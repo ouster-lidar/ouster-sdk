@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ouster_client</name>
+  <version>0.1.0</version>
+  <description>The os1_client package</description>
+  <maintainer email="oss@ouster.io">ouster developers</maintainer>
+  <license>BSD</license>
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <export></export>
+</package>

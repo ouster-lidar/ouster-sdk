@@ -1,0 +1,21 @@
+<launch>
+
+  <arg name="scan_dur_ns" default="100000000" doc="nanoseconds to batch lidar packets before publishing a cloud"/>
+  <arg name="os1_hostname" default="localhost" doc="hostname or IP in dotted decimal form of the sensor"/>
+  <arg name="os1_udp_dest" default="192.168.1.1" doc="hostname or IP where the sensor will send data packets"/>
+  <arg name="os1_lidar_port" default="7502" doc="port to which the sensor should send lidar data"/>
+  <arg name="os1_imu_port" default="7503" doc="port to which the sensor should send imu data"/>
+  <arg name="replay" default="false" doc="when true, the node will listen on ~/lidar_packets and ~/imu_packets for data instead of attempting to connect to a sensor"/>
+
+  <group ns="/os1_node">
+    <param name="scan_dur_ns" value="$(arg scan_dur_ns)"/>
+    <param name="os1_hostname" value="$(arg os1_hostname)"/>
+    <param name="os1_udp_dest" value="$(arg os1_udp_dest)"/>
+    <param name="os1_lidar_port" value="$(arg os1_lidar_port)"/>
+    <param name="os1_imu_port" value="$(arg os1_imu_port)"/>
+    <param name="replay" value="$(arg replay)"/>
+  </group>
+
+  <node pkg="ouster_ros" type="os1_node" name="os1_node" output="screen" required="true"/>
+
+</launch>
