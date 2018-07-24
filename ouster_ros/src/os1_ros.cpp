@@ -144,7 +144,8 @@ std::function<void(const PacketMsg&)> batch_packets(
 
         OS1::add_packet_to_cloud(scan_ts, scan_dur, pm, *cloud);
 
-        if (packet_ts - scan_ts >= scan_dur) {
+        auto batch_dur = packet_ts - scan_ts;
+        if (batch_dur >= scan_dur || batch_dur < ns(0)) {
             f(scan_ts, *cloud);
 
             cloud->clear();
