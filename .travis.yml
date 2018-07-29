@@ -1,0 +1,31 @@
+#   This .travis.yml works to check this repository
+
+#  Greatly inspired by JSK travis: https://github.com/jsk-ros-pkg/jsk_travis
+
+#sudo: required  # Not required by industrial_ci that uses Docker.
+#dist: trusty    # Not required by industrial_ci that uses Docker.
+services:
+  - docker
+# Force travis to use its minimal image with default Python settings
+language: generic
+notifications:
+  #  Whoever receives success and/or failure via email
+  email:
+    recipients:
+- gm130s@gmail.com  # Change this to yours should you copy this file.
+env:
+  matrix:
+#    - USE_DEB=true  ROS_DISTRO="indigo" ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
+#    - USE_DEB=true  ROS_DISTRO="indigo" ROS_REPOSITORY_PATH=http://packages.ros.org/ros-shadow-fixed/ubuntu
+#    - USE_DEB=true  ROS_DISTRO="jade"   ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
+#    - USE_DEB=true  ROS_DISTRO="jade"   ROS_REPOSITORY_PATH=http://packages.ros.org/ros-shadow-fixed/ubuntu
+    - ROS_DISTRO=kinetic DOCKER_BASE_IMAGE="ros:kinetic-ros-base" NOT_TEST_BUILD='true' DEBUG_BASH='true' VERBOSE_OUTPUT='false'
+matrix:
+  allow_failures:
+#    - env: USE_DEB=true  ROS_DISTRO="jade"   ROS_REPOSITORY_PATH=http://packages.ros.org/ros/ubuntu
+#    - env: USE_DEB=true  ROS_DISTRO="jade"   ROS_REPOSITORY_PATH=http://packages.ros.org/ros-shadow-fixed/ubuntu
+install:
+  - git clone https://github.com/ros-industrial/industrial_ci.git .ci_config
+script: 
+  - source .ci_config/travis.sh
+#  - source ./travis.sh  # Enable this when you have a package-local script 
