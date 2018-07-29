@@ -1,5 +1,5 @@
 #   This .travis.yml works to check this repository
-
+# https://github.com/ros-industrial/industrial_core/blob/indigo-devel/.travis.yml
 #  Greatly inspired by JSK travis: https://github.com/jsk-ros-pkg/jsk_travis
 
 #sudo: required  # Not required by industrial_ci that uses Docker.
@@ -15,7 +15,7 @@ notifications:
       - accounts@wilselby.com  # Change this to yours should you copy this file.
 env:
   matrix:
-    - ROS_DISTRO=kinetic DOCKER_BASE_IMAGE="ros:kinetic-ros-base" NOT_TEST_BUILD='true' DEBUG_BASH='true' VERBOSE_OUTPUT='false' ADDITIONAL_DEBS=ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control
+    - ROS_DISTRO=kinetic DOCKER_BASE_IMAGE="ros:kinetic-ros-base" NOT_TEST_BUILD='true' DEBUG_BASH='true' VERBOSE_OUTPUT='false' ADDITIONAL_DEBS=ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control CATKIN_PARALLEL_JOBS=1
 matrix:
   allow_failures:
 
