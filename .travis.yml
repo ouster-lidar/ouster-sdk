@@ -15,7 +15,7 @@ notifications:
       - accounts@wilselby.com  # Change this to yours should you copy this file.
 env:
   matrix:
-    - ROS_DISTRO=kinetic DOCKER_BASE_IMAGE="ros:kinetic-ros-base" NOT_TEST_BUILD='true' DEBUG_BASH='true' VERBOSE_OUTPUT='false' ADDITIONAL_DEBS=ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control CATKIN_PARALLEL_JOBS=1
+    - ROS_DISTRO=kinetic DOCKER_BASE_IMAGE="ros:kinetic-ros-base" NOT_TEST_BUILD='true' DEBUG_BASH='true' VERBOSE_OUTPUT='false' ADDITIONAL_DEBS=ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control CATKIN_CONFIG=--no-install
 matrix:
   allow_failures:
 
