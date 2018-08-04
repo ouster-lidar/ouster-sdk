@@ -14,8 +14,16 @@ notifications:
     recipients:
       - accounts@wilselby.com  # Change this to yours should you copy this file.
 env:
+  global:
+    - POST_PROCESS='echo "post processing reached"'
+    - BEFORE_SCRIPT='echo current dir: $(pwd)'
+    - NOT_TEST_BUILD='true'
+    - DEBUG_BASH='true'
+    - VERBOSE_OUTPUT='false'
+    - CATKIN_CONFIG=--no-install
   matrix:
-    - ROS_DISTRO=kinetic DOCKER_BASE_IMAGE="ros:kinetic-ros-base" NOT_TEST_BUILD='true' DEBUG_BASH='true' VERBOSE_OUTPUT='false' ADDITIONAL_DEBS=ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control CATKIN_CONFIG=--no-install
+    - ROS_DISTRO=kinetic DOCKER_BASE_IMAGE="ros:kinetic-ros-base" ADDITIONAL_DEBS=ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control 
+    - ROS_DISTRO=indigo DOCKER_IMAGE='arm32v7/ros:indigo-ros-core' ADDITIONAL_DEBS=build-essential python-catkin-tools python-pip ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control
 matrix:
   allow_failures:
 
