@@ -7,13 +7,12 @@
   </description>
 
   <license>BSD</license>
-  <author>Kevin Hallenbeck</author>
-  <maintainer email="khallenbeck@dataspeedinc.com">Kevin Hallenbeck</maintainer>
-  <url type="website">http://wiki.ros.org/velodyne_description</url>
-  <url type="repository">https://bitbucket.org/dataspeedinc/velodyne_simulator</url>
-  <url type="bugtracker">https://bitbucket.org/dataspeedinc/velodyne_simulator/issues</url>
+  <author>Wil Selby</author>
+  <maintainer email="accounts@wilselby.com">Wil Selby</maintainer>
 
   <buildtool_depend>catkin</buildtool_depend>
+
+  <test_depend>rostest</test_depend>
 
   <exec_depend>urdf</exec_depend>
   <exec_depend>xacro</exec_depend>
