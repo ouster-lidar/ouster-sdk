@@ -17,7 +17,7 @@ env:
   global:
     - POST_PROCESS='echo "post processing reached"'
     - BEFORE_SCRIPT='echo current dir: $(pwd)'
-    - NOT_TEST_BUILD='true'
+    - NOT_TEST_BUILD='false'
     - DEBUG_BASH='true'
     - VERBOSE_OUTPUT='false'
     - CATKIN_CONFIG=--no-install
