@@ -15,16 +15,13 @@ notifications:
       - accounts@wilselby.com  # Change this to yours should you copy this file.
 env:
   global:
-    - POST_PROCESS='echo "post processing reached"'
-    - BEFORE_SCRIPT='echo current dir: $(pwd)'
     - NOT_TEST_BUILD='false'
     - DEBUG_BASH='true'
-    - VERBOSE_OUTPUT='false'
+    - VERBOSE_OUTPUT='true'
     - CATKIN_CONFIG=--no-install
-    - ADDITIONAL_DEBS=build-essential python-catkin-tools python-pip ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control ros-kinetic-joint-state-publisher ros-kinetic-robot-state-publisher ros-kinetic-xacro ros-kinetic-controller-manager ros-kinetic-joint-state-controller ros-kinetic-ros-control
   matrix:
 #    - ROS_DISTRO="indigo" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:indigo-ros-core
-    - ROS_DISTRO="kinetic" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:kinetic-ros-core
+    - ROS_DISTRO="kinetic" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:kinetic-ros-core ADDITIONAL_DEBS=build-essential python-catkin-tools python-pip ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control ros-kinetic-joint-state-publisher ros-kinetic-robot-state-publisher ros-kinetic-xacro ros-kinetic-controller-manager ros-kinetic-joint-state-controller ros-kinetic-ros-control
 #    - ROS_DISTRO="kinetic" ROS_REPO=ros-shadow-fixed DOCKER_BASE_IMAGE=ros:kinetic-ros-core
 #    - ROS_DISTRO="lunar" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:lunar-ros-core
 #    - ROS_DISTRO="lunar" ROS_REPO=ros-shadow-fixed DOCKER_BASE_IMAGE=ros:lunar-ros-core
