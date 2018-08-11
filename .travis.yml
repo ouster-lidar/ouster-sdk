@@ -12,7 +12,7 @@ notifications:
   #  Whoever receives success and/or failure via email
   email:
     recipients:
-      - accounts@wilselby.com  # Change this to yours should you copy this file.
+#      - accounts@wilselby.com  # Change this to yours should you copy this file.
 env:
   global:
     - NOT_TEST_BUILD='false'
@@ -27,10 +27,11 @@ env:
     - ROS_DISTRO="kinetic" ROS_REPO=ros-shadow-fixed DOCKER_BASE_IMAGE=ros:kinetic-ros-core ADDITIONAL_DEBS="build-essential python-catkin-tools python-pip ros-kinetic-gazebo-ros-pkgs ros-kinetic-gazebo-ros-control ros-kinetic-joint-state-publisher ros-kinetic-robot-state-publisher ros-kinetic-xacro ros-kinetic-controller-manager ros-kinetic-joint-state-controller ros-kinetic-ros-control"
 #    - ROS_DISTRO="lunar" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:lunar-ros-core
 #    - ROS_DISTRO="lunar" ROS_REPO=ros-shadow-fixed DOCKER_BASE_IMAGE=ros:lunar-ros-core
-    - ROS_DISTRO="melodic" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:melodic-ros-core ADDITIONAL_DEBS="build-essential python-catkin-tools python-pip ros-melodic-gazebo-ros-pkgs ros-melodic-gazebo-ros-control ros-melodic-joint-state-publisher ros-melodic-robot-state-publisher ros-melodic-xacro ros-melodic-controller-manager ros-melodic-joint-state-controller ros-melodic-ros-control"
+#    - ROS_DISTRO="melodic" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:melodic-ros-core 
 #    - ROS_DISTRO="melodic" ROS_REPO=ros-shadow-fixed DOCKER_BASE_IMAGE=ros:melodic-ros-core
 matrix:
   allow_failures:
+     - ROS_DISTRO="melodic" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:melodic-ros-core ADDITIONAL_DEBS="build-essential python-catkin-tools python-pip ros-melodic-gazebo-ros-pkgs ros-melodic-gazebo-ros-control ros-melodic-joint-state-publisher ros-melodic-robot-state-publisher ros-melodic-xacro ros-melodic-controller-manager ros-melodic-joint-state-controller ros-melodic-ros-control"
 
 install:
   - git clone https://github.com/ros-industrial/industrial_ci.git .ci_config
@@ -38,9 +39,7 @@ script:
   - source .ci_config/travis.sh
 #  - source ./travis.sh  # Enable this when you have a package-local script 
 
-#ros-kinetic-joint-trajectory-controller ros-kinetic-rqt ros-kinetic-rqt-controller-manager  ros-kinetic-rqt-gui
 
-#ros-kinetic-tf-conversions 
 
 
 
