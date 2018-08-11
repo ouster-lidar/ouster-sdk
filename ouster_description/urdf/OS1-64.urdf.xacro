@@ -30,7 +30,7 @@
       </visual>
    </link>
 
-    <!-- Gazebo requires the velodyne_gazebo_plugins package -->
+    <!-- Gazebo requires the ouster_gazebo_plugins package -->
     <gazebo reference="${name}">
         <sensor type="ray" name="${name}-OS1-64">
           <pose>0 0 0 0 0 0</pose>

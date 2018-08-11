@@ -11,8 +11,7 @@
       <param name="topic" value="/points" />
       <param name="hz" value="5" />
       <param name="hzerror" value="1" />
-      <param name="test_duration" value="10.0" />
-      <param name="wait_time" value="60.0" />
+      <param name="test_duration" value="5.0" />
    </test>
 
    <test test-name="os1GazeboPublishTest_tf" pkg="rostest" type="publishtest" name="tfPublish">
@@ -26,8 +25,11 @@
 
    <test test-name="os1GazeboParamTest_robot_description" pkg="rostest" type="paramtest" name="robot_descriptionParam" >
       <param name="param_name_target" value="robot_description" />
-      <param name="test_duration" value="10.0" />
-      <param name="wait_time" value="60.0" />
+      <param name="test_duration" value="5.0" />
+      <param name="wait_time" value="20.0" />
    </test>
 
 </launch>
+
+
+
