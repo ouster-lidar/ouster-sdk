@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+
+   <include file="$(find ouster_description)/launch/os1_world.launch">
+      <arg name="gui" default="false"/>
+      <arg name="rviz" default="false"/>
+   </include>
+
+   <test test-name="os1GazeboPublishTest_tf" pkg="rostest" type="publishtest" name="tfPublish">
+    <rosparam>
+      topics:
+        - name: /tf_static
+          timeout: 10
+          negative: False
+    </rosparam>
+   </test>
+
+</launch>
