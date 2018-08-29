@@ -3,6 +3,7 @@
 ## Contents
 * `ouster_client/` contains a simple C++ client for the OS1 sensor
 * `ouster_ros/` contains an example ROS node for publishing point cloud messages
+* `ouster_viz/` contains a  visualizer for an OS1 sensor
 
 ## Building the Sample Client
 * The sample client requires a compiler supporting C++11 or newer and CMake
