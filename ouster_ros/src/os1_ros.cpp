@@ -75,19 +75,18 @@ static PointOS1 nth_point(int ind, const uint8_t* col_buf) {
     auto tte = trig_table[ind];
     const uint8_t* px_buf = nth_px(ind, col_buf);
     float r = px_range(px_buf) / 1000.0;
-    float h_angle = tte.h_offs + h_angle_0;
+    float h_angle = tte.beam_azimuth_angles + h_angle_0;
 
     PointOS1 point;
     point.reflectivity = px_reflectivity(px_buf);
     point.intensity = px_signal_photons(px_buf);
-    point.x = -r * tte.cos_v_angle * cosf(h_angle);
-    point.y = r * tte.cos_v_angle * sinf(h_angle);
-    point.z = r * tte.sin_v_angle;
+    point.x = -r * tte.cos_beam_altitude_angles * cosf(h_angle);
+    point.y = r * tte.cos_beam_altitude_angles * sinf(h_angle);
+    point.z = r * tte.sin_beam_altitude_angles;
     point.ring = ind;
 
     return point;
 }
-
 void add_packet_to_cloud(ns scan_start_ts, ns scan_duration,
                          const PacketMsg& pm, CloudOS1& cloud) {
     const uint8_t* buf = pm.buf.data();

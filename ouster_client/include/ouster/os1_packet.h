@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -21,7 +22,7 @@ const int column_bytes = 16 + (pixels_per_column * pixel_bytes) + 4;
 
 const int encoder_ticks_per_rev = 90112;
 
-const float v_angle[pixels_per_column] = {
+const std::array<float, OS1::pixels_per_column> beam_altitude_angles = {
     16.611,  16.084,  15.557,  15.029,  14.502,  13.975,  13.447,  12.920,
     12.393,  11.865,  11.338,  10.811,  10.283,  9.756,   9.229,   8.701,
     8.174,   7.646,   7.119,   6.592,   6.064,   5.537,   5.010,   4.482,
@@ -31,8 +32,7 @@ const float v_angle[pixels_per_column] = {
     -8.701,  -9.229,  -9.756,  -10.283, -10.811, -11.338, -11.865, -12.393,
     -12.920, -13.447, -13.975, -14.502, -15.029, -15.557, -16.084, -16.611,
 };
-
-const float h_offs[pixels_per_column] = {
+const std::array<float, OS1::pixels_per_column> beam_azimuth_angles = {
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
@@ -44,21 +44,20 @@ const float h_offs[pixels_per_column] = {
 };
 
 struct trig_table_entry {
-    float sin_v_angle;
-    float cos_v_angle;
-    float h_offs;
+    float sin_beam_altitude_angles;
+    float cos_beam_altitude_angles;
+    float beam_azimuth_angles;
 };
 
 // table of vertical angle cos, sin, and horizontal offset of each pixel
 static trig_table_entry trig_table[pixels_per_column];
-
 }
 
 static bool init_tables() {
     for (int i = 0; i < pixels_per_column; i++) {
-        trig_table[i] = {sinf(v_angle[i] * 2 * M_PI / 360.0f),
-                         cosf(v_angle[i] * 2 * M_PI / 360.0f),
-                         h_offs[i] * 2 * (float)M_PI / 360.0f};
+        trig_table[i] = {sinf(beam_altitude_angles[i] * 2 * M_PI / 360.0f),
+                         cosf(beam_altitude_angles[i] * 2 * M_PI / 360.0f),
+                         beam_azimuth_angles[i] * 2 * (float)M_PI / 360.0f};
     }
     return true;
 }
@@ -78,8 +77,26 @@ inline uint64_t col_timestamp(const uint8_t* col_buf) {
 
 inline float col_h_angle(const uint8_t* col_buf) {
     uint32_t ticks;
-    memcpy(&ticks, col_buf + 12, sizeof(uint32_t));
+    memcpy(&ticks, col_buf + (3 * 4), sizeof(uint32_t));
     return (2.0 * M_PI * ticks / (float)encoder_ticks_per_rev);
+}
+
+inline float col_h_encoder_count(const uint8_t* col_buf) {
+    uint32_t res;
+    std::memcpy(&res, col_buf + (3 * 4), sizeof(uint32_t));
+    return res;
+}
+
+inline uint32_t col_measurement_id(const uint8_t* col_buf) {
+    uint32_t res;
+    memcpy(&res, col_buf + (2 * 4), sizeof(uint32_t));
+    return res;
+}
+
+inline uint32_t col_valid(const uint8_t* col_buf) {
+    uint32_t res;
+    memcpy(&res, col_buf + (196 * 4), sizeof(uint32_t));
+    return res;
 }
 
 // lidar pixel fields
@@ -103,6 +120,12 @@ inline uint16_t px_reflectivity(const uint8_t* px_buf) {
 inline uint16_t px_signal_photons(const uint8_t* px_buf) {
     uint16_t res;
     memcpy(&res, px_buf + 6, sizeof(uint16_t));
+    return res;
+}
+
+inline uint16_t px_noise_photons(const uint8_t* px_buf) {
+    uint16_t res;
+    memcpy(&res, px_buf + 8, sizeof(uint16_t));
     return res;
 }
 

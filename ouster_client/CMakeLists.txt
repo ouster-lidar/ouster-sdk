@@ -1,7 +1,10 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.1.0)
 project(ouster_client)
 
-add_compile_options(-std=c++11 -Wall)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_FLAGS         "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 find_package(catkin QUIET)
 if (catkin_FOUND)
@@ -16,8 +19,8 @@ else()
   message(STATUS "Catkin not found, compiling without ROS")
 endif()
 
-
-include_directories(include)
 add_library(ouster_client STATIC src/os1.cpp)
+target_include_directories(ouster_client PUBLIC include)
+
 add_executable(ouster_client_example src/main.cpp)
 target_link_libraries(ouster_client_example ouster_client)
