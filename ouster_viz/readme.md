@@ -11,7 +11,7 @@
 ## Build Dependencies
 * The sample visualizer requires a compiler supporting C++11 or newer and CMake 3.1 or newer
 * Requires VTK6 and Eigen3 libraries
-* Using Ubuntu: sudo apt-get install libvtk6-dev libeigen3-dev eigen3-devel.noarch
+* Using Ubuntu: sudo apt-get install libvtk6-dev libproj-dev libeigen3-dev eigen3-devel.noarch
 * Using Fedora: sudo apt-get update yum install vtk-devel.x86_64
 
 ## Building the Visualizer:
