@@ -74,7 +74,7 @@
 
 **Solution**: ensure that you can resolve and ping both `<os1_hostname>` and `<udp_data_dest_ip>`
 
-## Vertical black stripes in Lidar Scan or Lidar Scan updating too slowly
+## Repeated error: "Dropped a Packet: previous packet:* current packet:*"
 
 **Cause**: Sensor configured with a different lidar_mode than the visualizer
 
