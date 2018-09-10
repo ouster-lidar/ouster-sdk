@@ -1,3 +1,12 @@
+#ifndef OUSTER_ROS_MOTION_CORRECTION_H_
+#define OUSTER_ROS_MOTION_CORRECTION_H_
+
+#include <kindr/minimal/quat-transformation.h>
+#include "ouster_ros/point_os1.h"
+
+namespace ouster_ros {
+namespace OS1 {
+
 typedef kindr::minimal::QuatTransformation Transformation;
 
 template <typename Type>
@@ -5,13 +14,19 @@ using AlignedList = std::list<Type, Eigen::aligned_allocator<Type>>;
 
 class MotionCorrection {
  public:
-  MotionCorrection(const bool output_reflectance_as_intensity = false,
+  MotionCorrection(const bool output_reflectivity_as_intensity = false,
                    const bool remove_old_transformations = true)
-      : output_reflectance_as_intensity_(output_reflectance_as_intensity),
-        remove_old_transformations_(remove_old_transformations) void addTransformation(
-            const ros::Time& stamp,
-            const kindr::minimal::QuatTransformation& transformation) {
-    if (!transform_list_.empty() && stamp < transformation_list_.back().stamp) {
+      : output_reflectivity_as_intensity_(output_reflectivity_as_intensity),
+        remove_old_transformations_(remove_old_transformations) {}
+
+  void addTransformation(
+      const ros::Time& stamp,
+      const kindr::minimal::QuatTransformation& transformation) {
+    const uint64_t stamp_us = static_cast<uint64_t>(stamp.sec) * 1000000ul +
+                              static_cast<uint64_t>(stamp.nsec) / 1000ul;
+
+    if (!transformation_list_.empty() &&
+        stamp_us < transformation_list_.back().stamp) {
       ROS_ERROR_STREAM(
           "Detected jump backwards in time, resetting transformation list");
       transformation_list_.clear();
@@ -19,16 +34,18 @@ class MotionCorrection {
 
     TransformationStamped transformation_stamped;
     transformation_stamped.transformation = transformation;
-    transformation_stamped.stamp = stamp;
-    transform_list_.push_back(transformation_stamped);
+    transformation_stamped.stamp = stamp_us;
+    transformation_list_.push_back(transformation_stamped);
 
-    if (transform_list_.size() == 1) {
-      it_ = transform_list_.begin();
+    if (transformation_list_.size() == 1) {
+      it_ = transformation_list_.begin();
     }
   }
 
-  void addPointCloudToQueue(const std::shared_ptr<pcl::PointCloud<PointOS1>>& pointcloud_ptr) {
-    if (!pointcloud_list_.empty() && stamp < pointcloud_list_.back().header.stamp) {
+  void addPointCloudToQueue(
+      const std::shared_ptr<pcl::PointCloud<PointOS1>>& pointcloud_ptr) {
+    if (!pointcloud_list_.empty() &&
+        pointcloud_ptr->header.stamp < pointcloud_list_.back()->header.stamp) {
       ROS_ERROR_STREAM(
           "Detected jump backwards in time, resetting pointcloud list");
     }
@@ -36,10 +53,11 @@ class MotionCorrection {
     pointcloud_list_.push_back(pointcloud_ptr);
   }
 
-  bool processNextQueuedPointcloud(pcl::PointCloud<PointXYZI>* pointcloud) {
+  bool processNextQueuedPointcloud(
+      pcl::PointCloud<pcl::PointXYZI>* pointcloud) {
     while (!pointcloud_list_.empty()) {
-      const InterpolationStatus status = TransformPoints(
-          *pointcloud_list_.front().pointcloud_ptr, &pointcloud);
+      const InterpolationStatus status =
+          TransformPoints(*pointcloud_list_.front(), pointcloud);
 
       if (status == InterpolationStatus::MATCHED) {
         return true;
@@ -63,19 +81,22 @@ class MotionCorrection {
     AFTER_LAST
   };
 
-  InterpolationStatus TransformPoints( const pcl::PointCloud<PointOS1> pointcloud_in,
-           pcl::PointCloud<pcl::PointXYZI>* pointcloud_out) {
-  	pointcloud_out.header = pointcloud_in.header;
+  InterpolationStatus TransformPoints(
+      const pcl::PointCloud<PointOS1> pointcloud_in,
+      pcl::PointCloud<pcl::PointXYZI>* pointcloud_out) {
+    pointcloud_out->header = pointcloud_in.header;
+
+    ros::Time input_time;
     const uint64_t first_point_stamp =
         pointcloud_in.header.stamp + pointcloud_in.front().time_offset_us;
-    const ros::Time last_point_stamp =
+    const uint64_t last_point_stamp =
         pointcloud_in.header.stamp + pointcloud_in.back().time_offset_us;
-    pointcloud_out.header.stamp =
+    pointcloud_out->header.stamp =
         pointcloud_in.header.stamp + (pointcloud_in.front().time_offset_us +
-                                     pointcloud_in.back().time_offset_us) /
-                                        2;
+                                      pointcloud_in.back().time_offset_us) /
+                                         2;
 
-    if (transform_list_.size() < 2) {
+    if (transformation_list_.size() < 2) {
       return InterpolationStatus::NOT_ENOUGH_POINTS;
     }
     if (transformation_list_.front().stamp > first_point_stamp) {
@@ -86,8 +107,8 @@ class MotionCorrection {
     }
 
     for (const PointOS1& point : pointcloud_in) {
-      const uint64_t point_stamp_64 = poincloud_in.header.stamp + point.time_offset_us;
-      const ros::Time point_stamp(point_stamp_64/1000000, (point_stamp_64 % 1000000)*1000);
+      const uint64_t point_stamp =
+          pointcloud_in.header.stamp + point.time_offset_us;
 
       while (it_->stamp < point_stamp) {
         ++it_;
@@ -99,8 +120,9 @@ class MotionCorrection {
       // Interpolate between the two transformations using the exponential
       // map.
       const double t_delta_ratio =
-          (stamp - transformation_before.stamp).toSec() /
-          (transformation_after.stamp - transformation_before.stamp).toSec();
+          static_cast<double>(point_stamp - transformation_before.stamp) /
+          static_cast<double>(transformation_after.stamp -
+                              transformation_before.stamp);
 
       const kindr::minimal::QuatTransformation::Vector6 delta_vector =
           (transformation_before.transformation.inverse() *
@@ -120,15 +142,15 @@ class MotionCorrection {
       output_point.y = interpolated_position.y();
       output_point.z = interpolated_position.z();
 
-      if (output_reflectance_as_intensity_) {
-        output_point.intensity = point.reflectance;
+      if (output_reflectivity_as_intensity_) {
+        output_point.intensity = point.reflectivity;
       } else {
         output_point.intensity = point.intensity;
       }
     }
 
     if (remove_old_transformations_) {
-      while (transformation_list_.front() != std::prev(it_)) {
+      while (transformation_list_.begin() != std::prev(it_)) {
         transformation_list_.pop_front();
       }
     }
@@ -138,13 +160,18 @@ class MotionCorrection {
 
  private:
   struct TransformationStamped {
-    ros::Time stamp;
+    uint64_t stamp;
     kindr::minimal::QuatTransformation transformation;
   };
-  const bool output_reflectance_as_intensity_;
+  const bool output_reflectivity_as_intensity_;
   const bool remove_old_transformations_;
 
-  AlignedList<PointCloudPtr> pointcloud_list_;
-  AlignedList<TransformationStamped> transform_list_;
+  AlignedList<std::shared_ptr<pcl::PointCloud<PointOS1>>> pointcloud_list_;
+  AlignedList<TransformationStamped> transformation_list_;
   AlignedList<TransformationStamped>::const_iterator it_;
 };
+
+}  // namespace OS1
+}  // namespace ouster_ros
+
+#endif  // OUSTER_ROS_MOTION_CORRECTION_H_

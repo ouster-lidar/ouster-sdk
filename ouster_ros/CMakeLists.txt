@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   roscpp
   ouster_client
+  minkindr
+  minkindr_conversions
 )
 
 add_message_files(DIRECTORY msg FILES PacketMsg.msg)
@@ -33,3 +35,6 @@ add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 
 add_executable(os1_node src/os1_node.cpp)
 target_link_libraries(os1_node ouster_ros ${catkin_LIBRARIES})
+
+add_executable(motion_correction_node src/motion_correction_node.cpp src/motion_correction.cpp)
+target_link_libraries(motion_correction_node ${catkin_LIBRARIES})

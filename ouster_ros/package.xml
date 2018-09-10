@@ -14,6 +14,8 @@
   <build_depend>pcl_ros</build_depend>
   <build_depend>pcl_conversions</build_depend>
   <build_depend>ouster_client</build_depend>
+  <build_depend>minkindr</build_depend>
+  <build_depend>minkindr_conversions</build_depend>
 
   <exec_depend>roscpp</exec_depend>
   <exec_depend>message_runtime</exec_depend>
