@@ -8,9 +8,25 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 find_package(Threads)
 find_package(Eigen3 REQUIRED)
-find_package(VTK REQUIRED)
+find_package(VTK REQUIRED COMPONENTS vtkCommonCore NO_MODULE)
 
-add_subdirectory(../ouster_client ouster_client)
+# Load additional vtk components; prefer newer vtk opengl module
+# https://www.visitusers.org/index.php?title=VTK_7.1_Upgrade
+# https://www.vtk.org/Wiki/VTK/Build_System_Migration
+set(VIZ_VTK_COMPONENTS vtkCommonCore vtkCommonDataModel vtkCommonMath
+  vtkCommonTransforms vtkFiltersSources vtkImagingCore vtkInteractionStyle
+  vtkRenderingCore
+  )
+if(TARGET vtkRenderingOpenGL2)
+  list(APPEND VIZ_VTK_COMPONENTS vtkRenderingOpenGL2)
+else()
+  list(APPEND VIZ_VTK_COMPONENTS vtkRenderingOpenGL)
+endif()
+find_package(VTK REQUIRED COMPONENTS ${VIZ_VTK_COMPONENTS} NO_MODULE)
+
+include(${VTK_USE_FILE})
+
+add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
 
 include_directories(include)
 

@@ -33,10 +33,6 @@
 #include <vtkSmartPointer.h>
 #include <vtkTransform.h>
 
-#include <vtkAutoInit.h>
-VTK_MODULE_INIT(vtkRenderingOpenGL);
-VTK_MODULE_INIT(vtkInteractionStyle)
-
 #include "ouster/colormaps.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/viz.h"
