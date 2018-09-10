@@ -42,4 +42,14 @@
   - To replay raw sensor output, run `roslaunch ouster_ros os1.launch replay:=true`
   - In a second terminal, run `rosbag play --clock <bagfile>`
   - To visualize output, run `rviz -d /path/to/ouster_ros/viz.rviz` in another terminal
-* Sample raw sensor output is available [here](https://data.ouster.io/ouster-os1-100sec.bag)
+* Sample raw sensor output is available [here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-46-17_0.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-47-31_1.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-48-45_2.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-49-58_3.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-51-12_4.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-52-26_5.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-53-40_6.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-54-53_7.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-56-07_8.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-57-21_9.bag) and 
+[here](https://data.ouster.io/2018-08-29-16-45-52-raffi-subaru/2018-08-29-16-58-34_10.bag)
