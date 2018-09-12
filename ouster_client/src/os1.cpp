@@ -142,6 +142,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     success &= do_cmd("set_udp_port_lidar", std::to_string(lidar_port));
     success &= do_cmd("set_udp_port_imu", std::to_string(imu_port));
     success &= do_cmd("set_udp_ip", udp_dest_host);
+    success &= do_cmd("set_timestamp_mode", "TIME_FROM_PTP_1588");
+    success &= do_cmd("reinitialize", "");
 
     if (!success) return std::shared_ptr<client>();
 
