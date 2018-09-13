@@ -33,6 +33,20 @@
 using ns = std::chrono::nanoseconds;
 using PacketMsg = ouster_ros::PacketMsg;
 
+bool validTimestamp(const ros::Time& msg_time) {
+  const ros::Duration kMaxTimeOffset(1.0);
+
+  const ros::Time now = ros::Time::now();
+  if (msg_time < (now - kMaxTimeOffset)) {
+    ROS_WARN_STREAM_THROTTLE(
+        1, "OS1 clock is currently not in sync with host. Current host time: "
+               << now << " OS1 message time: " << msg_time
+               << ". Rejecting measurement.");
+    return false;
+  }
+  return true;
+}
+
 int main(int argc, char** argv) {
     ros::init(argc, argv, "ouster_driver");
     ros::NodeHandle nh("~");
@@ -49,12 +63,18 @@ int main(int argc, char** argv) {
 
     auto lidar_handler = ouster_ros::OS1::batch_packets(
         scan_dur, [&](ns scan_ts, const ouster_ros::OS1::CloudOS1& cloud) {
-            lidar_pub.publish(
-                ouster_ros::OS1::cloud_to_cloud_msg(cloud, scan_ts));
+          sensor_msgs::PointCloud2 msg =
+              ouster_ros::OS1::cloud_to_cloud_msg(cloud, scan_ts);
+          if (validTimestamp(msg.header.stamp)) {
+            lidar_pub.publish(msg);
+          }
         });
 
     auto imu_handler = [&](const PacketMsg& p) {
-        imu_pub.publish(ouster_ros::OS1::packet_to_imu_msg(p));
+        sensor_msgs::Imu msg = ouster_ros::OS1::packet_to_imu_msg(p);
+        if(validTimestamp(msg.header.stamp)){
+            imu_pub.publish(msg);
+        }
     };
 
     if (replay_mode) {
