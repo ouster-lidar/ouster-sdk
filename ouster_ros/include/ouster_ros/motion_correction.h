@@ -48,6 +48,12 @@ class MotionCorrection {
         pointcloud_ptr->header.stamp < pointcloud_list_.back()->header.stamp) {
       ROS_ERROR_STREAM(
           "Detected jump backwards in time, resetting pointcloud list");
+      pointcloud_list_.clear();
+    }
+
+    if(pointcloud_list_.size() > 100){
+      ROS_WARN_STREAM("There are now over 100 pointclouds waiting to be transformed, removing oldest.");
+      pointcloud_list_.pop_front();
     }
 
     pointcloud_list_.push_back(pointcloud_ptr);
@@ -57,7 +63,7 @@ class MotionCorrection {
       pcl::PointCloud<pcl::PointXYZI>* pointcloud) {
     while (!pointcloud_list_.empty()) {
       const InterpolationStatus status =
-          TransformPoints(*pointcloud_list_.front(), pointcloud);
+          transformPoints(*pointcloud_list_.front(), pointcloud);
 
       if (status == InterpolationStatus::MATCHED) {
         return true;
@@ -81,7 +87,7 @@ class MotionCorrection {
     AFTER_LAST
   };
 
-  InterpolationStatus TransformPoints(
+  InterpolationStatus transformPoints(
       const pcl::PointCloud<PointOS1> pointcloud_in,
       pcl::PointCloud<pcl::PointXYZI>* pointcloud_out) {
     pointcloud_out->header = pointcloud_in.header;
@@ -147,6 +153,7 @@ class MotionCorrection {
       } else {
         output_point.intensity = point.intensity;
       }
+      pointcloud_out->push_back(output_point);
     }
 
     if (remove_old_transformations_) {
