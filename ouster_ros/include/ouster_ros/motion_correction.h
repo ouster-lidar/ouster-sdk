@@ -151,6 +151,8 @@ class MotionCorrection {
       return InterpolationStatus::AFTER_LAST;
     }
 
+    ROS_ERROR_STREAM("PC header: " << pointcloud_out->header.stamp << " " << ros::Time::now());
+
     while (pc_it_->stamp < pointcloud_out->header.stamp) {
       ++pc_it_;
     }
