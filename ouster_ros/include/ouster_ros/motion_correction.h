@@ -1,13 +1,14 @@
 #ifndef OUSTER_ROS_MOTION_CORRECTION_H_
 #define OUSTER_ROS_MOTION_CORRECTION_H_
 
+#include <pcl/common/transforms.h>
 #include <kindr/minimal/quat-transformation.h>
 #include "ouster_ros/point_os1.h"
 
 namespace ouster_ros {
 namespace OS1 {
 
-typedef kindr::minimal::QuatTransformation Transformation;
+typedef kindr::minimal::QuatTransformationTemplate<float> Transformation;
 
 template <typename Type>
 using AlignedList = std::list<Type, Eigen::aligned_allocator<Type>>;
@@ -35,13 +36,13 @@ class MotionCorrection {
     }
 
     TransformationStamped transformation_stamped;
-    transformation_stamped.transformation = transformation;
+    transformation_stamped.transformation = transformation.cast<float>();
     transformation_stamped.stamp = stamp_us;
     transformation_list_.push_back(transformation_stamped);
 
     if (transformation_list_.size() == 1) {
-      it_ = transformation_list_.begin();
-      pc_it_ = transformation_list_.begin();
+      point_it_ = transformation_list_.begin();
+      cloud_it_ = transformation_list_.begin();
     }
   }
 
@@ -96,7 +97,7 @@ class MotionCorrection {
 
   struct TransformationStamped {
     uint64_t stamp;
-    kindr::minimal::QuatTransformation transformation;
+    Transformation transformation;
   };
 
   // small private functor class
@@ -105,16 +106,16 @@ class MotionCorrection {
     Interpolator(const TransformationStamped& transformation_before,
                  const TransformationStamped& transformation_after)
         : before_stamp_(transformation_before.stamp),
-          delta_stamp_(static_cast<double>(transformation_after.stamp -
-                                           transformation_before.stamp)),
+          delta_stamp_(static_cast<float>(transformation_after.stamp -
+                                          transformation_before.stamp)),
           transformation_before_(transformation_before.transformation),
           delta_vector_((transformation_before.transformation.inverse() *
                          transformation_after.transformation)
                             .log()) {}
 
     Transformation operator()(const uint64_t stamp) const {
-      const double t_delta_ratio =
-          static_cast<double>(stamp - before_stamp_) / delta_stamp_;
+      const float t_delta_ratio =
+          static_cast<float>(stamp - before_stamp_) / delta_stamp_;
       return transformation_before_ *
              Transformation::exp(t_delta_ratio * delta_vector_);
     }
@@ -122,8 +123,8 @@ class MotionCorrection {
    private:
     uint64_t before_stamp_;
     double delta_stamp_;
-    kindr::minimal::QuatTransformation transformation_before_;
-    kindr::minimal::QuatTransformation::Vector6 delta_vector_;
+    Transformation transformation_before_;
+    Transformation::Vector6 delta_vector_;
   };
 
   InterpolationStatus transformPoints(
@@ -151,53 +152,55 @@ class MotionCorrection {
       return InterpolationStatus::AFTER_LAST;
     }
 
-    ROS_ERROR_STREAM("PC header: " << pointcloud_out->header.stamp << " " << ros::Time::now());
-
-    while (pc_it_->stamp < pointcloud_out->header.stamp) {
-      ++pc_it_;
+    while (cloud_it_->stamp < pointcloud_out->header.stamp) {
+      ++cloud_it_;
     }
 
-    Interpolator interpolator(*std::prev(pc_it_), *pc_it_);
+    Interpolator interpolator(*std::prev(cloud_it_), *cloud_it_);
     const Transformation transformation_pointcloud_inv =
         interpolator(pointcloud_out->header.stamp).inverse();
 
-    AlignedList<TransformationStamped>::const_iterator last_point_it = pc_it_;
+    AlignedList<TransformationStamped>::const_iterator previous_point_it =
+        cloud_it_;
+    uint64_t previous_point_stamp = 0ul;
+    Eigen::Affine3f pcl_transform;
 
     for (const PointOS1& point : pointcloud_in) {
       const uint64_t point_stamp =
           pointcloud_in.header.stamp + point.time_offset_us;
 
-      while (it_->stamp < point_stamp) {
-        ++it_;
+      if (point_stamp != previous_point_stamp) {
+        while (point_it_->stamp < point_stamp) {
+          ++point_it_;
+        }
+
+        if (previous_point_it != point_it_) {
+          interpolator = Interpolator(*std::prev(point_it_), *point_it_);
+          point_it_ = previous_point_it;
+        }
+
+        const Transformation delta_transforamtion =
+            transformation_pointcloud_inv * interpolator(point_stamp);
+
+        pcl_transform.matrix() = delta_transforamtion.getTransformationMatrix();
       }
-
-      if (last_point_it != it_) {
-        interpolator = Interpolator(*std::prev(it_), *it_);
-        it_ = last_point_it;
-      }
-
-      const kindr::minimal::QuatTransformation delta_transforamtion =
-          transformation_pointcloud_inv * interpolator(point_stamp);
-
-      const kindr::minimal::Position original_position(point.x, point.y,
-                                                       point.z);
-      const kindr::minimal::Position interpolated_position =
-          delta_transforamtion * original_position;
 
       pcl::PointXYZI output_point;
-      output_point.x = interpolated_position.x();
-      output_point.y = interpolated_position.y();
-      output_point.z = interpolated_position.z();
+      output_point.x = point.x;
+      output_point.y = point.y;
+      output_point.z = point.z;
 
       if (output_reflectivity_as_intensity_) {
         output_point.intensity = point.reflectivity;
       } else {
         output_point.intensity = point.intensity;
       }
-      pointcloud_out->push_back(output_point);
+
+      pointcloud_out->push_back(
+          pcl::transformPoint(output_point, pcl_transform));
     }
     if (remove_old_transformations_) {
-      while (transformation_list_.begin() != std::prev(it_)) {
+      while (transformation_list_.begin() != std::prev(point_it_)) {
         transformation_list_.pop_front();
       }
     }
@@ -211,8 +214,8 @@ class MotionCorrection {
 
   AlignedList<std::shared_ptr<pcl::PointCloud<PointOS1>>> pointcloud_list_;
   AlignedList<TransformationStamped> transformation_list_;
-  AlignedList<TransformationStamped>::const_iterator it_;
-  AlignedList<TransformationStamped>::const_iterator pc_it_;
+  AlignedList<TransformationStamped>::const_iterator point_it_;
+  AlignedList<TransformationStamped>::const_iterator cloud_it_;
 };
 
 }  // namespace OS1

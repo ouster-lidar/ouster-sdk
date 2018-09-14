@@ -44,6 +44,7 @@ bool validTimestamp(const ros::Time& msg_time) {
                << ". Rejecting measurement.");
     return false;
   }
+  
   return true;
 }
 
