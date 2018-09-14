@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(ouster_ros)
 
-add_compile_options(-std=c++11 -Wall)
+add_compile_options(-std=c++11 -Wall -Ofast)
 
 find_package(catkin REQUIRED COMPONENTS
   message_generation
