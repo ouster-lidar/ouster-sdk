@@ -2,6 +2,9 @@
 #define OUSTER_ROS_MOTION_CORRECTION_H_
 
 #include <kindr/minimal/quat-transformation.h>
+#include <pcl_ros/point_cloud.h>
+#include <ros/ros.h>
+#include <list>
 #include "ouster_ros/point_os1.h"
 
 namespace ouster_ros {
@@ -20,13 +23,12 @@ class MotionCorrection {
 
   void addTransformation(
       const ros::Time& stamp,
-      const kindr::minimal::QuatTransformation& transformation) ;
+      const kindr::minimal::QuatTransformation& transformation);
 
   void addPointCloudToQueue(
       const std::shared_ptr<pcl::PointCloud<PointOS1>>& pointcloud_ptr);
 
-  bool processNextQueuedPointcloud(
-      pcl::PointCloud<pcl::PointXYZI>* pointcloud);
+  bool processNextQueuedPointcloud(pcl::PointCloud<pcl::PointXYZI>* pointcloud);
 
  private:
   enum class InterpolationStatus {

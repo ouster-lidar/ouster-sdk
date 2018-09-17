@@ -76,7 +76,7 @@ bool MotionCorrection::processNextQueuedPointcloud(
   return false;
 }
 
-InterpolationStatus MotionCorrection::transformPoints(
+MotionCorrection::InterpolationStatus MotionCorrection::transformPoints(
     const pcl::PointCloud<PointOS1> pointcloud_in,
     pcl::PointCloud<pcl::PointXYZI>* pointcloud_out) {
   pointcloud_out->header = pointcloud_in.header;
@@ -158,5 +158,3 @@ InterpolationStatus MotionCorrection::transformPoints(
 
 }  // namespace OS1
 }  // namespace ouster_ros
-
-#endif  // OUSTER_ROS_MOTION_CORRECTION_H_
