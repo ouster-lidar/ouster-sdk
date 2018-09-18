@@ -71,7 +71,7 @@ class MotionCorrection {
   };
 
   InterpolationStatus transformPoints(
-      const pcl::PointCloud<PointOS1> pointcloud_in,
+      const pcl::PointCloud<PointOS1>& pointcloud_in,
       pcl::PointCloud<pcl::PointXYZI>* pointcloud_out);
 
   const size_t max_pointcloud_queue_length_;

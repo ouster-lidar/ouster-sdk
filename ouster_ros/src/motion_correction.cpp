@@ -14,8 +14,7 @@ MotionCorrection::MotionCorrection(const size_t max_pointcloud_queue_length,
 void MotionCorrection::addTransformation(
     const ros::Time& stamp,
     const kindr::minimal::QuatTransformation& transformation) {
-  const uint64_t stamp_us = static_cast<uint64_t>(stamp.sec) * 1000000ul +
-                            static_cast<uint64_t>(stamp.nsec) / 1000ul;
+  const uint64_t stamp_us = stamp.toNSec() / 1000ul;
 
   if (!transformation_list_.empty() &&
       stamp_us < transformation_list_.back().stamp) {
@@ -77,9 +76,10 @@ bool MotionCorrection::processNextQueuedPointcloud(
 }
 
 MotionCorrection::InterpolationStatus MotionCorrection::transformPoints(
-    const pcl::PointCloud<PointOS1> pointcloud_in,
+    const pcl::PointCloud<PointOS1>& pointcloud_in,
     pcl::PointCloud<pcl::PointXYZI>* pointcloud_out) {
   pointcloud_out->header = pointcloud_in.header;
+  pointcloud_out->reserve(pointcloud_in.size());
 
   ros::Time input_time;
   const uint64_t first_point_stamp =
