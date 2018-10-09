@@ -32,31 +32,25 @@ void handle_imu(uint8_t* buf) {
 }
 
 void print_headers() {
-    std::cout << std::setw(15) << "n_lidar_packets" 
-              << std::setw(15) << "col_0_azimuth"
-              << std::setw(15) << "col_0_ts" 
-              << std::setw(15) << "n_imu_packets"
-              << std::setw(15) << "im_av_z"
-              << std::setw(15) << "im_la_y"
-              << std::setw(15) << "imu_ts" 
-              << std::endl;
+    std::cout << std::setw(15) << "n_lidar_packets" << std::setw(15)
+              << "col_0_azimuth" << std::setw(15) << "col_0_ts" << std::setw(15)
+              << "n_imu_packets" << std::setw(15) << "im_av_z" << std::setw(15)
+              << "im_la_y" << std::setw(15) << "imu_ts" << std::endl;
 }
 
 void print_stats() {
-    std::cout << "\r" 
-              << std::setw(15) << n_lidar_packets 
-              << std::setw(15) << lidar_col_0_h_angle
-              << std::setw(15) << lidar_col_0_ts
-              << std::setw(15) << n_imu_packets
-              << std::setw(15) << imu_av_z
-              << std::setw(15) << imu_la_y
-              << std::setw(15) << imu_ts;
+    std::cout << "\r" << std::setw(15) << n_lidar_packets << std::setw(15)
+              << lidar_col_0_h_angle << std::setw(15) << lidar_col_0_ts
+              << std::setw(15) << n_imu_packets << std::setw(15) << imu_av_z
+              << std::setw(15) << imu_la_y << std::setw(15) << imu_ts;
     std::flush(std::cout);
 }
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "Usage: ouster_client_example <os1_hostname> <data_destination_ip>" << std::endl;
+        std::cerr << "Usage: ouster_client_example <os1_hostname> "
+                     "<data_destination_ip>"
+                  << std::endl;
         return 1;
     }
 

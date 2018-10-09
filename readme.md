@@ -3,6 +3,7 @@
 ## Contents
 * `ouster_client/` contains a simple C++ client for the OS1 sensor
 * `ouster_ros/` contains an example ROS node for publishing point cloud messages
+* `ouster_viz/` contains a  visualizer for an OS1 sensor
 
 ## Building the Sample Client
 * The sample client requires a compiler supporting C++11 or newer and CMake
@@ -13,6 +14,15 @@
 * Make sure the OS1 is connected to the network and has obtained a dhcp lease. See accompanying documentation for more details
 * You should see a binary called `ouster_client_example` in your build directory on success
 * Run `ouster_client_example <os1_hostname> <udp_data_dest_ip>` where `<os1_hostname>` is the hostname or IP address of the OS1 sensor, and `<udp_data_dest_ip>` is the IP to which the sensor should send lidar data
+
+## Building the visualizer
+* The visualizer is not built using ROS
+* Build with `cd /path/to/ouster_example/ouster_viz && mkdir build && cd build && cmake .. && make`
+
+## Running the visualizer (does not require ROS)
+* The example visualiser can be used to display point clouds and range/intensity/noise images for the OS1 sensor
+* You should see a binary called "viz" in your build directory on success
+* Run `./viz <os1_hostname> <udp_data_dest_ip>`, passing the same arguments as for `ouster_client_example`
 
 ## Building the Sample ROS Node
 * Supports Ubuntu 16.04 with ROS Kinetic (for ouster_ros)

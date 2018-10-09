@@ -28,6 +28,7 @@ bool read_lidar_packet(const client& cli, PacketMsg& m) {
 }
 
 sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p) {
+    const double standard_g = 9.80665;
     sensor_msgs::Imu m;
     const uint8_t* buf = p.buf.data();
 
@@ -39,9 +40,9 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p) {
     m.orientation.z = 0;
     m.orientation.w = 0;
 
-    m.linear_acceleration.x = imu_la_x(buf);
-    m.linear_acceleration.y = imu_la_y(buf);
-    m.linear_acceleration.z = imu_la_z(buf);
+    m.linear_acceleration.x = imu_la_x(buf) * standard_g;
+    m.linear_acceleration.y = imu_la_y(buf) * standard_g;
+    m.linear_acceleration.z = imu_la_z(buf) * standard_g;
 
     m.angular_velocity.x = imu_av_x(buf) * M_PI / 180.0;
     m.angular_velocity.y = imu_av_y(buf) * M_PI / 180.0;
@@ -74,19 +75,18 @@ static PointOS1 nth_point(int ind, const uint8_t* col_buf) {
     auto tte = trig_table[ind];
     const uint8_t* px_buf = nth_px(ind, col_buf);
     float r = px_range(px_buf) / 1000.0;
-    float h_angle = tte.h_offs + h_angle_0;
+    float h_angle = tte.beam_azimuth_angles + h_angle_0;
 
     PointOS1 point;
     point.reflectivity = px_reflectivity(px_buf);
     point.intensity = px_signal_photons(px_buf);
-    point.x = -r * tte.cos_v_angle * cosf(h_angle);
-    point.y = r * tte.cos_v_angle * sinf(h_angle);
-    point.z = r * tte.sin_v_angle;
+    point.x = -r * tte.cos_beam_altitude_angles * cosf(h_angle);
+    point.y = r * tte.cos_beam_altitude_angles * sinf(h_angle);
+    point.z = r * tte.sin_beam_altitude_angles;
     point.ring = ind;
 
     return point;
 }
-
 void add_packet_to_cloud(ns scan_start_ts, ns scan_duration,
                          const PacketMsg& pm, CloudOS1& cloud) {
     const uint8_t* buf = pm.buf.data();
@@ -144,7 +144,8 @@ std::function<void(const PacketMsg&)> batch_packets(
 
         OS1::add_packet_to_cloud(scan_ts, scan_dur, pm, *cloud);
 
-        if (packet_ts - scan_ts >= scan_dur) {
+        auto batch_dur = packet_ts - scan_ts;
+        if (batch_dur >= scan_dur || batch_dur < ns(0)) {
             f(scan_ts, *cloud);
 
             cloud->clear();

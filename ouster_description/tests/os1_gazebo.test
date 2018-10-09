@@ -9,7 +9,7 @@
 
    <test test-name="os1GazeboHzTest_points" pkg="rostest" type="hztest" name="pointsHz">
       <param name="topic" value="/points" />
-      <param name="hz" value="5" />
+      <param name="hz" value="10" />
       <param name="hzerror" value="1" />
       <param name="test_duration" value="10.0" />
       <param name="wait_time" value="60.0" />

@@ -22,7 +22,7 @@
 
   <!-- Spawn the example robot -->
   <param name="robot_description" command="$(find xacro)/xacro --inorder '$(arg model)'" />
-  <node pkg="gazebo_ros" type="spawn_model" name="spawn_sensor" args="-urdf -param robot_description -model example"/>
+  <node pkg="gazebo_ros" type="spawn_model" name="spawn_sensor" output="screen" args="-urdf -param robot_description -model example"/>
   <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
     <param name="publish_frequency" type="double" value="30.0" />
   </node>
