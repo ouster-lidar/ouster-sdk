@@ -24,15 +24,6 @@
 * You should see a binary called "viz" in your build directory on success
 * Run `./viz <os1_hostname> <udp_data_dest>`, passing the same arguments as for `ouster_client_example`
 
-## Building the visualizer
-* The visualizer is not built using ROS
-* Build with `cd /path/to/ouster_example/ouster_viz && mkdir build && cd build && cmake .. && make`
-
-## Running the visualizer (does not require ROS)
-* The example visualiser can be used to display point clouds and range/intensity/noise images for the OS1 sensor
-* You should see a binary called "viz" in your build directory on success
-* Run `./viz <os1_hostname> <udp_data_dest_ip>`, passing the same arguments as for `ouster_client_example`
-
 ## Building the Sample ROS Node
 * Supports Ubuntu 16.04 with ROS Kinetic (for ouster_ros)
 * ROS installation instructions can be found [here](http://wiki.ros.org/kinetic/Installation/Ubuntu)
