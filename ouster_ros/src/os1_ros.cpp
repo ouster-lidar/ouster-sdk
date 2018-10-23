@@ -92,12 +92,11 @@ void add_packet_to_cloud(ns scan_start_ts, ns scan_duration,
     const uint8_t* buf = pm.buf.data();
     for (int icol = 0; icol < columns_per_buffer; icol++) {
         const uint8_t* col_buf = nth_col(icol, buf);
-        float ts = (col_timestamp(col_buf) - scan_start_ts.count()) /
-                   (float)scan_duration.count();
+        int32_t ts = col_timestamp(col_buf) - scan_start_ts.count();
 
         for (int ipx = 0; ipx < pixels_per_column; ipx++) {
             auto p = nth_point(ipx, col_buf);
-            p.t = ts;
+            p.time_offset_us = ts/1000;
             cloud.push_back(p);
         }
     }
