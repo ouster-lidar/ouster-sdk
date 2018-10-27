@@ -53,7 +53,7 @@
   <joint name="os1_link_joint" type="fixed">
     <parent link="base_link" />
     <child link="os1" />
-    <origin xyz="0.00 0. 0.0" rpy="0. 0 0" />
+    <origin xyz="0.00 0. 0.03618" rpy="0. 0 0" />
   </joint>
 
 </robot>

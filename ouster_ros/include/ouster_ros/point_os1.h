@@ -9,7 +9,7 @@ struct EIGEN_ALIGN16 PointOS1 {
     PCL_ADD_POINT4D;
     float intensity;
     float t;
-    uint16_t reflectivity;
+    uint16_t reflectivity;    
     uint8_t ring;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };

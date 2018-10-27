@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+
+   <arg name="bag_file" default="$(find ouster_ros)/tests/2018-08-29-16-46-17_0.bag"/>
+
+   <node pkg="rosbag" type="play" name="rosbag_player" output="screen"
+     args="$(arg bag_file) --clock" >
+   </node>
+
+   <include file="$(find ouster_ros)/os1.launch">
+      <arg name="replay" default="true"/>
+   </include>
+
+<!-- Test ROS Topic Frequency
+Topics (expected hz):
+
+/os1_node/imu (100hz)                                                     
+/os1_node/imu_packets (100hz)                                             
+/os1_node/lidar_packets (~640hz)
+/os1_node/points (10hz)
+-->
+   <test test-name="os1imuHzTest_points" pkg="rostest" type="hztest" name="imuHz">
+      <param name="topic" value="/os1_node/imu" />
+      <param name="hz" value="100" />
+      <param name="hzerror" value="5" />
+      <param name="test_duration" value="5.0" />
+      <param name="wait_time" value="2.0" />
+   </test>
+
+   <test test-name="os1imupacketsHzTest_points" pkg="rostest" type="hztest" name="imupacketsHz">
+      <param name="topic" value="/os1_node/imu_packets" />
+      <param name="hz" value="100" />
+      <param name="hzerror" value="5" />
+      <param name="test_duration" value="5.0" />
+      <param name="wait_time" value="2.0" />
+   </test>
+
+   <test test-name="os1lidarpacketsHzTest_points" pkg="rostest" type="hztest" name="lidarpacketsHz">
+      <param name="topic" value="/os1_node/lidar_packets" />
+      <param name="hz" value="640" />
+      <param name="hzerror" value="20" />
+      <param name="test_duration" value="5.0" />
+      <param name="wait_time" value="2.0" />
+   </test>
+
+   <test test-name="os1pointsHzTest_points" pkg="rostest" type="hztest" name="pointsHz">
+      <param name="topic" value="/os1_node/points" />
+      <param name="hz" value="10" />
+      <param name="hzerror" value="2" />
+      <param name="test_duration" value="5.0" />
+      <param name="wait_time" value="2.0" />
+   </test>
+
+<!-- ROSparam Test only relevant if a real sensor is hooked up
+Params:
+/os1_node/os1_hostname                                             
+/os1_node/os1_imu_port                                             
+/os1_node/os1_lidar_port                                           
+/os1_node/os1_udp_dest
+/os1_node/replay
+/os1_node/scan_dur_ns
+
+   <test test-name="os1GazeboParamTest_robot_description" pkg="rostest" type="paramtest" name="robot_descriptionParam" >
+      <param name="param_name_target" value="robot_description" />
+      <param name="test_duration" value="10.0" />
+      <param name="wait_time" value="60.0" />
+   </test>
+-->
+
+</launch>
