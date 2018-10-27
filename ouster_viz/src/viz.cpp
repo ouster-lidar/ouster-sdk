@@ -33,10 +33,6 @@
 #include <vtkSmartPointer.h>
 #include <vtkTransform.h>
 
-#include <vtkAutoInit.h>
-VTK_MODULE_INIT(vtkRenderingOpenGL);
-VTK_MODULE_INIT(vtkInteractionStyle)
-
 #include "ouster/colormaps.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/viz.h"
@@ -706,7 +702,7 @@ LidarScanState load_lidar_scan_config(const viz::SensorSpecifics& ss) {
 }
 
 /**
- * Run visualizer renering loop
+ * Run visualizer rendering loop
  **/
 void run_viz(VizHandle& vh) {
     auto cb = vtkSmartPointer<vtkTimerCallback>::New();
@@ -849,7 +845,8 @@ std::shared_ptr<VizHandle> init_viz(const std::vector<double>& xyz_lut,
     camera_2d->SetViewUp(0, 1, 0);
     camera_2d->SetClippingRange(8.0, 32000);
 
-    std::shared_ptr<VizHandle> vh = std::make_shared<VizHandle>();
+    std::shared_ptr<VizHandle> vh =
+        std::allocate_shared<VizHandle>(Eigen::aligned_allocator<VizHandle>());
 
     vh->lss = lss;
     vh->visualizer_state = visualizer_state;

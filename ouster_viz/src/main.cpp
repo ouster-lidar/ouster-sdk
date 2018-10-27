@@ -117,19 +117,7 @@ int main(int argc, char** argv) {
         std::vector<float>(OS1::beam_altitude_angles.begin(),
                            OS1::beam_altitude_angles.end())};
 
-    std::cout << "Sensor: " << argv[1] << " UDP Destination:" << argv[2]
-              << std::endl;
-    std::shared_ptr<OS1::client> cli;
-
     try {
-        cli = OS1::init_client(argv[1], argv[2], 7502, 7503);
-        if (!cli) {
-            std::cerr << "Failed to connect to client at: " << argv[1]
-                      << std::endl;
-            print_help();
-            return 1;
-        }
-
         int c = 0;
         int temp = 0;
         while ((c = getopt(argc, argv, "hr:n:i:m:")) != -1) {
@@ -154,20 +142,36 @@ int main(int argc, char** argv) {
                     } else {
                         std::cout << "Lidar Mode must be 512, 1024, or 2048"
                                   << std::endl;
-                        return -1;
+                        print_help();
+                        std::exit(EXIT_FAILURE);
                     }
                     break;
                 case '?':
-                    std::cout << "Incorrect Argument Format" << std::endl;
+                    std::cout << "Invalid Argument Format" << std::endl;
                     print_help();
-                    return -1;
+                    std::exit(EXIT_FAILURE);
                     break;
             }
         }
     } catch (const std::exception& ex) {
-        std::cout << "Invalid format : " << ex.what() << std::endl;
+        std::cout << "Invalid Argument Format: " << ex.what() << std::endl;
         print_help();
-        return 1;
+        std::exit(EXIT_FAILURE);
+    }
+    if (argc != optind + 2) {
+        std::cerr << "Expected 2 arguments after options" << std::endl;
+        print_help();
+        std::exit(EXIT_FAILURE);
+    }
+    std::cout << "Sensor: " << argv[optind]
+              << " UDP Destination:" << argv[optind + 1] << std::endl;
+    std::shared_ptr<OS1::client> cli;
+    cli = OS1::init_client(argv[optind], argv[optind + 1], 7502, 7503);
+    if (!cli) {
+        std::cerr << "Failed to connect to client at: " << argv[optind]
+                  << std::endl;
+        print_help();
+        std::exit(EXIT_FAILURE);
     }
 
     uint8_t lidar_buf[OS1::lidar_packet_bytes + 1];

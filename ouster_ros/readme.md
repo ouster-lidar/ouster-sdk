@@ -1,4 +1,4 @@
-#README for OS1 Example ROS Node
+# README for OS1 Example ROS Node
 
 ## Building the Sample ROS Node
 * Supports Ubuntu 16.04 with ROS Kinetic (for ouster_ros)
