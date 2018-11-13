@@ -1,56 +1,16 @@
 sudo: required
-dist: xenial
+dist: trusty
 language: generic
-services:
-  - docker
 compiler:
   - gcc
-
-notifications:
-  email:
-    on_failure: always
-
 env:
-  global:
-    - ROS_CI_DESKTOP="`lsb_release -cs`"
-    - CI_SOURCE_PATH=$(pwd)
-    - ROSINSTALL_FILE=$CI_SOURCE_PATH/dependencies.rosinstall
-    - CATKIN_OPTIONS=$CI_SOURCE_PATH/catkin.options
-    - PYTHONPATH=${PYTHONPATH}:/usr/lib/python2.7/dist-packages:/usr/local/lib/python2.7/dist-packages
-    - WS_DIR="`mktemp -u ~/ouster_ws_tmp.XXXXXXXXXXXXXXXX`"
   matrix:
-    - ROS_DISTRO="indigo" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:indigo-ros-core
-    - ROS_DISTRO="kinetic" ROS_REPO=ros DOCKER_BASE_IMAGE=ros:kinetic-ros-core
-
-before_install:
-  -   sudo sh -c "echo \"deb http://packages.ros.org/ros/ubuntu $ROS_CI_DESKTOP main\" > /etc/apt/sources.list.d/ros-latest.list";
-      travis_retry sudo apt-key adv --keyserver hkp://ha.pool.sks-keyservers.net:80 --recv-key 421C365BD9FF1F717815A3895523BAEEB01FA116;
-      travis_retry sudo apt-get update;
-      travis_retry sudo apt-get install -y dpkg;
-      travis_retry sudo apt-get install -y python-catkin-pkg python-rosdep python-wstool ros-${ROS_DISTRO}-catkin;
-      source /opt/ros/${ROS_DISTRO}/setup.bash;
-      travis_retry sudo rosdep init;
-      travis_retry rosdep update;
+    - ROS_DISTRO="indigo" ROS_REPO=ros CATKIN_CONFIG="-DCMAKE_BUILD_TYPE=Release" DOCKER_BASE_IMAGE=ros:indigo-perception
+    - ROS_DISTRO="kinetic" ROS_REPO=ros CATKIN_CONFIG="-DCMAKE_BUILD_TYPE=Release" DOCKER_BASE_IMAGE=ros:kinetic-perception
+    - ROS_DISTRO="lunar" ROS_REPO=ros CATKIN_CONFIG="-DCMAKE_BUILD_TYPE=Release" DOCKER_BASE_IMAGE=ros:lunar-perception
+    - ROS_DISTRO="melodic" ROS_REPO=ros CATKIN_CONFIG="-DCMAKE_BUILD_TYPE=Release" DOCKER_BASE_IMAGE=ros:melodic-perception
 
 install:
-  - mkdir -p $WS_DIR/src
-  - cd $WS_DIR/src
-  - catkin_init_workspace
-  - cd $WS_DIR
-  - catkin_make
-  - source devel/setup.bash
-  - cd $WS_DIR/src
-  - ln -s $CI_SOURCE_PATH .
-
-before_script:
-  - cd $WS_DIR/src
-  - wstool init
-  - if [[ -f $ROSINSTALL_FILE ]] ; then wstool merge $ROSINSTALL_FILE ; fi
-  - wstool up
-  - cd $WS_DIR
-  - rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
-
+  git clone https://github.com/ros-industrial/industrial_ci.git .ci_config
 script:
-  - source /opt/ros/$ROS_DISTRO/setup.bash
-  - cd $WS_DIR
-  - catkin_make $( [ -f $CATKIN_OPTIONS ] && cat $CATKIN_OPTIONS )
+  source .ci_config/travis.sh
