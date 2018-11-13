@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
+#include <utility>
 
 namespace ouster {
 namespace OS1 {
@@ -26,9 +28,11 @@ enum client_state { ERROR = 1, LIDAR_DATA = 2, IMU_DATA = 4 };
  * @param imu_port port on which the sensor will send imu data
  * @return pointer owning the resources associated with the connection
  */
-std::shared_ptr<client> init_client(const std::string& hostname,
-                                    const std::string& udp_dest_host,
-                                    int lidar_port, int imu_port);
+std::shared_ptr<client> init_client(
+    const std::string& hostname, const std::string& udp_dest_host,
+    int lidar_port, int imu_port,
+    const std::vector<std::pair<std::string, std::string>>& config_commands =
+        {});
 
 /**
  * Block for up to a second until either data is ready or an error occurs.

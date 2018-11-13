@@ -2,6 +2,8 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
+#include <chrono>
 
 #include "ouster/os1.h"
 #include "ouster/os1_packet.h"
@@ -18,10 +20,16 @@ float lidar_col_0_h_angle = 0.0;
 float imu_av_z = 0.0;
 float imu_la_y = 0.0;
 
+std::chrono::duration<double, std::chrono::seconds::period> timestamp_offset;
+
 void handle_lidar(uint8_t* buf) {
     n_lidar_packets++;
     lidar_col_0_ts = OS1::col_timestamp(OS1::nth_col(0, buf));
     lidar_col_0_h_angle = OS1::col_h_angle(OS1::nth_col(0, buf));
+
+    std::chrono::time_point<std::chrono::system_clock> lidar_ts(
+        std::chrono::nanoseconds(OS1::col_timestamp(OS1::nth_col(0, buf))));
+    timestamp_offset = (std::chrono::system_clock::now() - lidar_ts);
 }
 
 void handle_imu(uint8_t* buf) {
@@ -33,13 +41,15 @@ void handle_imu(uint8_t* buf) {
 
 void print_headers() {
     std::cout << std::setw(15) << "n_lidar_packets" << std::setw(15)
-              << "col_0_azimuth" << std::setw(15) << "col_0_ts" << std::setw(15)
-              << "n_imu_packets" << std::setw(15) << "im_av_z" << std::setw(15)
-              << "im_la_y" << std::setw(15) << "imu_ts" << std::endl;
+              << "time_offset" << std::setw(15) << "col_0_azimuth"
+              << std::setw(15) << "col_0_ts" << std::setw(15) << "n_imu_packets"
+              << std::setw(15) << "im_av_z" << std::setw(15) << "im_la_y"
+              << std::setw(15) << "imu_ts" << std::endl;
 }
 
 void print_stats() {
-    std::cout << "\r" << std::setw(15) << n_lidar_packets << std::setw(15)
+    std::cout << "\r" << std::setw(15) << n_lidar_packets
+              << std::setw(15) << timestamp_offset.count() << std::setw(15)
               << lidar_col_0_h_angle << std::setw(15) << lidar_col_0_ts
               << std::setw(15) << n_imu_packets << std::setw(15) << imu_av_z
               << std::setw(15) << imu_la_y << std::setw(15) << imu_ts;
@@ -53,8 +63,10 @@ int main(int argc, char** argv) {
                   << std::endl;
         return 1;
     }
-
-    auto cli = OS1::init_client(argv[1], argv[2], 7502, 7503);
+    std::vector<std::pair<std::string, std::string>> additional_configurations;
+    additional_configurations.push_back(
+        std::make_pair("set_timestamp_mode", "TIME_FROM_PTP_1588"));
+    auto cli = OS1::init_client(argv[1], argv[2], 7502, 7503, additional_configurations);
     if (!cli) {
         std::cerr << "Failed to connect to client at: " << argv[1] << std::endl;
         return 1;
