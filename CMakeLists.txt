@@ -10,7 +10,6 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   pcl_conversions
   roscpp
-  ouster_client
 )
 
 add_message_files(DIRECTORY msg FILES PacketMsg.msg)
@@ -27,7 +26,7 @@ catkin_package(
   CATKIN_DEPENDS pcl_ros pcl_conversions roscpp message_runtime std_msgs sensor_msgs
 )
 
-add_library(ouster_ros STATIC src/os1_ros.cpp)
+add_library(ouster_ros STATIC src/os1_ros.cpp src/os1.cpp)
 target_link_libraries(ouster_ros ${catkin_LIBRARIES})
 add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 

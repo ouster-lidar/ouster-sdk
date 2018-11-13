@@ -1,9 +1,10 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>ouster_ros</name>
-  <version>0.1.0</version>
-  <description>OS1 example ROS client</description>
-  <maintainer email="oss@ouster.io">ouster developers</maintainer>
+  <version>0.1.1</version>
+  <description>OS1 ROS client</description>
+  <author email="oss@ouster.io">ouster developers</author>
+  <maintainer email="miyamoto.musashi2@gmail.com">Alex</maintainer>
   <license>BSD</license>
   <buildtool_depend>catkin</buildtool_depend>
 
@@ -13,7 +14,6 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>pcl_ros</build_depend>
   <build_depend>pcl_conversions</build_depend>
-  <build_depend>ouster_client</build_depend>
 
   <exec_depend>roscpp</exec_depend>
   <exec_depend>message_runtime</exec_depend>

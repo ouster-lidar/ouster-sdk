@@ -1,0 +1,30 @@
+<!-- -*- mode: XML -*- -->
+<!-- start Ouster OS1 driver -->
+
+<launch>
+
+  <arg name="lidar_address" default="192.168.2.105" doc="hostname or IP address in dotted decimal form of the Ouster sensor"/>
+  <arg name="pc_address" default="192.168.2.1" doc="hostname or IP address of the computer (PC) where the sensor will send data packets"/>
+  <arg name="lidar_port" default="7502" doc="port to which the sensor should send lidar data"/>
+  <arg name="imu_port" default="7503" doc="port to which the sensor should send imu data"/>
+  <arg name="replay" default="false" doc="when true, the node will listen on ~/lidar_packets and ~/imu_packets for data instead of attempting to connect to a sensor"/>
+  <arg name="scan_dur_ns" default="100000000" doc="nanoseconds to batch lidar packets before publishing a cloud"/>
+  <arg name="mode_xyzir" default="true" doc="Point cloud mode, either XYZIR (velodyne compatible) on true, or the default for PointOS1 on false"/>
+  <arg name="lidar_frame_name" default="velodyne" doc="Frame name for lidar output message"/>
+  <arg name="imu_frame_name" default="imu" doc="Frame name for IMU output message"/>
+
+  <node pkg="ouster_ros" type="os1_node" name="os1_node" output="log" >
+    <param name="os1_lidar_address" value="$(arg lidar_address)"/>
+    <param name="pc_address" value="$(arg pc_address)"/>
+    <param name="os1_lidar_port" value="$(arg lidar_port)"/>
+    <param name="os1_imu_port" value="$(arg imu_port)"/>
+    <param name="replay" value="$(arg replay)"/>
+    <param name="scan_dur_ns" value="$(arg scan_dur_ns)"/>
+    <param name="points_topic_name" value="/points_raw"/>
+    <param name="imu_topic_name" value="/imu_raw"/>
+    <param name="lidar_frame_name" value="$(arg lidar_frame_name)"/>
+    <param name="imu_frame_name" value="$(arg imu_frame_name)"/>
+    <param name="mode_xyzir" value="$(arg mode_xyzir)"/>
+  </node>
+
+</launch>

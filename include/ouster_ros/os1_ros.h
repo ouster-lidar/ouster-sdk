@@ -21,6 +21,7 @@ namespace ouster_ros {
 namespace OS1 {
 
 using CloudOS1 = pcl::PointCloud<PointOS1>;
+using CloudOS1XYZIR = pcl::PointCloud<PointOS1XYZIR>;
 using ns = std::chrono::nanoseconds;
 
 /**
@@ -59,9 +60,13 @@ ns timestamp_of_lidar_packet(const PacketMsg& pm);
 /**
  * Parse an imu packet message into a ROS imu message
  * @param pm packet message populated by read_imu_packet
+ * @param frame the frame to set in the resulting ROS message
  * @returns ROS sensor message with fields populated from the OS1 packet
+ * 
+ * @note Modified to support custom message frame name
  */
-sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm);
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
+                                   const std::string& frame = "os1_imu");
 
 /**
  * Accumulate points from a lidar packet message into a PCL point cloud. All
@@ -108,5 +113,19 @@ void spin(const ouster::OS1::client& cli,
  */
 std::function<void(const PacketMsg&)> batch_packets(
     ns scan_dur, const std::function<void(ns, const CloudOS1&)>& f);
+
+/**
+ * Define the pointcloud type to use
+ * @param mode_xyzir to publish PointXYZIR point cloud type (when true), or the native PointOS1 (when false)
+ *
+ * @note This function was added to support velodyne compatible mode.
+ */
+void set_point_mode(bool mode_xyzir);
+
+/**
+ * Converts the OS1 native point format to XYZIR (Velodyne like) 
+ */
+void convert2XYZIR(const CloudOS1& in, CloudOS1XYZIR& out);
+
 }
 }

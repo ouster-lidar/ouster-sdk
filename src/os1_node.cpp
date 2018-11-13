@@ -34,27 +34,35 @@ using ns = std::chrono::nanoseconds;
 using PacketMsg = ouster_ros::PacketMsg;
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "ouster_driver");
+    ros::init(argc, argv, "os1_node");
     ros::NodeHandle nh("~");
 
     auto scan_dur = ns(nh.param("scan_dur_ns", 100000000));
-    auto os1_hostname = nh.param("os1_hostname", std::string("localhost"));
-    auto os1_udp_dest = nh.param("os1_udp_dest", std::string("192.168.1.1"));
+    auto os1_hostname = nh.param("os1_lidar_address", std::string("localhost"));
+    auto os1_udp_dest = nh.param("pc_address", std::string("192.168.1.1"));
     auto os1_lidar_port = nh.param("os1_lidar_port", -1);
     auto os1_imu_port = nh.param("os1_imu_port", -1);
     auto replay_mode = nh.param("replay", true);
+    auto points_topic_name = nh.param("points_topic_name", std::string("/points_raw"));
+    auto imu_topic_name = nh.param("imu_topic_name", std::string("/imu_raw"));
+    auto lidar_frame_name = nh.param("lidar_frame_name", std::string("/os1"));
+    auto imu_frame_name = nh.param("imu_frame_name", std::string("/os1_imu"));
+    auto mode_xyzir = nh.param("mode_xyzir", false);
+    
+    //defines the pointcloud mode
+    ouster_ros::OS1::set_point_mode(mode_xyzir);
 
-    auto lidar_pub = nh.advertise<sensor_msgs::PointCloud2>("points", 10);
-    auto imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 10);
+    auto lidar_pub = nh.advertise<sensor_msgs::PointCloud2>(points_topic_name, 10);
+    auto imu_pub = nh.advertise<sensor_msgs::Imu>(imu_topic_name, 10);
 
     auto lidar_handler = ouster_ros::OS1::batch_packets(
         scan_dur, [&](ns scan_ts, const ouster_ros::OS1::CloudOS1& cloud) {
             lidar_pub.publish(
-                ouster_ros::OS1::cloud_to_cloud_msg(cloud, scan_ts));
+                ouster_ros::OS1::cloud_to_cloud_msg(cloud, scan_ts, lidar_frame_name));
         });
 
     auto imu_handler = [&](const PacketMsg& p) {
-        imu_pub.publish(ouster_ros::OS1::packet_to_imu_msg(p));
+        imu_pub.publish(ouster_ros::OS1::packet_to_imu_msg(p, imu_frame_name));
     };
 
     if (replay_mode) {

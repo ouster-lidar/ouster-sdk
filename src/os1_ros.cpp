@@ -9,6 +9,8 @@ namespace OS1 {
 
 using namespace ouster::OS1;
 
+static bool pointcloud_mode_xyzir = false;
+
 ns timestamp_of_imu_packet(const PacketMsg& pm) {
     return ns(imu_gyro_ts(pm.buf.data()));
 }
@@ -27,13 +29,14 @@ bool read_lidar_packet(const client& cli, PacketMsg& m) {
     return read_lidar_packet(cli, m.buf.data());
 }
 
-sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p) {
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame) {
     const double standard_g = 9.80665;
     sensor_msgs::Imu m;
     const uint8_t* buf = p.buf.data();
 
     m.header.stamp.fromNSec(imu_gyro_ts(buf));
-    m.header.frame_id = "os1_imu";
+    //m.header.frame_id = "os1_imu";
+    m.header.frame_id = frame; //allowing to define the message frame name
 
     m.orientation.x = 0;
     m.orientation.y = 0;
@@ -64,9 +67,17 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p) {
 sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
                                             const std::string& frame) {
     sensor_msgs::PointCloud2 msg;
-    pcl::toROSMsg(cloud, msg);
+    if (pointcloud_mode_xyzir) {
+    	CloudOS1XYZIR cloud_xyzir;
+    	convert2XYZIR(cloud, cloud_xyzir);
+    	pcl::toROSMsg(cloud_xyzir, msg);
+    } else {
+    	pcl::toROSMsg(cloud, msg);
+    }
+    //pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count());
+    //msg.header.stamp.fromNSec(timestamp.count()); //<-- default on original OS1 driver
+    msg.header.stamp = ros::Time::now();  //<-- prefered mode
     return msg;
 }
 
@@ -153,5 +164,25 @@ std::function<void(const PacketMsg&)> batch_packets(
         }
     };
 }
+
+void set_point_mode(bool mode_xyzir)
+{
+    pointcloud_mode_xyzir = mode_xyzir;
+}
+
+void convert2XYZIR(const CloudOS1& in, CloudOS1XYZIR& out) 
+{
+   out.points.clear();
+   PointOS1XYZIR q;
+   for (auto p : in.points) {
+       q.x = p.x;
+       q.y = p.y;
+       q.z = p.z;
+       q.intensity = p.intensity;
+       q.ring = p.ring;
+       out.points.push_back(q);
+   }
+}
+
 }
 }
