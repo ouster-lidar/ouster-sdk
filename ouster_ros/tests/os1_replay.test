@@ -20,10 +20,11 @@ Topics (expected hz):
 /os1_node/lidar_packets (~640hz)
 /os1_node/points (10hz)
 -->
+
    <test test-name="os1imuHzTest_points" pkg="rostest" type="hztest" name="imuHz">
       <param name="topic" value="/os1_node/imu" />
       <param name="hz" value="100" />
-      <param name="hzerror" value="5" />
+      <param name="hzerror" value="10" />
       <param name="test_duration" value="5.0" />
       <param name="wait_time" value="2.0" />
    </test>
