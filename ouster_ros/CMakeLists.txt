@@ -30,8 +30,8 @@ catkin_package(
 
 if (CATKIN_ENABLE_TESTING)
 
-  find_package(rostest REQUIRED)
-  add_rostest(tests/os1_replay.test)
+#  find_package(rostest REQUIRED)
+#  add_rostest(tests/os1_replay.test)
 
 #  catkin_download_test_data(
 #	${PROJECT_NAME}_test.bag
