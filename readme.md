@@ -1,3 +1,8 @@
+[![Docker Stars](https://img.shields.io/docker/stars/wilselby/ouster_example.svg)](https://hub.docker.com/r/wilselby/ouster_example/)
+[![Docker Pulls](https://img.shields.io/docker/pulls/wilselby/ouster_example.svg)](https://hub.docker.com/r/wilselby/ouster_example/)
+[![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/wilselby/ouster_example/blob/master/LICENSE)
+[![Build Status](https://travis-ci.org/wilselby/ouster_example.svg?branch=master)](https://travis-ci.org/wilselby/ouster_example)
+
 # OS1 Example Client and ROS Node
 
 ## Contents
