@@ -15,7 +15,7 @@ notifications:
 #      - accounts@wilselby.com  # Change this to yours should you copy this file.
 env:
   global:
-    - NOT_TEST_BUILD='false'
+    - NOT_TEST_BUILD='true'
     - DEBUG_BASH='true'
     - VERBOSE_OUTPUT='true'
     - CATKIN_CONFIG=--no-install
