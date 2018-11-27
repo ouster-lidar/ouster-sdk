@@ -27,7 +27,6 @@ RUN apt-get update \
     libxext6 \
     libx11-6 \
     tmux \
-    ros-melodic-rviz \
     eog \
  && rm -rf /var/lib/apt/lists/*
 
