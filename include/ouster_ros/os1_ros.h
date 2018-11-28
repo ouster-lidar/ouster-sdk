@@ -118,12 +118,14 @@ std::function<void(const PacketMsg&)> batch_packets(
  * Define the pointcloud type to use
  * @param mode_xyzir to publish PointXYZIR point cloud type (when true), or the native PointOS1 (when false)
  *
- * @note This function was added to support velodyne compatible mode.
+ * @note This function was added to support velodyne compatible mode for Autoware.
  */
 void set_point_mode(bool mode_xyzir);
 
 /**
  * Converts the OS1 native point format to XYZIR (Velodyne like) 
+ * 
+ * @note This function was added to support velodyne compatible mode for Autoware.
  */
 void convert2XYZIR(const CloudOS1& in, CloudOS1XYZIR& out);
 

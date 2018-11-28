@@ -58,5 +58,36 @@ bool read_lidar_packet(const client& cli, uint8_t* buf);
  * @returns true if an imu packet was successfully read
  */
 bool read_imu_packet(const client& cli, uint8_t* buf);
+
+/**
+ * Operation modes (horizontal resolution and scan rate) supported by the OS1 LiDAR
+ */
+typedef enum {
+      MODE_512x10=0,
+      MODE_1024x10=1,
+      MODE_2048x10=2,
+      MODE_512x20=3,
+      MODE_1024x20=4
+} operation_mode_t;
+using OperationMode = operation_mode_t;
+
+/**
+ * Laser pulse modes supported by the OS1 LiDAR
+ */
+typedef enum {
+      PULSE_STANDARD=0,
+      PULSE_NARROW=1,
+} pulse_mode_t;
+using PulseMode = pulse_mode_t;
+/**
+ * Define the pointcloud type to use
+ * @param operation_mode defines
+ * @param pulse_mode
+ * @param window_rejection
+ * 
+ * @note This function was added to configure advanced operation modes for Autoware
+ */
+void set_advanced_params(OperationMode operation_mode, PulseMode pulse_mode, bool window_rejection);
+
 }
 }

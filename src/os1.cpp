@@ -18,6 +18,17 @@ namespace OS1 {
 
 using ns = std::chrono::nanoseconds;
 
+/**
+ * @note Added to support advanced mode parameters configuration for Autoware
+ */
+static OperationMode _operation_mode = ouster::OS1::MODE_1024x10;
+static PulseMode _pulse_mode = ouster::OS1::PULSE_STANDARD;
+static bool _window_rejection = true;
+static std::string _operation_mode_str = "";
+static std::string _pulse_mode_str = "";
+static std::string _window_rejection_str = "";
+//----------------
+
 struct client {
     int lidar_fd;
     int imu_fd;
@@ -129,7 +140,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
         auto res = std::string(read_buf);
         res.erase(res.find_last_not_of(" \r\n\t") + 1);
-
+        
         if (res != op) {
             std::cerr << "init_client: command \"" << cmd << "\" failed with \""
                       << res << "\"" << std::endl;
@@ -144,7 +155,22 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     success &= do_cmd("set_udp_ip", udp_dest_host);
 
     if (!success) return std::shared_ptr<client>();
-
+    
+    /**
+     * @note Added to support advanced mode parameters configuration for Autoware
+     */
+    //setting advanced mode parameters
+    success &= do_cmd("set_config_param", "lidar_mode " + _operation_mode_str);
+    success &= do_cmd("set_config_param", "pulse_mode " + _pulse_mode_str);
+    success &= do_cmd("set_config_param", "window_rejection_enable " + _window_rejection_str);
+    
+    if (!success) return std::shared_ptr<client>();
+    
+    //reinitialize to take effect 
+    success &= do_cmd("reinitialize", "");
+    if (!success) return std::shared_ptr<client>();
+    //----------------
+    
     close(sock_fd);
 
     int lidar_fd = udp_data_socket(lidar_port);
@@ -194,5 +220,33 @@ bool read_lidar_packet(const client& cli, uint8_t* buf) {
 bool read_imu_packet(const client& cli, uint8_t* buf) {
     return recv_fixed(cli.imu_fd, buf, imu_packet_bytes);
 }
+
+/**
+ * @note Added to support advanced mode parameters configuration for Autoware
+ */
+//----------------
+void set_advanced_params(OperationMode operation_mode, PulseMode pulse_mode, bool window_rejection)
+{
+   _operation_mode = operation_mode;
+   _pulse_mode = pulse_mode;
+   _window_rejection = window_rejection;
+   
+   switch (_operation_mode) {
+       case MODE_512x10: _operation_mode_str = std::string("512x10"); break;
+       case MODE_1024x10: _operation_mode_str = std::string("1024x10"); break;
+       case MODE_2048x10: _operation_mode_str = std::string("2048x10"); break;
+       case MODE_512x20: _operation_mode_str = std::string("512x20"); break;
+       case MODE_1024x20: _operation_mode_str = std::string("1024x20"); break;
+       default: _operation_mode_str = std::string("1024x10"); break;
+   }
+   switch (_pulse_mode) {
+       case PULSE_STANDARD: _pulse_mode_str = std::string("STANDARD"); break;
+       case PULSE_NARROW: _pulse_mode_str = std::string("NARROW"); break;
+       default: _pulse_mode_str = std::string("STANDARD"); break;
+   }
+   _window_rejection_str = ((_window_rejection) ? std::string("1") : std::string("0"));
+}
+//----------------
+
 }
 }

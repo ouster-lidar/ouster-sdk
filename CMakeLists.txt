@@ -26,9 +26,7 @@ catkin_package(
   CATKIN_DEPENDS pcl_ros pcl_conversions roscpp message_runtime std_msgs sensor_msgs
 )
 
-add_library(ouster_ros STATIC src/os1_ros.cpp src/os1.cpp)
-target_link_libraries(ouster_ros ${catkin_LIBRARIES})
-add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
+add_executable(${PROJECT_NAME} src/os1_node.cpp src/os1_ros.cpp src/os1.cpp)
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_gencpp)
 
-add_executable(os1_node src/os1_node.cpp)
-target_link_libraries(os1_node ouster_ros ${catkin_LIBRARIES})

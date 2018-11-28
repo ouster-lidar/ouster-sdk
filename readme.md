@@ -22,7 +22,7 @@
 * Sample raw sensor output is available [here](https://data.ouster.io/sample-data-2018-08-29)
 
 ## OS1 address configuration
-* By default, the OS1 uses DHCP to obtain its IP address (the `<os1_hostname>` parameter above). The **"OS-1-64/16 High Resolution Imaging LIDAR: Software User Guide"** by  Ouster Inc. recommends using `dnsmasq`. Additionally, the sensor's internal parameter `udp_ip` can be defined using the `set_config_param` command, although is somewhat risky in case you forget the sensor IP address.
+* By default, the OS1 uses DHCP to obtain its IP address (the `<os1_hostname>` parameter above). The **"OS-1-64/16 High Resolution Imaging LIDAR: Software User Guide"** by  Ouster Inc. recommends using `dnsmasq`. 
 * Setting IP address dynamically (default)
   - Install `dnsmasq` (when required), as `sudo apt install dnsmasq dnsmasq-utils`
   - Identify the interface name the OS1 is attached to. If this interface is not configured yet, setup its IP address and network mask. Use the NetworkManager and use "manual" in IPv4 settings, or use the `ifconfig` command (ex., `ifconfig <INTERFACENAME> 192.168.2.1 netmask 255.255.255.0 up`)
@@ -36,19 +36,6 @@
 where `<HOSTNAME>` is your computer's assigned hostname, `<INTERFACENAME>` is the interface configured above, `192.168.2.***` is the IP address assigned to the sensor, `bc:0f:**:**:**:**` is the OS1 MAC address and `os1-XXXXXXXXXXXX` is the sensor's hostname (`XXXXXXXXXXXX` is replaced by the sensor's serial number). *Note: instead of "\*" an actual number will be shown.*
 
   - You can set `<os1_hostname>` as either the assigned IP address (ex., `192.168.2.***`) or the sensor's hostname (ex., `os1-XXXXXXXXXXXX`).
-* Setting IP address manually
-  - Please identify the current sensor IP address or hostname using the steps above
-  - Connect to the sensor and reconfigure the `udp_ip` parameter, storing the modification internally so to use it at next boot. `os1-XXXXXXXXXXXX` is the sensor's hostname (`XXXXXXXXXXXX` is replaced by the sensor's serial number)
-```bash
-  nc os1-XXXXXXXXXXXX 7501
-  get_config_param active udp_ip
-  set_config_param udp_ip <NEW_IP_ADDRESS>
-  get_config_param active udp_ip
-  get_config_param staged udp_ip
-  write_config_txt
-  reinitialize
-```
-the `udp_ip` configuration parameter will be `""` when running on DHCP mode. The `get_config_param active udp_ip` will show the current IP address setting while `get_config_param staged udp_ip` will show the new setting (not yet active) staged to run, with `write_config_txt` we can store sensor settings.
 
 ## OS1 mode configuration
 * Setting the LiDAR horizontal resolution and scan rate
