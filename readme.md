@@ -51,6 +51,7 @@ where `<HOSTNAME>` is your computer's assigned hostname, `<INTERFACENAME>` is th
 ```
 
 ##Todo
-- [x] Velodyne compatibility mode
-- [ ] Configure active sensor parameters from driver code, in particular `lidar_mode`
-
+- [x] Velodyne compatibility mode.
+- [x] Configure active sensor parameters from driver code, in particular `lidar_mode`.
+- [ ] Fix `replay` option currently not working.
+- [ ] Verify the sensor operation information and attempt software reset on error condition, and current parameter values to avoid unnecessary rewrites/reinitialization.

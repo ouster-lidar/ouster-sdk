@@ -66,6 +66,7 @@ int main(int argc, char** argv) {
     auto queue_size = 10;
     if ((ouster::OS1::OperationMode)operation_mode == ouster::OS1::MODE_512x20 || (ouster::OS1::OperationMode)operation_mode == ouster::OS1::MODE_1024x20) {
     	queue_size = 20;
+    	scan_dur = scan_dur / 2; //scan duration should be smaller at faster frame rates
     }
     //----------------
 
