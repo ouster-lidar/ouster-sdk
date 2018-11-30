@@ -2,6 +2,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/wilselby/ouster_example.svg)](https://hub.docker.com/r/wilselby/ouster_example/)
 [![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/wilselby/ouster_example/blob/master/LICENSE)
 [![Build Status](https://travis-ci.org/wilselby/ouster_example.svg?branch=master)](https://travis-ci.org/wilselby/ouster_example)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fwilselby%2Fouster_example.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fwilselby%2Fouster_example?ref=badge_shield)
 
 # OS1 Example Client and ROS Node
 
