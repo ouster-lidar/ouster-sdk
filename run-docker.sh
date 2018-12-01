@@ -1,7 +1,7 @@
 #!/bin/bash
 
 xhost +local:root
-IMG=wilselby/ros_melodic:cartographer_ros
+IMG=wilselby/ouster_example:latest
 
 # If NVIDIA is present, use Nvidia-docker
 if test -c /dev/nvidia0
