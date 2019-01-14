@@ -188,33 +188,34 @@ int main(int argc, char** argv) {
     // Use to signal termination
     std::atomic_bool end_program{false};
 
-    // Start render loop
-    std::thread render([&] {
-        viz::run_viz(*vh);
-        end_program = true;
-    });
+    // Start poll thread
+    std::thread poll([&] {
+        // Poll the client for data and add to our lidar scan
+        while (!end_program) {
+            OS1::client_state st = OS1::poll_client(*cli);
 
-    // Poll the client for data and add to our lidar scan
-    while (!end_program) {
-        OS1::client_state st = OS1::poll_client(*cli);
-
-        if (st & OS1::client_state::ERROR) {
-            std::cerr << "Client returned error state" << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-        if (st & OS1::client_state::LIDAR_DATA) {
-            if (OS1::read_lidar_packet(*cli, lidar_buf)) {
-                add_packet_to_lidar_scan(lidar_buf, ls_counter, ls_poll, [&] {
-                    viz::update_poll(*vh, ls_poll);
-                });
+            if (st & OS1::client_state::ERROR) {
+                std::cerr << "Client returned error state" << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            if (st & OS1::client_state::LIDAR_DATA) {
+                if (OS1::read_lidar_packet(*cli, lidar_buf)) {
+                    add_packet_to_lidar_scan(
+                        lidar_buf, ls_counter, ls_poll,
+                        [&] { viz::update_poll(*vh, ls_poll); });
+                }
+            }
+            if (st & OS1::client_state::IMU_DATA) {
+                OS1::read_imu_packet(*cli, imu_buf);
             }
         }
-        if (st & OS1::client_state::IMU_DATA) {
-            OS1::read_imu_packet(*cli, imu_buf);
-        }
-    }
+    });
+
+    // Start render loop
+    viz::run_viz(*vh);
+    end_program = true;
 
     // clean up
-    render.join();
+    poll.join();
     return 0;
 }
