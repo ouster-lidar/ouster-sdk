@@ -1,20 +1,28 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.1.0)
 project(ouster_ros)
 
-add_compile_options(-std=c++11 -Wall)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_FLAGS         "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs
   sensor_msgs
+  geometry_msgs
   pcl_ros
   pcl_conversions
   roscpp
   ouster_client
+  ouster_viz
+  tf2
+  tf2_ros
 )
 
-add_message_files(DIRECTORY msg FILES PacketMsg.msg)
-generate_messages(DEPENDENCIES std_msgs sensor_msgs)
+add_message_files(FILES PacketMsg.msg)
+add_service_files(FILES OS1ConfigSrv.srv)
+generate_messages(DEPENDENCIES std_msgs sensor_msgs geometry_msgs)
 
 include_directories(
   include
@@ -24,7 +32,10 @@ include_directories(
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ouster_ros
-  CATKIN_DEPENDS pcl_ros pcl_conversions roscpp message_runtime std_msgs sensor_msgs
+  CATKIN_DEPENDS
+    roscpp message_runtime pcl_ros
+    std_msgs sensor_msgs geometry_msgs
+    ouster_client ouster_viz
 )
 
 add_library(ouster_ros STATIC src/os1_ros.cpp)
@@ -33,3 +44,12 @@ add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 
 add_executable(os1_node src/os1_node.cpp)
 target_link_libraries(os1_node ouster_ros ${catkin_LIBRARIES})
+
+add_executable(os1_cloud_node src/os1_cloud_node.cpp)
+target_link_libraries(os1_cloud_node ouster_ros ${catkin_LIBRARIES})
+
+add_executable(viz_node src/viz_node.cpp)
+target_link_libraries(viz_node ${catkin_LIBRARIES})
+
+add_executable(img_node src/img_node.cpp)
+target_link_libraries(img_node ouster_ros ${catkin_LIBRARIES})
