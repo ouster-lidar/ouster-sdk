@@ -1,40 +1,61 @@
+/**
+ * @file
+ * @brief Holds lidar data by field in column-major order
+ */
+
 #pragma once
-#include <algorithm>
-#include <cmath>
+
+#include <utility>
 #include <vector>
 
 namespace ouster {
 
-/**
- * LidarScan class
- * by convention:
- * row coordinate: 0 <= u < H
- * col coordinate: 0 <= v < W
- */
-
-class LidarScan {
-   public:
-    const size_t W;
-    const size_t H;
+struct LidarScan {
+    const ssize_t W;
+    const ssize_t H;
     std::vector<double> range;
     std::vector<double> intensity;
     std::vector<double> reflectivity;
     std::vector<double> noise;
+    std::vector<double> x;
+    std::vector<double> y;
+    std::vector<double> z;
 
-    LidarScan(size_t w = 2048, size_t h = 64)
-        : W(w),
-          H(h),
-          range(W * H, 0),
-          intensity(W * H, 0),
-          reflectivity(W * H, 0),
-          noise(W * H, 0) {}
+    LidarScan(size_t w, size_t h) : W(w), H(h) {
+        range.reserve(W * H);
+        intensity.reserve(W * H);
+        reflectivity.reserve(W * H);
+        noise.reserve(W * H);
+        x.reserve(W * H);
+        y.reserve(W * H);
+        z.reserve(W * H);
+    };
 
-    void reset() {
-        std::fill(range.begin(), range.end(), 0);
-        std::fill(intensity.begin(), intensity.end(), 0);
-        std::fill(reflectivity.begin(), reflectivity.end(), 0);
-        std::fill(noise.begin(), noise.end(), 0);
+    void clear() {
+        range.clear();
+        intensity.clear();
+        reflectivity.clear();
+        noise.clear();
+        x.clear();
+        y.clear();
+        z.clear();
+    }
+
+    // x, y, z, (padding), i, ts, reflectivity, ring, noise, range (mm)
+    using value_type = std::tuple<float, float, float, float, float, float,
+                                  uint16_t, uint8_t, uint16_t, uint32_t>;
+
+    /**
+     * For use with os1_util.h:batch_to_iter
+     **/
+    void push_back(const value_type& data) {
+        x.push_back(std::get<0>(data));
+        y.push_back(std::get<1>(data));
+        z.push_back(std::get<2>(data));
+        intensity.push_back(std::get<4>(data));
+        reflectivity.push_back(std::get<6>(data));
+        noise.push_back(std::get<8>(data));
+        range.push_back(std::get<9>(data));
     }
 };
-
-}  // namespace ouster
+}

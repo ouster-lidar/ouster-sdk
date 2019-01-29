@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    auto cli = OS1::init_client(argv[1], argv[2], 7502, 7503);
+    auto cli = OS1::init_client(argv[1], argv[2]);
     if (!cli) {
         std::cerr << "Failed to connect to client at: " << argv[1] << std::endl;
         return 1;
