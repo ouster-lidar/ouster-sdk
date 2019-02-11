@@ -42,9 +42,9 @@ bool validTimestamp(const ros::Time& msg_time) {
         1, "OS1 clock is currently not in sync with host. Current host time: "
                << now << " OS1 message time: " << msg_time
                << ". Rejecting measurement.");
-//    return false;
+    return false;
   }
-  
+
   return true;
 }
 
