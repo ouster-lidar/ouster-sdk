@@ -28,7 +28,8 @@ enum client_state { ERROR = 1, LIDAR_DATA = 2, IMU_DATA = 4 };
  */
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    int lidar_port, int imu_port);
+                                    int lidar_port, int imu_port,
+                                    const std::string& lidar_mode);
 
 /**
  * Block for up to a second until either data is ready or an error occurs.

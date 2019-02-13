@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
     auto os1_lidar_port = nh.param("os1_lidar_port", -1);
     auto os1_imu_port = nh.param("os1_imu_port", -1);
     auto replay_mode = nh.param("replay", true);
+    std::string os1_lidar_mode = nh.param("lidar_mode", std::string("1024x10"));
 
     auto lidar_pub = nh.advertise<sensor_msgs::PointCloud2>("points", 10);
     auto imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 10);
@@ -89,7 +90,7 @@ int main(int argc, char** argv) {
         auto imu_packet_pub = nh.advertise<PacketMsg>("imu_packets", 500);
 
         auto cli = ouster::OS1::init_client(os1_hostname, os1_udp_dest,
-                                            os1_lidar_port, os1_imu_port);
+                                            os1_lidar_port, os1_imu_port, os1_lidar_mode);
         if (!cli) {
             ROS_ERROR("Failed to initialize sensor at: %s", os1_hostname.c_str());
             return 1;

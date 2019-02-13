@@ -100,7 +100,7 @@ static int cfg_socket(const char* addr) {
 
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    int lidar_port, int imu_port) {
+                                    int lidar_port, int imu_port, const std::string& lidar_mode) {
     int sock_fd = cfg_socket(hostname.c_str());
 
     if (sock_fd < 0) return std::shared_ptr<client>();
@@ -143,6 +143,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     success &= do_cmd("set_udp_port_imu", std::to_string(imu_port));
     success &= do_cmd("set_udp_ip", udp_dest_host);
     success &= do_cmd("set_timestamp_mode", "TIME_FROM_PTP_1588");
+    success &= do_cmd("set_config_param", "lidar_mode " + lidar_mode);
     success &= do_cmd("reinitialize", "");
 
     if (!success) return std::shared_ptr<client>();
