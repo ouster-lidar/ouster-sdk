@@ -67,18 +67,21 @@ int main(int argc, char** argv) {
         range_image.step = W;
         range_image.encoding = "mono8";
         range_image.data.resize(W * H);
+        range_image.header.stamp = static_cast<ros::Time>(m->header.stamp);
 
         noise_image.width = W;
         noise_image.height = H;
         noise_image.step = W;
         noise_image.encoding = "mono8";
         noise_image.data.resize(W * H);
-
+        noise_image.header.stamp = static_cast<ros::Time>(m->header.stamp);
+        
         intensity_image.width = W;
         intensity_image.height = H;
         intensity_image.step = W;
         intensity_image.encoding = "mono8";
         intensity_image.data.resize(W * H);
+        intensity_image.header.stamp = static_cast<ros::Time>(m->header.stamp);
 
         for (int u = 0; u < H; u++) {
             for (int v = 0; v < W; v++) {
