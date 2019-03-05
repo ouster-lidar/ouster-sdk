@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   ouster_viz
   tf2
   tf2_ros
+  tf2_geometry_msgs
 )
 
 add_message_files(FILES PacketMsg.msg)
