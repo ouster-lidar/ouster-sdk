@@ -9,8 +9,8 @@
 * Supports Ubuntu 16.04 with ROS Kinetic (for ouster_ros)
 * ROS installation instructions can be found
   [here](http://wiki.ros.org/kinetic/Installation/Ubuntu)
-* Additionally requires `ros-kinetic-pcl-ros`, `ros-kinetic-tf2-ros` and,
-  optionally, `ros-kinetic-rviz` for visualization using ROS
+* Additionally requires `ros-kinetic-pcl-ros`, `ros-kinetic-tf2-geometry-msgs`
+  and, optionally, `ros-kinetic-rviz` for visualization using ROS
 * Be sure to source the ROS setup script before building. For example:`source
   /opt/ros/kinetic/setup.bash`
 * Build with `mkdir -p myworkspace/src && cd myworkspace && ln -s
@@ -30,7 +30,7 @@
      /os1_node/lidar_packets` in another terminal
 * To publish ROS topics from recorded data:
     - Run `roslaunch ouster_ros os1.launch replay:=true
-     os1_hostname:=<os1_hostname>`
+      os1_hostname:=<os1_hostname>`
     - In a second terminal run `rosbag play --clock <bagfile>`
     - Note: `os1_node` reads and writes metadata to `${ROS_HOME}` to enable
       accurately replaying raw data. By default, the name of this file is based
@@ -45,7 +45,7 @@
       visualizer, add `viz:=true` to either of the `roslaunch` commands above
     - A window should open and start displaying data after a few seconds. This
       should work with a running sensor or replayed data
-    - See the [README.md](ouster_viz/README.md) in the `ouster_viz` directory
+    - See the [README.md](../ouster_viz/README.md) in the `ouster_viz` directory
       for details on keyboard and mouse controls
 * To display sensor output using ROS tools (rviz):
     - Follow the instructions above for running the example ROS code with a

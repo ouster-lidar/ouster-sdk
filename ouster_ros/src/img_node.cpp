@@ -55,8 +55,10 @@ int main(int argc, char** argv) {
     ros::Publisher intensity_image_pub =
         nh.advertise<sensor_msgs::Image>("intensity_image", 100);
 
-    auto cloud_handler = [&](
-        const pcl::PointCloud<ouster_ros::OS1::PointOS1>::ConstPtr& m) {
+    ouster_ros::OS1::CloudOS1 cloud{};
+
+    auto cloud_handler = [&](const sensor_msgs::PointCloud2::ConstPtr& m) {
+        pcl::fromROSMsg(*m, cloud);
 
         sensor_msgs::Image range_image;
         sensor_msgs::Image noise_image;
@@ -67,24 +69,27 @@ int main(int argc, char** argv) {
         range_image.step = W;
         range_image.encoding = "mono8";
         range_image.data.resize(W * H);
+        range_image.header.stamp = m->header.stamp;
 
         noise_image.width = W;
         noise_image.height = H;
         noise_image.step = W;
         noise_image.encoding = "mono8";
         noise_image.data.resize(W * H);
+        noise_image.header.stamp = m->header.stamp;
 
         intensity_image.width = W;
         intensity_image.height = H;
         intensity_image.step = W;
         intensity_image.encoding = "mono8";
         intensity_image.data.resize(W * H);
+        intensity_image.header.stamp = m->header.stamp;
 
         for (int u = 0; u < H; u++) {
             for (int v = 0; v < W; v++) {
                 const size_t vv = (v + px_offset[u]) % W;
                 const size_t index = vv * H + u;
-                const auto& pt = (*m)[index];
+                const auto& pt = cloud[index];
 
                 if (pt.range == 0) {
                     range_image.data[u * W + v] = 0;
@@ -103,7 +108,7 @@ int main(int argc, char** argv) {
     };
 
     auto pc_sub =
-        nh.subscribe<ouster_ros::OS1::CloudOS1>("points", 500, cloud_handler);
+        nh.subscribe<sensor_msgs::PointCloud2>("points", 500, cloud_handler);
 
     ros::spin();
     return EXIT_SUCCESS;

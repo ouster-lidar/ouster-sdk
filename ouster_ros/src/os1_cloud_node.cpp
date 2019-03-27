@@ -8,9 +8,8 @@
 #include <ros/service.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <chrono>
-
 #include <tf2_ros/static_transform_broadcaster.h>
+#include <chrono>
 
 #include "ouster/os1_packet.h"
 #include "ouster/os1_util.h"
@@ -27,6 +26,11 @@ namespace OS1 = ouster::OS1;
 int main(int argc, char** argv) {
     ros::init(argc, argv, "os1_cloud_node");
     ros::NodeHandle nh("~");
+
+    auto tf_prefix = nh.param("tf_prefix", std::string{});
+    auto sensor_frame = tf_prefix + "/os1_sensor";
+    auto imu_frame = tf_prefix + "/os1_imu";
+    auto lidar_frame = tf_prefix + "/os1_lidar";
 
     ouster_ros::OS1ConfigSrv cfg{};
     auto client = nh.serviceClient<ouster_ros::OS1ConfigSrv>("os1_config");
@@ -50,12 +54,12 @@ int main(int argc, char** argv) {
     auto it = cloud.begin();
     sensor_msgs::PointCloud2 msg{};
 
-    auto batch_and_publish = OS1::batch_to_iter<CloudOS1::iterator, PointOS1>(
-        xyz_lut, W, H, [&](uint64_t scan_ts) mutable {
+    auto batch_and_publish = OS1::batch_to_iter<CloudOS1::iterator>(
+        xyz_lut, W, H, {}, &PointOS1::make,
+        [&](uint64_t scan_ts) mutable {
             msg = ouster_ros::OS1::cloud_to_cloud_msg(
-                cloud, std::chrono::nanoseconds{scan_ts}, "os1_lidar");
+                cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame);
             lidar_pub.publish(msg);
-            it = cloud.begin();
         });
 
     auto lidar_handler = [&](const PacketMsg& pm) mutable {
@@ -63,7 +67,7 @@ int main(int argc, char** argv) {
     };
 
     auto imu_handler = [&](const PacketMsg& p) {
-        imu_pub.publish(ouster_ros::OS1::packet_to_imu_msg(p, "os1_imu"));
+        imu_pub.publish(ouster_ros::OS1::packet_to_imu_msg(p, imu_frame));
     };
 
     auto lidar_packet_sub = nh.subscribe<PacketMsg, const PacketMsg&>(
@@ -75,10 +79,10 @@ int main(int argc, char** argv) {
     tf2_ros::StaticTransformBroadcaster tf_bcast{};
 
     tf_bcast.sendTransform(ouster_ros::OS1::transform_to_tf_msg(
-        cfg.response.imu_to_sensor_transform, "os1_sensor", "os1_imu"));
+        cfg.response.imu_to_sensor_transform, sensor_frame, imu_frame));
 
     tf_bcast.sendTransform(ouster_ros::OS1::transform_to_tf_msg(
-        cfg.response.lidar_to_sensor_transform, "os1_sensor", "os1_lidar"));
+        cfg.response.lidar_to_sensor_transform, sensor_frame, lidar_frame));
 
     ros::spin();
 

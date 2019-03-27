@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -46,29 +47,50 @@ const std::array<std::pair<lidar_mode, std::string>, 5> lidar_mode_strings = {
      {MODE_2048x10, "2048x10"}}};
 
 int udp_data_socket(int port) {
-    int sock_fd = socket(PF_INET, SOCK_DGRAM, 0);
-    if (sock_fd < 0) {
-        std::cerr << "socket: " << std::strerror(errno) << std::endl;
+    struct addrinfo hints, *info_start, *ai;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET6;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    auto port_s = std::to_string(port);
+
+    int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
+    if (ret != 0) {
+        std::cerr << "getaddrinfo(): " << gai_strerror(ret) << std::endl;
+        return -1;
+    }
+    if (info_start == NULL) {
+        std::cerr << "getaddrinfo: empty result" << std::endl;
         return -1;
     }
 
-    struct sockaddr_in my_addr;
-    memset((char*)&my_addr, 0, sizeof(my_addr));
-    my_addr.sin_family = AF_INET;
-    my_addr.sin_port = htons(port);
-    my_addr.sin_addr.s_addr = INADDR_ANY;
+    int sock_fd;
+    for (ai = info_start; ai != NULL; ai = ai->ai_next) {
+        sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+        if (sock_fd < 0) {
+            std::cerr << "udp socket(): " << std::strerror(errno) << std::endl;
+            continue;
+        }
 
-    if (bind(sock_fd, (struct sockaddr*)&my_addr, sizeof(my_addr)) < 0) {
-        std::cerr << "bind: " << std::strerror(errno) << std::endl;
+        if (bind(sock_fd, ai->ai_addr, ai->ai_addrlen) < 0) {
+            close(sock_fd);
+            std::cerr << "udp bind(): " << std::strerror(errno) << std::endl;
+            continue;
+        }
+
+        break;
+    }
+
+    freeaddrinfo(info_start);
+    if (ai == NULL) {
+        close(sock_fd);
         return -1;
     }
 
-    struct timeval timeout;
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
-    if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
-                   sizeof(timeout)) < 0) {
-        std::cerr << "setsockopt: " << std::strerror(errno) << std::endl;
+    if (fcntl(sock_fd, F_SETFL, fcntl(sock_fd, F_GETFL, 0) | O_NONBLOCK) < 0) {
+        std::cerr << "udp fcntl(): " << std::strerror(errno) << std::endl;
         return -1;
     }
 
@@ -233,7 +255,7 @@ sensor_info parse_metadata(const std::string& meta) {
                         {},        {},        {}, {}};
     info.hostname = root["hostname"].asString();
     info.sn = root["prod_sn"].asString();
-    info.fw_rev = version_of_string(root["build_rev"].asString());
+    info.fw_rev = root["build_rev"].asString();
 
     info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
 

@@ -45,7 +45,7 @@ const version invalid_version = {0, 0, 0};
 /**
  * Minimum supported version
  */
-const OS1::version min_version = {1, 8, 0};
+const OS1::version min_version = {1, 9, 0};
 
 inline bool operator==(const version& u, const version& v) {
     return u.major == v.major && u.minor == v.minor && u.patch == v.patch;
@@ -63,7 +63,7 @@ inline bool operator<=(const version& u, const version& v) {
 struct sensor_info {
     std::string hostname;
     std::string sn;
-    version fw_rev;
+    std::string fw_rev;
     lidar_mode mode;
     std::vector<double> beam_azimuth_angles;
     std::vector<double> beam_altitude_angles;

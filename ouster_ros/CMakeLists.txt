@@ -6,6 +6,9 @@ set(CMAKE_CXX_FLAGS         "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(jsoncpp REQUIRED jsoncpp)
+
 find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs
@@ -45,12 +48,16 @@ add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 
 add_executable(os1_node src/os1_node.cpp)
 target_link_libraries(os1_node ouster_ros ${catkin_LIBRARIES})
+add_dependencies(os1_node ${PROJECT_NAME}_gencpp)
 
 add_executable(os1_cloud_node src/os1_cloud_node.cpp)
 target_link_libraries(os1_cloud_node ouster_ros ${catkin_LIBRARIES})
+add_dependencies(os1_cloud_node ${PROJECT_NAME}_gencpp)
 
 add_executable(viz_node src/viz_node.cpp)
 target_link_libraries(viz_node ${catkin_LIBRARIES})
+add_dependencies(viz_node ${PROJECT_NAME}_gencpp)
 
 add_executable(img_node src/img_node.cpp)
 target_link_libraries(img_node ouster_ros ${catkin_LIBRARIES})
+add_dependencies(img_node ${PROJECT_NAME}_gencpp)

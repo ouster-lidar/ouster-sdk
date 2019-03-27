@@ -38,30 +38,36 @@ if (DEFINED CATKIN_DEVEL_PREFIX)
   )
 
   include_directories(${catkin_INCLUDE_DIRS})
-
   set(viz_LINK_LIBRARIES ${catkin_LIBRARIES})
 
 else()
   message(STATUS "Catkin env not set, compiling ${PROJECT_NAME} without ROS")
-  add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
+
+  if(NOT TARGET ouster_client)
+    add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
+  endif()
 
   set(viz_LINK_LIBRARIES ouster_client)
-
 endif()
 
-include_directories(include)
 
+include_directories(include)
 include_directories(SYSTEM
   ${EIGEN3_INCLUDE_DIR}
   ${VTK_INCLUDE_DIRS}
-  )
+)
 
-add_library(ouster_viz STATIC src/viz.cpp)
+
+add_library(ouster_viz STATIC
+  src/viz.cpp)
 target_link_libraries(ouster_viz
   ${viz_LINK_LIBRARIES}
 )
 
-add_executable(viz src/main.cpp src/viz.cpp)
+
+add_executable(viz
+  src/main.cpp
+  src/viz.cpp)
 target_link_libraries(viz
   ${VTK_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}

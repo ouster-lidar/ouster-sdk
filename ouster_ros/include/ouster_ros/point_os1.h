@@ -13,12 +13,18 @@ namespace OS1 {
 struct EIGEN_ALIGN16 PointOS1 {
     PCL_ADD_POINT4D;
     float intensity;
-    float t;
+    uint32_t t;
     uint16_t reflectivity;
     uint8_t ring;
     uint16_t noise;
     uint32_t range;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    static inline PointOS1 make(float x, float y, float z, float intensity,
+                                uint32_t t, uint16_t reflectivity, uint8_t ring,
+                                uint16_t noise, uint32_t range) {
+        return {x, y, z, 0.0, intensity, t, reflectivity, ring, noise, range};
+    }
 };
 }
 }
@@ -29,9 +35,9 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::OS1::PointOS1,
     (float, y, y)
     (float, z, z)
     (float, intensity, intensity)
-    (float, t, t)
-    (uint8_t, ring, ring)
+    (uint32_t, t, t)
     (uint16_t, reflectivity, reflectivity)
+    (uint8_t, ring, ring)
     (uint16_t, noise, noise)
     (uint32_t, range, range)
 )

@@ -4,6 +4,7 @@
 #include <csignal>
 #include <cstdlib>
 
+#include <Eigen/Eigen>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -23,9 +24,8 @@ namespace viz = ouster::viz;
  * Print usage
  */
 void print_help() {
-    std::cout << "Usage:\n"
-              << "Required arguments: ./viz hostname udp_destination_host\n"
-              << "Optional Arguments:\n"
+    std::cout << "Usage: viz [options] [hostname] [udp_destination]\n"
+              << "Options:\n"
               << "  -m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10> "
                  "lidar mode, default: 1024x10"
               << std::endl;
@@ -101,17 +101,17 @@ int main(int argc, char** argv) {
     // Use to signal termination
     std::atomic_bool end_program{false};
 
-    auto it = std::back_inserter(*ls);
+    // auto it = std::back_inserter(*ls);
+    auto it = ls->begin();
 
     // callback that calls update with filled lidar scan
-    auto batch_and_update =
-        OS1::batch_to_iter<std::back_insert_iterator<ouster::LidarScan>,
-                           ouster::LidarScan::value_type>(
-            xyz_lut, W, H, [&](uint64_t) {
-                viz::update(*vh, ls);
-                ls->clear();
-                it = std::back_inserter(*ls);
-            });
+    auto batch_and_update = OS1::batch_to_iter<ouster::LidarScan::iterator>(
+        xyz_lut, W, H, {}, &ouster::LidarScan::make_val,
+        [&](uint64_t) {
+            // swap lidar scan and point it to new buffer
+            viz::update(*vh, ls);
+            it = ls->begin();
+        });
 
     // Start poll thread
     std::thread poll([&] {

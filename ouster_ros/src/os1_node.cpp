@@ -32,9 +32,10 @@ void populate_metadata_defaults(OS1::sensor_info& info,
 
     if (!info.sn.size()) info.sn = "UNKNOWN";
 
-    if (info.fw_rev == OS1::invalid_version)
+    OS1::version v = OS1::version_of_string(info.fw_rev);
+    if (v == OS1::invalid_version)
         ROS_WARN("Unknown sensor firmware version; output may not be reliable");
-    else if (info.fw_rev < OS1::min_version)
+    else if (v < OS1::min_version)
         ROS_WARN("Firmware < %s not supported; output may not be reliable",
                  to_string(OS1::min_version).c_str());
 
@@ -44,14 +45,14 @@ void populate_metadata_defaults(OS1::sensor_info& info,
         info.mode = OS1::lidar_mode_of_string(specified_lidar_mode);
     }
 
-    if (!info.beam_azimuth_angles.size() || !info.beam_azimuth_angles.size()) {
+    if (info.beam_azimuth_angles.empty() || info.beam_altitude_angles.empty()) {
         ROS_WARN("Beam angles not found in metadata; using design values");
         info.beam_azimuth_angles = OS1::beam_azimuth_angles;
         info.beam_altitude_angles = OS1::beam_altitude_angles;
     }
 
-    if (!info.imu_to_sensor_transform.size() ||
-        !info.lidar_to_sensor_transform.size()) {
+    if (info.imu_to_sensor_transform.empty() ||
+        info.lidar_to_sensor_transform.empty()) {
         ROS_WARN("Frame transforms not found in metadata; using design values");
         info.imu_to_sensor_transform = OS1::imu_to_sensor_transform;
         info.lidar_to_sensor_transform = OS1::lidar_to_sensor_transform;
@@ -181,7 +182,7 @@ int main(int argc, char** argv) {
 
         ROS_INFO("Using lidar_mode: %s", OS1::to_string(info.mode).c_str());
         ROS_INFO("Sensor sn: %s firmware rev: %s", info.sn.c_str(),
-                 to_string(info.fw_rev).c_str());
+                 info.fw_rev.c_str());
 
         // just serve config service
         ros::spin();
@@ -211,7 +212,7 @@ int main(int argc, char** argv) {
         populate_metadata_defaults(info, "");
 
         ROS_INFO("Sensor sn: %s firmware rev: %s", info.sn.c_str(),
-                 to_string(info.fw_rev).c_str());
+                 info.fw_rev.c_str());
 
         // publish packet messages from the sensor
         return connection_loop(nh, *cli);

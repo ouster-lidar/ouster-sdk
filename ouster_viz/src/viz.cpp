@@ -119,13 +119,7 @@ struct VizHandle {
  * Update data being displayed
  **/
 void update(viz::VizHandle& vh, std::unique_ptr<ouster::LidarScan>& ls) {
-    assert(ls->range.size() == (size_t)vh.W * vh.H);
-    assert(ls->intensity.size() == (size_t)vh.W * vh.H);
-    assert(ls->reflectivity.size() == (size_t)vh.W * vh.H);
-    assert(ls->noise.size() == (size_t)vh.W * vh.H);
-    assert(ls->x.size() == (size_t)vh.W * vh.H);
-    assert(ls->y.size() == (size_t)vh.W * vh.H);
-    assert(ls->z.size() == (size_t)vh.W * vh.H);
+    assert(ls->W * ls->H == vh.W * vh.H);
 
     std::unique_lock<std::mutex> ls_guard(vh.lsb.ls_mtx);
     ls.swap(vh.lsb.back);
@@ -168,20 +162,20 @@ void color_noise(Eigen::Ref<Eigen::ArrayXd> key_eigen,
  * Generates a point cloud from a lidar scan, by multiplying each pixel in the
  * lidar scan by a vector pointing radially outward
  **/
-void lidar_scan_to_point_cloud(const ouster::LidarScan& ls, Points& xyz) {
+void lidar_scan_to_point_cloud(ouster::LidarScan& ls, Points& xyz) {
     const int n = ls.W * ls.H;
     xyz.resize(n, 3);
-    xyz.col(0) = Eigen::Map<const Eigen::ArrayXd>(ls.x.data(), n);
-    xyz.col(1) = Eigen::Map<const Eigen::ArrayXd>(ls.y.data(), n);
-    xyz.col(2) = Eigen::Map<const Eigen::ArrayXd>(ls.z.data(), n);
+    xyz.col(0) = ls.x();
+    xyz.col(1) = ls.y();
+    xyz.col(2) = ls.z();
 }
 
 /**
  * Update scalars used to color points
  **/
 void update_color_key(const VisualizerConfig& config, const Points& xyz,
-                      std::vector<double>& intensity,
-                      std::vector<double>& range,
+                      Eigen::Ref<Eigen::ArrayXd> intensity,
+                      Eigen::Ref<Eigen::ArrayXd> range,
                       std::vector<double>& color_key) {
     const int n = xyz.rows();
     color_key.resize(n);
@@ -221,9 +215,9 @@ void update_images(
     using MapXXdr = Eigen::Map<
         Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>;
 
-    MapXXd r{ls.range.data(), ls.H, ls.W};
-    MapXXd i{ls.intensity.data(), ls.H, ls.W};
-    MapXXd n{ls.noise.data(), ls.H, ls.W};
+    MapXXd r{ls.range().data(), ls.H, ls.W};
+    MapXXd i{ls.intensity().data(), ls.H, ls.W};
+    MapXXd n{ls.noise().data(), ls.H, ls.W};
 
     MapXXdr dst{arr.data(), 3 * ls.H, ls.W};
 
@@ -455,8 +449,8 @@ void run_viz(VizHandle& vh) {
         // update data backing visualization: pc_render, color_key, image_data
         lidar_scan_to_point_cloud(*vh.lsb.front, pc_render);
 
-        update_color_key(vh.config, pc_render, vh.lsb.front->intensity,
-                         vh.lsb.front->range, color_key);
+        update_color_key(vh.config, pc_render, vh.lsb.front->intensity(),
+                         vh.lsb.front->range(), color_key);
 
         update_images(*vh.lsb.front, image_data, px_offset, vh.config);
 

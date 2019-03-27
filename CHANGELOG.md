@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.0] - 2019-03-26
+### Added
+- allow renaming tf ids using the `tf_prefix` parameter
+
+### Changed
+- use frame id to batch packets so client code deals with reordered lidar
+  packets without splitting frames
+- use a uint32_t for PointOS1 timestamps to avoid unnecessary loss of precision
+
+### Fixed
+- bug causing ring and reflectivity to be corrupted in os1_cloud_node output
+- misplaced sine in azimuth angle calculation (addresses #42)
+- populate timestamps on image node output (addresses #39)
+
 ## [1.10.0] - 2019-01-27
 ### Added
 - `os1_node` now queries and uses calibrated beam angles from the sensor
@@ -27,6 +41,8 @@
 - switched order of fields in `PointOS1` to be compatible with `PointXYZI`
   (addresses #16)
 - moved example visualizer VTK rendering into the main thread (merged #23)
+- the timestamp field of PointOS1 now represents time since the start of the
+  scan (the timestamp of the PointCloud2 message) in nanoseconds
 
 ### Removed
 - removed keyboard camera controls in example visualizer

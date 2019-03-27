@@ -27,14 +27,14 @@
 * An executable called "viz" is generated in the build directory
 * Note: if compiling in an environment with ROS, the location of the
   executable will be different
-* To run: `./viz <os1_hostname> <udp_data_dest_ip>`
+* To run: `./viz <flags> <os1_hostname> <udp_data_dest_ip>`
 * For help, run ./viz -h
 
 ## Command Line Arguments
 * `<os1_hostname>` the hostname or IP address of the OS-1 sensor
 * `<udp_data_dest_ip>` the IP to which the sensor should send data
-* `-m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10>` to set the
-  lidar mode (horizontal resolution and rate). Defaults to 1024x10.
+* `-m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10>` flag to set the lidar
+  mode (horizontal resolution and rate). Defaults to 1024x10.
 
 ## Key bindings
 | key | what it does |

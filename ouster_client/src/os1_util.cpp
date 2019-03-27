@@ -45,7 +45,7 @@ std::vector<double> make_xyz_lut(int W, int H,
         for (int ipx = 0; ipx < H; ipx++) {
             int ind = 3 * (icol * H + ipx);
             double h_angle =
-                std::sin(azimuth_angles.at(ipx) * 2 * M_PI / 360.0) + h_angle_0;
+                (azimuth_angles.at(ipx) * 2 * M_PI / 360.0) + h_angle_0;
 
             xyz[ind + 0] = std::cos(altitude_angles[ipx] * 2 * M_PI / 360.0) *
                            std::cos(h_angle);
