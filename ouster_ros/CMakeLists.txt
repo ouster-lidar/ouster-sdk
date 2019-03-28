@@ -61,3 +61,14 @@ add_dependencies(viz_node ${PROJECT_NAME}_gencpp)
 add_executable(img_node src/img_node.cpp)
 target_link_libraries(img_node ouster_ros ${catkin_LIBRARIES})
 add_dependencies(img_node ${PROJECT_NAME}_gencpp)
+
+install(TARGETS ouster_ros
+                os1_node
+                os1_cloud_node
+                viz_node
+                img_node
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+install(FILES os1.launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
