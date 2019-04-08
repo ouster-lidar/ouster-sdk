@@ -83,12 +83,12 @@ MotionCorrection::InterpolationStatus MotionCorrection::transformPoints(
 
   ros::Time input_time;
   const uint64_t first_point_stamp =
-      pointcloud_in.header.stamp + pointcloud_in.front().time_offset_us;
+      pointcloud_in.header.stamp + pointcloud_in.front().t;
   const uint64_t last_point_stamp =
-      pointcloud_in.header.stamp + pointcloud_in.back().time_offset_us;
+      pointcloud_in.header.stamp + pointcloud_in.back().t;
   pointcloud_out->header.stamp =
-      pointcloud_in.header.stamp + (pointcloud_in.front().time_offset_us +
-                                    pointcloud_in.back().time_offset_us) /
+      pointcloud_in.header.stamp + (pointcloud_in.front().t +
+                                    pointcloud_in.back().t) /
                                        2;
 
   if (transformation_list_.size() < 2) {
@@ -116,7 +116,7 @@ MotionCorrection::InterpolationStatus MotionCorrection::transformPoints(
 
   for (const PointOS1& point : pointcloud_in) {
     const uint64_t point_stamp =
-        pointcloud_in.header.stamp + point.time_offset_us;
+        pointcloud_in.header.stamp + point.t;
 
     if (point_stamp != previous_point_stamp) {
       while (point_it_->stamp < point_stamp) {
