@@ -67,16 +67,16 @@ int main(int argc, char** argv) {
         scan_dur, [&](ns scan_ts, const ouster_ros::OS1::CloudOS1& cloud) {
           sensor_msgs::PointCloud2 msg =
               ouster_ros::OS1::cloud_to_cloud_msg(cloud, scan_ts);
-          if (validTimestamp(msg.header.stamp)) {
+          //if (validTimestamp(msg.header.stamp)) {
             lidar_pub.publish(msg);
-          }
+          //}
         });
 
     auto imu_handler = [&](const PacketMsg& p) {
         sensor_msgs::Imu msg = ouster_ros::OS1::packet_to_imu_msg(p);
-        if(validTimestamp(msg.header.stamp)){
+        //if(validTimestamp(msg.header.stamp)){
             imu_pub.publish(msg);
-        }
+        //}
     };
 
     if (replay_mode) {

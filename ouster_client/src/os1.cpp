@@ -106,14 +106,20 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     if (sock_fd < 0) return std::shared_ptr<client>();
 
     std::string cmd;
+    static std::string setter = "set_config_param";
 
     auto do_cmd = [&](const std::string& op, const std::string& val) {
         const size_t max_res_len = 64;
         char read_buf[max_res_len + 1];
 
         ssize_t len;
-        std::string cmd = op + " " + val + "\n";
+        std::string cmd;
+        if (val.empty())
+          cmd = op + "\n";
+        else
+          cmd = setter + " " + op + " " + val + "\n";
 
+        std::cout << "sending command: " << cmd << std::endl;
         len = write(sock_fd, cmd.c_str(), cmd.length());
         if (len != (ssize_t)cmd.length()) {
             std::cerr << "init_client: failed to send command" << std::endl;
@@ -130,7 +136,13 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         auto res = std::string(read_buf);
         res.erase(res.find_last_not_of(" \r\n\t") + 1);
 
-        if (res != op) {
+        bool check = false;
+        if (val.empty())
+          check = res == op;
+        else 
+          check = res == setter;
+
+        if (!check) {
             std::cerr << "init_client: command \"" << cmd << "\" failed with \""
                       << res << "\"" << std::endl;
             return false;
@@ -139,11 +151,11 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     };
 
     bool success = true;
-    success &= do_cmd("set_udp_port_lidar", std::to_string(lidar_port));
-    success &= do_cmd("set_udp_port_imu", std::to_string(imu_port));
-    success &= do_cmd("set_udp_ip", udp_dest_host);
-    success &= do_cmd("set_timestamp_mode", "TIME_FROM_PTP_1588");
-    success &= do_cmd("set_config_param", "lidar_mode " + lidar_mode);
+    success &= do_cmd("udp_port_lidar", std::to_string(lidar_port));
+    success &= do_cmd("udp_port_imu", std::to_string(imu_port));
+    success &= do_cmd("udp_ip", udp_dest_host);
+    success &= do_cmd("timestamp_mode", "TIME_FROM_PTP_1588");
+    success &= do_cmd("lidar_mode " , lidar_mode);
     success &= do_cmd("reinitialize", "");
 
     if (!success) return std::shared_ptr<client>();
