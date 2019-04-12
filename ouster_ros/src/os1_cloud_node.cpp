@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
         [&](uint64_t scan_ts) mutable {
             msg = ouster_ros::OS1::cloud_to_cloud_msg(
                 cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame);
-            //if (validTimestamp(msg.header.stamp))
+            if (validTimestamp(msg.header.stamp))
               lidar_pub.publish(msg);
         });
 
@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
 
     auto imu_handler = [&](const PacketMsg& p) {
         auto imu_msg = ouster_ros::OS1::packet_to_imu_msg(p, imu_frame);
-        //if (validTimestamp(msg.header.stamp))
+        if (validTimestamp(msg.header.stamp))
           imu_pub.publish(imu_msg);
     };
 
