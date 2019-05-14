@@ -39,6 +39,8 @@
 #include <vtkVertexGlyphFilter.h>
 
 #include "colormaps.h"
+#include "ouster/autoexposure.h"
+#include "ouster/beam_uniformity.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/os1_util.h"
 #include "ouster/viz.h"
@@ -70,12 +72,19 @@ const std::vector<std::pair<std::string, vtkSmartPointer<vtkLookupTable>>>
 /**
  * Specify what quantity to color in the point cloud visualization
  **/
-enum ColorMode { COLOR_Z, COLOR_INTENSITY, COLOR_ZINTENSITY, COLOR_RANGE };
+enum ColorMode {
+    COLOR_Z,
+    COLOR_INTENSITY,
+    COLOR_ZINTENSITY,
+    COLOR_RINTENSITY,
+    COLOR_RANGE
+};
 
 const std::vector<std::pair<std::string, ColorMode>> color_modes = {
     {"Z", COLOR_Z},
     {"INTENSITY", COLOR_INTENSITY},
     {"Z+INTENSITY", COLOR_ZINTENSITY},
+    {"INTENSITY_TIMES_RANGE", COLOR_RINTENSITY},
     {"RANGE", COLOR_RANGE}};
 
 /**
@@ -90,11 +99,20 @@ struct VisualizerConfig {
 
     int palette;       // image color palette
     bool image_noise;  // display noise image
-    double intensity_scale;
     double range_scale;
-    double noise_scale;
 
     int fraction_3d;  // percent of window displaying cloud
+};
+
+/**
+ * Mutable state for visualizer
+ */
+struct VisualizerState {
+    AutoExposure color_intensity;
+    AutoExposure color_zintensity;
+    AutoExposure color_rintensity;
+    AutoExposure color_noise;
+    BeamUniformityCorrector buc;
 };
 
 struct LidarScanBuffer {
@@ -109,6 +127,7 @@ struct LidarScanBuffer {
  **/
 struct VizHandle {
     VisualizerConfig config;
+    VisualizerState state;
     LidarScanBuffer lsb;
     int W;
     int H;
@@ -128,16 +147,6 @@ void update(viz::VizHandle& vh, std::unique_ptr<ouster::LidarScan>& ls) {
 }
 
 /**
- * Applies filter for scaling the intensity scaling factor based on their
- * intensity
- **/
-void color_intensity(Eigen::Ref<Eigen::ArrayXd> key_eigen,
-                     const VisualizerConfig& config) {
-    key_eigen *= config.intensity_scale;
-    key_eigen = key_eigen.max(0.0).sqrt();
-}
-
-/**
  * Applies filter for scaling the intensity scaling factor based on their range
  **/
 void color_range(Eigen::Ref<Eigen::ArrayXd> range,
@@ -149,13 +158,6 @@ void color_range(Eigen::Ref<Eigen::ArrayXd> range,
     } else {
         range = (range * 0.02).min(1.0).max(0.0);
     }
-}
-
-void color_noise(Eigen::Ref<Eigen::ArrayXd> key_eigen,
-                 const VisualizerConfig& config) {
-    double noise_scale = config.image_noise ? config.noise_scale : 0.0;
-    key_eigen *= noise_scale * 0.002;
-    key_eigen = key_eigen.max(0.0).sqrt();
 }
 
 /**
@@ -174,8 +176,8 @@ void lidar_scan_to_point_cloud(ouster::LidarScan& ls, Points& xyz) {
 /**
  * Update scalars used to color points
  **/
-void update_color_key(const VisualizerConfig& config, const Points& xyz,
-                      Eigen::Ref<Eigen::ArrayXd> intensity,
+void update_color_key(const VisualizerConfig& config, VisualizerState& state,
+                      const Points& xyz, Eigen::Ref<Eigen::ArrayXd> intensity,
                       Eigen::Ref<Eigen::ArrayXd> range,
                       std::vector<double>& color_key) {
     const int n = xyz.rows();
@@ -191,12 +193,18 @@ void update_color_key(const VisualizerConfig& config, const Points& xyz,
             break;
         case COLOR_INTENSITY:
             key_eigen = Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
-            color_intensity(key_eigen, config);
+            state.color_intensity(key_eigen);
             break;
         case COLOR_ZINTENSITY:
             key_eigen = Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
-            color_intensity(key_eigen, config);
             key_eigen += ((1.5 + xyz.col(2)) * 0.05).abs().sqrt();
+            state.color_zintensity(key_eigen);
+            break;
+        case COLOR_RINTENSITY:
+            key_eigen =
+                (Eigen::Map<const Eigen::ArrayXd>(range.data(), n) + 3.0) *
+                Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
+            state.color_rintensity(key_eigen);
             break;
         case COLOR_RANGE:
             key_eigen = Eigen::Map<const Eigen::ArrayXd>(range.data(), n);
@@ -213,7 +221,8 @@ void update_color_key(const VisualizerConfig& config, const Points& xyz,
 void update_images(
     ouster::LidarScan& ls,
     Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& arr,
-    const std::vector<int>& px_offset, const VisualizerConfig& config) {
+    const std::vector<int>& px_offset, const VisualizerConfig& config,
+    VisualizerState& state) {
     using MapXXd = Eigen::Map<Eigen::ArrayXXd>;
     using MapXXdr = Eigen::Map<
         Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>;
@@ -235,10 +244,16 @@ void update_images(
             n.row(u).head(ofs);
     }
 
+    Eigen::ArrayXXd noise_image = dst.bottomRows(ls.H);
+    state.buc.correct(noise_image);
+
     const int N = ls.W * ls.H;
     color_range(Eigen::Map<Eigen::ArrayXd>{arr.data(), N}, config);
-    color_intensity(Eigen::Map<Eigen::ArrayXd>{arr.data() + N, N}, config);
-    color_noise(Eigen::Map<Eigen::ArrayXd>{arr.data() + 2 * N, N}, config);
+    state.color_intensity(Eigen::Map<Eigen::ArrayXd>{arr.data() + N, N});
+    if (config.image_noise) {
+        state.color_noise(Eigen::Map<Eigen::ArrayXd>{noise_image.data(), N});
+        dst.bottomRows(ls.H) = noise_image;
+    }
 };
 
 class KeyPressInteractorStyle : public vtkInteractorStyleTrackballCamera {
@@ -342,7 +357,8 @@ vtkSmartPointer<vtkActor> init_cloud_actor(
 }
 
 void fill_viewport(vtkSmartPointer<vtkRenderer> renderer,
-                   vtkSmartPointer<vtkImageData> image) {
+                   vtkSmartPointer<vtkImageData> image,
+                   const VisualizerConfig& config) {
     auto camera = renderer->GetActiveCamera();
 
     double* origin = image->GetOrigin();
@@ -351,8 +367,13 @@ void fill_viewport(vtkSmartPointer<vtkRenderer> renderer,
 
     double xc = origin[0] + 0.5 * (extent[0] + extent[1]) * spacing[0];
     double yc = origin[1] + 0.5 * (extent[2] + extent[3]) * spacing[1];
-    // double s = (extent[1] - extent[0] + 1) * spacing[0] * 0.5;
     double s = (extent[3] - extent[2] + 1) * spacing[1] * 0.5;
+
+    // if the noise image is turned off, we only show the bottom two thirds
+    if (!config.image_noise) {
+        yc = origin[1] + 1.0 / 3 * (extent[2] + extent[3]) * spacing[1];
+        s = (extent[3] - extent[2] + 1) * spacing[1] / 3.0;
+    }
     double d = camera->GetDistance();
 
     camera->ParallelProjectionOn();
@@ -425,7 +446,7 @@ void run_viz(VizHandle& vh) {
     render_window->AddRenderer(renderer_2d);
 
     // fit image to viewport
-    fill_viewport(renderer_2d, image_change->GetOutput());
+    fill_viewport(renderer_2d, image_change->GetOutput(), vh.config);
 
     // vtk callback that calls a std::function in client data
     auto fn_cb = [](vtkObject*, long unsigned int, void* clientData, void*) {
@@ -436,7 +457,6 @@ void run_viz(VizHandle& vh) {
 
     // render callback
     std::function<void()> on_render = [&]() {
-
         // check if we're exiting
         if (vh.exit) render_window_interactor->ExitCallback();
 
@@ -451,9 +471,11 @@ void run_viz(VizHandle& vh) {
 
         // update data backing visualization: pc_render, color_key, image_data
         lidar_scan_to_point_cloud(*vh.lsb.front, pc_render);
-        update_color_key(vh.config, pc_render, vh.lsb.front->intensity(),
-                         vh.lsb.front->range(), color_key);
-        update_images(*vh.lsb.front, image_data, px_offset, vh.config);
+        update_color_key(vh.config, vh.state, pc_render,
+                         vh.lsb.front->intensity(), vh.lsb.front->range(),
+                         color_key);
+        update_images(*vh.lsb.front, image_data, px_offset, vh.config,
+                      vh.state);
 
         points->Modified();
         color->Modified();
@@ -480,6 +502,8 @@ void run_viz(VizHandle& vh) {
 
         renderer_2d->SetViewport(0, vh.config.fraction_3d / 100.0, 1, 1);
         renderer->SetViewport(0, 0, 1, vh.config.fraction_3d / 100.0);
+
+        fill_viewport(renderer_2d, image_change->GetOutput(), vh.config);
 
         if (camera->GetParallelProjection() != vh.config.parallel) {
             camera->SetParallelProjection(vh.config.parallel);
@@ -521,17 +545,15 @@ std::shared_ptr<VizHandle> init_viz(int W, int H) {
     vh->W = W;
     vh->exit = false;
 
-    vh->config.palette = 1;
+    vh->config.palette = 5;
     vh->config.c_palette = 1;
     vh->config.point_size = 2;
 
     vh->config.color_mode = 2;
     vh->config.cycle_range = false;
     vh->config.parallel = false;
-    vh->config.image_noise = false;
-    vh->config.intensity_scale = 0.002;
+    vh->config.image_noise = true;
     vh->config.range_scale = 0.005;
-    vh->config.noise_scale = 1.0;
 
     vh->lsb.back =
         std::unique_ptr<ouster::LidarScan>(new ouster::LidarScan(W, H));
@@ -541,5 +563,5 @@ std::shared_ptr<VizHandle> init_viz(int W, int H) {
 
     return vh;
 }
-}
-}
+}  // namespace viz
+}  // namespace ouster

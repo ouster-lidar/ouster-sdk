@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.13.0] - 2020-03-16
+### Added
+- post-processing to improve ambient image uniformity in visualizer
+- make timestamp mode configurable via the client (PR #97)
+
+### Changed
+- turn on position-independent code by default to make using code in libraries
+  easier (PR #65)
+- use random ports for lidar and imu data by default when unspecified
+
+### Fixed
+- prevent legacy tf prefix from making invalid frame names (PR #56)
+- use `iterator_traits` to make `batch_to_iter` work with more types (PR #70)
+- use correct name for json dependency in `package.xml` (PR #116)
+- handle udp socket creation error gracefully in client
+
 ## [1.12.0] - 2019-05-02
 ### Added
 - install directives for `ouster_ros` build (addresses #50)

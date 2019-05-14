@@ -9,6 +9,7 @@
 #include <iterator>
 #include <utility>
 #include <vector>
+#include <cstdlib>
 
 namespace ouster {
 

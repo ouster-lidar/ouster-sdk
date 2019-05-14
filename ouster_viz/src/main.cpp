@@ -31,6 +31,8 @@ void print_help() {
         << "Options:\n"
         << "  -m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10> : lidar mode, "
            "default 1024x10\n"
+        << "  -l <port> : use specified port for lidar data\n"
+        << "  -i <port> : use specified port for imu data \n"
         << "  -f <path> : use provided metadata file; do not configure via TCP"
         << std::endl;
 }
@@ -57,10 +59,12 @@ int main(int argc, char** argv) {
     OS1::lidar_mode mode = OS1::MODE_1024x10;
     bool do_config = true;  // send tcp commands to configure sensor
     std::string metadata{};
+    int lidar_port = 0;
+    int imu_port = 0;
 
     try {
         int c = 0;
-        while ((c = getopt(argc, argv, "hm:f:")) != -1) {
+        while ((c = getopt(argc, argv, "hm:l:i:f:")) != -1) {
             switch (c) {
                 case 'h':
                     print_help();
@@ -77,6 +81,12 @@ int main(int argc, char** argv) {
                         print_help();
                         std::exit(EXIT_FAILURE);
                     }
+                    break;
+                case 'l':
+                    lidar_port = std::stoi(optarg);
+                    break;
+                case 'i':
+                    imu_port = std::stoi(optarg);
                     break;
                 case 'f':
                     do_config = false;
@@ -103,12 +113,19 @@ int main(int argc, char** argv) {
 
     std::shared_ptr<OS1::client> cli;
     if (do_config) {
-        std::cout << "Configuring sensor: " << argv[optind]
-                  << " UDP Destination:" << argv[optind + 1] << std::endl;
-        cli = OS1::init_client(argv[optind], argv[optind + 1], mode);
+        std::string os1_host = argv[optind];
+        std::string os1_udp_dest = argv[optind + 1];
+        std::cout << "Configuring sensor: " << os1_host
+                  << " UDP Destination:" << os1_udp_dest << std::endl;
+        cli =
+            OS1::init_client(os1_host, os1_udp_dest, mode,
+                             OS1::TIME_FROM_INTERNAL_OSC, lidar_port, imu_port);
     } else {
-        std::cout << "Listening for sensor data" << std::endl;
-        cli = OS1::init_client();
+        if (lidar_port == 0) lidar_port = 7502;
+        if (imu_port == 0) imu_port = 7503;
+        std::cout << "Listening for sensor data on udp ports " << lidar_port
+                  << " and " << imu_port << std::endl;
+        cli = OS1::init_client(lidar_port, imu_port);
     }
 
     if (!cli) {

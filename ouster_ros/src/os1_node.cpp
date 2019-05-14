@@ -147,8 +147,8 @@ int main(int argc, char** argv) {
     // empty indicates "not set" since roslaunch xml can't optionally set params
     auto hostname = nh.param("os1_hostname", std::string{});
     auto udp_dest = nh.param("os1_udp_dest", std::string{});
-    auto lidar_port = nh.param("os1_lidar_port", 7501);
-    auto imu_port = nh.param("os1_imu_port", 7502);
+    auto lidar_port = nh.param("os1_lidar_port", 0);
+    auto imu_port = nh.param("os1_imu_port", 0);
     auto replay = nh.param("replay", false);
     auto lidar_mode = nh.param("lidar_mode", std::string{});
     auto timestamp_mode = nh.param("timestamp_mode", std::string{});

@@ -132,7 +132,7 @@ timestamp_mode timestamp_mode_of_string(const std::string& s);
  * @param imu_port port on which the sensor will send imu data
  * @return pointer owning the resources associated with the connection
  */
-std::shared_ptr<client> init_client(int lidar_port = 7502, int imu_port = 7503);
+std::shared_ptr<client> init_client(int lidar_port = 0, int imu_port = 0);
 
 /**
  * Connect to and configure the sensor and start listening for data
@@ -146,10 +146,10 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode = MODE_1024x10,
                                     timestamp_mode ts_mode = TIME_FROM_INTERNAL_OSC,
-                                    int lidar_port = 7502, int imu_port = 7503);
+                                    int lidar_port = 0, int imu_port = 0);
 
 /**
- * Block for up to timeout_sec until either data is ready or an error occurs.
+ * Block for up to timeout_sec until either data is ready or an error occurs
  * @param cli client returned by init_client associated with the connection
  * @param timeout_sec seconds to block while waiting for data
  * @return client_state s where (s & ERROR) is true if an error occured, (s &
@@ -159,7 +159,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 client_state poll_client(const client& cli, int timeout_sec = 1);
 
 /**
- * Read lidar data from the sensor. Will not block.
+ * Read lidar data from the sensor. Will not block
  * @param cli client returned by init_client associated with the connection
  * @param buf buffer to which to write lidar data. Must be at least
  * lidar_packet_bytes + 1 bytes
@@ -168,7 +168,7 @@ client_state poll_client(const client& cli, int timeout_sec = 1);
 bool read_lidar_packet(const client& cli, uint8_t* buf);
 
 /**
- * Read imu data from the sensor. Will not block.
+ * Read imu data from the sensor. Will not block
  * @param cli client returned by init_client associated with the connection
  * @param buf buffer to which to write imu data. Must be at least
  * imu_packet_bytes + 1 bytes
@@ -186,8 +186,7 @@ std::string get_metadata(const client& cli);
 /**
  * Parse metadata text blob from the sensor into a sensor_info struct. String
  * and vector fields will have size 0 if the parameter cannot be found or
- * parsed,
- * while lidar_mode will be set to 0 (invalid).
+ * parsed, while lidar_mode will be set to 0 (invalid)
  * @throw runtime_error if the text is not valid json
  * @param metadata a text blob returned by get_metadata above
  * @return a sensor_info struct populated with a subset of the metadata
