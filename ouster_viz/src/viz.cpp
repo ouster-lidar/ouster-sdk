@@ -163,8 +163,9 @@ void color_noise(Eigen::Ref<Eigen::ArrayXd> key_eigen,
  * lidar scan by a vector pointing radially outward
  **/
 void lidar_scan_to_point_cloud(ouster::LidarScan& ls, Points& xyz) {
-    const int n = ls.W * ls.H;
-    xyz.resize(n, 3);
+    assert(xyz.rows() == ls.W * ls.H);
+    assert(xyz.cols() == 3);
+
     xyz.col(0) = ls.x();
     xyz.col(1) = ls.y();
     xyz.col(2) = ls.z();
@@ -178,8 +179,10 @@ void update_color_key(const VisualizerConfig& config, const Points& xyz,
                       Eigen::Ref<Eigen::ArrayXd> range,
                       std::vector<double>& color_key) {
     const int n = xyz.rows();
-    color_key.resize(n);
-    intensity.resize(n);
+    assert(intensity.size() == n);
+    assert(range.size() == n);
+    assert(color_key.size() == (size_t)n);
+
     Eigen::Map<Eigen::ArrayXd> key_eigen(color_key.data(), n);
 
     switch (color_modes[config.color_mode].second) {
@@ -315,20 +318,9 @@ class KeyPressInteractorStyle : public vtkInteractorStyleTrackballCamera {
 };
 vtkStandardNewMacro(KeyPressInteractorStyle);
 
-vtkSmartPointer<vtkActor> init_cloud_actor(int n_points, Points& cloud,
-                                           std::vector<double>& color_key) {
-    cloud.resize(n_points, 3);
-    color_key.resize(n_points);
-
-    auto points = vtkSmartPointer<vtkPoints>::New();
-    points->SetDataTypeToDouble();
-    vtkDoubleArray::SafeDownCast(points->GetData())
-        ->SetArray(cloud.data(), n_points * 3, 1);
-
-    auto color = vtkSmartPointer<vtkDoubleArray>::New();
-    color->SetName("DepthArray");
-    color->SetArray(color_key.data(), n_points, 1);
-
+vtkSmartPointer<vtkActor> init_cloud_actor(
+    vtkSmartPointer<vtkPoints>& points,
+    vtkSmartPointer<vtkDoubleArray>& color) {
     auto vtk_cloud = vtkSmartPointer<vtkPolyData>::New();
     vtk_cloud->SetPoints(points);
     vtk_cloud->GetPointData()->SetScalars(color);
@@ -374,21 +366,32 @@ void fill_viewport(vtkSmartPointer<vtkRenderer> renderer,
  * Run visualizer rendering loop
  **/
 void run_viz(VizHandle& vh) {
+    const size_t n_points = vh.W * vh.H;
+
     Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
         image_data{3 * vh.H, vh.W};
-    Points pc_render{vh.H * vh.W, 3};
-    std::vector<double> color_key{};
-    color_key.resize(vh.H, vh.W);
+
+    Points pc_render{n_points, 3};
+    std::vector<double> color_key(n_points, 0.0);
 
     std::vector<int> px_offset = OS1::get_px_offset(vh.W);
 
-    auto cloud_actor = init_cloud_actor(vh.W * vh.H, pc_render, color_key);
+    auto points = vtkSmartPointer<vtkPoints>::New();
+    points->SetDataTypeToDouble();
+    vtkDoubleArray::SafeDownCast(points->GetData())
+        ->SetArray(pc_render.data(), n_points * 3, 1);
+
+    auto color = vtkSmartPointer<vtkDoubleArray>::New();
+    color->SetName("DepthArray");
+    color->SetArray(color_key.data(), n_points, 1);
+
+    auto cloud_actor = init_cloud_actor(points, color);
 
     auto image = vtkSmartPointer<vtkImageData>::New();
     image->SetDimensions(vh.W, 3 * vh.H, 1);
     image->AllocateScalars(VTK_DOUBLE, 1);
     vtkDoubleArray::SafeDownCast(image->GetPointData()->GetScalars())
-        ->SetArray(image_data.data(), 3 * vh.H * vh.W, 1);
+        ->SetArray(image_data.data(), 3 * n_points, 1);
 
     auto image_color = vtkSmartPointer<vtkImageMapToColors>::New();
     image_color->SetLookupTable(palettes[vh.config.palette].second);
@@ -448,19 +451,12 @@ void run_viz(VizHandle& vh) {
 
         // update data backing visualization: pc_render, color_key, image_data
         lidar_scan_to_point_cloud(*vh.lsb.front, pc_render);
-
         update_color_key(vh.config, pc_render, vh.lsb.front->intensity(),
                          vh.lsb.front->range(), color_key);
-
         update_images(*vh.lsb.front, image_data, px_offset, vh.config);
 
-        // note: vtk 6 requires the first line, while >6 requires the second
-        cloud_actor->GetMapper()->GetInput()->Modified();
-        vtkPolyData::SafeDownCast(cloud_actor->GetMapper()->GetInput())
-            ->GetPoints()
-            ->GetData()
-            ->Modified();
-
+        points->Modified();
+        color->Modified();
         image->Modified();
 
         render_window->Render();
@@ -501,7 +497,7 @@ void run_viz(VizHandle& vh) {
     render_window_interactor->SetInteractorStyle(style);
     render_window_interactor->Initialize();
     render_window_interactor->AddObserver(vtkCommand::TimerEvent, timer_cb);
-    render_window_interactor->CreateRepeatingTimer(60);
+    render_window_interactor->CreateRepeatingTimer(16);
 
     style->config_updated();
 
