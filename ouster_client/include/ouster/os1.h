@@ -108,7 +108,15 @@ lidar_mode lidar_mode_of_string(const std::string& s);
 int n_cols_of_lidar_mode(lidar_mode mode);
 
 /**
- * Connect to the sensor and start listening for data
+ * Listen for OS1 data on the specified ports
+ * @param lidar_port port on which the sensor will send lidar data
+ * @param imu_port port on which the sensor will send imu data
+ * @return pointer owning the resources associated with the connection
+ */
+std::shared_ptr<client> init_client(int lidar_port = 7502, int imu_port = 7503);
+
+/**
+ * Connect to and configure the sensor and start listening for data
  * @param hostname hostname or ip of the sensor
  * @param udp_dest_host hostname or ip where the sensor should send data
  * @param lidar_port port on which the sensor will send lidar data
@@ -122,17 +130,17 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const uint16_t imu_port = 7503u);
 
 /**
- * Block for up to a second until either data is ready or an error occurs.
+ * Block for up to timeout_sec until either data is ready or an error occurs.
  * @param cli client returned by init_client associated with the connection
+ * @param timeout_sec seconds to block while waiting for data
  * @return client_state s where (s & ERROR) is true if an error occured, (s &
  * LIDAR_DATA) is true if lidar data is ready to read, and (s & IMU_DATA) is
  * true if imu data is ready to read
  */
-client_state poll_client(const client& cli);
+client_state poll_client(const client& cli, int timeout_sec = 1);
 
 /**
- * Read lidar data from the sensor. Will block for up to a second if no data is
- * available.
+ * Read lidar data from the sensor. Will not block.
  * @param cli client returned by init_client associated with the connection
  * @param buf buffer to which to write lidar data. Must be at least
  * lidar_packet_bytes + 1 bytes
@@ -141,8 +149,7 @@ client_state poll_client(const client& cli);
 bool read_lidar_packet(const client& cli, uint8_t* buf);
 
 /**
- * Read imu data from the sensor. Will block for up to a second if no data is
- * available.
+ * Read imu data from the sensor. Will not block.
  * @param cli client returned by init_client associated with the connection
  * @param buf buffer to which to write imu data. Must be at least
  * imu_packet_bytes + 1 bytes

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.12.0] - 2019-05-02
+### Added
+- install directives for `ouster_ros` build (addresses #50)
+
+### Changed
+- flip the sign on IMU acceleration output to follow usual conventions
+- increase the update rate in the visualizer to ~60hz
+
+### Fixed
+- visualizer issue where the point cloud would occasionally occasionally not be
+  displayed using newer versions of Eigen
+
 ## [1.11.0] - 2019-03-26
 ### Added
 - allow renaming tf ids using the `tf_prefix` parameter

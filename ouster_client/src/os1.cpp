@@ -282,11 +282,21 @@ sensor_info parse_metadata(const std::string& meta) {
     return info;
 }
 
+std::shared_ptr<client> init_client(int lidar_port, int imu_port) {
+    auto cli = std::make_shared<client>();
+
+    int lidar_fd = udp_data_socket(lidar_port);
+    int imu_fd = udp_data_socket(imu_port);
+    cli->lidar_fd = lidar_fd;
+    cli->imu_fd = imu_fd;
+    return cli;
+}
+
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode, const uint16_t lidar_port,
                                     const uint16_t imu_port) {
-    auto cli = std::make_shared<client>();
+        auto cli = init_client(lidar_port, imu_port);
 
     int sock_fd = cfg_socket(hostname.c_str());
 
@@ -346,24 +356,22 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     cli->meta["hostname"] = hostname;
     cli->meta["lidar_mode"] = to_string(mode);
 
-    if (!success) return std::shared_ptr<client>();
-
-    int lidar_fd = udp_data_socket(lidar_port);
-    int imu_fd = udp_data_socket(imu_port);
-    cli->lidar_fd = lidar_fd;
-    cli->imu_fd = imu_fd;
-    return cli;
+    return success ? cli : std::shared_ptr<client>();
 }
 
-client_state poll_client(const client& c) {
+client_state poll_client(const client& c, const int timeout_sec) {
     fd_set rfds;
     FD_ZERO(&rfds);
     FD_SET(c.lidar_fd, &rfds);
     FD_SET(c.imu_fd, &rfds);
 
+    timeval tv;
+    tv.tv_sec = timeout_sec;
+    tv.tv_usec = 0;
+
     int max_fd = std::max(c.lidar_fd, c.imu_fd);
 
-    int retval = select(max_fd + 1, &rfds, NULL, NULL, NULL);
+    int retval = select(max_fd + 1, &rfds, NULL, NULL, &tv);
 
     client_state res = client_state(0);
     if (retval == -1 && errno == EINTR) {
@@ -377,6 +385,7 @@ client_state poll_client(const client& c) {
     }
     return res;
 }
+
 static bool recv_fixed(int fd, void* buf, size_t len) {
     ssize_t n = recvfrom(fd, buf, len + 1, 0, NULL, NULL);
     if (n == (ssize_t)len)

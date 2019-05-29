@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1.0)
 project(ouster_viz)
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_FLAGS         "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
@@ -43,10 +43,7 @@ if (DEFINED CATKIN_DEVEL_PREFIX)
 else()
   message(STATUS "Catkin env not set, compiling ${PROJECT_NAME} without ROS")
 
-  if(NOT TARGET ouster_client)
-    add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
-  endif()
-
+  add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
   set(viz_LINK_LIBRARIES ouster_client)
 endif()
 

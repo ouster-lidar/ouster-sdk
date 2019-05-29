@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1.0)
 project(ouster_ros)
 
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_FLAGS         "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
@@ -67,3 +67,13 @@ add_dependencies(img_node ${PROJECT_NAME}_gencpp)
 
 add_executable(motion_correction_node src/motion_correction_node.cpp src/motion_correction.cpp)
 target_link_libraries(motion_correction_node ${catkin_LIBRARIES})
+
+install(TARGETS os1_node
+                os1_cloud_node
+                viz_node
+                img_node
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+install(FILES os1.launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
