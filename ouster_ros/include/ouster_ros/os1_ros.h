@@ -60,6 +60,20 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
                                             const std::string& frame);
 
 /**
+ * Serialize a PCL point cloud to a ROS message
+ * @param cloud the PCL point cloud to convert
+ * @param timestamp the timestamp to give the resulting ROS message
+ * @param frame the frame to set in the resulting ROS message
+ * @param time offset added to point cloud [ms]
+ * @return a ROS message containing the point cloud
+ */
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
+                                            const std::string& frame,
+                                            const float timeOffset_ms);
+
+                                            
+
+/**
  * Convert transformation matrix return by sensor to ROS transform
  * @param mat transformation matrix return by sensor
  * @param frame the parent frame of the published transform

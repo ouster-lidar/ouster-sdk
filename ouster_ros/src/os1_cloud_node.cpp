@@ -27,7 +27,7 @@ static bool validTimestamp(const ros::Time& msg_time) {
   const ros::Duration kMaxTimeOffset(1.0);
 
   const ros::Time now = ros::Time::now();
-  if (msg_time < (now - kMaxTimeOffset)) {
+  if (/* msg_time < (now - kMaxTimeOffset)*/ true) {
     ROS_WARN_STREAM_THROTTLE(
         1, "OS1 clock is currently not in sync with host. Current host time: "
                << now << " OS1 message time: " << msg_time
@@ -46,6 +46,8 @@ int main(int argc, char** argv) {
     auto sensor_frame = tf_prefix + "/os1_sensor";
     auto imu_frame = tf_prefix + "/os1_imu";
     auto lidar_frame = tf_prefix + "/os1_lidar";
+    
+
 
     ouster_ros::OS1ConfigSrv cfg{};
     auto client = nh.serviceClient<ouster_ros::OS1ConfigSrv>("os1_config");
@@ -68,12 +70,14 @@ int main(int argc, char** argv) {
     CloudOS1 cloud{W, H};
     auto it = cloud.begin();
     sensor_msgs::PointCloud2 msg{};
+    float timeOffset_ms = 0.0;
+    nh.param<float>("timeOffset_ms", timeOffset_ms, 0.0);
 
     auto batch_and_publish = OS1::batch_to_iter<CloudOS1::iterator>(
         xyz_lut, W, H, {}, &PointOS1::make,
         [&](uint64_t scan_ts) mutable {
             msg = ouster_ros::OS1::cloud_to_cloud_msg(
-                cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame);
+                cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame, timeOffset_ms);
             if (validTimestamp(msg.header.stamp))
               lidar_pub.publish(msg);
         });
