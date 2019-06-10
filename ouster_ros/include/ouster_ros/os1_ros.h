@@ -69,7 +69,7 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
  */
 sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
                                             const std::string& frame,
-                                            const float timeOffset_ms);
+                                            const double timeOffset_ms);
 
                                             
 

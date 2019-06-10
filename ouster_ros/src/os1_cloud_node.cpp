@@ -70,8 +70,9 @@ int main(int argc, char** argv) {
     CloudOS1 cloud{W, H};
     auto it = cloud.begin();
     sensor_msgs::PointCloud2 msg{};
-    float timeOffset_ms = 0.0;
-    nh.param<float>("timeOffset_ms", timeOffset_ms, 0.0);
+    double timeOffset_ms = 0.0;
+    nh.param<double>("timeOffset_ms", timeOffset_ms, 0.0);
+    ROS_INFO("Time Offset is initialized to %f ms", timeOffset_ms);
 
     auto batch_and_publish = OS1::batch_to_iter<CloudOS1::iterator>(
         xyz_lut, W, H, {}, &PointOS1::make,
