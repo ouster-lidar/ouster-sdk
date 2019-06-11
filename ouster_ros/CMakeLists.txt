@@ -43,6 +43,7 @@ catkin_package(
 )
 
 add_library(ouster_ros STATIC src/os1_ros.cpp)
+set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(ouster_ros ${catkin_LIBRARIES})
 add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 
