@@ -80,6 +80,12 @@ int udp_data_socket(int port) {
             continue;
         }
 
+        int recv_buf_size = 10 * 1024 * 1024; // 10MB
+        if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, &recv_buf_size, sizeof(recv_buf_size)) == -1) {
+        	std::cerr << "udp setsockopt(SO_RCVBUF): " << std::strerror(errno) << std::endl;
+            continue;
+        }
+
         break;
     }
 
