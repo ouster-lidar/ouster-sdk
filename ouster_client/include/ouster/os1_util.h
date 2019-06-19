@@ -82,7 +82,7 @@ std::vector<int> get_px_offset(int W);
 template <typename iterator_type, typename F, typename C>
 std::function<void(const uint8_t*, iterator_type it)> batch_to_iter(
     const std::vector<double>& xyz_lut, int W, int H,
-    const typename iterator_type::value_type& empty, C&& c, F&& f) {
+    const typename std::iterator_traits<iterator_type>::value_type& empty, C&& c, F&& f) {
     int next_m_id{W};
     int32_t cur_f_id{-1};
 
