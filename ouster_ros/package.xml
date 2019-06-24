@@ -19,6 +19,7 @@
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>ouster_client</build_depend>
   <build_depend>ouster_viz</build_depend>
+  <build_depend>clay_lib</build_depend>
 
 
   <exec_depend>roscpp</exec_depend>

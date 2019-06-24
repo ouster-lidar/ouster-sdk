@@ -17,9 +17,11 @@
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/os1_ros.h"
 
+#include <clay_lib/point_definition.h>
+
 using PacketMsg = ouster_ros::PacketMsg;
 using CloudOS1 = ouster_ros::OS1::CloudOS1;
-using PointOS1 = ouster_ros::OS1::PointOS1;
+using PointOS1 = Kaarta::KaartaSensorPoint;
 
 namespace OS1 = ouster::OS1;
 
@@ -55,7 +57,7 @@ int main(int argc, char** argv) {
     sensor_msgs::PointCloud2 msg{};
 
     auto batch_and_publish = OS1::batch_to_iter<CloudOS1::iterator>(
-        xyz_lut, W, H, {}, &PointOS1::make,
+        xyz_lut, W, H, {}, &Kaarta::KaartaSensorPoint::make,
         [&](uint64_t scan_ts) mutable {
             msg = ouster_ros::OS1::cloud_to_cloud_msg(
                 cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame);

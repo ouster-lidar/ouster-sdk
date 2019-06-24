@@ -91,13 +91,13 @@ int main(int argc, char** argv) {
                 const size_t index = vv * H + u;
                 const auto& pt = cloud[index];
 
-                if (pt.range == 0) {
+                if (pt.distance == 0) {
                     range_image.data[u * W + v] = 0;
                 } else {
                     range_image.data[u * W + v] =
-                        255 - std::min(std::round(pt.range * 5e-3), 255.0);
+                        255 - std::min(std::round(pt.distance * 1000 * 5e-3), 255.0);
                 }
-                noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
+                noise_image.data[u * W + v] = std::min(/*pt.noise*/ (uint16_t)0, (uint16_t)255);
                 intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
             }
         }

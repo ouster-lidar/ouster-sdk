@@ -149,7 +149,8 @@ int main(int argc, char** argv) {
     auto udp_dest = nh.param("os1_udp_dest", std::string{});
     auto lidar_port = nh.param("os1_lidar_port", 7501);
     auto imu_port = nh.param("os1_imu_port", 7502);
-    auto replay = nh.param("replay", false);
+    // auto replay = nh.param("replay", false);
+    auto replay = nh.param("/use_sim_time", false);
     auto lidar_mode = nh.param("lidar_mode", std::string{});
 
     // fall back to metadata file name based on hostname, if available

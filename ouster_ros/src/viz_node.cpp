@@ -21,7 +21,7 @@
 #include "ouster_ros/point_os1.h"
 
 using CloudOS1 = ouster_ros::OS1::CloudOS1;
-using PointOS1 = ouster_ros::OS1::PointOS1;
+using PointOS1 = Kaarta::KaartaSensorPoint;
 
 namespace viz = ouster::viz;
 namespace OS1 = ouster::OS1;
@@ -54,8 +54,8 @@ int main(int argc, char** argv) {
         std::transform(
             cloud.begin(), cloud.end(), ls->begin(), [](const PointOS1& p) {
                 return ouster::LidarScan::make_val(p.x, p.y, p.z, p.intensity,
-                                                   p.t, p.reflectivity, p.ring,
-                                                   p.noise, p.range);
+                                                   p.time, 0, p.ring,
+                                                   0, p.distance);
             });
 
         viz::update(*vh, ls);

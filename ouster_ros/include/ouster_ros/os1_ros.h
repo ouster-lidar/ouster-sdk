@@ -15,11 +15,12 @@
 #include "ouster/os1.h"
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/point_os1.h"
+#include <clay_lib/point_definition.h>
 
 namespace ouster_ros {
 namespace OS1 {
 
-using CloudOS1 = pcl::PointCloud<PointOS1>;
+using CloudOS1 = pcl::PointCloud<Kaarta::KaartaSensorPoint>;
 using ns = std::chrono::nanoseconds;
 
 /**
