@@ -4,7 +4,8 @@
   <arg name="os1_udp_dest" default="10.42.0.1" doc="hostname or IP where the sensor will send data packets"/>
   <arg name="os1_lidar_port" default="7502" doc="port to which the sensor should send lidar data"/>
   <arg name="os1_imu_port" default="7503" doc="port to which the sensor should send imu data"/>
-  <arg name="replay" default="false" doc="do not connect to a sensor; expect /os1_node/{lidar,imu}_packets from replay"/>
+  <arg name="use_imu" default="false" doc="enable or disable madgwick filter (i.e. use stencil imu or ouster imu)"/>
+  <arg name="replay" default="true" doc="do not connect to a sensor; expect /os1_node/{lidar,imu}_packets from replay"/>
   <arg name="lidar_mode" default="" doc="resolution and rate: either 512x10, 512x20, 1024x10, 1024x20, or 2048x10"/>
   <arg name="metadata" default="" doc="override default metadata file for replays"/>
   <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
@@ -35,6 +36,21 @@
   <node if="$(arg image)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
     <remap from="~/os1_config" to="/os1_node/os1_config"/>
     <remap from="~/points" to="/os1_cloud_node/points"/>
+  </node>
+
+  <node pkg="imu_filter_madgwick" type="imu_filter_node" output="log" name="ouster_imu_madgwick_filter_node" if="$(arg use_imu)" >
+    <param name="use_mag" value="false"/>
+    <param name="publish_tf" value="false"/>
+    <remap from="imu/data_raw" to="/os1_cloud_node/imu"/>  
+    <remap from="imu/data" to="madgwick/imu/data"/>  
+  </node>
+
+  <node pkg="stencil_tools" type="imu_rotation" output="log"  name="ouster_imu_rotate_to_clay" if="$(arg use_imu)" >
+    <param name="roll" value="1.57"/>
+    <param name="pitch" value="0"/>
+    <param name="yaw" value="1.57"/>
+    <remap from="imu/data" to="madgwick/imu/data"/> 
+    <remap from="imu/transformed" to="/imu/data"/>
   </node>
 
 </launch>
