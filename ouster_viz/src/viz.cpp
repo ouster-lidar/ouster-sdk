@@ -71,12 +71,19 @@ const std::vector<std::pair<std::string, vtkSmartPointer<vtkLookupTable>>>
 /**
  * Specify what quantity to color in the point cloud visualization
  **/
-enum ColorMode { COLOR_Z, COLOR_INTENSITY, COLOR_ZINTENSITY, COLOR_RANGE };
+enum ColorMode {
+    COLOR_Z,
+    COLOR_INTENSITY,
+    COLOR_ZINTENSITY,
+    COLOR_RINTENSITY,
+    COLOR_RANGE
+};
 
 const std::vector<std::pair<std::string, ColorMode>> color_modes = {
     {"Z", COLOR_Z},
     {"INTENSITY", COLOR_INTENSITY},
     {"Z+INTENSITY", COLOR_ZINTENSITY},
+    {"INTENSITY_TIMES_RANGE", COLOR_RINTENSITY},
     {"RANGE", COLOR_RANGE}};
 
 /**
@@ -91,9 +98,7 @@ struct VisualizerConfig {
 
     int palette;       // image color palette
     bool image_noise;  // display noise image
-    double intensity_scale;
     double range_scale;
-    double noise_scale;
 
     int fraction_3d;  // percent of window displaying cloud
 };
@@ -129,16 +134,6 @@ void update(viz::VizHandle& vh, std::unique_ptr<ouster::LidarScan>& ls) {
 }
 
 /**
- * Applies filter for scaling the intensity scaling factor based on their
- * intensity
- **/
-void color_intensity(Eigen::Ref<Eigen::ArrayXd> key_eigen,
-                     const VisualizerConfig& config) {
-    key_eigen *= config.intensity_scale;
-    key_eigen = key_eigen.max(0.0).sqrt();
-}
-
-/**
  * Applies filter for scaling the intensity scaling factor based on their range
  **/
 void color_range(Eigen::Ref<Eigen::ArrayXd> range,
@@ -152,31 +147,48 @@ void color_range(Eigen::Ref<Eigen::ArrayXd> range,
     }
 }
 
-void color_noise(Eigen::Ref<Eigen::ArrayXd> key_eigen,
-                 const VisualizerConfig& config) {
-    const size_t n = key_eigen.rows();
-    const size_t kth_extreme = n / 20;
-    std::vector<size_t> indices(n);
-    for (size_t i = 0; i < n; i++) {
-        indices[i] = i;
+/**
+ * Functor that adjusts brightness so that 1st percentile pixel is black
+ * and 99th percentile pixel is white, while applying basic gamma correction
+ * of 2.0.
+ * Stores state of the black and white points so that it does not flicker
+ * rapidly.
+ */
+struct AutoExposure {
+   private:
+    double lo_static = -1.0;
+    double hi_static = -1.0;
+
+   public:
+    void operator()(Eigen::Ref<Eigen::ArrayXd> key_eigen) {
+        const size_t n = key_eigen.rows();
+        const size_t kth_extreme = n / 100;
+        std::vector<size_t> indices(n);
+        for (size_t i = 0; i < n; i++) {
+            indices[i] = i;
+        }
+        auto cmp = [&](const size_t a, const size_t b) {
+            return key_eigen(a) < key_eigen(b);
+        };
+        std::nth_element(indices.begin(), indices.begin() + kth_extreme,
+                         indices.end(), cmp);
+        const double lo = key_eigen[*(indices.begin() + kth_extreme)];
+        std::nth_element(indices.begin() + kth_extreme,
+                         indices.end() - kth_extreme, indices.end(), cmp);
+        const double hi = key_eigen[*(indices.end() - kth_extreme)];
+        if (lo_static < 0) {
+            lo_static = lo;
+            hi_static = hi;
+        }
+        lo_static = 0.9 * lo_static + 0.1 * lo;
+        hi_static = 0.9 * hi_static + 0.1 * hi;
+        key_eigen -= lo;
+        key_eigen *= 1.0 / (hi - lo);
+
+        // gamma correction
+        key_eigen = key_eigen.max(0.0).sqrt().min(1.0);
     }
-    auto cmp = [&](const size_t a, const size_t b) {
-        return key_eigen(a) < key_eigen(b);
-    };
-    std::nth_element(indices.begin(), indices.begin() + kth_extreme,
-                     indices.end(), cmp);
-    const double lo = key_eigen[*(indices.begin() + kth_extreme)];
-    std::nth_element(indices.begin() + kth_extreme, indices.end() - kth_extreme,
-                     indices.end(), cmp);
-    const double hi = key_eigen[*(indices.end() - kth_extreme)];
-    static double lo_static = lo;
-    static double hi_static = hi;
-    lo_static = 0.9 * lo_static + 0.1 * lo;
-    hi_static = 0.9 * hi_static + 0.1 * hi;
-    key_eigen -= lo;
-    key_eigen *= 1.0 / (hi - lo);
-    key_eigen = key_eigen.max(0.0).sqrt().min(1.0);
-}
+};
 
 /**
  * Generates a point cloud from a lidar scan, by multiplying each pixel in the
@@ -205,18 +217,28 @@ void update_color_key(const VisualizerConfig& config, const Points& xyz,
 
     Eigen::Map<Eigen::ArrayXd> key_eigen(color_key.data(), n);
 
+    static AutoExposure color_intensity;
+    static AutoExposure color_zintensity;
+    static AutoExposure color_rintensity;
+
     switch (color_modes[config.color_mode].second) {
         case COLOR_Z:
             key_eigen = ((1.5 + xyz.col(2)) * 0.1).abs().sqrt();
             break;
         case COLOR_INTENSITY:
             key_eigen = Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
-            color_intensity(key_eigen, config);
+            color_intensity(key_eigen);
             break;
         case COLOR_ZINTENSITY:
             key_eigen = Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
-            color_intensity(key_eigen, config);
             key_eigen += ((1.5 + xyz.col(2)) * 0.05).abs().sqrt();
+            color_zintensity(key_eigen);
+            break;
+        case COLOR_RINTENSITY:
+            key_eigen =
+                (Eigen::Map<const Eigen::ArrayXd>(range.data(), n) + 3.0) *
+                Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
+            color_rintensity(key_eigen);
             break;
         case COLOR_RANGE:
             key_eigen = Eigen::Map<const Eigen::ArrayXd>(range.data(), n);
@@ -260,9 +282,11 @@ void update_images(
     buc.correct(noise_image);
 
     const int N = ls.W * ls.H;
+    static AutoExposure color_intensity;
+    static AutoExposure color_noise;
     color_range(Eigen::Map<Eigen::ArrayXd>{arr.data(), N}, config);
-    color_intensity(Eigen::Map<Eigen::ArrayXd>{arr.data() + N, N}, config);
-    color_noise(Eigen::Map<Eigen::ArrayXd>{noise_image.data(), N}, config);
+    color_intensity(Eigen::Map<Eigen::ArrayXd>{arr.data() + N, N});
+    color_noise(Eigen::Map<Eigen::ArrayXd>{noise_image.data(), N});
     dst.bottomRows(ls.H) = noise_image;
 };
 
@@ -545,7 +569,7 @@ std::shared_ptr<VizHandle> init_viz(int W, int H) {
     vh->W = W;
     vh->exit = false;
 
-    vh->config.palette = 1;
+    vh->config.palette = 5;
     vh->config.c_palette = 1;
     vh->config.point_size = 2;
 
@@ -553,9 +577,7 @@ std::shared_ptr<VizHandle> init_viz(int W, int H) {
     vh->config.cycle_range = false;
     vh->config.parallel = false;
     vh->config.image_noise = true;
-    vh->config.intensity_scale = 0.002;
     vh->config.range_scale = 0.005;
-    vh->config.noise_scale = 1.0;
 
     vh->lsb.back =
         std::unique_ptr<ouster::LidarScan>(new ouster::LidarScan(W, H));
