@@ -286,8 +286,10 @@ void update_images(
     static AutoExposure color_noise;
     color_range(Eigen::Map<Eigen::ArrayXd>{arr.data(), N}, config);
     color_intensity(Eigen::Map<Eigen::ArrayXd>{arr.data() + N, N});
-    color_noise(Eigen::Map<Eigen::ArrayXd>{noise_image.data(), N});
-    dst.bottomRows(ls.H) = noise_image;
+    if (config.image_noise) {
+        color_noise(Eigen::Map<Eigen::ArrayXd>{noise_image.data(), N});
+        dst.bottomRows(ls.H) = noise_image;
+    }
 };
 
 class KeyPressInteractorStyle : public vtkInteractorStyleTrackballCamera {
@@ -391,7 +393,8 @@ vtkSmartPointer<vtkActor> init_cloud_actor(
 }
 
 void fill_viewport(vtkSmartPointer<vtkRenderer> renderer,
-                   vtkSmartPointer<vtkImageData> image) {
+                   vtkSmartPointer<vtkImageData> image,
+                   const VisualizerConfig& config) {
     auto camera = renderer->GetActiveCamera();
 
     double* origin = image->GetOrigin();
@@ -400,8 +403,13 @@ void fill_viewport(vtkSmartPointer<vtkRenderer> renderer,
 
     double xc = origin[0] + 0.5 * (extent[0] + extent[1]) * spacing[0];
     double yc = origin[1] + 0.5 * (extent[2] + extent[3]) * spacing[1];
-    // double s = (extent[1] - extent[0] + 1) * spacing[0] * 0.5;
     double s = (extent[3] - extent[2] + 1) * spacing[1] * 0.5;
+
+    // if the noise image is turned off, we only show the bottom two thirds
+    if (!config.image_noise) {
+        yc = origin[1] + 1.0 / 3 * (extent[2] + extent[3]) * spacing[1];
+        s = (extent[3] - extent[2] + 1) * spacing[1] / 3.0;
+    }
     double d = camera->GetDistance();
 
     camera->ParallelProjectionOn();
@@ -474,7 +482,7 @@ void run_viz(VizHandle& vh) {
     render_window->AddRenderer(renderer_2d);
 
     // fit image to viewport
-    fill_viewport(renderer_2d, image_change->GetOutput());
+    fill_viewport(renderer_2d, image_change->GetOutput(), vh.config);
 
     // vtk callback that calls a std::function in client data
     auto fn_cb = [](vtkObject*, long unsigned int, void* clientData, void*) {
@@ -528,6 +536,8 @@ void run_viz(VizHandle& vh) {
 
         renderer_2d->SetViewport(0, vh.config.fraction_3d / 100.0, 1, 1);
         renderer->SetViewport(0, 0, 1, vh.config.fraction_3d / 100.0);
+
+        fill_viewport(renderer_2d, image_change->GetOutput(), vh.config);
 
         if (camera->GetParallelProjection() != vh.config.parallel) {
             camera->SetParallelProjection(vh.config.parallel);
