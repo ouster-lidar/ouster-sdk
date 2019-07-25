@@ -39,6 +39,7 @@
 #include <vtkVertexGlyphFilter.h>
 
 #include "colormaps.h"
+#include "ouster/beam_uniformity.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/os1_util.h"
 #include "ouster/viz.h"
@@ -153,9 +154,28 @@ void color_range(Eigen::Ref<Eigen::ArrayXd> range,
 
 void color_noise(Eigen::Ref<Eigen::ArrayXd> key_eigen,
                  const VisualizerConfig& config) {
-    double noise_scale = config.image_noise ? config.noise_scale : 0.0;
-    key_eigen *= noise_scale * 0.002;
-    key_eigen = key_eigen.max(0.0).sqrt();
+    const size_t n = key_eigen.rows();
+    const size_t kth_extreme = n / 20;
+    std::vector<size_t> indices(n);
+    for (size_t i = 0; i < n; i++) {
+        indices[i] = i;
+    }
+    auto cmp = [&](const size_t a, const size_t b) {
+        return key_eigen(a) < key_eigen(b);
+    };
+    std::nth_element(indices.begin(), indices.begin() + kth_extreme,
+                     indices.end(), cmp);
+    const double lo = key_eigen[*(indices.begin() + kth_extreme)];
+    std::nth_element(indices.begin() + kth_extreme, indices.end() - kth_extreme,
+                     indices.end(), cmp);
+    const double hi = key_eigen[*(indices.end() - kth_extreme)];
+    static double lo_static = lo;
+    static double hi_static = hi;
+    lo_static = 0.9 * lo_static + 0.1 * lo;
+    hi_static = 0.9 * hi_static + 0.1 * hi;
+    key_eigen -= lo;
+    key_eigen *= 1.0 / (hi - lo);
+    key_eigen = key_eigen.max(0.0).sqrt().min(1.0);
 }
 
 /**
@@ -235,10 +255,15 @@ void update_images(
             n.row(u).head(ofs);
     }
 
+    Eigen::ArrayXXd noise_image = dst.bottomRows(ls.H);
+    static BeamUniformityCorrector buc;
+    buc.correct(noise_image);
+
     const int N = ls.W * ls.H;
     color_range(Eigen::Map<Eigen::ArrayXd>{arr.data(), N}, config);
     color_intensity(Eigen::Map<Eigen::ArrayXd>{arr.data() + N, N}, config);
-    color_noise(Eigen::Map<Eigen::ArrayXd>{arr.data() + 2 * N, N}, config);
+    color_noise(Eigen::Map<Eigen::ArrayXd>{noise_image.data(), N}, config);
+    dst.bottomRows(ls.H) = noise_image;
 };
 
 class KeyPressInteractorStyle : public vtkInteractorStyleTrackballCamera {
@@ -436,7 +461,6 @@ void run_viz(VizHandle& vh) {
 
     // render callback
     std::function<void()> on_render = [&]() {
-
         // check if we're exiting
         if (vh.exit) render_window_interactor->ExitCallback();
 
@@ -528,7 +552,7 @@ std::shared_ptr<VizHandle> init_viz(int W, int H) {
     vh->config.color_mode = 2;
     vh->config.cycle_range = false;
     vh->config.parallel = false;
-    vh->config.image_noise = false;
+    vh->config.image_noise = true;
     vh->config.intensity_scale = 0.002;
     vh->config.range_scale = 0.005;
     vh->config.noise_scale = 1.0;
@@ -541,5 +565,5 @@ std::shared_ptr<VizHandle> init_viz(int W, int H) {
 
     return vh;
 }
-}
-}
+}  // namespace viz
+}  // namespace ouster
