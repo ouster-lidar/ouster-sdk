@@ -127,10 +127,11 @@ std::function<void(const uint8_t*, iterator_type it)> batch_to_iter(
                 const uint8_t* px_buf = OS1::nth_px(ipx, col_buf);
 
                 // only give range data to 1 in every 4 pixels to mimic OS1-16
+                uint32_t r;
                 if (ipx % 4 == 0) {
-                    uint32_t r = OS1::px_range(px_buf);
+                    r = OS1::px_range(px_buf);
                 } else {
-                    uint32_t r = 0;
+                    r = 0;
                 }
                 
                 int ind = 3 * (idx + ipx);
