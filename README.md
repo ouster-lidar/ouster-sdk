@@ -3,6 +3,8 @@ Sample code for connecting to and configuring the OS-1, reading and visualizing
 data, and interfacing with ROS.
 
 See the `README.md` in each subdirectory for details.
+## mimic_16 fork
+This fork mimics the output of an OS1-16 in the three sample clients provided. All visualizers will output 16 channels of data in the point cloud and the ambient, intensity, and range images. The unused 48 channels are zeroed out. 
 
 ## Contents
 * [ouster_client/](ouster_client/README.md) contains an example C++ client for the OS-1 sensor
