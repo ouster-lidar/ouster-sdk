@@ -128,10 +128,16 @@ std::function<void(const uint8_t*, iterator_type it)> batch_to_iter(
 
                 // only give range data to 1 in every 4 pixels to mimic OS1-16
                 uint32_t r;
+                uint32_t i;
+                uint32_t n;
                 if (ipx % 4 == 0) {
                     r = OS1::px_range(px_buf);
+                    i = OS1::px_signal_photons(px_buf);
+                    n = OS1::px_noise_photons(px_buf);
                 } else {
                     r = 0;
+                    i = 0;
+                    n = 0;
                 }
                 
                 int ind = 3 * (idx + ipx);
@@ -140,9 +146,9 @@ std::function<void(const uint8_t*, iterator_type it)> batch_to_iter(
                 it[idx + ipx] = c(r * 0.001f * xyz_lut[ind + 0],
                                   r * 0.001f * xyz_lut[ind + 1],
                                   r * 0.001f * xyz_lut[ind + 2],
-                                  OS1::px_signal_photons(px_buf), ts - scan_ts,
+                                  i, ts - scan_ts,
                                   OS1::px_reflectivity(px_buf), ipx,
-                                  OS1::px_noise_photons(px_buf), r);
+                                  n, r);
             }
         }
     };
