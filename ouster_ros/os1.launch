@@ -5,7 +5,6 @@
   <arg name="os1_lidar_port" default="7502" doc="port to which the sensor should send lidar data"/>
   <arg name="os1_imu_port" default="7503" doc="port to which the sensor should send imu data"/>
   <arg name="use_imu" default="false" doc="enable or disable madgwick filter (i.e. use stencil imu or ouster imu)"/>
-  <arg name="replay" default="true" doc="do not connect to a sensor; expect /os1_node/{lidar,imu}_packets from replay"/>
   <arg name="lidar_mode" default="" doc="resolution and rate: either 512x10, 512x20, 1024x10, 1024x20, or 2048x10"/>
   <arg name="metadata" default="" doc="override default metadata file for replays"/>
   <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
@@ -13,7 +12,6 @@
 
   <node pkg="ouster_ros" name="os1_node" type="os1_node" output="screen" required="true">
     <param name="~/lidar_mode" type="string" value="$(arg lidar_mode)"/>
-    <param name="~/replay" value="$(arg replay)"/>
     <param name="~/os1_hostname" value="$(arg os1_hostname)"/>
     <param name="~/os1_udp_dest" value="$(arg os1_udp_dest)"/>
     <param name="~/os1_lidar_port" value="$(arg os1_lidar_port)"/>
