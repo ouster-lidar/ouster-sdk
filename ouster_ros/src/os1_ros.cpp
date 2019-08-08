@@ -1,34 +1,41 @@
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl_ros/filters/passthrough.h>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <cassert>
+#include <limits>
 
 #include "ouster/os1.h"
 #include "ouster/os1_packet.h"
 #include "ouster/os1_util.h"
 #include "ouster_ros/os1_ros.h"
 
-namespace ouster_ros {
-namespace OS1 {
+namespace ouster_ros
+{
+namespace OS1
+{
 
 using namespace ouster::OS1;
 
-bool read_imu_packet(const client& cli, PacketMsg& m) {
+bool read_imu_packet(const client &cli, PacketMsg &m)
+{
     m.buf.resize(imu_packet_bytes + 1);
     return read_imu_packet(cli, m.buf.data());
 }
 
-bool read_lidar_packet(const client& cli, PacketMsg& m) {
+bool read_lidar_packet(const client &cli, PacketMsg &m)
+{
     m.buf.resize(lidar_packet_bytes + 1);
     return read_lidar_packet(cli, m.buf.data());
 }
 
-sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p,
-                                   const std::string& frame) {
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg &p,
+                                   const std::string &frame)
+{
     const double standard_g = 9.80665;
     sensor_msgs::Imu m;
-    const uint8_t* buf = p.buf.data();
+    const uint8_t *buf = p.buf.data();
 
     m.header.stamp.fromNSec(imu_gyro_ts(buf));
     m.header.frame_id = frame;
@@ -46,12 +53,14 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p,
     m.angular_velocity.y = imu_av_y(buf) * M_PI / 180.0;
     m.angular_velocity.z = imu_av_z(buf) * M_PI / 180.0;
 
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 9; i++)
+    {
         m.orientation_covariance[i] = -1;
         m.angular_velocity_covariance[i] = 0;
         m.linear_acceleration_covariance[i] = 0;
     }
-    for (int i = 0; i < 9; i += 4) {
+    for (int i = 0; i < 9; i += 4)
+    {
         m.linear_acceleration_covariance[i] = 0.01;
         m.angular_velocity_covariance[i] = 6e-4;
     }
@@ -59,28 +68,69 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p,
     return m;
 }
 
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
-                                            const std::string& frame) {
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
+                                            const std::string &frame)
+{
     sensor_msgs::PointCloud2 msg{};
     pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count()) +ros::Duration(0,70e6);
+    msg.header.stamp.fromNSec(timestamp.count()) + ros::Duration(0, 70e6);
     return msg;
 }
 
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
-                                            const std::string& frame, 
-                                            const double timeOffset = 0.0) {
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
+                                            const std::string &frame,
+                                            const double timeOffset = 0.0)
+{
     sensor_msgs::PointCloud2 msg{};
     pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count()) +ros::Duration(timeOffset*1e-3);
+    msg.header.stamp.fromNSec(timestamp.count()) + ros::Duration(timeOffset * 1e-3);
     return msg;
+}
+
+//TODO(Tuko): Move the intensiy filtering in the point cloud assembly and reject points there. 
+sensor_msgs::PointCloud2 cloud_to_cloud_filtered_msg(CloudOS1 &cloud, ns timestamp,
+                                                     const std::string &frame,
+                                                     const float min_intensity = 0.0,
+                                                     const double timeOffset = 0.0)
+{
+    sensor_msgs::PointCloud2 msg{};
+    if (0 < min_intensity)
+        filter_pcl_intensity(cloud,min_intensity );
+
+    pcl::toROSMsg(cloud, msg);
+    msg.header.frame_id = frame;
+    msg.header.stamp.fromNSec(timestamp.count()) + ros::Duration(timeOffset * 1e-3);
+    return msg;
+}
+
+void filter_pcl_intensity(CloudOS1 &cloud, const float min_intensity)
+{   
+    // 
+    CloudOS1 filtered_cloud;
+    filtered_cloud.points.reserve(cloud.points.size());
+
+    // Iterate over all points and remove the ones with low intensity
+    for(PointOS1 point_i:cloud.points)
+    {
+        if(point_i.intensity > min_intensity)
+        {   
+            filtered_cloud.points.push_back(point_i);
+        }
+    } 
+
+    // Adapt the header and swap the data
+    cloud.points.swap(filtered_cloud.points);
+    cloud.width = cloud.points.size();
+    cloud.points.shrink_to_fit();
+    cloud.height= 1;
 }
 
 geometry_msgs::TransformStamped transform_to_tf_msg(
-    const std::vector<double>& mat, const std::string& frame,
-    const std::string& child_frame) {
+    const std::vector<double> &mat, const std::string &frame,
+    const std::string &child_frame)
+{
     assert(mat.size() == 16);
 
     tf2::Transform tf{};
@@ -97,5 +147,5 @@ geometry_msgs::TransformStamped transform_to_tf_msg(
 
     return msg;
 }
-}
-}
+} // namespace OS1
+} // namespace ouster_ros

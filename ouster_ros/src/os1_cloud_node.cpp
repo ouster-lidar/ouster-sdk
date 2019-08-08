@@ -72,15 +72,19 @@ int main(int argc, char** argv) {
     sensor_msgs::PointCloud2 msg{};
     double timeOffset_ms = 0.0;
     nh.param<double>("timeOffset_ms", timeOffset_ms, 0.0);
+    float min_intensity = 0.0;
+    nh.param<float>("min_intnesity", min_intensity, 0.0);
+
     ROS_INFO("Time Offset is initialized to %f ms", timeOffset_ms);
 
     auto batch_and_publish = OS1::batch_to_iter<CloudOS1::iterator>(
         xyz_lut, W, H, {}, &PointOS1::make,
         [&](uint64_t scan_ts) mutable {
-            msg = ouster_ros::OS1::cloud_to_cloud_msg(
-                cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame, timeOffset_ms);
-            if (validTimestamp(msg.header.stamp))
+            msg = ouster_ros::OS1::cloud_to_cloud_filtered_msg(
+                cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame, min_intensity, timeOffset_ms);
+            if (validTimestamp(msg.header.stamp)){
               lidar_pub.publish(msg);
+            }
         });
 
     auto lidar_handler = [&](const PacketMsg& pm) mutable {

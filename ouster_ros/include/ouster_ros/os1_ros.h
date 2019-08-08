@@ -16,8 +16,10 @@
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/point_os1.h"
 
-namespace ouster_ros {
-namespace OS1 {
+namespace ouster_ros
+{
+namespace OS1
+{
 
 using CloudOS1 = pcl::PointCloud<PointOS1>;
 using ns = std::chrono::nanoseconds;
@@ -29,7 +31,7 @@ using ns = std::chrono::nanoseconds;
  * @param pm the destination packet message
  * @return whether reading was successful
  */
-bool read_imu_packet(const ouster::OS1::client& cli, PacketMsg& pm);
+bool read_imu_packet(const ouster::OS1::client &cli, PacketMsg &pm);
 
 /**
  * Read a lidar packet into a ROS message. Blocks for up to a second if no data
@@ -38,7 +40,7 @@ bool read_imu_packet(const ouster::OS1::client& cli, PacketMsg& pm);
  * @param pm the destination packet message
  * @return whether reading was successful
  */
-bool read_lidar_packet(const ouster::OS1::client& cli, PacketMsg& pm);
+bool read_lidar_packet(const ouster::OS1::client &cli, PacketMsg &pm);
 
 /**
  * Parse an imu packet message into a ROS imu message
@@ -46,8 +48,8 @@ bool read_lidar_packet(const ouster::OS1::client& cli, PacketMsg& pm);
  * @param frame the frame to set in the resulting ROS message
  * @return ROS sensor message with fields populated from the OS1 packet
  */
-sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
-                                   const std::string& frame);
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg &pm,
+                                   const std::string &frame);
 
 /**
  * Serialize a PCL point cloud to a ROS message
@@ -56,8 +58,8 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
  * @param frame the frame to set in the resulting ROS message
  * @return a ROS message containing the point cloud
  */
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
-                                            const std::string& frame);
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
+                                            const std::string &frame);
 
 /**
  * Serialize a PCL point cloud to a ROS message
@@ -67,11 +69,43 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
  * @param time offset added to point cloud [ms]
  * @return a ROS message containing the point cloud
  */
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
-                                            const std::string& frame,
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
+                                            const std::string &frame,
                                             const double timeOffset_ms);
 
-                                            
+/**
+ * Serialize a PCL point cloud to a ROS message, filter it by intensity and add a time offset if necessary
+ * @param cloud the PCL point cloud to convert
+ * @param timestamp the timestamp to give the resulting ROS message
+ * @param frame the frame to set in the resulting ROS message
+ * @param time offset added to point cloud [ms]
+ * @return a ROS message containing the point cloud
+ */
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
+                                            const std::string &frame,
+                                            const double timeOffset_ms);
+
+
+/**
+ * Serialize a PCL point cloud to a ROS message, filter it by intensity and add a time offset if necessary
+ * @param cloud the PCL point cloud to convert
+ * @param timestamp the timestamp to give the resulting ROS message
+ * @param frame the frame to set in the resulting ROS message
+ * @param time offset added to point cloud [ms]
+ * @return a ROS message containing the point cloud
+ */
+sensor_msgs::PointCloud2 cloud_to_cloud_filtered_msg(CloudOS1 &cloud, ns timestamp,
+                                                     const std::string &frame,
+                                                     const float min_intensity,
+                                                     const double timeOffset);
+
+/**
+ * Filter point cloud by intensity
+ * @param cloud the PCL point cloud to filter
+ * @oaram max_intensity Max intensity a point cloud can have
+ * @return a ROS message containing the point cloud
+ */
+void filter_pcl_intensity(CloudOS1 &cloud, const float max_intensity);
 
 /**
  * Convert transformation matrix return by sensor to ROS transform
@@ -81,7 +115,7 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
  * @return ROS message suitable for publishing as a transform
  */
 geometry_msgs::TransformStamped transform_to_tf_msg(
-    const std::vector<double>& mat, const std::string& frame,
-    const std::string& child_frame);
-}
-}
+    const std::vector<double> &mat, const std::string &frame,
+    const std::string &child_frame);
+} // namespace OS1
+} // namespace ouster_ros
