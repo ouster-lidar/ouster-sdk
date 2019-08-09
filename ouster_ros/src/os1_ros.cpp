@@ -60,21 +60,13 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p,
 }
 
 sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
-                                            const std::string& frame) {
-    sensor_msgs::PointCloud2 msg{};
-    pcl::toROSMsg(cloud, msg);
-    msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count()) +ros::Duration(0,70e6);
-    return msg;
-}
-
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
                                             const std::string& frame, 
-                                            const double timeOffset = 0.0) {
+                                            const double time_offset_ms) {
     sensor_msgs::PointCloud2 msg{};
     pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count()) +ros::Duration(timeOffset*1e-3);
+    msg.header.stamp.fromNSec(timestamp.count())
+                              + ros::Duration(time_offset_ms * 1e-3);
     return msg;
 }
 
