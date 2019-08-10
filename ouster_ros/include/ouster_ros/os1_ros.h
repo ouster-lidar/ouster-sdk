@@ -57,7 +57,7 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg &pm,
  * @param timestamp the timestamp to give the resulting ROS message
  * @param frame the frame to set in the resulting ROS message
  * @param time_offset_ms added to point cloud header time stamp [ms]
- * @param
+ * @param min_intensity minimum intensity value for a point not to be filtered
  * @return a ROS message containing the point cloud
  */
 sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,

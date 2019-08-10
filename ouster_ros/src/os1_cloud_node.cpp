@@ -46,6 +46,8 @@ int main(int argc, char** argv) {
     auto sensor_frame = tf_prefix + "/os1_sensor";
     auto imu_frame = tf_prefix + "/os1_imu";
     auto lidar_frame = tf_prefix + "/os1_lidar";
+    auto replay = false;
+    nh.param<bool>("replay", replay, false);
     
 
 
@@ -84,7 +86,7 @@ int main(int argc, char** argv) {
             msg = ouster_ros::OS1::cloud_to_cloud_msg(
                 cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame,
                 time_offset_ms);
-            if (validTimestamp(msg.header.stamp))
+            if (validTimestamp(msg.header.stamp) || replay )
               lidar_pub.publish(msg);
             }
         );
@@ -95,7 +97,7 @@ int main(int argc, char** argv) {
 
     auto imu_handler = [&](const PacketMsg& p) {
         auto imu_msg = ouster_ros::OS1::packet_to_imu_msg(p, imu_frame);
-        if (validTimestamp(msg.header.stamp))
+        if (validTimestamp(msg.header.stamp) || replay)
           imu_pub.publish(imu_msg);
     };
 
