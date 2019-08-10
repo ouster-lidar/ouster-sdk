@@ -68,63 +68,44 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg &p,
     return m;
 }
 
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
-                                            const std::string &frame)
-{
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
+                                            const std::string& frame, 
+                                            const double time_offset_ms,
+                                            const float min_intensity) {
     sensor_msgs::PointCloud2 msg{};
-    pcl::toROSMsg(cloud, msg);
+    CloudOS1 cloud_filtered;
+    if (0 < min_intensity){
+        filter_pcl_intensity(cloud, cloud_filtered, min_intensity );
+        pcl::toROSMsg(cloud_filtered, msg);
+    }
+    else{
+        pcl::toROSMsg(cloud, msg);
+    }
     msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count()) + ros::Duration(0, 70e6);
+    msg.header.stamp.fromNSec(timestamp.count())
+                              + ros::Duration(time_offset_ms * 1e-3);
     return msg;
 }
 
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
-                                            const std::string &frame,
-                                            const double timeOffset = 0.0)
-{
-    sensor_msgs::PointCloud2 msg{};
-    pcl::toROSMsg(cloud, msg);
-    msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count()) + ros::Duration(timeOffset * 1e-3);
-    return msg;
-}
-
-//TODO(Tuko): Move the intensiy filtering in the point cloud assembly and reject points there. 
-sensor_msgs::PointCloud2 cloud_to_cloud_filtered_msg(CloudOS1 &cloud, ns timestamp,
-                                                     const std::string &frame,
-                                                     const float min_intensity = 0.0,
-                                                     const double timeOffset = 0.0)
-{
-    sensor_msgs::PointCloud2 msg{};
-    if (0 < min_intensity)
-        filter_pcl_intensity(cloud,min_intensity );
-
-    pcl::toROSMsg(cloud, msg);
-    msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count()) + ros::Duration(timeOffset * 1e-3);
-    return msg;
-}
-
-void filter_pcl_intensity(CloudOS1 &cloud, const float min_intensity)
+//TODO(Tuko): Move the intensiy filtering in the point cloud assembly and reject points there.
+void filter_pcl_intensity(const CloudOS1 &cloud_in, CloudOS1 &cloud_out, const float min_intensity)
 {   
     // 
-    CloudOS1 filtered_cloud;
-    filtered_cloud.points.reserve(cloud.points.size());
+    cloud_out.points.clear();
+    cloud_out.points.reserve(cloud_in.points.size());
 
     // Iterate over all points and remove the ones with low intensity
-    for(PointOS1 point_i:cloud.points)
-    {
-        if(point_i.intensity > min_intensity)
-        {   
-            filtered_cloud.points.push_back(point_i);
+    for(PointOS1 point_i:cloud_in.points) {
+        if(point_i.intensity > min_intensity){
+            cloud_out.points.push_back(point_i);
         }
     } 
 
-    // Adapt the header and swap the data
-    cloud.points.swap(filtered_cloud.points);
-    cloud.width = cloud.points.size();
-    cloud.points.shrink_to_fit();
-    cloud.height= 1;
+    // Adapt the header
+    cloud_out.header.frame_id = cloud_in.header.frame_id;
+    cloud_out.header.stamp = cloud_in.header.stamp;
+    cloud_out.width = cloud_out.points.size();
+    cloud_out.height= 1;
 }
 
 geometry_msgs::TransformStamped transform_to_tf_msg(
