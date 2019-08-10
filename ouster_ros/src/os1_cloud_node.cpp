@@ -46,6 +46,8 @@ int main(int argc, char** argv) {
     auto sensor_frame = tf_prefix + "/os1_sensor";
     auto imu_frame = tf_prefix + "/os1_imu";
     auto lidar_frame = tf_prefix + "/os1_lidar";
+    auto replay = false;
+    nh.param<bool>("replay", replay, false);
     
 
 
@@ -70,22 +72,24 @@ int main(int argc, char** argv) {
     CloudOS1 cloud{W, H};
     auto it = cloud.begin();
     sensor_msgs::PointCloud2 msg{};
-    double timeOffset_ms = 0.0;
-    nh.param<double>("timeOffset_ms", timeOffset_ms, 0.0);
+    double time_offset = 0.0;
+    nh.param<double>("time_offfset", time_offset, 0.0);
+    ROS_INFO("[OS1 Cloud Node] Time-offset is initialized to %f ms", time_offset);
     float min_intensity = 0.0;
     nh.param<float>("min_intnesity", min_intensity, 0.0);
+    ROS_INFO("[OS1 Cloud Node] Minimum point intensity is initialized to %f ms", min_intensity);
 
-    ROS_INFO("Time Offset is initialized to %f ms", timeOffset_ms);
 
     auto batch_and_publish = OS1::batch_to_iter<CloudOS1::iterator>(
         xyz_lut, W, H, {}, &PointOS1::make,
         [&](uint64_t scan_ts) mutable {
-            msg = ouster_ros::OS1::cloud_to_cloud_filtered_msg(
-                cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame, min_intensity, timeOffset_ms);
-            if (validTimestamp(msg.header.stamp)){
+            msg = ouster_ros::OS1::cloud_to_cloud_msg(
+                cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame,
+                time_offset);
+            if (validTimestamp(msg.header.stamp) || replay )
               lidar_pub.publish(msg);
             }
-        });
+        );
 
     auto lidar_handler = [&](const PacketMsg& pm) mutable {
         batch_and_publish(pm.buf.data(), it);
@@ -93,7 +97,7 @@ int main(int argc, char** argv) {
 
     auto imu_handler = [&](const PacketMsg& p) {
         auto imu_msg = ouster_ros::OS1::packet_to_imu_msg(p, imu_frame);
-        if (validTimestamp(msg.header.stamp))
+        if (validTimestamp(msg.header.stamp) || replay)
           imu_pub.publish(imu_msg);
     };
 
