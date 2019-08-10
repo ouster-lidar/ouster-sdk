@@ -56,13 +56,13 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg &pm,
  * @param cloud the PCL point cloud to convert
  * @param timestamp the timestamp to give the resulting ROS message
  * @param frame the frame to set in the resulting ROS message
- * @param time_offset_ms added to point cloud header time stamp [ms]
+ * @param time_offset_ms added to point cloud header time stamp [s]
  * @param min_intensity minimum intensity value for a point not to be filtered
  * @return a ROS message containing the point cloud
  */
 sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
                                             const std::string& frame,
-                                            double time_offset_ms = 0.0,
+                                            double time_offset = 0.0,
                                             float min_intensity = 0.0);
 
 /**

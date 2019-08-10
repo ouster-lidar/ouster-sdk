@@ -63,7 +63,7 @@ namespace ouster_ros {
 
         sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1 &cloud, ns timestamp,
                                                     const std::string &frame,
-                                                    const double time_offset_ms,
+                                                    const double time_offset,
                                                     const float min_intensity) {
             sensor_msgs::PointCloud2 msg{};
             CloudOS1 cloud_filtered;
@@ -75,7 +75,7 @@ namespace ouster_ros {
             }
             msg.header.frame_id = frame;
             msg.header.stamp.fromNSec(timestamp.count())
-            + ros::Duration(time_offset_ms * 1e-3);
+            + ros::Duration(time_offset);
             return msg;
         }
 
