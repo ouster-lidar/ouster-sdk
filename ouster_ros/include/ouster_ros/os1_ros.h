@@ -72,7 +72,7 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
  * @oaram min_intensity Minimum intensity a point can have to not be filtered out
  * @return void
  */
-void filter_pcl_intensity(const CloudOS1 &cloud_in, CloudOS1 cloud_out, float min_intensity);
+void filter_pcl_intensity(const CloudOS1 &cloud_in, CloudOS1 &cloud_out, float min_intensity);
 
 
 /**

@@ -80,7 +80,7 @@ namespace ouster_ros {
         }
 
 //TODO(fabioruetz): Move the intensiy filtering in the point cloud assembly and reject points there.
-        void filter_pcl_intensity(const CloudOS1 &cloud_in, CloudOS1 cloud_out, const float min_intensity) {
+        void filter_pcl_intensity(const CloudOS1 &cloud_in, CloudOS1 &cloud_out, const float min_intensity) {
             //
             cloud_out.points.clear();
             cloud_out.points.reserve(cloud_in.points.size());
