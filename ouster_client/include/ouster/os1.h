@@ -34,6 +34,12 @@ enum lidar_mode {
     MODE_2048x10
 };
 
+enum timestamp_mode {
+    TIME_FROM_INTERNAL_OSC = 1,
+    TIME_FROM_SYNC_PULSE_IN,
+    TIME_FROM_PTP_1588
+};
+
 struct version {
     int16_t major;
     int16_t minor;
@@ -107,6 +113,20 @@ lidar_mode lidar_mode_of_string(const std::string& s);
 int n_cols_of_lidar_mode(lidar_mode mode);
 
 /**
+ * Get string representation of a timestamp mode
+ * @param timestamp_mode
+ * @return string representation of the timestamp mode, or "UNKNOWN"
+ */
+std::string to_string(timestamp_mode mode);
+
+/**
+ * Get timestamp mode from string
+ * @param string
+ * @return timestamp mode corresponding to the string, or 0 on error
+ */
+timestamp_mode timestamp_mode_of_string(const std::string& s);
+
+/**
  * Listen for OS1 data on the specified ports
  * @param lidar_port port on which the sensor will send lidar data
  * @param imu_port port on which the sensor will send imu data
@@ -125,6 +145,7 @@ std::shared_ptr<client> init_client(int lidar_port = 7502, int imu_port = 7503);
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode = MODE_1024x10,
+                                    timestamp_mode ts_mode = TIME_FROM_INTERNAL_OSC,
                                     int lidar_port = 7502, int imu_port = 7503);
 
 /**
