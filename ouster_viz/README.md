@@ -1,4 +1,4 @@
-# OS-1 Example Visualizer
+# OS1 Example Visualizer
 
 ## Contents
 * 'ouster_viz/' contains a basic visualizer that can be used to
@@ -31,7 +31,7 @@
 * For help, run ./viz -h
 
 ## Command Line Arguments
-* `<os1_hostname>` the hostname or IP address of the OS-1 sensor
+* `<os1_hostname>` the hostname or IP address of the OS1 sensor
 * `<udp_data_dest_ip>` the IP to which the sensor should send data
 * `-m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10>` flag to set the lidar
   mode (horizontal resolution and rate). Defaults to 1024x10.
