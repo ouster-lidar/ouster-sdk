@@ -1,10 +1,10 @@
-# OS-1 Example Visualizer
+# OS1 Example Visualizer
 
 ## Contents
-* 'ouster_viz/' contains a basic visualizer that can be used to
+* `ouster_viz/` contains a basic visualizer that can be used to
   display point clouds and range/intensity/ambient images
-* can be built both with and without ROS. See the instructions in
-  `ouster_ros` for building in a ROS environment
+* Can be built both with and without ROS. See the instructions in
+  [ouster_ros](../ouster_ros/README.md) for building in a ROS environment
 
 ## Operating System Support
 * The visualizer has been tested on: Ubuntu 16.04, 17.1, and 18.04, as
@@ -20,21 +20,23 @@
   eigen3-devel.noarch
 
 ## Building the Visualizer:
-* Build with 'cd /path/to/ouster_example/ouster_viz && mkdir build &&
-  cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make'
+* In the following instruction steps, `/path/to/ouster_example` is where you've cloned the repository 
+* Run the following command `export CMAKE_PREFIX_PATH=/path/to/ouster_example`
+* Build with `cd /path/to/ouster_example/ouster_viz && mkdir build &&
+  cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make`
 
 ## Running the Visualizer
-* An executable called "viz" is generated in the build directory
+* An executable called `simple_viz` is generated in the build directory
 * Note: if compiling in an environment with ROS, the location of the
   executable will be different
-* To run: `./viz <flags> <os1_hostname> <udp_data_dest_ip>`
-* For help, run ./viz -h
+* To run: `./simple_viz <flags> <os1_hostname> <udp_data_dest_ip>`
+* For help, run `./simple_viz -h`
 
 ## Command Line Arguments
-* `<os1_hostname>` the hostname or IP address of the OS-1 sensor
+* `<os1_hostname>` the hostname or IP address of the OS1 sensor
 * `<udp_data_dest_ip>` the IP to which the sensor should send data
 * `-m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10>` flag to set the lidar
-  mode (horizontal resolution and rate). Defaults to 1024x10.
+  mode (horizontal resolution x rotation rate). Defaults to 1024x10.
 
 ## Key bindings
 | key | what it does |
