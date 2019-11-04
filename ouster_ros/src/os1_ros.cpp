@@ -30,7 +30,7 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p,
     sensor_msgs::Imu m;
     const uint8_t* buf = p.buf.data();
     
-    //-----To support Unix/Pisix time stamp -------
+    //-----To support Unix/Posix time stamp -------
     //m.header.stamp.fromNSec(imu_gyro_ts(buf)); 
     m.header.stamp = ros::Time::now();
     //---------------------------------------------
@@ -69,7 +69,7 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
     pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
 
-    //-----To support Unix/Pisix time stamp -------
+    //-----To support Unix/Posix time stamp -------
     //msg.header.stamp.fromNSec(timestamp.count());
     msg.header.stamp = ros::Time::now();
     //---------------------------------------------
