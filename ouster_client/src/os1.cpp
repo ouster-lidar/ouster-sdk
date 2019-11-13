@@ -309,24 +309,29 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
     std::string res;
     bool success = true;
+    // bool need_reinitialize = false;
 
     success &=
         do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
     success &= res == "set_config_param";
 
-    success &= do_tcp_cmd(sock_fd, {"set_config_param", "udp_port_lidar",
-                                    std::to_string(lidar_port)},
-                          res);
-    success &= res == "set_config_param";
+    // success &= do_tcp_cmd(sock_fd, {"get_config_param active udp_dest_host"}, res);
+    // need_reinitialize &= (res != udp_dest_host);
+    // printf("do_tcp_cmd result of get_config_param active udp_dest_host = %s. Need reinitialize = %d\n", res.c_str(), need_reinitialize);
 
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "udp_port_imu", std::to_string(imu_port)},
-        res);
-    success &= res == "set_config_param";
+    // success &= do_tcp_cmd(sock_fd, {"set_config_param", "udp_port_lidar",
+    //                                 std::to_string(lidar_port)},
+    //                       res);
+    // success &= res == "set_config_param";
 
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
-    success &= res == "set_config_param";
+    // success &= do_tcp_cmd(
+    //     sock_fd, {"set_config_param", "udp_port_imu", std::to_string(imu_port)},
+    //     res);
+    // success &= res == "set_config_param";
+
+    // success &= do_tcp_cmd(
+    //     sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
+    // success &= res == "set_config_param";
 
     success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
     success &= reader->parse(res.c_str(), res.c_str() + res.size(), &cli->meta,
@@ -347,8 +352,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         reader->parse(res.c_str(), res.c_str() + res.size(), &root, &errors);
     update_json_obj(cli->meta, root);
 
-    success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
-    success &= res == "reinitialize";
+    // success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
+    // success &= res == "reinitialize";
 
     close(sock_fd);
 

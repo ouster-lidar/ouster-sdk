@@ -1,7 +1,7 @@
 <launch>
 
-  <arg name="os1_hostname" default="os1-991832000787.local" doc="hostname or IP in dotted decimal form of the sensor"/>
-  <arg name="os1_udp_dest" default="10.42.0.1" doc="hostname or IP where the sensor will send data packets"/>
+  <arg name="os1_hostname" default="10.45.0.155" doc="hostname or IP in dotted decimal form of the sensor"/>
+  <arg name="os1_udp_dest" default="10.45.0.1" doc="hostname or IP where the sensor will send data packets"/>
   <arg name="os1_lidar_port" default="7502" doc="port to which the sensor should send lidar data"/>
   <arg name="os1_imu_port" default="7503" doc="port to which the sensor should send imu data"/>
   <arg name="use_imu" default="false" doc="enable or disable madgwick filter (i.e. use stencil imu or ouster imu)"/>
