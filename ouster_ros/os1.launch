@@ -12,7 +12,7 @@
   <arg name="image" default="false" doc="publish range/intensity/noise image topic"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
 
-  <node pkg="ouster_ros" name="os1_node" type="os1_node" output="screen" required="true">
+  <node pkg="ouster_ros" name="os1_node" type="os1_node" output="screen" >
     <param name="~/lidar_mode" type="string" value="$(arg lidar_mode)"/>
     <param name="~/timestamp_mode" type="string" value="$(arg timestamp_mode)"/>
     <param name="~/replay" value="$(arg replay)"/>
@@ -23,19 +23,19 @@
     <param name="~/metadata" value="$(arg metadata)"/>
   </node>
 
-  <node pkg="ouster_ros" type="os1_cloud_node" name="os1_cloud_node" output="screen" required="true">
+  <node pkg="ouster_ros" type="os1_cloud_node" name="os1_cloud_node" output="screen" >
     <remap from="~/os1_config" to="/os1_node/os1_config"/>
     <remap from="~/lidar_packets" to="/os1_node/lidar_packets"/>
     <remap from="~/imu_packets" to="/os1_node/imu_packets"/>
     <param name="~/tf_prefix" value="$(arg tf_prefix)"/>
   </node>
 
-  <node if="$(arg viz)" pkg="ouster_ros" name="viz_node" type="viz_node" output="screen" required="true">
+  <node if="$(arg viz)" pkg="ouster_ros" name="viz_node" type="viz_node" output="screen" >
     <remap from="~/os1_config" to="/os1_node/os1_config"/>
     <remap from="~/points" to="/os1_cloud_node/points"/>
   </node>
 
-  <node if="$(arg image)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
+  <node if="$(arg image)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" >
     <remap from="~/os1_config" to="/os1_node/os1_config"/>
     <remap from="~/points" to="/os1_cloud_node/points"/>
   </node>
