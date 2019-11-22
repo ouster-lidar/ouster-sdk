@@ -65,6 +65,7 @@ int main(int argc, char** argv) {
         [&](uint64_t scan_ts) mutable {
             msg = ouster_ros::OS1::cloud_to_cloud_msg(
                 cloud, std::chrono::nanoseconds{scan_ts}, lidar_frame);
+            msg.header.stamp = ros::Time::now();
             lidar_pub.publish(msg);
         });
 
