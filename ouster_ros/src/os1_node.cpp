@@ -128,11 +128,12 @@ int connection_loop(ros::NodeHandle& nh, OS1::client& cli) {
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "os1_node");
+    ros::NodeHandle n;
     ros::NodeHandle nh("~");
 
     OS1::sensor_info info{};
     auto srv =
-        nh.advertiseService<OS1ConfigSrv::Request, OS1ConfigSrv::Response>(
+        n.advertiseService<OS1ConfigSrv::Request, OS1ConfigSrv::Response>(
             "os1_config",
             [&](OS1ConfigSrv::Request&, OS1ConfigSrv::Response& res) {
                 res.hostname = info.hostname;
