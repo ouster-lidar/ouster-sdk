@@ -88,6 +88,27 @@ int udp_data_socket(int port) {
         break;
     }
 
+    int reuse = 1;
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0)
+        perror("setsockopt(SO_REUSEADDR) failed");
+        
+
+/////////////////////join the multicast group////////////////
+    struct sockaddr_in localif;
+    struct ip_mreq mreq;
+    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    localif.sin_family = AF_INET;
+    localif.sin_port   = htons(7501);
+    localif.sin_addr.s_addr = htonl(INADDR_ANY);
+    bind(s, (sockaddr *)&localif, sizeof(localif));
+    mreq.imr_interface.s_addr = inet_addr("192.168.0.100");
+    mreq.imr_multiaddr.s_addr = inet_addr("232.79.85.83");
+    // mreq.imr_multiaddr.s_addr = inet_addr("232.67.69.80");
+    setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mreq, sizeof(mreq));
+    // if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0)
+    //      perror("setsockopt(SO_REUSEADDR) failed");
+
+
     freeaddrinfo(info_start);
     if (ai == NULL) {
         close(sock_fd);
@@ -134,6 +155,27 @@ int cfg_socket(const char* addr) {
 
         break;
     }
+   int reuse = 1;
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0)
+        perror("setsockopt(SO_REUSEADDR) failed");
+
+
+    /////////////////////join the multicast group////////////////
+    struct sockaddr_in localif;
+    struct ip_mreq mreq;
+    int s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    localif.sin_family = AF_INET;
+    localif.sin_port   = htons(7501);
+    localif.sin_addr.s_addr = htonl(INADDR_ANY);
+    bind(s, (sockaddr *)&localif, sizeof(localif));
+    mreq.imr_interface.s_addr = inet_addr("192.168.0.100");
+    mreq.imr_multiaddr.s_addr = inet_addr("232.79.85.83");
+    //  mreq.imr_multiaddr.s_addr = inet_addr("232.67.69.80");
+
+    setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mreq, sizeof(mreq));
+    // if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0)
+    // perror("setsockopt(SO_REUSEADDR) failed");
+
 
     freeaddrinfo(info_start);
     if (ai == NULL) {
