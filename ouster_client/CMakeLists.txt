@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 project(ouster_client)
-
+include(../CMakeScripts/colcon_cmake_vars.cmake)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
@@ -32,3 +32,15 @@ target_include_directories(ouster_client SYSTEM PRIVATE ${jsoncpp_INCLUDE_DIRS})
 
 add_executable(ouster_client_example src/main.cpp)
 target_link_libraries(ouster_client_example ouster_client)
+
+
+install(DIRECTORY include/ouster
+  DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}
+)
+
+install(TARGETS ouster_client ouster_client_example
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+

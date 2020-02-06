@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 project(ouster_viz)
-
+include(../CMakeScripts/colcon_cmake_vars.cmake)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
@@ -9,6 +9,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 find_package(Threads)
 find_package(Eigen3 REQUIRED)
 find_package(VTK REQUIRED COMPONENTS vtkCommonCore NO_MODULE)
+
+set(OUSTER_VIZ True)
 
 # Load additional vtk components; prefer newer vtk opengl module
 # https://www.visitusers.org/index.php?title=VTK_7.1_Upgrade
@@ -69,4 +71,16 @@ target_link_libraries(viz
   ${VTK_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
   ${viz_LINK_LIBRARIES}
+)
+
+
+
+install(TARGETS ouster_viz viz
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(DIRECTORY include/ouster
+  DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}
 )

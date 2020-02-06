@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 project(ouster_ros)
-
+include(../CMakeScripts/colcon_cmake_vars.cmake)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g")
@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(jsoncpp REQUIRED jsoncpp)
 
+find_package(ouster_viz QUIET)
 find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs
@@ -18,7 +19,6 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   roscpp
   ouster_client
-  ouster_viz
   tf2
   tf2_ros
   tf2_geometry_msgs
@@ -54,20 +54,30 @@ add_executable(os1_cloud_node src/os1_cloud_node.cpp)
 target_link_libraries(os1_cloud_node ouster_ros ${catkin_LIBRARIES})
 add_dependencies(os1_cloud_node ${PROJECT_NAME}_gencpp)
 
+if(OUSTER_VIZ)
 add_executable(viz_node src/viz_node.cpp)
 target_link_libraries(viz_node ${catkin_LIBRARIES})
 add_dependencies(viz_node ${PROJECT_NAME}_gencpp)
+endif(OUSTER_VIZ)
 
 add_executable(img_node src/img_node.cpp)
 target_link_libraries(img_node ouster_ros ${catkin_LIBRARIES})
 add_dependencies(img_node ${PROJECT_NAME}_gencpp)
 
+if( OUSTER_VIZ )
+install(TARGETS viz_node
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+endif(OUSTER_VIZ)
+
 install(TARGETS os1_node
                 os1_cloud_node
-                viz_node
                 img_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+
 )
 install(FILES os1.launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
