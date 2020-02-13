@@ -70,3 +70,19 @@ target_link_libraries(viz
   ${CMAKE_THREAD_LIBS_INIT}
   ${viz_LINK_LIBRARIES}
 )
+
+if (DEFINED CATKIN_DEVEL_PREFIX)
+  install(TARGETS ${PROJECT_NAME}
+    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+
+  ## Mark cpp header files for installation
+  install(DIRECTORY include/ouster/
+    #The package that use this need the ouster/* path, not ouster_viz
+    DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}/ouster
+    FILES_MATCHING PATTERN "*.h"
+  #   PATTERN ".svn" EXCLUDE
+  )
+endif()

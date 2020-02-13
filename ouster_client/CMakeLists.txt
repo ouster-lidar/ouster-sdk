@@ -19,6 +19,7 @@ if (DEFINED CATKIN_DEVEL_PREFIX)
     DEPENDS jsoncpp
     CATKIN_DEPENDS
   )
+
 else()
   message(STATUS "Catkin env not set, compiling ${PROJECT_NAME} without ROS")
 endif()
@@ -32,3 +33,21 @@ target_include_directories(ouster_client SYSTEM PRIVATE ${jsoncpp_INCLUDE_DIRS})
 
 add_executable(ouster_client_example src/main.cpp)
 target_link_libraries(ouster_client_example ouster_client)
+
+if (DEFINED CATKIN_DEVEL_PREFIX)
+
+  install(TARGETS ${PROJECT_NAME}
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+
+  ## Mark cpp header files for installation
+  install(DIRECTORY include/ouster/
+    #The package that use this need the ouster/* path, not the ouster_client
+    DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}/ouster
+    FILES_MATCHING PATTERN "*.h"
+  #   PATTERN ".svn" EXCLUDE
+  )
+
+endif()
