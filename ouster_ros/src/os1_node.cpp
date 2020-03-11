@@ -151,6 +151,7 @@ int main(int argc, char** argv) {
     auto imu_port = nh.param("os1_imu_port", 7502);
     auto replay = nh.param("replay", false);
     auto lidar_mode = nh.param("lidar_mode", std::string{});
+    auto timestamp_mode = nh.param("timestamp_mode", std::string{});
 
     // fall back to metadata file name based on hostname, if available
     auto meta_file = nh.param("metadata", std::string{});
@@ -164,6 +165,15 @@ int main(int argc, char** argv) {
 
     if (!OS1::lidar_mode_of_string(lidar_mode)) {
         ROS_ERROR("Invalid lidar mode %s", lidar_mode.c_str());
+        return EXIT_FAILURE;
+    }
+
+    if (not timestamp_mode.size()) {
+        timestamp_mode = OS1::to_string(OS1::TIME_FROM_INTERNAL_OSC);
+    }
+
+    if (!OS1::timestamp_mode_of_string(timestamp_mode)) {
+        ROS_ERROR("Invalid timestamp mode %s", timestamp_mode.c_str());
         return EXIT_FAILURE;
     }
 
@@ -195,6 +205,7 @@ int main(int argc, char** argv) {
 
         auto cli = OS1::init_client(hostname, udp_dest,
                                     OS1::lidar_mode_of_string(lidar_mode),
+                                    OS1::timestamp_mode_of_string(timestamp_mode),
                                     lidar_port, imu_port);
 
         if (!cli) {

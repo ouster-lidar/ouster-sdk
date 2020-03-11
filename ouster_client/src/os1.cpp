@@ -46,6 +46,12 @@ const std::array<std::pair<lidar_mode, std::string>, 5> lidar_mode_strings = {
      {MODE_1024x20, "1024x20"},
      {MODE_2048x10, "2048x10"}}};
 
+const std::array<std::pair<timestamp_mode, std::string>, 3>
+    timestamp_mode_strings = {
+        {{TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
+         {TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
+         {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
+
 int udp_data_socket(int port) {
     struct addrinfo hints, *info_start, *ai;
 
@@ -232,6 +238,28 @@ int n_cols_of_lidar_mode(lidar_mode mode) {
     }
 }
 
+std::string to_string(timestamp_mode mode) {
+    auto end = timestamp_mode_strings.end();
+    auto res =
+        std::find_if(timestamp_mode_strings.begin(), end,
+                     [&](const std::pair<timestamp_mode, std::string>& p) {
+                         return p.first == mode;
+                     });
+
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+timestamp_mode timestamp_mode_of_string(const std::string& s) {
+    auto end = timestamp_mode_strings.end();
+    auto res =
+        std::find_if(timestamp_mode_strings.begin(), end,
+                     [&](const std::pair<timestamp_mode, std::string>& p) {
+                         return p.second == s;
+                     });
+
+    return res == end ? timestamp_mode(0) : res->first;
+}
+
 std::string get_metadata(const client& cli) {
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
@@ -294,8 +322,8 @@ std::shared_ptr<client> init_client(int lidar_port, int imu_port) {
 
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    lidar_mode mode, int lidar_port,
-                                    int imu_port) {
+                                    lidar_mode mode, timestamp_mode ts_mode,
+                                    int lidar_port, int imu_port) {
     auto cli = init_client(lidar_port, imu_port);
 
     int sock_fd = cfg_socket(hostname.c_str());
@@ -326,6 +354,11 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
     success &= do_tcp_cmd(
         sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
+    success &= res == "set_config_param";
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "timestamp_mode", to_string(ts_mode)},
+        res);
     success &= res == "set_config_param";
 
     success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
