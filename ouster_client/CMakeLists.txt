@@ -26,6 +26,7 @@ endif()
 add_library(ouster_client STATIC
   src/os1.cpp
   src/os1_util.cpp)
+set_target_properties(ouster_client PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(ouster_client jsoncpp)
 target_include_directories(ouster_client PUBLIC include)
 target_include_directories(ouster_client SYSTEM PRIVATE ${jsoncpp_INCLUDE_DIRS})
