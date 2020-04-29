@@ -13,14 +13,14 @@
 namespace ouster {
 namespace OS1 {
 
-const size_t lidar_packet_bytes = 12608;
+const size_t lidar_packet_bytes = 24896;
 const size_t imu_packet_bytes = 48;
 
 struct client;
 
 enum client_state {
     TIMEOUT = 0,
-    ERROR = 1,
+    CLIENT_ERROR = 1,
     LIDAR_DATA = 2,
     IMU_DATA = 4,
     EXIT = 8
@@ -32,12 +32,6 @@ enum lidar_mode {
     MODE_1024x10,
     MODE_1024x20,
     MODE_2048x10
-};
-
-enum timestamp_mode {
-    TIME_FROM_INTERNAL_OSC = 1,
-    TIME_FROM_SYNC_PULSE_IN,
-    TIME_FROM_PTP_1588
 };
 
 struct version {
@@ -71,6 +65,7 @@ struct sensor_info {
     std::string sn;
     std::string fw_rev;
     lidar_mode mode;
+    std::string prod_line;
     std::vector<double> beam_azimuth_angles;
     std::vector<double> beam_altitude_angles;
     std::vector<double> imu_to_sensor_transform;
@@ -113,26 +108,13 @@ lidar_mode lidar_mode_of_string(const std::string& s);
 int n_cols_of_lidar_mode(lidar_mode mode);
 
 /**
- * Get string representation of a timestamp mode
- * @param timestamp_mode
- * @return string representation of the timestamp mode, or "UNKNOWN"
- */
-std::string to_string(timestamp_mode mode);
-
-/**
- * Get timestamp mode from string
- * @param string
- * @return timestamp mode corresponding to the string, or 0 on error
- */
-timestamp_mode timestamp_mode_of_string(const std::string& s);
-
-/**
- * Listen for OS1 data on the specified ports
+ * Listen for OS1 data on the specified ports; do not configure the sensor
  * @param lidar_port port on which the sensor will send lidar data
  * @param imu_port port on which the sensor will send imu data
  * @return pointer owning the resources associated with the connection
  */
-std::shared_ptr<client> init_client(int lidar_port = 0, int imu_port = 0);
+std::shared_ptr<client> init_client(const std::string& hostname = "",
+                                    int lidar_port = 7502, int imu_port = 7503);
 
 /**
  * Connect to and configure the sensor and start listening for data
@@ -145,7 +127,6 @@ std::shared_ptr<client> init_client(int lidar_port = 0, int imu_port = 0);
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode = MODE_1024x10,
-                                    timestamp_mode ts_mode = TIME_FROM_INTERNAL_OSC,
                                     int lidar_port = 0, int imu_port = 0);
 
 /**
@@ -177,11 +158,12 @@ bool read_lidar_packet(const client& cli, uint8_t* buf);
 bool read_imu_packet(const client& cli, uint8_t* buf);
 
 /**
- * Get metadata text blob from the sensor
+ * Get metadata text blob from the sensor. Attempt to fetch from the network if
+ * not already populated
  * @param cli client returned by init_client associated with the connection
  * @return a text blob of metadata parseable into a sensor_info struct
  */
-std::string get_metadata(const client& cli);
+std::string get_metadata(client& cli);
 
 /**
  * Parse metadata text blob from the sensor into a sensor_info struct. String

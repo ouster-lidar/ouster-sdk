@@ -45,6 +45,8 @@ void populate_metadata_defaults(OS1::sensor_info& info,
         info.mode = OS1::lidar_mode_of_string(specified_lidar_mode);
     }
 
+    if (!info.prod_line.size()) info.prod_line = "UNKNOWN";
+
     if (info.beam_azimuth_angles.empty() || info.beam_altitude_angles.empty()) {
         ROS_WARN("Beam angles not found in metadata; using design values");
         info.beam_azimuth_angles = OS1::beam_azimuth_angles;
@@ -109,7 +111,7 @@ int connection_loop(ros::NodeHandle& nh, OS1::client& cli) {
             ROS_INFO("poll_client: caught signal, exiting");
             return EXIT_SUCCESS;
         }
-        if (state & OS1::ERROR) {
+        if (state & OS1::CLIENT_ERROR) {
             ROS_ERROR("poll_client: returned error");
             return EXIT_FAILURE;
         }
@@ -137,6 +139,7 @@ int main(int argc, char** argv) {
             [&](OS1ConfigSrv::Request&, OS1ConfigSrv::Response& res) {
                 res.hostname = info.hostname;
                 res.lidar_mode = to_string(info.mode);
+                res.prod_line = info.prod_line;
                 res.beam_azimuth_angles = info.beam_azimuth_angles;
                 res.beam_altitude_angles = info.beam_altitude_angles;
                 res.imu_to_sensor_transform = info.imu_to_sensor_transform;
@@ -151,7 +154,6 @@ int main(int argc, char** argv) {
     auto imu_port = nh.param("os1_imu_port", 0);
     auto replay = nh.param("replay", false);
     auto lidar_mode = nh.param("lidar_mode", std::string{});
-    auto timestamp_mode = nh.param("timestamp_mode", std::string{});
 
     // fall back to metadata file name based on hostname, if available
     auto meta_file = nh.param("metadata", std::string{});
@@ -165,15 +167,6 @@ int main(int argc, char** argv) {
 
     if (!OS1::lidar_mode_of_string(lidar_mode)) {
         ROS_ERROR("Invalid lidar mode %s", lidar_mode.c_str());
-        return EXIT_FAILURE;
-    }
-
-    if (not timestamp_mode.size()) {
-        timestamp_mode = OS1::to_string(OS1::TIME_FROM_INTERNAL_OSC);
-    }
-
-    if (!OS1::timestamp_mode_of_string(timestamp_mode)) {
-        ROS_ERROR("Invalid timestamp mode %s", timestamp_mode.c_str());
         return EXIT_FAILURE;
     }
 
@@ -191,8 +184,8 @@ int main(int argc, char** argv) {
         populate_metadata_defaults(info, lidar_mode);
 
         ROS_INFO("Using lidar_mode: %s", OS1::to_string(info.mode).c_str());
-        ROS_INFO("Sensor sn: %s firmware rev: %s", info.sn.c_str(),
-                 info.fw_rev.c_str());
+        ROS_INFO("%s sn: %s firmware rev: %s", info.prod_line.c_str(),
+                 info.sn.c_str(), info.fw_rev.c_str());
 
         // just serve config service
         ros::spin();
@@ -205,7 +198,6 @@ int main(int argc, char** argv) {
 
         auto cli = OS1::init_client(hostname, udp_dest,
                                     OS1::lidar_mode_of_string(lidar_mode),
-                                    OS1::timestamp_mode_of_string(timestamp_mode),
                                     lidar_port, imu_port);
 
         if (!cli) {
@@ -222,8 +214,8 @@ int main(int argc, char** argv) {
         info = OS1::parse_metadata(metadata);
         populate_metadata_defaults(info, "");
 
-        ROS_INFO("Sensor sn: %s firmware rev: %s", info.sn.c_str(),
-                 info.fw_rev.c_str());
+        ROS_INFO("%s sn: %s firmware rev: %s", info.prod_line.c_str(),
+                 info.sn.c_str(), info.fw_rev.c_str());
 
         // publish packet messages from the sensor
         return connection_loop(nh, *cli);

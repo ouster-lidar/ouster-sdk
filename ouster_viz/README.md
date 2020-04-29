@@ -15,21 +15,22 @@
 * The sample visualizer requires a compiler supporting C++11 or newer
   and CMake 3.1 or newer
 * Requires VTK6 and Eigen3 libraries
-* Using Ubuntu: sudo apt-get install libvtk6-dev libeigen3-dev
-* Using Fedora: sudo yum install vtk-devel.x86_64 eigen3-devel.noarch
+* Using Ubuntu: `sudo apt-get install libvtk6-dev libeigen3-dev libtclap-dev`
+* Using Fedora: `sudo yum install vtk-devel.x86_64 eigen3-devel.noarch tclap.noarch`
+* Using Arch Linux: `sudo pacman -S cmake vtk eigen tclap`
 
 ## Building the Visualizer:
-* In the following instruction steps, `/path/to/ouster_example` is where you've cloned the repository
+* In the following instruction steps, `/path/to/ouster_example` is where you've cloned the repository 
 * Run the following command `export CMAKE_PREFIX_PATH=/path/to/ouster_example`
 * Build with `cd /path/to/ouster_example/ouster_viz && mkdir build &&
   cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make`
 
 ## Running the Visualizer
-* An executable called `viz` is generated in the build directory
+* An executable called `simple_viz` is generated in the build directory
 * Note: if compiling in an environment with ROS, the location of the
   executable will be different
-* To run: `./viz <flags> <os1_hostname> <udp_data_dest_ip>`
-* For help, run `./viz -h`
+* To run: `./simple_viz <flags> <os1_hostname> <udp_data_dest_ip>`
+* For help, run `./simple_viz -h`
 
 ## Command Line Arguments
 * `<os1_hostname>` the hostname or IP address of the OS1 sensor

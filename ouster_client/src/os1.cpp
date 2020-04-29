@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -12,30 +13,15 @@
 #include <utility>
 #include <vector>
 
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
+#include "ouster/compat.h"
 #include "ouster/os1.h"
+#include "ouster/os1_impl.h"
 #include "ouster/os1_packet.h"
 
 namespace ouster {
 namespace OS1 {
 
 using ns = std::chrono::nanoseconds;
-
-struct client {
-    int lidar_fd;
-    int imu_fd;
-    Json::Value meta;
-    ~client() {
-        close(lidar_fd);
-        close(imu_fd);
-    }
-};
 
 namespace {
 
@@ -46,19 +32,13 @@ const std::array<std::pair<lidar_mode, std::string>, 5> lidar_mode_strings = {
      {MODE_1024x20, "1024x20"},
      {MODE_2048x10, "2048x10"}}};
 
-const std::array<std::pair<timestamp_mode, std::string>, 3>
-    timestamp_mode_strings = {
-        {{TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
-         {TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
-         {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
-
 int32_t get_sock_port(int sock_fd) {
     struct sockaddr_storage ss;
     socklen_t addrlen = sizeof ss;
 
-    if (getsockname(sock_fd, (struct sockaddr*)&ss, &addrlen) < 0) {
-        std::cerr << "udp getsockname(): " << std::strerror(errno) << std::endl;
-        return -1;
+    if (!socket_valid(getsockname(sock_fd, (struct sockaddr*)&ss, &addrlen))) {
+        std::cerr << "udp getsockname(): " << socket_get_error() << std::endl;
+        return SOCKET_ERROR;
     }
 
     if (ss.ss_family == AF_INET)
@@ -66,14 +46,14 @@ int32_t get_sock_port(int sock_fd) {
     else if (ss.ss_family == AF_INET6)
         return ntohs(((struct sockaddr_in6*)&ss)->sin6_port);
     else
-        return -1;
+        return SOCKET_ERROR;
 }
 
 int udp_data_socket(int port) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET6;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;
 
@@ -82,24 +62,24 @@ int udp_data_socket(int port) {
     int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
     if (ret != 0) {
         std::cerr << "getaddrinfo(): " << gai_strerror(ret) << std::endl;
-        return -1;
+        return SOCKET_ERROR;
     }
     if (info_start == NULL) {
         std::cerr << "getaddrinfo: empty result" << std::endl;
-        return -1;
+        return SOCKET_ERROR;
     }
 
     int sock_fd;
     for (ai = info_start; ai != NULL; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-        if (sock_fd < 0) {
-            std::cerr << "udp socket(): " << std::strerror(errno) << std::endl;
+        if (!socket_valid(sock_fd)) {
+            std::cerr << "udp socket(): " << socket_get_error() << std::endl;
             continue;
         }
 
-        if (bind(sock_fd, ai->ai_addr, ai->ai_addrlen) < 0) {
-            close(sock_fd);
-            std::cerr << "udp bind(): " << std::strerror(errno) << std::endl;
+        if (!socket_valid(bind(sock_fd, ai->ai_addr, ai->ai_addrlen))) {
+            socket_close(sock_fd);
+            std::cerr << "udp bind(): " << socket_get_error() << std::endl;
             continue;
         }
 
@@ -108,14 +88,14 @@ int udp_data_socket(int port) {
 
     freeaddrinfo(info_start);
     if (ai == NULL) {
-        close(sock_fd);
-        return -1;
+        socket_close(sock_fd);
+        return SOCKET_ERROR;
     }
 
-    if (fcntl(sock_fd, F_SETFL, fcntl(sock_fd, F_GETFL, 0) | O_NONBLOCK) < 0) {
-        std::cerr << "udp fcntl(): " << std::strerror(errno) << std::endl;
-        close(sock_fd);
-        return -1;
+    if (!socket_valid(socket_set_non_blocking(sock_fd))) {
+        std::cerr << "udp fcntl(): " << socket_get_error() << std::endl;
+        socket_close(sock_fd);
+        return SOCKET_ERROR;
     }
 
     return sock_fd;
@@ -125,29 +105,29 @@ int cfg_socket(const char* addr) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
     int ret = getaddrinfo(addr, "7501", &hints, &info_start);
     if (ret != 0) {
         std::cerr << "getaddrinfo: " << gai_strerror(ret) << std::endl;
-        return -1;
+        return SOCKET_ERROR;
     }
     if (info_start == NULL) {
         std::cerr << "getaddrinfo: empty result" << std::endl;
-        return -1;
+        return SOCKET_ERROR;
     }
 
     int sock_fd;
     for (ai = info_start; ai != NULL; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-        if (sock_fd < 0) {
-            std::cerr << "socket: " << std::strerror(errno) << std::endl;
+        if (!socket_valid(sock_fd)) {
+            std::cerr << "socket: " << socket_get_error() << std::endl;
             continue;
         }
 
         if (connect(sock_fd, ai->ai_addr, ai->ai_addrlen) == -1) {
-            close(sock_fd);
+            socket_close(sock_fd);
             continue;
         }
 
@@ -156,7 +136,7 @@ int cfg_socket(const char* addr) {
 
     freeaddrinfo(info_start);
     if (ai == NULL) {
-        return -1;
+        return SOCKET_ERROR;
     }
 
     return sock_fd;
@@ -172,15 +152,15 @@ bool do_tcp_cmd(int sock_fd, const std::vector<std::string>& cmd_tokens,
     ss << "\n";
     std::string cmd = ss.str();
 
-    ssize_t len = write(sock_fd, cmd.c_str(), cmd.length());
-    if (len != (ssize_t)cmd.length()) {
+    size_t len = send(sock_fd, cmd.c_str(), cmd.length(), 0);
+    if (len != (size_t)cmd.length()) {
         return false;
     }
 
     // need to synchronize with server by reading response
     std::stringstream read_ss;
     do {
-        len = read(sock_fd, read_buf.get(), max_res_len);
+        len = recv(sock_fd, read_buf.get(), max_res_len, 0);
         if (len < 0) {
             return false;
         }
@@ -195,7 +175,50 @@ bool do_tcp_cmd(int sock_fd, const std::vector<std::string>& cmd_tokens,
 }
 
 void update_json_obj(Json::Value& dst, const Json::Value& src) {
-    for (const auto& key : src.getMemberNames()) dst[key] = src[key];
+    const std::vector<std::string>& members = src.getMemberNames();
+    for (const auto& key : members) {
+        dst[key] = src[key];
+    }
+}
+
+bool collect_metadata(client& cli, const int sock_fd) {
+    Json::CharReaderBuilder builder{};
+    auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
+    Json::Value root{};
+    std::string errors{};
+
+    std::string res;
+    bool success = true;
+
+    success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
+
+    success &=
+        reader->parse(res.c_str(), res.c_str() + res.size(), &cli.meta, NULL);
+
+    success &= do_tcp_cmd(sock_fd, {"get_beam_intrinsics"}, res);
+    success &=
+        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
+    update_json_obj(cli.meta, root);
+
+    success &= do_tcp_cmd(sock_fd, {"get_imu_intrinsics"}, res);
+    success &=
+        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
+    update_json_obj(cli.meta, root);
+
+    success &= do_tcp_cmd(sock_fd, {"get_lidar_intrinsics"}, res);
+    success &=
+        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
+    update_json_obj(cli.meta, root);
+
+    success &= do_tcp_cmd(sock_fd, {"get_config_param", "active"}, res);
+    success &=
+        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
+
+    // merge extra info into metadata
+    cli.meta["hostname"] = cli.hostname;
+    cli.meta["lidar_mode"] = root["lidar_mode"];
+
+    return success;
 }
 }  // namespace
 
@@ -256,29 +279,18 @@ int n_cols_of_lidar_mode(lidar_mode mode) {
     }
 }
 
-std::string to_string(timestamp_mode mode) {
-    auto end = timestamp_mode_strings.end();
-    auto res =
-        std::find_if(timestamp_mode_strings.begin(), end,
-                     [&](const std::pair<timestamp_mode, std::string>& p) {
-                         return p.first == mode;
-                     });
+std::string get_metadata(client& cli) {
+    if (!cli.meta) {
+        int sock_fd = cfg_socket(cli.hostname.c_str());
+        if (sock_fd < 0) return "";
 
-    return res == end ? "UNKNOWN" : res->second;
-}
+        bool success = collect_metadata(cli, sock_fd);
 
-timestamp_mode timestamp_mode_of_string(const std::string& s) {
-    auto end = timestamp_mode_strings.end();
-    auto res =
-        std::find_if(timestamp_mode_strings.begin(), end,
-                     [&](const std::pair<timestamp_mode, std::string>& p) {
-                         return p.second == s;
-                     });
+        socket_close(sock_fd);
 
-    return res == end ? timestamp_mode(0) : res->first;
-}
+        if (!success) return "";
+    }
 
-std::string get_metadata(const client& cli) {
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
     builder["precision"] = 6;
@@ -297,13 +309,14 @@ sensor_info parse_metadata(const std::string& meta) {
             throw std::runtime_error{errors.c_str()};
     }
 
-    sensor_info info = {"UNKNOWN", "UNKNOWN", {}, lidar_mode(0),
-                        {},        {},        {}, {}};
+    sensor_info info = {"UNKNOWN", "UNKNOWN", {}, lidar_mode(0), "UNKNOWN", {},
+                        {},        {},        {}};
     info.hostname = root["hostname"].asString();
     info.sn = root["prod_sn"].asString();
     info.fw_rev = root["build_rev"].asString();
 
     info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
+    info.prod_line = root["prod_line"].asString();
 
     for (const auto& v : root["beam_altitude_angles"])
         info.beam_altitude_angles.push_back(v.asDouble());
@@ -328,29 +341,28 @@ sensor_info parse_metadata(const std::string& meta) {
     return info;
 }
 
-std::shared_ptr<client> init_client(int lidar_port, int imu_port) {
+std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
+                                    int imu_port) {
     auto cli = std::make_shared<client>();
+    cli->hostname = hostname;
 
     cli->lidar_fd = udp_data_socket(lidar_port);
     cli->imu_fd = udp_data_socket(imu_port);
-
-    if (cli->lidar_fd < 0 || cli->imu_fd < 0)
-        return std::shared_ptr<client>();
 
     return cli;
 }
 
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    lidar_mode mode, timestamp_mode ts_mode,
-                                    int lidar_port, int imu_port) {
-    auto cli = init_client(lidar_port, imu_port);
-    if (!cli) return std::shared_ptr<client>();
+                                    lidar_mode mode, int lidar_port,
+                                    int imu_port) {
+    auto cli = init_client(hostname, lidar_port, imu_port);
 
     // update requested ports to actual bound ports
     lidar_port = get_sock_port(cli->lidar_fd);
     imu_port = get_sock_port(cli->imu_fd);
-    if (lidar_port == -1 || imu_port == -1) return std::shared_ptr<client>();
+    if (!socket_valid(lidar_port) || !socket_valid(imu_port))
+        return std::shared_ptr<client>();
 
     int sock_fd = cfg_socket(hostname.c_str());
 
@@ -359,7 +371,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     Json::Value root{};
     std::string errors{};
 
-    if (sock_fd < 0) return std::shared_ptr<client>();
+    if (!socket_valid(sock_fd)) return std::shared_ptr<client>();
 
     std::string res;
     bool success = true;
@@ -383,38 +395,12 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
     success &= res == "set_config_param";
 
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "timestamp_mode", to_string(ts_mode)},
-        res);
-    success &= res == "set_config_param";
-
-    success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
-    success &= reader->parse(res.c_str(), res.c_str() + res.size(), &cli->meta,
-                             &errors);
-
-    success &= do_tcp_cmd(sock_fd, {"get_beam_intrinsics"}, res);
-    success &=
-        reader->parse(res.c_str(), res.c_str() + res.size(), &root, &errors);
-    update_json_obj(cli->meta, root);
-
-    success &= do_tcp_cmd(sock_fd, {"get_imu_intrinsics"}, res);
-    success &=
-        reader->parse(res.c_str(), res.c_str() + res.size(), &root, &errors);
-    update_json_obj(cli->meta, root);
-
-    success &= do_tcp_cmd(sock_fd, {"get_lidar_intrinsics"}, res);
-    success &=
-        reader->parse(res.c_str(), res.c_str() + res.size(), &root, &errors);
-    update_json_obj(cli->meta, root);
+    success &= collect_metadata(*cli, sock_fd);
 
     success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
     success &= res == "reinitialize";
 
-    close(sock_fd);
-
-    // merge extra info into metadata
-    cli->meta["hostname"] = hostname;
-    cli->meta["lidar_mode"] = to_string(mode);
+    socket_close(sock_fd);
 
     return success ? cli : std::shared_ptr<client>();
 }
@@ -434,26 +420,29 @@ client_state poll_client(const client& c, const int timeout_sec) {
     int retval = select(max_fd + 1, &rfds, NULL, NULL, &tv);
 
     client_state res = client_state(0);
-    if (retval == -1 && errno == EINTR) {
+
+    if (!socket_valid(retval) && socket_exit()) {
         res = EXIT;
-    } else if (retval == -1) {
-        std::cerr << "select: " << std::strerror(errno) << std::endl;
-        res = client_state(res | ERROR);
+    } else if (!socket_valid(retval)) {
+        std::cerr << "select: " << socket_get_error() << std::endl;
+        res = client_state(res | CLIENT_ERROR);
     } else if (retval) {
         if (FD_ISSET(c.lidar_fd, &rfds)) res = client_state(res | LIDAR_DATA);
         if (FD_ISSET(c.imu_fd, &rfds)) res = client_state(res | IMU_DATA);
     }
+
     return res;
 }
 
-static bool recv_fixed(int fd, void* buf, ssize_t len) {
-    ssize_t n = recv(fd, (char*)buf, len + 1, 0);
-    if (n == len)
+static bool recv_fixed(int fd, void* buf, int64_t len) {
+    int64_t n = recv(fd, (char*)buf, len + 1, 0);
+    if (n == len) {
         return true;
-    else if (n == -1)
-        std::cerr << "recvfrom: " << std::strerror(errno) << std::endl;
-    else
+    } else if (n == static_cast<int64_t>(-1)) {
+        std::cerr << "recvfrom: " << socket_get_error() << std::endl;
+    } else {
         std::cerr << "Unexpected udp packet length: " << n << std::endl;
+    }
     return false;
 }
 

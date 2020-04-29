@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
                   << std::endl;
         return 1;
     }
-
+    socket_init();
     auto cli = OS1::init_client(argv[1], argv[2]);
     if (!cli) {
         std::cerr << "Failed to connect to client at: " << argv[1] << std::endl;
@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
 
     while (true) {
         OS1::client_state st = OS1::poll_client(*cli);
-        if (st & OS1::ERROR) {
+        if (st & OS1::CLIENT_ERROR) {
             return 1;
         } else if (st & OS1::LIDAR_DATA) {
             if (OS1::read_lidar_packet(*cli, lidar_buf))
@@ -78,6 +78,6 @@ int main(int argc, char** argv) {
 
         if (n_imu_packets % 50 == 0) print_stats();
     }
-
+    socket_quit();
     return 0;
 }

@@ -1,14 +1,7 @@
-#include <Eigen/Eigen>
-#include <atomic>
-#include <cassert>
-#include <cmath>
-#include <deque>
-#include <functional>
-#include <iostream>
-#include <mutex>
-#include <vector>
+#include "ouster/viz.h"
 
 #include <vtkActor.h>
+#include <vtkActor2D.h>
 #include <vtkCallbackCommand.h>
 #include <vtkCamera.h>
 #include <vtkCellArray.h>
@@ -21,34 +14,46 @@
 #include <vtkImageMapper3D.h>
 #include <vtkImageProperty.h>
 #include <vtkInteractorStyleTrackballCamera.h>
+#include <vtkLabelPlacementMapper.h>
 #include <vtkLookupTable.h>
 #include <vtkMath.h>
 #include <vtkMatrix4x4.h>
 #include <vtkObjectFactory.h>
 #include <vtkPointData.h>
+#include <vtkPointSetToLabelHierarchy.h>
 #include <vtkPointSource.h>
 #include <vtkPoints.h>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
+#include <vtkRegularPolygonSource.h>
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkRenderer.h>
 #include <vtkSmartPointer.h>
+#include <vtkStringArray.h>
 #include <vtkTransform.h>
 #include <vtkVertexGlyphFilter.h>
+
+#include <Eigen/Eigen>
+#include <atomic>
+#include <cassert>
+#include <cmath>
+#include <deque>
+#include <functional>
+#include <iostream>
+#include <mutex>
+#include <vector>
 
 #include "colormaps.h"
 #include "ouster/autoexposure.h"
 #include "ouster/beam_uniformity.h"
+#include "ouster/compat.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/os1_util.h"
-#include "ouster/viz.h"
 
 namespace ouster {
 namespace viz {
-
-using Points = Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor>;
 
 /**
  * Helper function to create vtk lookup tables for the specific color palettes
@@ -96,6 +101,7 @@ struct VisualizerConfig {
     int color_mode;    // cloud coloring mode
     bool cycle_range;  // cycle range palette
     bool parallel;     // use parallel projection
+    bool show_range;   // show range
 
     int palette;       // image color palette
     bool image_noise;  // display noise image
@@ -118,8 +124,8 @@ struct VisualizerState {
 struct LidarScanBuffer {
     std::mutex ls_mtx;
     bool ls_dirty = true;  // false if the 'back' scan is new
-    std::unique_ptr<ouster::LidarScan> back;
-    std::unique_ptr<ouster::LidarScan> front;
+    std::unique_ptr<LidarScan> back;
+    std::unique_ptr<LidarScan> front;
 };
 
 /**
@@ -129,16 +135,19 @@ struct VizHandle {
     VisualizerConfig config;
     VisualizerState state;
     LidarScanBuffer lsb;
-    int W;
-    int H;
+    const Points* xyz_lut;
+    LidarScan::index_t w;
+    LidarScan::index_t h;
+    std::string prod_line;
+    std::vector<double> range_radii;
     std::atomic_bool exit;
 };
 
 /**
  * Update data being displayed
  **/
-void update(viz::VizHandle& vh, std::unique_ptr<ouster::LidarScan>& ls) {
-    assert(ls->W * ls->H == vh.W * vh.H);
+void update(viz::VizHandle& vh, std::unique_ptr<LidarScan>& ls) {
+    assert(ls->w * ls->h == vh.w * vh.h);
 
     std::unique_lock<std::mutex> ls_guard(vh.lsb.ls_mtx);
     ls.swap(vh.lsb.back);
@@ -161,26 +170,15 @@ void color_range(Eigen::Ref<Eigen::ArrayXd> range,
 }
 
 /**
- * Generates a point cloud from a lidar scan, by multiplying each pixel in the
- * lidar scan by a vector pointing radially outward
- **/
-void lidar_scan_to_point_cloud(ouster::LidarScan& ls, Points& xyz) {
-    assert(xyz.rows() == ls.W * ls.H);
-    assert(xyz.cols() == 3);
-
-    xyz.col(0) = ls.x();
-    xyz.col(1) = ls.y();
-    xyz.col(2) = ls.z();
-}
-
-/**
  * Update scalars used to color points
  **/
-void update_color_key(const VisualizerConfig& config, VisualizerState& state,
-                      const Points& xyz, Eigen::Ref<Eigen::ArrayXd> intensity,
-                      Eigen::Ref<Eigen::ArrayXd> range,
-                      std::vector<double>& color_key) {
-    const int n = xyz.rows();
+void update_color_key(
+    const VisualizerConfig& config, VisualizerState& state, const Points& xyz,
+    Eigen::Ref<const Eigen::Array<LidarScan::raw_t, Eigen::Dynamic, 1>>
+        intensity,
+    Eigen::Ref<const Eigen::Array<LidarScan::raw_t, Eigen::Dynamic, 1>> range,
+    std::vector<double>& color_key) {
+    const LidarScan::index_t n = xyz.rows();
     assert(intensity.size() == n);
     assert(range.size() == n);
     assert(color_key.size() == (size_t)n);
@@ -192,22 +190,21 @@ void update_color_key(const VisualizerConfig& config, VisualizerState& state,
             key_eigen = ((1.5 + xyz.col(2)) * 0.1).abs().sqrt();
             break;
         case COLOR_INTENSITY:
-            key_eigen = Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
+            key_eigen = intensity.cast<double>();
             state.color_intensity(key_eigen);
             break;
         case COLOR_ZINTENSITY:
-            key_eigen = Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
+            key_eigen = intensity.cast<double>();
             key_eigen += ((1.5 + xyz.col(2)) * 0.05).abs().sqrt();
             state.color_zintensity(key_eigen);
             break;
         case COLOR_RINTENSITY:
             key_eigen =
-                (Eigen::Map<const Eigen::ArrayXd>(range.data(), n) + 3.0) *
-                Eigen::Map<const Eigen::ArrayXd>(intensity.data(), n);
+                (range.cast<double>() + 3.0) * (intensity.cast<double>());
             state.color_rintensity(key_eigen);
             break;
         case COLOR_RANGE:
-            key_eigen = Eigen::Map<const Eigen::ArrayXd>(range.data(), n);
+            key_eigen = range.cast<double>();
             color_range(key_eigen, config);
             break;
         default:
@@ -219,40 +216,44 @@ void update_color_key(const VisualizerConfig& config, VisualizerState& state,
  * Inserts lidar scan into frame so that it can be rendered
  **/
 void update_images(
-    ouster::LidarScan& ls,
+    LidarScan& ls,
     Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& arr,
     const std::vector<int>& px_offset, const VisualizerConfig& config,
     VisualizerState& state) {
-    using MapXXd = Eigen::Map<Eigen::ArrayXXd>;
+    using MapXXraw = Eigen::Map<Eigen::Array<LidarScan::raw_t, Eigen::Dynamic,
+                                             Eigen::Dynamic, Eigen::RowMajor>>;
     using MapXXdr = Eigen::Map<
         Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>;
 
-    MapXXd r{ls.range().data(), ls.H, ls.W};
-    MapXXd i{ls.intensity().data(), ls.H, ls.W};
-    MapXXd n{ls.noise().data(), ls.H, ls.W};
+    MapXXraw range{ls.range().data(), ls.h, ls.w};
+    MapXXraw intensity{ls.intensity().data(), ls.h, ls.w};
+    MapXXraw noise{ls.noise().data(), ls.h, ls.w};
 
-    MapXXdr dst{arr.data(), 3 * ls.H, ls.W};
+    MapXXdr dst{arr.data(), 3 * ls.h, ls.w};
 
     // de-stagger and covert to row-major
-    for (int u = 0; u < ls.H; u++) {
-        const int ofs = px_offset[u];
-        dst.row(1 * ls.H - u - 1) << r.row(u).tail(ls.W - ofs),
-            r.row(u).head(ofs);
-        dst.row(2 * ls.H - u - 1) << i.row(u).tail(ls.W - ofs),
-            i.row(u).head(ofs);
-        dst.row(3 * ls.H - u - 1) << n.row(u).tail(ls.W - ofs),
-            n.row(u).head(ofs);
+    for (int u = 0; u < ls.h; u++) {
+        const std::ptrdiff_t ofs = px_offset[u];
+        dst.row(1 * ls.h - u - 1)
+            << range.row(u).tail(ls.w - ofs).cast<double>(),
+            range.row(u).head(ofs).cast<double>();
+        dst.row(2 * ls.h - u - 1)
+            << intensity.row(u).tail(ls.w - ofs).cast<double>(),
+            intensity.row(u).head(ofs).cast<double>();
+        dst.row(3 * ls.h - u - 1)
+            << noise.row(u).tail(ls.w - ofs).cast<double>(),
+            noise.row(u).head(ofs).cast<double>();
     }
 
-    Eigen::ArrayXXd noise_image = dst.bottomRows(ls.H);
+    Eigen::ArrayXXd noise_image = dst.bottomRows(ls.h);
     state.buc.correct(noise_image);
 
-    const int N = ls.W * ls.H;
+    const int N = ls.w * ls.h;
     color_range(Eigen::Map<Eigen::ArrayXd>{arr.data(), N}, config);
     state.color_intensity(Eigen::Map<Eigen::ArrayXd>{arr.data() + N, N});
     if (config.image_noise) {
         state.color_noise(Eigen::Map<Eigen::ArrayXd>{noise_image.data(), N});
-        dst.bottomRows(ls.H) = noise_image;
+        dst.bottomRows(ls.h) = noise_image;
     }
 };
 
@@ -301,6 +302,11 @@ class KeyPressInteractorStyle : public vtkInteractorStyleTrackballCamera {
             std::cout << "Noise image: "
                       << (vh->config.image_noise ? "On" : "Off") << std::endl;
 
+        } else if (key == "g") {
+            vh->config.show_range = !vh->config.show_range;
+            std::cout << "Show range: "
+                      << (vh->config.show_range ? "On" : "Off") << std::endl;
+
         } else if (key == "0") {
             vh->config.parallel = !vh->config.parallel;
             std::cout << "Parallel projection: "
@@ -332,6 +338,82 @@ class KeyPressInteractorStyle : public vtkInteractorStyleTrackballCamera {
     std::function<void()> config_updated = [] {};
 };
 vtkStandardNewMacro(KeyPressInteractorStyle);
+
+std::vector<vtkSmartPointer<vtkProp>> init_grid_actors(
+    const std::vector<double>& radii) {
+    std::vector<vtkSmartPointer<vtkProp>> actors;
+
+    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+    vtkSmartPointer<vtkPolyData> pointsPolydata =
+        vtkSmartPointer<vtkPolyData>::New();
+    pointsPolydata->SetPoints(points);
+
+    vtkSmartPointer<vtkStringArray> labels =
+        vtkSmartPointer<vtkStringArray>::New();
+    labels->SetNumberOfValues(radii.size());
+    labels->SetName("labels");
+
+    vtkSmartPointer<vtkIntArray> sizes = vtkSmartPointer<vtkIntArray>::New();
+    sizes->SetNumberOfValues(radii.size());
+    sizes->SetName("sizes");
+
+    for (size_t i = 0; i < radii.size(); i++) {
+        // draw a circle
+        vtkSmartPointer<vtkRegularPolygonSource> polygonSource =
+            vtkSmartPointer<vtkRegularPolygonSource>::New();
+        polygonSource->GeneratePolygonOff();
+        polygonSource->SetNumberOfSides(50);
+        polygonSource->SetRadius(radii[i]);
+        polygonSource->SetCenter(0, 0, 0);
+
+        vtkSmartPointer<vtkPolyDataMapper> mapper =
+            vtkSmartPointer<vtkPolyDataMapper>::New();
+        mapper->SetInputConnection(polygonSource->GetOutputPort());
+
+        vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
+        actor->SetMapper(mapper);
+        actor->GetProperty()->SetColor(0.2, 0.2, 0.2);
+
+        points->InsertNextPoint(0.0, radii[i], 0.0);
+
+        std::ostringstream out;
+        out.precision(1);
+        out << std::fixed << radii[i] << "m";
+
+        labels->SetValue(i, out.str());
+        sizes->SetValue(i, 5);
+        actors.push_back(actor);
+    }
+    pointsPolydata->GetPointData()->AddArray(labels);
+    pointsPolydata->GetPointData()->AddArray(sizes);
+
+    vtkSmartPointer<vtkPolyDataMapper> pointMapper =
+        vtkSmartPointer<vtkPolyDataMapper>::New();
+    pointMapper->SetInputData(pointsPolydata);
+
+    vtkSmartPointer<vtkActor> pointActor = vtkSmartPointer<vtkActor>::New();
+    pointActor->SetMapper(pointMapper);
+
+    vtkSmartPointer<vtkPointSetToLabelHierarchy>
+        pointSetToLabelHierarchyFilter =
+            vtkSmartPointer<vtkPointSetToLabelHierarchy>::New();
+    pointSetToLabelHierarchyFilter->SetInputData(pointsPolydata);
+    pointSetToLabelHierarchyFilter->SetLabelArrayName("labels");
+    pointSetToLabelHierarchyFilter->SetPriorityArrayName("sizes");
+    pointSetToLabelHierarchyFilter->Update();
+
+    vtkSmartPointer<vtkLabelPlacementMapper> labelMapper =
+        vtkSmartPointer<vtkLabelPlacementMapper>::New();
+    labelMapper->SetInputConnection(
+        pointSetToLabelHierarchyFilter->GetOutputPort());
+    vtkSmartPointer<vtkActor2D> labelActor = vtkSmartPointer<vtkActor2D>::New();
+    labelActor->SetMapper(labelMapper);
+
+    actors.push_back(pointActor);
+    actors.push_back(labelActor);
+
+    return actors;
+}
 
 vtkSmartPointer<vtkActor> init_cloud_actor(
     vtkSmartPointer<vtkPoints>& points,
@@ -387,20 +469,22 @@ void fill_viewport(vtkSmartPointer<vtkRenderer> renderer,
  * Run visualizer rendering loop
  **/
 void run_viz(VizHandle& vh) {
-    const size_t n_points = vh.W * vh.H;
+    const LidarScan::index_t n_points = vh.w * vh.h;
 
     Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-        image_data{3 * vh.H, vh.W};
+        image_data{3 * vh.h, vh.w};
 
     Points pc_render{n_points, 3};
+    Eigen::Array<double, Eigen::Dynamic, 3, Eigen::RowMajor> pc_render_rowmajor{
+        n_points, 3};
     std::vector<double> color_key(n_points, 0.0);
 
-    std::vector<int> px_offset = OS1::get_px_offset(vh.W);
+    std::vector<int> px_offset = OS1::get_px_offset(vh.w, vh.prod_line);
 
     auto points = vtkSmartPointer<vtkPoints>::New();
     points->SetDataTypeToDouble();
     vtkDoubleArray::SafeDownCast(points->GetData())
-        ->SetArray(pc_render.data(), n_points * 3, 1);
+        ->SetArray(pc_render_rowmajor.data(), n_points * 3, 1);
 
     auto color = vtkSmartPointer<vtkDoubleArray>::New();
     color->SetName("DepthArray");
@@ -409,7 +493,7 @@ void run_viz(VizHandle& vh) {
     auto cloud_actor = init_cloud_actor(points, color);
 
     auto image = vtkSmartPointer<vtkImageData>::New();
-    image->SetDimensions(vh.W, 3 * vh.H, 1);
+    image->SetDimensions(vh.w, 3 * vh.h, 1);
     image->AllocateScalars(VTK_DOUBLE, 1);
     vtkDoubleArray::SafeDownCast(image->GetPointData()->GetScalars())
         ->SetArray(image_data.data(), 3 * n_points, 1);
@@ -418,10 +502,17 @@ void run_viz(VizHandle& vh) {
     image_color->SetLookupTable(palettes[vh.config.palette].second);
     image_color->SetInputData(image);
 
-    // adjust aspect ratio
+    // adjust aspect ratio, set vertical fov based on prod line
     auto image_change = vtkSmartPointer<vtkImageChangeInformation>::New();
     image_change->SetInputConnection(image_color->GetOutputPort());
-    image_change->SetOutputSpacing(vh.H / 33.0, vh.W / 360.0, 1.0);
+    double vfov = 33.0;  // default for gen 1
+    if (vh.prod_line == "OS-0-128")
+        vfov = 90.0;
+    else if (vh.prod_line == "OS-1-128")
+        vfov = 40.0;  // really 45.0
+    else if (vh.prod_line == "OS-2-128")
+        vfov = 22.5;
+    image_change->SetOutputSpacing(vh.h / vfov, vh.w / 360.0, 1.0);  // OS-2
     image_change->Update();
 
     auto image_actor = vtkSmartPointer<vtkImageActor>::New();
@@ -435,6 +526,9 @@ void run_viz(VizHandle& vh) {
     auto renderer = vtkSmartPointer<vtkRenderer>::New();
     renderer->SetBackground(0, 0, 0);
     renderer->AddActor(cloud_actor);
+
+    auto grid_actors = init_grid_actors(vh.range_radii);
+    for (const auto& a : grid_actors) renderer->AddActor(a);
 
     auto camera = renderer->GetActiveCamera();
     camera->SetPosition(0, 0, 150);
@@ -470,7 +564,7 @@ void run_viz(VizHandle& vh) {
         }
 
         // update data backing visualization: pc_render, color_key, image_data
-        lidar_scan_to_point_cloud(*vh.lsb.front, pc_render);
+        pc_render_rowmajor = pc_render = cartesian(*vh.lsb.front, *vh.xyz_lut);
         update_color_key(vh.config, vh.state, pc_render,
                          vh.lsb.front->intensity(), vh.lsb.front->range(),
                          color_key);
@@ -512,6 +606,8 @@ void run_viz(VizHandle& vh) {
             camera->SetFocalPoint(0, 0, 0);
         }
 
+        for (auto& a : grid_actors) a->SetVisibility(vh.config.show_range);
+
         render_window->Render();
     };
 
@@ -536,14 +632,21 @@ void shutdown(VizHandle& vh) { vh.exit = true; }
 /**
  * Initializes the visualizer based on user-given parameters
  **/
-std::shared_ptr<VizHandle> init_viz(int W, int H) {
+std::shared_ptr<VizHandle> init_viz(const LidarScan::index_t w,
+                                    const LidarScan::index_t h,
+                                    const Points* xyz_lut,
+                                    const std::string& prod_line,
+                                    const std::vector<double>& range_radii) {
     auto vh = std::make_shared<VizHandle>();
 
     vh->config.fraction_3d = 70;
 
-    vh->H = H;
-    vh->W = W;
+    vh->h = h;
+    vh->w = w;
+    vh->prod_line = prod_line;
+    vh->xyz_lut = xyz_lut;
     vh->exit = false;
+    vh->range_radii = range_radii;
 
     vh->config.palette = 5;
     vh->config.c_palette = 1;
@@ -555,11 +658,8 @@ std::shared_ptr<VizHandle> init_viz(int W, int H) {
     vh->config.image_noise = true;
     vh->config.range_scale = 0.005;
 
-    vh->lsb.back =
-        std::unique_ptr<ouster::LidarScan>(new ouster::LidarScan(W, H));
-
-    vh->lsb.front =
-        std::unique_ptr<ouster::LidarScan>(new ouster::LidarScan(W, H));
+    vh->lsb.back = std::unique_ptr<LidarScan>(new LidarScan(w, h));
+    vh->lsb.front = std::unique_ptr<LidarScan>(new LidarScan(w, h));
 
     return vh;
 }

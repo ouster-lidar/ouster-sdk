@@ -34,30 +34,35 @@ extern const std::vector<double> imu_to_sensor_transform = {
 extern const std::vector<double> lidar_to_sensor_transform = {
     -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1};
 
-std::vector<double> make_xyz_lut(int W, int H,
-                                 const std::vector<double>& azimuth_angles,
-                                 const std::vector<double>& altitude_angles) {
-    const int n = W * H;
-    std::vector<double> xyz = std::vector<double>(3 * n, 0);
+const std::vector<int> OS0_offset_512 = {
+    0,  11, 21, 31, 1,  11, 21, 31, 1,  11, 21, 30, 2,  11, 21, 30, 2,  11, 20,
+    29, 2,  11, 20, 29, 3,  11, 20, 29, 3,  12, 20, 29, 3,  12, 20, 28, 3,  12,
+    20, 28, 3,  12, 20, 28, 4,  12, 20, 28, 4,  12, 20, 28, 4,  12, 20, 28, 4,
+    12, 20, 28, 4,  12, 20, 28, 4,  12, 20, 28, 4,  12, 20, 28, 4,  12, 20, 28,
+    4,  12, 20, 28, 4,  12, 20, 28, 4,  12, 20, 28, 3,  12, 20, 28, 3,  12, 20,
+    29, 3,  12, 20, 29, 3,  12, 20, 29, 3,  11, 20, 29, 2,  11, 20, 30, 2,  11,
+    21, 30, 2,  11, 21, 31, 1,  11, 21, 31, 0,  11, 21, 32};
 
-    for (int icol = 0; icol < W; icol++) {
-        double h_angle_0 = 2.0 * M_PI * icol / W;
-        for (int ipx = 0; ipx < H; ipx++) {
-            int ind = 3 * (icol * H + ipx);
-            double h_angle =
-                (azimuth_angles.at(ipx) * 2 * M_PI / 360.0) + h_angle_0;
+const std::vector<int> OS0_offset_1024 = {
+    0,  21, 42, 62, 1,  22, 42, 61, 2,  22, 41, 60, 3,  22, 41, 60, 4,  23, 41,
+    59, 5,  23, 41, 58, 5,  23, 40, 58, 6,  23, 40, 57, 6,  23, 40, 57, 7,  23,
+    40, 57, 7,  23, 40, 56, 7,  24, 40, 56, 7,  24, 40, 56, 8,  24, 40, 56, 8,
+    24, 40, 56, 8,  24, 40, 56, 8,  24, 40, 56, 8,  24, 40, 56, 8,  24, 40, 56,
+    7,  24, 40, 56, 7,  24, 40, 56, 7,  24, 40, 56, 7,  23, 40, 57, 7,  23, 40,
+    57, 6,  23, 40, 58, 6,  23, 40, 58, 5,  23, 41, 59, 5,  23, 41, 59, 4,  22,
+    41, 60, 3,  22, 41, 61, 2,  22, 42, 62, 1,  21, 42, 63};
 
-            xyz[ind + 0] = std::cos(altitude_angles[ipx] * 2 * M_PI / 360.0) *
-                           std::cos(h_angle);
-            xyz[ind + 1] = -std::cos(altitude_angles[ipx] * 2 * M_PI / 360.0) *
-                           std::sin(h_angle);
-            xyz[ind + 2] = std::sin(altitude_angles[ipx] * 2 * M_PI / 360.0);
-        }
-    }
-    return xyz;
-}
+const std::vector<int> OS0_offset_2048 = {
+    0,  43, 84, 125, 3,  43, 83, 123, 5,  44, 83, 121, 7,  45, 82, 119,
+    8,  45, 82, 118, 9,  46, 81, 116, 11, 46, 81, 115, 12, 46, 81, 115,
+    13, 47, 80, 114, 13, 47, 80, 113, 14, 47, 80, 113, 14, 47, 80, 112,
+    15, 47, 80, 112, 15, 47, 79, 112, 15, 47, 79, 111, 15, 47, 79, 111,
+    15, 47, 79, 111, 15, 47, 79, 112, 15, 47, 80, 112, 15, 47, 80, 112,
+    15, 47, 80, 112, 14, 47, 80, 113, 14, 47, 80, 114, 13, 47, 80, 114,
+    12, 46, 81, 115, 11, 46, 81, 116, 10, 46, 81, 117, 9,  45, 82, 119,
+    8,  45, 82, 120, 6,  44, 83, 122, 4,  43, 84, 124, 2,  43, 84, 127};
 
-std::vector<int> get_px_offset(int lidar_mode) {
+std::vector<int> get_px_offset(int lidar_mode, const std::string& prod_line) {
     auto repeat = [](int n, const std::vector<int>& v) {
         std::vector<int> res{};
         for (int i = 0; i < n; i++) res.insert(res.end(), v.begin(), v.end());
@@ -66,14 +71,26 @@ std::vector<int> get_px_offset(int lidar_mode) {
 
     switch (lidar_mode) {
         case 512:
-            return repeat(16, {0, 3, 6, 9});
+            // if      (prod_line == "OS-0-128") return repeat(32, {0, 8, 16, 24});
+            if      (prod_line == "OS-0-128") return OS0_offset_512;
+            else if (prod_line == "OS-1-128") return repeat(32, {0, 4, 8, 12});
+            else if (prod_line == "OS-2-128") return repeat(32, {0, 2, 4, 6});
+            else return repeat(32, {0, 3, 6, 9}); // default for gen1
         case 1024:
-            return repeat(16, {0, 6, 12, 18});
+            // if      (prod_line == "OS-0-128") return repeat(32, {0, 16, 32, 48});
+            if      (prod_line == "OS-0-128") return OS0_offset_1024;
+            else if (prod_line == "OS-1-128") return repeat(32, {0, 8, 16, 24});
+            else if (prod_line == "OS-2-128") return repeat(32, {0, 4, 8, 12});
+            else return repeat(32, {0, 6, 12, 18}); // default for gen1
         case 2048:
-            return repeat(16, {0, 12, 24, 36});
+            // if      (prod_line == "OS-0-128") return repeat(32, {0, 32, 64, 96});
+            if      (prod_line == "OS-0-128") return OS0_offset_2048;
+            else if (prod_line == "OS-1-128") return repeat(32, {0, 16, 32, 48});
+            else if (prod_line == "OS-2-128") return repeat(32, {0, 8, 16, 24});
+            else return repeat(32, {0, 12, 24, 36}); // default for gen1
         default:
-            return std::vector<int>{64, 0};
+            return std::vector<int>{128, 0};
     }
 }
-}
-}
+}  // namespace OS1
+}  // namespace ouster
