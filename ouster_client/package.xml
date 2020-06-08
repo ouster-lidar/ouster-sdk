@@ -5,7 +5,7 @@
   <description>The os1_client package</description>
   <maintainer email="oss@ouster.io">ouster developers</maintainer>
   <license>BSD</license>
-  <build_depend>libjsoncpp</build_depend>
+  <build_depend>libjsoncpp-dev</build_depend>
   <buildtool_depend>catkin</buildtool_depend>
 
   <exec_depend>libjsoncpp</exec_depend>
