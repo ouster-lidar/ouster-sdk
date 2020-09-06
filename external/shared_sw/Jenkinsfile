@@ -1,8 +1,14 @@
 #!/usr/bin/env groovy
 
 pipeline {
-
     agent any
+
+    options {
+        overrideIndexTriggers(false)
+        // checkoutToSubdirectory('ouster_sw')
+        buildDiscarder(logRotator(numToKeepStr: env.BRANCH_NAME == 'master' ? '20' : '5'))
+    }
+
     environment {
         MAKEFLAGS  = sh(script: 'echo -j$(nproc) -l$(nproc)', returnStdout: true).trim()
     }
@@ -20,6 +26,8 @@ pipeline {
                     agent {label 'windows'}
                     steps {
                         powershell script: '''
+                            cd ./external/shared_sw
+
                             # Make sure we error out on errors
                             $ErrorActionPreference = "Stop"
                             Set-PSDebug -Trace 1
@@ -42,7 +50,10 @@ pipeline {
                 }
                 stage('Build Linux Client') {
                     steps {
-                        sh './docker_build_shared_sw.sh'
+                        sh '''
+                        cd ./external/shared_sw
+                        ./docker_build_shared_sw.sh
+                        '''
                     } 
                 }
             }
@@ -54,7 +65,12 @@ pipeline {
                     agent {label 'windows'}
                     steps {
                         withCredentials([file(credentialsId: 'ouster-build-gcs', variable: 'AUTH_FILE')]) {
-                            powershell script: "gcloud auth activate-service-account --key-file=$AUTH_FILE;./sensor_utils/Docker/Windows10/test.bat;if(\$LASTEXITCODE -ne 0) {throw 'Build Failed'}"
+                            powershell script: """
+                            cd ./external/shared_sw
+                            gcloud auth activate-service-account --key-file=$AUTH_FILE
+                            ./sensor_utils/Docker/Windows10/test.bat
+                            if (\$LASTEXITCODE -ne 0) {throw 'Build Failed'}
+                            """
                         }
                     }
                 }
@@ -63,6 +79,7 @@ pipeline {
                     steps {
                         withCredentials([file(credentialsId: 'ouster-build-gcs', variable: 'AUTH_FILE')]) {
                         sh script: '''
+                        cd ./external/shared_sw
                         gcloud auth activate-service-account --key-file=${AUTH_FILE}
                         ./docker_test_shared_sw.sh
                             
