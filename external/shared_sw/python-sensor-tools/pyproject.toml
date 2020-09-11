@@ -1,0 +1,29 @@
+[[tool.poetry.source]]
+name = "ouster"
+url = "https://ousterdev.jfrog.io/ousterdev/api/pypi/test-virtual-pypi-1/simple/"
+
+[tool.poetry]
+name = "ouster-sensor-tools"
+version = "0.0.2-dev"
+license = "Proprietary"
+description = "Internal sensor utilities"
+authors = ["Dima Garbuzov <dima.garbuzov@ouster.io>"]
+packages = [ { include = "ouster", from = "src" } ]
+
+[tool.poetry.dependencies]
+python = "^3.6"
+click = "^7.0"
+numpy = "^1.19"
+ouster-client = "^0.0.2-dev"
+psutil = "^5.7"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.3.5"
+
+[tool.poetry.scripts]
+ouster-checker = 'ouster.checker:run'
+ouster-example = 'ouster.example:run'
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

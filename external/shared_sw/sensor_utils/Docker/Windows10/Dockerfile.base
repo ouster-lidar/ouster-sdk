@@ -1,0 +1,47 @@
+# escape=`
+
+# Use the latest Windows Server Core image with .NET Framework 4.8.
+FROM mcr.microsoft.com/dotnet/framework/sdk:4.8-windowsservercore-ltsc2016
+
+# Restore the default Windows shell for correct batch processing.
+SHELL ["cmd", "/S", "/C"]
+
+# Download the Build Tools bootstrapper.
+ADD https://aka.ms/vs/16/release/vs_buildtools.exe C:\TEMP\vs_buildtools.exe
+
+RUN powershell 'if ((Get-FileHash C:\TEMP\vs_buildtools.exe).hash -ne "6642E716910CEBA23C6CA90B3ECE1D239492A1708C86B4E84728AE40BDF88428") { throw "Build Tool Verification Error"}'
+
+# Install Build Tools
+RUN C:\TEMP\vs_buildtools.exe --quiet --wait --norestart --nocache `
+	--installPath C:\BuildTools `
+	--all `
+	--remove Microsoft.VisualStudio.Component.Windows10SDK.10240 `
+	--remove Microsoft.VisualStudio.Workload.UniversalBuildTools `
+	--remove Microsoft.VisualStudio.Workload.OfficeBuildTools `
+	--remove Microsoft.VisualStudio.Workload.AzureBuildTools `
+	--remove Microsoft.VisualStudio.Component.Windows10SDK.10586 `
+	--remove Microsoft.VisualStudio.Component.Windows10SDK.14393 `
+	--remove Microsoft.VisualStudio.Component.Windows81SDK `
+	|| IF "%ERRORLEVEL%"=="3010" EXIT 0
+
+# Download and install Chocolatey
+RUN @"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && SET "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"
+
+# Set shell for chocolatey installs
+SHELL ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass"]
+
+# Install git and python
+RUN choco install -y git python3
+RUN pip install pytest wheel
+
+# Clone microsofts vcpkg tool for build and run dependencies
+RUN git clone https://github.com/microsoft/vcpkg.git \vcpkg
+
+# Restore the default Windows shell for correct batch processing.
+SHELL ["cmd", "/S", "/C"]
+
+# Build dependencies
+RUN \BuildTools\Common7\Tools\VsDevCmd.bat && `
+        \vcpkg\bootstrap-vcpkg.bat && `
+        \vcpkg\vcpkg install --triplet x64-windows-static vtk
+

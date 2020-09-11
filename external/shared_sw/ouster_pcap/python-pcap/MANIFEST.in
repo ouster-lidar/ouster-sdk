@@ -1,0 +1,3 @@
+include README.rst CMakeLists.txt
+recursive-include src *
+recursive-include ouster *

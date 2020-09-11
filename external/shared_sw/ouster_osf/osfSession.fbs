@@ -1,0 +1,117 @@
+include "osfCommon.fbs";
+
+namespace ouster.OSF;
+
+enum LIDAR_MODE:uint8 {
+    MODE_UNKNOWN = 0,
+    MODE_512x10,
+    MODE_512x20,
+    MODE_1024x10,
+    MODE_1024x20,
+    MODE_2048x10
+}
+
+
+struct chunk_offset {
+    index:uint64; // ts or frame_id
+    offset:uint64;
+}
+
+// ============ Lidar Sensor ========================================
+
+table osf_sensor {
+    name:string;
+    id:uint8;
+    sn:string;
+    firmware_rev:string;
+    mode:LIDAR_MODE;
+    extrinsics:[double];
+    beam_azimuths:[double];
+    beam_altitudes:[double];
+    imu_to_sensor_transform:[double];
+    lidar_to_sensor_transform:[double];
+
+    // V14: gen2/128 support update
+    lidar_origin_to_beam_origin_mm:double;
+    prod_line:string;
+    df_pixels_per_column:uint32;
+    df_columns_per_packet:uint32;
+    df_columns_per_frame:uint32;
+    df_pixel_shift_by_row:[int32];
+}
+
+// ============ Metadata definitions =================================
+
+table MetadataExtension {
+    buffer:[uint8];
+    type:uint32;
+}
+
+table LidarScanStream {
+    sensor_id:uint32;                 // referenced to osf_sensor.id, currently
+                                      // limited to uint8 only
+    lidar_frame_mode:OSF_FRAME_MODE;  // if not set or OSF_UNKNOWN the value
+                                      // from osfSession.lidar_frame_mode
+                                      // should be used
+}
+
+table LidarImuStream {
+    sensor_id:uint32;                 // referenced to osf_sensor.id, currently
+                                      // limited to uint8 only
+}
+
+table LidarTrajectoryStream {
+    sensor_id:uint32;                 // referenced to osf_sensor.id, currently
+                                      // limited to uint8 only
+}
+
+table GpsStream {
+    device_id:uint32;                 // for future use, currently not in use
+    extrinsics:[double];
+}
+
+table RobotStateStream {
+    // left for possible future extensions it usually the Vehicle or BaseLink
+    // in robot setup.
+}
+
+union MetadataInfo {
+    LidarScanStream,
+    LidarImuStream,
+    LidarTrajectoryStream,
+    GpsStream,
+    RobotStateStream,
+    MetadataExtension
+}
+
+// Links to the devices and additional osfSession info:
+// Below reservations needed for backward compatibility:
+//    - ids from 1 to 127 reserved for lidar sensors
+//    - id 253 reserved for GpsStream
+//    - id 254 reserved for RobotStateStream
+table MetadataEntry {
+    id:uint32;
+    info:MetadataInfo;
+}
+
+// =========== Session ===================================
+
+table osfSession {
+    id:string;
+    session_mode:OSF_SESSION_MODE;
+    lidar_frame_mode:OSF_FRAME_MODE;  // default frame_mode to use with all
+                                      // sensors if other is not specified in
+                                      // a corresponding stream Metadata
+                                      // LidarStream.lidar_frame_mode
+    range_multiplier:uint8;
+    sensors:[osf_sensor];
+    start_ts:uint64;
+    end_ts:uint64;
+    map:[chunk_offset];
+    metadata:[MetadataEntry];  // required to be sorted and unique
+                               // by MetadataEntry.id
+}
+
+file_identifier "OSF#";
+file_extension "osfs";
+root_type osfSession;

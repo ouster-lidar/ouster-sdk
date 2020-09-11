@@ -1,0 +1,6 @@
+#include <string>
+namespace ouster {
+namespace sensor {
+std::string exampleVersion = "@OUSTER_EXAMPLE_VERSION@";
+}
+}

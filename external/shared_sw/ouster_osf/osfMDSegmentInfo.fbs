@@ -1,0 +1,14 @@
+namespace ouster.OSFe;
+
+// MetadataExtension to describe all Segments.category_id  in the file
+// with a string label (legend)
+table SegmentInfo { 
+    /// The labels are expected to have label_ids that start
+    /// from 0 and increase from there. 
+    legend_category_id:[uint16];
+    legend_category_value:[string];
+}
+
+file_identifier "OMsi";
+file_extension "osfmd";
+root_type SegmentInfo;

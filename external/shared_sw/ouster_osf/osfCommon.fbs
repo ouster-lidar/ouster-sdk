@@ -1,0 +1,49 @@
+namespace ouster.OSF;
+
+enum device : uint8 {sensor1 = 1, sensor2, sensor3, gps = 253 , car = 254 }
+
+enum OSF_SESSION_MODE:uint8 {
+    OSF_UNKNOWN = 0,     // DEFAULT
+    OSF_STREAM,          // Simple stream of messages
+    OSF_FRAMED,          // Stream chunked into Vehicle-Frames
+}
+
+// Encoding results below provided for drive 707, 0001.bag (2.1 GB)
+// Size reflects only PNG encoded parts pf lidar_scan message.
+//   CPU: Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz;
+//   single-threaded; libpng; zlib_compression_level = 4; Ubuntu 18.04
+// Decoding time usually ~5x faster of encoding and not provided.
+enum OSF_FRAME_MODE:uint8 {
+    OSF_UNKNOWN = 0, // DEFAULT
+
+    // Encoding: 501 MB, 44.5 s (OSF file size: 684 MB)
+    OSF_32,          // PNG (8 bits) RGBA -> Range         16 bit (quantized)
+                     //                   -> Intensity      8 bit (clamped)
+                     //                   -> Noise          8 bit (clamped)
+
+    // Encoding: 668 MB, 63.9 s (OSF file size: 852 MB)
+    OSF_56,          // PNG ( 8 bits) RGB  -> Range        20 bit (full)
+                     // PNG (16 bits) Grey -> Intensity    16 bit (full)
+                     // PNG (16 bits) Grey -> Noise        16 bit (full)
+
+    // NOT IMPLEMENTED
+    OSF_48,          // PNG (16 bits) RGB
+
+    // NOT IMPLEMENTED
+    OSF_64,          // PNG (16 bits) RGBA
+
+    // Encoding: 398 MB, 39.4 s (OSF file size: 581 MB)
+    OSF_40RI,        // PNG ( 8 bits) RGB  -> Range        20 bit (full)
+                     // PNG (16 bits) Grey -> Intensity    16 bit (full)
+
+    // Encoding: 446 MB, 44.8 s (OSF file size: 629 MB)
+    OSF_40RN,        // PNG ( 8 bits) RGB  -> Range        20 bit (full)
+                     // PNG (16 bits) Grey -> Noise        16 bit (full)
+
+    // Encoding: 866 MB, 79.5 s (OSF file size: 1.1 GB)
+    OSF_72           // PNG ( 8 bits) RGB  -> Range        20 bit (full)
+                     // PNG (16 bits) Grey -> Intensity    16 bit (full)
+                     // PNG (16 bits) Grey -> Noise        16 bit (full)
+                     // PNG (16 bits) Grey -> Reflectivity 16 bit (full)
+
+}

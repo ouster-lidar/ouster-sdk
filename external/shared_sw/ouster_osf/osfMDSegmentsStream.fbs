@@ -1,0 +1,10 @@
+namespace ouster.OSFe;
+
+// MetadataInfo for Segments MessageExtension stream
+table SegmentsStream {
+    sensor_id:uint32;
+}
+
+file_identifier "OMss";
+file_extension "osfmd";
+root_type SegmentsStream;

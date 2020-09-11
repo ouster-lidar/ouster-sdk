@@ -1,0 +1,21 @@
+namespace ouster.OSF;
+
+enum HEADER_STATUS:uint8 {
+    UNKNOWN = 0,
+    INVALID,
+    VALID
+}
+
+table osfHeader {
+    version:uint64;
+    status:HEADER_STATUS;
+    session_offset:uint64 = 1;
+    file_length:uint64 = 1;
+    //default to something else than 0.
+    //Because when we use the default value the value is actually
+    //not inserted in the buffer and so it is smaller
+}
+
+file_identifier "OSF$";
+file_extension "osfh";
+root_type osfHeader;

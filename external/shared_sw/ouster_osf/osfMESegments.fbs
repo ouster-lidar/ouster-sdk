@@ -1,0 +1,24 @@
+namespace ouster.OSFe;
+
+enum SEGMENT_SOURCE: uint8 {
+    ML_UNKNOWN = 0,
+    ML_GROUND_TRUTH,
+    ML_INFERENCE
+}
+
+table Segments {
+    // PNG encoded, diemnsions: lidar_scan.W x lidar_scan.H
+    // 1 channel (grayscale), 8 bit-depth, indexed-color encoding (up to 255 classes)
+    // compressed
+    category_ids_buf:[uint8];
+
+    // PNG encoded, diemnsions: lidar_scan.W x lidar_scan.H
+    // 1 channel (grayscale), 16 bit-depth (up to 65k instances)
+    instance_ids_buf:[uint8];
+
+    source:SEGMENT_SOURCE;
+}
+
+file_identifier "Omss";
+file_extension "osfme";
+root_type Segments;

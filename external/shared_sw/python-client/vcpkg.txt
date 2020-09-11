@@ -1,0 +1,3 @@
+eigen3
+pybind11
+jsoncpp
