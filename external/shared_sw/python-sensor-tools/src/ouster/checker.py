@@ -12,8 +12,8 @@ from datetime import datetime
 import collections
 import psutil
 
-import ouster._sensor as sensor
-import ouster.lidardata as osl
+import ouster.client._sensor as sensor
+import ouster.client.lidardata as osl
 
 def log(str, file=sys.stderr):
     print("{} {}".format(datetime.now(), str), file=file, end='')

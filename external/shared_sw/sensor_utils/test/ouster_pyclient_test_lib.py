@@ -9,9 +9,9 @@ import shutil
 import threading
 import numpy as np
 
-import ouster._sensor as ouster_sensor
+import ouster.client._sensor as ouster_sensor
 import ouster._pcap as ouster_pcap
-import ouster.lidardata as osl
+import ouster.client.lidardata as osl
 
 class Pcap:
     def __init__(self, hostname, dest_ip, path):

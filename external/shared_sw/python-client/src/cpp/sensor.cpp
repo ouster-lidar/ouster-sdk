@@ -1,6 +1,9 @@
 /**
  * @file
  * @brief ouster_pyclient python module
+ *
+ * Note: the type annotations in `sensor.pyi` need to be updated whenever this
+ * file changes. See the mypy documentation for details.
  */
 
 #include <pybind11/eigen.h>
@@ -51,7 +54,7 @@ PYBIND11_MODULE(_sensor, m) {
 
     using namespace ouster;
 
-    m.doc() = "ouster._sensor";
+    m.doc() = "ouster.client._sensor";
     socket_init();
 
     // clang-format off

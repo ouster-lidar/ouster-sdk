@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import ouster._sensor as sensor
-import ouster.lidardata as osl
+import ouster.client._sensor as sensor
+import ouster.client.lidardata as osl
 import pickle
 import numpy as np
 import unittest

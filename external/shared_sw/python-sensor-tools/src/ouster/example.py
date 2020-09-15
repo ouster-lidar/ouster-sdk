@@ -1,21 +1,23 @@
 import argparse
 import sys
 
-import ouster._sensor as sensor
-import ouster.lidardata as osl
+import ouster.client._sensor as sensor
+import ouster.client.lidardata as osl
+from typing import List
 
-n_lidar_packets = 0
-n_imu_packets = 0
+n_lidar_packets: int = 0
+n_imu_packets: int = 0
 
-lidar_col_0_ts = 0
-imu_ts = 0
+lidar_col_0_ts: int = 0
+imu_ts: int = 0
 
-lidar_col_0_h_angle = 0.0
-imu_av_z = 0.0
-imu_la_y = 0.0
+lidar_col_0_h_angle: float = 0.0
+imu_av_z: float = 0.0
+imu_la_y: float = 0.0
 
 
-def handle_lidar(col_timestamps, col_encoders, pf):
+def handle_lidar(col_timestamps, col_encoders,
+                 pf: sensor.PacketFormat) -> None:
     global n_lidar_packets
     global lidar_col_0_ts
     global lidar_col_0_h_angle
@@ -24,7 +26,7 @@ def handle_lidar(col_timestamps, col_encoders, pf):
     lidar_col_0_h_angle = col_encoders[0] / pf.encoder_ticks_per_rev
 
 
-def handle_imu(buf, pf):
+def handle_imu(buf: bytearray, pf: sensor.PacketFormat) -> None:
     global n_imu_packets
     global imu_ts
     global imu_av_z
@@ -35,21 +37,21 @@ def handle_imu(buf, pf):
     imu_la_y = pf.imu_la_y(buf)
 
 
-def print_headers():
+def print_headers() -> None:
     sys.stdout.write(
         "{:>15} {:>15} {:>15} {:>15} {:>15} {:>15} {:>15}\n".format(
             "n_lidar_packets", "col_0_azimuth", "col_0_ts", "n_imu_packets",
             "im_av_z", "im_la_y", "imu_ts"))
 
 
-def print_stats():
+def print_stats() -> None:
     sys.stdout.write(
         "\r{:15} {:15.3f} {:15.6f} {:15} {:15.3f} {:15.3f} {:15.6f}".format(
             n_lidar_packets, lidar_col_0_h_angle, lidar_col_0_ts / 1e9,
             n_imu_packets, imu_av_z, imu_la_y, imu_ts / 1e9))
 
 
-def run():
+def run() -> None:
     argParser = argparse.ArgumentParser(
         description='Barebones OS client written in Python')
     argParser.add_argument("remote_ip",
@@ -57,23 +59,15 @@ def run():
                            help="IP address of OS device")
     argParser.add_argument(
         "local_ip",
-        nargs='?',
         type=str,
         help="IP address of the local data-receiving interface")
+
     args = argParser.parse_args()
-    if args.local_ip is None:
-        try:
-            args.local_ip = getLocalIp(args.remote_ip)
-        except:
-            sys.stderr.write(
-                "Could not determine local IP, please specify manually through arguments\n"
-            )
-            sys.exit(1)
     cli = sensor.init_client(args.remote_ip, args.local_ip)
 
     if cli is None:
-        sys.stderr.write("Failed to connect to client at: " + sys.argv[1] +
-                         "\n")
+        sys.stderr.write("Failed to connect to client at: {}\n".format(
+            sys.argv[1]))
         sys.exit(1)
     print_headers()
 

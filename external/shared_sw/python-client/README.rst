@@ -48,6 +48,12 @@ a faster development cycle, you can rebuild using ``python setup.py build_ext -i
 reinstalling the package after every change. For a local debug build, you can also add the ``-g``
 flag.
 
+This package comes with a stub file providing type annotations for use with mypy. We don't currently
+run mypy in CI, but all changes should typecheck. To get started, see `the official mypy
+documentation`_.
+
+.. _the official mypy documentation: https://mypy.readthedocs.io
+
 
 Release
 =======
