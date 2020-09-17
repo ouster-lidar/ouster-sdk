@@ -165,18 +165,20 @@ bool replay_next_imu_packet(playback_handle& handle);
  * Get the next lidar packet
  * @param[in] handle A handle to the initialized playback struct
  * @param[out] buf A character buffer to write data to
+ * @param[in] buffer_size The size of the buffer in bytes
  * @return If the packet was successfully read, false normally means there are
 no more packets
  */
-bool get_next_lidar_data(playback_handle& handle, uint8_t* buf);
+bool get_next_lidar_data(playback_handle& handle, uint8_t* buf, size_t buffer_size);
 
 /**
  * Get the next imu packet
  * @param[in] handle A handle to the initialized playback struct
  * @param[out] buf A character buffer to write data to
+ * @param[in] buffer_size The size of the buffer in bytes
  * @return If the packet was successfully read, false normally means there are
 no more packets
  */
-bool get_next_imu_data(playback_handle& handle, uint8_t* buf);
+bool get_next_imu_data(playback_handle& handle, uint8_t* buf, size_t buffer_size);
 }  // namespace sensor_utils
 }  // namespace ouster

@@ -69,7 +69,7 @@ std::ostream& operator<<(std::ostream& stream_in, const port_couple& data) {
 
 bool reassemble_packet(PDU& pdu, IP* ip, IPv4Reassembler& reassembler) {
     bool result = false;
-   
+
     if (ip != NULL) {
         if (reassembler.process(pdu) != IPv4Reassembler::FRAGMENTED) {
             result = true;
@@ -81,8 +81,7 @@ bool reassemble_packet(PDU& pdu, IP* ip, IPv4Reassembler& reassembler) {
 bool send_packet(PDU& pdu, PacketSender& sender, IPv4Reassembler& reassembler,
                  const std::string& src_ip, const std::string& dest_ip,
                  port_couple src_ports = {0, 0},
-                 port_couple dst_ports = {0, 0})
-{
+                 port_couple dst_ports = {0, 0}) {
     bool sent = false;
     IP* ip = pdu.find_pdu<IP>();
     if (reassemble_packet(pdu, ip, reassembler)) {
@@ -95,8 +94,7 @@ bool send_packet(PDU& pdu, PacketSender& sender, IPv4Reassembler& reassembler,
                 if (dst_ports.lidar_port != 0) {
                     udp->dport(dst_ports.lidar_port);
                 }
-            }
-            else if (udp->dport() == src_ports.imu_port) {
+            } else if (udp->dport() == src_ports.imu_port) {
                 if (dst_ports.imu_port != 0) {
                     udp->dport(dst_ports.imu_port);
                 }
@@ -226,7 +224,8 @@ std::shared_ptr<stream_info> replay_get_pcap_info(
 int guess_imu_port(const stream_info& stream_data) {
     int result = 0;
     const int imu_size = 48;
-    if (stream_data.packet_size_to_port.find(imu_size) != stream_data.packet_size_to_port.end()) {
+    if (stream_data.packet_size_to_port.find(imu_size) !=
+            stream_data.packet_size_to_port.end()) {
         auto correct_packet_size = stream_data.packet_size_to_port.at(imu_size);
         if (correct_packet_size.size() > 1) {
             throw "Error: Multiple possible imu packets found";
@@ -245,7 +244,8 @@ int guess_lidar_port(const stream_info& stream_data) {
     int hit_count = 0;
 
     for (auto s : lidar_sizes) {
-        if (stream_data.packet_size_to_port.find(s) != stream_data.packet_size_to_port.end()) {
+        if (stream_data.packet_size_to_port.find(s) !=
+                stream_data.packet_size_to_port.end()) {
             auto correct_packet_size = stream_data.packet_size_to_port.at(s);
             hit_count++;
             if (correct_packet_size.size() > 1) {
@@ -371,11 +371,12 @@ bool replay_next_imu_packet(playback_handle& handle) {
     return result;
 }
 
-bool get_next_lidar_data(playback_handle& handle, uint8_t* buf) {
+bool get_next_lidar_data(playback_handle& handle, uint8_t* buf,
+                         size_t buffer_size) {
     bool result = false;
 
     bool reassm = false;
-    
+
     while (!reassm) {
         Packet pkt = handle.pcap_file_lidar_reader->next_packet();
         if (pkt) {
@@ -387,18 +388,26 @@ bool get_next_lidar_data(playback_handle& handle, uint8_t* buf) {
                     result = true;
                     auto raw = pdu->find_pdu<RawPDU>();
                     auto temp = (uint32_t*)&(raw->payload()[0]);
-                    memcpy(buf, temp, raw->payload_size());
+                    auto size = raw->payload_size();
+                    if (size > buffer_size) {
+                        throw std::invalid_argument(
+                            "Incompatible argument: expected a bytearray of size > "
+                            + std::to_string(size));
+                    } else {
+                        memcpy(buf, temp, size);
+                    }
                 }
             }
         } else {
             reassm = true;
         }
     }
-    
+
     return result;
 }
 
-bool get_next_imu_data(playback_handle& handle, uint8_t* buf) {
+bool get_next_imu_data(playback_handle& handle, uint8_t* buf,
+                       size_t buffer_size) {
     bool result = false;
 
     bool reassm = false;
@@ -413,14 +422,21 @@ bool get_next_imu_data(playback_handle& handle, uint8_t* buf) {
                     result = true;
                     auto raw = pdu->find_pdu<RawPDU>();
                     auto temp = (uint32_t*)&(raw->payload()[0]);
-                    memcpy((uint32_t*)buf, temp, raw->payload_size());
+                    auto size = raw->payload_size();
+                    if (size > buffer_size) {
+                        throw std::invalid_argument(
+                            "Incompatible argument: expected a bytearray of size > "
+                            + std::to_string(size));
+                    } else {
+                        memcpy(buf, temp, size);
+                    }
                 }
             }
         } else {
             reassm = true;
         }
     }
-    
+
     return result;
 }
 

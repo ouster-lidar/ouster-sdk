@@ -159,23 +159,15 @@ class Pcap:
                             timeout -= 1
                             self._listener_new_imu_data_cv.wait(0.01)
                         self._listener_new_imu_data = False
-    # Commented out until we replace the pybuffers code  
-    # def get_all_packets(self):
-    #     if self._stepwise_pcap_handle == None:
-    #         raise Exception("Stepwise replay not initialized")
-    #     else:
-    #         has_next = True
-    #         while has_next: 
-    #             if (ouster_pcap.get_next_lidar_data(self._stepwise_pcap_handle, self._lidar_buf)):
-    #                 self._data['lidar_packets'].append(np.array(self._lidar_buf, copy=True))
-    #             else:
-    #                 has_next = False
-    #         has_next = True
-    #         while has_next: 
-    #             if (ouster_pcap.get_next_imu_data(self._stepwise_pcap_handle, self._imu_buf)):
-    #                 self._data['imu_packets'].append(np.array(self._imu_buf, copy=True))
-    #             else:
-    #                 has_next = False
+    def get_all_packets(self):
+        if self._stepwise_pcap_handle == None:
+            raise Exception("Stepwise replay not initialized")
+        else:
+            while ouster_pcap.get_next_lidar_data(self._stepwise_pcap_handle, self._lidar_buf):
+                self._data['lidar_packets'].append(np.array(self._lidar_buf, copy=True))
+
+            while ouster_pcap.get_next_imu_data(self._stepwise_pcap_handle, self._imu_buf):
+                self._data['imu_packets'].append(np.array(self._imu_buf, copy=True))
                     
     def start_stepwise_play(self, blocking=False):
         if self._stepwise_pcap_handle == None:

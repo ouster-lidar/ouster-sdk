@@ -2,38 +2,67 @@
  * @file
  * @brief ouster_pyclient_pcap python module
  */
+#include <pybind11/eval.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/eval.h>
-#include <string>
+
 #include <csignal>
 #include <cstdlib>
+#include <string>
 #include <thread>
 
 #include "ouster/os_pcap.h"
-//Disabled until buffers are replaced
+// Disabled until buffers are replaced
 //#include "ouster/ouster_pybuffer.h"
 #include <pcap/pcap.h>
+
 #include <sstream>
 
 namespace py = pybind11;
 
-void handler(int) {
-    std::quick_exit(EXIT_SUCCESS);
+void handler(int) { std::quick_exit(EXIT_SUCCESS); }
+
+/// @TODO The pybind11 buffer_info struct is actually pretty heavy-weight – it
+/// includes some string fields, vectors, etc. Might be worth it to avoid
+/// calling this twice.
+/*
+ * Check that buffer is a 1-d byte array of size > bound and return an internal
+ * pointer to the data for writing. Check is strictly greater to account for the
+ * extra byte required to determine if a datagram is bigger than expected.
+ */
+inline uint8_t* getptr(py::buffer& buf) {
+    auto info = buf.request();
+    if (info.format != py::format_descriptor<uint8_t>::format()) {
+        throw std::invalid_argument(
+            "Incompatible argument: expected a bytearray");
+    }
+    return (uint8_t*)info.ptr;
+}
+/// @TODO The pybind11 buffer_info struct is actually pretty heavy-weight – it
+/// includes some string fields, vectors, etc. Might be worth it to avoid
+/// calling this twice.
+/*
+ * Return the size of the python buffer
+ */
+inline size_t getptrsize(py::buffer& buf) {
+    auto info = buf.request();
+
+    return (size_t)info.size;
 }
 
 // hack: Wrap replay to allow terminating via SIGINT
-int replay_pcap(const std::string &file, const std::string &src_ip, const std::string &dest_ip, double rate) {
-	py::gil_scoped_release release;
-	auto py_handler = std::signal(SIGINT, handler);
-	auto res = ouster::sensor_utils::replay(file, src_ip, dest_ip, rate);
-	std::signal(SIGINT, py_handler);
+int replay_pcap(const std::string& file, const std::string& src_ip,
+                const std::string& dest_ip, double rate) {
+    py::gil_scoped_release release;
+    auto py_handler = std::signal(SIGINT, handler);
+    auto res = ouster::sensor_utils::replay(file, src_ip, dest_ip, rate);
+    std::signal(SIGINT, py_handler);
 
-	return res;
+    return res;
 }
 
 // Record functionality removed for a short amount of time
-// until we switch it over to support libtins    
+// until we switch it over to support libtins
 
 PYBIND11_MODULE(_pcap, m) {
     m.doc() = "ouster._pcap"; // optional module docstring
@@ -72,9 +101,10 @@ PYBIND11_MODULE(_pcap, m) {
               return ouster::sensor_utils::guess_ports(stream_data);
           });
     m.def("replay_initalize",
-          (std::shared_ptr<ouster::sensor_utils::playback_handle> (*)(const std::string &, const std::string &,
-                                                                      const std::string &, const ouster::sensor_utils::port_couple &,
-                                                                      int, int)) &ouster::sensor_utils::replay_initalize);
+          (std::shared_ptr<ouster::sensor_utils::playback_handle>(*)(
+              const std::string&, const std::string&, const std::string&,
+              const ouster::sensor_utils::port_couple&, int, int)) &
+              ouster::sensor_utils::replay_initalize);
     m.def("replay_uninitialize",
           [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle) {
               py::gil_scoped_release release;
@@ -90,16 +120,14 @@ PYBIND11_MODULE(_pcap, m) {
               py::gil_scoped_release release;
               return ouster::sensor_utils::replay_next_imu_packet(*handle);
           });
-    //Disabled until buffers are replaced
-    /*m.def("get_next_lidar_data",
-      [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
-      PyBufferData* buf) -> bool { py::gil_scoped_release release; return
-      ouster::sensor_utils::get_next_lidar_data(*handle, (uint8_t*)buf->get_data());
-      });
-      m.def("get_next_imu_data",
-      [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
-      PyBufferData* buf) -> bool { py::gil_scoped_release release; return
-      ouster::sensor_utils::get_next_imu_data(*handle, (uint8_t*)buf->get_data());
-      });
-    */
+    m.def("get_next_lidar_data",
+          [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
+                  py::buffer buf) -> bool { py::gil_scoped_release release; return
+              ouster::sensor_utils::get_next_lidar_data(*handle, getptr(buf), getptrsize(buf));
+          });
+    m.def("get_next_imu_data",
+          [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
+                  py::buffer buf) -> bool { py::gil_scoped_release release; return
+              ouster::sensor_utils::get_next_imu_data(*handle, getptr(buf), getptrsize(buf));
+          });
 }

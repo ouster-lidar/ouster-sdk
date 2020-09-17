@@ -43,17 +43,17 @@ class TestReceiveData(unittest.TestCase):
         self._test.stop_listening()
         time.sleep(5)
         self._test.pytest_compare(self._reference, self)
-    # Commented out until we replace the pybuffers code        
-    # def test_read_data(self):
-    #     self._test = Pcap("os1-991912000353", socket.gethostbyname(socket.gethostname()), 
-    #                       os.path.join(os.path.dirname(__file__), "test-files/ouster_pyclient_test2.pcap"))
-    #     print("Started reading")
-    #     print(time.time())
-    #     self._test.init_stepwise_replay(7000, 7001)
-    #     self._test.get_all_packets()
-    #     print("Stopped reading")
-    #     print(time.time())
-    #     self._test.pytest_compare(self._reference, self)
+        
+    def test_read_data(self):
+        self._test = Pcap("os1-991912000353", socket.gethostbyname(socket.gethostname()), 
+                          os.path.join(os.path.dirname(__file__), "test-files/ouster_pyclient_test2.pcap"))
+        print("Started reading")
+        print(time.time())
+        self._test.init_stepwise_replay(7000, 7001)
+        self._test.get_all_packets()
+        print("Stopped reading")
+        print(time.time())
+        self._test.pytest_compare(self._reference, self)
 
 
 if __name__ == '__main__':
