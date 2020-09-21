@@ -332,7 +332,10 @@ std::unique_ptr<LidarScan> lidar_scan_from_osf_message(
             for (size_t i = 0; i < width; ++i) {
                 ls->ts[i] = LidarScan::ts_t(msg_ts_vec->Get(i));
             }
-        } else {
+        } else if (msg_ts_vec->size() != 0) {
+            // NOTE[pb]: Zero size of ts vector can be present as the result of
+            // frameChunker earlier implementation that recorded empty
+            // ts vector.
             std::cout << "ERROR: lidar_scan msg has ts of length: "
                       << msg_ts_vec->size() << ", expected: " << ls->ts.size()
                       << std::endl;

@@ -148,14 +148,15 @@ void OSFC::logScanMessage(const ouster::OSF::StampedMessage* msg) {
 
     // Copy lidar_scan.ts
     auto msg_ls_ts_vec = msg->message_as_lidar_scan()->ts();
-    std::vector<uint64_t> ts_v;
+    flatbuffers::Offset<flatbuffers::Vector<uint64_t>> ts_msg(0);
     if (msg_ls_ts_vec) {
+        std::vector<uint64_t> ts_v;
         ts_v.reserve(msg_ls_ts_vec->size());
         for (size_t i = 0; i < msg_ls_ts_vec->size(); ++i) {
             ts_v.push_back(msg_ls_ts_vec->Get(i));
         }
+        ts_msg = builder.CreateVector(ts_v);
     }
-    auto ts_msg = builder.CreateVector(ts_v);
 
     auto scan = Createlidar_scan(builder, scan_msg, ts_msg);
     auto tm_scan = CreateStampedMessage(builder, msg->ts(), msg->id(),
