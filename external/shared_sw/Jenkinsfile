@@ -4,13 +4,14 @@ pipeline {
     agent any
 
     options {
+        skipDefaultCheckout(true)
         overrideIndexTriggers(false)
         // checkoutToSubdirectory('ouster_sw')
         buildDiscarder(logRotator(numToKeepStr: env.BRANCH_NAME == 'master' ? '20' : '5'))
     }
 
     environment {
-        MAKEFLAGS  = sh(script: 'echo -j$(nproc) -l$(nproc)', returnStdout: true).trim()
+        MAKEFLAGS = sh(script: 'echo -j$(nproc) -l$(nproc)', returnStdout: true).trim()
     }
 
     stages {
@@ -24,7 +25,19 @@ pipeline {
             parallel {
                 stage('Build Windows Client') {
                     agent {label 'windows'}
+
                     steps {
+                        // on windows 'GitLFSPull' is required to avoid error during checkout. But
+                        // this breaks merging PRs into master on linux. TODO: put this in utils
+                        // https://issues.jenkins-ci.org/browse/JENKINS-52935
+                        checkout([
+                             $class: 'GitSCM',
+                             branches: scm.branches,
+                             doGenerateSubmoduleConfigurations: scm.doGenerateSubmoduleConfigurations,
+                             extensions: scm.extensions + [ $class: 'GitLFSPull' ],
+                             userRemoteConfigs: scm.userRemoteConfigs
+                        ])
+
                         powershell script: '''
                             cd ./external/shared_sw
 
@@ -46,15 +59,17 @@ pipeline {
                                 throw "Build Failed"
                             }
                         '''
-                    } 
+                    }
                 }
                 stage('Build Linux Client') {
                     steps {
+                        checkout scm
+
                         sh '''
                         cd ./external/shared_sw
                         ./docker_build_shared_sw.sh
                         '''
-                    } 
+                    }
                 }
             }
         }
@@ -82,10 +97,10 @@ pipeline {
                         cd ./external/shared_sw
                         gcloud auth activate-service-account --key-file=${AUTH_FILE}
                         ./docker_test_shared_sw.sh
-                            
+
                     '''
                         }
-                    } 
+                    }
                 }
             }
         }
