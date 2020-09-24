@@ -72,8 +72,13 @@ class FileInfo {
     // Convenience method to view the string representations
     std::string to_string() const;
 
+    // OSF schema version
+    OSF_VERSION version() const { return version_; }
+
    private:
     sensors_map read_sensors();
+
+    OSF_VERSION version_;
 
     const uint8_t* buf_;
 

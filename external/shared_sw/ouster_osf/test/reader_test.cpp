@@ -348,6 +348,33 @@ TEST_F(ReaderTest, SortedWindowFilteredReader) {
     }
 }
 
+TEST_F(ReaderTest, CorrectLidarScanDecodingForV10) {
+    TEST_DATA_SKIP();
+
+    // Using OSF V10 from warden.
+    OsfFile osf_file(test_data_dir() + "/frame-chunker/drive-2577/0000.osf");
+
+    Reader reader(osf_file, {OSF::MessageType::LIDAR_SCAN});
+    auto messages = reader.messages();
+
+    auto msg = *messages.begin();
+    auto ls = msg.as_lidar_scan();
+
+    auto sinfo = reader.file_info().sensors().at(msg.id())->meta;
+
+    // Expected mean direction of first lidar scan of 'drive-2577/0000.osf'
+    Eigen::Vector3d mean_gt;
+    mean_gt << 0.863209, -1.47519, 0.150037;
+
+    Eigen::Vector3d mean = mean_direction(*ls, sinfo);
+
+    double dnorm = Eigen::Vector3d(mean_gt - mean).norm();
+
+    EXPECT_NEAR(0, dnorm, 1e-6) << "OUCH! We changed something in px_offsets "
+                                   "OR destaggering direction and didn't"
+                                   "account for old OSF V10 data!?";
+}
+
 }  // namespace
 }  // namespace OSF
 }  // namespace ouster

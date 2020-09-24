@@ -90,10 +90,13 @@ FramesSaver::Status FramesSaver::saveMessage(const OSF::MessageRef& msg) {
     FramesSaver::Status pre_save_status = pre_save_check(msg.ts());
     if (pre_save_status != FramesSaver::Status::OK) return pre_save_status;
 
+    // Recode lidar_scan if needed
     if (msg.type() == MessageType::LIDAR_SCAN &&
-        msg.file_info().lidar_frame_mode() != lidar_frame_mode_) {
-        // Recode lidar_scan because destination frame mode is differet
-        // going up to LidarScan and back then
+        // because destination frame mode is different
+        (msg.file_info().lidar_frame_mode() != lidar_frame_mode_ ||
+         // OR because it's in V1_0 and destaggering need to be fixed.
+         msg.file_info().version() == OSF_VERSION::V_1_0)) {
+        // so we are going up to LidarScan and back (decode/encode cycle)
         auto ls = msg.as_lidar_scan();
         if (!ls) {
             std::cout << "ERROR: Can't read lidar_scan for msg.ts = "

@@ -80,6 +80,7 @@ add_library(ouster_osf STATIC src/frame.cpp
                               src/message.cpp
                               src/reader.cpp
                               src/png_tools.cpp
+                              src/lidar_scan_stat.cpp
                               ${FBS_GENERATED_COMMON_DIR}/osfCommon_generated.h
                               ${FBS_GENERATED_DIR}/osfChunk_generated.h
                               ${FBS_GENERATED_DIR}/osfSession_generated.h

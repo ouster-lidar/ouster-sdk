@@ -2,12 +2,11 @@
 
 #include <Eigen/Eigen>
 #include <algorithm>
+#include <cstdio>
 #include <iostream>
 #include <limits>
 
 #include "ouster/lidar_scan.h"
-
-#include <cstdio>
 
 namespace ouster {
 
@@ -53,7 +52,6 @@ struct LidarScanStat {
         return min_(channel);
     }
 
-
     row_t max() const { return max_; }
     double max(const LidarScan::LidarScanIndex& channel) const {
         return max_(channel);
@@ -79,5 +77,17 @@ struct LidarScanStat {
     const LidarScan& lidar_scan_;
     const data_t data_;
 };
+
+/**
+ * Calculates the mean direction of all range vectors in cartesian coordinates.
+ * Usefull to check the basic correctness of the reconstructed range data, e.g.
+ * from OSF to LidarScan.
+ *
+ * @param ls - lidar scan
+ * @param sinfo - corresponding sensor_info with interinsics
+ * @return mean direction vector of range cartesian 3d points
+ */
+Eigen::Vector3d mean_direction(const LidarScan& ls,
+                               const sensor::sensor_info& sinfo);
 
 }  // namespace ouster

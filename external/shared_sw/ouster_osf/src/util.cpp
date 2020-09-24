@@ -315,6 +315,50 @@ std::map<uint64_t, size_t> get_map_from_file_info(const FileInfo& file_info) {
     return res;
 }
 
+/**
+ * Fixing the destagerring to return correct lidar_scan column orders.
+ * Can be applied only as last correction step of lidar scan recovery from
+ * OSF V10 (usually warden's prod data).
+ *
+ * This fix needed for all OSF v10 (soft best guess criteria) because
+ * the directions and amounts of px_offset changed with fw1.4 update.
+ *
+ * Production wardens keep's generating data in OSFs V10 that destaggered
+ * to one direction and with current master code (as of Sept 20, 2020) during
+ * the LidarScan recovery it's destaggered to the same direction with inverted
+ * px_offset values. Which leads to all pixels in lidar scans be shifted to
+ * <cycle count> pixels. (18 pixels for w == 1024)
+ *
+ * Where <cycle count> is the previous px_offset + inverted/reciprocals
+ * px_offset for any given row. NOTE: by construction these values are the same
+ * for every row so we can set the `fix_offset` uniformly to `px_offset`.
+ *
+ */
+void fix_lidar_scan_destagerring_v10(LidarScan& ls) {
+    int fix_offset;
+    switch (ls.w) {
+        case 512:
+        default:
+            fix_offset = 9;
+            break;
+        case 1024:
+            fix_offset = 18;
+            break;
+        case 2048:
+            fix_offset = 36;
+            break;
+    }
+    // Uniform px_offset that is the cycle of px_offset + inverted(px_offset)
+    std::vector<int> helper_px_offset(ls.h, fix_offset);
+    // Shifting columns back to the full cycle
+    ls.range() = destagger<LidarScan::raw_t, 1>(ls.range(), helper_px_offset);
+    ls.noise() = destagger<LidarScan::raw_t, 1>(ls.noise(), helper_px_offset);
+    ls.intensity() =
+        destagger<LidarScan::raw_t, 1>(ls.intensity(), helper_px_offset);
+    ls.reflectivity() =
+        destagger<LidarScan::raw_t, 1>(ls.reflectivity(), helper_px_offset);
+}
+
 std::unique_ptr<LidarScan> lidar_scan_from_osf_message(
     const StampedMessage* msg, const FileInfo& file_info) {
     auto sensor = file_info.sensors().at(msg->id());
@@ -361,6 +405,16 @@ std::unique_ptr<LidarScan> lidar_scan_from_osf_message(
                    file_info.lidar_frame_mode(),
                    file_info.range_multiplier())) {
         return nullptr;
+    }
+
+    // TODO[pb]: Later we might want to remove this in favor of one (or
+    //           multiple) OSF conversion steps. But we don't have all needed
+    //           tools for writing OSF convertors quickly now.
+    // TODO[pb]: There also no ls.ts values in LidarScans so later we can add
+    //           those to as part of convertors if they needed.
+    // Fix LidarScan destagger for OSF V10 (e.g. prod wardens).
+    if (file_info.version() == OSF_VERSION::V_1_0) {
+        fix_lidar_scan_destagerring_v10(*ls);
     }
 
     return ls;
@@ -508,7 +562,8 @@ void build_session(flatbuffers::FlatBufferBuilder& fbb, const std::string& id,
             std::cout << "\nWARNING: Inconsistent OSF::sensors_map spotted "
                       << "during osfSession creation: map id = " << s.first
                       << " shoud be equal to sensor.id = " << s.second->id
-                      << std::endl << std::endl;
+                      << std::endl
+                      << std::endl;
         }
         osf_sensors.push_back(create_osf_sensor(fbb, *s.second));
     }

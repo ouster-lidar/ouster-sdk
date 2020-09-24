@@ -20,6 +20,7 @@ FileInfo::FileInfo(const OsfFile& osf_file) {
     smap_ = read_sensors();
     // and chunk (frames) map
     cmap_ = get_map_from_file_info(*this);
+    version_ = osf_file.version();
 }
 
 std::string FileInfo::id() const {
