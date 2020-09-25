@@ -6,14 +6,16 @@ from . import _sensor as sensor
 import struct
 import math
 import numpy as np
+from typing import Any, Union
 
+BufferT = Union[bytes, bytearray, memoryview]
 
 class OsLidarData:
     """
     \class OsLidarData
     \brief This class has code creating no-copy views of the lidar data
     """
-    def __init__(self, data: bytearray, pf: sensor.PacketFormat) -> None:
+    def __init__(self, data: BufferT, pf: sensor.PacketFormat) -> None:
         self._pf = pf
         self._pybuffer = data
         self._data = np.array(data, copy=False)

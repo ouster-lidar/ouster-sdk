@@ -77,8 +77,11 @@ setup(
     ext_modules=[CMakeExtension('ouster.client._sensor')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
-    python_requires='>=3.3',
-    install_requires=["numpy"],
+    python_requires='>=3.6',
+    install_requires=[
+        'numpy',
+        'dataclasses >= 0.7; python_version < "3.7"',
+    ],
     extras_require={
         'test': ['tox']
     }

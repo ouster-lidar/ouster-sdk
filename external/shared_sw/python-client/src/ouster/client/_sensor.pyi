@@ -8,6 +8,7 @@ Note:
     This file should be updated whenever the bindings are modified.
 
 """
+# flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
 from typing import Any, Optional, overload
 
@@ -246,6 +247,9 @@ class DataFormat:
 
 class PacketFormat:
     def __init__(self, *args, **kwargs) -> None:
+        ...
+
+    def col_measurement_id(self, col: int, buf: bytes) -> int:
         ...
 
     def imu_accel_ts(self, buf: bytearray) -> int:
