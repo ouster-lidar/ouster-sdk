@@ -39,8 +39,6 @@ pipeline {
                         ])
 
                         powershell script: '''
-                            cd ./external/shared_sw
-
                             # Make sure we error out on errors
                             $ErrorActionPreference = "Stop"
                             Set-PSDebug -Trace 1
@@ -51,8 +49,8 @@ pipeline {
                             $env:PATH = $env:PATH -replace '"',''
 
                             # The build executes from root as that is how linux is set up
-                            ./sensor_utils/Docker/Windows10/make_vs_project.bat
-                            ./sensor_utils/Docker/Windows10/build.bat
+                            ./apps/sensor-client-integration/standard/windows/make_vs_project.bat
+                            ./apps/sensor-client-integration/standard/windows//build.bat
                         
 
                             if($LASTEXITCODE -ne 0) {
@@ -66,7 +64,7 @@ pipeline {
                         checkout scm
 
                         sh '''
-                        cd ./external/shared_sw
+                        cd ./apps/sensor-client-integration/standard/linux/
                         ./docker_build_shared_sw.sh
                         '''
                     }
@@ -81,9 +79,8 @@ pipeline {
                     steps {
                         withCredentials([file(credentialsId: 'ouster-build-gcs', variable: 'AUTH_FILE')]) {
                             powershell script: """
-                            cd ./external/shared_sw
                             gcloud auth activate-service-account --key-file=$AUTH_FILE
-                            ./sensor_utils/Docker/Windows10/test.bat
+                            ./apps/sensor-client-integration/standard/windows/test.bat
                             if (\$LASTEXITCODE -ne 0) {throw 'Build Failed'}
                             """
                         }
@@ -94,7 +91,7 @@ pipeline {
                     steps {
                         withCredentials([file(credentialsId: 'ouster-build-gcs', variable: 'AUTH_FILE')]) {
                         sh script: '''
-                        cd ./external/shared_sw
+                        cd ./apps/sensor-client-integration/standard/linux/
                         gcloud auth activate-service-account --key-file=${AUTH_FILE}
                         ./docker_test_shared_sw.sh
 
