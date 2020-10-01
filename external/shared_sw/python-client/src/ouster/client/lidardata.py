@@ -1,173 +1,98 @@
-"""
-\package OsLidarData
-This module has code for viewing lidar data
-"""
-from . import _sensor as sensor
-import struct
-import math
+from enum import Enum
+from typing import Union
+
 import numpy as np
-from typing import Any, Union
+
+from . import _sensor
 
 BufferT = Union[bytes, bytearray, memoryview]
 
-class OsLidarData:
+
+class Channel(Enum):
+    """Channels available in lidar packets."""
+    RANGE = (0, np.uint32)
+    REFLECTIVITY = (4, np.uint16)
+    INTENSITY = (6, np.uint16)
+    AMBIENT = (8, np.uint16)
+
+    def __init__(self, offset: int, dtype: type):
+        self.offset = offset
+        self.dtype = dtype
+
+
+class ColHeader(Enum):
+    """Column header datatypes and offsets.
+
+    Negative offsets are considered relative to the end of the col buffer.
     """
-    \class OsLidarData
-    \brief This class has code creating no-copy views of the lidar data
+    TIMESTAMP = (0, np.uint64)
+    FRAME_ID = (10, np.uint16)
+    MEASUREMENT_ID = (8, np.uint16)
+    ENCODER_COUNT = (12, np.uint32)
+    VALID = (-4, np.uint32)
+
+    def __init__(self, offset: int, dtype: type):
+        self.offset = offset
+        self.dtype = dtype
+
+
+class Packet:
+    """Read packet data using numpy views.
+
+    Todo:
+        This requires some information about packet data layout not provided by
+        packet_format. Bytes per pixel will be variable in future fw.
     """
-    def __init__(self, data: BufferT, pf: sensor.PacketFormat) -> None:
+
+    PIXEL_BYTES: int = 12
+    COL_PREAMBLE_BYTES: int = 16
+    COL_FOOTER_BYTES: int = 4
+
+    def __init__(self, data: BufferT, pf: _sensor.PacketFormat) -> None:
         self._pf = pf
-        self._pybuffer = data
         self._data = np.array(data, copy=False)
-        # TODO: this requires some information about packet data layout not
-        # provided by packet_format. Bytes per pixel will be variable in future fw
-        self._pixel_bytes = 12
-        self._col_preamble_size = 16
-        self._column_bytes = self._col_preamble_size + self._pixel_bytes * self._pf.pixels_per_column + 4
+        self._column_bytes = Packet.COL_PREAMBLE_BYTES + \
+            (Packet.PIXEL_BYTES * self._pf.pixels_per_column) + \
+            Packet.COL_FOOTER_BYTES
 
     def _view(self, offset: int, data_type: type) -> np.ndarray:
-        """
-        \brief Internal method for creating a view from a numpy array
-        \param offset Number of bytes the view should be offseted from the base data
-        \param data_type The numpy data type that the view will be casted into
+        """Internal method for creating a view from a numpy array.
+
+        Args:
+            offset (int): Byte offset of the view from the beginning of data
+            data_type (type): The numpy data type to use for elements
+
+        Returns:
+            np.ndarray: view of the buffer starting at the given offset
         """
         min = offset
         max = -((self._data.size - offset) % np.dtype(data_type).itemsize)
         return self._data[min:max].view(dtype=data_type)
 
-    def make_pixel_range_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for px range
-        \return The zero copy view of the os lidar data for px range
+    def view(self, field: Union[Channel, ColHeader]) -> np.ndarray:
+        """Create a zero-copy view of the specified data.
 
-        This method creates a view (no memory copied) that is a 2 dimensional array
-        of the pixel range data. This view is indexed by pixels, columns
-        """
-        data_type = np.uint32
-        temp_view = self._view(self._col_preamble_size, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.pixels_per_column, self._pf.columns_per_packet),
-            strides=(self._pixel_bytes, self._column_bytes))
+        Args:
+            field: Specifies either a channel or column header
 
-    def make_pixel_reflectivity_view(self) -> np.ndarray:
+        Returns:
+            view of the specified data as a numpy array
         """
-        \brief Create a zero copy view of the os lidar data for px reflectivity
-        \return The zero copy view of the os lidar data for px reflectivity
 
-        This method creates a view (no memory copied) that is a 2 dimensional array
-        of the pixel reflectivity data. This view is indexed by pixels, columns
-        """
-        data_type = np.uint16
-        temp_view = self._view(self._col_preamble_size + 4, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.pixels_per_column, self._pf.columns_per_packet),
-            strides=(self._pixel_bytes, self._column_bytes))
+        if isinstance(field, Channel):
+            return np.lib.stride_tricks.as_strided(
+                self._view(Packet.COL_PREAMBLE_BYTES + field.offset,
+                           field.dtype),
+                shape=(self._pf.pixels_per_column,
+                       self._pf.columns_per_packet),
+                strides=(Packet.PIXEL_BYTES, self._column_bytes))
 
-    def make_pixel_signal_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for px signal
-        \return The zero copy view of the os lidar data for px signal
+        elif isinstance(field, ColHeader):
+            start = 0 if field.offset >= 0 else self._column_bytes
+            return np.lib.stride_tricks.as_strided(
+                self._view(field.offset + start, field.dtype),
+                shape=(self._pf.columns_per_packet, ),
+                strides=(self._column_bytes, ))
 
-        This method creates a view (no memory copied) that is a 2 dimensional array
-        of the pixel signal data. This view is indexed by pixels, columns
-        """
-        data_type = np.uint16
-        temp_view = self._view(self._col_preamble_size + 6, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.pixels_per_column, self._pf.columns_per_packet),
-            strides=(self._pixel_bytes, self._column_bytes))
-
-    def make_pixel_noise_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for px noise
-        \return The zero copy view of the os lidar data for px noise
-
-        This method creates a view (no memory copied) that is a 2 dimensional array
-        of the pixel noise data. This view is indexed by pixels, columns
-        """
-        data_type = np.uint16
-        temp_view = self._view(self._col_preamble_size + 8, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.pixels_per_column, self._pf.columns_per_packet),
-            strides=(self._pixel_bytes, self._column_bytes))
-
-    def make_col_timestamp_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for column timestamps
-        \return The zero copy view of the os lidar data for column timestamps
-
-        This method creates a view (no memory copied) that is a 1 dimensional array
-        of the column timestamps data. This view is indexed by columns
-        """
-        data_type = np.int64
-        temp_view = self._view(0, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.columns_per_packet, ),
-            strides=(self._column_bytes, ))
-
-    def make_col_encoder_count_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for column encoder counts
-        \return The zero copy view of the os lidar data for column encoder counts
-
-        This method creates a view (no memory copied) that is a 1 dimensional array
-        of the column encoder counts data. This view is indexed by columns
-        """
-        data_type = np.uint32
-        temp_view = self._view(12, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.columns_per_packet, ),
-            strides=(self._column_bytes, ))
-
-    def make_col_measurement_id_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for column measurement ids
-        \return The zero copy view of the os lidar data for column measurement ids
-
-        This method creates a view (no memory copied) that is a 1 dimensional array
-        of the column measurement ids data. This view is indexed by columns
-        """
-        data_type = np.uint16
-        temp_view = self._view(8, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.columns_per_packet, ),
-            strides=(self._column_bytes, ))
-
-    def make_col_frame_id_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for column frame ids
-        \return The zero copy view of the os lidar data for column frame ids
-
-        This method creates a view (no memory copied) that is a 1 dimensional array
-        of the column frame ids data. This view is indexed by columns
-        """
-        data_type = np.uint16
-        temp_view = self._view(10, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.columns_per_packet, ),
-            strides=(self._column_bytes, ))
-
-    def make_col_valid_view(self) -> np.ndarray:
-        """
-        \brief Create a zero copy view of the os lidar data for column validity
-        \return The zero copy view of the os lidar data for column validity
-
-        This method creates a view (no memory copied) that is a 1 dimensional array
-        of the column validity data. This view is indexed by columns
-        """
-        data_type = np.uint32
-        temp_view = self._view(
-            self._col_preamble_size +
-            self._pf.pixels_per_column * self._pixel_bytes, data_type)
-        return np.lib.stride_tricks.as_strided(
-            temp_view,
-            shape=(self._pf.columns_per_packet, ),
-            strides=(self._column_bytes, ))
+        else:
+            raise TypeError("Expected either a Channel or ColHeader")

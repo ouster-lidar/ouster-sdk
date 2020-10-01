@@ -8,10 +8,10 @@ import numpy as np
 
 from . import _bufstream as bufstream
 from . import _sensor as sensor
-from . import OsLidarData
+from . import Packet, Channel, ColHeader
 
 
-def _np_md5(a: np.ndarray) -> str:
+def _md5(a: np.ndarray) -> str:
     """Get md5 hash of a numpy array."""
     return md5(np.ascontiguousarray(a)).hexdigest()
 
@@ -36,21 +36,21 @@ class ScanDigest:
     valid: str
 
     @classmethod
-    def from_packet(cls, p: OsLidarData) -> 'ScanDigest':
-        return cls(ranges=_np_md5(p.make_pixel_range_view()),
-                   reflectivity=_np_md5(p.make_pixel_reflectivity_view()),
-                   intensity=_np_md5(p.make_pixel_signal_view()),
-                   ambient=_np_md5(p.make_pixel_noise_view()),
-                   timestamp=_np_md5(p.make_col_timestamp_view()),
-                   encoder=_np_md5(p.make_col_encoder_count_view()),
-                   measurement_id=_np_md5(p.make_col_measurement_id_view()),
-                   frame_id=_np_md5(p.make_col_frame_id_view()),
-                   valid=_np_md5(p.make_col_valid_view()))
+    def from_packet(cls, p: Packet) -> 'ScanDigest':
+        return cls(ranges=_md5(p.view(Channel.RANGE)),
+                   reflectivity=_md5(p.view(Channel.REFLECTIVITY)),
+                   intensity=_md5(p.view(Channel.INTENSITY)),
+                   ambient=_md5(p.view(Channel.AMBIENT)),
+                   timestamp=_md5(p.view(ColHeader.TIMESTAMP)),
+                   encoder=_md5(p.view(ColHeader.ENCODER_COUNT)),
+                   measurement_id=_md5(p.view(ColHeader.MEASUREMENT_ID)),
+                   frame_id=_md5(p.view(ColHeader.FRAME_ID)),
+                   valid=_md5(p.view(ColHeader.VALID)))
 
 
 def _digest_io(pf: sensor.PacketFormat, b: BinaryIO) -> List[ScanDigest]:
     return [
-        ScanDigest.from_packet(OsLidarData(bytearray(buf), pf))
+        ScanDigest.from_packet(Packet(bytearray(buf), pf))
         for buf in bufstream.read(b)
     ]
 
@@ -71,11 +71,10 @@ class StreamDigest:
     meta: sensor.SensorInfo
     packets: List[ScanDigest]
 
-    def check(self) -> bool:
+    def check(self) -> None:
         """Check that data parsed from a packets on disk matches hashes."""
         with open(self.file, 'rb') as i:
-            ref = _digest_io(sensor.get_format(self.meta), i)
-            return ref == self.packets
+            assert self.packets == _digest_io(sensor.get_format(self.meta), i)
 
     def to_json(self) -> str:
         """Serialize to json."""

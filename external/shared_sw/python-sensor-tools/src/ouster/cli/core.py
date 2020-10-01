@@ -34,6 +34,20 @@ def dump_mids(digest_file: str) -> None:
 
 
 @testing.command()
+@click.argument('digest_file')
+def update_digest(digest_file: str) -> None:
+    """Update the specified digest file with new hashes."""
+    with open(digest_file, 'r') as f:
+        digest = StreamDigest.from_json(f.read())
+
+    with open(digest.file, 'rb') as fi:
+        new_digest = StreamDigest.from_bufstream(digest.file, digest.meta, fi)
+
+    with open(digest_file, 'w') as fj:
+        fj.write(new_digest.to_json())
+
+
+@testing.command()
 @click.argument('hostname')
 @click.option('--npackets', default=64, help="number of packets to capture")
 def capture(hostname: str, npackets: int) -> None:
@@ -44,8 +58,8 @@ def capture(hostname: str, npackets: int) -> None:
     digest suitable for regression tests.
 
     """
-    tmpfile = f"{hostname}_data.bin"
-    descrfile = f"{hostname}_digest.json"
+    datafile = f"{hostname}_data.bin"
+    dgstfile = f"{hostname}_digest.json"
 
     print(f"Connecting to {hostname}")
 
@@ -55,7 +69,7 @@ def capture(hostname: str, npackets: int) -> None:
         print("Failed to init")
         exit(1)
 
-    print(f"Writing data to {tmpfile} ...")
+    print(f"Writing data to {datafile} ...")
 
     si = oscli.parse_metadata(oscli.get_metadata(cli))
     pf = oscli.get_format(si)
@@ -65,17 +79,17 @@ def capture(hostname: str, npackets: int) -> None:
                             oscli.lidar_packets(pf, cli))
 
     # write n packets to a bufstream on disk
-    with open(tmpfile, 'wb') as fo:
+    with open(datafile, 'wb') as fo:
         _bufstream.write(fo, islice(frame_start, npackets))
 
     print("Hashing results ...")
 
-    with open(tmpfile, 'rb') as fi:
-        descr = StreamDigest.from_bufstream(tmpfile, si, fi)
+    with open(datafile, 'rb') as fi:
+        digest = StreamDigest.from_bufstream(datafile, si, fi)
 
-    print(f"Writing description to {descrfile} ...")
+    print(f"Writing description to {dgstfile} ...")
 
-    with open(descrfile, 'w') as fj:
-        fj.write(descr.to_json())
+    with open(dgstfile, 'w') as fj:
+        fj.write(digest.to_json())
 
     print("Done!")

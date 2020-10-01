@@ -1,7 +1,9 @@
 """Python sensor client."""
 # flake8: noqa: F401 (unused imports)
 
-from .lidardata import OsLidarData
+from .lidardata import Packet
+from .lidardata import Channel
+from .lidardata import ColHeader
 
 from ._sensor import Client
 from ._sensor import ClientState

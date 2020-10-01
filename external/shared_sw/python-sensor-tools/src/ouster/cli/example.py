@@ -3,7 +3,7 @@ import sys
 
 import ouster.client._sensor as sensor
 import ouster.client.lidardata as osl
-from typing import List
+from ouster.client import ColHeader
 
 n_lidar_packets: int = 0
 n_imu_packets: int = 0
@@ -77,9 +77,9 @@ def run() -> None:
     try:
         lidar_buf = bytearray(pf.lidar_packet_size + 1)
         imu_buf = bytearray(pf.imu_packet_size + 1)
-        os_data = osl.OsLidarData(lidar_buf, pf)
-        col_timestamps = os_data.make_col_timestamp_view()
-        col_encoders = os_data.make_col_encoder_count_view()
+        os_data = osl.Packet(lidar_buf, pf)
+        col_timestamps = os_data.view(ColHeader.TIMESTAMP)
+        col_encoders = os_data.view(ColHeader.ENCODER_COUNT)
         while True:
             st = sensor.poll_client(cli)
             if st & sensor.ERROR:
