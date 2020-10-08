@@ -3,9 +3,10 @@ from itertools import dropwhile, islice
 
 import click
 
-import ouster.client as oscli
+import ouster.client as client
 from ouster.client import _bufstream
 from ouster.client._digest import StreamDigest
+from ouster.client._sensor import LidarScan
 
 
 @click.group()
@@ -19,18 +20,39 @@ def testing():
 
 
 @testing.command()
+@click.option('--hostname', help="hostname to connect to")
+@click.option('--lidar-port', default=7512, help="lidar port")
+@click.option('--imu-port', default=7513, help="imu port")
+def read_scans(hostname: str, lidar_port: int, imu_port: int) -> None:
+    """Read packets from supplied ports and batch into scans.
+
+    This is just a debug command to run the scan-batching code.
+    """
+    cli = client.init_client(hostname, lidar_port, imu_port)
+
+    if cli is None:
+        print("Failed to init")
+        exit(1)
+
+    print(f"Listening for packets on ports {lidar_port} and {imu_port}")
+
+    nscans = 0
+
+    for m in client.scans(cli):
+        if isinstance(m, LidarScan):
+            nscans += 1
+            print(f"Scans received: {nscans}")
+
+    print("Exiting...")
+
+
+@testing.command()
 @click.argument('digest_file')
-def dump_mids(digest_file: str) -> None:
-    """Print the measurement ids from a bufstream packet capture."""
+def check_digest(digest_file: str) -> None:
     with open(digest_file, 'r') as f:
         digest = StreamDigest.from_json(f.read())
-
-    pf = oscli.get_format(digest.meta)
-
-    with open(digest.file, 'rb') as fb:
-        ids = [pf.col_measurement_id(0, buf) for buf in _bufstream.read(fb)]
-
-    print(ids)
+        digest.check()
+    print("Ok!")
 
 
 @testing.command()
@@ -63,7 +85,7 @@ def capture(hostname: str, npackets: int) -> None:
 
     print(f"Connecting to {hostname}")
 
-    cli = oscli.init_client(hostname, 7512, 7513)
+    cli = client.init_client(hostname, 7512, 7513)
 
     if cli is None:
         print("Failed to init")
@@ -71,12 +93,17 @@ def capture(hostname: str, npackets: int) -> None:
 
     print(f"Writing data to {datafile} ...")
 
-    si = oscli.parse_metadata(oscli.get_metadata(cli))
-    pf = oscli.get_format(si)
+    si = client.parse_metadata(client.get_metadata(cli))
+    pf = client.get_format(si)
+
+    lidar_packets = map(
+        lambda p: p._data,
+        dropwhile(lambda p: not isinstance(p, client.LidarPacket),
+                  client.packets(pf, cli)))
 
     # read lidar packets starting at the beginning of the next frame
     frame_start = dropwhile(lambda b: pf.col_measurement_id(0, b) != 0,
-                            oscli.lidar_packets(pf, cli))
+                            lidar_packets)
 
     # write n packets to a bufstream on disk
     with open(datafile, 'wb') as fo:

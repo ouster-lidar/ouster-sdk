@@ -1,9 +1,11 @@
 """Python sensor client."""
 # flake8: noqa: F401 (unused imports)
 
-from .lidardata import Packet
+from .lidardata import ImuPacket
+from .lidardata import LidarPacket
 from .lidardata import Channel
 from .lidardata import ColHeader
+from ._sensor import LidarScan
 
 from ._sensor import Client
 from ._sensor import ClientState
@@ -31,4 +33,4 @@ from ._sensor import timestamp_mode_of_string
 from ._sensor import version_of_string
 
 from .core import ClientError
-from .core import lidar_packets
+from .core import batch_to_scan, packets, scans

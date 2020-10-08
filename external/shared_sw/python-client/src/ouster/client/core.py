@@ -3,30 +3,98 @@
 This module is WIP and will contain more idiomatic wrappers around the
 lower-level pyblind11-generated module.
 """
-from typing import Generator
+from typing import Callable, Generator, Optional, Union
 
-from ._sensor import Client, ClientState, PacketFormat
-from ._sensor import poll_client, read_lidar_packet, read_imu_packet
+from . import _sensor
+from ._sensor import Client, ClientState, PacketFormat, LidarScan, SensorInfo
+
+from .lidardata import BufferT, ImuPacket, LidarPacket
 
 
 class ClientError(Exception):
     pass
 
 
-def lidar_packets(pf: PacketFormat,
-                  cli: Client) -> Generator[bytearray, None, None]:
-    """Create a stream of just the lidar packets emitted by a sensor."""
+def batch_to_scan(si: SensorInfo) -> Callable[[BufferT], Optional[LidarScan]]:
+    """Create a function to batch packet buffers to a LidarScan.
+
+    Args:
+        si: Sensor metadata
+
+    Returns:
+        Callable: a closure that can be called with a packet buffer.
+
+        Optionally returns a lidar scan, when the added packet is determined to
+        be from the next frame.
+    """
+    w = si.format.columns_per_frame
+    h = si.format.pixels_per_column
+
+    ls_write, ls_yield = _sensor.LidarScan(w, h), None
+
+    # when a frame is complete, assign it to ls_yield and start new frame
+    def complete_frame(ts: int):
+        nonlocal ls_write, ls_yield
+        ls_yield = ls_write
+        ls_write = _sensor.LidarScan(w, h)
+
+    batch = _sensor.batch_to_scan(w, _sensor.get_format(si), complete_frame)
+
+    # batch another packet buffer and optionally return a completed frame
+    def batcher(buf: BufferT) -> Optional[LidarScan]:
+        nonlocal ls_yield
+        ls_yield = None
+        batch(buf, ls_write)
+        return ls_yield
+
+    return batcher
+
+
+def packets(
+        pf: PacketFormat,
+        cli: Client) -> Generator[Union[ImuPacket, LidarPacket], None, None]:
+    """Create a stream of packets emitted by a sensor."""
     try:
-        imu_buf = bytearray(pf.imu_packet_size + 1)
         while True:
-            st = poll_client(cli)
+            st = _sensor.poll_client(cli)
             if st & ClientState.ERROR:
                 raise ClientError("Client returned error state")
             elif st & ClientState.LIDAR_DATA:
                 lidar_buf = bytearray(pf.lidar_packet_size + 1)
-                if (read_lidar_packet(cli, lidar_buf, pf)):
-                    yield lidar_buf
+                if (_sensor.read_lidar_packet(cli, lidar_buf, pf)):
+                    yield LidarPacket(lidar_buf, pf)
             elif st & ClientState.IMU_DATA:
-                read_imu_packet(cli, imu_buf, pf)
+                imu_buf = bytearray(pf.imu_packet_size + 1)
+                if (_sensor.read_imu_packet(cli, imu_buf, pf)):
+                    yield ImuPacket(imu_buf, pf)
+
+    except KeyboardInterrupt:
+        pass
+
+
+def scans(cli: Client) -> Generator[Union[ImuPacket, LidarScan], None, None]:
+    try:
+
+        si = _sensor.parse_metadata(_sensor.get_metadata(cli))
+        pf = _sensor.get_format(si)
+
+        lidar_buf = bytearray(pf.lidar_packet_size + 1)
+
+        batch = batch_to_scan(si)
+
+        while True:
+            st = _sensor.poll_client(cli)
+            if st & ClientState.ERROR:
+                raise ClientError("Client returned error state")
+            elif st & ClientState.LIDAR_DATA:
+                if (_sensor.read_lidar_packet(cli, lidar_buf, pf)):
+                    ls = batch(lidar_buf)
+                    if ls is not None:
+                        yield ls
+            elif st & ClientState.IMU_DATA:
+                imu_buf = bytearray(pf.imu_packet_size + 1)
+                if (_sensor.read_imu_packet(cli, imu_buf, pf)):
+                    yield ImuPacket(imu_buf, pf)
+
     except KeyboardInterrupt:
         pass

@@ -8,6 +8,40 @@ from . import _sensor
 BufferT = Union[bytes, bytearray, memoryview]
 
 
+class ImuPacket:
+    def __init__(self, data: BufferT, pf: _sensor.PacketFormat) -> None:
+        self._pf = pf
+        self._data = data
+
+    @property
+    def sys_ts(self) -> int:
+        return self._pf.imu_sys_ts(self._data)
+
+    @property
+    def accel_ts(self) -> int:
+        return self._pf.imu_accel_ts(self._data)
+
+    @property
+    def gyro_ts(self) -> int:
+        return self._pf.imu_gyro_ts(self._data)
+
+    @property
+    def accel(self) -> np.ndarray:
+        return np.array([
+            self._pf.imu_la_x(self._data),
+            self._pf.imu_la_y(self._data),
+            self._pf.imu_la_z(self._data)
+        ])
+
+    @property
+    def angular_vel(self) -> np.ndarray:
+        return np.array([
+            self._pf.imu_av_x(self._data),
+            self._pf.imu_av_y(self._data),
+            self._pf.imu_av_z(self._data)
+        ])
+
+
 class Channel(Enum):
     """Channels available in lidar packets."""
     RANGE = (0, np.uint32)
@@ -36,7 +70,7 @@ class ColHeader(Enum):
         self.dtype = dtype
 
 
-class Packet:
+class LidarPacket:
     """Read packet data using numpy views.
 
     Todo:
@@ -49,11 +83,17 @@ class Packet:
     COL_FOOTER_BYTES: int = 4
 
     def __init__(self, data: BufferT, pf: _sensor.PacketFormat) -> None:
+        """Create a new packet view of a buffer.
+
+        This will always alias the supplied buffer-like object. Pass in a copy
+        to avoid unintentional aliasing.
+        """
+
         self._pf = pf
-        self._data = np.array(data, copy=False)
-        self._column_bytes = Packet.COL_PREAMBLE_BYTES + \
-            (Packet.PIXEL_BYTES * self._pf.pixels_per_column) + \
-            Packet.COL_FOOTER_BYTES
+        self._data = np.frombuffer(data, dtype=np.uint8)
+        self._column_bytes = LidarPacket.COL_PREAMBLE_BYTES + \
+            (LidarPacket.PIXEL_BYTES * self._pf.pixels_per_column) + \
+            LidarPacket.COL_FOOTER_BYTES
 
     def _view(self, offset: int, data_type: type) -> np.ndarray:
         """Internal method for creating a view from a numpy array.
@@ -81,11 +121,11 @@ class Packet:
 
         if isinstance(field, Channel):
             return np.lib.stride_tricks.as_strided(
-                self._view(Packet.COL_PREAMBLE_BYTES + field.offset,
+                self._view(LidarPacket.COL_PREAMBLE_BYTES + field.offset,
                            field.dtype),
                 shape=(self._pf.pixels_per_column,
                        self._pf.columns_per_packet),
-                strides=(Packet.PIXEL_BYTES, self._column_bytes))
+                strides=(LidarPacket.PIXEL_BYTES, self._column_bytes))
 
         elif isinstance(field, ColHeader):
             start = 0 if field.offset >= 0 else self._column_bytes

@@ -1,9 +1,7 @@
 import argparse
 import sys
 
-import ouster.client._sensor as sensor
-import ouster.client.lidardata as osl
-from ouster.client import ColHeader
+import ouster.client as client
 
 n_lidar_packets: int = 0
 n_imu_packets: int = 0
@@ -16,25 +14,25 @@ imu_av_z: float = 0.0
 imu_la_y: float = 0.0
 
 
-def handle_lidar(col_timestamps, col_encoders,
-                 pf: sensor.PacketFormat) -> None:
+def handle_lidar(p: client.LidarPacket) -> None:
     global n_lidar_packets
     global lidar_col_0_ts
     global lidar_col_0_h_angle
     n_lidar_packets += 1
-    lidar_col_0_ts = col_timestamps[0]
-    lidar_col_0_h_angle = col_encoders[0] / pf.encoder_ticks_per_rev
+    lidar_col_0_ts = p.view(client.ColHeader.TIMESTAMP)[0]
+    lidar_col_0_h_angle = p.view(
+        client.ColHeader.ENCODER_COUNT)[0] / p._pf.encoder_ticks_per_rev
 
 
-def handle_imu(buf: bytearray, pf: sensor.PacketFormat) -> None:
+def handle_imu(p: client.ImuPacket) -> None:
     global n_imu_packets
     global imu_ts
     global imu_av_z
     global imu_la_y
     n_imu_packets += 1
-    imu_ts = pf.imu_sys_ts(buf)
-    imu_av_z = pf.imu_av_z(buf)
-    imu_la_y = pf.imu_la_y(buf)
+    imu_ts = p.sys_ts
+    imu_av_z = p.angular_vel[2]
+    imu_la_y = p.accel[1]
 
 
 def print_headers() -> None:
@@ -63,35 +61,28 @@ def run() -> None:
         help="IP address of the local data-receiving interface")
 
     args = argParser.parse_args()
-    cli = sensor.init_client(args.remote_ip, args.local_ip)
+
+    print(f"Connecting to {args.remote_ip}; sending data to {args.local_ip}")
+    cli = client.init_client(args.remote_ip, args.local_ip)
 
     if cli is None:
-        sys.stderr.write("Failed to connect to client at: {}\n".format(
-            sys.argv[1]))
+        print(f"Failed to connect to client at: {args.remote_ip}")
         sys.exit(1)
+
+    meta = client.parse_metadata(client.get_metadata(cli))
+    pf = client.get_format(meta)
+
+    print(f"Connected to {meta.sn} running {meta.fw_rev}")
+
+    meta = client.parse_metadata(client.get_metadata(cli))
     print_headers()
-
-    meta = sensor.parse_metadata(sensor.get_metadata(cli))
-    pf = sensor.get_format(meta)
-
     try:
-        lidar_buf = bytearray(pf.lidar_packet_size + 1)
-        imu_buf = bytearray(pf.imu_packet_size + 1)
-        os_data = osl.Packet(lidar_buf, pf)
-        col_timestamps = os_data.view(ColHeader.TIMESTAMP)
-        col_encoders = os_data.view(ColHeader.ENCODER_COUNT)
-        while True:
-            st = sensor.poll_client(cli)
-            if st & sensor.ERROR:
-                sys.exit(1)
-            elif st & sensor.LIDAR_DATA:
-                if (sensor.read_lidar_packet(cli, lidar_buf, pf)):
-                    handle_lidar(col_timestamps, col_encoders, pf)
-            elif st & sensor.IMU_DATA:
-                if (sensor.read_imu_packet(cli, imu_buf, pf)):
-                    handle_imu(imu_buf, pf)
-            if n_imu_packets % 11 == 0:
+        for p in client.packets(pf, cli):
+            if isinstance(p, client.LidarPacket):
+                handle_lidar(p)
+            elif isinstance(p, client.ImuPacket):
+                handle_imu(p)
+            if n_lidar_packets % 64 == 0:
                 print_stats()
     except KeyboardInterrupt:
-        pass
-    sys.exit(0)
+        print("Caught signal, exiting...")

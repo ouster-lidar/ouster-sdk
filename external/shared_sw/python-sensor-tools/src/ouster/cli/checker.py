@@ -101,7 +101,7 @@ class LidarState:
                 self.col_res = int(known_mode[:x_i])
                 self.scan_hz = int(known_mode[x_i + 1:])
 
-        self.pkt_data       = osl.Packet(pkt_buf, pf)
+        self.pkt_data       = osl.LidarPacket(pkt_buf, pf)
         self.valid_view     = self.pkt_data.view(osl.ColHeader.VALID)
         self.col_id_view    = self.pkt_data.view(osl.ColHeader.MEASUREMENT_ID)
         self.frame_id_view  = self.pkt_data.view(osl.ColHeader.FRAME_ID)

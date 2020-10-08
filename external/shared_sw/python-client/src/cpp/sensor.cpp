@@ -7,15 +7,20 @@
  */
 
 #include <pybind11/eigen.h>
+#include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
+#include <algorithm>
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
 #include "ouster/client.h"
 #include "ouster/compat.h"
+#include "ouster/lidar_scan.h"
 #include "ouster/packet.h"
 #include "ouster/types.h"
 
@@ -37,7 +42,6 @@ inline uint8_t* getptr(size_t bound, py::buffer& buf) {
     return (uint8_t*)info.ptr;
 }
 
-
 /*
  * Pybind11 can't deal with opaque pointers directly, so we have to wrap it in a
  * another struct
@@ -46,15 +50,27 @@ struct pyclient {
     std::shared_ptr<ouster::sensor::client> val;
 };
 
+/*
+ * Get lidar scan timestamps as ints to avoid timedelta conversion
+ */
+std::vector<uint64_t> ts_as_uint(const ouster::LidarScan& ls) {
+    std::vector<uint64_t> res{};
+    res.reserve(ls.ts.size());
+    std::transform(ls.ts.begin(), ls.ts.end(), std::back_inserter(res),
+                   [](auto ts) { return ts.count(); });
+    return res;
+}
 
 PYBIND11_MODULE(_sensor, m) {
+    using std::chrono::nanoseconds;
+
     using ouster::sensor::data_format;
     using ouster::sensor::packet_format;
     using ouster::sensor::sensor_info;
 
     using namespace ouster;
 
-    // turn off signatures in docstrings: _sensor.pyi stubs provide more accurate types
+    // turn off signatures in docstrings: mypy stubs provide better types
     py::options options;
     options.disable_function_signatures();
 
@@ -63,7 +79,6 @@ PYBIND11_MODULE(_sensor, m) {
 This module is generated directly from the C++ code and not meant to be used
 directly.
 )";
-
 
     socket_init();
 
@@ -105,6 +120,9 @@ directly.
         .def_readonly("encoder_ticks_per_rev", &packet_format::encoder_ticks_per_rev)
         .def("col_measurement_id", [](packet_format& pf, int col, py::buffer buf) {
             return pf.col_measurement_id(pf.nth_col(col, getptr(pf.lidar_packet_size, buf)));
+        })
+        .def("col_frame_id", [](packet_format& pf, int col, py::buffer buf) {
+            return pf.col_frame_id(pf.nth_col(col, getptr(pf.lidar_packet_size, buf)));
         })
         .def("imu_sys_ts", [](packet_format& pf, py::buffer buf) { return pf.imu_sys_ts(getptr(pf.imu_packet_size, buf)); })
         .def("imu_accel_ts", [](packet_format& pf, py::buffer buf) { return pf.imu_accel_ts(getptr(pf.imu_packet_size, buf)); })
@@ -224,7 +242,35 @@ directly.
 
     m.add_object("_cleanup", py::capsule([]() { socket_quit(); }));
 
-    m.attr("__version__") = VERSION_INFO;
-
     // clang-format on
+
+    // scan batching
+
+    py::class_<LidarScan>(m, "LidarScan")
+        .def(py::init<size_t, size_t>())
+        .def_readonly("w", &LidarScan::w)
+        .def_readonly("h", &LidarScan::h)
+        .def_property_readonly("ts", &ts_as_uint)
+        .def_property_readonly(
+            "data", [](LidarScan& self) { return self.data; },
+            py::return_value_policy::reference_internal);
+
+    /*
+     * Low-level scan batching function binding. This wraps the "done" callback
+     * to avoid converting ns to python timedelta. Also wraps the returned
+     * batching function to use a python buffer object.
+     */
+    m.def("batch_to_scan",
+          [](int w, const packet_format& pf, std::function<void(uint64_t)> done)
+              -> std::function<void(py::buffer&, LidarScan&)> {
+              auto batch = sensor::batch_to_scan(
+                  w, pf, [=](nanoseconds ns) { done(ns.count()); });
+
+              return [=](py::buffer& buf, LidarScan& ls) {
+                  uint8_t* ptr = getptr(pf.lidar_packet_size, buf);
+                  batch(ptr, ls);
+              };
+          });
+
+    m.attr("__version__") = VERSION_INFO;
 }

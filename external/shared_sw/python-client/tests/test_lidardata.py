@@ -14,7 +14,7 @@ from ouster.client._digest import StreamDigest  # noqa
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
 
-def test_parse_packet() -> None:
+def test_parse_and_batch_packets() -> None:
     """Test that parsing packets produces expected results."""
     f = path.join(DATA_DIR, "os-992011000121_digest.json")
     with open(f, 'r') as o1:

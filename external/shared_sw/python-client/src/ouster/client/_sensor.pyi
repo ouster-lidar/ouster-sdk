@@ -10,7 +10,10 @@ Note:
 """
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
-from typing import Any, Optional, overload
+from numpy import ndarray
+from typing import Any, Callable, ClassVar, List, Optional, overload, Union
+
+BufferT = Union[bytes, bytearray, memoryview]
 
 ERROR: ClientState
 EXIT: ClientState
@@ -71,11 +74,11 @@ def read_lidar_packet(cli: Client, buf: bytearray, pf: PacketFormat) -> bool:
 
 
 class ClientState:
-    ERROR: ClientState
-    EXIT: ClientState
-    IMU_DATA: ClientState
-    LIDAR_DATA: ClientState
-    TIMEOUT: ClientState
+    ERROR: ClassVar[ClientState]
+    EXIT: ClassVar[ClientState]
+    IMU_DATA: ClassVar[ClientState]
+    LIDAR_DATA: ClassVar[ClientState]
+    TIMEOUT: ClassVar[ClientState]
 
     def __init__(self, x: int) -> None:
         ...
@@ -249,34 +252,31 @@ class PacketFormat:
     def __init__(self, *args, **kwargs) -> None:
         ...
 
-    def col_measurement_id(self, col: int, buf: bytes) -> int:
+    def imu_sys_ts(self, buf: BufferT) -> int:
         ...
 
-    def imu_accel_ts(self, buf: bytearray) -> int:
+    def imu_accel_ts(self, buf: BufferT) -> int:
         ...
 
-    def imu_av_x(self, buf: bytearray) -> float:
+    def imu_gyro_ts(self, buf: BufferT) -> int:
         ...
 
-    def imu_av_y(self, buf: bytearray) -> float:
+    def imu_av_x(self, buf: BufferT) -> float:
         ...
 
-    def imu_av_z(self, buf: bytearray) -> float:
+    def imu_av_y(self, buf: BufferT) -> float:
         ...
 
-    def imu_gyro_ts(self, buf: bytearray) -> int:
+    def imu_av_z(self, buf: BufferT) -> float:
         ...
 
-    def imu_la_x(self, buf: bytearray) -> float:
+    def imu_la_x(self, buf: BufferT) -> float:
         ...
 
-    def imu_la_y(self, buf: bytearray) -> float:
+    def imu_la_y(self, buf: BufferT) -> float:
         ...
 
-    def imu_la_z(self, buf: bytearray) -> float:
-        ...
-
-    def imu_sys_ts(self, buf: bytearray) -> int:
+    def imu_la_z(self, buf: BufferT) -> float:
         ...
 
     @property
@@ -299,17 +299,23 @@ class PacketFormat:
     def pixels_per_column(self) -> int:
         ...
 
+    def col_measurement_id(self, col: int, buf: bytes) -> int:
+        ...
+
+    def col_frame_id(self, col: int, buf: bytes) -> int:
+        ...
+
 
 def get_format(info: SensorInfo) -> PacketFormat:
     ...
 
 
 class LidarMode:
-    MODE_1024x10: LidarMode
-    MODE_1024x20: LidarMode
-    MODE_2048x10: LidarMode
-    MODE_512x10: LidarMode
-    MODE_512x20: LidarMode
+    MODE_1024x10: ClassVar[LidarMode]
+    MODE_1024x20: ClassVar[LidarMode]
+    MODE_2048x10: ClassVar[LidarMode]
+    MODE_512x10: ClassVar[LidarMode]
+    MODE_512x20: ClassVar[LidarMode]
 
     def __init__(self, code: int) -> None:
         ...
@@ -346,9 +352,9 @@ def n_cols_of_lidar_mode(mode: LidarMode) -> int:
 
 
 class TimestampMode:
-    TIME_FROM_INTERNAL_OSC: TimestampMode
-    TIME_FROM_PTP_1588: TimestampMode
-    TIME_FROM_SYNC_PULSE_IN: TimestampMode
+    TIME_FROM_INTERNAL_OSC: ClassVar[TimestampMode]
+    TIME_FROM_PTP_1588: ClassVar[TimestampMode]
+    TIME_FROM_SYNC_PULSE_IN: ClassVar[TimestampMode]
 
     def __init__(self, code: int) -> None:
         ...
@@ -420,3 +426,30 @@ class Version:
 
 def version_of_string(s: str) -> Version:
     ...
+
+
+class LidarScan:
+    def __init__(self, w: int, h: int) -> None:
+        ...
+
+    @property
+    def w(self) -> int:
+        pass
+
+    @property
+    def h(self) -> int:
+        pass
+
+    @property
+    def data(self) -> ndarray:
+        pass
+
+    @property
+    def ts(self) -> List[int]:
+        pass
+
+
+def batch_to_scan(
+        w: int, pf: PacketFormat,
+        cb: Callable[[int], None]) -> Callable[[BufferT, LidarScan], None]:
+    pass
