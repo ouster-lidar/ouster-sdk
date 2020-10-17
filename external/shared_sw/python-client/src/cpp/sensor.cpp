@@ -14,7 +14,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 
@@ -44,10 +46,13 @@ inline uint8_t* getptr(size_t bound, py::buffer& buf) {
 
 /*
  * Pybind11 can't deal with opaque pointers directly, so we have to wrap it in a
- * another struct
+ * another struct. Mutex allows thread-safe access when the GIL is released
  */
 struct pyclient {
+    std::mutex mtx;
     std::shared_ptr<ouster::sensor::client> val;
+
+    pyclient(std::shared_ptr<ouster::sensor::client> cli) : mtx{}, val{cli} {}
 };
 
 /*
@@ -155,6 +160,7 @@ directly.
 
     m.def("get_metadata",
           [](pyclient& cli, int timeout_sec) {
+              std::lock_guard<std::mutex>{cli.mtx};
               return sensor::get_metadata(*cli.val, timeout_sec);
           },
           py::arg("cli"),
@@ -201,7 +207,7 @@ directly.
     m.def("init_client",
           [](const std::string& hostname, int lidar_port, int imu_port) -> py::object {
               auto cli = sensor::init_client(hostname, lidar_port, imu_port);
-              return cli ? py::cast(pyclient{cli}) : py::none{};
+              return cli ? py::cast(new pyclient{cli}) : py::none{};
           },
           py::arg("hostname") = "",
           py::arg("lidar_port") = 7502,
@@ -213,7 +219,7 @@ directly.
              int lidar_port, int imu_port, int timeout_sec) -> py::object {
               auto cli = sensor::init_client(hostname, udp_dest_host, mode, ts_mode,
                                              lidar_port, imu_port);
-              return cli ? py::cast(pyclient{cli}) : py::none{};
+              return cli ? py::cast(new pyclient{cli}) : py::none{};
           },
           py::arg("hostname"),
           py::arg("udp_dest_host"),
@@ -223,20 +229,24 @@ directly.
           py::arg("timeout_sec") = 30);
 
     m.def("poll_client",
-          [](const pyclient& cli, const int timeout_sec) -> sensor::client_state {
+          [](pyclient& cli, const int timeout_sec) -> sensor::client_state {
+              std::lock_guard<std::mutex>{cli.mtx};
               py::gil_scoped_release release;
+
               return sensor::poll_client(*cli.val, timeout_sec);
           },
           py::arg("cli"),
           py::arg("timeout_sec") = 1);
 
-    m.def("read_lidar_packet", [](const pyclient& cli, py::buffer buf,
+    m.def("read_lidar_packet", [](pyclient& cli, py::buffer buf,
                                   const packet_format& pf) {
+        std::lock_guard<std::mutex>{cli.mtx};
         return sensor::read_lidar_packet(*cli.val, getptr(pf.lidar_packet_size, buf), pf);
     });
 
-    m.def("read_imu_packet", [](const pyclient& cli, py::buffer buf,
+    m.def("read_imu_packet", [](pyclient& cli, py::buffer buf,
                                 const packet_format& pf) {
+        std::lock_guard<std::mutex>{cli.mtx};
         return sensor::read_imu_packet(*cli.val, getptr(pf.imu_packet_size, buf), pf);
     });
 
@@ -269,6 +279,59 @@ directly.
               return [=](py::buffer& buf, LidarScan& ls) {
                   uint8_t* ptr = getptr(pf.lidar_packet_size, buf);
                   batch(ptr, ls);
+              };
+          });
+
+    /*
+     * Create a function that produces a scan from the provided client handle
+     * without holding the Python GIL.
+     *
+     * TODO: the current batch_to_scan interface requires an extra copy, since
+     * it continue to write tothe same LidarScan after the done callback.
+     */
+    m.def("scan_batcher",
+          [](int w,
+             const packet_format& pf) -> std::function<LidarScan(pyclient&)> {
+              std::shared_ptr<uint8_t[]> lidar_buf(
+                  new uint8_t[pf.lidar_packet_size + 1]);
+              std::shared_ptr<uint8_t[]> imu_buf(
+                  new uint8_t[pf.imu_packet_size + 1]);
+
+              auto done = std::make_shared<bool>(false);
+              auto buf = std::make_shared<LidarScan>(w, pf.pixels_per_column);
+              auto res = std::make_shared<LidarScan>(w, pf.pixels_per_column);
+
+              // copy scan data and set the "done" flag when a scan is complete
+              auto batch = sensor::batch_to_scan(w, pf, [=](nanoseconds ns) {
+                  *res = *buf;
+                  *done = true;
+              });
+
+              return [=](pyclient& cli) mutable -> LidarScan {
+                  // release GIL while batching the next scan
+                  std::lock_guard<std::mutex>{cli.mtx};
+                  py::gil_scoped_release release;
+
+                  while (true) {
+                      sensor::client_state st = sensor::poll_client(*cli.val);
+                      if (st & sensor::CLIENT_ERROR) {
+                          return *res;
+                      } else if (st & sensor::LIDAR_DATA) {
+                          if (sensor::read_lidar_packet(*cli.val,
+                                                        lidar_buf.get(), pf)) {
+                              batch(lidar_buf.get(), *buf);
+                              // if a scan was completed
+                              if (*done) {
+                                  *done = false;
+                                  return *res;
+                              }
+                          }
+                      } else if (st & sensor::IMU_DATA) {
+                          if (sensor::read_imu_packet(*cli.val, imu_buf.get(),
+                                                      pf))
+                              ;  // just drop imu data for now
+                      }
+                  }
               };
           });
 

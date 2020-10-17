@@ -33,4 +33,4 @@ from ._sensor import timestamp_mode_of_string
 from ._sensor import version_of_string
 
 from .core import ClientError
-from .core import batch_to_scan, packets, scans
+from .core import batch_to_scan, packets, scans, ScanQueue

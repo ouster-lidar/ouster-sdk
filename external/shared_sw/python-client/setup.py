@@ -66,9 +66,10 @@ class CMakeBuild(build_ext):
 setup(
     name='ouster-client',
     url='https://bitbucket.org/ouster_io/ouster_sw',
-    version='0.0.2-dev',
+    version='0.0.2.dev0',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
+    namespace_packages=['ouster'],
     package_data={'ouster.client': ['py.typed']},
     author='Dima Garbuzov, Chris Bayruns',
     author_email='dima.garbuzov@ouster.io, chris.bayruns@ouster.io',

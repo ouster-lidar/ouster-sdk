@@ -4,6 +4,8 @@ This module is WIP and will contain more idiomatic wrappers around the
 lower-level pyblind11-generated module.
 """
 from typing import Callable, Generator, Optional, Union
+from threading import Event, Thread
+from queue import Queue
 
 from . import _sensor
 from ._sensor import Client, ClientState, PacketFormat, LidarScan, SensorInfo
@@ -70,6 +72,40 @@ def packets(
 
     except KeyboardInterrupt:
         pass
+
+
+class ScanQueue():
+    """Context manager for a producer/consumer queue of lidar scans.
+
+    Launches a thread that batches scans without holding the GIL. The consumer
+    can dequeue items and continue to do work without being blocked.
+    """
+    _queue: Queue
+
+    def __init__(self, cli: Client, size: int = 16):
+        self._cli = cli
+        self._running = Event()
+        self._producer = Thread(target=self._enqueue)
+        self._queue = Queue(size)
+
+        si = _sensor.parse_metadata(_sensor.get_metadata(cli))
+        pf = _sensor.get_format(si)
+        w = si.format.columns_per_frame
+        self._next_scan = _sensor.scan_batcher(w, pf)
+
+    def _enqueue(self):
+        while self._running.is_set():
+            self._queue.put(self._next_scan(self._cli), block=True)
+
+    def __enter__(self):
+        self._running.set()
+        self._producer.start()
+        return self._queue
+
+    def __exit__(self, type, value, traceback):
+        # stop and wait for the producer thread to exit
+        self._running.clear()
+        self._producer.join()
 
 
 def scans(cli: Client) -> Generator[Union[ImuPacket, LidarScan], None, None]:

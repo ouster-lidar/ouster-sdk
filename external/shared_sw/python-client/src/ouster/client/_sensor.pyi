@@ -453,3 +453,8 @@ def batch_to_scan(
         w: int, pf: PacketFormat,
         cb: Callable[[int], None]) -> Callable[[BufferT, LidarScan], None]:
     pass
+
+
+def scan_batcher(
+        w: int, pf: PacketFormat) -> Callable[[Client], LidarScan]:
+    pass
