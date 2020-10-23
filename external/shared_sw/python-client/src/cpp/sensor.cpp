@@ -298,10 +298,8 @@ directly.
     m.def("scan_batcher",
           [](int w,
              const packet_format& pf) -> std::function<LidarScan(pyclient&)> {
-              std::shared_ptr<uint8_t[]> lidar_buf(
-                  new uint8_t[pf.lidar_packet_size + 1]);
-              std::shared_ptr<uint8_t[]> imu_buf(
-                  new uint8_t[pf.imu_packet_size + 1]);
+              auto lidar_buf = std::vector<uint8_t>(pf.lidar_packet_size + 1);
+              auto imu_buf = std::vector<uint8_t>(pf.imu_packet_size + 1);
 
               auto done = std::make_shared<bool>(false);
               auto buf = std::make_shared<LidarScan>(w, pf.pixels_per_column);
@@ -324,8 +322,8 @@ directly.
                           return *res;
                       } else if (st & sensor::LIDAR_DATA) {
                           if (sensor::read_lidar_packet(*cli.val,
-                                                        lidar_buf.get(), pf)) {
-                              batch(lidar_buf.get(), *buf);
+                                                        lidar_buf.data(), pf)) {
+                              batch(lidar_buf.data(), *buf);
                               // if a scan was completed
                               if (*done) {
                                   *done = false;
@@ -333,7 +331,7 @@ directly.
                               }
                           }
                       } else if (st & sensor::IMU_DATA) {
-                          if (sensor::read_imu_packet(*cli.val, imu_buf.get(),
+                          if (sensor::read_imu_packet(*cli.val, imu_buf.data(),
                                                       pf))
                               ;  // just drop imu data for now
                       }

@@ -2,6 +2,8 @@
 
 #include <vector>
 
+#include "ouster/compat.h"
+
 namespace ouster {
 
 XYZLut make_xyz_lut(LidarScan::index_t w, LidarScan::index_t h,

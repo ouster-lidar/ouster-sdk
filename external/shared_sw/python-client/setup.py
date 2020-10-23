@@ -1,5 +1,4 @@
 import os
-import re
 import sys
 import platform
 import subprocess
@@ -83,7 +82,4 @@ setup(
         'numpy',
         'dataclasses >=0.7; python_version >="3.6" and python_version <"3.7"',
     ],
-    extras_require={
-        'test': ['tox']
-    }
-)
+    extras_require={'test': ['tox']})

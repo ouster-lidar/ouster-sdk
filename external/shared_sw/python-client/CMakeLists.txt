@@ -6,6 +6,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{CMAKE_TOOLCHAIN_FILE})
 endif()
 
 project(python-ouster-client)
+set(CMAKE_CXX_STANDARD 14)
 
 find_package(pybind11 2.2 REQUIRED)
 find_package(Eigen3 REQUIRED)

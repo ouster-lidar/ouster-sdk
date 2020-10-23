@@ -8,6 +8,7 @@
 #include <string>
 
 #if defined _WIN32
+#define _USE_MATH_DEFINES
 #define WPCAP 1
 // Try and limit the stuff windows brings in
 #define WIN32_LEAN_AND_MEAN
