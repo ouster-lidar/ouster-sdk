@@ -108,10 +108,10 @@ class LidarState:
         self.ticks_view     = self.pkt_data.view(osl.ColHeader.ENCODER_COUNT)
         self.ts_view        = self.pkt_data.view(osl.ColHeader.TIMESTAMP)
 
-        self.range_view     = self.pkt_data.view(osl.Channel.RANGE)
-        self.reflc_view     = self.pkt_data.view(osl.Channel.REFLECTIVITY)
-        self.signl_view     = self.pkt_data.view(osl.Channel.INTENSITY)
-        self.noise_view     = self.pkt_data.view(osl.Channel.AMBIENT)
+        self.range_view     = self.pkt_data.view(osl.ChanField.RANGE)
+        self.reflc_view     = self.pkt_data.view(osl.ChanField.REFLECTIVITY)
+        self.signl_view     = self.pkt_data.view(osl.ChanField.INTENSITY)
+        self.noise_view     = self.pkt_data.view(osl.ChanField.AMBIENT)
 
         self.reset_last()
         self.reset_scan()

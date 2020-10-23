@@ -8,7 +8,7 @@ import numpy as np
 
 from . import _bufstream as bufstream
 from . import _sensor as sensor
-from . import LidarPacket, LidarScan, Channel, ColHeader
+from . import LidarPacket, LidarScan, ChanField, ColHeader
 from . import batch_to_scan
 
 
@@ -35,7 +35,7 @@ class ScanDigest:
     @classmethod
     def from_packet(cls, p: LidarPacket) -> 'ScanDigest':
         hashes = {}
-        hashes.update({c.name: _md5(p.view(c)) for c in Channel})
+        hashes.update({c.name: _md5(p.view(c)) for c in ChanField})
         hashes.update({h.name: _md5(p.view(h)) for h in ColHeader})
 
         return cls(**hashes)

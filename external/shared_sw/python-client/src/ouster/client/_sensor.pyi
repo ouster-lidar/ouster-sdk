@@ -434,27 +434,31 @@ class LidarScan:
 
     @property
     def w(self) -> int:
-        pass
+        ...
 
     @property
     def h(self) -> int:
-        pass
+        ...
 
     @property
     def data(self) -> ndarray:
-        pass
+        ...
 
     @property
     def ts(self) -> List[int]:
-        pass
+        ...
+
+
+def destagger(filed: ndarray, info: SensorInfo) -> ndarray:
+    ...
 
 
 def batch_to_scan(
         w: int, pf: PacketFormat,
         cb: Callable[[int], None]) -> Callable[[BufferT, LidarScan], None]:
-    pass
+    ...
 
 
 def scan_batcher(
         w: int, pf: PacketFormat) -> Callable[[Client], LidarScan]:
-    pass
+    ...

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union
+from typing import ClassVar, Union
 
 import numpy as np
 
@@ -42,14 +42,15 @@ class ImuPacket:
         ])
 
 
-class Channel(Enum):
-    """Channels available in lidar packets."""
-    RANGE = (0, np.uint32)
-    REFLECTIVITY = (4, np.uint16)
-    INTENSITY = (6, np.uint16)
-    AMBIENT = (8, np.uint16)
+class ChanField(Enum):
+    """Channel fields available in lidar data."""
+    RANGE = (0, 0, np.uint32)
+    REFLECTIVITY = (3, 4, np.uint16)
+    INTENSITY = (1, 6, np.uint16)
+    AMBIENT = (2, 8, np.uint16)
 
-    def __init__(self, offset: int, dtype: type):
+    def __init__(self, ind: int, offset: int, dtype: type):
+        self.ind = ind
         self.offset = offset
         self.dtype = dtype
 
@@ -109,7 +110,7 @@ class LidarPacket:
         max = -((self._data.size - offset) % np.dtype(data_type).itemsize)
         return self._data[min:max].view(dtype=data_type)
 
-    def view(self, field: Union[Channel, ColHeader]) -> np.ndarray:
+    def view(self, field: Union[ChanField, ColHeader]) -> np.ndarray:
         """Create a zero-copy view of the specified data.
 
         Args:
@@ -119,7 +120,7 @@ class LidarPacket:
             view of the specified data as a numpy array
         """
 
-        if isinstance(field, Channel):
+        if isinstance(field, ChanField):
             return np.lib.stride_tricks.as_strided(
                 self._view(LidarPacket.COL_PREAMBLE_BYTES + field.offset,
                            field.dtype),
@@ -136,3 +137,42 @@ class LidarPacket:
 
         else:
             raise TypeError("Expected either a Channel or ColHeader")
+
+
+class LidarScan:
+    """Represents a single "scan" or "frame" of lidar data.
+
+    Internally, shares the same memory representation as the C++ LidarScan type
+    and should allow passing data without unnecessary copying.
+    """
+
+    N_FIELDS: ClassVar[int] = 4
+
+    def __init__(self, w: int, h: int):
+        """Initialize an empty lidarscan.
+
+        LidarScan is currently represented with a w*h X 4 column-major array
+        of uint32.
+        """
+        self.w = w
+        self.h = h
+        self._data = np.ndarray((w * h, 4), dtype=np.uint32, order='F')
+
+    def field(self, field: ChanField):
+        """Return a view of the specified channel field."""
+        return self._data[:, field.ind].reshape(self.h, self.w)
+
+    def destaggered(self, info: _sensor.SensorInfo, field: ChanField):
+        """Return a destaggered copy of the specified channel."""
+        return _sensor.destagger(self._data[:, field.ind],
+                                 info).reshape(self.h, self.w)
+
+    @classmethod
+    def from_buffer(cls, w: int, h: int, buf: np.ndarray):
+        """Alternative constructor from an existing buffer."""
+        ls = cls.__new__(cls)
+        ls.w = w
+        ls.h = h
+        ls._data = buf.astype(np.uint32).reshape((w * h, LidarScan.N_FIELDS),
+                                                 order='F')
+        return ls

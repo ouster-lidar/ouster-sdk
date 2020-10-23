@@ -265,6 +265,12 @@ directly.
             "data", [](LidarScan& self) { return self.data; },
             py::return_value_policy::reference_internal);
 
+    m.def("destagger",
+          [](const Eigen::Ref<const LidarScan::field_t<LidarScan::raw_t>> field,
+             const sensor::sensor_info& sensor) {
+              return ouster::destagger(field, sensor);
+          });
+
     /*
      * Low-level scan batching function binding. This wraps the "done" callback
      * to avoid converting ns to python timedelta. Also wraps the returned

@@ -3,9 +3,9 @@
 
 from .lidardata import ImuPacket
 from .lidardata import LidarPacket
-from .lidardata import Channel
+from .lidardata import ChanField
 from .lidardata import ColHeader
-from ._sensor import LidarScan
+from .lidardata import LidarScan
 
 from ._sensor import Client
 from ._sensor import ClientState

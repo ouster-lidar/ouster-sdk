@@ -8,16 +8,17 @@ from threading import Event, Thread
 from queue import Queue
 
 from . import _sensor
-from ._sensor import Client, ClientState, PacketFormat, LidarScan, SensorInfo
+from ._sensor import Client, ClientState, PacketFormat, SensorInfo
 
-from .lidardata import BufferT, ImuPacket, LidarPacket
+from .lidardata import BufferT, ImuPacket, LidarPacket, LidarScan
 
 
 class ClientError(Exception):
     pass
 
 
-def batch_to_scan(si: SensorInfo) -> Callable[[BufferT], Optional[LidarScan]]:
+def batch_to_scan(
+        si: SensorInfo) -> Callable[[BufferT], Optional[_sensor.LidarScan]]:
     """Create a function to batch packet buffers to a LidarScan.
 
     Args:
@@ -43,7 +44,7 @@ def batch_to_scan(si: SensorInfo) -> Callable[[BufferT], Optional[LidarScan]]:
     batch = _sensor.batch_to_scan(w, _sensor.get_format(si), complete_frame)
 
     # batch another packet buffer and optionally return a completed frame
-    def batcher(buf: BufferT) -> Optional[LidarScan]:
+    def batcher(buf: BufferT) -> Optional[_sensor.LidarScan]:
         nonlocal ls_yield
         ls_yield = None
         batch(buf, ls_write)
@@ -95,7 +96,9 @@ class ScanQueue():
 
     def _enqueue(self):
         while self._running.is_set():
-            self._queue.put(self._next_scan(self._cli), block=True)
+            nscan = self._next_scan(self._cli)
+            scan = LidarScan.from_buffer(nscan.w, nscan.h, nscan.data)
+            self._queue.put(scan, block=True)
 
     def __enter__(self):
         self._running.set()
@@ -108,7 +111,9 @@ class ScanQueue():
         self._producer.join()
 
 
-def scans(cli: Client) -> Generator[Union[ImuPacket, LidarScan], None, None]:
+def scans(
+        cli: Client
+) -> Generator[Union[ImuPacket, _sensor.LidarScan], None, None]:
     try:
 
         si = _sensor.parse_metadata(_sensor.get_metadata(cli))
