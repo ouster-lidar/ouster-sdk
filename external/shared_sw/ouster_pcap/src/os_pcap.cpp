@@ -153,7 +153,8 @@ int replay(const std::string& file_name, const std::string& source,
                     }
 
                     if (rate > 0.0) {
-                        const auto delta = (us(timestamp) - pcap_start_time) / rate;
+                        const auto delta =
+                            (us(timestamp) - pcap_start_time) / rate;
 
                         std::this_thread::sleep_until(real_start_time + delta);
                     }
@@ -178,15 +179,17 @@ std::shared_ptr<stream_info> get_info(BaseSniffer& sniffer,
 
     IPv4Reassembler reassembler;
     for (auto& packet : sniffer) {
-        if (result->packets_processed >= max_packets_to_process
-            && max_packets_to_process != 0) break;
+        if (result->packets_processed >= max_packets_to_process &&
+            max_packets_to_process != 0)
+            break;
         try {
             auto pdu = packet.pdu();
             if (pdu != NULL) {
                 IP* ip = pdu->find_pdu<IP>();
                 if (ip != NULL) {
                     result->packets_processed++;
-                    if (reassembler.process(*pdu) != IPv4Reassembler::FRAGMENTED) {
+                    if (reassembler.process(*pdu) !=
+                        IPv4Reassembler::FRAGMENTED) {
                         result->packets_reassembled++;
                         auto udp = pdu->find_pdu<UDP>();
                         auto raw = pdu->find_pdu<RawPDU>();
@@ -225,7 +228,7 @@ int guess_imu_port(const stream_info& stream_data) {
     int result = 0;
     const int imu_size = 48;
     if (stream_data.packet_size_to_port.find(imu_size) !=
-            stream_data.packet_size_to_port.end()) {
+        stream_data.packet_size_to_port.end()) {
         auto correct_packet_size = stream_data.packet_size_to_port.at(imu_size);
         if (correct_packet_size.size() > 1) {
             throw "Error: Multiple possible imu packets found";
@@ -245,7 +248,7 @@ int guess_lidar_port(const stream_info& stream_data) {
 
     for (auto s : lidar_sizes) {
         if (stream_data.packet_size_to_port.find(s) !=
-                stream_data.packet_size_to_port.end()) {
+            stream_data.packet_size_to_port.end()) {
             auto correct_packet_size = stream_data.packet_size_to_port.at(s);
             hit_count++;
             if (correct_packet_size.size() > 1) {
@@ -391,8 +394,9 @@ bool get_next_lidar_data(playback_handle& handle, uint8_t* buf,
                     auto size = raw->payload_size();
                     if (size > buffer_size) {
                         throw std::invalid_argument(
-                            "Incompatible argument: expected a bytearray of size > "
-                            + std::to_string(size));
+                            "Incompatible argument: expected a bytearray of "
+                            "size > " +
+                            std::to_string(size));
                     } else {
                         memcpy(buf, temp, size);
                     }
@@ -425,8 +429,9 @@ bool get_next_imu_data(playback_handle& handle, uint8_t* buf,
                     auto size = raw->payload_size();
                     if (size > buffer_size) {
                         throw std::invalid_argument(
-                            "Incompatible argument: expected a bytearray of size > "
-                            + std::to_string(size));
+                            "Incompatible argument: expected a bytearray of "
+                            "size > " +
+                            std::to_string(size));
                     } else {
                         memcpy(buf, temp, size);
                     }
@@ -440,7 +445,146 @@ bool get_next_imu_data(playback_handle& handle, uint8_t* buf,
     return result;
 }
 
-// Record functionality removed for a short amount of time
-// until we switch it over to support libtins
+std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
+                                                 const std::string& src_ip,
+                                                 const std::string& dst_ip,
+                                                 int frag_size) {
+    std::shared_ptr<record_handle> result = std::make_shared<record_handle>();
+
+    result->file_name = file_name;
+    result->frag_size = frag_size;
+    result->src_ip = src_ip;
+    result->dst_ip = dst_ip;
+
+    result->pcap_file_writer.reset(
+        new PacketWriter(file_name, DataLinkType<SLL>()));
+
+    return result;
+}
+
+/*
+ * This was a tricky problem, due to how the ip stack is set up.
+ *
+ * SLL Container -> ipv4 container -> udp container -> raw data
+ *
+ * The ipv4 container is what does the packet fragmentation and reassembly.
+ * With each full packet we need the ipv4 reassembly to contain only one udp
+header.
+* Due to this, we have to only create one official Tins::UDP packet.
+* We grab the packet id from this packet
+* Every packet after the first Tins::UDP packet needs to just be a ipv4
+* container with a manually set packet type of UDP(dec 17)
+* Every packet but the final packet needs to have the current flag set:
+*
+* pkt.flags(IP::MORE_FRAGMENTS);
+*
+*/
+
+// SLL is the linux pcap capture container
+std::vector<SLL> buffer_to_frag_packets(record_handle& handle, int src_port,
+                                        int dst_port, const uint8_t* buf,
+                                        size_t buf_size) {
+    std::vector<SLL> result;
+
+    int id = -1;   ///< This variable is used to track the packet id,
+                   ///< if -1 then create a packet and grab its id
+    size_t i = 0;  ///< Loop variable that contains current bytes processed
+    size_t offset_modifier =
+        0;  ///< This variable contains the offset to account
+            ///< for the udp packet with the fragment_offset
+
+    while (i < buf_size) {
+        // First create the ipv4 packet
+        IP pkt = IP(handle.src_ip, handle.dst_ip);
+
+        // Now figure out the size of the packet payload
+        size_t size = std::min(handle.frag_size, (buf_size - i));
+
+        // Correctly set this packets fragment offset
+        // NOTE: for some reason this has to be divided by 8
+        // NOTE: Reference here
+        // http://libtins.github.io/docs/latest/dd/d3f/classTins_1_1IP.html#a32a6bf84af274748317ef61ce1a91ce5
+        pkt.fragment_offset((i + offset_modifier) / 8);
+
+        // If this is the first packet
+        if (i == 0) {
+            // Fully create the libtins udp structure
+            auto udp = UDP(dst_port, src_port);
+
+            if ((size + udp.header_size()) > handle.frag_size) {
+                // Due to the udp header being included in the payload,
+                // we need to subtract its size from the payload
+                size -= udp.header_size();
+                // Set the "There is more data to follow" flag
+                pkt.flags(IP::MORE_FRAGMENTS);
+            }
+
+            // Pack what we can minus the udp header size into the payload
+            pkt /= udp / RawPDU((uint8_t*)(buf + i), size);
+
+            // Manually set the ipv4 protocol to UDP
+            pkt.protocol(PROTOCOL_UDP);
+
+            // Set the fragment_offset offset with the size of the udp header
+            offset_modifier = udp.header_size();
+        }
+        // This is a packet in the middle or end
+        else {
+            // Set the "There is more data to follow" flag
+            if (i + size < buf_size) pkt.flags(IP::MORE_FRAGMENTS);
+
+            // Manually set the ipv4 protocol to UDP
+            pkt.protocol(PROTOCOL_UDP);
+
+            // Pack what we can into the payload
+            pkt /= RawPDU((uint8_t*)(buf + i), size);
+        }
+
+        // Here is where we correctly set the packet id
+        if (id < 0) {
+            // If this is the first packet, set id to the generated packet id
+            id = pkt.id();
+        } else {
+            // If this is a following packet, use the first packets id
+            pkt.id(id);
+        }
+
+        // Finally we need to wrap this all into a linux packet capture
+        // container
+        auto sll = SLL();
+        sll /= pkt;
+
+        // Nasty libtins bug that causes write to fail
+        // https://www.gitmemory.com/issue/mfontanini/libtins/348/488141933
+        auto _ = sll.serialize();
+        // This is also related to the libtins bug, but pops out differently
+        /*
+         * This is due to the fact that the previous serialize does not treat
+         * the udp packet as if it were decodable. Manually tell libtins to
+         * go in and serialize the udp packet as well
+         */
+        if (sll.inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
+            _ = sll.inner_pdu()->inner_pdu()->inner_pdu()->serialize();
+        }
+
+        // Add the resulting packet to the vector
+        result.push_back(sll);
+
+        // Increment the current byte being processed
+        i += size;
+    }
+
+    return result;
+}
+
+void record_packet(record_handle& handle, int src_port, int dst_port,
+                   const uint8_t* buf, size_t buffer_size) {
+    // For each of the packets write it to the pcap file
+    for (auto item :
+         buffer_to_frag_packets(handle, src_port, dst_port, buf, buffer_size)) {
+        handle.pcap_file_writer->write(item);
+    }
+}
+
 }  // namespace sensor_utils
 }  // namespace ouster

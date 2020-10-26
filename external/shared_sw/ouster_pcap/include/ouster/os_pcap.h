@@ -14,6 +14,8 @@
 #include <unordered_set>
 #include <vector>
 
+#define PROTOCOL_UDP 17
+
 namespace ouster {
 namespace sensor_utils {
 
@@ -51,6 +53,20 @@ struct playback_handle {
     Tins::IPv4Reassembler
         reassembler;            ///< The reassembler mainly for lidar packets
     Tins::PacketSender sender;  ///< The sender object for sending packets
+};
+
+/**
+ * Struct to hide the record details
+ * @TODO This really should be opaque, however pybind does not like opaque types,
+maybe make pybind trampolines to bypass
+ */
+struct record_handle {
+    std::string dst_ip;     ///< The destination IP
+    std::string src_ip;     ///< The source IP
+    std::string file_name;  ///< The filename of the output pcap file
+    size_t frag_size;       ///< The size of the udp data fragmentation
+    std::unique_ptr<Tins::PacketWriter>
+        pcap_file_writer;   ///< Object that holds the pcap writer
 };
 
 /**
@@ -179,6 +195,33 @@ bool get_next_lidar_data(playback_handle& handle, uint8_t* buf, size_t buffer_si
  * @return If the packet was successfully read, false normally means there are
 no more packets
  */
-bool get_next_imu_data(playback_handle& handle, uint8_t* buf, size_t buffer_size);
+bool get_next_imu_data(playback_handle& handle, uint8_t* buf,
+                       size_t buffer_size);
+
+/**
+ * Initialize the record handle for recording pcap files
+ * @param[in] file The file path to the target pcap to record to
+ * @param[in] src_ip The source address to label the packets with
+ * @param[in] dst_ip The destination address to label the packets with
+ * @param[in] frag_size The size of the fragments for packet fragmentation
+ */
+std::shared_ptr<record_handle> record_initialize(const std::string& file,
+                                                 const std::string& src_ip,
+                                                 const std::string& dst_ip,
+                                                 int frag_size);
+
+/**
+ * Record a buffer to a record_handle pcap file
+ * @param[in] handle The record handle that record_initialize has initted
+ * @param[in] src_port The source port to label the packets with
+ * @param[in] dst_port The destination port to label the packets with
+ * @param[in] buf The buffer to record to the pcap file
+ * @param[in] buffer_size The size of the buffer to record to the pcap file
+ */
+void record_packet(record_handle& handle,
+                   int src_port,
+                   int dst_port,
+                   const uint8_t* buf, size_t buffer_size);
+
 }  // namespace sensor_utils
 }  // namespace ouster

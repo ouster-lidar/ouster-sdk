@@ -66,6 +66,8 @@ int replay_pcap(const std::string& file, const std::string& src_ip,
 
 PYBIND11_MODULE(_pcap, m) {
     m.doc() = "ouster._pcap"; // optional module docstring
+
+    // clang-format off
     
     py::class_<ouster::sensor_utils::stream_info,
                std::shared_ptr<ouster::sensor_utils::stream_info>>(m, "stream_info")
@@ -91,6 +93,9 @@ PYBIND11_MODULE(_pcap, m) {
     
     py::class_<ouster::sensor_utils::playback_handle,
                std::shared_ptr<ouster::sensor_utils::playback_handle>>(m, "playback_handle")
+        .def(py::init<>());
+    py::class_<ouster::sensor_utils::record_handle,
+               std::shared_ptr<ouster::sensor_utils::record_handle>>(m, "record_handle")
         .def(py::init<>());
     
     m.def("replay_pcap", &replay_pcap);
@@ -122,12 +127,28 @@ PYBIND11_MODULE(_pcap, m) {
           });
     m.def("get_next_lidar_data",
           [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
-                  py::buffer buf) -> bool { py::gil_scoped_release release; return
-              ouster::sensor_utils::get_next_lidar_data(*handle, getptr(buf), getptrsize(buf));
+                  py::buffer buf) -> bool {
+              py::gil_scoped_release release;
+              return ouster::sensor_utils::get_next_lidar_data(*handle, getptr(buf), getptrsize(buf));
           });
     m.def("get_next_imu_data",
           [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
-                  py::buffer buf) -> bool { py::gil_scoped_release release; return
-              ouster::sensor_utils::get_next_imu_data(*handle, getptr(buf), getptrsize(buf));
+                  py::buffer buf) -> bool {
+              py::gil_scoped_release release;
+              return ouster::sensor_utils::get_next_imu_data(*handle, getptr(buf), getptrsize(buf));
           });
+    m.def("record_initialize", &ouster::sensor_utils::record_initialize);
+    m.def("record_packet",
+          [](std::shared_ptr<ouster::sensor_utils::record_handle> handle,
+             int src_port,
+             int dst_port,
+             py::buffer buf) -> void {
+              py::gil_scoped_release release;
+              ouster::sensor_utils::record_packet(*handle,
+                                                  src_port,
+                                                  dst_port,
+                                                  getptr(buf),
+                                                  getptrsize(buf));
+          });
+    // clang-format on
 }
