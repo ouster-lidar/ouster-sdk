@@ -19,5 +19,5 @@
 * An executable called `ouster_client_example` is generated in the build
   directory on success
 * Run `./ouster_client_example <sensor_hostname> <udp_data_dest_ip>` where
-  `<sensor_hostname>` is the hostname or IP address of the sensor, and
+  `<sensor_hostname>` can be the hostname (os-991xxxxxxxxx) or IP of the sensor
   `<udp_data_dest_ip>` is the IP to which the sensor should send lidar data

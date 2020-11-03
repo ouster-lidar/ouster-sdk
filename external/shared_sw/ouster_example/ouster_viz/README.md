@@ -3,7 +3,7 @@
 ## Contents
 * `ouster_viz/` contains a basic visualizer that can be used to
   display point clouds and range/intensity/ambient images
-* Can be built both with and without ROS. See the instructions in
+* `ouster_viz/` can be built both with and without ROS. See the instructions in
   [ouster_ros](../ouster_ros/README.md) for building in a ROS environment
 
 ## Operating System Support
@@ -21,24 +21,25 @@ Preliminary compatibility has been added for:
 
 though these are not officially supported and not yet guaranteed to build and run correctly.
 
-# Build Dependencies
+## Building the Visualizer
+Before building, make sure all the build dependencies are installed.
+
+### Build Dependencies
 * The sample visualizer requires a compiler supporting C++11 or newer
   and CMake 3.1 or newer
-* Requires GLFW3, GLEW and Eigen3 libraries
-* Using Ubuntu: `sudo apt-get install libglfw3-dev libglew-dev libeigen3-dev libjsoncpp-dev
-  libtclap-dev`
-* Using Arch Linux: `sudo pacman -S cmake glfw glew eigen jsoncpp tclap`
+* Requires build-essential, GLFW3, GLEW and Eigen3 libraries
+* Using Ubuntu: `sudo apt-get install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev
+  libjsoncpp-dev libtclap-dev`
+* Using Arch Linux: `sudo pacman -S build-essential cmake glfw glew eigen jsoncpp tclap`
 * Using MacOS: install XCode and [Brew](https://brew.sh/) and then `brew install cmake pkg-config
   glfw glew eigen jsoncpp tclap`
 * Using Windows: install Visual Studio and [vcpkg](https://github.com/microsoft/vcpkg) and then
   `vcpkg install glfw3 glew tclap jsoncpp eigen3`
 
-# Building the Visualizer
-Before building, make sure all the build dependencies are installed.
-
+### Building
 In the following instruction steps, `/path/to/ouster_example` is where you've cloned the repository
 
-## Linux
+#### Linux
 Run the following commmands:
 
 ```
@@ -50,7 +51,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ```
 
-## macOS
+#### macOS
 Run the following commands
 
 ```
@@ -67,15 +68,17 @@ make
 * Note: if compiling in an environment with ROS, the location of the
   executable will be different
 * To run: `./simple_viz <flags> <sensor_hostname> <udp_data_dest_ip>`
+    - `<sensor_hostname>` can be the hostname (os-991xxxxxxxxx) or IP of the sensor
+    - `<udp_data_dest_ip>` is the IP to which the sensor should send data
 * For help, run `./simple_viz -h`
 
-## Command Line Arguments
+### Command Line Arguments
 * `<sensor_hostname>` the hostname or IP address of the sensor
 * `<udp_data_dest_ip>` the IP to which the sensor should send data
 * `-m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10>` flag to set the lidar
   mode (horizontal resolution x rotation rate). Defaults to 1024x10.
 
-## Key bindings
+### Key bindings
 | key | what it does |
 | ----| ------------ |
 | `p` | Increase point size |

@@ -8,27 +8,34 @@
   Melodic](http://wiki.ros.org/melodic/Installation/Ubuntu) on Ubuntu 18.04, and [ROS
   Noetic](http://wiki.ros.org/noetic/Installation/Ubuntu) on Ubuntu 20.04
 
-## Building the Sample ROS Nodes
-* In the following instruction steps, `/path/to/ouster_example` is where you've cloned the repository
-* Requires the `ros-*-ros-core`, `ros-*-pcl-ros`, `ros-*-tf2-geometry-msgs` packages and,
-  optionally, `ros-*-rviz` for visualization using ROS, where `*` is `kinetic`, `melodic`, or
-  `noetic`
+## Building
+* Note: In the following instruction steps (Building + Running), `/path/to/ouster_example`
+  is where you've cloned the repository.
+
+### Build Dependencies
+*  `ouster_ros/` requires ROS libraries; call `sudo apt-get install ros-<ROS-VERSION>-ros-core
+  ros-<ROS-VERSION>-pcl-ros ros-<ROS-VERSION>-tf2-geometry-msgs`, and
+  optionally `sudo apt install ros-<ROS-VERSION>-rviz` for visualization using ROS (rviz),
+  where `<ROS-VERSION>` is `kinetic`, `melodic`, or `noetic`.
 * Install additional build dependencies with: `sudo apt-get install libglfw3-dev libglew-dev
   libtclap-dev`
+
+### Building the Sample ROS Nodes
 * Then run the following command `export CMAKE_PREFIX_PATH=/path/to/ouster_example`
 * Be sure to source the ROS setup script before building: `source /opt/ros/*/setup.bash`
 * Build with `mkdir -p myworkspace/src && cd myworkspace && ln -s
   /path/to/ouster_example ./src/ && catkin_make -DCMAKE_BUILD_TYPE=Release`
 
-## Running the Sample ROS Nodes
+## Running Sample ROS Nodes
+* In each new terminal for each command below, make sure to source ROS environment with `source /path/to/myworkspace/devel/setup.bash` where
+  `/path/to/myworkspace` is where the path to the workspace directory that was created when
+  building the ROS nodes (NOTE: be aware that this is different than previous setup.bash for building)
+
+### Connecting to a Live Sensor
 * Make sure the sensor is connected to the network and has obtained a DHCP
   lease. See section 3.1 in the accompanying [software user guide](https://www.ouster.com/resources)
   for more details
-* In each new terminal for each command below:
-    - Make sure to source ROS environment with `source /path/to/myworkspace/devel/setup.bash` where
-      `/path/to/myworkspace` is where the path to the workspace directory that was created when
-      building the ROS nodes
-* To publish ROS topics from a running sensor from within the `ouster_ros` directory:
+* To publish ROS topics from a running sensor from within the `ouster_ros` directory (inside `/path/to/ouster_example/`):
     - Run `roslaunch ouster.launch sensor_hostname:=<sensor_hostname>
       udp_dest:=<udp_data_dest_ip> lidar_mode:=<lidar_mode> viz:=<viz>`where:
         - `<sensor_hostname>` can be the hostname (os-991xxxxxxxxx) or IP of the sensor
@@ -37,16 +44,9 @@
         - `<viz>` is either `true` or `false`. If true, a window should open and start
           displaying data after a few seconds
     - See [ouster_viz](../ouster_viz/README.md) for documentation on using the visualizer
-* **To display sensor output using the Ouster Visualizer in ROS:**
-    - set `<viz>` to `true` in the roslaunch command.
-    - Example command:
-        - `roslaunch ouster.launch sensor_hostname:=os-991234567890.local
-          udp_dest:=192.0.2.1 lidar_mode:=2048x10 viz:=true`
-* To record raw sensor output
-    - In another terminal instance, run `rosbag record /os_node/imu_packets
-     /os_node/lidar_packets`
-    - This will save a .bag file of recorded data in that directory
-* To publish ROS topics from recorded data from withint the `ouster_ros` directory:
+
+### Playing Back Recorded Data
+* To publish ROS topics from recorded data from within the `ouster_ros` directory:
     - Run `roslaunch ouster.launch replay:=true
       sensor_hostname:=<sensor_hostname>`
     - In a second terminal run `rosbag play --clock <bagfile>`
@@ -58,6 +58,13 @@
       1024x10. This can be overridden with the `lidar_mode`
       parameter. Visualizer output will only be correct if the same `lidar_mode`
       parameter is used for both recording and replay
+
+### Visualizing Data
+* To display sensor output using the Ouster Visualizer in ROS:
+    - set `<viz>` to `true` in the roslaunch command.
+    - Example command:
+        - `roslaunch ouster.launch sensor_hostname:=os-991234567890.local
+          udp_dest:=192.0.2.1 lidar_mode:=2048x10 viz:=true`
 * To display sensor output using built-in ROS tools (rviz):
     - Follow the instructions above for running the example ROS code with a
       sensor or recorded data
@@ -65,3 +72,9 @@
       in another terminal
     - To view lidar intensity/noise/range images, add `image:=true` to either of
       the `roslaunch` commands above
+
+### Recording Data
+* To record raw sensor output use [rosbag record](https://wiki.ros.org/rosbag/Commandline#rosbag_record):
+    - In another terminal instance, run `rosbag record /os_node/imu_packets
+     /os_node/lidar_packets`
+    - This will save a .bag file of recorded data in that directory
