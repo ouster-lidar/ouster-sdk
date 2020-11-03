@@ -21,6 +21,7 @@
 #include <memory>
 #include <sstream>
 #include <thread>
+#include <chrono>
 
 using namespace Tins;
 #include "ouster/os_pcap.h"
@@ -58,6 +59,17 @@ std::ostream& operator<<(std::ostream& stream_in,
                       << " Count: " << item2.second << std::endl;
         }
     }
+    return stream_in;
+}
+
+std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
+    stream_in << "Source IP: \"" << data.src_ip << "\" ";
+    stream_in << "Source Port: " << data.src_port << std::endl;
+    
+    stream_in << "Destination IP: \"" << data.dst_ip << "\" ";
+    stream_in << "Destination Port: " << data.dst_port << std::endl;
+   
+    stream_in << "Payload Size: " << data.payload_size << std::endl;
     return stream_in;
 }
 
@@ -308,7 +320,8 @@ std::shared_ptr<playback_handle> replay_initalize(
         new FileSniffer(file_name, lidar_filter.str()));
     result->pcap_file_imu_reader.reset(
         new FileSniffer(file_name, imu_filter.str()));
-
+    result->pcap_reader.reset(
+        new FileSniffer(file_name));
     return result;
 }
 
@@ -442,6 +455,63 @@ bool get_next_imu_data(playback_handle& handle, uint8_t* buf,
         }
     }
 
+    return result;
+}
+
+bool next_packet_info(playback_handle& handle, packet_info& info) {
+    bool result = false;
+
+    bool reassm = false;
+    while (!reassm) {
+        handle.packet_cache = handle.pcap_reader->next_packet();
+        if (handle.packet_cache) {
+            auto pdu = handle.packet_cache.pdu();
+            if (pdu) {
+                IP* ip = pdu->find_pdu<IP>();
+                reassm = reassemble_packet(*pdu, ip, handle.reassembler);
+                if (reassm) {
+                    result = true;
+                    UDP* udp = pdu->find_pdu<UDP>();
+                    auto raw = pdu->find_pdu<RawPDU>();
+
+                    info.dst_ip = ip->dst_addr().to_string();
+                    info.src_ip = ip->src_addr().to_string();
+                    info.dst_port = udp->dport();
+                    info.src_port = udp->sport();
+                    info.payload_size = raw->payload_size();
+                    info.timestamp = static_cast<std::chrono::microseconds>(handle.packet_cache.timestamp());
+                    handle.have_new_packet = true;
+                }
+            }
+        } else {
+            reassm = true;
+        }
+    }
+    
+    return result;
+}
+
+size_t read_packet(playback_handle& handle, uint8_t* buf,
+                      size_t buffer_size) {
+    size_t result = 0;
+    if(handle.have_new_packet) {
+        result = true;
+        auto pdu = handle.packet_cache.pdu();
+        auto raw = pdu->find_pdu<RawPDU>();
+        auto temp = (uint32_t*)&(raw->payload()[0]);
+        auto size = raw->payload_size();
+        if (size > buffer_size) {
+            throw std::invalid_argument(
+                                        "Incompatible argument: expected a bytearray of "
+                                        "size > " +
+                                        std::to_string(size));
+        } else {
+            handle.have_new_packet = false;
+            result = size;
+            memcpy(buf, temp, size);
+        }
+    }
+    
     return result;
 }
 

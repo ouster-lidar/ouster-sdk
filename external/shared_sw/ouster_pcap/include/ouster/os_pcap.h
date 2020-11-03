@@ -33,6 +33,20 @@ struct port_couple {
  */
 std::ostream& operator<<(std::ostream& stream_in, const port_couple& data);
 
+struct packet_info {
+    std::string dst_ip;    ///< The destination IP
+    std::string src_ip;    ///< The source IP
+    int dst_port;          ///< The destination port
+    int src_port;          ///< The source port
+    size_t payload_size;   ///< The size of the packet payload
+    std::chrono::microseconds timestamp;    ///< The packet timestamp in microseconds
+};
+
+/**
+ * To string method for packet info structs
+ */
+std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
+
 /**
  * Struct to hide the stepwise playback details
  * @TODO This really should be opaque, however pybind does not like opaque types,
@@ -50,6 +64,12 @@ struct playback_handle {
     std::unique_ptr<Tins::FileSniffer>
         pcap_file_imu_reader;  ///< Object that holds the pcap reader for imu
                                ///< packets
+    
+    std::unique_ptr<Tins::FileSniffer>
+        pcap_reader;  ///< Object that holds the unified pcap reader
+    Tins::Packet packet_cache;
+    bool have_new_packet;
+    
     Tins::IPv4Reassembler
         reassembler;            ///< The reassembler mainly for lidar packets
     Tins::PacketSender sender;  ///< The sender object for sending packets
@@ -198,6 +218,25 @@ no more packets
 bool get_next_imu_data(playback_handle& handle, uint8_t* buf,
                        size_t buffer_size);
 
+/**
+ * Return the information on the next packet avaliable in the playback_handle
+ * This must be called BEFORE calling the read_next_packet function
+ * @param[in] handle The playback handle
+ * @param[out] info The returned information on the next packet
+ * @return The status on whether there is a new packet or not
+ */
+bool next_packet_info(playback_handle& handle, packet_info& info);
+
+/**
+ * Read the data from the next packet avaliable in the playback_handle
+ * This must be called AFTER calling the next_packet_info function
+ * @param[in] handle The playback handle
+ * @param[out] buf The buffer to write the recieved data to (Must be sized appropriately
+ * @param[in] buffer_size The size of the output buffer
+ * @return 0 on no new packet, > 0 the size of the bytes recieved
+ */
+size_t read_packet(playback_handle& handle, uint8_t* buf,
+                       size_t buffer_size);
 /**
  * Initialize the record handle for recording pcap files
  * @param[in] file The file path to the target pcap to record to

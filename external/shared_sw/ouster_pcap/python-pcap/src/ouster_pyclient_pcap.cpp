@@ -81,7 +81,21 @@ PYBIND11_MODULE(_pcap, m) {
         .def_readonly("port_to_packet_sizes", &ouster::sensor_utils::stream_info::port_to_packet_sizes)
         .def_readonly("port_to_packet_count", &ouster::sensor_utils::stream_info::port_to_packet_count)
         .def_readonly("packet_size_to_port", &ouster::sensor_utils::stream_info::packet_size_to_port);
-
+    
+    py::class_<ouster::sensor_utils::packet_info,
+               std::shared_ptr<ouster::sensor_utils::packet_info>>(m, "packet_info")
+        .def(py::init<>())
+        .def("__repr__", [](const ouster::sensor_utils::packet_info& data) {
+                             std::stringstream result;
+                             result << data;
+                             return result.str();})
+        .def_readonly("dst_ip", &ouster::sensor_utils::packet_info::dst_ip)
+        .def_readonly("src_ip", &ouster::sensor_utils::packet_info::src_ip)
+        .def_readonly("dst_port", &ouster::sensor_utils::packet_info::dst_port)
+        .def_readonly("src_port", &ouster::sensor_utils::packet_info::src_port)
+        .def_readonly("timestamp", &ouster::sensor_utils::packet_info::timestamp)
+        .def_readonly("payload_size", &ouster::sensor_utils::packet_info::payload_size);
+    
     py::class_<ouster::sensor_utils::port_couple>(m, "port_couple")
         .def(py::init<>())
         .def("__repr__", [](const ouster::sensor_utils::port_couple& data) {
@@ -137,6 +151,20 @@ PYBIND11_MODULE(_pcap, m) {
               py::gil_scoped_release release;
               return ouster::sensor_utils::get_next_imu_data(*handle, getptr(buf), getptrsize(buf));
           });
+    
+    m.def("next_packet_info",
+          [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
+             ouster::sensor_utils::packet_info& info) -> bool {
+              py::gil_scoped_release release;
+              return ouster::sensor_utils::next_packet_info(*handle, info);
+          });
+    m.def("read_packet",
+          [](std::shared_ptr<ouster::sensor_utils::playback_handle> handle,
+             py::buffer buf) -> size_t {
+              py::gil_scoped_release release;
+              return ouster::sensor_utils::read_packet(*handle, getptr(buf), getptrsize(buf));
+          });
+    
     m.def("record_initialize", &ouster::sensor_utils::record_initialize);
     m.def("record_packet",
           [](std::shared_ptr<ouster::sensor_utils::record_handle> handle,
