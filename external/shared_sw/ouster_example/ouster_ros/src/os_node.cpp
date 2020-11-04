@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 
+#include "ouster/build.h"
 #include "ouster/types.h"
 #include "ouster_ros/OSConfigSrv.h"
 #include "ouster_ros/PacketMsg.h"
@@ -158,6 +159,8 @@ int main(int argc, char** argv) {
         ROS_ERROR("Must specify both hostname and udp destination");
         return EXIT_FAILURE;
     }
+
+    ROS_INFO("Client version: %s", ouster::CLIENT_VERSION_FULL);
 
     if (replay) {
         ROS_INFO("Running in replay mode");

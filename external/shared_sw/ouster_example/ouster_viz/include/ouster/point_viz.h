@@ -13,6 +13,9 @@
 #include <GLFW/glfw3.h>
 // clang-format on
 
+#include "ouster/compat.h"
+#include "ouster/colormaps.h"
+
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -26,18 +29,8 @@
 #include <vector>
 #include <cmath>
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
-#include "ouster/colormaps.h"
 
 namespace ouster {
 namespace viz {

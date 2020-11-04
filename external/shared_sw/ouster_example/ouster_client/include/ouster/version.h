@@ -3,6 +3,9 @@
  * @brief Simple version struct
  */
 
+#include <cstdint>
+#include <string>
+
 #pragma once
 
 namespace ouster {

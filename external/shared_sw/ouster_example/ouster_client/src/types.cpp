@@ -2,16 +2,7 @@
 
 #include <json/json.h>
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Eigen>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -23,6 +14,7 @@
 
 #include "ouster/packet.h"
 #include "ouster/version.h"
+#include "ouster/build.h"
 
 namespace ouster {
 namespace sensor {
@@ -319,6 +311,7 @@ sensor_info metadata_from_json(const std::string& json_file) {
 
 std::string to_string(const sensor_info& info) {
     Json::Value root{};
+    root["client_version"] = ouster::CLIENT_VERSION;
     root["hostname"] = info.name;
     root["prod_sn"] = info.sn;
     root["build_rev"] = info.fw_rev;

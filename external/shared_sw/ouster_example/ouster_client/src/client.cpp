@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/build.h"
 #include "ouster/compat.h"
 #include "ouster/types.h"
 
@@ -258,6 +259,7 @@ bool collect_metadata(client& cli, const int sock_fd, chrono::seconds timeout) {
     // merge extra info into metadata
     cli.meta["hostname"] = cli.hostname;
     cli.meta["lidar_mode"] = root["lidar_mode"];
+    cli.meta["client_version"] = ouster::CLIENT_VERSION;
 
     return success;
 }

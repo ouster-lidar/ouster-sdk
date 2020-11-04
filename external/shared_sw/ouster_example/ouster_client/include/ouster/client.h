@@ -14,7 +14,7 @@
 
 namespace ouster {
 namespace sensor {
-extern std::string exampleVersion;
+
 struct client;
 
 enum client_state {

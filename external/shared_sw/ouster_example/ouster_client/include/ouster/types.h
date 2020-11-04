@@ -4,17 +4,7 @@
  */
 
 #pragma once
-
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Eigen>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
 #include <string>
 #include <vector>
 

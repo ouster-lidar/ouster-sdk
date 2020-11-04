@@ -7,7 +7,8 @@
 
 #include <string>
 
-#if defined _WIN32
+#if defined _WIN32 // --------- On Windows ---------
+
 #define _USE_MATH_DEFINES
 #define WPCAP 1
 // Try and limit the stuff windows brings in
@@ -15,9 +16,6 @@
 #define NOMINMAX 1
 #define HAVE_U_INT8_T 1
 #define HAVE_U_INT16_T 1
-
-// Fix for windows compiler issue
-#define VTK_FALLTHROUGH [[fallthrough]]
 
 // Windows headers
 #include <WS2tcpip.h>
@@ -34,37 +32,8 @@
 #define ssize_t SSIZE_T
 #endif
 
-#pragma pack(push, 1)
-struct ether_header {
-    uint8_t padding1[12];
-    uint16_t ether_type;
-};
+#else  // --------- Compiling on *nix ---------
 
-struct iphdr {
-    uint8_t ihl : 4;
-    uint8_t version : 4;
-    uint8_t padding1;
-    uint16_t tot_len;
-    uint16_t id;
-    uint16_t frag_off;
-    uint8_t ttl;
-    uint8_t protocol;
-    uint8_t padding2[6];
-    uint32_t daddr;
-};
-
-struct udphdr {
-    uint16_t padding1;
-    uint16_t dest;
-    uint16_t len;
-    uint16_t padding2;
-};
-#pragma pack(pop)
-
-#define ETHERTYPE_IP 0x0800
-
-#define SET_SIN_ADDR(data, address) data.addr.sin_addr.S_un.S_addr = (address)
-#else  // --------- Compiling on Linux ---------
 // Linux headers
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -80,7 +49,7 @@ struct udphdr {
 typedef int SOCKET;
 typedef fd_set FDSET;
 #define SOCKET_ERROR -1
-#define SET_SIN_ADDR(data, address) data.addr.sin_addr = {address}
+
 #endif  // --------- End Platform Differentiation Block ---------
 
 /**

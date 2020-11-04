@@ -1,14 +1,8 @@
 #include <tclap/CmdLine.h>
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
-#include <Eigen/Eigen>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
+// clang-format off
+#include "ouster/compat.h"
+// clang-format on
 
 #include <atomic>
 #include <cmath>
@@ -18,36 +12,20 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "ouster/client.h"
-#include "ouster/compat.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/lidar_scan_viz.h"
 #include "ouster/packet.h"
 #include "ouster/point_viz.h"
 #include "ouster/types.h"
+#include "ouster/build.h"
 
 namespace sensor = ouster::sensor;
 namespace viz = ouster::viz;
-
-/**
- * Print usage
- */
-void print_help() {
-    std::cout
-        << "Usage: viz [options] [hostname] [udp_destination]\n"
-        << "Version: " << ouster::sensor::exampleVersion << std::endl
-        << "Options:\n"
-        << "  -m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10> : lidar mode\n"
-        << "  -l <port> : use specified port for lidar data\n"
-        << "  -i <port> : use specified port for imu data \n"
-        << "  -f <path> : use provided metadata file; do not configure via TCP"
-        << std::endl;
-}
 
 int main(int argc, char** argv) {
     sensor::lidar_mode mode = sensor::MODE_UNSPEC;
@@ -60,7 +38,7 @@ int main(int argc, char** argv) {
     std::string udp_dest;
 
     try {
-        TCLAP::CmdLine cmd("Ouster Visualizer", ' ', ouster::sensor::exampleVersion);
+        TCLAP::CmdLine cmd("Ouster Visualizer", ' ', ouster::CLIENT_VERSION_FULL);
 
         TCLAP::UnlabeledValueArg<std::string> hostname_arg(
             "hostname", "hostname of the sensor", true, "", "string");
@@ -117,8 +95,7 @@ int main(int argc, char** argv) {
         hostname = hostname_arg.getValue();
         udp_dest = udp_destination_arg.getValue();
     } catch (const std::exception& ex) {
-        std::cout << "Invalid Argument Format: " << ex.what() << std::endl;
-        print_help();
+        std::cout << "Unexpected error: " << ex.what() << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
@@ -140,7 +117,6 @@ int main(int argc, char** argv) {
 
     if (!cli) {
         std::cerr << "Failed to initialize client" << std::endl;
-        print_help();
         std::exit(EXIT_FAILURE);
     }
 

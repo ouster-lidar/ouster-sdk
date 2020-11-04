@@ -5,6 +5,7 @@
 
 #include "ouster/client.h"
 #include "ouster/compat.h"
+#include "ouster/build.h"
 
 namespace sensor = ouster::sensor;
 
@@ -50,8 +51,9 @@ int main(int argc, char** argv) {
     if (argc != 3) {
         std::cerr << "Usage: ouster_client_example <sensor_hostname> "
                      "<data_destination_ip>"
-                  << std::endl << "Version: " << ouster::sensor::exampleVersion
-                  << std::endl;
+                  << std::endl
+                  << "Platform: " << ouster::BUILD_SYSTEM << std::endl
+                  << "Version: " << ouster::CLIENT_VERSION_FULL << std::endl;
         return 1;
     }
     socket_init();

@@ -63,7 +63,7 @@ add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 # ==== Executables ====
 add_executable(os_node src/os_node.cpp)
 target_link_libraries(os_node ouster_ros ${catkin_LIBRARIES} ouster_viz
-                      ouster_client)
+                      ouster_client ouster_build)
 target_include_directories(os_node PRIVATE include ${catkin_INCLUDE_DIRS})
 add_dependencies(os_node ${PROJECT_NAME}_gencpp)
 
