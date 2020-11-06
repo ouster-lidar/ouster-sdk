@@ -42,7 +42,7 @@ namespace {
 // default udp receive buffer size on windows is very low -- use 256K
 const int RCVBUF_SIZE = 256 * 1024;
 
-int32_t get_sock_port(int sock_fd) {
+int32_t get_sock_port(SOCKET sock_fd) {
     struct sockaddr_storage ss;
     socklen_t addrlen = sizeof ss;
 
@@ -59,7 +59,7 @@ int32_t get_sock_port(int sock_fd) {
         return SOCKET_ERROR;
 }
 
-int udp_data_socket(int port) {
+SOCKET udp_data_socket(int port) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
@@ -79,7 +79,7 @@ int udp_data_socket(int port) {
         return SOCKET_ERROR;
     }
 
-    int sock_fd;
+    SOCKET sock_fd;
     for (ai = info_start; ai != NULL; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (!socket_valid(sock_fd)) {
@@ -88,14 +88,13 @@ int udp_data_socket(int port) {
         }
 
         int off = 0;
-        if (!socket_valid(setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY,
-                                     (char*)&off, sizeof(off)))) {
+        if (setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off, sizeof(off))) {
             std::cerr << "udp setsockopt(): " << socket_get_error() << std::endl;
             socket_close(sock_fd);
             return SOCKET_ERROR;
         }
 
-        if (!socket_valid(bind(sock_fd, ai->ai_addr, ai->ai_addrlen))) {
+        if (bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
             socket_close(sock_fd);
             std::cerr << "udp bind(): " << socket_get_error() << std::endl;
             continue;
@@ -126,7 +125,7 @@ int udp_data_socket(int port) {
     return sock_fd;
 }
 
-int cfg_socket(const char* addr) {
+SOCKET cfg_socket(const char* addr) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
@@ -143,7 +142,7 @@ int cfg_socket(const char* addr) {
         return SOCKET_ERROR;
     }
 
-    int sock_fd;
+    SOCKET sock_fd;
     for (ai = info_start; ai != NULL; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (!socket_valid(sock_fd)) {
@@ -151,7 +150,7 @@ int cfg_socket(const char* addr) {
             continue;
         }
 
-        if (connect(sock_fd, ai->ai_addr, ai->ai_addrlen) == -1) {
+        if (!connect(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
             socket_close(sock_fd);
             continue;
         }
@@ -167,7 +166,7 @@ int cfg_socket(const char* addr) {
     return sock_fd;
 }
 
-bool do_tcp_cmd(int sock_fd, const std::vector<std::string>& cmd_tokens,
+bool do_tcp_cmd(SOCKET sock_fd, const std::vector<std::string>& cmd_tokens,
                 std::string& res) {
     const size_t max_res_len = 16 * 1024;
     auto read_buf = std::unique_ptr<char[]>{new char[max_res_len + 1]};
@@ -206,7 +205,7 @@ void update_json_obj(Json::Value& dst, const Json::Value& src) {
     }
 }
 
-bool collect_metadata(client& cli, const int sock_fd, chrono::seconds timeout) {
+bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
     Json::CharReaderBuilder builder{};
     auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
     Json::Value root{};
@@ -267,7 +266,7 @@ bool collect_metadata(client& cli, const int sock_fd, chrono::seconds timeout) {
 
 std::string get_metadata(client& cli, int timeout_sec) {
     if (!cli.meta) {
-        int sock_fd = cfg_socket(cli.hostname.c_str());
+        SOCKET sock_fd = cfg_socket(cli.hostname.c_str());
         if (sock_fd < 0) return "";
 
         bool success =
@@ -313,7 +312,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     if (!socket_valid(lidar_port) || !socket_valid(imu_port))
         return std::shared_ptr<client>();
 
-    int sock_fd = cfg_socket(hostname.c_str());
+    SOCKET sock_fd = cfg_socket(hostname.c_str());
     if (!socket_valid(sock_fd)) return std::shared_ptr<client>();
 
     std::string res;
@@ -368,9 +367,9 @@ client_state poll_client(const client& c, const int timeout_sec) {
     tv.tv_sec = timeout_sec;
     tv.tv_usec = 0;
 
-    int max_fd = std::max(c.lidar_fd, c.imu_fd);
+    SOCKET max_fd = std::max(c.lidar_fd, c.imu_fd);
 
-    int retval = select(max_fd + 1, &rfds, NULL, NULL, &tv);
+    SOCKET retval = select((int)max_fd + 1, &rfds, NULL, NULL, &tv);
 
     client_state res = client_state(0);
 
@@ -387,11 +386,11 @@ client_state poll_client(const client& c, const int timeout_sec) {
     return res;
 }
 
-static bool recv_fixed(int fd, void* buf, int64_t len) {
+static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
     int64_t n = recv(fd, (char*)buf, len + 1, 0);
     if (n == len) {
         return true;
-    } else if (n == static_cast<int64_t>(-1)) {
+    } else if (n == -1) {
         std::cerr << "recvfrom: " << socket_get_error() << std::endl;
     } else {
         std::cerr << "Unexpected udp packet length: " << n << std::endl;

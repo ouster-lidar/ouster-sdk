@@ -42,20 +42,14 @@ int socket_close(SOCKET sock) {
 
 std::string socket_get_error() {
 #ifdef _WIN32
-    wchar_t* char_buffer = NULL;
-    std::string result;
-
-    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                       FORMAT_MESSAGE_IGNORE_INSERTS,
-                   NULL, WSAGetLastError(),
-                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                   (LPWSTR)&char_buffer, 0, NULL);
-
-    std::wstring wide_string(char_buffer);
-    result = std::string(wide_string.begin(), wide_string.end());
-    LocalFree(char_buffer);
-
-    return result;
+    int errnum = WSAGetLastError();
+    char buf[256] = {0};
+    if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, errnum, 0, buf,
+                      sizeof(buf), NULL) != 0) {
+        return std::string(buf);
+    } else {
+        return std::string{"Unknown WSA error "} + std::to_string(errnum);
+    }
 #else
     return std::strerror(errno);
 #endif

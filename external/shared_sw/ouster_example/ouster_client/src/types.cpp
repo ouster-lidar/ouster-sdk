@@ -259,8 +259,8 @@ sensor_info parse_metadata(const std::string& meta) {
     // "imu_to_sensor_transform" may be absent in sensor config
     // produced by Ouster Studio, so we backfill it with default value
     if (root["imu_to_sensor_transform"].size() == 16) {
-        for (size_t i = 0; i < 4; i++) {
-            for (size_t j = 0; j < 4; j++) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
                 const Json::Value::ArrayIndex ind = i * 4 + j;
                 info.imu_to_sensor_transform(i, j) =
                     root["imu_to_sensor_transform"][ind].asDouble();
@@ -275,8 +275,8 @@ sensor_info parse_metadata(const std::string& meta) {
     // "lidar_to_sensor_transform" may be absent in sensor config
     // produced by Ouster Studio, so we backfill it with default value
     if (root["lidar_to_sensor_transform"].size() == 16) {
-        for (size_t i = 0; i < 4; i++) {
-            for (size_t j = 0; j < 4; j++) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
                 const Json::Value::ArrayIndex ind = i * 4 + j;
                 info.lidar_to_sensor_transform(i, j) =
                     root["lidar_to_sensor_transform"][ind].asDouble();

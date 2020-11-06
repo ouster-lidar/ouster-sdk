@@ -15,7 +15,7 @@ uint64_t n_imu_packets = 0;
 uint64_t lidar_col_0_ts = 0;
 uint64_t imu_ts = 0;
 
-float lidar_col_0_h_angle = 0.0;
+uint32_t lidar_col_0_h_angle = 0;
 float imu_av_z = 0.0;
 float imu_la_y = 0.0;
 
