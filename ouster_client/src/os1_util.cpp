@@ -1,5 +1,6 @@
 #include <cmath>
 #include <vector>
+#include <string>
 
 #include "ouster/os1_packet.h"
 
@@ -34,46 +35,6 @@ extern const std::vector<double> imu_to_sensor_transform = {
 extern const std::vector<double> lidar_to_sensor_transform = {
     -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1};
 
-std::vector<double> make_xyz_lut(int W, int H,
-                                 const std::vector<double>& azimuth_angles,
-                                 const std::vector<double>& altitude_angles) {
-    const int n = W * H;
-    std::vector<double> xyz = std::vector<double>(3 * n, 0);
 
-    for (int icol = 0; icol < W; icol++) {
-        double h_angle_0 = 2.0 * M_PI * icol / W;
-        for (int ipx = 0; ipx < H; ipx++) {
-            int ind = 3 * (icol * H + ipx);
-            double h_angle =
-                (azimuth_angles.at(ipx) * 2 * M_PI / 360.0) + h_angle_0;
-
-            xyz[ind + 0] = std::cos(altitude_angles[ipx] * 2 * M_PI / 360.0) *
-                           std::cos(h_angle);
-            xyz[ind + 1] = -std::cos(altitude_angles[ipx] * 2 * M_PI / 360.0) *
-                           std::sin(h_angle);
-            xyz[ind + 2] = std::sin(altitude_angles[ipx] * 2 * M_PI / 360.0);
-        }
-    }
-    return xyz;
-}
-
-std::vector<int> get_px_offset(int lidar_mode) {
-    auto repeat = [](int n, const std::vector<int>& v) {
-        std::vector<int> res{};
-        for (int i = 0; i < n; i++) res.insert(res.end(), v.begin(), v.end());
-        return res;
-    };
-
-    switch (lidar_mode) {
-        case 512:
-            return repeat(16, {0, 3, 6, 9});
-        case 1024:
-            return repeat(16, {0, 6, 12, 18});
-        case 2048:
-            return repeat(16, {0, 12, 24, 36});
-        default:
-            return std::vector<int>{64, 0};
-    }
-}
-}
-}
+}  // namespace OS1
+}  // namespace ouster

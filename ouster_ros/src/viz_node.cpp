@@ -9,12 +9,14 @@
 #include <ros/console.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+
 #include <algorithm>
 #include <iterator>
 #include <thread>
 #include <utility>
 
 #include "ouster/os1_packet.h"
+#include "ouster/os1_util.h"
 #include "ouster/viz.h"
 #include "ouster_ros/OS1ConfigSrv.h"
 #include "ouster_ros/os1_ros.h"
@@ -38,24 +40,39 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    auto H = OS1::pixels_per_column;
-    auto W = OS1::n_cols_of_lidar_mode(
-        OS1::lidar_mode_of_string(cfg.response.lidar_mode));
+    // parse meadata
+    auto info = OS1::parse_metadata(cfg.response.metadata);
 
-    auto vh = viz::init_viz(W, H);
+    auto H = info.format.pixels_per_column;
+    auto W = OS1::n_cols_of_lidar_mode(info.mode);
+
+    const auto xyz_lut =
+        ouster::make_xyz_lut(W, H, OS1::range_unit,
+                             info.lidar_origin_to_beam_origin_mm,
+                             info.beam_azimuth_angles, info.beam_altitude_angles);
+
+    auto range_markers = nh.param<std::vector<double>>(
+        "range_markers", viz::default_range_markers);
+
+    auto vh = viz::init_viz(&xyz_lut, info.format, info.prod_line, range_markers);
     auto ls = std::unique_ptr<ouster::LidarScan>{new ouster::LidarScan(W, H)};
 
     auto cloud_handler = [&](const CloudOS1& cloud) {
-        if ((int)cloud.size() != W * H) {
+        if (cloud.size() != W * H) {
             ROS_ERROR("Unexpected cloud size; check lidar_mode");
             ros::shutdown();
         }
 
         std::transform(
             cloud.begin(), cloud.end(), ls->begin(), [](const PointOS1& p) {
-                return ouster::LidarScan::make_val(p.x, p.y, p.z, p.intensity,
-                                                   p.t, p.reflectivity, p.ring,
-                                                   p.noise, p.range);
+                return ouster::LidarScan::pixel(
+                    static_cast<ouster::LidarScan::index_t>(p.ring),
+                    static_cast<ouster::LidarScan::index_t>(0),
+                    std::chrono::nanoseconds(p.t), std::chrono::nanoseconds(0),
+                    static_cast<ouster::LidarScan::raw_t>(p.range),
+                    static_cast<ouster::LidarScan::raw_t>(p.intensity),
+                    static_cast<ouster::LidarScan::raw_t>(p.noise),
+                    static_cast<ouster::LidarScan::raw_t>(p.reflectivity));
             });
 
         viz::update(*vh, ls);

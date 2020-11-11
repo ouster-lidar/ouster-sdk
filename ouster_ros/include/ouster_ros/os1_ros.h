@@ -29,7 +29,8 @@ using ns = std::chrono::nanoseconds;
  * @param pm the destination packet message
  * @return whether reading was successful
  */
-bool read_imu_packet(const ouster::OS1::client& cli, PacketMsg& pm);
+bool read_imu_packet(const ouster::OS1::client& cli, PacketMsg& pm,
+                     const ouster::OS1::packet_format& pf);
 
 /**
  * Read a lidar packet into a ROS message. Blocks for up to a second if no data
@@ -38,7 +39,8 @@ bool read_imu_packet(const ouster::OS1::client& cli, PacketMsg& pm);
  * @param pm the destination packet message
  * @return whether reading was successful
  */
-bool read_lidar_packet(const ouster::OS1::client& cli, PacketMsg& pm);
+bool read_lidar_packet(const ouster::OS1::client& cli, PacketMsg& pm,
+                       const ouster::OS1::packet_format& pf);
 
 /**
  * Parse an imu packet message into a ROS imu message
@@ -47,7 +49,8 @@ bool read_lidar_packet(const ouster::OS1::client& cli, PacketMsg& pm);
  * @return ROS sensor message with fields populated from the OS1 packet
  */
 sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
-                                   const std::string& frame);
+                                   const std::string& frame,
+                                   const ouster::OS1::packet_format& pf);
 
 /**
  * Serialize a PCL point cloud to a ROS message

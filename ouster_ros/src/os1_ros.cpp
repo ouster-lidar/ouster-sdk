@@ -14,23 +14,25 @@ namespace OS1 {
 
 using namespace ouster::OS1;
 
-bool read_imu_packet(const client& cli, PacketMsg& m) {
-    m.buf.resize(imu_packet_bytes + 1);
-    return read_imu_packet(cli, m.buf.data());
+bool read_imu_packet(const client& cli, PacketMsg& m,
+                     const OS1::packet_format& pf) {
+    m.buf.resize(pf.imu_packet_size + 1);
+    return read_imu_packet(cli, m.buf.data(), pf);
 }
 
-bool read_lidar_packet(const client& cli, PacketMsg& m) {
-    m.buf.resize(lidar_packet_bytes + 1);
-    return read_lidar_packet(cli, m.buf.data());
+bool read_lidar_packet(const client& cli, PacketMsg& m,
+                       const OS1::packet_format& pf) {
+    m.buf.resize(pf.lidar_packet_size + 1);
+    return read_lidar_packet(cli, m.buf.data(), pf);
 }
 
-sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p,
-                                   const std::string& frame) {
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame,
+                                   const ouster::OS1::packet_format& pf) {
     const double standard_g = 9.80665;
     sensor_msgs::Imu m;
     const uint8_t* buf = p.buf.data();
 
-    m.header.stamp.fromNSec(imu_gyro_ts(buf));
+    m.header.stamp.fromNSec(pf.imu_gyro_ts(buf));
     m.header.frame_id = frame;
 
     m.orientation.x = 0;
@@ -38,13 +40,13 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p,
     m.orientation.z = 0;
     m.orientation.w = 0;
 
-    m.linear_acceleration.x = imu_la_x(buf) * standard_g;
-    m.linear_acceleration.y = imu_la_y(buf) * standard_g;
-    m.linear_acceleration.z = imu_la_z(buf) * standard_g;
+    m.linear_acceleration.x = pf.imu_la_x(buf) * standard_g;
+    m.linear_acceleration.y = pf.imu_la_y(buf) * standard_g;
+    m.linear_acceleration.z = pf.imu_la_z(buf) * standard_g;
 
-    m.angular_velocity.x = imu_av_x(buf) * M_PI / 180.0;
-    m.angular_velocity.y = imu_av_y(buf) * M_PI / 180.0;
-    m.angular_velocity.z = imu_av_z(buf) * M_PI / 180.0;
+    m.angular_velocity.x = pf.imu_av_x(buf) * M_PI / 180.0;
+    m.angular_velocity.y = pf.imu_av_y(buf) * M_PI / 180.0;
+    m.angular_velocity.z = pf.imu_av_z(buf) * M_PI / 180.0;
 
     for (int i = 0; i < 9; i++) {
         m.orientation_covariance[i] = -1;
