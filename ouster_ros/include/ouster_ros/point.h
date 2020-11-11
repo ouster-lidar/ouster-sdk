@@ -1,16 +1,21 @@
 /**
  * @file
- * @brief PCL point datatype for use with the OS-1
+ * @brief PCL point datatype for use with ouster sensors
  */
 
 #pragma once
 #define PCL_NO_PRECOMPILE
 #include <pcl/point_types.h>
 
-namespace ouster_ros {
-namespace OS1 {
+#include <Eigen/Eigen>
+#include <chrono>
+#include <functional>
 
-struct EIGEN_ALIGN16 PointOS1 {
+#include "ouster/lidar_scan.h"
+
+namespace ouster_ros {
+
+struct EIGEN_ALIGN16 Point {
     PCL_ADD_POINT4D;
     float intensity;
     uint32_t t;
@@ -20,20 +25,20 @@ struct EIGEN_ALIGN16 PointOS1 {
     uint32_t range;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    template <class XYZLUT>
-    static inline std::function<PointOS1(
-        std::ptrdiff_t, std::ptrdiff_t, std::chrono::nanoseconds,
-        std::chrono::nanoseconds, uint32_t, uint16_t, uint16_t, uint16_t)>
-    get_from_pixel(XYZLUT* xyz_lut, size_t w, size_t h) {
+    static inline std::function<
+        Point(std::ptrdiff_t, std::ptrdiff_t, std::chrono::nanoseconds,
+              std::chrono::nanoseconds, uint32_t, uint16_t, uint16_t, uint16_t)>
+    get_from_pixel(const ouster::XYZLut& xyz_lut, size_t w, size_t h) {
         return [xyz_lut, w, h](std::ptrdiff_t u, std::ptrdiff_t v,
                                std::chrono::nanoseconds ts,
                                std::chrono::nanoseconds scan_ts, uint32_t range,
                                uint16_t intensity, uint16_t noise,
-                               uint16_t reflectivity) -> PointOS1 {
-            const double r = static_cast<double>(range);
-            return {static_cast<float>((xyz_lut->direction)(u * w + v, 0) * r),
-                    static_cast<float>((xyz_lut->direction)(u * w + v, 1) * r),
-                    static_cast<float>((xyz_lut->direction)(u * w + v, 2) * r),
+                               uint16_t reflectivity) -> Point {
+            const auto xyz = xyz_lut.direction.row(u * w + v) * range +
+                             xyz_lut.offset.row(u * w + v);
+            return {static_cast<float>(xyz(0)),
+                    static_cast<float>(xyz(1)),
+                    static_cast<float>(xyz(2)),
                     0.0f,
                     static_cast<float>(intensity),
                     static_cast<uint32_t>((ts - scan_ts).count()),
@@ -44,11 +49,10 @@ struct EIGEN_ALIGN16 PointOS1 {
         };
     }
 };
-}  // namespace OS1
 }  // namespace ouster_ros
 
 // clang-format off
-POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::OS1::PointOS1,
+POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
     (float, x, x)
     (float, y, y)
     (float, z, z)

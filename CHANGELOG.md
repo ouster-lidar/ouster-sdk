@@ -1,6 +1,27 @@
 # Changelog
 
-## [1.14.0-beta4] - unreleased (5bb6fe1)
+## [1.14.0-beta.10] - 2020-05-21
+### Added
+- preliminary support for Windows and Mac 10.15 for `ouster_viz` and
+  `ouster_client`
+
+### Changed
+- replaced VTK visualizer library with one based on GLFW
+- renamed all instances of "OS1" including namespaces, headers, node and topic
+  names, to reflect support for other product lines
+- updated all xyz point cloud calculations to take into account new
+  `lidar_origin_to_beam_origin` parameter reported by sensors
+- client and `os_node` and `simple_viz` now avoid setting the lidar and timestamp
+  modes when connecting to a client unless values are explicitly specicified
+
+### Fixed
+- increase the UDP receive buffer size in the client to reduce chances of
+  dropping packets on platforms with low defaults
+- `os_cloud_node` output now uses the updated point cloud calculation, taking
+  into account the lidar origin offset
+- minor regression with destaggering in img_node output in previous beta
+
+## [1.14.0-beta.4] - 2020-03-17
 ### Added
 - support for gen2 hardware in client, visualizer, and ROS sample code
 - support for updated "packed" lidar UDP data format for 16 and
@@ -11,6 +32,22 @@
 
 ### Changed
 - use random ports for lidar and imu data by default when unspecified
+
+## [1.13.0] - 2020-03-16
+### Added
+- post-processing to improve ambient image uniformity in visualizer
+- make timestamp mode configurable via the client (PR #97)
+
+### Changed
+- turn on position-independent code by default to make using code in libraries
+  easier (PR #65)
+- use random ports for lidar and imu data by default when unspecified
+
+### Fixed
+- prevent legacy tf prefix from making invalid frame names (PR #56)
+- use `iterator_traits` to make `batch_to_iter` work with more types (PR #70)
+- use correct name for json dependency in `package.xml` (PR #116)
+- handle udp socket creation error gracefully in client
 
 ## [1.12.0] - 2019-05-02
 ### Added

@@ -3,11 +3,10 @@
 #include <iomanip>
 #include <iostream>
 
-#include "ouster/os1.h"
-#include "ouster/os1_packet.h"
+#include "ouster/client.h"
 #include "ouster/compat.h"
 
-namespace OS1 = ouster::OS1;
+namespace sensor = ouster::sensor;
 
 uint64_t n_lidar_packets = 0;
 uint64_t n_imu_packets = 0;
@@ -19,14 +18,13 @@ float lidar_col_0_h_angle = 0.0;
 float imu_av_z = 0.0;
 float imu_la_y = 0.0;
 
-
-void handle_lidar(uint8_t* buf, const OS1::packet_format& pf) {
+void handle_lidar(uint8_t* buf, const sensor::packet_format& pf) {
     n_lidar_packets++;
     lidar_col_0_ts = pf.col_timestamp(pf.nth_col(0, buf));
     lidar_col_0_h_angle = pf.col_h_angle(pf.nth_col(0, buf));
 }
 
-void handle_imu(uint8_t* buf, const OS1::packet_format& pf) {
+void handle_imu(uint8_t* buf, const sensor::packet_format& pf) {
     n_imu_packets++;
     imu_ts = pf.imu_gyro_ts(buf);
     imu_av_z = pf.imu_av_z(buf);
@@ -50,21 +48,21 @@ void print_stats() {
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::cerr << "Usage: ouster_client_example <os1_hostname> "
+        std::cerr << "Usage: ouster_client_example <sensor_hostname> "
                      "<data_destination_ip>"
                   << std::endl;
         return 1;
     }
     socket_init();
-    auto cli = OS1::init_client(argv[1], argv[2]);
+    auto cli = sensor::init_client(argv[1], argv[2]);
     if (!cli) {
         std::cerr << "Failed to connect to client at: " << argv[1] << std::endl;
         return 1;
     }
 
-    auto metadata = OS1::get_metadata(*cli);
-    auto info = OS1::parse_metadata(metadata);
-    auto pf = OS1::get_format(info.format);
+    auto metadata = sensor::get_metadata(*cli);
+    auto info = sensor::parse_metadata(metadata);
+    auto pf = sensor::get_format(info.format);
 
     std::unique_ptr<uint8_t[]> lidar_buf(new uint8_t[pf.lidar_packet_size + 1]);
     std::unique_ptr<uint8_t[]> imu_buf(new uint8_t[pf.imu_packet_size + 1]);
@@ -72,14 +70,14 @@ int main(int argc, char** argv) {
     print_headers();
 
     while (true) {
-        OS1::client_state st = OS1::poll_client(*cli);
-        if (st & OS1::CLIENT_ERROR) {
+        sensor::client_state st = sensor::poll_client(*cli);
+        if (st & sensor::CLIENT_ERROR) {
             return 1;
-        } else if (st & OS1::LIDAR_DATA) {
-            if (OS1::read_lidar_packet(*cli, lidar_buf.get(), pf))
+        } else if (st & sensor::LIDAR_DATA) {
+            if (sensor::read_lidar_packet(*cli, lidar_buf.get(), pf))
                 handle_lidar(lidar_buf.get(), pf);
-        } else if (st & OS1::IMU_DATA) {
-            if (OS1::read_imu_packet(*cli, imu_buf.get(), pf))
+        } else if (st & sensor::IMU_DATA) {
+            if (sensor::read_imu_packet(*cli, imu_buf.get(), pf))
                 handle_imu(imu_buf.get(), pf);
         }
 

@@ -1,9 +1,8 @@
-#include "ouster/os1.h"
+#include "ouster/client.h"
 
 #include <json/json.h>
 
 #include <algorithm>
-#include <array>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -13,27 +12,24 @@
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 
 #include "ouster/compat.h"
-#include "ouster/os1_impl.h"
-#include "ouster/os1_packet.h"
+#include "ouster/impl/client_impl.h"
+#include "ouster/types.h"
 
 namespace ouster {
-namespace OS1 {
+namespace sensor {
 
 namespace chrono = std::chrono;
 
 namespace {
 
-const std::array<std::pair<lidar_mode, std::string>, 5> lidar_mode_strings = {
-    {{MODE_512x10, "512x10"},
-     {MODE_512x20, "512x20"},
-     {MODE_1024x10, "1024x10"},
-     {MODE_1024x20, "1024x20"},
-     {MODE_2048x10, "2048x10"}}};
+// default udp receive buffer size on windows is very low -- use 256K
+const int RCVBUF_SIZE = 256 * 1024;
 
 int32_t get_sock_port(int sock_fd) {
     struct sockaddr_storage ss;
@@ -97,6 +93,13 @@ int udp_data_socket(int port) {
 
     if (!socket_valid(socket_set_non_blocking(sock_fd))) {
         std::cerr << "udp fcntl(): " << socket_get_error() << std::endl;
+        socket_close(sock_fd);
+        return SOCKET_ERROR;
+    }
+
+    if (!socket_valid(setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF,
+                                 (char*)&RCVBUF_SIZE, sizeof(RCVBUF_SIZE)))) {
+        std::cerr << "udp setsockopt(): " << socket_get_error() << std::endl;
         socket_close(sock_fd);
         return SOCKET_ERROR;
     }
@@ -242,104 +245,6 @@ bool collect_metadata(client& cli, const int sock_fd, chrono::seconds timeout) {
 }
 }  // namespace
 
-data_format default_data_format(lidar_mode mode) {
-    auto repeat = [](int n, const std::vector<uint32_t>& v) {
-        std::vector<uint32_t> res{};
-        for (int i = 0; i < n; i++) res.insert(res.end(), v.begin(), v.end());
-        return res;
-    };
-
-    uint32_t pixels_per_column = 64;
-    uint32_t columns_per_packet = 16;
-    uint32_t columns_per_frame = n_cols_of_lidar_mode(mode);
-
-    std::vector<uint32_t> offset;
-    switch (columns_per_frame) {
-        case 512:
-            offset = repeat(16, {9, 6, 3, 0});
-            break;
-        case 1024:
-            offset = repeat(16, {18, 12, 6, 0});
-            break;
-        case 2048:
-            offset = repeat(16, {36, 24, 12, 0});
-            break;
-        default:
-            offset = repeat(16, {18, 12, 6, 0});
-            break;
-    }
-
-    return {pixels_per_column, columns_per_packet, columns_per_frame, offset};
-}
-
-double default_lidar_origin_to_beam_origin(std::string prod_line){
-    double lidar_origin_to_beam_origin_mm = 12.163; // default for gen 1
-    if (prod_line.find("OS-0-") == 0)
-        lidar_origin_to_beam_origin_mm = 27.67;
-    else if (prod_line.find("OS-1-") == 0)
-        lidar_origin_to_beam_origin_mm = 15.806;
-    else if (prod_line.find("OS-2-") == 0)
-        lidar_origin_to_beam_origin_mm = 13.762;
-    return lidar_origin_to_beam_origin_mm;
-}
-
-std::string to_string(version v) {
-    if (v == invalid_version) return "UNKNOWN";
-
-    std::stringstream ss{};
-    ss << "v" << v.major << "." << v.minor << "." << v.patch;
-    return ss.str();
-}
-
-version version_of_string(const std::string& s) {
-    std::istringstream is{s};
-    char c1, c2, c3;
-    version v;
-
-    is >> c1 >> v.major >> c2 >> v.minor >> c3 >> v.patch;
-
-    if (is && is.eof() && c1 == 'v' && c2 == '.' && c3 == '.' && v.major >= 0 &&
-        v.minor >= 0 && v.patch >= 0)
-        return v;
-    else
-        return invalid_version;
-};
-
-std::string to_string(lidar_mode mode) {
-    auto end = lidar_mode_strings.end();
-    auto res = std::find_if(lidar_mode_strings.begin(), end,
-                            [&](const std::pair<lidar_mode, std::string>& p) {
-                                return p.first == mode;
-                            });
-
-    return res == end ? "UNKNOWN" : res->second;
-}
-
-lidar_mode lidar_mode_of_string(const std::string& s) {
-    auto end = lidar_mode_strings.end();
-    auto res = std::find_if(lidar_mode_strings.begin(), end,
-                            [&](const std::pair<lidar_mode, std::string>& p) {
-                                return p.second == s;
-                            });
-
-    return res == end ? lidar_mode(0) : res->first;
-}
-
-int n_cols_of_lidar_mode(lidar_mode mode) {
-    switch (mode) {
-        case MODE_512x10:
-        case MODE_512x20:
-            return 512;
-        case MODE_1024x10:
-        case MODE_1024x20:
-            return 1024;
-        case MODE_2048x10:
-            return 2048;
-        default:
-            throw std::invalid_argument{"n_cols_of_lidar_mode"};
-    }
-}
-
 std::string get_metadata(client& cli, int timeout_sec) {
     if (!cli.meta) {
         int sock_fd = cfg_socket(cli.hostname.c_str());
@@ -360,99 +265,6 @@ std::string get_metadata(client& cli, int timeout_sec) {
     return Json::writeString(builder, cli.meta);
 }
 
-sensor_info parse_metadata(const std::string& meta) {
-    Json::Value root{};
-    Json::CharReaderBuilder builder{};
-    std::string errors{};
-    std::stringstream ss{meta};
-
-    if (meta.size()) {
-        if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::runtime_error{errors.c_str()};
-    }
-
-    sensor_info info{};
-
-    info.hostname = root["hostname"].asString();
-    info.sn = root["prod_sn"].asString();
-    info.fw_rev = root["build_rev"].asString();
-    info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
-    info.prod_line = root["prod_line"].asString();
-
-    // "data_format" introduced in fw 1.14. Fall back to common 1.13 parameters
-    // otherwise
-    if (root.isMember("data_format")) {
-        info.format.pixels_per_column =
-            root["data_format"]["pixels_per_column"].asInt();
-        info.format.columns_per_packet =
-            root["data_format"]["columns_per_packet"].asInt();
-        info.format.columns_per_frame =
-            root["data_format"]["columns_per_frame"].asInt();
-
-        for (const auto& v : root["data_format"]["pixel_shift_by_row"])
-            info.format.pixel_shift_by_row.push_back(v.asInt());
-    } else {
-        info.format = default_data_format(info.mode);
-    }
-    // "lidar_origin_to_beam_origin_mm" introduced in fw 1.14. Fall back to common
-    // 1.13 parameters otherwise
-    if (root.isMember("lidar_origin_to_beam_origin_mm")) {
-        info.lidar_origin_to_beam_origin_mm =
-            root["lidar_origin_to_beam_origin_mm"].asDouble();
-    } else {
-        info.lidar_origin_to_beam_origin_mm =
-            default_lidar_origin_to_beam_origin(info.prod_line);
-    }
-
-    for (const auto& v : root["beam_altitude_angles"])
-        info.beam_altitude_angles.push_back(v.asDouble());
-
-    for (const auto& v : root["beam_azimuth_angles"])
-        info.beam_azimuth_angles.push_back(v.asDouble());
-
-    for (const auto& v : root["imu_to_sensor_transform"])
-        info.imu_to_sensor_transform.push_back(v.asDouble());
-
-    for (const auto& v : root["lidar_to_sensor_transform"])
-        info.lidar_to_sensor_transform.push_back(v.asDouble());
-
-    return info;
-}
-
-std::string to_string(const sensor_info& info) {
-    Json::Value root{};
-    root["hostname"] = info.hostname;
-    root["prod_sn"] = info.sn;
-    root["build_rev"] = info.fw_rev;
-    root["lidar_mode"] = to_string(info.mode);
-    root["prod_line"] = info.prod_line;
-    root["data_format"]["pixels_per_column"] = info.format.pixels_per_column;
-    root["data_format"]["columns_per_packet"] = info.format.columns_per_packet;
-    root["data_format"]["columns_per_frame"] = info.format.columns_per_frame;
-    root["lidar_origin_to_beam_origin_mm"] = info.lidar_origin_to_beam_origin_mm;
-
-    for (auto i : info.format.pixel_shift_by_row)
-        root["data_format"]["pixel_shift_by_row"].append(i);
-
-    for (auto i : info.beam_azimuth_angles)
-        root["beam_azimuth_angles"].append(i);
-
-    for (auto i : info.beam_altitude_angles)
-        root["beam_altitude_angles"].append(i);
-
-    for (auto i : info.imu_to_sensor_transform)
-        root["imu_to_sensor_transform"].append(i);
-
-    for (auto i : info.imu_to_sensor_transform)
-        root["lidar_to_sensor_transform"].append(i);
-
-    Json::StreamWriterBuilder builder;
-    builder["enableYAMLCompatibility"] = true;
-    builder["precision"] = 6;
-    builder["indentation"] = "    ";
-    return Json::writeString(builder, root);
-}
-
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
     auto cli = std::make_shared<client>();
@@ -461,14 +273,19 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
     cli->lidar_fd = udp_data_socket(lidar_port);
     cli->imu_fd = udp_data_socket(imu_port);
 
+    if (!socket_valid(cli->lidar_fd) || !socket_valid(cli->imu_fd))
+        return std::shared_ptr<client>();
+
     return cli;
 }
 
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    lidar_mode mode, int lidar_port,
-                                    int imu_port, int timeout_sec) {
+                                    lidar_mode mode, timestamp_mode ts_mode,
+                                    int lidar_port, int imu_port,
+                                    int timeout_sec) {
     auto cli = init_client(hostname, lidar_port, imu_port);
+    if (!cli) return std::shared_ptr<client>();
 
     // update requested ports to actual bound ports
     lidar_port = get_sock_port(cli->lidar_fd);
@@ -477,9 +294,6 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         return std::shared_ptr<client>();
 
     int sock_fd = cfg_socket(hostname.c_str());
-
-    std::string errors{};
-
     if (!socket_valid(sock_fd)) return std::shared_ptr<client>();
 
     std::string res;
@@ -500,9 +314,19 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         res);
     success &= res == "set_config_param";
 
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
-    success &= res == "set_config_param";
+    // if specified (not UNSPEC), set the lidar and timestamp modes
+    if (mode) {
+        success &= do_tcp_cmd(
+            sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
+        success &= res == "set_config_param";
+    }
+
+    if (ts_mode) {
+        success &= do_tcp_cmd(
+            sock_fd, {"set_config_param", "timestamp_mode", to_string(ts_mode)},
+            res);
+        success &= res == "set_config_param";
+    }
 
     success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
     success &= res == "reinitialize";
@@ -564,5 +388,5 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
     return recv_fixed(cli.imu_fd, buf, pf.imu_packet_size);
 }
 
-}  // namespace OS1
+}  // namespace sensor
 }  // namespace ouster

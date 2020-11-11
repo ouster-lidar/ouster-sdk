@@ -1,14 +1,41 @@
+/**
+ * @file
+ * @brief Corrects beam uniformity by minimizing median difference between rows,
+ *        thereby correcting subtle horizontal line artifacts in images,
+ *        especially the noise image.
+ */
+
 #pragma once
 
-/**
- * Corrects beam uniformity by minimizing median difference between rows
- */
+#include <Eigen/Eigen>
+#include <algorithm>
+#include <vector>
+
+namespace ouster {
+namespace viz {
+
 class BeamUniformityCorrector {
    private:
+    // damping makes the correction smooth and avoids flickering.
+    // however, it becomes slower to update.
+    // 1.0 --> slowest, smoothest
+    // 0.0 --> fastest, prone to flickering
+    const double damping = 0.92;
+    // for performance reasons, we may not want to update every frame
+    // but rather every 8 or so frames.
+    const int update_every = 8;
+    int counter = 0;
+
     std::vector<double> dark_count;
 
-    std::vector<double> compute_dark_count(
-        const Eigen::Ref<Eigen::ArrayXXd> image) {
+    /**
+     * computes the dark count, i.e. an additive offset in the brightness of the
+     * image, to smoothe the difference between rows
+     *
+     * @param image Const reference to an image as a 2D Eigen array
+     */
+    static std::vector<double> compute_dark_count(
+        const Eigen::Ref<const Eigen::ArrayXXd>& image) {
         const size_t image_h = image.rows();
         const size_t image_w = image.cols();
 
@@ -47,21 +74,43 @@ class BeamUniformityCorrector {
         return new_dark_count;
     }
 
+    /**
+     * updates the dark count by using exponential smoothing:
+     * https://en.wikipedia.org/wiki/Exponential_smoothing
+     * and then updates the dark_count member variable with the new result
+     *
+     * @param image Const reference to an image as a 2D Eigen array
+     */
+    void update_dark_count(const Eigen::Ref<const Eigen::ArrayXXd>& image) {
+        const auto new_dark_count = compute_dark_count(image);
+        const size_t image_h = image.rows();
+        auto dark_count_map =
+            Eigen::Map<Eigen::ArrayXd>(dark_count.data(), image_h);
+        const auto new_dark_count_map =
+            Eigen::Map<const Eigen::ArrayXd>(new_dark_count.data(), image_h);
+        dark_count_map *= damping;
+        dark_count_map += new_dark_count_map * (1.0 - damping);
+    }
+
    public:
+    /**
+     * Applies dark count correction to an image, modifying it in-place
+     * to have reduced horizontal line artifacts.
+     *
+     * @param image Mutable reference to an image as a 2D Eigen array,
+     *              to be modified in-place
+     */
     void correct(Eigen::Ref<Eigen::ArrayXXd> image) {
         const size_t image_h = image.rows();
 
-        if (dark_count.size() == 0) {
-            dark_count = compute_dark_count(image);
-        } else {
-            // update dark_count with a decaying weighted average
-            const auto new_dark_count = compute_dark_count(image);
-            Eigen::Map<Eigen::ArrayXd>(dark_count.data(), image_h) *= 0.95;
-            Eigen::Map<Eigen::ArrayXd>(dark_count.data(), image_h) +=
-                Eigen::Map<const Eigen::ArrayXd>(new_dark_count.data(),
-                                                 image_h) *
-                0.05;
+        if (counter == 0) {
+            if (dark_count.size() == 0) {
+                dark_count = compute_dark_count(image);
+            } else {
+                update_dark_count(image);
+            }
         }
+        counter = (counter + 1) % update_every;
 
         // apply the dark count correction row by row
         for (size_t i = 0; i < image_h; i++) {
@@ -75,3 +124,5 @@ class BeamUniformityCorrector {
         }
     }
 };
+}  // namespace viz
+}  // namespace ouster

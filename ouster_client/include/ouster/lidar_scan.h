@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/compat.h"
+#include "ouster/types.h"
 
 namespace ouster {
 
@@ -92,7 +92,8 @@ struct LidarScan {
 
     template <bool Const>
     struct PixelRef_ {
-        using lidar_scan = typename std::conditional<Const, const LidarScan, LidarScan>::type;
+        using lidar_scan =
+            typename std::conditional<Const, const LidarScan, LidarScan>::type;
 
         void operator=(const Pixel& p) {
             const index_t hh = li_->h;
@@ -120,30 +121,33 @@ struct LidarScan {
             : pixel_index_{pixel_index}, li_{li} {}
         index_t pixel_index_;
         lidar_scan* li_;
-        friend class LidarScan;
+        friend struct LidarScan;
     };
 
     using PixelRef = PixelRef_<false>;
     using ConstPixelRef = PixelRef_<true>;
 
-
-    // Minimal set of operations to support os1_util.h:batch_to_iter; not
-    // really a proper iterator.
-    // Please note that the ordering of the iterator is column major
+    // Minimal set of operations to support batch_to_iter; not really a proper
+    // iterator. Please note that the ordering of the iterator is column major
     // and not row major like the actual underlying data.
     template <bool Const>
     struct iterator_ {
-        using iterator_category = std::output_iterator_tag;
+        using iterator_category = std::random_access_iterator_tag;
         using value_type = LidarScan::Pixel;
-        using difference_type = void;
+        using difference_type = index_t;
         using pointer = void;
-        using reference = typename std::conditional<Const, ConstPixelRef, PixelRef>::type;
+        using reference =
+            typename std::conditional<Const, ConstPixelRef, PixelRef>::type;
 
-        using lidar_scan = typename std::conditional<Const, const LidarScan, LidarScan>::type;
+        using lidar_scan =
+            typename std::conditional<Const, const LidarScan, LidarScan>::type;
 
         inline iterator_ operator++() {
             pixel_index_++;
             return *this;
+        }
+        inline difference_type operator-(const iterator_& other) {
+            return pixel_index_ - other.pixel_index_;
         }
         inline reference operator*() { return reference(pixel_index_, li_); }
 
@@ -168,7 +172,7 @@ struct LidarScan {
             : pixel_index_{pixel_index}, li_{li} {}
         index_t pixel_index_;
         lidar_scan* li_;
-        friend class LidarScan;
+        friend struct LidarScan;
     };
 
     using iterator = iterator_<false>;
@@ -182,7 +186,14 @@ struct LidarScan {
 
     iterator begin() { return iterator(0, this); }
     iterator end() { return iterator(w * h, this); }
+};
 
+/**
+ * Lookup table of beam directions and offsets
+ */
+struct XYZLut {
+    LidarScan::Points direction;
+    LidarScan::Points offset;
 };
 
 /**
@@ -194,52 +205,30 @@ struct LidarScan {
  * The ordering of the rows is consistent with LidarScan::ind(u, v) for the
  * 3D point corresponding to the pixel at row u, column v in the LidarScan.
  * @param w number of columns in the lidar scan. e.g. 512, 1024, or 2048.
- * @param h number of rows in the lidar scan. e.g. 64 for the OS1-64
- * @param range_unit the unit, in meters, of the range,  e.g. OS1::range_unit
+ * @param h number of rows in the lidar scan
+ * @param range_unit the unit, in meters, of the range,  e.g. sensor::range_unit
  * @param lidar_origin_to_beam_origin_mm the radius to the beam origin point of
  *  the unit, in millimeters
  * @param azimuth_angles_deg azimuth offsets in degrees for each of h beams
  * @param altitude_angles_Deg altitude in degrees for each of h beams
  * @return xyz direction unit vectors for each point in the lidar scan
  */
-struct xyz_lut {
-    LidarScan::Points direction;
-    LidarScan::Points offset;
-};
+XYZLut make_xyz_lut(LidarScan::index_t w, LidarScan::index_t h,
+                    double range_unit, double lidar_origin_to_beam_origin_mm,
+                    const std::vector<double>& azimuth_angles_deg,
+                    const std::vector<double>& altitude_angles_deg);
 
-inline xyz_lut make_xyz_lut(
-    const LidarScan::index_t w, const LidarScan::index_t h,
-    const double range_unit, const double lidar_origin_to_beam_origin_mm,
-    const std::vector<double>& azimuth_angles_deg,
-    const std::vector<double>& altitude_angles_deg) {
 
-    Eigen::ArrayXd azimuth(w * h);
-    Eigen::ArrayXd altitude(w * h);
-    const double azimuth_radians = M_PI * 2.0 / w;
-    for (LidarScan::index_t v = 0; v < w; v++) {
-        for (LidarScan::index_t u = 0; u < h; u++) {
-            LidarScan::index_t i = u * w + v;
-            azimuth(i) = azimuth_angles_deg[u] * M_PI / 180.0 +
-                         (v + w / 2) * azimuth_radians;
-            altitude(i) = altitude_angles_deg[u] * M_PI / 180.0;
-        }
-    }
-    xyz_lut lut;
-    lut.direction = LidarScan::Points{w * h, 3};
-    lut.direction.col(0) = altitude.cos() * azimuth.cos();
-    lut.direction.col(1) = -altitude.cos() * azimuth.sin();
-    lut.direction.col(2) = altitude.sin();
-    lut.direction *= range_unit;
-
-    const double lidar_origin_to_beam_origin_m = lidar_origin_to_beam_origin_mm / 1000.0;
-
-    lut.offset = LidarScan::Points{w * h, 3};
-    lut.offset.col(0) = azimuth.cos() - lut.direction.col(0) * lidar_origin_to_beam_origin_m;
-    lut.offset.col(1) = azimuth.sin() - lut.direction.col(0) * lidar_origin_to_beam_origin_m;
-    lut.offset.col(2) = Eigen::ArrayXd::Zero(w * h);
-    lut.offset *= lidar_origin_to_beam_origin_m;
-
-    return lut;
+/**
+ * Convenient overload that uses parameters from the supplied sensor_info
+ * @param sensor metadata returned from the client
+ * @return xyz direction unit vectors for each point in the lidar scan
+ */
+inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
+    return make_xyz_lut(
+        sensor.format.columns_per_frame, sensor.format.pixels_per_column,
+        sensor::range_unit, sensor.lidar_origin_to_beam_origin_mm,
+        sensor.beam_azimuth_angles, sensor.beam_altitude_angles);
 }
 
 /**
@@ -250,8 +239,7 @@ inline xyz_lut make_xyz_lut(
  *         to ith pixel in LidarScan where i = scan.ind(u, v) for a pixel
  *         at row u, column v.
  */
-inline LidarScan::Points cartesian(const LidarScan& scan,
-                                   const xyz_lut& lut) {
+inline LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
     auto raw = lut.direction.colwise() * scan.range().cast<double>();
     return (raw.array() == 0.0).select(raw, raw + lut.offset);
 }

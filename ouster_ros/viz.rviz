@@ -75,7 +75,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.00999999978
       Style: Points
-      Topic: /os1_cloud_node/points
+      Topic: /os_cloud_node/points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -121,11 +121,11 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        os1_imu:
+        os_imu:
           Value: false
-        os1_lidar:
+        os_lidar:
           Value: false
-        os1_sensor:
+        os_sensor:
           Value: true
       Marker Scale: 1
       Name: TF
@@ -133,10 +133,10 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        os1_sensor:
-          os1_imu:
+        os_sensor:
+          os_imu:
             {}
-          os1_lidar:
+          os_lidar:
             {}
       Update Interval: 0
       Value: true
@@ -144,7 +144,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: os1_sensor
+    Fixed Frame: os_sensor
     Frame Rate: 30
   Name: root
   Tools:

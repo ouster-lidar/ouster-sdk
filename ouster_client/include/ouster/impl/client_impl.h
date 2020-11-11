@@ -1,11 +1,12 @@
 #pragma once
 
 #include <json/json.h>
+
 #include "ouster/compat.h"
 #include "stdio.h"
 
 namespace ouster {
-namespace OS1 {
+namespace sensor {
 struct client {
     SOCKET lidar_fd;
     SOCKET imu_fd;
@@ -16,5 +17,5 @@ struct client {
         socket_close(imu_fd);
     }
 };
-}
-}
+}  // namespace sensor
+}  // namespace ouster
