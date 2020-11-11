@@ -1,4 +1,5 @@
 #include "ouster/compat.h"
+
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -89,10 +90,10 @@ int socket_set_non_blocking(SOCKET value) {
 
 int socket_set_reuse(SOCKET value) {
 #ifdef _WIN32
-	u_long reuse = 1;
-	return ioctlsocket(value, SO_REUSEADDR, &reuse);
+    u_long reuse = 1;
+    return ioctlsocket(value, SO_REUSEADDR, &reuse);
 #else
-	int option = 1;
-	return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    int option = 1;
+    return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 #endif
 }

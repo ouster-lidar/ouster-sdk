@@ -1,53 +1,40 @@
+/**
+ * @file
+ * @brief Packet parsing internals
+ */
+
 #pragma once
 
+#include <cstdint>
 #include <cstring>
 
 namespace ouster {
-namespace OS1 {
+namespace sensor {
 namespace impl {
-
-// TODO: these should be read from the packet format
 
 constexpr int pixel_bytes = 12;
 constexpr int imu_packet_size = 48;
 constexpr int cols_per_packet = 16;
-
 constexpr int64_t encoder_ticks_per_rev = 90112;
 
-constexpr int column_bytes_1_13_0 = 16 + (64 * pixel_bytes) + 4;
-
-constexpr int column_bytes_1_14_16 = 16 + (16 * pixel_bytes) + 4;
-constexpr int column_bytes_1_14_32 = 16 + (32 * pixel_bytes) + 4;
-constexpr int column_bytes_1_14_64 = column_bytes_1_13_0;
-constexpr int column_bytes_1_14_128 = 16 + (128 * pixel_bytes) + 4;
-
-constexpr int packet_bytes_1_13_0 = cols_per_packet * column_bytes_1_13_0;
-
-constexpr int packet_bytes_1_14_16 = cols_per_packet * column_bytes_1_14_16;
-constexpr int packet_bytes_1_14_32 = cols_per_packet * column_bytes_1_14_32;
-constexpr int packet_bytes_1_14_64 = packet_bytes_1_13_0;
-constexpr int packet_bytes_1_14_128 = cols_per_packet * column_bytes_1_14_128;
-
-// Reading from the lidar packet.
-
-inline const uint8_t* nth_col(int n, const uint8_t* lidar_buf) {
-    return lidar_buf + (n * column_bytes_1_13_0);
+constexpr int column_bytes(int n_pixels) {
+    return 16 + (n_pixels * pixel_bytes) + 4;
 }
 
-inline const uint8_t* nth_col_16(int n, const uint8_t* lidar_buf) {
-    return lidar_buf + (n * column_bytes_1_14_16);
+constexpr int packet_bytes(int n_pixels) {
+    return cols_per_packet * column_bytes(n_pixels);
 }
 
-inline const uint8_t* nth_col_32(int n, const uint8_t* lidar_buf) {
-    return lidar_buf + (n * column_bytes_1_14_32);
+template <int N_PIXELS>
+const uint8_t* nth_col(int n, const uint8_t* lidar_buf) {
+    return lidar_buf + (n * column_bytes(N_PIXELS));
 }
 
-inline const uint8_t* nth_col_64(int n, const uint8_t* lidar_buf) {
-    return lidar_buf + (n * column_bytes_1_14_64);
-}
-
-inline const uint8_t* nth_col_128(int n, const uint8_t* lidar_buf) {
-    return lidar_buf + (n * column_bytes_1_14_128);
+template <int N_PIXELS>
+inline uint32_t col_valid(const uint8_t* col_buf) {
+    uint32_t res;
+    memcpy(&res, col_buf + column_bytes(N_PIXELS) - 4, sizeof(uint32_t));
+    return res;
 }
 
 inline uint64_t col_timestamp(const uint8_t* col_buf) {
@@ -72,39 +59,6 @@ inline uint16_t col_frame_id(const uint8_t* col_buf) {
     uint16_t res;
     memcpy(&res, col_buf + 10, sizeof(uint16_t));
     return res;
-}
-
-inline uint32_t col_valid_16(const uint8_t* col_buf) {
-    uint32_t res;
-    memcpy(&res, col_buf + column_bytes_1_14_16 - 4,
-           sizeof(uint32_t));
-    return res;
-}
-
-inline uint32_t col_valid_32(const uint8_t* col_buf) {
-    uint32_t res;
-    memcpy(&res, col_buf + column_bytes_1_14_32 - 4,
-           sizeof(uint32_t));
-    return res;
-}
-
-inline uint32_t col_valid_64(const uint8_t* col_buf) {
-    uint32_t res;
-    memcpy(&res, col_buf + column_bytes_1_14_64 - 4,
-           sizeof(uint32_t));
-    return res;
-}
-
-
-inline uint32_t col_valid_128(const uint8_t* col_buf) {
-    uint32_t res;
-    memcpy(&res, col_buf + column_bytes_1_14_128 - 4,
-           sizeof(uint32_t));
-    return res;
-}
-
-inline const uint8_t* nth_px_1_0_0(int n, const uint8_t* col_buf) {
-    return col_buf + 16 + ((n + 4) * pixel_bytes);
 }
 
 inline const uint8_t* nth_px(int n, const uint8_t* col_buf) {
@@ -190,26 +144,40 @@ inline float imu_av_z(const uint8_t* imu_buf) {
     return res;
 }
 
-// for 1.12 imu flip
+template <int N_PIXELS>
+constexpr packet_format packet__1_14_0() {
+    return {
+        impl::packet_bytes(N_PIXELS),
+        impl::imu_packet_size,
+        impl::cols_per_packet,
+        N_PIXELS,
+        impl::encoder_ticks_per_rev,
 
-inline float imu_la_x_1_12_0(const uint8_t* imu_buf) {
-    float res;
-    std::memcpy(&res, imu_buf + 24, sizeof(float));
-    return -res;
-}
+        impl::nth_col<N_PIXELS>,
+        impl::col_timestamp,
+        impl::col_h_angle,
+        impl::col_measurement_id,
+        impl::col_frame_id,
+        impl::col_valid<N_PIXELS>,
 
-inline float imu_la_y_1_12_0(const uint8_t* imu_buf) {
-    float res;
-    std::memcpy(&res, imu_buf + 28, sizeof(float));
-    return -res;
-}
+        impl::nth_px,
+        impl::px_range,
+        impl::px_reflectivity,
+        impl::px_signal_photons,
+        impl::px_noise_photons,
 
-inline float imu_la_z_1_12_0(const uint8_t* imu_buf) {
-    float res;
-    std::memcpy(&res, imu_buf + 32, sizeof(float));
-    return -res;
+        impl::imu_sys_ts,
+        impl::imu_accel_ts,
+        impl::imu_gyro_ts,
+        impl::imu_la_x,
+        impl::imu_la_y,
+        impl::imu_la_z,
+        impl::imu_av_x,
+        impl::imu_av_y,
+        impl::imu_av_z,
+    };
 }
 
 }  // namespace impl
-}  // namespace OS1
-}  // namespace sensors
+}  // namespace sensor
+}  // namespace ouster

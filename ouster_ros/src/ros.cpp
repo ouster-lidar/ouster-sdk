@@ -1,33 +1,35 @@
+#include "ouster_ros/ros.h"
+
 #include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <cassert>
 
-#include "ouster/os1.h"
-#include "ouster/os1_packet.h"
-#include "ouster/os1_util.h"
-#include "ouster_ros/os1_ros.h"
+#include <cassert>
+#include <chrono>
+#include <string>
+#include <vector>
+
+#include "ouster/types.h"
 
 namespace ouster_ros {
-namespace OS1 {
 
-using namespace ouster::OS1;
+namespace sensor = ouster::sensor;
 
-bool read_imu_packet(const client& cli, PacketMsg& m,
-                     const OS1::packet_format& pf) {
+bool read_imu_packet(const sensor::client& cli, PacketMsg& m,
+                     const sensor::packet_format& pf) {
     m.buf.resize(pf.imu_packet_size + 1);
     return read_imu_packet(cli, m.buf.data(), pf);
 }
 
-bool read_lidar_packet(const client& cli, PacketMsg& m,
-                       const OS1::packet_format& pf) {
+bool read_lidar_packet(const sensor::client& cli, PacketMsg& m,
+                       const sensor::packet_format& pf) {
     m.buf.resize(pf.lidar_packet_size + 1);
     return read_lidar_packet(cli, m.buf.data(), pf);
 }
 
 sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame,
-                                   const ouster::OS1::packet_format& pf) {
+                                   const sensor::packet_format& pf) {
     const double standard_g = 9.80665;
     sensor_msgs::Imu m;
     const uint8_t* buf = p.buf.data();
@@ -61,7 +63,7 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame,
     return m;
 }
 
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const CloudOS1& cloud, ns timestamp,
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
                                             const std::string& frame) {
     sensor_msgs::PointCloud2 msg{};
     pcl::toROSMsg(cloud, msg);
@@ -89,5 +91,4 @@ geometry_msgs::TransformStamped transform_to_tf_msg(
 
     return msg;
 }
-}
-}
+}  // namespace ouster_ros

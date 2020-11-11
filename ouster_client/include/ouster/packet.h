@@ -1,39 +1,32 @@
 /**
  * @file
- * @brief Utilities to interpret data returned from the sensor
+ * @brief Utilities to parse lidar and imu packets
  */
 
 #pragma once
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <iterator>
-#include <vector>
 
-#include "ouster/os1_packet.h"
+#include "ouster/impl/packet_impl.h"
+#include "ouster/types.h"
 
 namespace ouster {
-namespace OS1 {
+namespace sensor {
 
-/**
- * Design values for altitude and azimuth offset angles. Can be used if
- * calibrated values are not available.
- */
-extern const std::vector<double> beam_altitude_angles;
-extern const std::vector<double> beam_azimuth_angles;
+constexpr packet_format packet__1_13_0 = impl::packet__1_14_0<64>();
 
-/**
- * Unit of range from OS1 packet, in metres.
- */
-constexpr double range_unit = 0.001;  // m
+constexpr packet_format packet__1_14_0__16 = impl::packet__1_14_0<16>();
 
-/**
- * Design values for imu and lidar to sensor-frame transforms. See the OS-1
- * manual for details.
- */
-extern const std::vector<double> imu_to_sensor_transform;
-extern const std::vector<double> lidar_to_sensor_transform;
+constexpr packet_format packet__1_14_0__32 = impl::packet__1_14_0<32>();
+
+constexpr packet_format packet__1_14_0__64 = impl::packet__1_14_0<64>();
+
+constexpr packet_format packet__1_14_0__128 = impl::packet__1_14_0<128>();
+
 
 /**
  * Make a function that batches a single scan (revolution) of data to a
@@ -44,11 +37,10 @@ extern const std::vector<double> lidar_to_sensor_transform;
  *
  * The value type is assumed to be constructed from 9 values: x, y, z,
  * (padding), intensity, ts, reflectivity, noise, range (in mm) and
- * default-constructible. It should be compatible with PointOS1 in the
- * ouster_ros package.
+ * default-constructible. It should be compatible with ouster_ros::Point
  *
  * @param w number of columns in the lidar scan. One of 512, 1024, or 2048.
- * @param h number of rows in the lidar scan. 64 for the OS1 family of sensors.
+ * @param h number of rows in the lidar scan
  * @param empty value to insert for missing data
  * @param c function outputs a type to which iterator_type can be assigned,
  *          with the following input arguments:
@@ -66,8 +58,9 @@ extern const std::vector<double> lidar_to_sensor_transform;
  * which data is added for every point in the scan.
  */
 template <typename iterator_type, typename F, typename C>
-std::function<void(const uint8_t*, iterator_type it)> batch_to_iter(int w,
-    const packet_format& pf, const typename iterator_type::value_type& empty,
+std::function<void(const uint8_t*, iterator_type it)> batch_to_iter(
+    int w, const packet_format& pf,
+    const typename std::iterator_traits<iterator_type>::value_type& empty,
     C&& c, F&& f) {
     int h = pf.pixels_per_column;
     int next_m_id{w};
@@ -122,5 +115,6 @@ std::function<void(const uint8_t*, iterator_type it)> batch_to_iter(int w,
         }
     };
 }
-}  // namespace OS1
+
+}  // namespace sensor
 }  // namespace ouster

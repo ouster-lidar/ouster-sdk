@@ -1,9 +1,13 @@
+/**
+ * @file
+ * @brief Compatibility with windows (unsupported)
+ */
+
 #pragma once
 
 #include <string>
-#include <vector>
 
-#if defined _WIN32  // --------- Compiling on Windows ---------
+#if defined _WIN32
 #define WPCAP 1
 // Try and limit the stuff windows brings in
 #define WIN32_LEAN_AND_MEAN
@@ -15,13 +19,13 @@
 #define VTK_FALLTHROUGH [[fallthrough]]
 
 // Windows headers
-#include <process.h>
 #include <WS2tcpip.h>
-#include <intrin.h>
-#include <winbase.h>
-#include <winsock2.h>
-#include <windows.h>
 #include <WinInet.h>
+#include <intrin.h>
+#include <process.h>
+#include <winbase.h>
+#include <windows.h>
+#include <winsock2.h>
 
 // ssize_t is available in vs
 #ifdef _MSC_VER
@@ -58,30 +62,24 @@ struct udphdr {
 
 #define ETHERTYPE_IP 0x0800
 
-// Fix windows issue with M_PI
-#define _USE_MATH_DEFINES  // for C++
-#include <math.h>
-#include <cmath>
-
 #define SET_SIN_ADDR(data, address) data.addr.sin_addr.S_un.S_addr = (address)
 #else  // --------- Compiling on Linux ---------
 // Linux headers
 #include <arpa/inet.h>
 #include <fcntl.h>
-#include <math.h>
+#include <net/ethernet.h>
 #include <netdb.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <net/ethernet.h>
-#include <netinet/ip.h>
-#include <netinet/udp.h>
 
 // Define windows types for linux
 typedef int SOCKET;
 typedef fd_set FDSET;
 #define SOCKET_ERROR -1
-#define SET_SIN_ADDR(data, address) data.addr.sin_addr = { address }
+#define SET_SIN_ADDR(data, address) data.addr.sin_addr = {address}
 #endif  // --------- End Platform Differentiation Block ---------
 
 /**

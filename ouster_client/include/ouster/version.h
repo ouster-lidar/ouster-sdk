@@ -1,12 +1,17 @@
+/**
+ * @file
+ * @brief Simple version struct
+ */
+
 #pragma once
 
 namespace ouster {
-namespace OS1 {
+namespace util {
 
 struct version {
-    int16_t major;
-    int16_t minor;
-    int16_t patch;
+    uint16_t major;
+    uint16_t minor;
+    uint16_t patch;
 };
 
 const version invalid_version = {0, 0, 0};
@@ -24,12 +29,18 @@ inline bool operator<=(const version& u, const version& v) {
     return u < v || u == v;
 }
 
+inline bool operator!=(const version& u, const version& v) { return !(u == v); }
+
+inline bool operator>=(const version& u, const version& v) { return !(u < v); }
+
+inline bool operator>(const version& u, const version& v) { return !(u <= v); }
+
 /**
  * Get string representation of a version
  * @param version
  * @return string representation of the version
  */
-std::string to_string(version v);
+std::string to_string(const version& v);
 
 /**
  * Get lidar mode from string
@@ -38,5 +49,5 @@ std::string to_string(version v);
  */
 version version_of_string(const std::string& s);
 
-}
-}
+}  // namespace util
+}  // namespace ouster
