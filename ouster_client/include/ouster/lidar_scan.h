@@ -5,10 +5,18 @@
 
 #pragma once
 
+#if defined _WIN32
+#pragma warning(push, 2)
+#endif
+
 #include <Eigen/Eigen>
+
+#if defined _WIN32
+#pragma warning(pop)
+#endif
+
 #include <chrono>
 #include <cmath>
-#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -22,16 +30,11 @@ struct LidarScan {
     using raw_t = uint32_t;
     using data_t = Eigen::Array<raw_t, Eigen::Dynamic, 4>;
     using index_t = std::ptrdiff_t;
-    using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
 
-    struct Pixel {
-        raw_t range;
-        raw_t intensity;
-        raw_t noise;
-        raw_t reflectivity;
-        ts_t ts;
-        static inline Pixel empty_val() { return Pixel{0, 0, 0, 0, ts_t(0)}; }
-    };
+    template <class T>
+    using field_t = Eigen::Array<T, Eigen::Dynamic, 1>;
+
+    using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
 
     index_t w;
     index_t h;
@@ -81,111 +84,6 @@ struct LidarScan {
     data_t::ConstColXpr reflectivity() const {
         return data.col(LidarScanIndex::REFLECTIVITY);
     }
-
-    static inline Pixel pixel(index_t, index_t, ts_t ts, ts_t, uint32_t range,
-                              uint16_t intensity, uint16_t noise,
-                              uint16_t reflectivity) {
-        return Pixel{static_cast<raw_t>(range), static_cast<raw_t>(intensity),
-                     static_cast<raw_t>(noise),
-                     static_cast<raw_t>(reflectivity), ts};
-    }
-
-    template <bool Const>
-    struct PixelRef_ {
-        using lidar_scan =
-            typename std::conditional<Const, const LidarScan, LidarScan>::type;
-
-        void operator=(const Pixel& p) {
-            const index_t hh = li_->h;
-            const index_t u = pixel_index_ % hh;
-            const index_t v = pixel_index_ / hh;
-            li_->range()(li_->ind(u, v)) = p.range;
-            li_->intensity()(li_->ind(u, v)) = p.intensity;
-            li_->noise()(li_->ind(u, v)) = p.noise;
-            li_->reflectivity()(li_->ind(u, v)) = p.reflectivity;
-            li_->ts[v] = p.ts;
-        }
-
-        operator Pixel() const {
-            const index_t hh = li_->h;
-            const index_t u = pixel_index_ % hh;
-            const index_t v = pixel_index_ / hh;
-            return Pixel{li_->range()(li_->ind(u, v)),
-                         li_->intensity()(li_->ind(u, v)),
-                         li_->noise()(li_->ind(u, v)),
-                         li_->reflectivity()(li_->ind(u, v)), li_->ts[v]};
-        }
-
-       private:
-        PixelRef_(index_t pixel_index, lidar_scan* li)
-            : pixel_index_{pixel_index}, li_{li} {}
-        index_t pixel_index_;
-        lidar_scan* li_;
-        friend struct LidarScan;
-    };
-
-    using PixelRef = PixelRef_<false>;
-    using ConstPixelRef = PixelRef_<true>;
-
-    // Minimal set of operations to support batch_to_iter; not really a proper
-    // iterator. Please note that the ordering of the iterator is column major
-    // and not row major like the actual underlying data.
-    template <bool Const>
-    struct iterator_ {
-        using iterator_category = std::random_access_iterator_tag;
-        using value_type = LidarScan::Pixel;
-        using difference_type = index_t;
-        using pointer = void;
-        using reference =
-            typename std::conditional<Const, ConstPixelRef, PixelRef>::type;
-
-        using lidar_scan =
-            typename std::conditional<Const, const LidarScan, LidarScan>::type;
-
-        inline iterator_ operator++() {
-            pixel_index_++;
-            return *this;
-        }
-        inline difference_type operator-(const iterator_& other) {
-            return pixel_index_ - other.pixel_index_;
-        }
-        inline reference operator*() { return reference(pixel_index_, li_); }
-
-        inline reference operator[](index_t i) {
-            return PixelRef(pixel_index_ + i, li_);
-        }
-
-        friend iterator_ operator+(iterator_ lhs, index_t i) {
-            return iterator_{lhs.pixel_index_ + i, lhs.li_};
-        }
-
-        friend bool operator==(const iterator_& lhs, const iterator_& rhs) {
-            return lhs.pixel_index_ == rhs.pixel_index_;
-        }
-
-        friend bool operator!=(const iterator_& lhs, const iterator_& rhs) {
-            return !(lhs == rhs);
-        }
-
-       private:
-        iterator_(index_t pixel_index, lidar_scan* li)
-            : pixel_index_{pixel_index}, li_{li} {}
-        index_t pixel_index_;
-        lidar_scan* li_;
-        friend struct LidarScan;
-    };
-
-    using iterator = iterator_<false>;
-    using const_iterator = iterator_<true>;
-
-    const_iterator cbegin() const { return const_iterator(0, this); }
-    const_iterator cend() const { return const_iterator(w * h, this); }
-
-    const_iterator begin() const { return const_iterator(0, this); }
-    const_iterator end() const { return const_iterator(w * h, this); }
-
-    iterator begin() { return iterator(0, this); }
-    iterator end() { return iterator(w * h, this); }
 };
 
 /**
@@ -209,15 +107,16 @@ struct XYZLut {
  * @param range_unit the unit, in meters, of the range,  e.g. sensor::range_unit
  * @param lidar_origin_to_beam_origin_mm the radius to the beam origin point of
  *  the unit, in millimeters
+ * @param transform additional transformation to apply to resulting points
  * @param azimuth_angles_deg azimuth offsets in degrees for each of h beams
  * @param altitude_angles_Deg altitude in degrees for each of h beams
  * @return xyz direction unit vectors for each point in the lidar scan
  */
 XYZLut make_xyz_lut(LidarScan::index_t w, LidarScan::index_t h,
                     double range_unit, double lidar_origin_to_beam_origin_mm,
+                    const sensor::mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg);
-
 
 /**
  * Convenient overload that uses parameters from the supplied sensor_info
@@ -228,7 +127,59 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
     return make_xyz_lut(
         sensor.format.columns_per_frame, sensor.format.pixels_per_column,
         sensor::range_unit, sensor.lidar_origin_to_beam_origin_mm,
-        sensor.beam_azimuth_angles, sensor.beam_altitude_angles);
+        sensor.lidar_to_sensor_transform, sensor.beam_azimuth_angles,
+        sensor.beam_altitude_angles);
+}
+
+/**
+ * Generate a destaggered version of a field from LidarScan,
+ * used for visualizing lidar data as an image view, or for algorithms
+ * that exploit the structure of the lidar data, such as
+ * beam_uniformity in ouster_viz, or computer vision algorithms.
+ * You can re-stagger a destaggered image by setting template parameter
+ * direction to be -1.
+ *
+ * For example:
+ *     destagger(lidarscan.intensity())
+ *     destagger(lidarscan.intensity().cast<double>())
+ *
+ * @param field
+ * @param pixel_shift_by_row
+ * @return destaggered version of field
+ */
+template <class T, int direction = 1>
+inline LidarScan::field_t<T> destagger(
+    const Eigen::Ref<const LidarScan::field_t<T>> field,
+    const std::vector<int>& pixel_shift_by_row) {
+    static_assert(direction == 1 || direction == -1,
+                  "Destagger direction should be only +1 or -1");
+    const LidarScan::index_t h = pixel_shift_by_row.size();
+    const LidarScan::index_t w = field.size() / h;
+
+    Eigen::Array<T, Eigen::Dynamic, 1> destaggered(h * w);
+    for (LidarScan::index_t u = 0; u < h; u++) {
+        const LidarScan::index_t offset =
+            (direction * pixel_shift_by_row[u] + w) % w;
+
+        destaggered.segment(u * w + offset, w - offset) =
+            field.segment(u * w, w - offset);
+        destaggered.segment(u * w, offset) =
+            field.segment(u * w + w - offset, offset);
+    }
+    return destaggered;
+}
+
+/**
+ * Convenient overload that uses parameters from the supplied sensor_info
+ * @param field
+ * @param sensor
+ * @return destaggered version of field
+ */
+template <class T>
+inline LidarScan::field_t<T> destagger(
+    const Eigen::Ref<const LidarScan::field_t<T>> field,
+    const sensor::sensor_info& sensor) {
+    return destagger(field, sensor.format.pixel_shift_by_row);
 }
 
 /**

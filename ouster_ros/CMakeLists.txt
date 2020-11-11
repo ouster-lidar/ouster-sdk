@@ -20,14 +20,12 @@ find_package(
              tf2_ros
              tf2_geometry_msgs)
 
-find_package(OpenGL REQUIRED)
-find_package(glfw3 REQUIRED)
 find_package(Threads REQUIRED)
-find_package(ouster_client REQUIRED)
-find_package(ouster_viz REQUIRED)
+find_package(ouster_client REQUIRED HINTS ../)
+find_package(ouster_viz REQUIRED HINTS ../)
 
 # ==== Options ====
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 add_compile_options(-Wall -Wextra -Werror)
 
 # ==== Catkin ====

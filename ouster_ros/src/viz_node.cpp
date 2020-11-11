@@ -41,31 +41,27 @@ int main(int argc, char** argv) {
     const size_t H = info.format.pixels_per_column;
     const size_t W = info.format.columns_per_frame;
 
-    auto packet_format = sensor::get_format(info.format);
+    auto packet_format = sensor::get_format(info);
 
     auto xyz_lut = ouster::make_xyz_lut(info);
 
     viz::PointViz point_viz(
         {viz::CloudSetup{
-            xyz_lut.direction.data(),
-            xyz_lut.offset.data(),
+            xyz_lut.direction.data(), xyz_lut.offset.data(),
             info.format.columns_per_frame * info.format.pixels_per_column,
-            info.format.columns_per_frame,
-            {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}}},
+            info.format.columns_per_frame, info.extrinsic.data()}},
         "Ouster Viz (ROS)");
-
-    ouster::LidarScan ls(W, H);
-    auto it = ls.begin();
 
     viz::LidarScanViz lidar_scan_viz(info, point_viz);
 
-    auto batch_and_display = sensor::batch_to_iter<ouster::LidarScan::iterator>(
-        W, packet_format, ouster::LidarScan::Pixel::empty_val(),
-        &ouster::LidarScan::pixel,
+    ouster::LidarScan ls(W, H);
+
+    auto batch_and_display = sensor::batch_to_scan(
+        W, packet_format,
         [&](std::chrono::nanoseconds) mutable { lidar_scan_viz.draw(ls); });
 
     auto lidar_handler = [&](const PacketMsg& pm) mutable {
-        batch_and_display(pm.buf.data(), it);
+        batch_and_display(pm.buf.data(), ls);
     };
 
     auto lidar_packet_sub = nh.subscribe<PacketMsg, const PacketMsg&>(

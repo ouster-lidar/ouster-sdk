@@ -1,6 +1,7 @@
 /**
  * @file
- * @brief Higher-level functions to read data from the ouster sensors as ROS messages
+ * @brief Higher-level functions to read data from the ouster sensors as ROS
+ * messages
  */
 
 #pragma once
@@ -15,6 +16,7 @@
 
 #include "ouster/client.h"
 #include "ouster/types.h"
+#include "ouster/lidar_scan.h"
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/point.h"
 
@@ -55,6 +57,17 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
                                    const sensor::packet_format& pf);
 
 /**
+ * Populate a PCL point cloud from a LidarScan
+ * @param xyz_lut lookup table from sensor beam angles (see lidar_scan.h)
+ * @param scan_ts scan start used to caluclate relative timestamps for points
+ * @param ls input lidar data
+ * @param cloud output pcl pointcloud to populate
+ */
+void scan_to_cloud(const ouster::XYZLut& xyz_lut,
+                   ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
+                   ouster_ros::Cloud& cloud);
+
+/**
  * Serialize a PCL point cloud to a ROS message
  * @param cloud the PCL point cloud to convert
  * @param timestamp the timestamp to give the resulting ROS message
@@ -72,6 +85,6 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
  * @return ROS message suitable for publishing as a transform
  */
 geometry_msgs::TransformStamped transform_to_tf_msg(
-    const std::vector<double>& mat, const std::string& frame,
+    const sensor::mat4d& mat, const std::string& frame,
     const std::string& child_frame);
 }  // namespace ouster_ros

@@ -113,38 +113,40 @@ class LidarScanViz {
             intensity_ae(intensity);
         }
         Eigen::ArrayXd noise = ls.noise().cast<double>();
-        Eigen::ArrayXXd noise_destaggered(h, w);
-        for (size_t u = 0; u < h; u++) {
-            for (size_t v = 0; v < w; v++) {
-                const size_t vv = (v + px_offset[u]) % w;
-                if (cycle_range) {
-                    imdata[u * w + vv] =
-                        std::fmod(range(u * w + v) * sensor::range_unit, 2.0) /
-                        2.0;
-                } else {
-                    imdata[u * w + vv] = range(u * w + v);
-                }
-                imdata[(u + h) * w + vv] = intensity(u * w + v);
-            }
+        Eigen::ArrayXd intensity_destaggered =
+            destagger<double>(intensity, px_offset);
+        Eigen::ArrayXd range_destaggered = destagger<double>(range, px_offset);
+        if (cycle_range) {
+            Eigen::Map<Eigen::Array<GLfloat, Eigen::Dynamic, 1>>(imdata.data(),
+                                                                 w * h) =
+                range_destaggered.cast<GLfloat>().unaryExpr(
+                    [](const GLfloat x) -> GLfloat {
+                        return std::fmod(x * sensor::range_unit, 2.0) * 0.5;
+                    });
+        } else {
+            Eigen::Map<Eigen::Array<GLfloat, Eigen::Dynamic, 1>>(
+                imdata.data(), w * h) = range_destaggered.cast<GLfloat>();
         }
+        Eigen::Map<Eigen::Array<GLfloat, Eigen::Dynamic, 1>>(
+            imdata.data() + w * h, w * h) =
+            intensity_destaggered.cast<GLfloat>();
 
-        // TODO: optimize and move destaggering logic to ouster::LidarScan
+        Eigen::ArrayXd noise_destaggered(h * w);
         if ((show_image && show_noise) || display_mode == MODE_NOISE) {
             // we need to destagger noise because the
             // BeamUniformityCorrector only works on destaggered stuff
-            for (size_t u = 0; u < h; u++) {
-                for (size_t v = 0; v < w; v++) {
-                    const size_t vv = (v + px_offset[u]) % w;
-                    noise_destaggered(u, vv) = noise(u * w + v);
-                }
-            }
-            noise_buc.correct(noise_destaggered);
-            noise_ae(
-                Eigen::Map<Eigen::ArrayXd>(noise_destaggered.data(), w * h));
-            for (size_t u = 0; u < h; u++) {
-                for (size_t v = 0; v < w; v++) {
-                    imdata[2 * h * w + u * w + v] = noise_destaggered(u, v);
-                }
+            noise_destaggered = destagger<double>(noise, px_offset);
+
+            noise_buc.correct(
+                Eigen::Map<Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+                                        Eigen::RowMajor>>(
+                    noise_destaggered.data(), h, w));
+            noise_ae(noise_destaggered);
+
+            if (show_image && show_noise) {
+                Eigen::Map<Eigen::Array<GLfloat, Eigen::Dynamic, 1>>(
+                    imdata.data() + 2 * w * h, w * h) =
+                    noise_destaggered.cast<GLfloat>();
             }
         }
 
@@ -170,13 +172,7 @@ class LidarScanViz {
                                          range.data());
                 break;
             case MODE_NOISE:
-                // zzz...
-                for (size_t u = 0; u < h; u++) {
-                    for (size_t v = 0; v < w; v++) {
-                        const size_t vv = (v + px_offset[u]) % w;
-                        noise(u * w + v) = noise_destaggered(u, vv);
-                    }
-                }
+                noise = destagger<double, -1>(noise_destaggered, px_offset);
                 point_viz.setRangeAndKey(which_cloud, ls.range().data(),
                                          noise.data());
                 break;

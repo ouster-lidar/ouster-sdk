@@ -9,18 +9,14 @@ set(OUSTER_CLIENT_ADDITIONAL_LIB_DIRS "")
 
 if(WIN32)
   find_package(jsoncpp CONFIG REQUIRED)
-  string(FIND ${CMAKE_CXX_FLAGS} "/MT" IS_MT)
-  if(IS_MT EQUAL -1)
-    set(OUSTER_CLIENT_ADDITIONAL_LIBS jsoncpp_lib ws2_32)
-  else()
-    set(OUSTER_CLIENT_ADDITIONAL_LIBS jsoncpp ws2_32)
-  endif()
+  set(OUSTER_CLIENT_ADDITIONAL_LIBS jsoncpp ws2_32)
 
   get_target_property(jsoncpp_INCLUDE_DIRS jsoncpp_lib
                       INTERFACE_INCLUDE_DIRECTORIES)
   set(OUSTER_CLIENT_ADDITIONAL_LIB_DIRS
-      ${_VCPKG_INSTALLED_DIR}/x64-windows-static/lib)
+      ${_VCPKG_INSTALLED_DIR}/x64-windows/lib)
   add_definitions(-D_USE_MATH_DEFINES)
+  add_compile_options(/W4)
 elseif(APPLE)
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(JSONCPP REQUIRED jsoncpp)
@@ -39,10 +35,13 @@ find_package(Eigen3 REQUIRED)
 
 # ==== Options ====
 set(CMAKE_CXX_STANDARD 11)
-add_compile_options(-Wall)
+if(NOT WIN32)
+  add_compile_options(-Wall)
+endif()
 
 # ==== Libraries ====
-add_library(ouster_client STATIC src/client.cpp src/types.cpp src/compat.cpp src/lidar_scan.cpp)
+add_library(ouster_client STATIC src/client.cpp src/types.cpp src/compat.cpp
+                                 src/lidar_scan.cpp)
 set_target_properties(ouster_client PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(ouster_client PUBLIC ${OUSTER_CLIENT_ADDITIONAL_LIBS})
 target_include_directories(ouster_client
@@ -58,4 +57,5 @@ endif()
 # ==== Executables ====
 add_executable(ouster_client_example src/main.cpp)
 target_link_libraries(ouster_client_example ouster_client)
-target_include_directories(ouster_client_example PRIVATE include)
+target_include_directories(ouster_client_example PRIVATE include
+                                                         ${EIGEN3_INCLUDE_DIR})

@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     uint32_t H = info.format.pixels_per_column;
     uint32_t W = info.format.columns_per_frame;
 
-    auto pf = sensor::get_format(info.format);
+    auto pf = sensor::get_format(info);
 
     auto lidar_pub = nh.advertise<sensor_msgs::PointCloud2>("points", 10);
     auto imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 100);
@@ -54,18 +54,17 @@ int main(int argc, char** argv) {
     auto xyz_lut = ouster::make_xyz_lut(info);
 
     Cloud cloud{W, H};
-    auto it = cloud.begin();
-    sensor_msgs::PointCloud2 msg{};
+    ouster::LidarScan ls{W, H};
 
-    auto batch_and_publish = sensor::batch_to_iter<Cloud::iterator>(
-        W, pf, {}, Point::get_from_pixel(xyz_lut, W, H),
-        [&](std::chrono::nanoseconds scan_ts) mutable {
-            msg = ouster_ros::cloud_to_cloud_msg(cloud, scan_ts, lidar_frame);
-            lidar_pub.publish(msg);
+    auto batch_and_publish = sensor::batch_to_scan(
+        W, pf, [&](std::chrono::nanoseconds scan_ts) mutable {
+            scan_to_cloud(xyz_lut, scan_ts, ls, cloud);
+            lidar_pub.publish(
+                ouster_ros::cloud_to_cloud_msg(cloud, scan_ts, sensor_frame));
         });
 
     auto lidar_handler = [&](const PacketMsg& pm) mutable {
-        batch_and_publish(pm.buf.data(), it);
+        batch_and_publish(pm.buf.data(), ls);
     };
 
     auto imu_handler = [&](const PacketMsg& p) {

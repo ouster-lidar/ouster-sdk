@@ -14,7 +14,7 @@ void Cloud::draw(const Camera& camera, const impl::CloudIds& ids,
     const Eigen::Matrix<GLfloat, 4, 4> proj_view =
         (camera.proj_view_target() * map_pose).cast<GLfloat>();
     glUniformMatrix4fv(ids.proj_view_id, 1, GL_FALSE, proj_view.data());
-    glUniformMatrix4fv(ids.model_id, 1, GL_TRUE, extrinsic_data.data());
+    glUniformMatrix4fv(ids.model_id, 1, GL_FALSE, extrinsic_data.data());
 
     glUniform1i(ids.palette_id, 0);
     glUniform1i(ids.transformation_id, 1);
@@ -29,6 +29,12 @@ void Cloud::draw(const Camera& camera, const impl::CloudIds& ids,
                            transformation_texture_id, GL_RGB32F);
         texture_changed = false;
     }
+    if (mask_changed) {
+        glBindBuffer(GL_ARRAY_BUFFER, buffers.mask_buffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n * 4, mask_data.data(),
+                     GL_STATIC_DRAW);
+        mask_changed = false;
+    }
     if (xyz_changed) {
         glBindBuffer(GL_ARRAY_BUFFER, buffers.xyz_buffer);
         glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n * 3, xyz_data.data(),
@@ -36,8 +42,20 @@ void Cloud::draw(const Camera& camera, const impl::CloudIds& ids,
         glBindBuffer(GL_ARRAY_BUFFER, buffers.off_buffer);
         glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * n * 3, off_data.data(),
                      GL_STATIC_DRAW);
+        xyz_changed = false;
     }
     glBindTexture(GL_TEXTURE_2D, transformation_texture_id);
+
+    glEnableVertexAttribArray(ids.mask_id);
+    glBindBuffer(GL_ARRAY_BUFFER, buffers.mask_buffer);
+
+    glVertexAttribPointer(ids.mask_id,
+                          4,         // size
+                          GL_FLOAT,  // type
+                          GL_FALSE,  // normalized?
+                          0,         // stride
+                          (void*)0   // array buffer offset
+    );
 
     glEnableVertexAttribArray(ids.xyz_id);
     glBindBuffer(GL_ARRAY_BUFFER, buffers.xyz_buffer);
@@ -94,6 +112,7 @@ void Cloud::draw(const Camera& camera, const impl::CloudIds& ids,
     );
 
     glDrawArrays(GL_POINTS, 0, n);
+    glDisableVertexAttribArray(ids.mask_id);
     glDisableVertexAttribArray(ids.xyz_id);
     glDisableVertexAttribArray(ids.off_id);
     glDisableVertexAttribArray(ids.trans_index_id);

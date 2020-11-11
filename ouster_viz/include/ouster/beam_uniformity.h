@@ -7,7 +7,16 @@
 
 #pragma once
 
+#if defined _WIN32
+#pragma warning(push, 2)
+#endif
+
 #include <Eigen/Eigen>
+
+#if defined _WIN32
+#pragma warning(pop)
+#endif
+
 #include <algorithm>
 #include <vector>
 
@@ -28,6 +37,9 @@ class BeamUniformityCorrector {
 
     std::vector<double> dark_count;
 
+    using im_t =
+        Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
     /**
      * computes the dark count, i.e. an additive offset in the brightness of the
      * image, to smoothe the difference between rows
@@ -35,14 +47,14 @@ class BeamUniformityCorrector {
      * @param image Const reference to an image as a 2D Eigen array
      */
     static std::vector<double> compute_dark_count(
-        const Eigen::Ref<const Eigen::ArrayXXd>& image) {
+        const Eigen::Ref<const im_t>& image) {
         const size_t image_h = image.rows();
         const size_t image_w = image.cols();
 
         std::vector<double> tmp(image_w);
         std::vector<double> new_dark_count(image_h, 0);
 
-        Eigen::ArrayXXd row_diffs =
+        im_t row_diffs =
             image.bottomRows(image_h - 1) - image.topRows(image_h - 1);
 
         // compute the median of differences between rows
@@ -81,7 +93,7 @@ class BeamUniformityCorrector {
      *
      * @param image Const reference to an image as a 2D Eigen array
      */
-    void update_dark_count(const Eigen::Ref<const Eigen::ArrayXXd>& image) {
+    void update_dark_count(const Eigen::Ref<const im_t>& image) {
         const auto new_dark_count = compute_dark_count(image);
         const size_t image_h = image.rows();
         auto dark_count_map =
@@ -100,7 +112,7 @@ class BeamUniformityCorrector {
      * @param image Mutable reference to an image as a 2D Eigen array,
      *              to be modified in-place
      */
-    void correct(Eigen::Ref<Eigen::ArrayXXd> image) {
+    void correct(Eigen::Ref<im_t> image) {
         const size_t image_h = image.rows();
 
         if (counter == 0) {

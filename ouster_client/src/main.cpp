@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
 
     auto metadata = sensor::get_metadata(*cli);
     auto info = sensor::parse_metadata(metadata);
-    auto pf = sensor::get_format(info.format);
+    auto pf = sensor::get_format(info);
 
     std::unique_ptr<uint8_t[]> lidar_buf(new uint8_t[pf.lidar_packet_size + 1]);
     std::unique_ptr<uint8_t[]> imu_buf(new uint8_t[pf.imu_packet_size + 1]);

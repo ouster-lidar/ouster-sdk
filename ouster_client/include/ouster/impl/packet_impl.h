@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstring>
 
+#include "ouster/types.h"
+
 namespace ouster {
 namespace sensor {
 namespace impl {

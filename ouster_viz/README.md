@@ -25,10 +25,13 @@ though these are not officially supported and not yet guaranteed to build and ru
 * The sample visualizer requires a compiler supporting C++11 or newer
   and CMake 3.1 or newer
 * Requires GLFW3, GLEW and Eigen3 libraries
-* Using Ubuntu: `sudo apt-get install libglfw3-dev libglew-dev libeigen3-dev libjsoncpp-dev libtclap-dev`
+* Using Ubuntu: `sudo apt-get install libglfw3-dev libglew-dev libeigen3-dev libjsoncpp-dev
+  libtclap-dev`
 * Using Arch Linux: `sudo pacman -S cmake glfw glew eigen jsoncpp tclap`
-* Using MacOS: install XCode and [Brew](https://brew.sh/) and then `brew install cmake pkg-config glfw glew eigen jsoncpp tclap`
-* Using Windows: install Visual Studio and [vcpkg](https://github.com/microsoft/vcpkg) and then `vcpkg install glfw3 glew tclap jsoncpp eigen3`
+* Using MacOS: install XCode and [Brew](https://brew.sh/) and then `brew install cmake pkg-config
+  glfw glew eigen jsoncpp tclap`
+* Using Windows: install Visual Studio and [vcpkg](https://github.com/microsoft/vcpkg) and then
+  `vcpkg install glfw3 glew tclap jsoncpp eigen3`
 
 # Building the Visualizer
 Before building, make sure all the build dependencies are installed.

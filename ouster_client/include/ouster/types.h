@@ -5,11 +5,23 @@
 
 #pragma once
 
+#if defined _WIN32
+#pragma warning(push, 2)
+#endif
+
+#include <Eigen/Eigen>
+
+#if defined _WIN32
+#pragma warning(pop)
+#endif
+
 #include <string>
 #include <vector>
 
 namespace ouster {
 namespace sensor {
+
+using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
 
 /**
  * Unit of range from sensor packet, in meters
@@ -27,8 +39,8 @@ extern const std::vector<double> gen1_azimuth_angles;
  * Design values for imu and lidar to sensor-frame transforms. See the manual
  * for details.
  */
-extern const std::vector<double> imu_to_sensor_transform;
-extern const std::vector<double> lidar_to_sensor_transform;
+extern const mat4d default_imu_to_sensor_transform;
+extern const mat4d default_lidar_to_sensor_transform;
 
 enum lidar_mode {
     MODE_UNSPEC = 0,
@@ -53,14 +65,8 @@ struct data_format {
     std::vector<int> pixel_shift_by_row;
 };
 
-/**
- * @param lidar_mode
- * @return data format struct for gen1, < 1.14 fw devices
- */
-data_format default_data_format(lidar_mode mode);
-
 struct sensor_info {
-    std::string hostname;
+    std::string name;
     std::string sn;
     std::string fw_rev;
     lidar_mode mode;
@@ -68,15 +74,18 @@ struct sensor_info {
     data_format format;
     std::vector<double> beam_azimuth_angles;
     std::vector<double> beam_altitude_angles;
-    std::vector<double> imu_to_sensor_transform;
-    std::vector<double> lidar_to_sensor_transform;
     double lidar_origin_to_beam_origin_mm;
+    mat4d imu_to_sensor_transform;
+    mat4d lidar_to_sensor_transform;
+    mat4d extrinsic;
 };
 
 /**
- * @return default sensor_info
+ * Get a default sensor_info for the given lidar mode
+ * @param lidar_mode
+ * @return default sensor_info for the OS1-64
  */
-sensor_info default_sensor_info();
+sensor_info default_sensor_info(lidar_mode mode);
 
 /**
  * Get string representation of a lidar mode
@@ -97,7 +106,14 @@ lidar_mode lidar_mode_of_string(const std::string& s);
  * @param lidar_mode
  * @return number of columns per rotation for the mode
  */
-int n_cols_of_lidar_mode(lidar_mode mode);
+uint32_t n_cols_of_lidar_mode(lidar_mode mode);
+
+/**
+ * Get the lidar rotation frequency from lidar mode
+ * @param lidar_mode
+ * @return lidar rotation frequency in Hz
+ */
+int frequency_of_lidar_mode(lidar_mode mode);
 
 /**
  * Get string representation of a timestamp mode
@@ -118,10 +134,18 @@ timestamp_mode timestamp_mode_of_string(const std::string& s);
  * and vector fields will have size 0 if the parameter cannot be found or
  * parsed, while lidar_mode will be set to 0 (invalid)
  * @throw runtime_error if the text is not valid json
- * @param metadata a text blob returned by get_metadata above
+ * @param metadata a text blob returned by get_metadata from client.h
  * @return a sensor_info struct populated with a subset of the metadata
  */
 sensor_info parse_metadata(const std::string& metadata);
+
+/**
+ * Parse metadata given path to a json file
+ * @throw runtime_error if json file does not exist or is malformed
+ * @param json_file path to a json file containing sensor metadata
+ * @return a sensor_info struct populated with a subset of the metadata
+ */
+sensor_info metadata_from_json(const std::string& json_file);
 
 /**
  * Get string representation of metadata
@@ -170,7 +194,7 @@ struct packet_format {
  * @param data_format parameters provided by the sensor
  * @returns a packet_format suitable for parsing UDP packets sent by the sensor
  */
-const packet_format& get_format(const data_format& format);
+const packet_format& get_format(const sensor_info& info);
 
 }  // namespace sensor
 }  // namespace ouster
