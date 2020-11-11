@@ -1,6 +1,15 @@
 #include <tclap/CmdLine.h>
 
+#if defined _WIN32
+#pragma warning(push, 2)
+#endif
+
 #include <Eigen/Eigen>
+
+#if defined _WIN32
+#pragma warning(pop)
+#endif
+
 #include <atomic>
 #include <cmath>
 #include <csignal>
@@ -61,10 +70,11 @@ int main(int argc, char** argv) {
             "string");
         cmd.add(udp_destination_arg);
 
-        TCLAP::ValueArg<std::string> mode_arg("m", "mode",
-                                              "<512x10 | 512x20 | 1024x10 | "
-                                              "1024x20 | 2048x10> : lidar mode ",
-                                              false, "", "string");
+        TCLAP::ValueArg<std::string> mode_arg(
+            "m", "mode",
+            "<512x10 | 512x20 | 1024x10 | "
+            "1024x20 | 2048x10> : lidar mode ",
+            false, "", "string");
         cmd.add(mode_arg);
 
         TCLAP::ValueArg<int> lidar_port_arg("l", "lidar_port",
@@ -133,24 +143,13 @@ int main(int argc, char** argv) {
         std::exit(EXIT_FAILURE);
     }
 
-    std::string metadata{};
-    if (do_config) {
-        metadata = sensor::get_metadata(*cli);
-    } else {
-        std::stringstream buf{};
-        std::ifstream ifs{};
-        ifs.open(meta_file);
-        buf << ifs.rdbuf();
-        ifs.close();
-
-        if (!ifs)
-            std::cerr << "Failed to read metadata file: " << meta_file
-                      << std::endl;
-
-        metadata = buf.str();
-    }
-
-    auto info = sensor::parse_metadata(metadata);
+    const sensor::sensor_info info = [&]() {
+        if (do_config) {
+            return sensor::parse_metadata(sensor::get_metadata(*cli));
+        } else {
+            return sensor::metadata_from_json(meta_file);
+        }
+    }();
 
     std::cout << "Using lidar_mode: " << sensor::to_string(info.mode)
               << std::endl;
@@ -160,16 +159,13 @@ int main(int argc, char** argv) {
     const uint32_t H = info.format.pixels_per_column;
     const uint32_t W = info.format.columns_per_frame;
 
-    auto packet_format = sensor::get_format(info.format);
+    auto packet_format = sensor::get_format(info);
 
     const auto xyz_lut = ouster::make_xyz_lut(info);
 
     viz::PointViz point_viz(
-        {viz::CloudSetup{xyz_lut.direction.data(),
-                         xyz_lut.offset.data(),
-                         H * W,
-                         W,
-                         {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}}},
+        {viz::CloudSetup{xyz_lut.direction.data(), xyz_lut.offset.data(), H * W,
+                         W, info.extrinsic.data()}},
         "Ouster Viz", false);
 
     /**
@@ -186,14 +182,11 @@ int main(int argc, char** argv) {
 
     std::unique_ptr<ouster::LidarScan> ls_read(new ouster::LidarScan(W, H));
     std::unique_ptr<ouster::LidarScan> ls_write(new ouster::LidarScan(W, H));
-    auto write_it = ls_write->begin();
 
-    auto batch_and_display = sensor::batch_to_iter<ouster::LidarScan::iterator>(
-        W, packet_format, ouster::LidarScan::Pixel::empty_val(),
-        &ouster::LidarScan::pixel, [&](std::chrono::nanoseconds) mutable {
+    auto batch_and_display = sensor::batch_to_scan(
+        W, packet_format, [&](std::chrono::nanoseconds) mutable {
             std::lock_guard<std::mutex> lk(swap_mtx);
             std::swap(ls_read, ls_write);
-            write_it = ls_write->begin();
             lidar_scan_ready = true;
             cv.notify_one();
         });
@@ -214,7 +207,7 @@ int main(int argc, char** argv) {
             if (st & sensor::client_state::LIDAR_DATA) {
                 if (sensor::read_lidar_packet(*cli, lidar_buf.get(),
                                               packet_format))
-                    batch_and_display(lidar_buf.get(), write_it);
+                    batch_and_display(lidar_buf.get(), *ls_write);
             }
             if (st & sensor::client_state::IMU_DATA) {
                 sensor::read_imu_packet(*cli, imu_buf.get(), packet_format);

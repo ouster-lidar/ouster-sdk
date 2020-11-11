@@ -28,7 +28,7 @@ namespace sensor = ouster::sensor;
 // fill in values that could not be parsed from metadata
 void populate_metadata_defaults(sensor::sensor_info& info,
                                 sensor::lidar_mode specified_lidar_mode) {
-    if (!info.hostname.size()) info.hostname = "UNKNOWN";
+    if (!info.name.size()) info.name = "UNKNOWN";
 
     if (!info.sn.size()) info.sn = "UNKNOWN";
 
@@ -52,35 +52,6 @@ void populate_metadata_defaults(sensor::sensor_info& info,
         info.beam_azimuth_angles = sensor::gen1_azimuth_angles;
         info.beam_altitude_angles = sensor::gen1_altitude_angles;
     }
-
-    if (info.imu_to_sensor_transform.empty() ||
-        info.lidar_to_sensor_transform.empty()) {
-        ROS_WARN("Frame transforms not found in metadata; using design values");
-        info.imu_to_sensor_transform = sensor::imu_to_sensor_transform;
-        info.lidar_to_sensor_transform = sensor::lidar_to_sensor_transform;
-    }
-}
-
-// try to read metadata file
-std::string read_metadata(const std::string& meta_file) {
-    if (meta_file.size()) {
-        ROS_INFO("Reading metadata from %s", meta_file.c_str());
-    } else {
-        ROS_WARN("No metadata file specified");
-        return "";
-    }
-
-    std::stringstream buf{};
-    std::ifstream ifs{};
-    ifs.open(meta_file);
-    buf << ifs.rdbuf();
-    ifs.close();
-
-    if (!ifs)
-        ROS_WARN("Failed to read %s; check that the path is valid",
-                 meta_file.c_str());
-
-    return buf.str();
 }
 
 // try to write metadata file
@@ -98,11 +69,11 @@ void write_metadata(const std::string& meta_file, const std::string& metadata) {
 }
 
 int connection_loop(ros::NodeHandle& nh, sensor::client& cli,
-                    const sensor::data_format& df) {
+                    const sensor::sensor_info& info) {
     auto lidar_packet_pub = nh.advertise<PacketMsg>("lidar_packets", 1280);
     auto imu_packet_pub = nh.advertise<PacketMsg>("imu_packets", 100);
 
-    auto pf = sensor::get_format(df);
+    auto pf = sensor::get_format(info);
 
     PacketMsg lidar_packet, imu_packet;
     lidar_packet.buf.resize(pf.lidar_packet_size + 1);
@@ -192,18 +163,21 @@ int main(int argc, char** argv) {
         ROS_INFO("Running in replay mode");
 
         // populate info for config service
-        std::string metadata = read_metadata(meta_file);
-        auto info = sensor::parse_metadata(metadata);
-        populate_metadata_defaults(info, lidar_mode);
-        published_metadata = to_string(info);
+        try {
+            auto info = sensor::metadata_from_json(meta_file);
+            published_metadata = to_string(info);
 
-        ROS_INFO("Using lidar_mode: %s", sensor::to_string(info.mode).c_str());
-        ROS_INFO("%s sn: %s firmware rev: %s", info.prod_line.c_str(),
-                 info.sn.c_str(), info.fw_rev.c_str());
+            ROS_INFO("Using lidar_mode: %s",
+                     sensor::to_string(info.mode).c_str());
+            ROS_INFO("%s sn: %s firmware rev: %s", info.prod_line.c_str(),
+                     info.sn.c_str(), info.fw_rev.c_str());
 
-        // just serve config service
-        ros::spin();
-        return EXIT_SUCCESS;
+            // just serve config service
+            ros::spin();
+            return EXIT_SUCCESS;
+        } catch (const std::runtime_error& e) {
+            ROS_ERROR("Error when running in replay mode: %s", e.what());
+        }
     } else {
         ROS_INFO("Connecting to %s; sending data to %s", hostname.c_str(),
                  udp_dest.c_str());
@@ -232,6 +206,6 @@ int main(int argc, char** argv) {
                  info.sn.c_str(), info.fw_rev.c_str());
 
         // publish packet messages from the sensor
-        return connection_loop(nh, *cli, info.format);
+        return connection_loop(nh, *cli, info);
     }
 }

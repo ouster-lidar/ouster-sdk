@@ -52,7 +52,7 @@ int udp_data_socket(int port) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;
+    hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;
 
@@ -74,6 +74,14 @@ int udp_data_socket(int port) {
         if (!socket_valid(sock_fd)) {
             std::cerr << "udp socket(): " << socket_get_error() << std::endl;
             continue;
+        }
+
+        int off = 0;
+        if (!socket_valid(setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY,
+                                     (char*)&off, sizeof(off)))) {
+            std::cerr << "udp setsockopt(): " << socket_get_error() << std::endl;
+            socket_close(sock_fd);
+            return SOCKET_ERROR;
         }
 
         if (!socket_valid(bind(sock_fd, ai->ai_addr, ai->ai_addrlen))) {
@@ -111,7 +119,7 @@ int cfg_socket(const char* addr) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
     int ret = getaddrinfo(addr, "7501", &hints, &info_start);

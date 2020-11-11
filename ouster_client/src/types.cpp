@@ -2,9 +2,21 @@
 
 #include <json/json.h>
 
+#if defined _WIN32
+#pragma warning(push, 2)
+#endif
+
+#include <Eigen/Eigen>
+
+#if defined _WIN32
+#pragma warning(pop)
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -30,6 +42,17 @@ const std::array<std::pair<timestamp_mode, std::string>, 3>
          {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
 
 }  // namespace
+
+bool operator==(const data_format& lhs, const data_format& rhs) {
+    return (lhs.pixels_per_column == rhs.pixels_per_column &&
+            lhs.columns_per_packet == rhs.columns_per_packet &&
+            lhs.columns_per_frame == rhs.columns_per_frame &&
+            lhs.pixel_shift_by_row == rhs.pixel_shift_by_row);
+}
+
+bool operator!=(const data_format& lhs, const data_format& rhs) {
+    return !(lhs == rhs);
+}
 
 data_format default_data_format(lidar_mode mode) {
     auto repeat = [](int n, const std::vector<int>& v) {
@@ -72,22 +95,23 @@ static double default_lidar_origin_to_beam_origin(std::string prod_line) {
     return lidar_origin_to_beam_origin_mm;
 }
 
-sensor_info default_sensor_info() {
+sensor_info default_sensor_info(lidar_mode mode) {
     return sensor::sensor_info{"UNKNOWN",
                                "000000000000",
                                "UNKNOWN",
-                               MODE_1024x10,
+                               mode,
                                "OS-1-64",
-                               default_data_format(MODE_1024x10),
+                               default_data_format(mode),
                                gen1_azimuth_angles,
                                gen1_altitude_angles,
-                               imu_to_sensor_transform,
-                               lidar_to_sensor_transform,
-                               default_lidar_origin_to_beam_origin("OS-1-64")};
+                               default_lidar_origin_to_beam_origin("OS-1-64"),
+                               default_imu_to_sensor_transform,
+                               default_lidar_to_sensor_transform,
+                               mat4d::Identity()};
 }
 
-const packet_format& get_format(const data_format& format) {
-    switch (format.pixels_per_column) {
+const packet_format& get_format(const sensor_info& info) {
+    switch (info.format.pixels_per_column) {
         case 16:
             return packet__1_14_0__16;
         case 32:
@@ -121,7 +145,7 @@ lidar_mode lidar_mode_of_string(const std::string& s) {
     return res == end ? lidar_mode(0) : res->first;
 }
 
-int n_cols_of_lidar_mode(lidar_mode mode) {
+uint32_t n_cols_of_lidar_mode(lidar_mode mode) {
     switch (mode) {
         case MODE_512x10:
         case MODE_512x20:
@@ -133,6 +157,20 @@ int n_cols_of_lidar_mode(lidar_mode mode) {
             return 2048;
         default:
             throw std::invalid_argument{"n_cols_of_lidar_mode"};
+    }
+}
+
+int frequency_of_lidar_mode(lidar_mode mode) {
+    switch (mode) {
+        case MODE_512x10:
+        case MODE_1024x10:
+        case MODE_2048x10:
+            return 10;
+        case MODE_512x20:
+        case MODE_1024x20:
+            return 20;
+        default:
+            throw std::invalid_argument{"frequency_of_lidar_mode"};
     }
 }
 
@@ -171,7 +209,7 @@ sensor_info parse_metadata(const std::string& meta) {
 
     sensor_info info{};
 
-    info.hostname = root["hostname"].asString();
+    info.name = root["hostname"].asString();
     info.sn = root["prod_sn"].asString();
     info.fw_rev = root["build_rev"].asString();
     info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
@@ -187,9 +225,15 @@ sensor_info parse_metadata(const std::string& meta) {
         info.format.columns_per_frame =
             root["data_format"]["columns_per_frame"].asInt();
 
+        if (root["data_format"]["pixel_shift_by_row"].size() !=
+            info.format.pixels_per_column) {
+            throw std::runtime_error{"Unexpected number of pixel_shift_by_row"};
+        }
+
         for (const auto& v : root["data_format"]["pixel_shift_by_row"])
             info.format.pixel_shift_by_row.push_back(v.asInt());
     } else {
+        std::cerr << "WARNING: No data_format found." << std::endl;
         info.format = default_data_format(info.mode);
     }
 
@@ -199,8 +243,18 @@ sensor_info parse_metadata(const std::string& meta) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();
     } else {
+        std::cerr << "WARNING: No lidar_origin_to_beam_origin_mm found."
+                  << std::endl;
         info.lidar_origin_to_beam_origin_mm =
             default_lidar_origin_to_beam_origin(info.prod_line);
+    }
+
+    if (root["beam_altitude_angles"].size() != info.format.pixels_per_column) {
+        throw std::runtime_error{"Unexpected number of beam_altitude_angles"};
+    }
+
+    if (root["beam_azimuth_angles"].size() != info.format.pixels_per_column) {
+        throw std::runtime_error{"Unexpected number of beam_azimuth_angles"};
     }
 
     for (const auto& v : root["beam_altitude_angles"])
@@ -209,18 +263,50 @@ sensor_info parse_metadata(const std::string& meta) {
     for (const auto& v : root["beam_azimuth_angles"])
         info.beam_azimuth_angles.push_back(v.asDouble());
 
-    for (const auto& v : root["imu_to_sensor_transform"])
-        info.imu_to_sensor_transform.push_back(v.asDouble());
+    if (root["imu_to_sensor_transform"].size() != 16) {
+        throw std::runtime_error{
+            "imu_to_sensor_transform must have 16 elements"};
+    }
 
-    for (const auto& v : root["lidar_to_sensor_transform"])
-        info.lidar_to_sensor_transform.push_back(v.asDouble());
+    if (root["lidar_to_sensor_transform"].size() != 16) {
+        throw std::runtime_error{
+            "lidar_to_sensor_transform must have 16 elements"};
+    }
+
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            const Json::Value::ArrayIndex ind = i * 4 + j;
+            info.imu_to_sensor_transform(i, j) =
+                root["imu_to_sensor_transform"][ind].asDouble();
+            info.lidar_to_sensor_transform(i, j) =
+                root["lidar_to_sensor_transform"][ind].asDouble();
+        }
+    }
+
+    info.extrinsic = mat4d::Identity();
 
     return info;
 }
 
+sensor_info metadata_from_json(const std::string& json_file) {
+    std::stringstream buf{};
+    std::ifstream ifs{};
+    ifs.open(json_file);
+    buf << ifs.rdbuf();
+    ifs.close();
+
+    if (!ifs) {
+        std::stringstream ss;
+        ss << "Failed to read metadata file: " << json_file;
+        throw std::runtime_error(ss.str());
+    }
+
+    return parse_metadata(buf.str());
+}
+
 std::string to_string(const sensor_info& info) {
     Json::Value root{};
-    root["hostname"] = info.hostname;
+    root["hostname"] = info.name;
     root["prod_sn"] = info.sn;
     root["build_rev"] = info.fw_rev;
     root["lidar_mode"] = to_string(info.mode);
@@ -240,11 +326,14 @@ std::string to_string(const sensor_info& info) {
     for (auto i : info.beam_altitude_angles)
         root["beam_altitude_angles"].append(i);
 
-    for (auto i : info.imu_to_sensor_transform)
-        root["imu_to_sensor_transform"].append(i);
-
-    for (auto i : info.imu_to_sensor_transform)
-        root["lidar_to_sensor_transform"].append(i);
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            root["imu_to_sensor_transform"].append(
+                info.imu_to_sensor_transform(i, j));
+            root["lidar_to_sensor_transform"].append(
+                info.lidar_to_sensor_transform(i, j));
+        }
+    }
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
@@ -275,18 +364,22 @@ extern const std::vector<double> gen1_azimuth_angles = {
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
 };
 
-extern const std::vector<double> imu_to_sensor_transform = {
-    1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1};
+extern const mat4d default_imu_to_sensor_transform =
+    (mat4d() << 1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1)
+        .finished();
 
-extern const std::vector<double> lidar_to_sensor_transform = {
-    -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1};
+extern const mat4d default_lidar_to_sensor_transform =
+    (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
+        .finished();
 
 }  // namespace sensor
 
 namespace util {
 
 std::string to_string(const version& v) {
-    if (v == invalid_version) return "UNKNOWN";
+    if (v == invalid_version) {
+        return "UNKNOWN";
+    }
 
     std::stringstream ss{};
     ss << "v" << v.major << "." << v.minor << "." << v.patch;

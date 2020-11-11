@@ -9,16 +9,27 @@ void Image::draw(Camera& cam) {
     glUseProgram(image_program_id);
     const GLuint vertex_id = glGetAttribLocation(image_program_id, "vertex");
     const GLuint uv_id = glGetAttribLocation(image_program_id, "vertex_uv");
-    const GLuint image_id = glGetAttribLocation(image_program_id, "image");
+    const GLuint image_id = glGetUniformLocation(image_program_id, "image");
+    const GLuint mask_id = glGetUniformLocation(image_program_id, "mask");
 
     glUniform1i(image_id, 0);
+    glUniform1i(mask_id, 1);
+
+    glActiveTexture(GL_TEXTURE0);
     if (texture_changed) {
         load_texture(data.data(), width, height, image_texture_id, GL_RED,
                      GL_RED);
         texture_changed = false;
     }
-    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, image_texture_id);
+
+    glActiveTexture(GL_TEXTURE1);
+    if (mask_changed) {
+        load_texture(mask_data.data(), width, height, mask_texture_id, GL_RGBA,
+                     GL_RGBA);
+        mask_changed = false;
+    }
+    glBindTexture(GL_TEXTURE_2D, mask_texture_id);
 
     const GLfloat window_aspect_ratio =
         window_height / static_cast<GLfloat>(window_width);

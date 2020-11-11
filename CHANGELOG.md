@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.14.0-beta.14] - 2020-09-02
+### Added
+- support for ROS noetic in `ouster_ros`. Note: this may break building on very old platforms
+  without a C++14-capable compiler
+- an extra extrinsics field in `sensor_info` for conveniently passing around an extra user-supplied
+  transform
+- a utility function to convert `lidar_scan` data between the "staggered" representation where each
+  column has the same timestamp and "de-staggered" representation where each column has the same
+  azimuth angle
+- mask support in the visualizer library in `ouster_viz`
+
+### Changed
+- `ouster_ros` now requires C++14 to support building against noetic libraries
+- replaced `batch_to_iter` with `batch_to_scan`, a simplified function that writes directly to
+  a `lidar_scan` instead of arbitrary iterator
+
+### Fixed
+- ipv6 support using dual-stack sockets on all supported platforms. This was broken since the
+  beta.10 release
+- projection to Cartesian coordinates now takes into account the vertical offset the sensor and
+  lidar frames
+- the reference frame of point cloud topics in `ouster_ros` is now correctly reported as the "sensor
+  frame" defined in the user guide
+
+## [1.14.0-beta.12] - 2020-07-10
+*no changes*
+
+## [1.14.0-beta.11] - 2020-06-17
+*no changes*
+
 ## [1.14.0-beta.10] - 2020-05-21
 ### Added
 - preliminary support for Windows and Mac 10.15 for `ouster_viz` and

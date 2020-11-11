@@ -103,13 +103,15 @@ int main(int argc, char** argv) {
                                     (8 * sizeof(*intensity_image.data.data())));
         intensity_image.header.stamp = m->header.stamp;
 
-        Eigen::ArrayXXd noise_image_eigen(H, W);
-        Eigen::ArrayXXd intensity_image_eigen(H, W);
+        using im_t = Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
+                                  Eigen::RowMajor>;
+        im_t noise_image_eigen(H, W);
+        im_t intensity_image_eigen(H, W);
 
         for (size_t u = 0; u < H; u++) {
             for (size_t v = 0; v < W; v++) {
                 const size_t vv = (v + W - px_offset[u]) % W;
-                const size_t index = vv * H + u;
+                const size_t index = u * W + vv;
                 const auto& pt = cloud[index];
 
                 if (pt.range == 0) {

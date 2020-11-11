@@ -7,7 +7,16 @@
  */
 
 #pragma once
+#if defined _WIN32
+#pragma warning(push, 2)
+#endif
+
 #include <Eigen/Dense>
+
+#if defined _WIN32
+#pragma warning(pop)
+#endif
+
 #include <algorithm>
 #include <vector>
 
@@ -15,7 +24,7 @@ namespace ouster {
 namespace viz {
 struct AutoExposure {
    private:
-    const double percentile = 0.03;
+    const double percentile = 0.1;
     // damping makes the autoexposure smooth and avoids flickering.
     // however, it becomes slower to update.
     // 1.0 --> slowest, smoothest
@@ -40,7 +49,8 @@ struct AutoExposure {
    public:
     /**
      * scales the image so that contrast is stretched between 0 and 1,
-     * so that the top percentile is 1 and the bottom percentile is 0.
+     * so that the top percentile is 1 - percentile
+     * and the bottom percentile is percentile.
      * Analogous to imagemagick's -contrast-stretch operation
      *
      * @param key_eigen Reference to image, modified in place
@@ -85,8 +95,8 @@ struct AutoExposure {
         lo_state = damping * lo_state + (1.0 - damping) * lo;
         hi_state = damping * hi_state + (1.0 - damping) * hi;
         counter = (counter + 1) % update_every;
-        key_eigen -= lo_state;
-        key_eigen *= 1.0 / (hi_state - lo_state);
+        key_eigen += percentile - lo_state;
+        key_eigen *= (1.0 - 2 * percentile) / (hi_state - lo_state);
 
         // clamp
         key_eigen = key_eigen.max(0.0).min(1.0);
