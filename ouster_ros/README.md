@@ -71,6 +71,7 @@
 | `r` | Reset camera position
 | `0` (zero) | Toggle parallel projection and reset camera |
 | `d` | Cycle through fraction of the window height used for displaying range and intensity image
+| `g` | Toggle range markers |
 
 ## Mouse control
 * Click and drag rotates the view

@@ -1,15 +1,8 @@
-/**
- * @file
- * @brief Corrects beam uniformity by minimizing median difference between rows
- *
- */
-
 #pragma once
 
-#include <Eigen/Eigen>
-#include <vector>
-#include <algorithm>
-
+/**
+ * Corrects beam uniformity by minimizing median difference between rows
+ */
 class BeamUniformityCorrector {
    private:
     std::vector<double> dark_count;

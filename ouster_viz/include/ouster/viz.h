@@ -9,9 +9,13 @@
 #include <vector>
 
 #include "ouster/lidar_scan.h"
+#include "ouster/os1.h"
 
 namespace ouster {
 namespace viz {
+
+const std::vector<double> default_range_markers = {5.0,  10.0, 15.0,
+                                                   20.0, 40.0, 80.0};
 
 /**
  * Handle to visualizer state
@@ -20,18 +24,21 @@ struct VizHandle;
 
 /**
  * Initialize an instance of the visualizer
- * @param W horizontal resolution, usually one of 512, 1024, or 2048
- * @param H vertical resolution, always 64 for OS1 family
+ * @param w horizontal resolution, usually one of 512, 1024, or 2048
+ * @param h vertical resolution, always 64 for OS1 family
  * @return a handle to the state of the visualizer
  */
-std::shared_ptr<VizHandle> init_viz(int W, int H);
+std::shared_ptr<VizHandle> init_viz(
+    const xyz_lut* xyz_lut, const OS1::data_format& df,
+    const std::string& prod_line,
+    const std::vector<double>& range_markers = default_range_markers);
 
 /**
  * Update the lidar scan being displayed by the visualizer
  * @param vh a handle to a visualizer returned by init_viz()
  * @param lidar_scan the lidar scan to visualize on the next frame
  */
-void update(viz::VizHandle& vh, std::unique_ptr<ouster::LidarScan>& lidar_scan);
+void update(viz::VizHandle& vh, std::unique_ptr<LidarScan>& lidar_scan);
 
 /**
  * Run visualizer render loop
@@ -45,5 +52,5 @@ void run_viz(VizHandle& vh);
  * @param vh handle to visualizer state returned by init_viz()
  */
 void shutdown(VizHandle& vh);
-}
-}
+}  // namespace viz
+}  // namespace ouster

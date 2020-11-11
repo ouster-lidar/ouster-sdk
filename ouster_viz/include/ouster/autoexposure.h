@@ -1,20 +1,12 @@
+#pragma once
+
 /**
- * @file
- * @brief Adjust brightness image brightness and apply gamma correction
- *
  * Functor that adjusts brightness so that 1st percentile pixel is black
  * and 99th percentile pixel is white, while applying basic gamma correction
  * of 2.0.
  * Stores state of the black and white points so that it does not flicker
  * rapidly.
  */
-
-#pragma once
-
-#include <Eigen/Eigen>
-#include <vector>
-#include <cstdlib>
-
 struct AutoExposure {
    private:
     double lo_state = -1.0;

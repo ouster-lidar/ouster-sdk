@@ -42,11 +42,11 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    auto H = OS1::pixels_per_column;
-    auto W = OS1::n_cols_of_lidar_mode(
-        OS1::lidar_mode_of_string(cfg.response.lidar_mode));
+    auto info = OS1::parse_metadata(cfg.response.metadata);
+    int H = info.format.pixels_per_column;
+    int W = info.format.columns_per_frame;
 
-    const auto px_offset = ouster::OS1::get_px_offset(W);
+    const auto& px_offset = info.format.pixel_shift_by_row;
 
     ros::Publisher range_image_pub =
         nh.advertise<sensor_msgs::Image>("range_image", 100);
