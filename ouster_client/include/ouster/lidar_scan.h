@@ -7,8 +7,6 @@
 
 #include <Eigen/Eigen>
 #include <chrono>
-#include <cmath>
-#include <utility>
 #include <vector>
 
 #include "ouster/types.h"

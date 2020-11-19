@@ -11,7 +11,7 @@
 #include <functional>
 #include <iterator>
 
-#include "ouster/impl/packet_impl.h"
+#include "ouster/impl/parsing.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 

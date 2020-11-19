@@ -1,8 +1,8 @@
 #include "ouster/lidar_scan.h"
 
+#include <Eigen/Eigen>
+#include <cmath>
 #include <vector>
-
-#include "ouster/compat.h"
 
 namespace ouster {
 

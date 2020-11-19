@@ -1,26 +1,36 @@
-#include "ouster/compat.h"
+#include "ouster/impl/netcompat.h"
 
-#include <cstring>
-#include <iostream>
-#include <stdexcept>
 #include <string>
 
-int socket_init(void) {
-#ifdef _WIN32
-    WSADATA wsa_data;
-    return WSAStartup(MAKEWORD(1, 1), &wsa_data);
-#else
-    return 0;
-#endif
-}
+#if defined _WIN32
 
-int socket_quit(void) {
-#ifdef _WIN32
-    return WSACleanup();
+#include <winsock2.h>
+
 #else
-    return 0;
+
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <cstring>
+
 #endif
-}
+
+namespace ouster {
+namespace impl {
+
+#ifdef _WIN32
+struct StaticWrapper {
+    WSADATA wsa_data;
+
+    StaticWrapper() { WSAStartup(MAKEWORD(1, 1), &wsa_data); }
+
+    ~StaticWrapper() { WSACleanup(); }
+};
+
+static StaticWrapper resources = {};
+#endif
 
 int socket_close(SOCKET sock) {
     int status = 0;
@@ -91,3 +101,6 @@ int socket_set_reuse(SOCKET value) {
     return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 #endif
 }
+
+}  // namespace impl
+}  // namespace ouster

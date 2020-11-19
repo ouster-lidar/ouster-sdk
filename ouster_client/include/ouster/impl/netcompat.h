@@ -7,24 +7,11 @@
 
 #include <string>
 
-#if defined _WIN32 // --------- On Windows ---------
+#if defined _WIN32  // --------- On Windows ---------
 
-#define _USE_MATH_DEFINES
-#define WPCAP 1
 // Try and limit the stuff windows brings in
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX 1
-#define HAVE_U_INT8_T 1
-#define HAVE_U_INT16_T 1
-
-// Windows headers
-#include <WS2tcpip.h>
-#include <WinInet.h>
-#include <intrin.h>
-#include <process.h>
-#include <winbase.h>
-#include <windows.h>
 #include <winsock2.h>
+#include <ws2tcpip.h>
 
 // ssize_t is available in vs
 #ifdef _MSC_VER
@@ -34,35 +21,21 @@
 
 #else  // --------- Compiling on *nix ---------
 
-// Linux headers
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <net/ethernet.h>
 #include <netdb.h>
-#include <netinet/ip.h>
-#include <netinet/udp.h>
+#include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <unistd.h>
 
-// Define windows types for linux
+// Define windows types
 typedef int SOCKET;
 typedef fd_set FDSET;
 #define SOCKET_ERROR -1
 
 #endif  // --------- End Platform Differentiation Block ---------
 
-/**
- * Initialize the socket stack (Noop on linux)
- * @return success on windows
- */
-int socket_init(void);
-
-/**
- * Shutdown the socket stack (Noop on linux)
- * @return success on windows
- */
-int socket_quit(void);
+namespace ouster {
+namespace impl {
 
 /**
  * Close a specified socket
@@ -103,3 +76,6 @@ int socket_set_non_blocking(SOCKET value);
  * @return success
  */
 int socket_set_reuse(SOCKET value);
+
+}  // namespace impl
+}  // namespace ouster

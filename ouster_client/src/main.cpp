@@ -3,9 +3,8 @@
 #include <iomanip>
 #include <iostream>
 
-#include "ouster/client.h"
-#include "ouster/compat.h"
 #include "ouster/build.h"
+#include "ouster/client.h"
 
 namespace sensor = ouster::sensor;
 
@@ -56,7 +55,7 @@ int main(int argc, char** argv) {
                   << "Version: " << ouster::CLIENT_VERSION_FULL << std::endl;
         return 1;
     }
-    socket_init();
+
     auto cli = sensor::init_client(argv[1], argv[2]);
     if (!cli) {
         std::cerr << "Failed to connect to client at: " << argv[1] << std::endl;
@@ -86,6 +85,6 @@ int main(int argc, char** argv) {
 
         if (n_imu_packets % 50 == 0) print_stats();
     }
-    socket_quit();
+
     return 0;
 }

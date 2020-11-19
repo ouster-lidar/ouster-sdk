@@ -5,15 +5,14 @@
  * Contains headers and some inline functions for the main PointViz class
  * as well as supporting classes such as Camera, Image, Cloud, etc.
  */
-
 #pragma once
+
 // clang-format off
 // glew must be included first so we prevent clang-format from rearranging
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 // clang-format on
 
-#include "ouster/compat.h"
 #include "ouster/colormaps.h"
 
 #include <array>

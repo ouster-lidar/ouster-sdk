@@ -1,9 +1,5 @@
 #include <tclap/CmdLine.h>
 
-// clang-format off
-#include "ouster/compat.h"
-// clang-format on
-
 #include <atomic>
 #include <cmath>
 #include <csignal>
@@ -16,13 +12,13 @@
 #include <thread>
 #include <vector>
 
+#include "ouster/build.h"
 #include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/lidar_scan_viz.h"
 #include "ouster/packet.h"
 #include "ouster/point_viz.h"
 #include "ouster/types.h"
-#include "ouster/build.h"
 
 namespace sensor = ouster::sensor;
 namespace viz = ouster::viz;
@@ -38,7 +34,8 @@ int main(int argc, char** argv) {
     std::string udp_dest;
 
     try {
-        TCLAP::CmdLine cmd("Ouster Visualizer", ' ', ouster::CLIENT_VERSION_FULL);
+        TCLAP::CmdLine cmd("Ouster Visualizer", ' ',
+                           ouster::CLIENT_VERSION_FULL);
 
         TCLAP::UnlabeledValueArg<std::string> hostname_arg(
             "hostname", "hostname of the sensor", true, "", "string");
@@ -100,7 +97,7 @@ int main(int argc, char** argv) {
     }
 
     std::shared_ptr<sensor::client> cli;
-    socket_init();
+
     if (do_config) {
         std::cout << "Connecting to " << hostname << "; sending data to "
                   << udp_dest << std::endl;
@@ -211,6 +208,6 @@ int main(int argc, char** argv) {
     cv.notify_one();  // wake up update_draw thread for exit
     poll.join();
     update_draw.join();
-    socket_quit();
+
     return EXIT_SUCCESS;
 }
