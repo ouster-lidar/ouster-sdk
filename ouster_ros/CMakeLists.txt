@@ -21,8 +21,6 @@ find_package(
              tf2_geometry_msgs)
 
 find_package(Threads REQUIRED)
-find_package(ouster_client REQUIRED HINTS ../)
-find_package(ouster_viz REQUIRED HINTS ../)
 
 # ==== Options ====
 set(CMAKE_CXX_STANDARD 14)
@@ -46,10 +44,13 @@ catkin_package(
   sensor_msgs
   geometry_msgs)
 
+# === Modules ===
+add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
+add_subdirectory(../ouster_viz ouster_viz EXCLUDE_FROM_ALL)
+
 # ==== Libraries ====
 add_library(ouster_ros STATIC src/ros.cpp)
-target_link_libraries(
-  ouster_ros
+target_link_libraries(ouster_ros
   PUBLIC ${catkin_LIBRARIES}
   PRIVATE ouster_client)
 set_target_properties(ouster_ros PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -1,8 +1,0 @@
-/CMakeLists.txt
-.catkin_tools/
-build/
-devel/
-logs/
-install/
-doc/
-VERSION

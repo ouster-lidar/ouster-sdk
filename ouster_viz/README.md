@@ -12,7 +12,7 @@ platforms are:
 
 * Ubuntu 16.04
 * Ubuntu 18.04
-* Arch Linux
+* Ubuntu 20.04
 
 Preliminary compatibility has been added for:
 
@@ -30,7 +30,6 @@ Before building, make sure all the build dependencies are installed.
 * Requires build-essential, GLFW3, GLEW and Eigen3 libraries
 * Using Ubuntu: `sudo apt-get install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev
   libjsoncpp-dev libtclap-dev`
-* Using Arch Linux: `sudo pacman -S build-essential cmake glfw glew eigen jsoncpp tclap`
 * Using MacOS: install XCode and [Brew](https://brew.sh/) and then `brew install cmake pkg-config
   glfw glew eigen jsoncpp tclap`
 * Using Windows: install Visual Studio and [vcpkg](https://github.com/microsoft/vcpkg) and then
@@ -39,27 +38,14 @@ Before building, make sure all the build dependencies are installed.
 ### Building
 In the following instruction steps, `/path/to/ouster_example` is where you've cloned the repository
 
-#### Linux
+#### Linux / macOS
 Run the following commmands:
 
 ```
-export CMAKE_PREFIX_PATH=/path/to/ouster_example
-cd /path/to/ouster_example/ouster_viz
+cd /path/to/ouster_example
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
-make
-```
-
-#### macOS
-Run the following commands
-
-```
-export CMAKE_PREFIX_PATH=/path/to/ouster_example
-cd /path/to/ouster_example/ouster_viz
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF ..
 make
 ```
 

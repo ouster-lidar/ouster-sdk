@@ -8,8 +8,8 @@
 
 ## Building the Sample Client
 * The sample client requires a compiler supporting C++11 or newer and CMake
-* Build with `cd /path/to/ouster_example/ouster_client && mkdir build && cd
-  build && cmake .. && make` where `/path/to/ouster_example` is where you've
+* Build with `cd /path/to/ouster_example && mkdir build && cd build && cmake
+  -DBUILD_VIZ=OFF .. && make` where `/path/to/ouster_example` is where you've
   cloned the repository
 
 ## Running the Sample Client

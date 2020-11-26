@@ -9,11 +9,11 @@
   Noetic](http://wiki.ros.org/noetic/Installation/Ubuntu) on Ubuntu 20.04
 
 ## Building
-* Note: In the following instruction steps (Building + Running), `/path/to/ouster_example`
-  is where you've cloned the repository.
+* Note: In the following instructions, `/path/to/ouster_example` should be replaced with the actual
+  path where you you've cloned the repository.
 
 ### Build Dependencies
-*  `ouster_ros/` requires ROS libraries; call `sudo apt-get install ros-<ROS-VERSION>-ros-core
+* `ouster_ros/` requires ROS libraries; call `sudo apt-get install ros-<ROS-VERSION>-ros-core
   ros-<ROS-VERSION>-pcl-ros ros-<ROS-VERSION>-tf2-geometry-msgs`, and
   optionally `sudo apt install ros-<ROS-VERSION>-rviz` for visualization using ROS (rviz),
   where `<ROS-VERSION>` is `kinetic`, `melodic`, or `noetic`.
@@ -21,10 +21,11 @@
   libtclap-dev`
 
 ### Building the Sample ROS Nodes
-* Then run the following command `export CMAKE_PREFIX_PATH=/path/to/ouster_example`
 * Be sure to source the ROS setup script before building: `source /opt/ros/*/setup.bash`
-* Build with `mkdir -p myworkspace/src && cd myworkspace && ln -s
-  /path/to/ouster_example ./src/ && catkin_make -DCMAKE_BUILD_TYPE=Release`
+* Set up the ROS workspace with: `mkdir -p myworkspace/src && cd myworkspace && ln -s
+  /path/to/ouster_example ./src/`. Do not create your workspace inside the cloned repository, as
+  this will confuse the ROS build system.
+* Then, build with `catkin_make -DCMAKE_BUILD_TYPE=Release`
 
 ## Running Sample ROS Nodes
 * In each new terminal for each command below, make sure to source ROS environment with `source /path/to/myworkspace/devel/setup.bash` where
