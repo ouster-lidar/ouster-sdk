@@ -11,8 +11,7 @@ find_package(GLEW REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 
 # ==== Libraries ====
-add_library(ouster_viz STATIC src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp)
-set_target_properties(ouster_viz PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(ouster_viz src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp)
 target_link_libraries(ouster_viz
   PUBLIC Threads::Threads glfw GLEW::GLEW OpenGL::GL
   PRIVATE ouster_client)

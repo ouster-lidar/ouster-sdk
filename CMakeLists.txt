@@ -7,6 +7,8 @@ include(DefaultBuildType)
 project(ouster_example)
 
 # ==== Options ====
+option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
+option(BUILD_SHARED_LIBS "Build shared libraries." OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -17,7 +19,7 @@ else()
   add_compile_options(-Wall -Wextra -Werror)
 endif()
 
-# === Modules ===
+# === Subdirectories ===
 add_subdirectory(ouster_client)
 
 if(BUILD_VIZ)

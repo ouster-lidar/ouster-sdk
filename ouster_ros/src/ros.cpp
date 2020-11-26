@@ -76,10 +76,8 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
             const auto pix = ls.data.row(u * ls.w + v);
             const auto ts = (ls.ts[v] - scan_ts).count();
             cloud(v, u) = ouster_ros::Point{
-                static_cast<float>(xyz(0)),
-                static_cast<float>(xyz(1)),
-                static_cast<float>(xyz(2)),
-                1.0f,
+                {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
+                  static_cast<float>(xyz(2)), 1.0f}},
                 static_cast<float>(pix(ouster::LidarScan::INTENSITY)),
                 static_cast<uint32_t>(ts),
                 static_cast<uint16_t>(pix(ouster::LidarScan::REFLECTIVITY)),
