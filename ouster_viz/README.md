@@ -86,6 +86,7 @@ make
 | `0` | Toggle orthographic camera |
 | `=` | Zoom in |
 | `-` | Zoom out |
+| `shift` | Camera Translation with mouse drag |
 
 ## Mouse control
 * Click and drag rotates the view

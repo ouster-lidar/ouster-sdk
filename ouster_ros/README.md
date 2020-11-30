@@ -18,7 +18,7 @@
   optionally `sudo apt install ros-<ROS-VERSION>-rviz` for visualization using ROS (rviz),
   where `<ROS-VERSION>` is `kinetic`, `melodic`, or `noetic`.
 * Install additional build dependencies with: `sudo apt-get install libglfw3-dev libglew-dev
-  libtclap-dev`
+  libtclap-dev build-essential` 
 
 ### Building the Sample ROS Nodes
 * Be sure to source the ROS setup script before building: `source /opt/ros/*/setup.bash`
@@ -36,8 +36,8 @@
 * Make sure the sensor is connected to the network and has obtained a DHCP
   lease. See section 3.1 in the accompanying [software user guide](https://www.ouster.com/resources)
   for more details
-* To publish ROS topics from a running sensor from within the `ouster_ros` directory (inside `/path/to/ouster_example/`):
-    - Run `roslaunch ouster.launch sensor_hostname:=<sensor_hostname>
+* To publish ROS topics from a running sensor:
+    - Run `roslaunch ouster_ros ouster.launch sensor_hostname:=<sensor_hostname>
       udp_dest:=<udp_data_dest_ip> lidar_mode:=<lidar_mode> viz:=<viz>`where:
         - `<sensor_hostname>` can be the hostname (os-991xxxxxxxxx) or IP of the sensor
         - `<udp_data_dest_ip>` is the IP to which the sensor should send data
@@ -46,25 +46,11 @@
           displaying data after a few seconds
     - See [ouster_viz](../ouster_viz/README.md) for documentation on using the visualizer
 
-### Playing Back Recorded Data
-* To publish ROS topics from recorded data from within the `ouster_ros` directory:
-    - Run `roslaunch ouster.launch replay:=true
-      sensor_hostname:=<sensor_hostname>`
-    - In a second terminal run `rosbag play --clock <bagfile>`
-    - Note: `os_node` reads and writes metadata to `${ROS_HOME}` to enable
-      accurately replaying raw data. By default, the name of this file is based
-      on the hostname of the sensor. The location of this file can be overridden
-      using the `metadata:=<path_to_file>` flag
-    - If a metadata file is not available, the visualizer will default to
-      1024x10. This can be overridden with the `lidar_mode`
-      parameter. Visualizer output will only be correct if the same `lidar_mode`
-      parameter is used for both recording and replay
-
 ### Visualizing Data
 * To display sensor output using the Ouster Visualizer in ROS:
     - set `<viz>` to `true` in the roslaunch command.
     - Example command:
-        - `roslaunch ouster.launch sensor_hostname:=os-991234567890.local
+        - `roslaunch ouster_ros ouster.launch sensor_hostname:=os-991234567890.local
           udp_dest:=192.0.2.1 lidar_mode:=2048x10 viz:=true`
 * To display sensor output using built-in ROS tools (rviz):
     - Follow the instructions above for running the example ROS code with a
@@ -79,3 +65,20 @@
     - In another terminal instance, run `rosbag record /os_node/imu_packets
      /os_node/lidar_packets`
     - This will save a .bag file of recorded data in that directory
+    - It's best to copy and save the metadata file at `$(ROS_HOME)/<sensor_hostname>.json` alongside the bag
+
+### Playing Back Recorded Data
+* To publish ROS topics from recorded data:
+    - Run `roslaunch ouster_ros ouster.launch replay:=true
+      sensor_hostname:=<sensor_hostname> metadata:=<sensor_hostname>.json`
+    - In a second terminal run `rosbag play --clock <bagfile>`
+    - Note: `os_node` reads and writes metadata to `${ROS_HOME}` to enable
+      accurately replaying raw data. By default, the name of this file is based
+      on the hostname of the sensor, i.e., os-991xxxxxxxxx.json. The location of 
+      this file can be overridden using the `metadata:=<path_to_file>` flag
+    - If a metadata file is not available, the visualizer will default to
+      1024x10. This can be overridden with the `lidar_mode`
+      parameter. Visualizer output will only be correct if the same `lidar_mode`
+      parameter is used for both recording and replay.
+
+

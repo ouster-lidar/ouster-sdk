@@ -3,8 +3,12 @@
 ## Contents
 * `ouster_client/` contains a simple C++ client application that prints lidar
   data to the terminal
-* can be built both with and without ROS. See the instructions in
-  [ouster_ros/](../ouster_ros/README.md) for building in a ROS environment
+* can be built both with and without ROS. See the instructions in 
+  [ouster_viz](../ouster_viz/READMe.md) for a basic visualizer which allows you 
+  to set the lidar mode, and displays point clouds and range/intensity/ambient
+  images. See [ouster_ros/](../ouster_ros/README.md) for building in a ROS 
+  environment.
+
 
 ## Building the Sample Client
 * The sample client requires a compiler supporting C++11 or newer and CMake
