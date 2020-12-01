@@ -14,66 +14,86 @@
 namespace ouster {
 
 struct LidarScan {
-    enum LidarScanIndex { RANGE, INTENSITY, NOISE, REFLECTIVITY };
-    using ts_t = std::chrono::nanoseconds;
-    using raw_t = uint32_t;
-    using data_t = Eigen::Array<raw_t, Eigen::Dynamic, 4>;
-    using index_t = std::ptrdiff_t;
-
-    template <class T>
-    using field_t = Eigen::Array<T, Eigen::Dynamic, 1>;
-
+    /**
+     * XYZ coordinates with dimensions arranged contiguously in columns
+     */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
 
-    index_t w;
-    index_t h;
+    using raw_t = uint32_t;
 
+    using ts_t = std::chrono::nanoseconds;
+
+    enum Field { RANGE, INTENSITY, NOISE, REFLECTIVITY };
+
+    using data_t = Eigen::Array<raw_t, -1, 4>;
+
+    struct BlockHeader {
+        ts_t timestamp;
+        uint32_t encoder;
+        uint32_t status;
+    };
+
+    std::ptrdiff_t w;
+    std::ptrdiff_t h;
     data_t data;
-    std::vector<ts_t> ts;
+    std::vector<BlockHeader> headers;
+    uint16_t frame_id;
 
-    uint32_t range(size_t u, size_t v) const {
-        assert(u < (size_t)h && v < (size_t)w);
-        return this->range()[this->ind(u, v)];
-    }
-    uint32_t intensity(size_t u, size_t v) const {
-        assert(u < (size_t)h && v < (size_t)w);
-        return this->intensity()[this->ind(u, v)];
-    }
+    LidarScan() : w(0), h(0), data{0, 4}, headers(0), frame_id(0){};
+    LidarScan(size_t w, size_t h)
+        : w(w), h(h), data{w * h, 4}, headers(w), frame_id(0){};
 
-    LidarScan() : w(0), h(0), data{0, 4}, ts(0){};
-    LidarScan(size_t w, size_t h) : w(w), h(h), data{w * h, 4}, ts(w){};
-
-    // get ts in us. We may use us everywhere in our code. In that case, we will
-    // remove this function. (Hao)
-    std::chrono::microseconds ts_us(size_t v) const {
-        assert(v < (size_t)w);
-        return std::chrono::duration_cast<std::chrono::microseconds>(ts[v]);
+    /** Access timestamps */
+    std::vector<LidarScan::ts_t> timestamps() const {
+        std::vector<LidarScan::ts_t> res;
+        res.reserve(headers.size());
+        for (const auto& h : headers) res.push_back(h.timestamp);
+        return res;
     }
 
-    inline index_t ind(const index_t u, const index_t v) const {
-        return u * w + v;
+    /** Access azimuth block header fields */
+    const BlockHeader& header(size_t m_id) const { return headers.at(m_id); }
+
+    BlockHeader& header(size_t m_id) { return headers.at(m_id); }
+
+    /** Access azimuth block data */
+    Eigen::Map<data_t, 0, Eigen::Stride<-1, -1>> block(size_t m_id) {
+        return Eigen::Map<data_t, 0, Eigen::Stride<-1, -1>>(
+            data.row(m_id).data(), h, 4, {w * h, w});
     }
 
-    data_t::ColXpr range() { return data.col(LidarScanIndex::RANGE); }
-    data_t::ColXpr intensity() { return data.col(LidarScanIndex::INTENSITY); }
-    data_t::ColXpr noise() { return data.col(LidarScanIndex::NOISE); }
-    data_t::ColXpr reflectivity() {
-        return data.col(LidarScanIndex::REFLECTIVITY);
+    Eigen::Map<const data_t, 0, Eigen::Stride<-1, -1>> block(
+        size_t m_id) const {
+        return Eigen::Map<const data_t, 0, Eigen::Stride<-1, -1>>(
+            data.row(m_id).data(), h, 4, {w * h, w});
     }
 
-    data_t::ConstColXpr range() const {
-        return data.col(LidarScanIndex::RANGE);
+    /** Access a channel field for the entire scan as a 2d array */
+    Eigen::Map<img_t<raw_t>> field(Field f) {
+        return Eigen::Map<img_t<raw_t>>(data.col(f).data(), h, w);
     }
-    data_t::ConstColXpr intensity() const {
-        return data.col(LidarScanIndex::INTENSITY);
-    }
-    data_t::ConstColXpr noise() const {
-        return data.col(LidarScanIndex::NOISE);
-    }
-    data_t::ConstColXpr reflectivity() const {
-        return data.col(LidarScanIndex::REFLECTIVITY);
+
+    Eigen::Map<const img_t<raw_t>> field(Field f) const {
+        return Eigen::Map<const img_t<raw_t>>(data.col(f).data(), h, w);
     }
 };
+
+/**
+ * Equality for column headers.
+ */
+inline bool operator==(const LidarScan::BlockHeader& a,
+                       const LidarScan::BlockHeader& b) {
+    return a.timestamp == b.timestamp && a.encoder == b.encoder &&
+           a.status == b.status;
+}
+
+/**
+ * Equality for scans.
+ */
+inline bool operator==(const LidarScan& a, const LidarScan& b) {
+    return a.w == b.w && a.h == b.h && (a.data == b.data).all() &&
+           a.headers == b.headers && a.frame_id && b.frame_id;
+}
 
 /**
  * Lookup table of beam directions and offsets
@@ -101,9 +121,9 @@ struct XYZLut {
  * @param altitude_angles_Deg altitude in degrees for each of h beams
  * @return xyz direction unit vectors for each point in the lidar scan
  */
-XYZLut make_xyz_lut(LidarScan::index_t w, LidarScan::index_t h,
-                    double range_unit, double lidar_origin_to_beam_origin_mm,
-                    const sensor::mat4d& transform,
+XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
+                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg);
 
@@ -136,26 +156,32 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
  * @param pixel_shift_by_row
  * @return destaggered version of field
  */
-template <class T, int direction = 1>
-inline LidarScan::field_t<T> destagger(
-    const Eigen::Ref<const LidarScan::field_t<T>> field,
-    const std::vector<int>& pixel_shift_by_row) {
-    static_assert(direction == 1 || direction == -1,
-                  "Destagger direction should be only +1 or -1");
-    const LidarScan::index_t h = pixel_shift_by_row.size();
-    const LidarScan::index_t w = field.size() / h;
+template <typename T>
+inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& img,
+                          const std::vector<int>& pixel_shift_by_row,
+                          bool inverse = false) {
+    const auto h = img.rows();
+    const auto w = img.cols();
 
-    Eigen::Array<T, Eigen::Dynamic, 1> destaggered(h * w);
-    for (LidarScan::index_t u = 0; u < h; u++) {
-        const LidarScan::index_t offset =
-            (direction * pixel_shift_by_row[u] + w) % w;
+    // TODO: throw if pixels_shifts.size() != h
 
-        destaggered.segment(u * w + offset, w - offset) =
-            field.segment(u * w, w - offset);
-        destaggered.segment(u * w, offset) =
-            field.segment(u * w + w - offset, offset);
+    img_t<T> destaggered{h, w};
+    for (std::ptrdiff_t u = 0; u < h; u++) {
+        const std::ptrdiff_t offset =
+            ((inverse ? -1 : 1) * pixel_shift_by_row[u] + w) % w;
+
+        destaggered.row(u).segment(offset, w - offset) =
+            img.row(u).segment(0, w - offset);
+        destaggered.row(u).segment(0, offset) =
+            img.row(u).segment(w - offset, offset);
     }
     return destaggered;
+}
+
+template <typename T>
+inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
+                        const std::vector<int>& pixel_shift_by_row) {
+    return destagger(img, pixel_shift_by_row, true);
 }
 
 /**
@@ -164,10 +190,9 @@ inline LidarScan::field_t<T> destagger(
  * @param sensor
  * @return destaggered version of field
  */
-template <class T>
-inline LidarScan::field_t<T> destagger(
-    const Eigen::Ref<const LidarScan::field_t<T>> field,
-    const sensor::sensor_info& sensor) {
+template <typename T>
+inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& field,
+                          const sensor::sensor_info& sensor) {
     return destagger(field, sensor.format.pixel_shift_by_row);
 }
 
@@ -180,7 +205,9 @@ inline LidarScan::field_t<T> destagger(
  *         at row u, column v.
  */
 inline LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
-    auto raw = lut.direction.colwise() * scan.range().cast<double>();
+    img_t<double> range = scan.field(LidarScan::RANGE).cast<double>();
+    auto raw = lut.direction.colwise() *
+               Eigen::Map<Eigen::ArrayXd>(range.data(), range.size());
     return (raw.array() == 0.0).select(raw, raw + lut.offset);
 }
 

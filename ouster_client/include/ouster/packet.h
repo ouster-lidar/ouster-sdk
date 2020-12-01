@@ -60,7 +60,9 @@ std::function<void(const uint8_t*, LidarScan& ls)> batch_to_scan(
             const uint16_t m_id = pf.col_measurement_id(col_buf);
             const uint16_t f_id = pf.col_frame_id(col_buf);
             const std::chrono::nanoseconds ts(pf.col_timestamp(col_buf));
-            const bool valid = pf.col_valid(col_buf) == 0xffffffff;
+            const uint32_t encoder = pf.col_h_angle(col_buf);
+            const uint32_t status = pf.col_valid(col_buf);
+            const bool valid = (status == 0xffffffff);
 
             // drop invalid / out-of-bounds data in case of misconfiguration
             if (!valid || m_id >= w || f_id + 1 == cur_f_id) continue;
@@ -73,6 +75,7 @@ std::function<void(const uint8_t*, LidarScan& ls)> batch_to_scan(
                     row_view_t{ls.data.data(), rows, ls.w}
                         .block(0, next_m_id, rows, w - next_m_id)
                         .setZero();
+                    ls.frame_id = cur_f_id;
                     f(scan_ts);
                 }
 
@@ -91,15 +94,11 @@ std::function<void(const uint8_t*, LidarScan& ls)> batch_to_scan(
                 next_m_id = m_id + 1;
             }
 
-            ls.ts[m_id] = ts;
+            ls.header(m_id) = {ts, encoder, status};
             for (uint8_t ipx = 0; ipx < h; ipx++) {
-                // index of the first point in current packet
-                const std::ptrdiff_t idx = ls.ind(ipx, m_id);
-
                 const uint8_t* px_buf = pf.nth_px(ipx, col_buf);
 
-                // i, ts, reflectivity, ring, noise, range (mm)
-                ls.data.row(idx)
+                ls.block(m_id).row(ipx)
                     << static_cast<LidarScan::raw_t>(pf.px_range(px_buf)),
                     static_cast<LidarScan::raw_t>(pf.px_signal_photons(px_buf)),
                     static_cast<LidarScan::raw_t>(pf.px_noise_photons(px_buf)),

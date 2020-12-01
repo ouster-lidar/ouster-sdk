@@ -6,9 +6,9 @@
 
 namespace ouster {
 
-XYZLut make_xyz_lut(LidarScan::index_t w, LidarScan::index_t h,
-                    double range_unit, double lidar_origin_to_beam_origin_mm,
-                    const sensor::mat4d& transform,
+XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
+                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg) {
     Eigen::ArrayXd encoder(w * h);   // theta_e
@@ -18,9 +18,9 @@ XYZLut make_xyz_lut(LidarScan::index_t w, LidarScan::index_t h,
     const double azimuth_radians = M_PI * 2.0 / w;
 
     // populate angles for each pixel
-    for (LidarScan::index_t v = 0; v < w; v++) {
-        for (LidarScan::index_t u = 0; u < h; u++) {
-            LidarScan::index_t i = u * w + v;
+    for (size_t v = 0; v < w; v++) {
+        for (size_t u = 0; u < h; u++) {
+            size_t i = u * w + v;
             encoder(i) = 2 * M_PI - (v * azimuth_radians);
             azimuth(i) = -azimuth_angles_deg[u] * M_PI / 180.0;
             altitude(i) = altitude_angles_deg[u] * M_PI / 180.0;

@@ -9,9 +9,19 @@
 #include <vector>
 
 namespace ouster {
-namespace sensor {
 
+/**
+ * For image operations
+ */
+template <typename T>
+using img_t = Eigen::Array<T, -1, -1, Eigen::RowMajor>;
+
+/**
+ * Used for transformations
+ */
 using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
+
+namespace sensor {
 
 /**
  * Unit of range from sensor packet, in meters
