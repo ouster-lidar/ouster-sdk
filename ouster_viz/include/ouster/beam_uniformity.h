@@ -2,7 +2,7 @@
  * @file
  * @brief Corrects beam uniformity by minimizing median difference between rows,
  *        thereby correcting subtle horizontal line artifacts in images,
- *        especially the noise image.
+ *        especially the ambient image.
  */
 
 #pragma once

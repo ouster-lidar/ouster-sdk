@@ -69,7 +69,7 @@ make
 | ----| ------------ |
 | `p` | Increase point size |
 | `o` | Decrease point size |
-| `m` | Cycle point cloud coloring by intensity, noise, reflectivity, range |
+| `m` | Cycle point cloud coloring by intensity, ambient, reflectivity, range |
 | `v` | Toggle color cycling in range image |
 | `n` | Toggle display ambient image from the sensor |
 | `r` | Toggle auto-rotating |

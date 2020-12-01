@@ -21,7 +21,7 @@ float imu_la_y = 0.0;
 void handle_lidar(uint8_t* buf, const sensor::packet_format& pf) {
     n_lidar_packets++;
     lidar_col_0_ts = pf.col_timestamp(pf.nth_col(0, buf));
-    lidar_col_0_h_angle = pf.col_h_angle(pf.nth_col(0, buf));
+    lidar_col_0_h_angle = pf.col_encoder(pf.nth_col(0, buf));
 }
 
 void handle_imu(uint8_t* buf, const sensor::packet_format& pf) {

@@ -57,8 +57,8 @@
       sensor or recorded data
     - To visualize output using rviz, run `rviz -d /path/to/ouster_ros/viz.rviz`
       in another terminal
-    - To view lidar intensity/noise/range images, add `image:=true` to either of
-      the `roslaunch` commands above
+    - To view lidar intensity/ambient/range images, add `image:=true` to either
+      of the `roslaunch` commands above
 
 ### Recording Data
 * To record raw sensor output use [rosbag record](https://wiki.ros.org/rosbag/Commandline#rosbag_record):

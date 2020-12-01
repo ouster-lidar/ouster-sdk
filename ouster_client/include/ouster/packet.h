@@ -60,8 +60,8 @@ std::function<void(const uint8_t*, LidarScan& ls)> batch_to_scan(
             const uint16_t m_id = pf.col_measurement_id(col_buf);
             const uint16_t f_id = pf.col_frame_id(col_buf);
             const std::chrono::nanoseconds ts(pf.col_timestamp(col_buf));
-            const uint32_t encoder = pf.col_h_angle(col_buf);
-            const uint32_t status = pf.col_valid(col_buf);
+            const uint32_t encoder = pf.col_encoder(col_buf);
+            const uint32_t status = pf.col_status(col_buf);
             const bool valid = (status == 0xffffffff);
 
             // drop invalid / out-of-bounds data in case of misconfiguration
@@ -71,10 +71,12 @@ std::function<void(const uint8_t*, LidarScan& ls)> batch_to_scan(
                 // if not initializing with first packet
                 if (scan_ts != invalid_ts) {
                     // zero out remaining missing columns
-                    auto rows = ls.h * 4;
+                    auto rows = ls.h * LidarScan::N_FIELDS;
                     row_view_t{ls.data.data(), rows, ls.w}
                         .block(0, next_m_id, rows, w - next_m_id)
                         .setZero();
+
+                    // finish the scan and notify callback
                     ls.frame_id = cur_f_id;
                     f(scan_ts);
                 }
@@ -87,7 +89,7 @@ std::function<void(const uint8_t*, LidarScan& ls)> batch_to_scan(
 
             // zero out missing columns if we jumped forward
             if (m_id >= next_m_id) {
-                auto rows = ls.h * 4;
+                auto rows = ls.h * LidarScan::N_FIELDS;
                 row_view_t{ls.data.data(), rows, ls.w}
                     .block(0, next_m_id, rows, m_id - next_m_id)
                     .setZero();
@@ -100,8 +102,8 @@ std::function<void(const uint8_t*, LidarScan& ls)> batch_to_scan(
 
                 ls.block(m_id).row(ipx)
                     << static_cast<LidarScan::raw_t>(pf.px_range(px_buf)),
-                    static_cast<LidarScan::raw_t>(pf.px_signal_photons(px_buf)),
-                    static_cast<LidarScan::raw_t>(pf.px_noise_photons(px_buf)),
+                    static_cast<LidarScan::raw_t>(pf.px_signal(px_buf)),
+                    static_cast<LidarScan::raw_t>(pf.px_ambient(px_buf)),
                     static_cast<LidarScan::raw_t>(pf.px_reflectivity(px_buf));
             }
         }

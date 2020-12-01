@@ -19,21 +19,21 @@ namespace viz {
 class LidarScanViz {
     AutoExposure range_ae;
     AutoExposure intensity_ae;
-    AutoExposure noise_ae;
+    AutoExposure ambient_ae;
     AutoExposure reflectivity_ae;
-    BeamUniformityCorrector noise_buc;
+    BeamUniformityCorrector ambient_buc;
     const std::vector<int> px_offset;
     const double aspect_ratio;
     const size_t h, w;
     std::vector<GLfloat> imdata;
-    std::atomic_bool show_noise;
+    std::atomic_bool show_ambient;
     std::atomic_int display_mode;
     std::atomic_bool cycle_range;
 
     enum CloudDisplayMode {
         MODE_RANGE = 0,
         MODE_INTENSITY = 1,
-        MODE_NOISE = 2,
+        MODE_AMBIENT = 2,
         MODE_REFLECTIVITY = 3,
         NUM_MODES = 4
     };
@@ -58,12 +58,12 @@ class LidarScanViz {
           h(info.format.pixels_per_column),
           w(info.format.columns_per_frame),
           imdata(3 * h * w),
-          show_noise(true),
+          show_ambient(true),
           display_mode(MODE_INTENSITY),
           cycle_range(false),
           point_viz(point_viz_) {
         point_viz.attachKeyHandler(
-            GLFW_KEY_N, [this]() { this->show_noise = !this->show_noise; });
+            GLFW_KEY_N, [this]() { this->show_ambient = !this->show_ambient; });
         point_viz.attachKeyHandler(GLFW_KEY_M, [this]() {
             this->display_mode = (this->display_mode + 1) % NUM_MODES;
 
@@ -77,8 +77,8 @@ class LidarScanViz {
                 case MODE_RANGE:
                     std::cerr << "Coloring point cloud by range" << std::endl;
                     break;
-                case MODE_NOISE:
-                    std::cerr << "Coloring point cloud by noise" << std::endl;
+                case MODE_AMBIENT:
+                    std::cerr << "Coloring point cloud by ambient" << std::endl;
                     break;
                 case MODE_REFLECTIVITY:
                     std::cerr << "Coloring point cloud by reflectivity"
@@ -118,7 +118,7 @@ class LidarScanViz {
             intensity_ae(
                 Eigen::Map<Eigen::ArrayXd>(intensity.data(), intensity.size()));
         }
-        img_t<double> noise = ls.field(LidarScan::NOISE).cast<double>();
+        img_t<double> ambient = ls.field(LidarScan::AMBIENT).cast<double>();
         auto intensity_destaggered = destagger<double>(intensity, px_offset);
         auto range_destaggered = destagger<double>(range, px_offset);
         if (cycle_range) {
@@ -133,23 +133,23 @@ class LidarScanViz {
         glmap_t(imdata.data() + w * h, h, w) =
             intensity_destaggered.cast<GLfloat>();
 
-        img_t<double> noise_destaggered{h, w};
-        if ((show_image && show_noise) || display_mode == MODE_NOISE) {
-            // we need to destagger noise because the
+        img_t<double> ambient_destaggered{h, w};
+        if ((show_image && show_ambient) || display_mode == MODE_AMBIENT) {
+            // we need to destagger ambient because the
             // BeamUniformityCorrector only works on destaggered stuff
-            noise_destaggered = destagger<double>(noise, px_offset);
-            noise_buc.correct(noise_destaggered);
-            noise_ae(Eigen::Map<Eigen::ArrayXd>(noise_destaggered.data(),
-                                                noise_destaggered.size()));
+            ambient_destaggered = destagger<double>(ambient, px_offset);
+            ambient_buc.correct(ambient_destaggered);
+            ambient_ae(Eigen::Map<Eigen::ArrayXd>(ambient_destaggered.data(),
+                                                  ambient_destaggered.size()));
 
-            if (show_image && show_noise) {
+            if (show_image && show_ambient) {
                 glmap_t(imdata.data() + 2 * w * h, h, w) =
-                    noise_destaggered.cast<GLfloat>();
+                    ambient_destaggered.cast<GLfloat>();
             }
         }
 
         if (show_image) {
-            if (show_noise) {
+            if (show_ambient) {
                 point_viz.resizeImage(w, 3 * h);
                 point_viz.setImageAspectRatio(3 * aspect_ratio);
             } else {
@@ -170,9 +170,10 @@ class LidarScanViz {
             case MODE_RANGE:
                 point_viz.setRangeAndKey(which_cloud, range_data, range.data());
                 break;
-            case MODE_NOISE:
-                noise = stagger<double>(noise_destaggered, px_offset);
-                point_viz.setRangeAndKey(which_cloud, range_data, noise.data());
+            case MODE_AMBIENT:
+                ambient = stagger<double>(ambient_destaggered, px_offset);
+                point_viz.setRangeAndKey(which_cloud, range_data,
+                                         ambient.data());
                 break;
             case MODE_REFLECTIVITY:
                 img_t<double> reflectivity =

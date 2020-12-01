@@ -55,4 +55,11 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
     return lut;
 }
 
+LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
+    auto reshaped = Eigen::Map<const Eigen::Array<LidarScan::raw_t, -1, 1>>(
+        scan.field(LidarScan::RANGE).data(), scan.h * scan.w);
+    auto nooffset = lut.direction.colwise() * reshaped.cast<double>();
+    return (nooffset.array() == 0.0).select(nooffset, nooffset + lut.offset);
+}
+
 }  // namespace ouster

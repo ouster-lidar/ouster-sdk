@@ -33,7 +33,7 @@ const uint8_t* nth_col(int n, const uint8_t* lidar_buf) {
 }
 
 template <int N_PIXELS>
-inline uint32_t col_valid(const uint8_t* col_buf) {
+inline uint32_t col_status(const uint8_t* col_buf) {
     uint32_t res;
     std::memcpy(&res, col_buf + column_bytes(N_PIXELS) - 4, sizeof(uint32_t));
     return res;
@@ -45,7 +45,7 @@ inline uint64_t col_timestamp(const uint8_t* col_buf) {
     return res;  // nanoseconds
 }
 
-inline uint32_t col_h_angle(const uint8_t* col_buf) {
+inline uint32_t col_encoder(const uint8_t* col_buf) {
     uint32_t res;
     std::memcpy(&res, col_buf + 12, sizeof(uint32_t));
     return res;
@@ -80,13 +80,13 @@ inline uint16_t px_reflectivity(const uint8_t* px_buf) {
     return res;
 }
 
-inline uint16_t px_signal_photons(const uint8_t* px_buf) {
+inline uint16_t px_signal(const uint8_t* px_buf) {
     uint16_t res;
     std::memcpy(&res, px_buf + 6, sizeof(uint16_t));
     return res;
 }
 
-inline uint16_t px_noise_photons(const uint8_t* px_buf) {
+inline uint16_t px_ambient(const uint8_t* px_buf) {
     uint16_t res;
     std::memcpy(&res, px_buf + 8, sizeof(uint16_t));
     return res;
@@ -157,16 +157,16 @@ constexpr packet_format packet__1_14_0() {
 
         impl::nth_col<N_PIXELS>,
         impl::col_timestamp,
-        impl::col_h_angle,
+        impl::col_encoder,
         impl::col_measurement_id,
         impl::col_frame_id,
-        impl::col_valid<N_PIXELS>,
+        impl::col_status<N_PIXELS>,
 
         impl::nth_px,
         impl::px_range,
         impl::px_reflectivity,
-        impl::px_signal_photons,
-        impl::px_noise_photons,
+        impl::px_signal,
+        impl::px_ambient,
 
         impl::imu_sys_ts,
         impl::imu_accel_ts,
