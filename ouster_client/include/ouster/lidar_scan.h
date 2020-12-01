@@ -52,7 +52,7 @@ class LidarScan {
     std::ptrdiff_t h{0};
     data_t data{};
     std::vector<BlockHeader> headers{};
-    uint16_t frame_id{0};
+    int32_t frame_id{-1};
 
     /** The default constructor creates an invalid 0 x 0 scan */
     LidarScan() = default;
@@ -67,8 +67,7 @@ class LidarScan {
         : w{static_cast<std::ptrdiff_t>(w)},
           h{static_cast<std::ptrdiff_t>(h)},
           data{w * h, N_FIELDS},
-          headers{w, BlockHeader{ts_t{0}, 0, 0}},
-          frame_id{0} {};
+          headers{w, BlockHeader{ts_t{0}, 0, 0}} {};
 
     /**
      * Access timestamps as a vector.
@@ -244,5 +243,38 @@ inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
                         const std::vector<int>& pixel_shift_by_row) {
     return destagger(img, pixel_shift_by_row, true);
 }
+
+/**
+ * Parse lidar packets into a LidarScan.
+ *
+ * Make a function that batches a single scan (revolution) of data to a
+ * LidarScan.
+ */
+class ScanBatcher {
+    std::ptrdiff_t w;
+    std::ptrdiff_t h;
+    uint16_t next_m_id;
+    LidarScan ls_write;
+
+   public:
+    sensor::packet_format pf;
+
+    /**
+     * Create a batcher given information about the scan and packet format.
+     *
+     * @param w number of columns in the lidar scan. One of 512, 1024, or 2048
+     * @param pf expected format of the incoming packets used for parsing
+     */
+    ScanBatcher(size_t w, const sensor::packet_format& pf);
+
+    /**
+     * Add a packet to the scan.
+     *
+     * @param packet_buf the lidar packet
+     * @param lidar scan to populate
+     * @return true when the provided lidar scan is ready to use
+     */
+    bool operator()(const uint8_t* packet_buf, LidarScan& ls);
+};
 
 }  // namespace ouster

@@ -10,10 +10,11 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 
+#include <algorithm>
 #include <chrono>
+#include <memory>
 
 #include "ouster/lidar_scan.h"
-#include "ouster/packet.h"
 #include "ouster/types.h"
 #include "ouster_ros/OSConfigSrv.h"
 #include "ouster_ros/PacketMsg.h"
@@ -56,15 +57,20 @@ int main(int argc, char** argv) {
     Cloud cloud{W, H};
     ouster::LidarScan ls{W, H};
 
-    auto batch_and_publish = sensor::batch_to_scan(
-        W, pf, [&](std::chrono::nanoseconds scan_ts) mutable {
-            scan_to_cloud(xyz_lut, scan_ts, ls, cloud);
-            lidar_pub.publish(
-                ouster_ros::cloud_to_cloud_msg(cloud, scan_ts, sensor_frame));
-        });
+    ouster::ScanBatcher batch(W, pf);
 
     auto lidar_handler = [&](const PacketMsg& pm) mutable {
-        batch_and_publish(pm.buf.data(), ls);
+        if (batch(pm.buf.data(), ls)) {
+            auto h = std::find_if(
+                ls.headers.begin(), ls.headers.end(), [](const auto& h) {
+                    return h.timestamp != std::chrono::nanoseconds{0};
+                });
+            if (h != ls.headers.end()) {
+                scan_to_cloud(xyz_lut, h->timestamp, ls, cloud);
+                lidar_pub.publish(ouster_ros::cloud_to_cloud_msg(
+                    cloud, h->timestamp, sensor_frame));
+            }
+        }
     };
 
     auto imu_handler = [&](const PacketMsg& p) {

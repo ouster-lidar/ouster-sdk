@@ -12,9 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "ouster/packet.h"
-#include "ouster/version.h"
 #include "ouster/build.h"
+#include "ouster/impl/parsing.h"
+#include "ouster/version.h"
 
 namespace ouster {
 namespace sensor {
@@ -101,6 +101,13 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                default_lidar_to_sensor_transform,
                                mat4d::Identity()};
 }
+
+
+constexpr packet_format packet__1_13_0 = impl::packet__1_14_0<64>();
+constexpr packet_format packet__1_14_0__16 = impl::packet__1_14_0<16>();
+constexpr packet_format packet__1_14_0__32 = impl::packet__1_14_0<32>();
+constexpr packet_format packet__1_14_0__64 = impl::packet__1_14_0<64>();
+constexpr packet_format packet__1_14_0__128 = impl::packet__1_14_0<128>();
 
 const packet_format& get_format(const sensor_info& info) {
     switch (info.format.pixels_per_column) {
@@ -254,7 +261,6 @@ sensor_info parse_metadata(const std::string& meta) {
 
     for (const auto& v : root["beam_azimuth_angles"])
         info.beam_azimuth_angles.push_back(v.asDouble());
-
 
     // "imu_to_sensor_transform" may be absent in sensor config
     // produced by Ouster Studio, so we backfill it with default value

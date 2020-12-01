@@ -62,4 +62,71 @@ LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
     return (nooffset.array() == 0.0).select(nooffset, nooffset + lut.offset);
 }
 
+ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
+    : w(w), h(pf.pixels_per_column), next_m_id(0), ls_write(w, h), pf(pf) {}
+
+bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
+    using row_view_t =
+        Eigen::Map<Eigen::Array<LidarScan::raw_t, Eigen::Dynamic,
+                                Eigen::Dynamic, Eigen::RowMajor>>;
+
+    if (ls.w != w || ls.h != h)
+        throw std::invalid_argument("unexpected scan dimensions");
+
+    bool swapped = false;
+
+    for (int icol = 0; icol < pf.columns_per_packet; icol++) {
+        const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
+        const uint16_t m_id = pf.col_measurement_id(col_buf);
+        const uint16_t f_id = pf.col_frame_id(col_buf);
+        const std::chrono::nanoseconds ts(pf.col_timestamp(col_buf));
+        const uint32_t encoder = pf.col_encoder(col_buf);
+        const uint32_t status = pf.col_status(col_buf);
+        const bool valid = (status == 0xffffffff);
+
+        // drop invalid / out-of-bounds data in case of misconfiguration
+        if (!valid || m_id >= w || f_id + 1 == ls_write.frame_id) continue;
+
+        if (ls_write.frame_id != f_id) {
+            // if not initializing with first packet
+            if (ls_write.frame_id != -1) {
+                // zero out remaining missing columns
+                auto rows = h * LidarScan::N_FIELDS;
+                row_view_t{ls_write.data.data(), rows, w}
+                    .block(0, next_m_id, rows, w - next_m_id)
+                    .setZero();
+
+                // finish the scan and notify callback
+                std::swap(ls, ls_write);
+                swapped = true;
+            }
+
+            // start new frame
+            next_m_id = 0;
+            ls_write.frame_id = f_id;
+        }
+
+        // zero out missing columns if we jumped forward
+        if (m_id >= next_m_id) {
+            auto rows = h * LidarScan::N_FIELDS;
+            row_view_t{ls_write.data.data(), rows, w}
+                .block(0, next_m_id, rows, m_id - next_m_id)
+                .setZero();
+            next_m_id = m_id + 1;
+        }
+
+        ls_write.header(m_id) = {ts, encoder, status};
+        for (uint8_t ipx = 0; ipx < h; ipx++) {
+            const uint8_t* px_buf = pf.nth_px(ipx, col_buf);
+
+            ls_write.block(m_id).row(ipx)
+                << static_cast<LidarScan::raw_t>(pf.px_range(px_buf)),
+                static_cast<LidarScan::raw_t>(pf.px_signal(px_buf)),
+                static_cast<LidarScan::raw_t>(pf.px_ambient(px_buf)),
+                static_cast<LidarScan::raw_t>(pf.px_reflectivity(px_buf));
+        }
+    }
+    return swapped;
+}
+
 }  // namespace ouster
