@@ -5,13 +5,15 @@
  * Contains headers and some inline functions for the main PointViz class
  * as well as supporting classes such as Camera, Image, Cloud, etc.
  */
-
 #pragma once
+
 // clang-format off
 // glew must be included first so we prevent clang-format from rearranging
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 // clang-format on
+
+#include "ouster/colormaps.h"
 
 #include <array>
 #include <atomic>
@@ -26,18 +28,8 @@
 #include <vector>
 #include <cmath>
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
-#include "ouster/colormaps.h"
 
 namespace ouster {
 namespace viz {
@@ -46,6 +38,7 @@ namespace impl {
 // compilation options as internal C++ code, leading to problems. besides, the
 // performance here is not super critical
 using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
+using mat4f = Eigen::Matrix<GLfloat, 4, 4, Eigen::DontAlign>;
 
 constexpr int default_window_width = 640;
 constexpr int default_window_height = 480;
@@ -177,6 +170,25 @@ static const std::string ring_fragment_shader_code =
             #version 120
             void main() {
                 gl_FragColor = vec4(0.15, 0.15, 0.15, 1);
+            })SHADER";
+static const std::string cuboid_vertex_shader_code =
+    R"SHADER(
+            #version 120
+            attribute vec3 cuboid_xyz;
+            uniform vec4 cuboid_rgba;
+            uniform mat4 pose;
+            uniform mat4 proj_view;
+            varying vec4 rgba;
+            void main(){
+                gl_Position = proj_view * pose * vec4(cuboid_xyz, 1.0);
+                rgba = cuboid_rgba;
+            })SHADER";
+static const std::string cuboid_fragment_shader_code =
+    R"SHADER(
+            #version 120
+            varying vec4 rgba;
+            void main() {
+                gl_FragColor = rgba;
             })SHADER";
 static const std::string image_vertex_shader_code =
     R"SHADER(
@@ -921,8 +933,7 @@ class Rings {
     void draw(const Camera& camera) {
         glUseProgram(ring_program_id);
         const float radius = std::pow(10.0f, static_cast<GLfloat>(ring_size));
-        Eigen::Matrix<GLfloat, 4, 4> camera_data =
-            camera.proj_view().cast<GLfloat>();
+        mat4f camera_data = camera.proj_view().cast<GLfloat>();
         glUniformMatrix4fv(ring_proj_view_id, 1, GL_FALSE, camera_data.data());
         glEnableVertexAttribArray(ring_xyz_id);
         glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
@@ -948,6 +959,108 @@ class Rings {
      */
     ~Rings() { glDeleteProgram(ring_program_id); }
 };
+
+/**
+ * struct to deal with a single cuboid
+ */
+struct Cuboid {
+    mat4f pose;
+    std::array<GLfloat, 4> rgba;
+};
+
+/**
+ * Class to deal with showing cuboids
+ */
+class Cuboids {
+    const std::array<GLfloat, 24> xyz;
+    const std::array<GLubyte, 24> indices;
+    const std::array<GLubyte, 24> edge_indices;
+    std::vector<Cuboid> cuboids;
+
+    GLuint cuboid_program_id;
+    GLuint cuboid_xyz_id;
+    GLuint cuboid_proj_view_id;
+    GLuint cuboid_pose_id;
+    GLuint cuboid_rgba_id;
+    GLuint xyz_buffer;
+
+   public:
+    bool enabled;
+
+    /**
+     * constructor
+     */
+    Cuboids()
+        : xyz{+0.5, +0.5, +0.5, +0.5, +0.5, -0.5, +0.5, -0.5,
+              +0.5, +0.5, -0.5, -0.5, -0.5, +0.5, +0.5, -0.5,
+              +0.5, -0.5, -0.5, -0.5, +0.5, -0.5, -0.5, -0.5},
+          indices{0, 1, 3, 2, 6, 7, 5, 4, 2, 3, 7, 6,
+                  4, 5, 1, 0, 0, 2, 6, 4, 5, 7, 3, 1},
+          edge_indices{0, 1, 1, 3, 3, 2, 2, 0, 4, 5, 5, 7,
+                       7, 6, 6, 4, 0, 4, 1, 5, 2, 6, 3, 7},
+          enabled{true} {}
+
+    /**
+     * initializes shader program, vertex buffers and handles after OpenGL
+     * context has been created
+     */
+    void initialize() {
+        cuboid_program_id = load_shaders(cuboid_vertex_shader_code,
+                                         cuboid_fragment_shader_code);
+        cuboid_xyz_id = glGetAttribLocation(cuboid_program_id, "cuboid_xyz");
+        cuboid_proj_view_id =
+            glGetUniformLocation(cuboid_program_id, "proj_view");
+        cuboid_pose_id = glGetUniformLocation(cuboid_program_id, "pose");
+        cuboid_rgba_id = glGetUniformLocation(cuboid_program_id, "cuboid_rgba");
+
+        glGenBuffers(1, &xyz_buffer);
+        glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 24, xyz.data(),
+                     GL_STATIC_DRAW);
+    }
+
+    void clear() { cuboids.clear(); }
+    void push(Cuboid&& c) { cuboids.push_back(std::move(c)); }
+
+    /**
+     * draws the cuboids from the point of view of the camera.
+     * The cuboids are always centered on the camera's target.
+     *
+     * @param camera The camera
+     */
+    void draw(const Camera& camera) {
+        glUseProgram(cuboid_program_id);
+        const mat4f camera_data = camera.proj_view_target().cast<GLfloat>();
+        glUniformMatrix4fv(cuboid_proj_view_id, 1, GL_FALSE,
+                           camera_data.data());
+        glEnableVertexAttribArray(cuboid_xyz_id);
+        glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
+        glVertexAttribPointer(cuboid_xyz_id,
+                              3,         // size
+                              GL_FLOAT,  // type
+                              GL_FALSE,  // normalized?
+                              0,         // stride
+                              (void*)0   // array buffer offset
+        );
+        for (const auto& cuboid : cuboids) {
+            const mat4f pose = cuboid.pose;
+            glUniformMatrix4fv(cuboid_pose_id, 1, GL_FALSE, pose.data());
+            glUniform4fv(cuboid_rgba_id, 1, cuboid.rgba.data());
+
+            glDrawElements(GL_QUADS, 24, GL_UNSIGNED_BYTE, indices.data());
+            auto rgba = cuboid.rgba;
+            rgba[3] = 1;
+            glUniform4fv(cuboid_rgba_id, 1, rgba.data());
+            glDrawElements(GL_LINES, 24, GL_UNSIGNED_BYTE, edge_indices.data());
+        }
+        glDisableVertexAttribArray(cuboid_xyz_id);
+    };
+
+    /**
+     * destructor
+     */
+    ~Cuboids() { glDeleteProgram(cuboid_program_id); }
+};
 }  // namespace impl
 
 class PointViz {
@@ -956,6 +1069,7 @@ class PointViz {
 
     std::vector<impl::MultiCloud> clouds;
     impl::DoubleBuffer<impl::Image> image;
+    impl::DoubleBuffer<impl::Cuboids> cuboids;
     std::string name;
     GLFWwindow* window;
     impl::Camera camera;
@@ -1195,6 +1309,23 @@ class PointViz {
      * swap the double buffered image after writing all necessary data
      */
     void imageSwap() { image.swap(); }
+
+    /**
+     * add a cuboid
+     *
+     * @param a cuboid
+     */
+    void addCuboid(impl::Cuboid&& cuboid) {
+        cuboids.write->push(std::move(cuboid));
+    }
+
+    /**
+     * swap double buffered cuboids
+     */
+    void cuboidSwap() {
+        cuboids.read->clear();
+        cuboids.swap();
+    }
 
     /**
      * set camera target. the camera will smoothly move towards it

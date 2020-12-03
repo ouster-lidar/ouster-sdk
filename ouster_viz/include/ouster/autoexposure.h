@@ -7,16 +7,7 @@
  */
 
 #pragma once
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Dense>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
 #include <algorithm>
 #include <vector>
 

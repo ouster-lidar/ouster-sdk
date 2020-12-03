@@ -1,15 +1,5 @@
 #include <tclap/CmdLine.h>
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
-#include <Eigen/Eigen>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
 #include <atomic>
 #include <cmath>
 #include <csignal>
@@ -18,35 +8,19 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "ouster/build.h"
 #include "ouster/client.h"
-#include "ouster/compat.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/lidar_scan_viz.h"
-#include "ouster/packet.h"
 #include "ouster/point_viz.h"
 #include "ouster/types.h"
 
 namespace sensor = ouster::sensor;
 namespace viz = ouster::viz;
-
-/**
- * Print usage
- */
-void print_help() {
-    std::cout
-        << "Usage: viz [options] [hostname] [udp_destination]\n"
-        << "Options:\n"
-        << "  -m <512x10 | 512x20 | 1024x10 | 1024x20 | 2048x10> : lidar mode\n"
-        << "  -l <port> : use specified port for lidar data\n"
-        << "  -i <port> : use specified port for imu data \n"
-        << "  -f <path> : use provided metadata file; do not configure via TCP"
-        << std::endl;
-}
 
 int main(int argc, char** argv) {
     sensor::lidar_mode mode = sensor::MODE_UNSPEC;
@@ -59,7 +33,8 @@ int main(int argc, char** argv) {
     std::string udp_dest;
 
     try {
-        TCLAP::CmdLine cmd("Ouster Visualizer");
+        TCLAP::CmdLine cmd("Ouster Visualizer", ' ',
+                           ouster::CLIENT_VERSION_FULL);
 
         TCLAP::UnlabeledValueArg<std::string> hostname_arg(
             "hostname", "hostname of the sensor", true, "", "string");
@@ -116,13 +91,12 @@ int main(int argc, char** argv) {
         hostname = hostname_arg.getValue();
         udp_dest = udp_destination_arg.getValue();
     } catch (const std::exception& ex) {
-        std::cout << "Invalid Argument Format: " << ex.what() << std::endl;
-        print_help();
+        std::cout << "Unexpected error: " << ex.what() << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
     std::shared_ptr<sensor::client> cli;
-    socket_init();
+
     if (do_config) {
         std::cout << "Connecting to " << hostname << "; sending data to "
                   << udp_dest << std::endl;
@@ -139,7 +113,6 @@ int main(int argc, char** argv) {
 
     if (!cli) {
         std::cerr << "Failed to initialize client" << std::endl;
-        print_help();
         std::exit(EXIT_FAILURE);
     }
 
@@ -183,13 +156,7 @@ int main(int argc, char** argv) {
     std::unique_ptr<ouster::LidarScan> ls_read(new ouster::LidarScan(W, H));
     std::unique_ptr<ouster::LidarScan> ls_write(new ouster::LidarScan(W, H));
 
-    auto batch_and_display = sensor::batch_to_scan(
-        W, packet_format, [&](std::chrono::nanoseconds) mutable {
-            std::lock_guard<std::mutex> lk(swap_mtx);
-            std::swap(ls_read, ls_write);
-            lidar_scan_ready = true;
-            cv.notify_one();
-        });
+    auto batch = ouster::ScanBatcher(W, packet_format);
 
     std::unique_ptr<uint8_t[]> lidar_buf(
         new uint8_t[packet_format.lidar_packet_size + 1]);
@@ -206,8 +173,14 @@ int main(int argc, char** argv) {
             }
             if (st & sensor::client_state::LIDAR_DATA) {
                 if (sensor::read_lidar_packet(*cli, lidar_buf.get(),
-                                              packet_format))
-                    batch_and_display(lidar_buf.get(), *ls_write);
+                                              packet_format)) {
+                    if (batch(lidar_buf.get(), *ls_write)) {
+                        std::lock_guard<std::mutex> lk(swap_mtx);
+                        std::swap(ls_read, ls_write);
+                        lidar_scan_ready = true;
+                        cv.notify_one();
+                    }
+                }
             }
             if (st & sensor::client_state::IMU_DATA) {
                 sensor::read_imu_packet(*cli, imu_buf.get(), packet_format);
@@ -230,10 +203,11 @@ int main(int argc, char** argv) {
             lidar_scan_viz.draw(*ls_read);
         }
     });
+
     point_viz.drawLoop();
     cv.notify_one();  // wake up update_draw thread for exit
     poll.join();
     update_draw.join();
-    socket_quit();
+
     return EXIT_SUCCESS;
 }

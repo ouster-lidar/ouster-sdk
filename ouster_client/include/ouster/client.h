@@ -25,13 +25,12 @@ enum client_state {
     EXIT = 8
 };
 
-/**
- * Minimum supported version
- */
+/** Minimum supported version. */
 const util::version min_version = {1, 12, 0};
 
 /**
- * Listen for sensor data on the specified ports; do not configure the sensor
+ * Listen for sensor data on the specified ports; do not configure the sensor.
+ *
  * @param lidar_port port on which the sensor will send lidar data
  * @param imu_port port on which the sensor will send imu data
  * @return pointer owning the resources associated with the connection
@@ -40,7 +39,8 @@ std::shared_ptr<client> init_client(const std::string& hostname = "",
                                     int lidar_port = 7502, int imu_port = 7503);
 
 /**
- * Connect to and configure the sensor and start listening for data
+ * Connect to and configure the sensor and start listening for data.
+ *
  * @param hostname hostname or ip of the sensor
  * @param udp_dest_host hostname or ip where the sensor should send data
  * @param lidar_port port on which the sensor will send lidar data
@@ -56,7 +56,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     int timeout_sec = 30);
 
 /**
- * Block for up to timeout_sec until either data is ready or an error occurs
+ * Block for up to timeout_sec until either data is ready or an error occurs.
+ *
  * NOTE: will return immediately if LIDAR_DATA or IMU_DATA are set and not
  * cleared by read_lidar_data() and read_imu_data() before the next call
  * @param cli client returned by init_client associated with the connection
@@ -68,7 +69,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 client_state poll_client(const client& cli, int timeout_sec = 1);
 
 /**
- * Read lidar data from the sensor. Will not block
+ * Read lidar data from the sensor. Will not block.
+ *
  * @param cli client returned by init_client associated with the connection
  * @param buf buffer to which to write lidar data. Must be at least
  * lidar_packet_bytes + 1 bytes
@@ -78,7 +80,8 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
                        const packet_format& pf);
 
 /**
- * Read imu data from the sensor. Will not block
+ * Read imu data from the sensor. Will not block.
+ *
  * @param cli client returned by init_client associated with the connection
  * @param buf buffer to which to write imu data. Must be at least
  * imu_packet_bytes + 1 bytes
@@ -87,8 +90,10 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
 
 /**
- * Get metadata text blob from the sensor. Attempt to fetch from the network if
- * not already populated
+ * Get metadata text blob from the sensor.
+ *
+ * Will attempt to fetch from the network if not already populated.
+ *
  * @param cli client returned by init_client associated with the connection
  * @param timeout_sec how long to wait for the sensor to initialize
  * @return a text blob of metadata parseable into a sensor_info struct

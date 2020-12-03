@@ -1,0 +1,280 @@
+===================
+Ouster Example Code
+===================
+
+:Description: Sample code provided for working with Ouster sensors
+
+.. contents:: Contents:
+   :local:
+
+
+Summary
+=======
+
+Sample code for connecting to and configuring ouster sensors, reading and visualizing data, and
+interfacing with ROS.
+
+* `ouster_client <ouster_client/>`_ contains an example C++ client for ouster sensors
+* `ouster_viz <ouster_viz/>`_ contains a basic point cloud visualizer
+* `ouster_ros <ouster_ros/>`_ contains example ROS nodes for publishing point cloud messages
+
+To get started building the client and visualizer libraries, see the ``Building`` section below. For
+instructions on ROS, start with the ``ROS`` section.
+
+
+Sample Client and Visualizer
+============================
+
+Building the example code requires a compiler supporting C++11 and CMake 3.1 or newer and the tclap,
+jsoncpp, and Eigen3 libraries with headers installed on the system. The sample visualizer also
+requires the GLFW3 and GLEW libraries.
+
+Building on Linux / macOS
+-------------------------
+
+To install build dependencies on Ubuntu, run::
+
+    sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
+         libjsoncpp-dev libtclap-dev
+
+On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
+
+    brew install cmake pkg-config glfw glew eigen jsoncpp tclap
+
+To build run the following commands::
+
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release <path to ouster_example>
+    make
+
+where ``<path to ouster_example>`` is the location of the ``ouster_example`` source directory. The
+CMake build script supports several optional flags::
+
+    -DBUILD_VIZ=OFF                      Do not build the sample visualizer
+    -DBUILD_SHARED_LIBS                  Build shared libraries (.dylib or .so)
+    -DCMAKE_POSITION_INDEPENDENT_CODE    Standard flag for position independent code
+
+Building on Windows
+-------------------
+
+The example code can be built on Windows 10 with Visual Studio 2019 using CMake support and vcpkg
+for dependencies. Follow the official documentation to set up your build environment:
+
+* `Visual Studio <https://visualstudio.microsoft.com/downloads/>`_
+* `Visual Studio CMake Support
+  <https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019>`_
+* `Visual Studio CPP Support
+  <https://docs.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=vs-2019>`_
+* `Vcpkg, at tag "2020.07" installed and integrated with Visual Studio
+  <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
+
+.. note::
+
+   You'll need to run ``git checkout 2020.07`` in the vcpkg directory before bootstrapping to use
+   the correct versions of the dependencies. Building may fail unexpectedly if you skip this step.
+
+Don't forget to integrate vcpkg with Visual Studio after bootstrapping::
+
+    .\vcpkg.exe integrate install
+
+You should be able to install dependencies with::
+
+    .\vcpkg.exe install --triplet x64-windows glfw3 glew tclap jsoncpp eigen3
+
+After these steps are complete, you should be able to open, build and run the ``ouster_example``
+project using Visual Studio:
+
+1. Start Visual Studio.
+2. When the prompt opens asking you what type of project to open click **Open a local folder** and
+   navigate to the ``ouster_example`` source directory.
+3. After opening the project for the first time, wait for CMake configuration to complete.
+4. Make sure Visual Studio is `building in release mode`_. You may experience performance issues and
+   missing data in the visualizer otherwise.
+5. In the menu bar at the top of the screen, select **Build > Build All**.
+6. To use the resulting binaries, go to **View > Terminal** and run, for example::
+
+    .\out\build\x64-Release\ouster_client\ouster_client_example.exe -h
+
+.. _building in release mode: https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-debug-and-release-configurations?view=vs-2019
+
+Running the Sample Client
+-------------------------
+
+Make sure the sensor is connected to the network. See "Connecting to the Sensor" in the `Software
+User Manual <https://www.ouster.com/downloads>`_ for instructions and different options for network
+configuration.
+
+Navigate to ``ouster_client`` under the build directory, which should contain an executable named
+``ouster_client_example``. This program will attempt to connect to the sensor, capture lidar data,
+and write point clouds out to CSV files::
+
+    ./ouster_client_example <sensor hostname> <udp data destination>
+
+where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
+data destingation>`` is the hostname or IP to which the sensor should send lidar data.
+
+On Windows, you may need to allow the client/visualizer through the Windows firewall to receive
+sensor data.
+
+Running the Sample Visualizer
+-----------------------------
+
+Navigate to ``ouster_viz`` under the build directory, which should contain an executable named
+``simple_viz`` . Run::
+
+    ./simple_viz <flags> <sensor hostname> <udp data destination>
+
+where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
+data destingation>`` is the hostname or IP to which the sensor should send lidar data.
+
+For usage and other options, run ``./simple_viz -h`` Mouse controls:
+
+* Click and drag rotates the view
+* Middle click and drag moves the view
+* Scroll adjusts how far away the camera is from the vehicle
+
+Keyboard controls:
+
+    ============= ============================================
+        key       what it does
+    ============= ============================================
+    ``p``         Increase point size
+    ``o``         Decrease point size
+    ``m``         Cycle point cloud coloring mode
+    ``v``         Toggle color cycling in range image
+    ``n``         Toggle display near-IR image from the sensor
+    ``r``         Toggle auto-rotating
+    ``shift + r`` Reset camera
+    ``e``         Change range and signal image size
+    ``;``         Increase spacing in range markers
+    ``'``         Decrease spacing in range markers
+    ``r``         Toggle auto rotate
+    ``w``         Camera pitch up
+    ``s``         Camera pitch down
+    ``a``         Camera yaw left
+    ``d``         Camera yaw right
+    ``1``         Toggle point cloud visibility
+    ``0``         Toggle orthographic camera
+    ``=``         Zoom in
+    ``-``         Zoom out
+    ``shift``     Camera Translation with mouse drag
+    ============= ============================================
+
+
+Example ROS Code
+================
+
+The sample code include tools for publishing sensor data as standard ROS topics. Since ROS uses its
+own build system, it must be compiled separately from the rest of the sample code.
+
+The provided ROS code has been tested on ROS Kinetic, Melodic, and Noetic on Ubuntu 16.04, 18.04,
+and 20.04, respectively. Use the `installation instructions <https://www.ros.org/install/>`_ to get
+started with ROS on your platform.
+
+Building
+--------
+
+The build dependencies include those of the sample code::
+
+    sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
+         libjsoncpp-dev libtclap-dev
+
+and, additionally::
+
+    sudo apt install ros-<ROS-VERSION>-ros-core ros-<ROS-VERSION>-pcl-ros \
+         ros-<ROS-VERSION>-tf2-geometry-msgs ros-<ROS-VERSION>-rviz
+
+where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``. To build::
+
+    source /opt/ros/<ROS-VERSION>/setup.bash
+    mkdir -p ./myworkspace/src
+    cd myworkspace
+    ln -s <path to ouster_example> ./src/
+    catkin_make -DCMAKE_BUILD_TYPE=Release
+
+**Warning:** Do not create your workspace directory inside the cloned ouster_example repository, as
+this will confuse the ROS build system.
+
+For each command in the following sections, make sure to first set up the ROS environment in each
+new terminal by running::
+
+        source myworkspace/devel/setup.bash
+
+Running ROS Nodes with a Live Sensor
+------------------------------------
+
+Make sure the sensor is connected to the network. See "Connecting to the Sensor" in the `Software
+User Manual`_ for instructions and different options for network configuration.
+
+To publish ROS topics from a running sensor, run::
+
+    roslaunch ouster_ros ouster.launch sensor_hostname:=<sensor hostname> \
+                                       udp_dest:=<udp data destination> \
+                                       metadata:=<path to metadata json> \
+                                       lidar_mode:=<lidar mode> viz:=<viz>
+
+where:
+
+* ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor
+* ``<udp data destination>`` is the hostname or IP to which the sensor should send data
+* ``<path to metadata json>`` is an optional path to json file to save calibration metadata
+* ``<lidar mode>`` is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or ``2048x10``, and
+* ``<viz>`` is either ``true`` or ``false``: if true, a window should open and start displaying data
+  after a few seconds.
+
+Note that if the ``metadata`` parameter is not specified, this command will write metadata to
+``${ROS_HOME}``. By default, the name of this file is based on the hostname of the sensor,
+e.g. ``os-99xxxxxxxxxx.json``.
+
+Recording Data
+--------------
+
+To record raw sensor output use `rosbag record`_. After starting the ``roslaunch`` command above, in
+another terminal, run::
+
+    rosbag record /os_node/imu_packets /os_node/lidar_packets`
+
+This will save a bag file of recorded data in the current working directory. 
+
+It's recommended to
+copy and save the metadata file at ``$(ROS_HOME)/<sensor_hostname>.json`` alongside the bag.
+
+.. _rosbag record: https://wiki.ros.org/rosbag/Commandline#rosbag_record
+
+Playing Back Recorded Data
+--------------------------
+
+To publish ROS topics from recorded data, specify the ``replay`` and ``metadata`` parameters when
+running ``roslaunch``::
+
+    roslaunch ouster_ros ouster.launch replay:=true metadata:=<path to metadata json>
+
+And in a second terminal run `rosbag play`_::
+
+    rosbag play --clock <bag files ...>
+
+If a metadata file is not available, the visualizer will default to ``1024x10``. This can be
+overridden with the ``lidar_mode`` parameter. Visualizer output will only be correct if the same
+``lidar_mode`` parameter is used for both recording and replay.
+
+.. _rosbag play: https://wiki.ros.org/rosbag/Commandline#rosbag_play
+
+Visualizing Data in Rviz
+------------------------
+
+To display sensor output using built-in ROS tools (rviz), follow the instructions above for running
+the example ROS code with a sensor or recorded data. Then, run::
+
+    rviz -d ouster_example/ouster_ros/viz.rviz
+
+in another terminal with the ROS environment set up. To view lidar intensity, near-IR, and range
+images, add ``image:=true`` to the ``roslaunch`` command above.
+
+
+Additional Information
+======================
+
+* Sample sensor output usable with the provided ROS code `is available here
+  <https://ouster.com/resources/lidar-sample-data>`_.
+* For network configuration, refer to "Connecting to the Sensor" in the `Software User Manual`_.

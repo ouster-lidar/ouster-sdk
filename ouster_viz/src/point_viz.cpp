@@ -148,6 +148,8 @@ bool PointViz::initialize() {
     rings.initialize();
     image.read->initialize();
     image.write->initialize();
+    cuboids.read->initialize();
+    cuboids.write->initialize();
     return true;
 }
 
@@ -177,6 +179,22 @@ void PointViz::drawLoop() {
         if (rings.enabled) {
             rings.draw(camera);
         }
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
+        glBlendEquation(GL_FUNC_ADD);
+
+        // enable culling
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_FRONT);
+
+        // draw cuboids
+        if (cuboids.enabled) {
+            cuboids.draw(camera);
+        }
+        glDisable(GL_BLEND);
+        // enable culling
+        glDisable(GL_CULL_FACE);
 
         // Swap buffers
         glfwSwapBuffers(window);

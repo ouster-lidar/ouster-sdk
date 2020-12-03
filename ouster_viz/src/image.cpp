@@ -6,6 +6,9 @@ namespace viz {
 namespace impl {
 
 void Image::draw(Camera& cam) {
+    // calling this before image has been resized causes flickering
+    if (data.size() <= 0) return;
+
     glUseProgram(image_program_id);
     const GLuint vertex_id = glGetAttribLocation(image_program_id, "vertex");
     const GLuint uv_id = glGetAttribLocation(image_program_id, "vertex_uv");

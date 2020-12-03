@@ -1,8 +1,8 @@
 /**
  * @file
- * @brief Example node to visualize range, noise and intensity images
+ * @brief Example node to visualize range, ambient and intensity images
  *
- * Publishes ~/range_image, ~/noise_image, and ~/intensity_image.  Please bear
+ * Publishes ~/range_image, ~/ambient_image, and ~/intensity_image.  Please bear
  * in mind that there is rounding/clamping to display 8 bit images. For computer
  * vision applications, use higher bit depth values in /os_cloud_node/points
  */
@@ -58,15 +58,15 @@ int main(int argc, char** argv) {
 
     ros::Publisher range_image_pub =
         nh.advertise<sensor_msgs::Image>("range_image", 100);
-    ros::Publisher noise_image_pub =
-        nh.advertise<sensor_msgs::Image>("noise_image", 100);
+    ros::Publisher ambient_image_pub =
+        nh.advertise<sensor_msgs::Image>("ambient_image", 100);
     ros::Publisher intensity_image_pub =
         nh.advertise<sensor_msgs::Image>("intensity_image", 100);
 
     ouster_ros::Cloud cloud{};
 
-    viz::AutoExposure noise_ae, intensity_ae;
-    viz::BeamUniformityCorrector noise_buc;
+    viz::AutoExposure ambient_ae, intensity_ae;
+    viz::BeamUniformityCorrector ambient_buc;
 
     std::stringstream encoding_ss;
     encoding_ss << "mono" << bit_depth;
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
         pcl::fromROSMsg(*m, cloud);
 
         sensor_msgs::Image range_image;
-        sensor_msgs::Image noise_image;
+        sensor_msgs::Image ambient_image;
         sensor_msgs::Image intensity_image;
 
         range_image.width = W;
@@ -87,13 +87,13 @@ int main(int argc, char** argv) {
                                 (8 * sizeof(*range_image.data.data())));
         range_image.header.stamp = m->header.stamp;
 
-        noise_image.width = W;
-        noise_image.height = H;
-        noise_image.step = W;
-        noise_image.encoding = encoding;
-        noise_image.data.resize(W * H * bit_depth /
-                                (8 * sizeof(*noise_image.data.data())));
-        noise_image.header.stamp = m->header.stamp;
+        ambient_image.width = W;
+        ambient_image.height = H;
+        ambient_image.step = W;
+        ambient_image.encoding = encoding;
+        ambient_image.data.resize(W * H * bit_depth /
+                                  (8 * sizeof(*ambient_image.data.data())));
+        ambient_image.header.stamp = m->header.stamp;
 
         intensity_image.width = W;
         intensity_image.height = H;
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
 
         using im_t = Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic,
                                   Eigen::RowMajor>;
-        im_t noise_image_eigen(H, W);
+        im_t ambient_image_eigen(H, W);
         im_t intensity_image_eigen(H, W);
 
         for (size_t u = 0; u < H; u++) {
@@ -124,22 +124,23 @@ int main(int argc, char** argv) {
                         std::min(std::round(pt.range * range_multiplier),
                                  static_cast<double>(pixel_value_max));
                 }
-                noise_image_eigen(u, v) = pt.noise;
+                ambient_image_eigen(u, v) = pt.ambient;
                 intensity_image_eigen(u, v) = pt.intensity;
             }
         }
 
-        noise_buc.correct(noise_image_eigen);
-        noise_ae(Eigen::Map<Eigen::ArrayXd>(noise_image_eigen.data(), W * H));
+        ambient_buc.correct(ambient_image_eigen);
+        ambient_ae(
+            Eigen::Map<Eigen::ArrayXd>(ambient_image_eigen.data(), W * H));
         intensity_ae(
             Eigen::Map<Eigen::ArrayXd>(intensity_image_eigen.data(), W * H));
-        noise_image_eigen = noise_image_eigen.sqrt();
+        ambient_image_eigen = ambient_image_eigen.sqrt();
         intensity_image_eigen = intensity_image_eigen.sqrt();
         for (size_t u = 0; u < H; u++) {
             for (size_t v = 0; v < W; v++) {
                 reinterpret_cast<pixel_type*>(
-                    noise_image.data.data())[u * W + v] =
-                    noise_image_eigen(u, v) * pixel_value_max;
+                    ambient_image.data.data())[u * W + v] =
+                    ambient_image_eigen(u, v) * pixel_value_max;
                 reinterpret_cast<pixel_type*>(
                     intensity_image.data.data())[u * W + v] =
                     intensity_image_eigen(u, v) * pixel_value_max;
@@ -147,7 +148,7 @@ int main(int argc, char** argv) {
         }
 
         range_image_pub.publish(range_image);
-        noise_image_pub.publish(noise_image);
+        ambient_image_pub.publish(ambient_image);
         intensity_image_pub.publish(intensity_image);
     };
 

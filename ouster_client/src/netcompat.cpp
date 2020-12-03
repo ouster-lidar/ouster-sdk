@@ -1,26 +1,36 @@
-#include "ouster/compat.h"
+#include "ouster/impl/netcompat.h"
 
-#include <cstring>
-#include <iostream>
-#include <stdexcept>
 #include <string>
 
-int socket_init(void) {
-#ifdef _WIN32
-    WSADATA wsa_data;
-    return WSAStartup(MAKEWORD(1, 1), &wsa_data);
-#else
-    return 0;
-#endif
-}
+#if defined _WIN32
 
-int socket_quit(void) {
-#ifdef _WIN32
-    return WSACleanup();
+#include <winsock2.h>
+
 #else
-    return 0;
+
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <cstring>
+
 #endif
-}
+
+namespace ouster {
+namespace impl {
+
+#ifdef _WIN32
+struct StaticWrapper {
+    WSADATA wsa_data;
+
+    StaticWrapper() { WSAStartup(MAKEWORD(1, 1), &wsa_data); }
+
+    ~StaticWrapper() { WSACleanup(); }
+};
+
+static StaticWrapper resources = {};
+#endif
 
 int socket_close(SOCKET sock) {
     int status = 0;
@@ -42,20 +52,14 @@ int socket_close(SOCKET sock) {
 
 std::string socket_get_error() {
 #ifdef _WIN32
-    wchar_t* char_buffer = NULL;
-    std::string result;
-
-    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                       FORMAT_MESSAGE_IGNORE_INSERTS,
-                   NULL, WSAGetLastError(),
-                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                   (LPWSTR)&char_buffer, 0, NULL);
-
-    std::wstring wide_string(char_buffer);
-    result = std::string(wide_string.begin(), wide_string.end());
-    LocalFree(char_buffer);
-
-    return result;
+    int errnum = WSAGetLastError();
+    char buf[256] = {0};
+    if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, errnum, 0, buf,
+                      sizeof(buf), NULL) != 0) {
+        return std::string(buf);
+    } else {
+        return std::string{"Unknown WSA error "} + std::to_string(errnum);
+    }
 #else
     return std::strerror(errno);
 #endif
@@ -97,3 +101,6 @@ int socket_set_reuse(SOCKET value) {
     return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
 #endif
 }
+
+}  // namespace impl
+}  // namespace ouster

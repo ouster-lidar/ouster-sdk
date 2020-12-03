@@ -2,21 +2,12 @@
  * @file
  * @brief Corrects beam uniformity by minimizing median difference between rows,
  *        thereby correcting subtle horizontal line artifacts in images,
- *        especially the noise image.
+ *        especially the ambient image.
  */
 
 #pragma once
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Eigen>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
 #include <algorithm>
 #include <vector>
 

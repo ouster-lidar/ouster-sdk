@@ -9,7 +9,7 @@
   <arg name="timestamp_mode" default="" doc="method used to timestamp measurements: TIME_FROM_INTERNAL_OSC, TIME_FROM_SYNC_PULSE_IN, TIME_FROM_PTP_1588"/>
   <arg name="metadata" default="" doc="override default metadata file for replays"/>
   <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
-  <arg name="image" default="false" doc="publish range/intensity/noise image topic"/>
+  <arg name="image" default="false" doc="publish range/intensity/ambient image topic"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
 
   <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" required="true">
@@ -40,7 +40,7 @@
     <remap from="~/points" to="/os_cloud_node/points"/>
   </node>
 
-  <!-- for compatibility with < 1.14 rosbags -->
+  <!-- for compatibility with < 1.13 rosbags -->
   <node pkg="topic_tools" name="relay_lidar" type="relay" args="/os1_node/lidar_packets /os_node/lidar_packets" />
   <node pkg="topic_tools" name="relay_imu" type="relay" args="/os1_node/imu_packets /os_node/imu_packets" />
 
