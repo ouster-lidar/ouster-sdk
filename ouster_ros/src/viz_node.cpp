@@ -14,7 +14,6 @@
 
 #include "ouster/lidar_scan.h"
 #include "ouster/lidar_scan_viz.h"
-#include "ouster/packet.h"
 #include "ouster/point_viz.h"
 #include "ouster/types.h"
 #include "ouster_ros/OSConfigSrv.h"
@@ -56,12 +55,10 @@ int main(int argc, char** argv) {
 
     ouster::LidarScan ls(W, H);
 
-    auto batch_and_display = sensor::batch_to_scan(
-        W, packet_format,
-        [&](std::chrono::nanoseconds) mutable { lidar_scan_viz.draw(ls); });
+    ouster::ScanBatcher batch(W, packet_format);
 
     auto lidar_handler = [&](const PacketMsg& pm) mutable {
-        batch_and_display(pm.buf.data(), ls);
+        if (batch(pm.buf.data(), ls)) lidar_scan_viz.draw(ls);
     };
 
     auto lidar_packet_sub = nh.subscribe<PacketMsg, const PacketMsg&>(

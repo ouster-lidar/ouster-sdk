@@ -74,17 +74,15 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
         for (auto v = 0; v < ls.w; v++) {
             const auto xyz = points.row(u * ls.w + v);
             const auto pix = ls.data.row(u * ls.w + v);
-            const auto ts = (ls.ts[v] - scan_ts).count();
+            const auto ts = (ls.header(v).timestamp - scan_ts).count();
             cloud(v, u) = ouster_ros::Point{
-                static_cast<float>(xyz(0)),
-                static_cast<float>(xyz(1)),
-                static_cast<float>(xyz(2)),
-                1.0f,
+                {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
+                  static_cast<float>(xyz(2)), 1.0f}},
                 static_cast<float>(pix(ouster::LidarScan::INTENSITY)),
                 static_cast<uint32_t>(ts),
                 static_cast<uint16_t>(pix(ouster::LidarScan::REFLECTIVITY)),
                 static_cast<uint8_t>(u),
-                static_cast<uint16_t>(pix(ouster::LidarScan::NOISE)),
+                static_cast<uint16_t>(pix(ouster::LidarScan::AMBIENT)),
                 static_cast<uint32_t>(pix(ouster::LidarScan::REFLECTIVITY))};
         }
     }
@@ -100,7 +98,7 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
 }
 
 geometry_msgs::TransformStamped transform_to_tf_msg(
-    const sensor::mat4d& mat, const std::string& frame,
+    const ouster::mat4d& mat, const std::string& frame,
     const std::string& child_frame) {
     Eigen::Affine3d aff;
     aff.linear() = mat.block<3, 3>(0, 0);

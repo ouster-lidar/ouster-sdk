@@ -2,16 +2,7 @@
 
 #include <json/json.h>
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Eigen>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -21,7 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "ouster/packet.h"
+#include "ouster/build.h"
+#include "ouster/impl/parsing.h"
 #include "ouster/version.h"
 
 namespace ouster {
@@ -110,18 +102,25 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                mat4d::Identity()};
 }
 
+
+constexpr packet_format packet_1_13 = impl::packet_2_0<64>();
+constexpr packet_format packet_2_0_16 = impl::packet_2_0<16>();
+constexpr packet_format packet_2_0_32 = impl::packet_2_0<32>();
+constexpr packet_format packet_2_0_64 = impl::packet_2_0<64>();
+constexpr packet_format packet_2_0_128 = impl::packet_2_0<128>();
+
 const packet_format& get_format(const sensor_info& info) {
     switch (info.format.pixels_per_column) {
         case 16:
-            return packet__1_14_0__16;
+            return packet_2_0_16;
         case 32:
-            return packet__1_14_0__32;
+            return packet_2_0_32;
         case 64:
-            return packet__1_14_0__64;
+            return packet_2_0_64;
         case 128:
-            return packet__1_14_0__128;
+            return packet_2_0_128;
         default:
-            return packet__1_13_0;
+            return packet_1_13;
     }
 }
 
@@ -215,8 +214,7 @@ sensor_info parse_metadata(const std::string& meta) {
     info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
     info.prod_line = root["prod_line"].asString();
 
-    // "data_format" introduced in fw 1.14. Fall back to common 1.13 parameters
-    // otherwise
+    // "data_format" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("data_format")) {
         info.format.pixels_per_column =
             root["data_format"]["pixels_per_column"].asInt();
@@ -237,8 +235,7 @@ sensor_info parse_metadata(const std::string& meta) {
         info.format = default_data_format(info.mode);
     }
 
-    // "lidar_origin_to_beam_origin_mm" introduced in fw 1.14. Fall back to
-    // common 1.13 parameters otherwise
+    // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("lidar_origin_to_beam_origin_mm")) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();
@@ -263,24 +260,36 @@ sensor_info parse_metadata(const std::string& meta) {
     for (const auto& v : root["beam_azimuth_angles"])
         info.beam_azimuth_angles.push_back(v.asDouble());
 
-    if (root["imu_to_sensor_transform"].size() != 16) {
-        throw std::runtime_error{
-            "imu_to_sensor_transform must have 16 elements"};
-    }
-
-    if (root["lidar_to_sensor_transform"].size() != 16) {
-        throw std::runtime_error{
-            "lidar_to_sensor_transform must have 16 elements"};
-    }
-
-    for (size_t i = 0; i < 4; i++) {
-        for (size_t j = 0; j < 4; j++) {
-            const Json::Value::ArrayIndex ind = i * 4 + j;
-            info.imu_to_sensor_transform(i, j) =
-                root["imu_to_sensor_transform"][ind].asDouble();
-            info.lidar_to_sensor_transform(i, j) =
-                root["lidar_to_sensor_transform"][ind].asDouble();
+    // "imu_to_sensor_transform" may be absent in sensor config
+    // produced by Ouster Studio, so we backfill it with default value
+    if (root["imu_to_sensor_transform"].size() == 16) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                const Json::Value::ArrayIndex ind = i * 4 + j;
+                info.imu_to_sensor_transform(i, j) =
+                    root["imu_to_sensor_transform"][ind].asDouble();
+            }
         }
+    } else {
+        std::cerr << "WARNING: No valid imu_to_sensor_transform found."
+                  << std::endl;
+        info.imu_to_sensor_transform = default_imu_to_sensor_transform;
+    }
+
+    // "lidar_to_sensor_transform" may be absent in sensor config
+    // produced by Ouster Studio, so we backfill it with default value
+    if (root["lidar_to_sensor_transform"].size() == 16) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                const Json::Value::ArrayIndex ind = i * 4 + j;
+                info.lidar_to_sensor_transform(i, j) =
+                    root["lidar_to_sensor_transform"][ind].asDouble();
+            }
+        }
+    } else {
+        std::cerr << "WARNING: No valid lidar_to_sensor_transform found."
+                  << std::endl;
+        info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
     }
 
     info.extrinsic = mat4d::Identity();
@@ -306,6 +315,7 @@ sensor_info metadata_from_json(const std::string& json_file) {
 
 std::string to_string(const sensor_info& info) {
     Json::Value root{};
+    root["client_version"] = ouster::CLIENT_VERSION;
     root["hostname"] = info.name;
     root["prod_sn"] = info.sn;
     root["build_rev"] = info.fw_rev;

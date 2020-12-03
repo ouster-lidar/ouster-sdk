@@ -3,6 +3,9 @@
  * @brief Simple version struct
  */
 
+#include <cstdint>
+#include <string>
+
 #pragma once
 
 namespace ouster {
@@ -36,14 +39,16 @@ inline bool operator>=(const version& u, const version& v) { return !(u < v); }
 inline bool operator>(const version& u, const version& v) { return !(u <= v); }
 
 /**
- * Get string representation of a version
+ * Get string representation of a version.
+ *
  * @param version
  * @return string representation of the version
  */
 std::string to_string(const version& v);
 
 /**
- * Get lidar mode from string
+ * Get lidar mode from string.
+ *
  * @param string
  * @return lidar mode corresponding to the string, or invalid_version on error
  */

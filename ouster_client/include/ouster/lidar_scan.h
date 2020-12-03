@@ -5,121 +5,174 @@
 
 #pragma once
 
-#if defined _WIN32
-#pragma warning(push, 2)
-#endif
-
 #include <Eigen/Eigen>
-
-#if defined _WIN32
-#pragma warning(pop)
-#endif
-
 #include <chrono>
-#include <cmath>
-#include <utility>
+#include <cstddef>
+#include <stdexcept>
 #include <vector>
 
 #include "ouster/types.h"
 
 namespace ouster {
 
-struct LidarScan {
-    enum LidarScanIndex { RANGE, INTENSITY, NOISE, REFLECTIVITY };
-    using ts_t = std::chrono::nanoseconds;
+/**
+ * Datastructure for efficient operations on aggregated lidar data.
+ *
+ * Stores each field (range, intensity, etc.) contiguously as a H x W block of
+ * 4-byte unsigned integers, where H is the number of beams and W is the
+ * horizontal resolution (e.g. 512, 1024, 2048).
+ *
+ * Note: this is the "staggered" representation where each column corresponds
+ * to a single measurement in time. Use the destagger() function to create an
+ * image where columns correspond to a single azimuth angle.
+ */
+class LidarScan {
+   public:
+    static constexpr int N_FIELDS = 4;
+
     using raw_t = uint32_t;
-    using data_t = Eigen::Array<raw_t, Eigen::Dynamic, 4>;
-    using index_t = std::ptrdiff_t;
+    using ts_t = std::chrono::nanoseconds;
+    using data_t = Eigen::Array<raw_t, Eigen::Dynamic, N_FIELDS>;
 
-    template <class T>
-    using field_t = Eigen::Array<T, Eigen::Dynamic, 1>;
+    using DynStride = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
 
+    /** XYZ coordinates with dimensions arranged contiguously in columns */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
 
-    index_t w;
-    index_t h;
+    /** Data fields reported per channel */
+    enum Field { RANGE, INTENSITY, AMBIENT, REFLECTIVITY };
 
-    data_t data;
-    std::vector<ts_t> ts;
+    /** Measurement block information, other than the channel data */
+    struct BlockHeader {
+        ts_t timestamp;
+        uint32_t encoder;
+        uint32_t status;
+    };
 
-    uint32_t range(size_t u, size_t v) const {
-        assert(u < (size_t)h && v < (size_t)w);
-        return this->range()[this->ind(u, v)];
-    }
-    uint32_t intensity(size_t u, size_t v) const {
-        assert(u < (size_t)h && v < (size_t)w);
-        return this->intensity()[this->ind(u, v)];
+    /* Members variables: use with caution, some of these will become private */
+    std::ptrdiff_t w{0};
+    std::ptrdiff_t h{0};
+    data_t data{};
+    std::vector<BlockHeader> headers{};
+    int32_t frame_id{-1};
+
+    /** The default constructor creates an invalid 0 x 0 scan */
+    LidarScan() = default;
+
+    /**
+     * Initialize an empty scan with the given horizontal / vertical resolution.
+     *
+     * @param w horizontal resoulution, i.e. the number of measurements per scan
+     * @param h vertical resolution, i.e. the number of channels
+     */
+    LidarScan(size_t w, size_t h)
+        : w{static_cast<std::ptrdiff_t>(w)},
+          h{static_cast<std::ptrdiff_t>(h)},
+          data{w * h, N_FIELDS},
+          headers{w, BlockHeader{ts_t{0}, 0, 0}} {};
+
+    /**
+     * Access timestamps as a vector.
+     *
+     * @returns copy of the measurement timestamps as a vector
+     */
+    std::vector<LidarScan::ts_t> timestamps() const {
+        std::vector<LidarScan::ts_t> res;
+        res.reserve(headers.size());
+        for (const auto& h : headers) res.push_back(h.timestamp);
+        return res;
     }
 
-    LidarScan() : w(0), h(0), data{0, 4}, ts(0){};
-    LidarScan(size_t w, size_t h) : w(w), h(h), data{w * h, 4}, ts(w){};
+    /**
+     * Access measurement block header fields.
+     *
+     * @return the header values for the specified measurement id
+     */
+    BlockHeader& header(size_t m_id) { return headers.at(m_id); }
 
-    // get ts in us. We may use us everywhere in our code. In that case, we will
-    // remove this function. (Hao)
-    std::chrono::microseconds ts_us(size_t v) const {
-        assert(v < (size_t)w);
-        return std::chrono::duration_cast<std::chrono::microseconds>(ts[v]);
+    /** @copydoc header(size_t m_id) */
+    const BlockHeader& header(size_t m_id) const { return headers.at(m_id); }
+
+    /**
+     * Access measurement block data.
+     *
+     * @param m_id the measurement id of the desired block
+     * @return a view of the measurement block data
+     */
+    Eigen::Map<data_t, Eigen::Unaligned, DynStride> block(size_t m_id) {
+        return Eigen::Map<data_t, Eigen::Unaligned, DynStride>(
+            data.row(m_id).data(), h, N_FIELDS, {w * h, w});
     }
 
-    inline index_t ind(const index_t u, const index_t v) const {
-        return u * w + v;
+    /** @copydoc block(size_t m_id) */
+    Eigen::Map<const data_t, Eigen::Unaligned, DynStride> block(
+        size_t m_id) const {
+        return Eigen::Map<const data_t, Eigen::Unaligned, DynStride>(
+            data.row(m_id).data(), h, N_FIELDS, {w * h, w});
     }
 
-    data_t::ColXpr range() { return data.col(LidarScanIndex::RANGE); }
-    data_t::ColXpr intensity() { return data.col(LidarScanIndex::INTENSITY); }
-    data_t::ColXpr noise() { return data.col(LidarScanIndex::NOISE); }
-    data_t::ColXpr reflectivity() {
-        return data.col(LidarScanIndex::REFLECTIVITY);
+    /**
+     * Access a lidar data field.
+     *
+     * @param f the field to view
+     * @return a view of the field data
+     */
+    Eigen::Map<img_t<raw_t>> field(Field f) {
+        return Eigen::Map<img_t<raw_t>>(data.col(f).data(), h, w);
     }
 
-    data_t::ConstColXpr range() const {
-        return data.col(LidarScanIndex::RANGE);
-    }
-    data_t::ConstColXpr intensity() const {
-        return data.col(LidarScanIndex::INTENSITY);
-    }
-    data_t::ConstColXpr noise() const {
-        return data.col(LidarScanIndex::NOISE);
-    }
-    data_t::ConstColXpr reflectivity() const {
-        return data.col(LidarScanIndex::REFLECTIVITY);
+    /** @copydoc field(Field f) */
+    Eigen::Map<const img_t<raw_t>> field(Field f) const {
+        return Eigen::Map<const img_t<raw_t>>(data.col(f).data(), h, w);
     }
 };
 
-/**
- * Lookup table of beam directions and offsets
- */
+/** Equality for column headers. */
+inline bool operator==(const LidarScan::BlockHeader& a,
+                       const LidarScan::BlockHeader& b) {
+    return a.timestamp == b.timestamp && a.encoder == b.encoder &&
+           a.status == b.status;
+}
+
+/** Equality for scans. */
+inline bool operator==(const LidarScan& a, const LidarScan& b) {
+    return a.w == b.w && a.h == b.h && (a.data == b.data).all() &&
+           a.headers == b.headers && a.frame_id && b.frame_id;
+}
+
+/** Lookup table of beam directions and offsets. */
 struct XYZLut {
     LidarScan::Points direction;
     LidarScan::Points offset;
 };
 
 /**
- * Generate a matrix of unit vectors pointing radially outwards, useful for
- * efficiently computing cartesian coordinates from ranges.  The result is a
- * n x 3 array of doubles stored in column-major order where each row is the
- * unit vector corresponding to the nth point in a lidar scan, with 0 <= n <
- * h * w.
- * The ordering of the rows is consistent with LidarScan::ind(u, v) for the
- * 3D point corresponding to the pixel at row u, column v in the LidarScan.
- * @param w number of columns in the lidar scan. e.g. 512, 1024, or 2048.
+ * Generate a matrix of unit vectors pointing radially outwards.
+ *
+ * Useful for efficiently computing cartesian coordinates from
+ * ranges. The result is a n x 3 array of doubles stored in
+ * column-major order where each row is the unit vector corresponding
+ * to the nth point in a lidar scan, with 0 <= n < h * w.
+ *
+ * @param w number of columns in the lidar scan. e.g. 512, 1024, or 2048
  * @param h number of rows in the lidar scan
  * @param range_unit the unit, in meters, of the range,  e.g. sensor::range_unit
  * @param lidar_origin_to_beam_origin_mm the radius to the beam origin point of
- *  the unit, in millimeters
+ *        the unit, in millimeters
  * @param transform additional transformation to apply to resulting points
  * @param azimuth_angles_deg azimuth offsets in degrees for each of h beams
- * @param altitude_angles_Deg altitude in degrees for each of h beams
+ * @param altitude_angles_deg altitude in degrees for each of h beams
  * @return xyz direction unit vectors for each point in the lidar scan
  */
-XYZLut make_xyz_lut(LidarScan::index_t w, LidarScan::index_t h,
-                    double range_unit, double lidar_origin_to_beam_origin_mm,
-                    const sensor::mat4d& transform,
+XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
+                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg);
 
 /**
- * Convenient overload that uses parameters from the supplied sensor_info
+ * Convenient overload that uses parameters from the supplied sensor_info.
+ *
  * @param sensor metadata returned from the client
  * @return xyz direction unit vectors for each point in the lidar scan
  */
@@ -132,67 +185,98 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
 }
 
 /**
- * Generate a destaggered version of a field from LidarScan,
- * used for visualizing lidar data as an image view, or for algorithms
- * that exploit the structure of the lidar data, such as
- * beam_uniformity in ouster_viz, or computer vision algorithms.
- * You can re-stagger a destaggered image by setting template parameter
- * direction to be -1.
+ * Convert LidarScan to cartesian points.
+ *
+ * @param scan a LidarScan
+ * @param xyz_lut a lookup table of unit vectors generated by make_xyz_lut
+ * @return cartesian points where ith row is a 3D point which corresponds
+ *         to ith pixel in LidarScan where i = row * w + col
+ */
+LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
+
+/**
+ * Generate a destaggered version of a channel field.
+ *
+ * Used for visualizing lidar data as an image or for algorithms that
+ * exploit the structure of the lidar data, such as beam_uniformity in
+ * ouster_viz, or computer vision algorithms.
  *
  * For example:
- *     destagger(lidarscan.intensity())
- *     destagger(lidarscan.intensity().cast<double>())
+ *     destagger(lidarscan.field(Field::INTENSITY))
+ *     destagger(lidarscan.field(Field::INTENSITY).cast<double>())
  *
- * @param field
- * @param pixel_shift_by_row
- * @return destaggered version of field
+ * @param img the channel field
+ * @param pixel_shift_by_row offsets, usually queried from the sensor
+ * @param inverse perform the inverse operation
+ * @return destaggered version of the image
  */
-template <class T, int direction = 1>
-inline LidarScan::field_t<T> destagger(
-    const Eigen::Ref<const LidarScan::field_t<T>> field,
-    const std::vector<int>& pixel_shift_by_row) {
-    static_assert(direction == 1 || direction == -1,
-                  "Destagger direction should be only +1 or -1");
-    const LidarScan::index_t h = pixel_shift_by_row.size();
-    const LidarScan::index_t w = field.size() / h;
+template <typename T>
+inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& img,
+                          const std::vector<int>& pixel_shift_by_row,
+                          bool inverse = false) {
+    const size_t h = img.rows();
+    const size_t w = img.cols();
 
-    Eigen::Array<T, Eigen::Dynamic, 1> destaggered(h * w);
-    for (LidarScan::index_t u = 0; u < h; u++) {
-        const LidarScan::index_t offset =
-            (direction * pixel_shift_by_row[u] + w) % w;
+    if (pixel_shift_by_row.size() != h)
+        throw std::invalid_argument{"image height does not match shifts size"};
 
-        destaggered.segment(u * w + offset, w - offset) =
-            field.segment(u * w, w - offset);
-        destaggered.segment(u * w, offset) =
-            field.segment(u * w + w - offset, offset);
+    img_t<T> destaggered{h, w};
+    for (size_t u = 0; u < h; u++) {
+        const std::ptrdiff_t offset =
+            ((inverse ? -1 : 1) * pixel_shift_by_row[u] + w) % w;
+
+        destaggered.row(u).segment(offset, w - offset) =
+            img.row(u).segment(0, w - offset);
+        destaggered.row(u).segment(0, offset) =
+            img.row(u).segment(w - offset, offset);
     }
     return destaggered;
 }
 
 /**
- * Convenient overload that uses parameters from the supplied sensor_info
- * @param field
- * @param sensor
- * @return destaggered version of field
+ * Generate a staggered version of a channel field.
+ *
+ * @param img
+ * @param pixel_shift_by_row
+ * @return staggered version of the image
  */
-template <class T>
-inline LidarScan::field_t<T> destagger(
-    const Eigen::Ref<const LidarScan::field_t<T>> field,
-    const sensor::sensor_info& sensor) {
-    return destagger(field, sensor.format.pixel_shift_by_row);
+template <typename T>
+inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
+                        const std::vector<int>& pixel_shift_by_row) {
+    return destagger(img, pixel_shift_by_row, true);
 }
 
 /**
- * Convert LidarScan to cartesian points.
- * @param scan a LidarScan
- * @param xyz_lut a lookup table of unit vectors generated by make_xyz_lut
- * @return cartesian points where ith row is a 3D point which corresponds
- *         to ith pixel in LidarScan where i = scan.ind(u, v) for a pixel
- *         at row u, column v.
+ * Parse lidar packets into a LidarScan.
+ *
+ * Make a function that batches a single scan (revolution) of data to a
+ * LidarScan.
  */
-inline LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
-    auto raw = lut.direction.colwise() * scan.range().cast<double>();
-    return (raw.array() == 0.0).select(raw, raw + lut.offset);
-}
+class ScanBatcher {
+    std::ptrdiff_t w;
+    std::ptrdiff_t h;
+    uint16_t next_m_id;
+    LidarScan ls_write;
+
+   public:
+    sensor::packet_format pf;
+
+    /**
+     * Create a batcher given information about the scan and packet format.
+     *
+     * @param w number of columns in the lidar scan. One of 512, 1024, or 2048
+     * @param pf expected format of the incoming packets used for parsing
+     */
+    ScanBatcher(size_t w, const sensor::packet_format& pf);
+
+    /**
+     * Add a packet to the scan.
+     *
+     * @param packet_buf the lidar packet
+     * @param lidar scan to populate
+     * @return true when the provided lidar scan is ready to use
+     */
+    bool operator()(const uint8_t* packet_buf, LidarScan& ls);
+};
 
 }  // namespace ouster

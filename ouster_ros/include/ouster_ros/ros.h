@@ -15,8 +15,8 @@
 #include <string>
 
 #include "ouster/client.h"
-#include "ouster/types.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/types.h"
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/point.h"
 
@@ -85,6 +85,6 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
  * @return ROS message suitable for publishing as a transform
  */
 geometry_msgs::TransformStamped transform_to_tf_msg(
-    const sensor::mat4d& mat, const std::string& frame,
+    const ouster::mat4d& mat, const std::string& frame,
     const std::string& child_frame);
 }  // namespace ouster_ros

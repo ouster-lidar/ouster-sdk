@@ -33,9 +33,9 @@ const uint8_t* nth_col(int n, const uint8_t* lidar_buf) {
 }
 
 template <int N_PIXELS>
-inline uint32_t col_valid(const uint8_t* col_buf) {
+inline uint32_t col_status(const uint8_t* col_buf) {
     uint32_t res;
-    memcpy(&res, col_buf + column_bytes(N_PIXELS) - 4, sizeof(uint32_t));
+    std::memcpy(&res, col_buf + column_bytes(N_PIXELS) - 4, sizeof(uint32_t));
     return res;
 }
 
@@ -45,7 +45,7 @@ inline uint64_t col_timestamp(const uint8_t* col_buf) {
     return res;  // nanoseconds
 }
 
-inline uint32_t col_h_angle(const uint8_t* col_buf) {
+inline uint32_t col_encoder(const uint8_t* col_buf) {
     uint32_t res;
     std::memcpy(&res, col_buf + 12, sizeof(uint32_t));
     return res;
@@ -53,13 +53,13 @@ inline uint32_t col_h_angle(const uint8_t* col_buf) {
 
 inline uint16_t col_measurement_id(const uint8_t* col_buf) {
     uint16_t res;
-    memcpy(&res, col_buf + 8, sizeof(uint16_t));
+    std::memcpy(&res, col_buf + 8, sizeof(uint16_t));
     return res;
 }
 
 inline uint16_t col_frame_id(const uint8_t* col_buf) {
     uint16_t res;
-    memcpy(&res, col_buf + 10, sizeof(uint16_t));
+    std::memcpy(&res, col_buf + 10, sizeof(uint16_t));
     return res;
 }
 
@@ -80,13 +80,13 @@ inline uint16_t px_reflectivity(const uint8_t* px_buf) {
     return res;
 }
 
-inline uint16_t px_signal_photons(const uint8_t* px_buf) {
+inline uint16_t px_signal(const uint8_t* px_buf) {
     uint16_t res;
     std::memcpy(&res, px_buf + 6, sizeof(uint16_t));
     return res;
 }
 
-inline uint16_t px_noise_photons(const uint8_t* px_buf) {
+inline uint16_t px_ambient(const uint8_t* px_buf) {
     uint16_t res;
     std::memcpy(&res, px_buf + 8, sizeof(uint16_t));
     return res;
@@ -94,13 +94,13 @@ inline uint16_t px_noise_photons(const uint8_t* px_buf) {
 
 inline uint64_t imu_sys_ts(const uint8_t* imu_buf) {
     uint64_t res;
-    memcpy(&res, imu_buf, sizeof(uint64_t));
+    std::memcpy(&res, imu_buf, sizeof(uint64_t));
     return res;
 }
 
 inline uint64_t imu_accel_ts(const uint8_t* imu_buf) {
     uint64_t res;
-    memcpy(&res, imu_buf + 8, sizeof(uint64_t));
+    std::memcpy(&res, imu_buf + 8, sizeof(uint64_t));
     return res;
 }
 
@@ -147,7 +147,7 @@ inline float imu_av_z(const uint8_t* imu_buf) {
 }
 
 template <int N_PIXELS>
-constexpr packet_format packet__1_14_0() {
+constexpr packet_format packet_2_0() {
     return {
         impl::packet_bytes(N_PIXELS),
         impl::imu_packet_size,
@@ -157,16 +157,16 @@ constexpr packet_format packet__1_14_0() {
 
         impl::nth_col<N_PIXELS>,
         impl::col_timestamp,
-        impl::col_h_angle,
+        impl::col_encoder,
         impl::col_measurement_id,
         impl::col_frame_id,
-        impl::col_valid<N_PIXELS>,
+        impl::col_status<N_PIXELS>,
 
         impl::nth_px,
         impl::px_range,
         impl::px_reflectivity,
-        impl::px_signal_photons,
-        impl::px_noise_photons,
+        impl::px_signal,
+        impl::px_ambient,
 
         impl::imu_sys_ts,
         impl::imu_accel_ts,

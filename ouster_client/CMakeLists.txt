@@ -1,61 +1,36 @@
 cmake_minimum_required(VERSION 3.1.0)
 
 # ==== Project Name ====
-project(ouster_client)
+project(ouster_client VERSION 0.1.0)
+set(ouster_client_VERSION_SUFFIX "")
 
 # ==== Requirements ====
-set(OUSTER_CLIENT_ADDITIONAL_LIBS "")
-set(OUSTER_CLIENT_ADDITIONAL_LIB_DIRS "")
-
-if(WIN32)
-  find_package(jsoncpp CONFIG REQUIRED)
-  set(OUSTER_CLIENT_ADDITIONAL_LIBS jsoncpp ws2_32)
-
-  get_target_property(jsoncpp_INCLUDE_DIRS jsoncpp_lib
-                      INTERFACE_INCLUDE_DIRECTORIES)
-  set(OUSTER_CLIENT_ADDITIONAL_LIB_DIRS
-      ${_VCPKG_INSTALLED_DIR}/x64-windows/lib)
-  add_definitions(-D_USE_MATH_DEFINES)
-  add_compile_options(/W4)
-elseif(APPLE)
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(JSONCPP REQUIRED jsoncpp)
-  set(OUSTER_CLIENT_ADDITIONAL_INCLUDES ${JSONCPP_INCLUDEDIR})
-  set(OUSTER_CLIENT_ADDITIONAL_LIBS ${JSONCPP_LIBRARIES})
-  set(OUSTER_CLIENT_ADDITIONAL_LIB_DIRS ${JSONCPP_LIBDIR})
-  add_compile_options(-Wextra -Werror)
-else()
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(jsoncpp REQUIRED jsoncpp)
-  set(OUSTER_CLIENT_ADDITIONAL_LIBS jsoncpp)
-  add_compile_options(-Wextra -Werror)
-endif()
-
 find_package(Eigen3 REQUIRED)
+find_package(jsoncpp REQUIRED)
 
-# ==== Options ====
-set(CMAKE_CXX_STANDARD 11)
-if(NOT WIN32)
-  add_compile_options(-Wall)
-endif()
+# ==== Build Metadata Target ====
+add_custom_target(generate_build_header)
+add_custom_command(TARGET generate_build_header PRE_BUILD
+  COMMAND ${CMAKE_COMMAND} -DVERSION_GEN_OUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/include/ouster"
+                           -DVERSION_GEN_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+                           -DBUILD_TYPE="${CMAKE_BUILD_TYPE}"
+                           -DBUILD_SYSTEM="${CMAKE_SYSTEM_NAME}"
+                           -Douster_client_VERSION="${ouster_client_VERSION}"
+                           -Douster_client_VERSION_SUFFIX="${ouster_client_VERSION_SUFFIX}"
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/VersionGen.cmake)
+
+add_library(ouster_build INTERFACE)
+target_include_directories(ouster_build INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/include)
+add_dependencies(ouster_build generate_build_header)
 
 # ==== Libraries ====
-add_library(ouster_client STATIC src/client.cpp src/types.cpp src/compat.cpp
-                                 src/lidar_scan.cpp)
-set_target_properties(ouster_client PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(ouster_client PUBLIC ${OUSTER_CLIENT_ADDITIONAL_LIBS})
-target_include_directories(ouster_client
-                           PUBLIC include ${OUSTER_CLIENT_ADDITIONAL_INCLUDES})
-target_include_directories(
-  ouster_client SYSTEM
-  PUBLIC ${jsoncpp_INCLUDE_DIRS} SYSTEM
-  PRIVATE ${EIGEN3_INCLUDE_DIR})
-if(WIN32 OR APPLE)
-  target_link_directories(ouster_client PUBLIC
-                          ${OUSTER_CLIENT_ADDITIONAL_LIB_DIRS})
+add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp)
+target_link_libraries(ouster_client PUBLIC jsoncpp_lib Eigen3::Eigen ouster_build)
+if(WIN32)
+  target_link_libraries(ouster_client PUBLIC ws2_32)
 endif()
+target_include_directories(ouster_client PUBLIC include)
+
 # ==== Executables ====
-add_executable(ouster_client_example src/main.cpp)
-target_link_libraries(ouster_client_example ouster_client)
-target_include_directories(ouster_client_example PRIVATE include
-                                                         ${EIGEN3_INCLUDE_DIR})
+add_executable(ouster_client_example src/example.cpp)
+target_link_libraries(ouster_client_example ouster_client ouster_build)
