@@ -193,16 +193,11 @@ where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``. To build::
     ln -s <path to ouster_example> ./src/
     catkin_make -DCMAKE_BUILD_TYPE=Release
 
-.. warning::
+**Warning:** Do not create your workspace directory inside the cloned ouster_example repository, as
+this will confuse the ROS build system.
 
-    Do not create your workspace directory inside the cloned ouster_example repository, as this will
-    confuse the ROS build system.
-
-
-.. note::
-
-    For each command in the following sections, make sure to first set up the ROS environment in each
-    new terminal by running::
+For each command in the following sections, make sure to first set up the ROS environment in each
+new terminal by running::
 
         source myworkspace/devel/setup.bash
 

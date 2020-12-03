@@ -2,15 +2,16 @@
 Changelog
 =========
 
-[unreleased]
-============
+[20201202]
+==========
 
 Changed
 -------
 
+* switched to date-based version scheme. No longer tracking firmware versions
 * added a top-level ``CMakeLists.txt``. Client and visualizer should no longer be built
   separately. See the README for updated build instructions
-* cmake cleanup, including using custom cmake "find modules" to provide better compatibility between
+* cmake cleanup, including using custom "find modules" to provide better compatibility between
   different versions of cmake
 * respect standard cmake ``BUILD_SHARED_LIBS`` and ``CMAKE_POSITION_INDEPENDENT_CODE`` flags
 * make ``ouster_ros`` easier to use as a dependency by bundling the client and viz libraries
@@ -21,7 +22,7 @@ Changed
   API docs and the new client example code
 * update ``LidarScan`` API. Now includes accessors for measurement blocks as well as channel data
   fields. See ``lidar_scan.h`` for API docs
-* add client version field to metadata json, logs
+* add client version field to metadata json, logs, and help text
 * client API renaming to better reflect the Sensor Software Manual
 
 [1.14.0-beta.14] - 2020-08-27
