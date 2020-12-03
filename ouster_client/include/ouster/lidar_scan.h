@@ -28,11 +28,13 @@ namespace ouster {
  */
 class LidarScan {
    public:
-    static const int N_FIELDS = 4;
+    static constexpr int N_FIELDS = 4;
 
     using raw_t = uint32_t;
     using ts_t = std::chrono::nanoseconds;
-    using data_t = Eigen::Array<raw_t, -1, N_FIELDS>;
+    using data_t = Eigen::Array<raw_t, Eigen::Dynamic, N_FIELDS>;
+
+    using DynStride = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
 
     /** XYZ coordinates with dimensions arranged contiguously in columns */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
@@ -97,15 +99,15 @@ class LidarScan {
      * @param m_id the measurement id of the desired block
      * @return a view of the measurement block data
      */
-    Eigen::Map<data_t, 0, Eigen::Stride<-1, -1>> block(size_t m_id) {
-        return Eigen::Map<data_t, 0, Eigen::Stride<-1, -1>>(
+    Eigen::Map<data_t, Eigen::Unaligned, DynStride> block(size_t m_id) {
+        return Eigen::Map<data_t, Eigen::Unaligned, DynStride>(
             data.row(m_id).data(), h, N_FIELDS, {w * h, w});
     }
 
     /** @copydoc block(size_t m_id) */
-    Eigen::Map<const data_t, 0, Eigen::Stride<-1, -1>> block(
+    Eigen::Map<const data_t, Eigen::Unaligned, DynStride> block(
         size_t m_id) const {
-        return Eigen::Map<const data_t, 0, Eigen::Stride<-1, -1>>(
+        return Eigen::Map<const data_t, Eigen::Unaligned, DynStride>(
             data.row(m_id).data(), h, N_FIELDS, {w * h, w});
     }
 

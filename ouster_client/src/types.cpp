@@ -103,24 +103,24 @@ sensor_info default_sensor_info(lidar_mode mode) {
 }
 
 
-constexpr packet_format packet__1_13_0 = impl::packet__1_14_0<64>();
-constexpr packet_format packet__1_14_0__16 = impl::packet__1_14_0<16>();
-constexpr packet_format packet__1_14_0__32 = impl::packet__1_14_0<32>();
-constexpr packet_format packet__1_14_0__64 = impl::packet__1_14_0<64>();
-constexpr packet_format packet__1_14_0__128 = impl::packet__1_14_0<128>();
+constexpr packet_format packet_1_13 = impl::packet_2_0<64>();
+constexpr packet_format packet_2_0_16 = impl::packet_2_0<16>();
+constexpr packet_format packet_2_0_32 = impl::packet_2_0<32>();
+constexpr packet_format packet_2_0_64 = impl::packet_2_0<64>();
+constexpr packet_format packet_2_0_128 = impl::packet_2_0<128>();
 
 const packet_format& get_format(const sensor_info& info) {
     switch (info.format.pixels_per_column) {
         case 16:
-            return packet__1_14_0__16;
+            return packet_2_0_16;
         case 32:
-            return packet__1_14_0__32;
+            return packet_2_0_32;
         case 64:
-            return packet__1_14_0__64;
+            return packet_2_0_64;
         case 128:
-            return packet__1_14_0__128;
+            return packet_2_0_128;
         default:
-            return packet__1_13_0;
+            return packet_1_13;
     }
 }
 
@@ -214,8 +214,7 @@ sensor_info parse_metadata(const std::string& meta) {
     info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
     info.prod_line = root["prod_line"].asString();
 
-    // "data_format" introduced in fw 1.14. Fall back to common 1.13 parameters
-    // otherwise
+    // "data_format" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("data_format")) {
         info.format.pixels_per_column =
             root["data_format"]["pixels_per_column"].asInt();
@@ -236,8 +235,7 @@ sensor_info parse_metadata(const std::string& meta) {
         info.format = default_data_format(info.mode);
     }
 
-    // "lidar_origin_to_beam_origin_mm" introduced in fw 1.14. Fall back to
-    // common 1.13 parameters otherwise
+    // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("lidar_origin_to_beam_origin_mm")) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();

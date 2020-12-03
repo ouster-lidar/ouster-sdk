@@ -6,6 +6,8 @@
 
 namespace ouster {
 
+constexpr int LidarScan::N_FIELDS;
+
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     double lidar_origin_to_beam_origin_mm,
                     const mat4d& transform,

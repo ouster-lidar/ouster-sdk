@@ -32,5 +32,5 @@ endif()
 target_include_directories(ouster_client PUBLIC include)
 
 # ==== Executables ====
-add_executable(ouster_client_example src/main.cpp)
+add_executable(ouster_client_example src/example.cpp)
 target_link_libraries(ouster_client_example ouster_client ouster_build)

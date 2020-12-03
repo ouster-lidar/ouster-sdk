@@ -40,7 +40,7 @@
     <remap from="~/points" to="/os_cloud_node/points"/>
   </node>
 
-  <!-- for compatibility with < 1.14 rosbags -->
+  <!-- for compatibility with < 1.13 rosbags -->
   <node pkg="topic_tools" name="relay_lidar" type="relay" args="/os1_node/lidar_packets /os_node/lidar_packets" />
   <node pkg="topic_tools" name="relay_imu" type="relay" args="/os1_node/imu_packets /os_node/imu_packets" />
 

@@ -147,7 +147,7 @@ inline float imu_av_z(const uint8_t* imu_buf) {
 }
 
 template <int N_PIXELS>
-constexpr packet_format packet__1_14_0() {
+constexpr packet_format packet_2_0() {
     return {
         impl::packet_bytes(N_PIXELS),
         impl::imu_packet_size,
