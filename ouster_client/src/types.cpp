@@ -345,6 +345,8 @@ std::string to_string(const sensor_info& info) {
         }
     }
 
+    root["json_calibration_version"] = FW_2_0;
+
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
     builder["precision"] = 6;

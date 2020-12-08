@@ -47,6 +47,10 @@ enum timestamp_mode {
     TIME_FROM_PTP_1588
 };
 
+enum configuration_version {
+    FW_2_0 = 3
+};
+
 struct data_format {
     uint32_t pixels_per_column;
     uint32_t columns_per_packet;

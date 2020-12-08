@@ -268,6 +268,8 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
     cli.meta["lidar_mode"] = root["lidar_mode"];
     cli.meta["client_version"] = ouster::CLIENT_VERSION;
 
+    cli.meta["json_calibration_version"] = FW_2_0;
+
     return success;
 }
 }  // namespace
