@@ -107,7 +107,7 @@ uint32_t n_cols_of_lidar_mode(lidar_mode mode);
 
 /**
  * Get the lidar rotation frequency from lidar mode.
- * 
+ *
  * @param lidar_mode
  * @return lidar rotation frequency in Hz
  */
