@@ -1,10 +1,14 @@
+#include "cloud.h"
+
+#include <GL/glew.h>
+
 #include "ouster/point_viz.h"
 
 namespace ouster {
 namespace viz {
 namespace impl {
 
-void Cloud::setMapPose(const impl::mat4d& mat) { map_pose = mat; }
+void Cloud::setMapPose(const mat4d& mat) { map_pose = mat; }
 
 /**
  * render the point cloud with the point of view of the Camera

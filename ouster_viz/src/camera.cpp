@@ -1,6 +1,12 @@
+#include "camera.h"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <mutex>
+
+#include "common.h"
 #include "ouster/point_viz.h"
-#define EIGEN_DONT_ALIGN_STATICALLY
-#define EIGEN_DONT_ALIGN
 
 namespace ouster {
 namespace viz {
