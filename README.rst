@@ -11,15 +11,15 @@ Ouster Example Code
 Summary
 =======
 
-Sample code for connecting to and configuring ouster sensors, reading and visualizing data, and
-interfacing with ROS.
+To get started building the client and visualizer libraries, see the `Sample Client and Visualizer`_
+section below. For instructions on ROS, start with the `Example ROS Code`_ section.
+
+This repository contains sample code for connecting to and configuring ouster sensors, reading and
+visualizing data, and interfacing with ROS.
 
 * `ouster_client <ouster_client/>`_ contains an example C++ client for ouster sensors
 * `ouster_viz <ouster_viz/>`_ contains a basic point cloud visualizer
 * `ouster_ros <ouster_ros/>`_ contains example ROS nodes for publishing point cloud messages
-
-To get started building the client and visualizer libraries, see the ``Building`` section below. For
-instructions on ROS, start with the ``ROS`` section.
 
 
 Sample Client and Visualizer
@@ -69,10 +69,8 @@ for dependencies. Follow the official documentation to set up your build environ
 * `Vcpkg, at tag "2020.07" installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-.. note::
-
-   You'll need to run ``git checkout 2020.07`` in the vcpkg directory before bootstrapping to use
-   the correct versions of the dependencies. Building may fail unexpectedly if you skip this step.
+**Note** You'll need to run ``git checkout 2020.07`` in the vcpkg directory before bootstrapping to
+use the correct versions of the dependencies. Building may fail unexpectedly if you skip this step.
 
 Don't forget to integrate vcpkg with Visual Studio after bootstrapping::
 
@@ -128,7 +126,8 @@ Navigate to ``ouster_viz`` under the build directory, which should contain an ex
 where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
 data destingation>`` is the hostname or IP to which the sensor should send lidar data.
 
-For usage and other options, run ``./simple_viz -h`` Mouse controls:
+The sample visualizer does not currently include a GUI, but can be controlled with the mouse and
+keyboard:
 
 * Click and drag rotates the view
 * Middle click and drag moves the view
@@ -160,6 +159,8 @@ Keyboard controls:
     ``-``         Zoom out
     ``shift``     Camera Translation with mouse drag
     ============= ============================================
+
+For usage and other options, run ``./simple_viz -h``
 
 
 Example ROS Code
@@ -233,7 +234,7 @@ Recording Data
 To record raw sensor output use `rosbag record`_. After starting the ``roslaunch`` command above, in
 another terminal, run::
 
-    rosbag record /os_node/imu_packets /os_node/lidar_packets`
+    rosbag record /os_node/imu_packets /os_node/lidar_packets
 
 This will save a bag file of recorded data in the current working directory. 
 
