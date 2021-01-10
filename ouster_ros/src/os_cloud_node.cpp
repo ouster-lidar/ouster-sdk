@@ -25,6 +25,16 @@ using Cloud = ouster_ros::Cloud;
 using Point = ouster_ros::Point;
 namespace sensor = ouster::sensor;
 
+void print_valid_timestamp(const ros::Time& msg_time) {
+  const ros::Duration kMaxTimeOffset(1.0);
+
+  const ros::Time now = ros::Time::now();
+  if (msg_time < (now - kMaxTimeOffset)) {
+    ROS_ERROR("OS1 clock is currently not in sync with host. Current host time: %f, OS1 message time: %f",
+	now.toSec(), msg_time.toSec());
+  }
+}
+
 int main(int argc, char** argv) {
     ros::init(argc, argv, "os_cloud_node");
     ros::NodeHandle nh("~");
@@ -67,8 +77,10 @@ int main(int argc, char** argv) {
                 });
             if (h != ls.headers.end()) {
                 scan_to_cloud(xyz_lut, h->timestamp, ls, cloud);
-                lidar_pub.publish(ouster_ros::cloud_to_cloud_msg(
-                    cloud, h->timestamp, sensor_frame));
+                auto msg = ouster_ros::cloud_to_cloud_msg(
+                    cloud, h->timestamp, sensor_frame);
+                print_valid_timestamp(msg.header.stamp);
+                lidar_pub.publish(msg);
             }
         }
     };
