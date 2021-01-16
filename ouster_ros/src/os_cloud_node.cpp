@@ -27,16 +27,13 @@ using Cloud = ouster_ros::Cloud;
 using Point = ouster_ros::Point;
 namespace sensor = ouster::sensor;
 
-void print_valid_timestamp(const ros::Time& msg_time, Diagnostics& diagnostics) {
-  const ros::Duration kMaxTimeOffset(1.0);
-
-  const ros::Time now = ros::Time::now();
-  if (msg_time < (now - kMaxTimeOffset)) {
-    std::string error_msg = "Lidar clock is currently not in sync with host. Current host time:" + std::to_string(now.toSec()) + ", Lidar message time: " + std::to_string(msg_time.toSec());
-    diagnostics.fail(error_msg.c_str());
-    ROS_ERROR("Lidar clock is currently not in sync with host. Current host time: %f, Lidar message time: %f",
-	now.toSec(), msg_time.toSec());
-  }
+void check_valid_timestamp(const ros::Time& msg_time) {
+    const ros::Duration kMaxTimeOffset(5.0);
+    const ros::Time now = ros::Time::now();
+    if (msg_time < (now - kMaxTimeOffset)) {
+        ROS_ERROR("Lidar clock is not in sync with host. Current host time: %f, Lidar message time: %f", 
+            now.toSec(), msg_time.toSec());
+    }
 }
 
 int main(int argc, char** argv) {
@@ -83,11 +80,14 @@ int main(int argc, char** argv) {
                 });
             if (h != ls.headers.end()) {
                 scan_to_cloud(xyz_lut, h->timestamp, ls, cloud);
+
                 auto msg = ouster_ros::cloud_to_cloud_msg(
                     cloud, h->timestamp, sensor_frame);
-                print_valid_timestamp(msg.header.stamp, diagnostics);
+
+                check_valid_timestamp(msg.header.stamp);
+
                 lidar_pub.publish(msg);
-                diagnostics.tick();
+		diagnostics.tick(msg.header.stamp);
                 diagnostics.update();
             }
         }
