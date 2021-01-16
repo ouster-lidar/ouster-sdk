@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "os_cloud_node");
     ros::NodeHandle nh("~");
 
-    Diagnostics diagnostics(10, "lidar", "lidar");
+    Diagnostics diagnostics(10, "ouster", "ouster");
 
     auto tf_prefix = nh.param("tf_prefix", std::string{});
     if (!tf_prefix.empty() && tf_prefix.back() != '/') tf_prefix.append("/");
