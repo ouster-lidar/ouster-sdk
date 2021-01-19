@@ -11,7 +11,15 @@
   <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
   <arg name="image" default="false" doc="publish range/intensity/ambient image topic"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
-
+  <arg name="arg record" default="false" doc="record data"/>
+  <arg name="arg record_filepath" default="~" doc="file path for the bag to record data"/>
+  <arg name="multipurpose_io_mode" default="OFF" doc="Configure the mode of the MULTIPURPOSE_IO pin. Valid modes are OFF , INPUT_NMEA_UART , OUTPUT_FROM_INTERNAL_OSC , OUTPUT_FROM_SYNC_PULSE_IN , OUTPUT_FROM_PTP_1588 , or OUTPUT_FROM_ENCODER_ANGLE ."/>
+  <arg name="nmea_baud_rate" default="BAUD_9600" doc="Set BAUD_9600 (default) or BAUD_115200 for the expected baud rate the sensor is attempting to decode for NMEA UART input $GPRMC messages."/>	
+  <arg name="nmea_ignore_valid_char" default="0" doc="Set 0 if NMEA UART input $GPRMC messages should be ignored if valid charater is not set, and 1 if messages should be used for time syncing regardless of the valid character"/>
+  <arg name="nmea_in_polarity" default="ACTIVE_HIGH" doc="Set the polarity of NMEA UART input $GPRMC messages. Use ACTIVE_HIGH if UART is active high, idle low, and start bit is after a falling edge."/>
+  <arg name="nmea_leap_seconds" default="0" doc="Set an integer number of leap seconds that will be added to the UDP timesstamp when calculating seconds since 00:00:00 Thursday, 1 January 1970. For Unix Epoch time, this should be set to 0 ."/>
+  <arg name="sync_pulse_in_polarity" default="ACTIVE_HIGH" doc="Set the polarity of SYNC_PULSE_IN input, which controls polarity of SYNC_PULSE_IN pin when timestamp_mode is set in TIME_FROM_SYNC_PULSE_INif sensor is set as the master sensor used for time synchronization."/>
+  
   <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" required="true">
     <param name="~/lidar_mode" type="string" value="$(arg lidar_mode)"/>
     <param name="~/timestamp_mode" type="string" value="$(arg timestamp_mode)"/>
@@ -21,6 +29,12 @@
     <param name="~/lidar_port" value="$(arg lidar_port)"/>
     <param name="~/imu_port" value="$(arg imu_port)"/>
     <param name="~/metadata" value="$(arg metadata)"/>
+    <param name="~/multipurpose_io_mode" value="$(arg multipurpose_io_mode)"/>
+    <param name="~/nmea_baud_rate" value="$(arg nmea_baud_rate)"/>
+    <param name="~/nmea_ignore_valid_char" value="$(arg nmea_ignore_valid_char)"/>
+    <param name="~/nmea_in_polarity" value="$(arg nmea_in_polarity)"/>
+    <param name="~/nmea_leap_seconds" value="$(arg nmea_leap_seconds)"/>
+    <param name="~/sync_pulse_in_polarity" value="$(arg sync_pulse_in_polarity)"/>
   </node>
 
   <node pkg="ouster_ros" type="os_cloud_node" name="os_cloud_node" output="screen" required="true">
@@ -38,6 +52,10 @@
   <node if="$(arg image)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
     <remap from="~/os_config" to="/os_node/os_config"/>
     <remap from="~/points" to="/os_cloud_node/points"/>
+  </node>
+
+  <node if="$(arg record)" name="record" pkg="rosbag" type="record"
+        args="record /os_node/imu_packets /os_node/lidar_packets  --split --size 1024 --chunksize=2048  -o  $(arg record_filepath)os_packets_">
   </node>
 
   <!-- for compatibility with < 1.13 rosbags -->
