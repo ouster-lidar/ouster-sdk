@@ -6,19 +6,21 @@
   <arg name="imu_port" default="0" doc="port to which the sensor should send imu data"/>
   <arg name="replay" default="false" doc="do not connect to a sensor; expect /os_node/{lidar,imu}_packets from replay"/>
   <arg name="lidar_mode" default="" doc="resolution and rate: either 512x10, 512x20, 1024x10, 1024x20, or 2048x10"/>
-  <arg name="timestamp_mode" default="" doc="method used to timestamp measurements: TIME_FROM_INTERNAL_OSC, TIME_FROM_SYNC_PULSE_IN, TIME_FROM_PTP_1588"/>
+  <arg name="timestamp_mode" default="TIME_FROM_INTERNAL_OSC" doc="method used to timestamp measurements: TIME_FROM_INTERNAL_OSC, TIME_FROM_SYNC_PULSE_IN, TIME_FROM_PTP_1588"/>
   <arg name="metadata" default="" doc="override default metadata file for replays"/>
   <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
   <arg name="image" default="false" doc="publish range/intensity/ambient image topic"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
-  <arg name="arg record" default="false" doc="record data"/>
-  <arg name="arg record_filepath" default="~" doc="file path for the bag to record data"/>
+  <arg name="record" default="false" doc="record data"/>
+  <arg name="record_filepath" default="~" doc="file path for the bag to record data"/>
   <arg name="multipurpose_io_mode" default="OFF" doc="Configure the mode of the MULTIPURPOSE_IO pin. Valid modes are OFF , INPUT_NMEA_UART , OUTPUT_FROM_INTERNAL_OSC , OUTPUT_FROM_SYNC_PULSE_IN , OUTPUT_FROM_PTP_1588 , or OUTPUT_FROM_ENCODER_ANGLE ."/>
   <arg name="nmea_baud_rate" default="BAUD_9600" doc="Set BAUD_9600 (default) or BAUD_115200 for the expected baud rate the sensor is attempting to decode for NMEA UART input $GPRMC messages."/>	
   <arg name="nmea_ignore_valid_char" default="0" doc="Set 0 if NMEA UART input $GPRMC messages should be ignored if valid charater is not set, and 1 if messages should be used for time syncing regardless of the valid character"/>
   <arg name="nmea_in_polarity" default="ACTIVE_HIGH" doc="Set the polarity of NMEA UART input $GPRMC messages. Use ACTIVE_HIGH if UART is active high, idle low, and start bit is after a falling edge."/>
   <arg name="nmea_leap_seconds" default="0" doc="Set an integer number of leap seconds that will be added to the UDP timesstamp when calculating seconds since 00:00:00 Thursday, 1 January 1970. For Unix Epoch time, this should be set to 0 ."/>
   <arg name="sync_pulse_in_polarity" default="ACTIVE_HIGH" doc="Set the polarity of SYNC_PULSE_IN input, which controls polarity of SYNC_PULSE_IN pin when timestamp_mode is set in TIME_FROM_SYNC_PULSE_INif sensor is set as the master sensor used for time synchronization."/>
+  <arg name="azimuth_window_start" default="0" doc="Sets the start (default 0) of visible region of interest of the sensor. Only data from the within the specified azimuth window bounds is sent"/>
+  <arg name="azimuth_window_end" default="360000" doc="Sets the end (default 360000) of visible region of interest of the sensor. Only data from the within the specified azimuth window bounds is sent"/>
   
   <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" required="true">
     <param name="~/lidar_mode" type="string" value="$(arg lidar_mode)"/>
@@ -35,6 +37,8 @@
     <param name="~/nmea_in_polarity" value="$(arg nmea_in_polarity)"/>
     <param name="~/nmea_leap_seconds" value="$(arg nmea_leap_seconds)"/>
     <param name="~/sync_pulse_in_polarity" value="$(arg sync_pulse_in_polarity)"/>
+    <param name="~/azimuth_window_start" value="$(arg azimuth_window_start)"/>
+    <param name="~/azimuth_window_end" value="$(arg azimuth_window_end)"/>
   </node>
 
   <node pkg="ouster_ros" type="os_cloud_node" name="os_cloud_node" output="screen" required="true">

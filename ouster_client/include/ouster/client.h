@@ -53,6 +53,14 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     lidar_mode mode = MODE_UNSPEC,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
+                                    multipurpose_io_mode io_mode = mio_mode_OFF,
+                                    nmea_baud_rate baud = BAUD_9600,
+                                    nmea_ignore_valid_char nmea_ignore = nmea_val_char_ignore,
+                                    nmea_in_polarity nmea_polarity = nmea_polarity_ACTIVE_LOW,
+                                    int nmea_leap_seconds = 0,
+                                    sync_pulse_in_polarity sync_pulse_pol = sync_pulse_in_ACTIVE_HIGH,
+                                    int azimuth_window_start = 0,
+                                    int azimuth_window_end = 360000,
                                     int timeout_sec = 30);
 
 /**
