@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+  <arg name="simulation" default="false" />
+  <arg name="model" default="$(find ouster_description)/urdf/ouster_standalone.urdf.xacro" />
+
+  <param name="robot_description" command="xacro $(arg model) simulation:=$(arg simulation)" />
+</launch>

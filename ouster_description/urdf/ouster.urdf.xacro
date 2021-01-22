@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<!-- Copyright 2020 University of Oxford
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+
+
+<!-- Ouster OS Lidar Sensor -->
+<robot name="os" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<xacro:arg name="simulation" default="false" />
+
+<xacro:macro name="os_device" params="parent *origin name:=os1_lidar simulation:=false">
+  <joint name="${parent}_to_ouster" type="fixed">
+    <xacro:insert_block name="origin"/>
+    <parent link="${parent}" />
+    <child link="os_sensor" />
+  </joint>
+  <link name="os_sensor">
+    <visual>
+      <origin xyz="0 0 0" rpy="${pi/2} 0 ${pi/2}" />
+      <geometry>
+        <!--cylinder radius="0.04350" length="0.07350" /-->
+        <mesh filename="package://ouster_description/urdf/meshes/os1_mesh.dae" />
+      </geometry>
+    </visual>
+    <inertial>
+      <!-- CoM taken from CAD assuming constant density and mass 0.479 (best approximation available to real mass) -->
+      <origin xyz="-0.03775e-3 -2.161e-7 31.329e-3" rpy="0 0 0" />
+      <!-- mass taken from Ouster datasheet -->
+      <mass value="0.455" /> 
+      <!-- Inertia tensor from CAD assuming constant density and mass 0.479 (best approximation vailable to real mass) -->
+      <inertia ixx="3.545e-4" ixy="6.051e-10" ixz="-3.736e-7" iyy="3.554e-4" iyz="-2.919e-9" izz="3.627e-4" />
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0.03675"/>
+      <geometry>
+        <cylinder radius="0.04350" length="0.07350" />
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- if simulated sensor, produce extra frames as fixed -->
+  <xacro:if value="${simulation}">
+    <joint name="ouster_sensor_to_lidar" type="fixed">
+      <!-- origin queried from device -->
+      <origin xyz="0 0 0.03618" rpy="0 0 ${pi}" />
+      <parent link="os_sensor" />
+      <child link="os_lidar" />
+    </joint>
+    <link name="os_lidar" />
+    <joint name="ouster_sensor_to_imu" type="fixed">
+      <!-- origin queried from device -->
+      <origin xyz="0.006253 -0.011775 0.007645" rpy="0 0 0" />
+      <parent link="os_sensor" />
+      <child link="os_imu" />
+    </joint>
+    <link name="os_imu" />
+  </xacro:if> 
+</xacro:macro>
+
+</robot>

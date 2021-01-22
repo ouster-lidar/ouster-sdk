@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="rviz" default="true" />
+  <arg name="simulation" default="true" />
+
+  <include file="$(find ouster_description)/launch/load.launch">
+    <arg name="simulation" value="$(arg simulation)"/>
+  </include>
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+  <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz" args="-d $(find ouster_description)/config/rviz/display_urdf.rviz" />
+</launch>
+

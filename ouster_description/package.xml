@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>ouster_description</name>
+  <version>0.0.1</version>
+  <description>The ouster_description package</description>
+
+  <maintainer email="mcamurri@robots.ox.ac.uk">Marco Camurri</maintainer>
+  <author email="mcamurri@robots.ox.ac.uk">Marco Camurri</author>
+
+  <license>Apache 2.0</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>xacro</depend>
+</package>
