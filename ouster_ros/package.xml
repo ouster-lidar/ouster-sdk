@@ -7,8 +7,10 @@
   <license>BSD</license>
   <buildtool_depend>catkin</buildtool_depend>
 
-  <build_depend>libjsoncpp</build_depend>
-  <build_depend>libeigen3</build_depend>
+  <build_depend>libjsoncpp-dev</build_depend>
+  <build_depend>eigen</build_depend>
+  <build_depend>libglew-dev</build_depend>
+  <build_depend>libglfw3-dev</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>message_generation</build_depend>
   <build_depend>std_msgs</build_depend>
