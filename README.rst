@@ -34,12 +34,15 @@ Building on Linux / macOS
 
 To install build dependencies on Ubuntu, run::
 
-    sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev
+    sudo apt install build-essential cmake
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
 
-    brew install cmake pkg-config glfw glew eigen jsoncpp tclap
+    brew install cmake pkg-config
+
+Then install further dependencies with `rosdep`::
+
+    rosdep install --from-paths <path to ouster_example>
 
 To build run the following commands::
 
