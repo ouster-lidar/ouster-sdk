@@ -83,7 +83,7 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                 static_cast<uint16_t>(pix(ouster::LidarScan::REFLECTIVITY)),
                 static_cast<uint8_t>(u),
                 static_cast<uint16_t>(pix(ouster::LidarScan::AMBIENT)),
-                static_cast<uint32_t>(pix(ouster::LidarScan::REFLECTIVITY))};
+                static_cast<uint32_t>(pix(ouster::LidarScan::RANGE))};
         }
     }
 }
