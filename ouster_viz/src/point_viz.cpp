@@ -124,6 +124,7 @@ struct PointViz::impl {
 
     impl()
         : image(0, 0),
+          palette_texture_id((GLuint)-1),
           point_size(3),
           lbutton_down(false),
           mbutton_down(false),
@@ -450,6 +451,14 @@ void PointViz::cuboidSwap() {
 
 void PointViz::setCameraTarget(const mat4d& target) {
     pimpl->camera.setTarget(target);
+}
+    
+void PointViz::setPointCloudPalette(const float palette[][3], size_t palette_size) {
+    if(pimpl->palette_texture_id != (GLuint)-1) {
+        load_texture(palette, palette_size, 1, pimpl->palette_texture_id);
+    } else {
+        std::cerr << "Cannot set custom palette before initialization" << std::endl;
+    }
 }
 
 void PointViz::attachKeyHandler(int key, std::function<void()>&& f) {

@@ -13,6 +13,7 @@
 #include "ouster/lidar_scan.h"
 #include "ouster/point_viz.h"
 #include "ouster/types.h"
+#include "ouster/version.h"
 
 namespace ouster {
 namespace viz {
@@ -26,6 +27,7 @@ class LidarScanViz {
     AutoExposure ambient_ae;
     AutoExposure reflectivity_ae;
     BeamUniformityCorrector ambient_buc;
+    util::version firmware_version;
     const std::vector<int> px_offset;
     const double aspect_ratio;
     const size_t h, w;

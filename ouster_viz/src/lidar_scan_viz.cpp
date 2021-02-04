@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "ouster/types.h"
+#include "ouster/colormaps.h"
 
 namespace ouster {
 namespace viz {
@@ -21,9 +22,12 @@ enum CloudDisplayMode {
 };
 }
 
+const util::version calref_min_version = {2, 1, 0};
+
 LidarScanViz::LidarScanViz(const sensor::sensor_info& info,
                            PointViz& point_viz_)
-    : px_offset(info.format.pixel_shift_by_row),
+    : firmware_version(ouster::util::version_of_string(info.fw_rev)),
+      px_offset(info.format.pixel_shift_by_row),
       aspect_ratio((info.beam_altitude_angles.front() -
                     info.beam_altitude_angles.back()) /
                    360.0),  // beam angles are in degrees
@@ -54,6 +58,12 @@ LidarScanViz::LidarScanViz(const sensor::sensor_info& info,
             case MODE_REFLECTIVITY:
                 std::cerr << "Coloring point cloud by reflectivity"
                           << std::endl;
+        }
+        if(display_mode == MODE_REFLECTIVITY &&
+	       firmware_version >= calref_min_version) {
+           point_viz.setPointCloudPalette(calref, calref_n);
+        } else {
+           point_viz.setPointCloudPalette(spezia, spezia_n);
         }
     });
     point_viz.attachKeyHandler(GLFW_KEY_V, [this]() {
@@ -137,7 +147,14 @@ void LidarScanViz::draw(const LidarScan& ls, const size_t which_cloud,
         case MODE_REFLECTIVITY:
             img_t<double> reflectivity =
                 ls.field(LidarScan::REFLECTIVITY).cast<double>();
-            reflectivity_ae(reflectivity);
+            if(firmware_version >= calref_min_version) {  
+                // Scale directly from 0-255 to 0-1
+                reflectivity /= 255.0;
+            } else {
+                // Apply autoexposure algorithm          
+                reflectivity_ae(reflectivity);
+            }
+            
             point_viz.setRangeAndKey(which_cloud, range_data,
                                      reflectivity.data());
             break;

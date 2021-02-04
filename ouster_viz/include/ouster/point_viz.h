@@ -239,6 +239,14 @@ class PointViz {
     void setCameraTarget(const mat4d& target);
 
     /**
+     * Set point cloud color palette. 
+     *
+     * @param palette the new palette to use
+     * @param palette_size the number of colors in the new palette
+     */
+    void setPointCloudPalette(const float palette[][3], size_t palette_size);
+
+    /**
      * Add custom key handler to the key. Multiple bindings can exist
      * for the same key.
      *
