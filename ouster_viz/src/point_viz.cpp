@@ -133,6 +133,50 @@ struct PointViz::impl {
           initialized(false) {}
 };
 
+
+static void draw(PointViz::impl& pimpl) {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // draw images
+    if (pimpl.image.enabled) {
+        pimpl.image.draw(pimpl.camera);
+    } else {
+        pimpl.camera.setOffset(0, 0);
+    }
+
+    pimpl.camera.update();
+
+    // draw point clouds
+    glUseProgram(pimpl.point_program_id);
+    for (auto& cloud : pimpl.clouds) {
+        if (!cloud.enabled) continue;
+        cloud.draw(pimpl.camera, pimpl.cloud_ids, pimpl.palette_texture_id);
+    }
+
+    // draw rings
+    if (pimpl.rings.enabled) {
+        pimpl.rings.draw(pimpl.camera);
+    }
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
+    glBlendEquation(GL_FUNC_ADD);
+
+    // enable culling
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+
+    // draw cuboids
+    if (pimpl.cuboids.enabled) {
+        pimpl.cuboids.draw(pimpl.camera);
+    }
+    glDisable(GL_BLEND);
+    // enable culling
+    glDisable(GL_CULL_FACE);
+
+    // Swap buffers
+    glfwSwapBuffers(pimpl.window);
+}
+
 /**
  * callback for resizing the window. Should be called automatically by GLFW.
  *
@@ -140,11 +184,15 @@ struct PointViz::impl {
  * @param width  window width in pixels
  * @param height window height in pixels
  */
-static void updateWindowSize(GLFWwindow* window, int width, int height) {
-    impl::window_width = width;
-    impl::window_height = height;
+static void updateFBSize(GLFWwindow* window, int fb_width, int fb_height) {
+    impl::window_width = fb_width;
+    impl::window_height = fb_height;
     impl::window_to_viz[window]->pimpl->camera.update();
-    glViewport(0, 0, width, height);
+    glViewport(0, 0, fb_width, fb_height);
+#ifdef __APPLE__
+    // glfwPollEvents blocks during resize. Keep rending to avoid artifacts
+    draw(*impl::window_to_viz[window]->pimpl);
+#endif
 }
 
 /**
@@ -482,6 +530,11 @@ PointViz::~PointViz() {
 
 bool PointViz::initialize() {
     glfwSetErrorCallback(error_callback);
+
+    // avoid chdir to resources dir on macos
+#ifdef __APPLE__
+    glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
+#endif
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
         return false;
@@ -504,7 +557,7 @@ bool PointViz::initialize() {
         glfwTerminate();
         return false;
     }
-    glfwSetWindowSizeCallback(pimpl->window, updateWindowSize);
+    glfwSetFramebufferSizeCallback(pimpl->window, updateFBSize);
     glfwMakeContextCurrent(pimpl->window);
 
     if (glewInit() != GLEW_OK) {
@@ -561,47 +614,7 @@ void PointViz::drawLoop() {
     // we should set the opengl context to be current
     glfwMakeContextCurrent(pimpl->window);
     do {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        // draw images
-        if (pimpl->image.enabled) {
-            pimpl->image.draw(pimpl->camera);
-        } else {
-            pimpl->camera.setOffset(0, 0);
-        }
-
-        pimpl->camera.update();
-
-        // draw point clouds
-        glUseProgram(pimpl->point_program_id);
-        for (auto& cloud : pimpl->clouds) {
-            if (!cloud.enabled) continue;
-            cloud.draw(pimpl->camera, pimpl->cloud_ids,
-                       pimpl->palette_texture_id);
-        }
-
-        // draw rings
-        if (pimpl->rings.enabled) {
-            pimpl->rings.draw(pimpl->camera);
-        }
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
-        glBlendEquation(GL_FUNC_ADD);
-
-        // enable culling
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_FRONT);
-
-        // draw cuboids
-        if (pimpl->cuboids.enabled) {
-            pimpl->cuboids.draw(pimpl->camera);
-        }
-        glDisable(GL_BLEND);
-        // enable culling
-        glDisable(GL_CULL_FACE);
-
-        // Swap buffers
-        glfwSwapBuffers(pimpl->window);
+        draw(*pimpl);
         glfwPollEvents();
     } while (!quit && glfwWindowShouldClose(pimpl->window) == 0);
     glDeleteProgram(pimpl->point_program_id);
