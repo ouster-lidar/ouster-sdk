@@ -2,12 +2,14 @@
 
 #include <atomic>
 #include <cmath>
+#include <condition_variable>
 #include <csignal>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
