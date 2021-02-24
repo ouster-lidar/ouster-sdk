@@ -46,6 +46,23 @@ bool operator!=(const data_format& lhs, const data_format& rhs) {
     return !(lhs == rhs);
 }
 
+bool operator==(const sensor_info& lhs, const sensor_info& rhs) {
+    return lhs.name == rhs.name && lhs.sn == rhs.sn &&
+           lhs.fw_rev == rhs.fw_rev && lhs.mode == rhs.mode &&
+           lhs.prod_line == rhs.prod_line && lhs.format == rhs.format &&
+           lhs.beam_azimuth_angles == rhs.beam_azimuth_angles &&
+           lhs.beam_altitude_angles == rhs.beam_altitude_angles &&
+           lhs.lidar_origin_to_beam_origin_mm ==
+               rhs.lidar_origin_to_beam_origin_mm &&
+           lhs.imu_to_sensor_transform == rhs.imu_to_sensor_transform &&
+           lhs.lidar_to_sensor_transform == rhs.lidar_to_sensor_transform &&
+           lhs.extrinsic == rhs.extrinsic;
+}
+
+bool operator!=(const sensor_info& lhs, const sensor_info& rhs) {
+    return !(lhs == rhs);
+}
+
 data_format default_data_format(lidar_mode mode) {
     auto repeat = [](int n, const std::vector<int>& v) {
         std::vector<int> res{};
@@ -314,38 +331,85 @@ sensor_info metadata_from_json(const std::string& json_file) {
 }
 
 std::string to_string(const sensor_info& info) {
+    return to_string(info, {});
+}
+
+std::string to_string(const sensor_info& info,
+                      const std::set<std::string> only_fields) {
     Json::Value root{};
-    root["client_version"] = ouster::CLIENT_VERSION;
-    root["hostname"] = info.name;
-    root["prod_sn"] = info.sn;
-    root["build_rev"] = info.fw_rev;
-    root["lidar_mode"] = to_string(info.mode);
-    root["prod_line"] = info.prod_line;
-    root["data_format"]["pixels_per_column"] = info.format.pixels_per_column;
-    root["data_format"]["columns_per_packet"] = info.format.columns_per_packet;
-    root["data_format"]["columns_per_frame"] = info.format.columns_per_frame;
-    root["lidar_origin_to_beam_origin_mm"] =
-        info.lidar_origin_to_beam_origin_mm;
 
-    for (auto i : info.format.pixel_shift_by_row)
-        root["data_format"]["pixel_shift_by_row"].append(i);
+    auto to_show = [&only_fields](const std::string& field_str) {
+        return only_fields.empty() || only_fields.count(field_str);
+    };
 
-    for (auto i : info.beam_azimuth_angles)
-        root["beam_azimuth_angles"].append(i);
+    if (to_show("client_version")) {
+        root["client_version"] = ouster::CLIENT_VERSION;
+    }
 
-    for (auto i : info.beam_altitude_angles)
-        root["beam_altitude_angles"].append(i);
+    if (to_show("hostname")) {
+        root["hostname"] = info.name;
+    }
 
-    for (size_t i = 0; i < 4; i++) {
-        for (size_t j = 0; j < 4; j++) {
-            root["imu_to_sensor_transform"].append(
-                info.imu_to_sensor_transform(i, j));
-            root["lidar_to_sensor_transform"].append(
-                info.lidar_to_sensor_transform(i, j));
+    if (to_show("prod_sn")) {
+        root["prod_sn"] = info.sn;
+    }
+
+    if (to_show("build_rev")) {
+        root["build_rev"] = info.fw_rev;
+    }
+
+    if (to_show("lidar_mode")) {
+        root["lidar_mode"] = to_string(info.mode);
+    }
+
+    if (to_show("prod_line")) {
+        root["prod_line"] = info.prod_line;
+    }
+
+    if (to_show("data_format")) {
+        root["data_format"]["pixels_per_column"] = info.format.pixels_per_column;
+        root["data_format"]["columns_per_packet"] = info.format.columns_per_packet;
+        root["data_format"]["columns_per_frame"] = info.format.columns_per_frame;
+        for (auto i : info.format.pixel_shift_by_row)
+            root["data_format"]["pixel_shift_by_row"].append(i);
+    }
+
+    if (to_show("lidar_origin_to_beam_origin_mm")) {
+        root["lidar_origin_to_beam_origin_mm"] =
+            info.lidar_origin_to_beam_origin_mm;
+    }
+
+    if (to_show("beam_azimuth_angles")) {
+        for (auto i : info.beam_azimuth_angles)
+            root["beam_azimuth_angles"].append(i);
+    }
+
+    if (to_show("beam_altitude_angles")) {
+        for (auto i : info.beam_altitude_angles)
+            root["beam_altitude_angles"].append(i);
+    }
+
+    if (to_show("imu_to_sensor_transform")) {
+        for (size_t i = 0; i < 4; i++) {
+            for (size_t j = 0; j < 4; j++) {
+                root["imu_to_sensor_transform"].append(
+                    info.imu_to_sensor_transform(i, j));
+            }
         }
     }
 
-    root["json_calibration_version"] = FW_2_0;
+    if (to_show("lidar_to_sensor_transform")) {
+        for (size_t i = 0; i < 4; i++) {
+            for (size_t j = 0; j < 4; j++) {
+                root["lidar_to_sensor_transform"].append(
+                    info.lidar_to_sensor_transform(i, j));
+            }
+        }
+    }
+
+    if (to_show("json_calibration_version")) {
+        root["json_calibration_version"] = FW_2_0;
+    }
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;

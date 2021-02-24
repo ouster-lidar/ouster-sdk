@@ -8,6 +8,7 @@
 #include <Eigen/Eigen>
 #include <string>
 #include <vector>
+#include <set>
 
 namespace ouster {
 
@@ -72,6 +73,14 @@ struct sensor_info {
     mat4d lidar_to_sensor_transform;
     mat4d extrinsic;
 };
+
+/** Equality/Not-Equality for data_format */
+bool operator==(const data_format& lhs, const data_format& rhs);
+bool operator!=(const data_format& lhs, const data_format& rhs);
+
+/** Equality/Not-Equality for sensor_info */
+bool operator==(const sensor_info& lhs, const sensor_info& rhs);
+bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
 
 /**
  * Get a default sensor_info for the given lidar mode.
@@ -151,12 +160,24 @@ sensor_info parse_metadata(const std::string& metadata);
 sensor_info metadata_from_json(const std::string& json_file);
 
 /**
- * Get string representation of metadata.
+ * Get a string representation of metadata. All fields included.
  *
  * @param metadata a struct of sensor metadata
  * @return a json metadata string
  */
 std::string to_string(const sensor_info& metadata);
+
+/**
+ * Get a string representation of metadata, with the option to pass select
+ * fields which will be included.
+ *
+ * @param metadata a struct of sensor metadata
+ * @param only_fields a set of fields (as strings) to include, if empty -
+ *                    include all fields.
+ * @return a json metadata string
+ */
+std::string to_string(const sensor_info& info,
+                      const std::set<std::string> only_fields);
 
 /**
  * Table of accessors for extracting data from imu and lidar packets.

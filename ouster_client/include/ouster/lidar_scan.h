@@ -140,6 +140,11 @@ inline bool operator==(const LidarScan& a, const LidarScan& b) {
            a.headers == b.headers && a.frame_id && b.frame_id;
 }
 
+/** Not Equality for scans. */
+inline bool operator!=(const LidarScan& a, const LidarScan& b) {
+    return !(a == b);
+}
+
 /** Lookup table of beam directions and offsets. */
 struct XYZLut {
     LidarScan::Points direction;
