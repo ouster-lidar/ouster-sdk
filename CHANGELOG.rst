@@ -2,6 +2,19 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+Changed
+-------
+* reflectivity visualization for changes in the upcoming 2.1 firmware
+* moved most of the visualizer code out of public headers and hid some implementation details
+
+Fixed
+-----
+* visualizer bug causing a small viewport when resizing the window on macos with a retina display
+
+
 [20201209]
 ==========
 
