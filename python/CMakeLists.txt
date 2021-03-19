@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 
-set(OUSTER_SDK_PATH ".." CACHE STRING "SDK source directory")
+set(OUSTER_SDK_PATH "${CMAKE_CURRENT_LIST_DIR}/.." CACHE STRING "SDK source directory")
 message(STATUS "Ouster SDK location: ${OUSTER_SDK_PATH}")
 list(APPEND CMAKE_MODULE_PATH ${OUSTER_SDK_PATH}/cmake)
 
