@@ -16,3 +16,8 @@ pybind11_add_module(_sensor src/cpp/sensor.cpp)
 set_target_properties(_sensor PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 target_link_libraries(_sensor PRIVATE ouster_client)
 target_include_directories(_sensor SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
+
+pybind11_add_module(_pcap src/cpp/pcap.cpp)
+set_target_properties(_pcap PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+target_link_libraries(_pcap PRIVATE ouster_pcap)
+target_include_directories(_pcap SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})

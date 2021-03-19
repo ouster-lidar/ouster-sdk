@@ -21,6 +21,7 @@ endif()
 
 # === Subdirectories ===
 add_subdirectory(ouster_client)
+add_subdirectory(ouster_pcap)
 
 if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
