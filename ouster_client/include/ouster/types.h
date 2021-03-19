@@ -47,6 +47,41 @@ enum timestamp_mode {
     TIME_FROM_PTP_1588
 };
 
+enum multipurpose_io_mode {
+  mio_mode_UNSPEC = 0,
+  mio_mode_OFF = 1,
+  mio_INPUT_NMEA_UART,
+  mio_OUTPUT_FROM_INTERNAL_OSC,
+  mio_OUTPUT_FROM_SYNC_PULSE_IN,
+  mio_OUTPUT_FROM_PTP_1588,
+  mio_OUTPUT_FROM_ENCODER_ANGLE
+};
+
+enum nmea_baud_rate {
+  BAUD_UNSPEC = 0,
+  BAUD_9600 = 1,
+  BAUD_115200
+};
+
+enum nmea_in_polarity {
+  nmea_polarity_UNSPEC = 0,
+  nmea_polarity_ACTIVE_HIGH = 1,
+  nmea_polarity_ACTIVE_LOW
+};
+
+enum sync_pulse_in_polarity {
+  sync_pulse_in_UNSPEC = 0,
+  sync_pulse_in_ACTIVE_HIGH = 1,
+  sync_pulse_in_ACTIVE_LOW
+};
+
+enum nmea_ignore_valid_char{
+  nmea_val_char_UNSPEC = 0,
+  nmea_val_char_ignore = 1,
+  nmea_val_char_not_ignore
+};
+
+
 enum configuration_version {
     FW_2_0 = 3
 };
@@ -157,6 +192,98 @@ sensor_info metadata_from_json(const std::string& json_file);
  * @return a json metadata string
  */
 std::string to_string(const sensor_info& metadata);
+
+/**
+ * Get string representation of a multipurpose_io_mode
+ * @param multipurpose_io_mode
+ * @return string representation of the multipurpose_io_mode
+ */
+std::string to_string(multipurpose_io_mode v);
+
+/**
+ * Get multipurpose_io_mode from string
+ * @param string
+ * @return multipurpose_io_mode corresponding to the string, or 0 on error
+ */
+multipurpose_io_mode multipurpose_io_mode_of_string(const std::string& s);
+
+/**
+ * Get string representation of a nmea_baud_rate
+ * @param nmea_baud_rate
+ * @return string representation of the nmea_baud_rate
+ */
+std::string to_string(nmea_baud_rate v);
+
+/**
+ * Get nmea_baud_rate from string
+ * @param string
+ * @return nmea_baud_rate corresponding to the string, or 0 on error
+ */
+nmea_baud_rate nmea_baud_rate_of_string(const std::string& s);
+
+/**
+ * Get string representation of a nmea_in_polarity
+ * @param nmea_in_polarity
+ * @return string representation of the nmea_in_polarity
+ */
+std::string to_string(nmea_in_polarity v);
+
+/**
+ * Get nmea_in_polarity from string
+ * @param string
+ * @return nmea_in_polarity corresponding to the string, or 0 on error
+ */
+nmea_in_polarity nmea_in_polarity_of_string(const std::string& s);
+
+/**
+ * Get string representation of a sync_pulse_in_polarity
+ * @param sync_pulse_in_polarity
+ * @return string representation of the sync_pulse_in_polarity
+ */
+std::string to_string(sync_pulse_in_polarity v);
+
+/**
+ * Get sync_pulse_in_polarity from string
+ * @param string
+ * @return sync_pulse_in_polarity corresponding to the string, or 0 on error
+ */
+sync_pulse_in_polarity sync_pulse_in_polarity_of_string(const std::string& s);
+
+
+/**
+ * Get string representation of a nmea_ignore_valid_char
+ * @param nmea_ignore_valid_char
+ * @return string representation of the nmea_ignore_valid_char
+ */
+std::string to_string(nmea_ignore_valid_char v);
+
+/**
+ * Get nmea_ignore_valid_char from string
+ * @param string
+ * @return nmea_ignore_valid_char corresponding to the string, or 0 on error
+ */
+nmea_ignore_valid_char nmea_ignore_valid_char_of_string(const std::string& s);
+
+/**
+ * Get nmea_leap_seconds from string
+ * @param string
+ * @return nmea_leap_seconds corresponding to the string, or -999999 on error
+ */
+int nmea_leap_seconds_of_string(const std::string& s);
+
+/**
+ * Get azimuth_window value from string
+ * @param string
+ * @return azimuth_window corresponding to the string
+ */
+int azimuth_window_of_string(const std::string& s);
+
+/**
+ * Get string representation of a azimuth_window_start and azimuth_window_end
+ * @param int azimuth_window_start, int azimuth_window_end
+ * @return string representation of the azimuth_window
+ */
+std::string azimuth_window_to_string(const int start, const int end);
 
 /**
  * Table of accessors for extracting data from imu and lidar packets.

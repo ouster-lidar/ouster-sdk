@@ -312,6 +312,14 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
+                                    multipurpose_io_mode io_mode,
+                                    nmea_baud_rate baud,
+                                    nmea_ignore_valid_char nmea_ignore,
+                                    nmea_in_polarity nmea_polarity,
+                                    int nmea_leap_seconds,
+                                    sync_pulse_in_polarity sync_pulse_pol,
+                                    int azimuth_window_start,
+                                    int azimuth_window_end,
                                     int timeout_sec) {
     auto cli = init_client(hostname, lidar_port, imu_port);
     if (!cli) return std::shared_ptr<client>();
@@ -356,6 +364,41 @@ std::shared_ptr<client> init_client(const std::string& hostname,
             res);
         success &= res == "set_config_param";
     }
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "multipurpose_io_mode", to_string(io_mode)},
+        res);
+    success &= res == "set_config_param";
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "nmea_baud_rate", to_string(baud)},
+        res);
+    success &= res == "set_config_param";
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "nmea_ignore_valid_char", to_string(nmea_ignore)},
+        res);
+    success &= res == "set_config_param";
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "nmea_in_polarity", to_string(nmea_polarity)},
+        res);
+    success &= res == "set_config_param";
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "sync_pulse_in_polarity", to_string(sync_pulse_pol)},
+        res);
+    success &= res == "set_config_param";
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "nmea_leap_seconds", std::to_string(nmea_leap_seconds)},
+        res);
+    success &= res == "set_config_param";
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "azimuth_window", 
+                  azimuth_window_to_string(azimuth_window_start, azimuth_window_end)},
+        res);
+    success &= res == "set_config_param";
 
     success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
     success &= res == "reinitialize";

@@ -33,6 +33,42 @@ const std::array<std::pair<timestamp_mode, std::string>, 3>
          {TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
          {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
 
+const std::array<std::pair<multipurpose_io_mode, std::string>, 7>
+    multipurpose_io_mode_strings = {
+        {{mio_mode_UNSPEC, "UNSPEC"},
+         {mio_mode_OFF, "OFF"},
+         {mio_INPUT_NMEA_UART, "INPUT_NMEA_UART"},
+         {mio_OUTPUT_FROM_INTERNAL_OSC, "OUTPUT_FROM_INTERNAL_OSC"},
+         {mio_OUTPUT_FROM_SYNC_PULSE_IN, "OUTPUT_FROM_SYNC_PULSE_IN"},
+         {mio_OUTPUT_FROM_PTP_1588, "OUTPUT_FROM_PTP_1588"},
+         {mio_OUTPUT_FROM_ENCODER_ANGLE, "OUTPUT_FROM_ENCODER_ANGLE"}}};
+
+
+const std::array<std::pair<nmea_baud_rate, std::string>, 3>
+    nmea_baud_rate_strings = {
+        {{BAUD_UNSPEC, "BAUD_UNSPEC"},
+         {BAUD_9600, "BAUD_9600"},
+         {BAUD_115200, "BAUD_115200"}}};
+
+const std::array<std::pair<nmea_in_polarity, std::string>, 3>
+   nmea_in_polarity_strings = {
+        {{nmea_polarity_UNSPEC, "nmea_polarity_UNSPEC"},
+         {nmea_polarity_ACTIVE_HIGH, "ACTIVE_HIGH"},
+         {nmea_polarity_ACTIVE_LOW, "ACTIVE_LOW"}}};
+
+const std::array<std::pair<sync_pulse_in_polarity, std::string>, 3>
+    sync_pulse_in_polarity_strings = {
+        {{sync_pulse_in_UNSPEC, "sync_pulse_in_UNSPEC"},
+         {sync_pulse_in_ACTIVE_HIGH, "ACTIVE_HIGH"},
+         {sync_pulse_in_ACTIVE_LOW, "ACTIVE_LOW"}}};
+
+const std::array<std::pair<nmea_ignore_valid_char, std::string>, 3>
+    nmea_ignore_valid_char_strings = {
+        {{nmea_val_char_UNSPEC, "nmea_val_char_UNSPEC"},
+         {nmea_val_char_ignore, "0"},
+         {nmea_val_char_not_ignore, "1"}}};
+
+
 }  // namespace
 
 bool operator==(const data_format& lhs, const data_format& rhs) {
@@ -193,6 +229,129 @@ timestamp_mode timestamp_mode_of_string(const std::string& s) {
                      });
 
     return res == end ? timestamp_mode(0) : res->first;
+}
+
+std::string to_string(multipurpose_io_mode mode) {
+    auto end = multipurpose_io_mode_strings.end();
+    auto res = std::find_if(multipurpose_io_mode_strings.begin(), end,
+                            [&](const std::pair<multipurpose_io_mode, std::string>& p) {
+                                return p.first == mode;
+                            });
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+multipurpose_io_mode multipurpose_io_mode_of_string(const std::string& s) {
+    auto end = multipurpose_io_mode_strings.end();
+    auto res = std::find_if(multipurpose_io_mode_strings.begin(), end,
+                            [&](const std::pair<multipurpose_io_mode, std::string>& p) {
+                                return p.second == s;
+                            });
+    return res == end ? multipurpose_io_mode(0) : res->first;
+}
+
+std::string to_string(nmea_baud_rate baud) {
+    auto end = nmea_baud_rate_strings.end();
+    auto res = std::find_if(nmea_baud_rate_strings.begin(), end,
+                            [&](const std::pair<nmea_baud_rate, std::string>& p) {
+                                return p.first == baud;
+                            });
+
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+nmea_baud_rate nmea_baud_rate_of_string(const std::string& s) {
+    auto end = nmea_baud_rate_strings.end();
+    auto res = std::find_if(nmea_baud_rate_strings.begin(), end,
+                            [&](const std::pair<nmea_baud_rate, std::string>& p) {
+                                return p.second == s;
+                            });
+
+    return res == end ? nmea_baud_rate(0) : res->first;
+}
+
+std::string to_string(nmea_in_polarity polarity) {
+    auto end = nmea_in_polarity_strings.end();
+    auto res = std::find_if(nmea_in_polarity_strings.begin(), end,
+                            [&](const std::pair<nmea_in_polarity, std::string>& p) {
+                                return p.first == polarity;
+                            });
+
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+nmea_in_polarity nmea_in_polarity_of_string(const std::string& s) {
+    auto end = nmea_in_polarity_strings.end();
+    auto res = std::find_if(nmea_in_polarity_strings.begin(), end,
+                            [&](const std::pair<nmea_in_polarity, std::string>& p) {
+                                return p.second == s;
+                            });
+
+    return res == end ? nmea_in_polarity(0) : res->first;
+}
+
+std::string to_string(sync_pulse_in_polarity polarity) {
+    auto end = sync_pulse_in_polarity_strings.end();
+    auto res = std::find_if(sync_pulse_in_polarity_strings.begin(), end,
+                            [&](const std::pair<sync_pulse_in_polarity, std::string>& p) {
+                                return p.first == polarity;
+                            });
+
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+sync_pulse_in_polarity sync_pulse_in_polarity_of_string(const std::string& s) {
+    auto end = sync_pulse_in_polarity_strings.end();
+    auto res = std::find_if(sync_pulse_in_polarity_strings.begin(), end,
+                            [&](const std::pair<sync_pulse_in_polarity, std::string>& p) {
+                                return p.second == s;
+                            });
+
+    return res == end ? sync_pulse_in_polarity(0) : res->first;
+}
+
+std::string to_string(nmea_ignore_valid_char mode) {
+    auto end = nmea_ignore_valid_char_strings.end();
+    auto res = std::find_if(nmea_ignore_valid_char_strings.begin(), end,
+                            [&](const std::pair<nmea_ignore_valid_char, std::string>& p) {
+                                return p.first == mode;
+                            });
+
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+nmea_ignore_valid_char nmea_ignore_valid_char_of_string(const std::string& s) {
+    auto end = nmea_ignore_valid_char_strings.end();
+    auto res = std::find_if(nmea_ignore_valid_char_strings.begin(), end,
+                            [&](const std::pair<nmea_ignore_valid_char, std::string>& p) {
+                                return p.second == s;
+                            });
+
+    return res == end ? nmea_ignore_valid_char(0) : res->first;
+}
+
+int nmea_leap_seconds_of_string(const std::string& s)
+{
+
+    return s == "0" ? 0 : (std::atoi(s.c_str()) == 0 ? -999999 :std::atoi(s.c_str()));
+
+}
+
+int azimuth_window_of_string(const std::string& s)
+{
+    if (s != "0" && std::atoi(s.c_str()) == 0)
+        return -999999;
+    else if (std::atoi(s.c_str()) >= 0 && std::atoi(s.c_str()) <= 360000) 
+	return std::atoi(s.c_str());
+    else 
+	return -999999;
+}
+
+std::string azimuth_window_to_string(const int start, const int end)
+{
+    if (start >=0 && start <= 360000 && end >=0 && end <= 360000)
+        return "[" + std::to_string(start) + "," + std::to_string(end) + "]";
+    else
+        return "[0,360000]";
 }
 
 sensor_info parse_metadata(const std::string& meta) {

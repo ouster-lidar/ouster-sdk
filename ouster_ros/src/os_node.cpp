@@ -125,12 +125,23 @@ int main(int argc, char** argv) {
     auto replay = nh.param("replay", false);
     auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
     auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
+    auto multipurpose_io_mode_arg = nh.param("multipurpose_io_mode", std::string());
+    auto nmea_baud_rate_arg = nh.param("nmea_baud_rate", std::string());
+    auto nmea_ignore_valid_char_arg = std::to_string(nh.param("nmea_ignore_valid_char", int()));
+    auto nmea_in_polarity_arg = nh.param("nmea_in_polarity", std::string());
+    auto nmea_leap_seconds_str_arg = std::to_string(nh.param("nmea_leap_seconds", int()));
+    auto sync_pulse_in_polarity_arg = nh.param("sync_pulse_in_polarity", std::string());
+    auto azimuth_window_start_str_arg = std::to_string(nh.param("azimuth_window_start", int()));
+    auto azimuth_window_end_str_arg = std::to_string(nh.param("azimuth_window_end", int()));
 
     // fall back to metadata file name based on hostname, if available
     auto meta_file = nh.param("metadata", std::string{});
     if (!meta_file.size() && hostname.size()) meta_file = hostname + ".json";
 
+
+    //
     // set lidar mode from param
+    //
     sensor::lidar_mode lidar_mode = sensor::MODE_UNSPEC;
     if (lidar_mode_arg.size()) {
         if (replay) ROS_WARN("Lidar mode set in replay mode. May be ignored");
@@ -142,7 +153,10 @@ int main(int argc, char** argv) {
         }
     }
 
+
+    //
     // set timestamp mode from param
+    //
     sensor::timestamp_mode timestamp_mode = sensor::TIME_FROM_UNSPEC;
     if (timestamp_mode_arg.size()) {
         if (replay)
@@ -155,6 +169,202 @@ int main(int argc, char** argv) {
         }
     }
 
+
+    //
+    // set multipurpose_io_mode from param
+    //
+    sensor::multipurpose_io_mode multipurpose_io_mode = sensor::mio_mode_UNSPEC;
+    
+    if (replay) {
+    	if (multipurpose_io_mode_arg.size())
+            ROS_WARN("Multipurpose I/O mode set in replay mode. Will be ignored");		
+    }
+    else {
+        if (multipurpose_io_mode_arg.size() == 0) {
+           ROS_WARN("Any setting for multipurpose I/O mode, used default OFF");
+           multipurpose_io_mode = sensor::mio_mode_OFF;
+        }
+        else {
+            multipurpose_io_mode = sensor::multipurpose_io_mode_of_string(multipurpose_io_mode_arg);	
+            if (!multipurpose_io_mode) {
+                ROS_ERROR("Invalid setting for multipurpose I/O mode %s", multipurpose_io_mode_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    //
+    // set nmea baud rate from param
+    //
+    sensor::nmea_baud_rate nmea_baud_rate = sensor::BAUD_UNSPEC;
+
+    if (replay) {
+        if (nmea_baud_rate_arg.size())
+            ROS_WARN("NMEA baud rate set in replay mode. Will be ignored");
+    }
+    else {
+        if (not nmea_baud_rate_arg.size()) {
+            ROS_WARN("Any setting for NMEA baud rate, used default BAUD_9600");
+            nmea_baud_rate = sensor::BAUD_9600;
+        }
+        else {
+            nmea_baud_rate = sensor::nmea_baud_rate_of_string(nmea_baud_rate_arg);
+            if (!nmea_baud_rate) {
+                ROS_ERROR("Invalid setting for NMEA baud rate %s", nmea_baud_rate_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    //
+    // set nmea polarity
+    //
+    sensor::nmea_in_polarity nmea_in_polarity = sensor::nmea_polarity_UNSPEC;
+
+    if (replay) {
+        if (nmea_in_polarity_arg.size())
+            ROS_WARN("NMEA input polarity set in replay mode. Will be ignored");
+    }
+    else {
+        if (not nmea_in_polarity_arg.size()) {
+            ROS_WARN("Any setting for NMEA input polarity, used default ACTIVE_LOW");
+            nmea_in_polarity = sensor::nmea_polarity_ACTIVE_LOW;
+        }
+        else {
+            nmea_in_polarity = sensor::nmea_in_polarity_of_string(nmea_in_polarity_arg);
+            if (!nmea_in_polarity) {
+                ROS_ERROR("Invalid setting for NMEA input polarity %s", nmea_in_polarity_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    //
+    // set sync pulse in polarity
+    //
+    sensor::sync_pulse_in_polarity sync_pulse_in_polarity = sensor::sync_pulse_in_UNSPEC;
+
+    if (replay) {
+        if (sync_pulse_in_polarity_arg.size())
+            ROS_WARN("Sync pulse input polarity set in replay mode. Will be ignored");
+    }
+    else {
+        if (not sync_pulse_in_polarity_arg.size()) {
+            ROS_WARN("Any setting for sync pulse input polarity, used default ACTIVE_HIGH");
+            sync_pulse_in_polarity = sensor::sync_pulse_in_ACTIVE_HIGH;
+        }
+        else {
+            sync_pulse_in_polarity = sensor::sync_pulse_in_polarity_of_string(sync_pulse_in_polarity_arg);
+            if (!sync_pulse_in_polarity) {
+                ROS_ERROR("Invalid sync pulse input polarity %s", sync_pulse_in_polarity_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    //
+    // set nmea ignore valid char
+    //
+    sensor::nmea_ignore_valid_char nmea_ignore_valid_char = sensor::nmea_val_char_UNSPEC;
+
+    if (replay) {
+        if (nmea_ignore_valid_char_arg.size())
+            ROS_WARN("NMEA ignore valid char set in replay mode. Will be ignored");
+    }
+    else {
+        if (not nmea_ignore_valid_char_arg.size()) {
+            ROS_WARN("Any setting for NMEA ignore valid char, used default IGNORE (0)");
+            nmea_ignore_valid_char = sensor::nmea_val_char_ignore;
+        }
+        else {
+            nmea_ignore_valid_char = sensor::nmea_ignore_valid_char_of_string(nmea_ignore_valid_char_arg);
+            if (!nmea_ignore_valid_char) {
+                ROS_ERROR("Invalid setting for NMEA ignore valid char %s", nmea_ignore_valid_char_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    //
+    // set nmea leap seconds
+    //
+    int nmea_leap_seconds = 0;
+
+    if (replay) {
+        if (nmea_leap_seconds_str_arg.size())
+            ROS_WARN("NMEA leap seconds set in replay mode. Will be ignored");
+    }
+    else {
+        if (not nmea_leap_seconds_str_arg.size()) {
+            ROS_WARN("Any setting for NMEA leap seconds, used default 0");
+            nmea_leap_seconds = 0;
+        }
+        else {
+            nmea_leap_seconds = sensor::nmea_leap_seconds_of_string(nmea_leap_seconds_str_arg);
+            if (nmea_leap_seconds == -999999) {
+                ROS_WARN("Invalid setting for NMEA leap seconds %s", nmea_leap_seconds_str_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    //
+    // set azimuth window start
+    //
+    int azimuth_window_start = 0;
+
+    if (replay) {
+        if (azimuth_window_start_str_arg.size())
+            ROS_WARN("Azimuth window start set in replay mode. Will be ignored");
+    }
+    else {
+        if (not azimuth_window_start_str_arg.size()) {
+            ROS_WARN("Any setting for azimuth window start, used default 0");
+            azimuth_window_start = 0;
+        }
+        else {
+            azimuth_window_start = sensor::azimuth_window_of_string(azimuth_window_start_str_arg);
+            if (azimuth_window_start == -999999) {
+                ROS_ERROR("Invalid setting for azimuth window start %s", azimuth_window_start_str_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    //
+    // set azimuth window end
+    //
+    int azimuth_window_end = 360000;
+
+    if (replay) {
+        if (azimuth_window_end_str_arg.size())
+            ROS_WARN("Azimuth window end set in replay mode. Will be ignored");
+    }
+    else {
+        if (not azimuth_window_end_str_arg.size()) {
+            ROS_WARN("Any setting for azimuth window end, used default 360000");
+            azimuth_window_end = 360000;
+        }
+        else {
+            azimuth_window_end = sensor::azimuth_window_of_string(azimuth_window_end_str_arg);
+            if (azimuth_window_end == -999999) {
+                ROS_ERROR("Invalid setting for azimuth window end %s", azimuth_window_end_str_arg.c_str());
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+
+    
+
+	
     if (!replay && (!hostname.size() || !udp_dest.size())) {
         ROS_ERROR("Must specify both hostname and udp destination");
         return EXIT_FAILURE;
@@ -187,7 +397,15 @@ int main(int argc, char** argv) {
         ROS_INFO("Waiting for sensor to initialize ...");
 
         auto cli = sensor::init_client(hostname, udp_dest, lidar_mode,
-                                       timestamp_mode, lidar_port, imu_port);
+                                       timestamp_mode, lidar_port, imu_port,
+                                       multipurpose_io_mode,
+                                       nmea_baud_rate,
+                                       nmea_ignore_valid_char,
+                                       nmea_in_polarity,
+                                       nmea_leap_seconds,
+                                       sync_pulse_in_polarity,
+                                       azimuth_window_start,
+                                       azimuth_window_end);
 
         if (!cli) {
             ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());
