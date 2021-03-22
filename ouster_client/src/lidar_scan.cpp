@@ -23,7 +23,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
     for (size_t v = 0; v < w; v++) {
         for (size_t u = 0; u < h; u++) {
             size_t i = u * w + v;
-            encoder(i) = 2 * M_PI - (v * azimuth_radians);
+            encoder(i) = 2.0 * M_PI - (v * azimuth_radians);
             azimuth(i) = -azimuth_angles_deg[u] * M_PI / 180.0;
             altitude(i) = altitude_angles_deg[u] * M_PI / 180.0;
         }
@@ -48,6 +48,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
     auto rot = transform.topLeftCorner(3, 3).transpose();
     auto trans = transform.topRightCorner(3, 1).transpose();
     lut.direction.matrix() *= rot;
+    lut.offset.matrix() *= rot;
     lut.offset.matrix() += trans.replicate(w * h, 1);
 
     // apply scaling factor

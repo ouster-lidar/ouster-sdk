@@ -358,6 +358,7 @@ directly.
         .def_readwrite("beam_altitude_angles", &sensor_info::beam_altitude_angles)
         .def_readwrite("imu_to_sensor_transform", &sensor_info::imu_to_sensor_transform)
         .def_readwrite("lidar_to_sensor_transform", &sensor_info::lidar_to_sensor_transform)
+        .def_readwrite("lidar_origin_to_beam_origin_mm", &sensor_info::lidar_origin_to_beam_origin_mm)
         .def_readwrite("extrinsic", &sensor_info::extrinsic)
         .def_static("from_default", &sensor::default_sensor_info, R"(
         Create gen-1 OS-1-64 metadata populated with design values.
@@ -418,7 +419,6 @@ directly.
         .value("EXIT", sensor::client_state::EXIT)
         // TODO: revisit including in C++ API
         .value("OVERFLOW", sensor::client_state(CLIENT_OVERFLOW));
-
 
     py::class_<PyClient>(m, "Client")
         .def(py::init<std::string, int, int, size_t>(),

@@ -118,6 +118,7 @@ class SensorInfo:
     beam_altitude_angles: List[float]
     imu_to_sensor_transform: ndarray
     lidar_to_sensor_transform: ndarray
+    lidar_origin_to_beam_origin_mm: float
     extrinsic: ndarray
 
     @classmethod
