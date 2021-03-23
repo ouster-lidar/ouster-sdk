@@ -166,53 +166,6 @@ std::shared_ptr<stream_info> replay_get_pcap_info(
     return result;
 }
 
-int guess_imu_port(const stream_info& stream_data) {
-    int result = 0;
-    const int imu_size = 48;
-    if (stream_data.packet_size_to_port.find(imu_size) !=
-        stream_data.packet_size_to_port.end()) {
-        auto correct_packet_size = stream_data.packet_size_to_port.at(imu_size);
-        if (correct_packet_size.size() > 1) {
-            throw "Error: Multiple possible imu packets found";
-        } else {
-            result = correct_packet_size.begin()->first;
-        }
-    }
-
-    return result;
-}
-
-int guess_lidar_port(const stream_info& stream_data) {
-    int result = 0;
-    std::vector<int> lidar_sizes = {3392, 6464, 12608, 24896};
-
-    int hit_count = 0;
-
-    for (auto s : lidar_sizes) {
-        if (stream_data.packet_size_to_port.find(s) !=
-            stream_data.packet_size_to_port.end()) {
-            auto correct_packet_size = stream_data.packet_size_to_port.at(s);
-            hit_count++;
-            if (correct_packet_size.size() > 1) {
-                throw "Error: Multiple possible lidar packets found";
-            } else {
-                result = correct_packet_size.begin()->first;
-            }
-        }
-    }
-
-    if (hit_count > 1) {
-        throw "Error: Multiple possible lidar packets found";
-    }
-
-    return result;
-}
-
-std::tuple<int, int> guess_ports(const stream_info& stream_data) {
-    return std::make_tuple(guess_lidar_port(stream_data),
-                           guess_imu_port(stream_data));
-}
-
 std::shared_ptr<playback_handle> replay_initialize(
     const std::string& file_name, const std::string& src_ip,
     const std::string& dst_ip, std::unordered_map<int, int> port_map) {

@@ -114,14 +114,6 @@ std::shared_ptr<stream_info> replay_get_pcap_info(
     const std::string& file, size_t max_packets_to_process);
 
 /**
- * Guess the ports for lidar and imu streams from a stream_info struct
- * @param[in] stream_data The stream_info struct for a pcap file
- * @return A tuple<int lidar_port, int imu_port> for the guessed lidar and imu
- * ports
- */
-std::tuple<int, int> guess_ports(const stream_info& stream_data);
-
-/**
  * Initialize the stepwise playback handle
  * @param[in] file The file path of the pcap file
  * @param[in] src_ip The source IP to send the packets from

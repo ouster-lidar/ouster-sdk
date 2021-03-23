@@ -53,7 +53,6 @@ class stream_info:
 
 
 class packet_info:
-
     def __init__(self) -> None:
         ...
 
@@ -80,10 +79,6 @@ class packet_info:
     @property
     def timestamp(self) -> datetime.timedelta:
         ...
-
-
-def guess_ports(si: stream_info) -> Tuple[int, int]:
-    ...
 
 
 def next_packet_info(handle: playback_handle, pi: packet_info) -> bool:

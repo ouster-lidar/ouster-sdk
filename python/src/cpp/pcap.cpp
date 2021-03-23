@@ -110,7 +110,6 @@ PYBIND11_MODULE(_pcap, m) {
     
     m.def("replay_pcap", &replay_pcap);
     m.def("replay_get_pcap_info", &ouster::sensor_utils::replay_get_pcap_info, py::return_value_policy::reference);
-    m.def("guess_ports", &ouster::sensor_utils::guess_ports);
 
     m.def("replay_initialize",
           py::overload_cast<const std::string&, const std::string&,
