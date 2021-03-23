@@ -206,8 +206,12 @@ LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
 /**
  * Generate a destaggered version of a channel field.
  *
- * Used for visualizing lidar data as an image or for algorithms that
- * exploit the structure of the lidar data, such as beam_uniformity in
+ * In the default staggered representation, each column corresponds to a single
+ * timestamp. In the destaggered representation, each column corresponds to a
+ * single azimuth angle, compsenating for the azimuth offset of each beam.
+ *
+ * Destaggering is used for visualizing lidar data as an image or for algorithms
+ * that exploit the structure of the lidar data, such as beam_uniformity in
  * ouster_viz, or computer vision algorithms.
  *
  * For example:

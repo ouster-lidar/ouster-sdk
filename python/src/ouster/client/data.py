@@ -190,7 +190,14 @@ class LidarScan:
         return self._data[:, field.ind].reshape(self.h, self.w)
 
     def destaggered(self, info: SensorInfo, field: ChanField) -> np.ndarray:
-        """Return a destaggered copy of the specified channel."""
+        """Return a destaggered copy of the specified channel.
+
+        In the default staggered representation, each column corresponds to a
+        single timestamp. A destaggered representation compensates for the
+        azimuth offset of each beam, returning columns that correspond to a
+        single azimuth angle.
+
+        """
         return _sensor.destagger(
             self._data[:, field.ind].reshape(self.h, self.w), info)
 
@@ -223,8 +230,8 @@ def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
 
     Internally, this will pre-compute a lookup table using the supplied
     intrinsic parameters. XYZ points are returned as an N x 3 array of doubles,
-    where N is the number of points in a scan (e.g. 131072 for a 128-beam sensor
-    in 1024x10 mode).
+    where N is the number of points in a scan (e.g. 131072 for a 128-beam
+    sensor in 1024x10 mode).
 
     Args:
         info: sensor metadata

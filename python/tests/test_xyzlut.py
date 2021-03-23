@@ -30,7 +30,7 @@ def xyz_ref(metadata: client.SensorInfo, scan: client.LidarScan) -> np.ndarray:
     # use homogeneous coordinates for convenient transformation
     xyz = np.zeros((scan.w * scan.h, 4))
 
-    # iterate over each measurement block/column and channel/row
+    # iterate over each measurement channel/row and measurement block/column
     for u, v in product(range(scan.h), range(scan.w)):
 
         r = scan.field(client.ChanField.RANGE)[u, v]
