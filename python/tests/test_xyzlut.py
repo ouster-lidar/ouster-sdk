@@ -15,7 +15,7 @@ def xyz_ref(metadata: client.SensorInfo, scan: client.LidarScan) -> np.ndarray:
 
     This is a reference implementation that follows the calculations from
     `Section 3.1.2`_ of the Software User Manual exactly. Output is a point
-    cloud in the *sensor frame* with points arranged in row-major order.
+    cloud in the *sensor frame* with points arranged in column-major order.
 
     Args:
         metadata: Sensor metadata associated with the scan
@@ -52,7 +52,7 @@ def xyz_ref(metadata: client.SensorInfo, scan: client.LidarScan) -> np.ndarray:
                           theta_azimuth) * cos(phi) + n * sin(theta_encoder)
         z = (r - n) * sin(phi)
 
-        # insert into xyz; point order is row-major
+        # insert into xyz; point order is column major
         xyz[u * scan.w + v] = [x, y, z, 1]
 
     # transform from lidar to sensor frame and scale to meters
