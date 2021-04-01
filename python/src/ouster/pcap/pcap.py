@@ -2,8 +2,10 @@ import time
 from threading import Lock
 from typing import Any, Dict, Iterable, Iterator, Optional, Tuple
 
-from ouster.client import  _pcap, LidarPacket, ImuPacket, Packet, PacketFormat, PacketSource, SensorInfo
+from ouster.client import _pcap, LidarPacket, ImuPacket, Packet, PacketFormat, PacketSource, SensorInfo
 from ouster.client._pcap import stream_info as stream_info
+
+
 def guess_imu_port(stream_data: stream_info) -> int:
     result = 0
     imu_size = 48
@@ -16,6 +18,7 @@ def guess_imu_port(stream_data: stream_info) -> int:
 
     return result
 
+
 def guess_lidar_port(stream_data: stream_info) -> int:
     result = 0
     lidar_sizes = {3392, 6464, 12608, 24896}
@@ -27,16 +30,16 @@ def guess_lidar_port(stream_data: stream_info) -> int:
             correct_packet_size = stream_data.packet_size_to_port[s]
             hit_count += 1
             if (len(correct_packet_size) > 1):
-                raise ValueError("Error: Multiple possible lidar packets found")
+                raise ValueError(
+                    "Error: Multiple possible lidar packets found")
             else:
                 result = list(correct_packet_size)[0]
-
 
     if (hit_count > 1):
         raise ValueError("Error: Multiple possible lidar packets found")
 
-
     return result
+
 
 def guess_ports(stream_data: stream_info) -> Tuple[int, int]:
     """ Guess the ports for lidar and imu streams from a stream_info struct
@@ -46,6 +49,7 @@ def guess_ports(stream_data: stream_info) -> Tuple[int, int]:
         A tuple<int lidar_port, int imu_port> for the guessed lidar and imu ports
     """
     return guess_lidar_port(stream_data), guess_imu_port(stream_data)
+
 
 class Pcap(PacketSource):
     """Read a sensor packet stream out of pcap as an iterator."""

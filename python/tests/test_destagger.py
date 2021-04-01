@@ -1,10 +1,13 @@
 from os import path
 
 import numpy as np
+import pytest
 from typing import List
 
 from ouster import client
-import ouster.client._digest as digest
+
+pytest.register_assert_rewrite('ouster.client._digest')
+import ouster.client._digest as digest  # noqa
 
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
