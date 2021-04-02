@@ -92,9 +92,6 @@ struct PyClient {
     using entry = std::pair<sensor::client_state, std::unique_ptr<uint8_t[]>>;
     std::vector<entry> bufs_;
 
-    // 32K max packet size, shoould be big enough for 128
-    static constexpr size_t packet_size = 32768;
-
     /*
      * Initialize the internal circular buffer.
      *

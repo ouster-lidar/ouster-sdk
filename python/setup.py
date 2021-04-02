@@ -95,7 +95,7 @@ setup(
         'dataclasses >=0.7; python_version >="3.6" and python_version <"3.7"',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
-        'typing-extensions >=3.7',
+        'typing-extensions >=3.7'
     ],
     extras_require={
         'test': ['pytest', 'tox'],
