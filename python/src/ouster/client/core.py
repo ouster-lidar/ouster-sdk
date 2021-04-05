@@ -27,12 +27,12 @@ class ClientTimeout(ClientError):
 
 class ClientOverflow(ClientError):
     """Raised when data loss is possible due to internal buffers filling up."""
+
     pass
 
 
 class PacketSource(Protocol):
     """Represents a single-sensor data stream."""
-
     def __iter__(self) -> Iterator[Packet]:
         """A PacketSource supports Iterable[Packet].
 
@@ -254,7 +254,7 @@ class Scans:
                  source: PacketSource,
                  *,
                  complete: bool = False,
-                 timeout: float = 0.0,
+                 timeout: Optional[float] = None,
                  _max_latency: int = 0) -> None:
         """
         If the packet source is a ``Sensor`` and _max_latency is n > 0, try to
@@ -296,7 +296,8 @@ class Scans:
             except StopIteration:
                 return
 
-            if self._timeout and time.monotonic() > last_ts + self._timeout:
+            if self._timeout is not None and (time.monotonic() >=
+                                              last_ts + self._timeout):
                 raise ClientTimeout("Failed to produce a scan before timeout")
 
             if isinstance(packet, LidarPacket):

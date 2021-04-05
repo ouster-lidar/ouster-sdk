@@ -360,6 +360,7 @@ directly.
         .def_static("from_default", &sensor::default_sensor_info, R"(
         Create gen-1 OS-1-64 metadata populated with design values.
         )")
+        .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__str__", [](const sensor_info& i) { return to_string(i); })
         .def("__repr__", [](const sensor_info& info) {
             return "<ouster.client.SensorInfo " + info.prod_line + " " +
@@ -368,7 +369,8 @@ directly.
 
 
     // Lidar Mode
-    py::enum_<sensor::lidar_mode>(m, "LidarMode")
+    auto lidar_mode = py::enum_<sensor::lidar_mode>(m, "LidarMode")
+        .value("MODE_UNSPEC", sensor::lidar_mode::MODE_UNSPEC)
         .value("MODE_512x10", sensor::lidar_mode::MODE_512x10)
         .value("MODE_512x20", sensor::lidar_mode::MODE_512x20)
         .value("MODE_1024x10", sensor::lidar_mode::MODE_1024x10)
@@ -378,16 +380,23 @@ directly.
             return sensor::n_cols_of_lidar_mode(self); })
         .def_property_readonly("frequency", [](const sensor::lidar_mode& self) {
             return sensor::frequency_of_lidar_mode(self); })
-        .def("__str__", [](const sensor::lidar_mode& u) { return to_string(u); })
         .def_static("from_string", &sensor::lidar_mode_of_string);
+    // workaround for https://github.com/pybind/pybind11/issues/2537
+    lidar_mode.attr("__str__") = py::cpp_function([](const sensor::lidar_mode& u) { return to_string(u); },
+                                                  py::name("__str__"),
+                                                  py::is_method(lidar_mode));
 
     // Timestamp Mode
-    py::enum_<sensor::timestamp_mode>(m, "TimestampMode")
+    auto timestamp_mode = py::enum_<sensor::timestamp_mode>(m, "TimestampMode")
+        .value("TIME_FROM_UNSPEC", sensor::timestamp_mode::TIME_FROM_UNSPEC)
         .value("TIME_FROM_INTERNAL_OSC", sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC)
         .value("TIME_FROM_SYNC_PULSE_IN", sensor::timestamp_mode::TIME_FROM_SYNC_PULSE_IN)
         .value("TIME_FROM_PTP_1588", sensor::timestamp_mode::TIME_FROM_PTP_1588)
-        .def("__str__", [](const sensor::timestamp_mode& u) { return to_string(u); })
         .def_static("from_string", &sensor::timestamp_mode_of_string);
+    // workaround for https://github.com/pybind/pybind11/issues/2537
+    timestamp_mode.attr("__str__") = py::cpp_function([](const sensor::timestamp_mode& u) { return to_string(u); },
+                                                      py::name("__str__"),
+                                                      py::is_method(timestamp_mode));
 
     // Version Info
     py::class_<util::version>(m, "Version")

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, ClassVar, List, Type, Union
+from typing import Callable, ClassVar, List, Optional, Type, Union
 
 import numpy.lib.stride_tricks
 import numpy as np
@@ -61,15 +61,17 @@ class ImuPacket:
 
 class ChanField(Enum):
     """Channel fields available in lidar data."""
-    RANGE = (0, 0, np.uint32)
-    REFLECTIVITY = (3, 4, np.uint16)
-    INTENSITY = (1, 6, np.uint16)
-    AMBIENT = (2, 8, np.uint16)
+    RANGE = (0, 0, np.uint32, 0x000FFFFF)
+    REFLECTIVITY = (3, 4, np.uint16, None)
+    INTENSITY = (1, 6, np.uint16, None)
+    AMBIENT = (2, 8, np.uint16, None)
 
-    def __init__(self, ind: int, offset: int, dtype: type):
+    def __init__(self, ind: int, offset: int, dtype: type,
+                 mask: Optional[int]):
         self.ind = ind
         self.offset = offset
         self.dtype = dtype
+        self.mask = mask
 
 
 class ColHeader(Enum):
@@ -127,14 +129,14 @@ class LidarPacket:
         Returns:
             view of the specified data as a numpy array
         """
-
         if isinstance(field, ChanField):
-            return np.lib.stride_tricks.as_strided(
+            v = np.lib.stride_tricks.as_strided(
                 self._data[LidarPacket._COL_PREAMBLE_BYTES +
                            field.offset:].view(dtype=field.dtype),
                 shape=(self._pf.pixels_per_column,
                        self._pf.columns_per_packet),
                 strides=(LidarPacket._PIXEL_BYTES, self._column_bytes))
+            return v if field.mask is None else v & field.mask
 
         elif isinstance(field, ColHeader):
             start = 0 if field.offset >= 0 else self._column_bytes

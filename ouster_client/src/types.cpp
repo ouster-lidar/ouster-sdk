@@ -86,8 +86,7 @@ data_format default_data_format(lidar_mode mode) {
             offset = repeat(16, {36, 24, 12, 0});
             break;
         default:
-            offset = repeat(16, {18, 12, 6, 0});
-            break;
+            throw std::invalid_argument{"default_data_format"};
     }
 
     return {pixels_per_column, columns_per_packet, columns_per_frame, offset};
@@ -220,7 +219,7 @@ sensor_info parse_metadata(const std::string& meta) {
 
     if (meta.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::runtime_error{errors.c_str()};
+            throw std::invalid_argument{errors.c_str()};
     }
 
     sensor_info info{};
@@ -242,7 +241,7 @@ sensor_info parse_metadata(const std::string& meta) {
 
         if (root["data_format"]["pixel_shift_by_row"].size() !=
             info.format.pixels_per_column) {
-            throw std::runtime_error{"Unexpected number of pixel_shift_by_row"};
+            throw std::invalid_argument{"Unexpected number of pixel_shift_by_row"};
         }
 
         for (const auto& v : root["data_format"]["pixel_shift_by_row"])
@@ -264,11 +263,11 @@ sensor_info parse_metadata(const std::string& meta) {
     }
 
     if (root["beam_altitude_angles"].size() != info.format.pixels_per_column) {
-        throw std::runtime_error{"Unexpected number of beam_altitude_angles"};
+        throw std::invalid_argument{"Unexpected number of beam_altitude_angles"};
     }
 
     if (root["beam_azimuth_angles"].size() != info.format.pixels_per_column) {
-        throw std::runtime_error{"Unexpected number of beam_azimuth_angles"};
+        throw std::invalid_argument{"Unexpected number of beam_azimuth_angles"};
     }
 
     for (const auto& v : root["beam_altitude_angles"])

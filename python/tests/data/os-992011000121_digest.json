@@ -1,10 +1,9 @@
 {
-    "file": "./tests/data/os-992011000121_data.bin",
     "meta": {
         "beam_altitude_angles": [20.5477, 19.2919, 18.0171, 16.7242, 15.4141, 14.088, 12.7466, 11.3909, 10.022, 8.641, 7.249, 5.8474, 4.4377, 3.0216, 1.601, 0.1779, -1.2454, -2.6668, -4.0842, -5.4956, -6.8994, -8.2939, -9.6778, -11.0499, -12.409, -13.754, -15.0841, -16.3982, -17.6955, -18.975, -20.2356, -21.4764],
         "beam_azimuth_angles": [-4.252, -4.2518, -4.2517, -4.2518, -4.2521, -4.2526, -4.2534, -4.2543, -4.2555, -4.2568, -4.2582, -4.2596, -4.2608, -4.2618, -4.2625, -4.2628, -4.2626, -4.262, -4.2611, -4.2599, -4.2586, -4.2572, -4.2558, -4.2546, -4.2536, -4.2528, -4.2522, -4.2518, -4.2517, -4.2517, -4.2519, -4.2521],
         "build_rev": "v1.14.0-beta.13",
-        "client_version": "0.1.0",
+        "client_version": "0.2.0-dev0",
         "data_format": {
             "columns_per_frame": 512,
             "columns_per_packet": 16,
@@ -22,7 +21,7 @@
     },
     "packets": [
         {
-            "RANGE": "03c7a618b111504b899833562b55d720",
+            "RANGE": "cb70f2d3cd63f89083a1e1356bde4c2e",
             "REFLECTIVITY": "70443233fdce99adf7a5ec54d4af5012",
             "INTENSITY": "027d43c4c21fe69ba016815164217df3",
             "AMBIENT": "0ae7b22a3187873ecab67480f585e982",
@@ -33,7 +32,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "c48906bf4ad84aada76fdf747d4b2fbc",
+            "RANGE": "f7b78b340f41cae205a5c89a44244448",
             "REFLECTIVITY": "57b942408e1a0e6de4de4843cf8c98dc",
             "INTENSITY": "aca10416f723d8dc5d472d50a31a9f34",
             "AMBIENT": "1bfdb5fe46952f76d90aca1ae37ddeec",
@@ -44,7 +43,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "b6be52e2746a2f7da7a5453f530c9d85",
+            "RANGE": "44334bae88b5098511f0947d9a448b5d",
             "REFLECTIVITY": "b9c15f37eca1be361fbca17f92f7df0d",
             "INTENSITY": "94e41aa2d867b33d3d15d3ea08599ee6",
             "AMBIENT": "d06b9722348ebb4eac25b3da251f61ca",
@@ -55,7 +54,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "92b52af78225b86d20ba0e992696d859",
+            "RANGE": "7c45795bf91343e540618a112094014d",
             "REFLECTIVITY": "29dd6f3e1e70f8247e3a1722cecd8962",
             "INTENSITY": "d6ce69e71fc5488a65334b007d36c120",
             "AMBIENT": "3983643ea91276fd28faf3b99a0aefe4",
@@ -66,7 +65,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "60859ad03317478bbbe736b62221fc68",
+            "RANGE": "a4d0630536e491b5206d1de5f713b3c8",
             "REFLECTIVITY": "ca345a3995906947faf3eb63303eb9e9",
             "INTENSITY": "4b223d97af66d4093ff59bf2a67c506e",
             "AMBIENT": "3b795361fc72cd3a77952bb8b30ec839",
@@ -110,7 +109,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "d22abb1d1de09dc14fbb41784224a5b0",
+            "RANGE": "54b8eb56248f45d3c4fe83915050eabe",
             "REFLECTIVITY": "2ee1b4c16edd008556ac77da0ddf3840",
             "INTENSITY": "d30b2ede12f4e524becd9bffa8d26dc4",
             "AMBIENT": "2de0ce6708328517f73bb8658e61e803",
@@ -121,7 +120,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "ca823476ccb87e40933bbd3682a31a37",
+            "RANGE": "e13e8d26537fc5c9fa0104705485cfba",
             "REFLECTIVITY": "78d930331f915c20b6bcaa5e1001425f",
             "INTENSITY": "38e61402f2595ed8d8076b9e5e298c52",
             "AMBIENT": "ae109f9be40e3ddcb83e9417a01caca9",
@@ -132,7 +131,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "4b703baefc44216d4bf4b327c371a416",
+            "RANGE": "ef2263a03a7e40a83fd978a4707178b3",
             "REFLECTIVITY": "ac26ae004a3a917dd8a845204a1e1f21",
             "INTENSITY": "0b949d6fc632d3fc07d273e2ae5d3237",
             "AMBIENT": "37404376db7756b6b73ebfb27ce5dc58",
@@ -143,7 +142,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "72838dd609d53bc197e16eb940ffc834",
+            "RANGE": "70d9ce2378145242a8d94c16250ab3d2",
             "REFLECTIVITY": "5ff694ef223ade81bad1a78a5a234eae",
             "INTENSITY": "baca22e08bab845041a75d6e2aaa7770",
             "AMBIENT": "c5408254066203ac7f70e7130da4af5a",
@@ -154,7 +153,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "8bd1b8d208d002c78602d899fedcfad4",
+            "RANGE": "5b7d7d432fa9bf4b6458c00663828dcc",
             "REFLECTIVITY": "42704d6a9a73e529939ed3b9a0572082",
             "INTENSITY": "8442536d25e5d949056ff66f61125377",
             "AMBIENT": "2672e888b666d94d258b5d1ca5f36782",
@@ -165,7 +164,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "e8c3e943b41914232744461d0fa1044f",
+            "RANGE": "5443816c05ebc33494876680608e181f",
             "REFLECTIVITY": "9165a7bf350f3c0560ba14a1d096b087",
             "INTENSITY": "0aa002c51bfafaa384acc799b8849fe9",
             "AMBIENT": "ea0569a71128a31ac8615f2aa85cf62f",
@@ -176,7 +175,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "c4d53e737613922d610c4af8b77e7fae",
+            "RANGE": "95324627f44153c18084afbc19d25d21",
             "REFLECTIVITY": "84809cfdfa01b257207377f79f593b80",
             "INTENSITY": "b03adb9cb2f0d222ebff32457b04af2b",
             "AMBIENT": "cf23b18243e32366bac538f08c4a42f5",
@@ -187,7 +186,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "cce7947283d08e447914a61188453741",
+            "RANGE": "a3f3bd52bf2258c14166a143971d0b06",
             "REFLECTIVITY": "a8f7cd24dc5a42e9b97db1526d584e9c",
             "INTENSITY": "a191da6c96142563953476c5732815c0",
             "AMBIENT": "1d8f50b2113aa01643133ca5b010e225",
@@ -198,7 +197,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "767af1db9894b80740eece153b01d7c0",
+            "RANGE": "1f4c20861dc81bb5eeead36628139d30",
             "REFLECTIVITY": "a924fb69e26e7b0efd33d28e0c8a6270",
             "INTENSITY": "7184e6e5654168d2ae2fcd238d83a81e",
             "AMBIENT": "58dcf06ce324c6f7891e0307dae39a5f",
@@ -209,7 +208,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "e6a36b12edfa38ac5c5c8cbe9c7861df",
+            "RANGE": "f62d921b8512bc7babf15039e0c6e5c6",
             "REFLECTIVITY": "e477248aa9517216bc5b4a1bef416db9",
             "INTENSITY": "b18d8a6d8eaaf255414fc9d362c0ba9a",
             "AMBIENT": "c6d81aade053c7c4fe5869099ad2c936",
@@ -220,7 +219,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "c945849fcfbee0e3eda9cfafd112574e",
+            "RANGE": "9b137009286b96840e57bf2cbcd0ffab",
             "REFLECTIVITY": "13436204c8edaeba5dacaadbf82fed80",
             "INTENSITY": "dd4893167e29ae2f4ee88330ad6b3a4e",
             "AMBIENT": "af9ac777472454f75855b26473b53e4b",
@@ -341,7 +340,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "28d5204abfab1dc032b0f7e435c85f71",
+            "RANGE": "8c023bcc9dce15d347c94645f5186c47",
             "REFLECTIVITY": "d137739d24387470772b0e80bc0e1f75",
             "INTENSITY": "f6cc39d6a3cc794598b2debaacf791f9",
             "AMBIENT": "c24934a479679385c054b887e2d5646c",
@@ -352,7 +351,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "56b70d71f75a3deeadfa79ae85622ca0",
+            "RANGE": "8ea1c0b131be6db245c35fa5844ca4ef",
             "REFLECTIVITY": "5c4e8af1ae410d35852b5e4b7e0ac2fb",
             "INTENSITY": "5e4237c7aac66f6df03f59663074db12",
             "AMBIENT": "610363ad83665d9da6c85ef6815ca163",
@@ -363,7 +362,7 @@
             "VALID": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
-            "RANGE": "60d5c563a2958fcc962b345113338a87",
+            "RANGE": "bd358b5c3974b9006dbf939236022622",
             "REFLECTIVITY": "6ee77b05b7f8493d13d85fc5956001c7",
             "INTENSITY": "d24af3c62f00b8e0c4f9a870e390e774",
             "AMBIENT": "e0212dbfeaf94656f272942a0d2291eb",

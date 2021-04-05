@@ -69,6 +69,8 @@ class ClientState:
     TIMEOUT: ClassVar[ClientState]
     OVERFLOW: ClassVar[ClientState]
 
+    __members__: ClassVar[dict]
+
     def __init__(self, x: int) -> None:
         ...
 
@@ -102,10 +104,6 @@ class ClientState:
     def __xor__(self, s: ClientState) -> int:
         ...
 
-    @property
-    def __members__(self) -> dict:
-        ...
-
 
 class SensorInfo:
     hostname: str
@@ -131,6 +129,9 @@ class SensorInfo:
 
     @overload
     def __init__(self, metadata: str) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
         ...
 
 
@@ -209,11 +210,14 @@ class PacketFormat:
 
 
 class LidarMode:
+    MODE_UNSPEC: ClassVar[LidarMode]
     MODE_1024x10: ClassVar[LidarMode]
     MODE_1024x20: ClassVar[LidarMode]
     MODE_2048x10: ClassVar[LidarMode]
     MODE_512x10: ClassVar[LidarMode]
     MODE_512x20: ClassVar[LidarMode]
+
+    __members__: ClassVar[dict]
 
     def __init__(self, code: int) -> None:
         ...
@@ -244,19 +248,18 @@ class LidarMode:
     def frequency(self) -> int:
         ...
 
-    @property
-    def __members__(self) -> dict:
-        ...
-
     @classmethod
     def from_string(cls, s: str) -> LidarMode:
         ...
 
 
 class TimestampMode:
+    TIME_FROM_UNSPEC: ClassVar[TimestampMode]
     TIME_FROM_INTERNAL_OSC: ClassVar[TimestampMode]
     TIME_FROM_PTP_1588: ClassVar[TimestampMode]
     TIME_FROM_SYNC_PULSE_IN: ClassVar[TimestampMode]
+
+    __members__: ClassVar[dict]
 
     def __init__(self, code: int) -> None:
         ...
@@ -277,10 +280,6 @@ class TimestampMode:
         ...
 
     def __setstate__(self, st: tuple) -> None:
-        ...
-
-    @property
-    def __members__(self) -> dict:
         ...
 
     @classmethod
