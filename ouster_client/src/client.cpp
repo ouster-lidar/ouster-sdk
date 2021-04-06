@@ -274,6 +274,178 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
 }
 }  // namespace
 
+bool get_config(const std::string hostname, sensor_config& config,
+                const bool active) {
+    Json::CharReaderBuilder builder{};
+    auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
+    Json::Value root{};
+    std::string errors{};
+
+    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    if (sock_fd < 0) return false;
+
+    std::string res;
+    bool success = true;
+
+    std::string active_or_passive = active ? "active" : "passive";
+    success &=
+        do_tcp_cmd(sock_fd, {"get_config_param", active_or_passive}, res);
+    success &=
+        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
+
+    config = parse_config(res);
+
+    impl::socket_close(sock_fd);
+
+    return success;
+}
+
+// conversion for operating_mode (introduced in fw 2.0) to auto_start
+// (deprecated in 1.13)
+const std::array<std::pair<OperatingMode, std::string>, 2> auto_start_strings =
+    {{{OPERATING_NORMAL, "1"}, {OPERATING_STANDBY, "0"}}};
+
+static std::string auto_start_string(OperatingMode mode) {
+    auto end = auto_start_strings.end();
+    auto res =
+        std::find_if(auto_start_strings.begin(), end,
+                     [&](const std::pair<OperatingMode, std::string>& p) {
+                         return p.first == mode;
+                     });
+
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+bool set_config(const std::string hostname, const sensor_config& config,
+                const bool persist) {
+    // open socket
+    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    if (sock_fd < 0) return false;
+
+    std::string res;
+    bool success = true;
+
+    auto set_param = [&sock_fd, &res](std::string param_name,
+                                      std::string param_value) {
+        bool success = true;
+        success &= do_tcp_cmd(
+            sock_fd, {"set_config_param", param_name, param_value}, res);
+        success &= res == "set_config_param";
+        return success;
+    };
+
+    // set params
+    if (config.udp_dest && !set_param("udp_ip", config.udp_dest.value()))
+        return false;
+
+    if (config.udp_port_lidar &&
+        !set_param("udp_port_lidar",
+                   std::to_string(config.udp_port_lidar.value())))
+        return false;
+
+    if (config.udp_port_imu &&
+        !set_param("udp_port_imu", std::to_string(config.udp_port_imu.value())))
+        return false;
+
+    if (config.ts_mode &&
+        !set_param("timestamp_mode", to_string(config.ts_mode.value())))
+        return false;
+
+    if (config.ld_mode &&
+        !set_param("lidar_mode", to_string(config.ld_mode.value())))
+        return false;
+
+    // "operating_mode" introduced in fw 2.0. use deprecated 'auto_start_flag'
+    // to support 1.13
+    if (config.operating_mode &&
+        !set_param("auto_start_flag",
+                   auto_start_string(config.operating_mode.value())))
+        return false;
+
+    if (config.multipurpose_io_mode &&
+        !set_param("multipurpose_io_mode",
+                   to_string(config.multipurpose_io_mode.value())))
+        return false;
+
+    if (config.azimuth_window &&
+        !set_param("azimuth_window", to_string(config.azimuth_window.value())))
+        return false;
+
+    if (config.sync_pulse_out_angle &&
+        !set_param("sync_pulse_out_angle",
+                   std::to_string(config.sync_pulse_out_angle.value())))
+        return false;
+
+    if (config.sync_pulse_out_pulse_width &&
+        !set_param("sync_pulse_out_pulse_width",
+                   std::to_string(config.sync_pulse_out_pulse_width.value())))
+        return false;
+
+    if (config.nmea_in_polarity &&
+        !set_param("nmea_in_polarity",
+                   to_string(config.nmea_in_polarity.value())))
+        return false;
+
+    if (config.nmea_baud_rate &&
+        !set_param("nmea_baud_rate", to_string(config.nmea_baud_rate.value())))
+        return false;
+
+    if (config.nmea_ignore_valid_char) {
+        const std::string nmea_ignore_valid_char_string =
+            config.nmea_ignore_valid_char.value() ? "1" : "0";
+        if (!set_param("nmea_ignore_valid_char", nmea_ignore_valid_char_string))
+            return false;
+    }
+
+    if (config.nmea_leap_seconds &&
+        !set_param("nmea_leap_seconds",
+                   std::to_string(config.nmea_leap_seconds.value())))
+        return false;
+
+    if (config.sync_pulse_in_polarity &&
+        !set_param("sync_pulse_in_polarity",
+                   to_string(config.sync_pulse_in_polarity.value())))
+        return false;
+
+    if (config.sync_pulse_out_polarity &&
+        !set_param("sync_pulse_out_polarity",
+                   to_string(config.sync_pulse_in_polarity.value())))
+        return false;
+
+    if (config.sync_pulse_out_frequency &&
+        !set_param("sync_pulse_out_frequency",
+                   std::to_string(config.sync_pulse_out_frequency.value())))
+        return false;
+
+    if (config.phase_lock_enable) {
+        const std::string phase_lock_enable_string =
+            config.phase_lock_enable.value() ? "true" : "false";
+        if (!set_param("phase_lock_enable", phase_lock_enable_string))
+            return false;
+    }
+
+    if (config.phase_lock_offset &&
+        !set_param("phase_lock_offset",
+                   std::to_string(config.phase_lock_offset.value())))
+        return false;
+
+    // reinitialize
+    success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
+    success &= res == "reinitialize";
+
+    // save if indicated
+    if (persist) {
+        // use deprecated write_config_txt to support 1.13
+        success &= do_tcp_cmd(sock_fd, {"write_config_txt"}, res);
+        success &= res == "write_config_txt";
+    }
+
+    // close socket
+    impl::socket_close(sock_fd);
+
+    return success;
+}
+
 std::string get_metadata(client& cli, int timeout_sec) {
     if (!cli.meta) {
         SOCKET sock_fd = cfg_socket(cli.hostname.c_str());

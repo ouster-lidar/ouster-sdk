@@ -5,10 +5,17 @@
 
 #pragma once
 
+#include <json/json.h>
+
 #include <Eigen/Eigen>
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
+
+#include "nonstd/optional.hpp"
+
+using nonstd::nullopt;
+using nonstd::optional;
 
 namespace ouster {
 
@@ -48,9 +55,33 @@ enum timestamp_mode {
     TIME_FROM_PTP_1588
 };
 
-enum configuration_version {
-    FW_2_0 = 3
+enum OperatingMode {
+    OPERATING_UNSPEC = 0,
+    OPERATING_NORMAL,
+    OPERATING_STANDBY
 };
+
+enum MultipurposeIOMode {
+    MULTIPURPOSE_UNSPEC = 0,
+    MULTIPURPOSE_OFF,
+    MULTIPURPOSE_INPUT_NMEA_UART,
+    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC,
+    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN,
+    MULTIPURPOSE_OUTPUT_FROM_PTP_1588,
+    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE
+};
+
+enum Polarity {
+    POLARITY_UNSPEC = 0,
+    POLARITY_ACTIVE_LOW,
+    POLARITY_ACTIVE_HIGH
+};
+
+enum NMEABaudRate { BAUD_UNSPEC = 0, BAUD_9600, BAUD_115200 };
+
+using AzimuthWindow = std::pair<int, int>;
+
+enum configuration_version { FW_2_0 = 3 };
 
 struct data_format {
     uint32_t pixels_per_column;
@@ -74,6 +105,36 @@ struct sensor_info {
     mat4d extrinsic;
 };
 
+struct sensor_config {
+    optional<std::string> udp_dest;
+    optional<int> udp_port_lidar;
+    optional<int> udp_port_imu;
+
+    // TODO: Kai -- replace ts_mode and ld_mode when timestamp_mode and
+    // lidar_mode get changed to CapsCase
+    optional<timestamp_mode> ts_mode;
+    optional<lidar_mode> ld_mode;
+    optional<OperatingMode> operating_mode;
+    optional<MultipurposeIOMode> multipurpose_io_mode;
+
+    optional<AzimuthWindow> azimuth_window;
+
+    optional<int> sync_pulse_out_angle;
+    optional<int> sync_pulse_out_pulse_width;
+
+    optional<Polarity> nmea_in_polarity;
+    optional<NMEABaudRate> nmea_baud_rate;
+    optional<bool> nmea_ignore_valid_char;
+    optional<int> nmea_leap_seconds;
+
+    optional<Polarity> sync_pulse_in_polarity;
+    optional<Polarity> sync_pulse_out_polarity;
+    optional<int> sync_pulse_out_frequency;
+
+    optional<bool> phase_lock_enable;
+    optional<int> phase_lock_offset;
+};
+
 /** Equality/Not-Equality for data_format */
 bool operator==(const data_format& lhs, const data_format& rhs);
 bool operator!=(const data_format& lhs, const data_format& rhs);
@@ -81,6 +142,10 @@ bool operator!=(const data_format& lhs, const data_format& rhs);
 /** Equality/Not-Equality for sensor_info */
 bool operator==(const sensor_info& lhs, const sensor_info& rhs);
 bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
+
+/** Equality/Not Equality for sensor config */
+bool operator==(const sensor_config& lhs, const sensor_config& rhs);
+bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
 
 /**
  * Get a default sensor_info for the given lidar mode.
@@ -139,6 +204,78 @@ std::string to_string(timestamp_mode mode);
 timestamp_mode timestamp_mode_of_string(const std::string& s);
 
 /**
+ * Get string representation of an operating mode.
+ *
+ * @param mode
+ * @return string representation of the operating mode, or "UNKNOWN"
+ */
+std::string to_string(OperatingMode mode);
+
+/**
+ * Get operating mode from string.
+ *
+ * @param string
+ * @return operating mode corresponding to the string, or 0 on error
+ */
+OperatingMode operating_mode_of_string(const std::string& s);
+
+/**
+ * Get string representation of a multipurpose io mode.
+ *
+ * @param mode
+ * @return string representation of the multipurpose io mode, or "UNKNOWN"
+ */
+std::string to_string(MultipurposeIOMode mode);
+
+/**
+ * Get multipurpose io mode from string.
+ *
+ * @param string
+ * @return multipurpose io mode corresponding to the string, or 0 on error
+ */
+MultipurposeIOMode multipurpose_io_mode_of_string(const std::string& s);
+
+/**
+ * Get string representation of a polarity.
+ *
+ * @param polarity
+ * @return string representation of the polarity, or "UNKNOWN"
+ */
+std::string to_string(Polarity polarity);
+
+/**
+ * Get polarity from string.
+ *
+ * @param string
+ * @return polarity corresponding to the string, or 0 on error
+ */
+Polarity polarity_of_string(const std::string& s);
+
+/**
+ * Get string representation of a NMEA Baud Rate
+ *
+ * @param rate
+ * @return string representation of the NMEA baud rate, or "UNKNOWN"
+ */
+std::string to_string(NMEABaudRate rate);
+
+/**
+ * Get nmea baud rate from string.
+ *
+ * @param string
+ * @return nmea baud rate corresponding to the string, or 0 on error
+ */
+NMEABaudRate nmea_baud_rate_of_string(const std::string& s);
+
+/**
+ * Get string representation of an Azimuth Window
+ *
+ * @param azimuth_window
+ * @return string representation of the azimuth window
+ */
+std::string to_string(AzimuthWindow azimuth_window);
+
+/**
  * Parse metadata text blob from the sensor into a sensor_info struct.
  *
  * String and vector fields will have size 0 if the parameter cannot
@@ -178,6 +315,36 @@ std::string to_string(const sensor_info& metadata);
  */
 std::string to_string(const sensor_info& info,
                       const std::set<std::string> only_fields);
+
+/**
+ * Parse config text blob from the sensor into a sensor_config struct
+ *
+ * All fields are optional, and will only be set if found.
+ *
+ * @throw runtime_error if the text is not valid json
+ * @param metadata a text blob given by get_config from client.h
+ * @return a sensor_config struct populated with the sensor config
+ * parameters
+ */
+sensor_config parse_config(const std::string& config);
+
+/**
+ * Get a string representation of sensor config. Only set fields will be
+ * represented.
+ *
+ * @param config a struct of sensor config
+ * @return a json sensor config string
+ */
+std::string to_string(const sensor_config& config);
+
+/** << operator overload for sensor_config */
+std::ostream& operator<<(std::ostream& os, const lidar_mode mode);
+std::ostream& operator<<(std::ostream& os, const timestamp_mode mode);
+std::ostream& operator<<(std::ostream& os, const OperatingMode mode);
+std::ostream& operator<<(std::ostream& os, const MultipurposeIOMode mode);
+std::ostream& operator<<(std::ostream& os, const Polarity polarity);
+std::ostream& operator<<(std::ostream& os, const NMEABaudRate rate);
+std::ostream& operator<<(std::ostream& os, const sensor_config& config);
 
 /**
  * Table of accessors for extracting data from imu and lidar packets.
@@ -230,7 +397,7 @@ struct packet_format {
  * Get a packet parser for a particular data format.
  *
  * @param data_format parameters provided by the sensor
- * @returns a packet_format suitable for parsing UDP packets sent by the sensor
+ * @return a packet_format suitable for parsing UDP packets sent by the sensor
  */
 const packet_format& get_format(const sensor_info& info);
 

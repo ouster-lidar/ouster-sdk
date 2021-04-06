@@ -100,5 +100,28 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  */
 std::string get_metadata(client& cli, int timeout_sec = 30);
 
+/**
+ * Get sensor config from the sensor
+ *
+ * Populates passed in config with the results of get_config
+ *
+ * @param hostname sensor hostname
+ * @param config sensor config to populate
+ * @param active whether to pull active or passive configs
+ * @return true if sensor config successfully populated
+ */
+bool get_config(const std::string hostname, sensor_config& config,
+                const bool active = true);
+
+/**
+ * Set sensor config on sensor
+ *
+ * @param hostname sensor hostname
+ * @param sensor config
+ * @param persist whether config should persist restart on sensor
+ * @return true if config params successfuly set on sensor
+ */
+bool set_config(const std::string hostname, const sensor_config& config,
+                const bool persist = false);
 }  // namespace sensor
 }  // namespace ouster
