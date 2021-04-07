@@ -5,7 +5,7 @@ lower-level pyblind11-generated module (ouster.client._sensor).
 """
 from contextlib import closing
 from more_itertools import take
-from typing import cast, Iterable, Iterator, List, Optional
+from typing import cast, Iterable, Iterator, List, Optional, Tuple
 from typing_extensions import Protocol
 from threading import Thread
 import time
@@ -88,10 +88,12 @@ class Sensor(PacketSource):
         thread (like any other non-daemonized Python thread).
     """
 
-    _cli: Optional[_sensor.Client] = None
+    _cli: _sensor.Client
+    _timeout: Optional[float]
     _metadata: SensorInfo
     _pf: PacketFormat
     _producer: Thread
+    _cache: Optional[Tuple[_sensor.ClientState, bytearray]]
 
     def __init__(self,
                  hostname: str = "localhost",
@@ -100,13 +102,13 @@ class Sensor(PacketSource):
                  *,
                  metadata: Optional[SensorInfo] = None,
                  buf_size: int = 128,
-                 timeout: float = 1.0,
+                 timeout: Optional[float] = 1.0,
                  _overflow_err: bool = True,
                  _flush_before_read: bool = True) -> None:
         """
-        Neither the ports nor udp destination on the sensor will be updated. The
-        metadata will be fetched over the network from the sensor unless
-        explicitly set using the ``metadata`` parameter.
+        Neither the ports nor udp destination configuration on the sensor will
+        be updated. The metadata will be fetched over the network from the
+        sensor unless explicitly provided using the ``metadata`` parameter.
 
         Args:
             hostname: hostname of the sensor
@@ -114,7 +116,7 @@ class Sensor(PacketSource):
             imu_port: UDP port to listen on for imu data
             metadata: explicitly provide metadata for the stream
             buf_size: number of packets to buffer before dropping data
-            timeout: seconds to wait for packets before signaling error
+            timeout: seconds to wait for packets before signaling error or None
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
         """
@@ -122,6 +124,7 @@ class Sensor(PacketSource):
         self._timeout = timeout
         self._overflow_err = _overflow_err
         self._flush_before_read = _flush_before_read
+        self._cache = None
 
         # Fetch from sensor if not explicitly provided
         if metadata:
@@ -129,7 +132,6 @@ class Sensor(PacketSource):
         else:
             raw = self._cli.get_metadata()
             if not raw:
-                self._cli = None
                 raise ClientError("Failed to collect metadata")
             self._metadata = SensorInfo(raw)
         self._pf = PacketFormat(self._metadata)
@@ -143,88 +145,96 @@ class Sensor(PacketSource):
     def metadata(self) -> SensorInfo:
         return self._metadata
 
-    def __iter__(self) -> Iterator[Packet]:
-        if self._cli is None:
-            raise ClientError("Client is already shut down")
+    def _next_packet(self) -> Optional[Packet]:
+        if self._cache is None:
+            # Lidar packets are bigger than IMU: wastes some space but is simple
+            buf = bytearray(self._pf.lidar_packet_size)
+            st = self._cli.consume(buf, self._timeout or 0)
+        else:
+            st, buf = self._cache
+            self._cache = None
 
-        # attempt to flush any old data before producing packets
+        if self._overflow_err and st & _sensor.ClientState.OVERFLOW:
+            raise ClientOverflow()
+        if st & _sensor.ClientState.LIDAR_DATA:
+            return LidarPacket(buf, self._pf)
+        elif st & _sensor.ClientState.IMU_DATA:
+            return ImuPacket(buf, self._pf)
+        elif st == _sensor.ClientState.TIMEOUT:
+            raise ClientTimeout(f"No packets received within {self._timeout}s")
+        elif st & _sensor.ClientState.ERROR:
+            raise ClientError("Client returned ERROR state")
+        elif st & _sensor.ClientState.EXIT:
+            return None
+
+        raise AssertionError("Should be unreachable")
+
+    def _peek(self) -> Tuple[_sensor.ClientState, bytearray]:
+        if self._cache is None:
+            # Lidar packets are bigger than IMU: wastes some space but is simple
+            buf = bytearray(self._pf.lidar_packet_size)
+            st = self._cli.consume(buf, self._timeout or 0)
+            self._cache = (st, buf)
+        return self._cache
+
+    def __iter__(self) -> Iterator[Packet]:
+        # Attempt to flush any old data before producing packets
         if self._flush_before_read:
             self.flush(full=True)
 
-        while True:
-            # Lidar packets are bigger than IMU: wastes some space but is simple
-            buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(buf, self._timeout)
-            if self._overflow_err and st & _sensor.ClientState.OVERFLOW:
-                raise ClientOverflow()
-            if st & _sensor.ClientState.LIDAR_DATA:
-                yield LidarPacket(buf, self._pf)
-            elif st & _sensor.ClientState.IMU_DATA:
-                yield ImuPacket(buf, self._pf)
-            elif st == _sensor.ClientState.TIMEOUT:
-                raise ClientTimeout()
-            elif st & _sensor.ClientState.ERROR:
-                raise ClientError("Client returned ERROR state")
-            elif st & _sensor.ClientState.EXIT:
-                return
-
-    def buf_use(self) -> int:
-        return 0 if self._cli is None else self._cli.size
+        return iter(self._next_packet, None)
 
     def flush(self, n_frames: int = 1, *, full=False) -> int:
         """Drop some data to clear internal buffers.
 
-        Will raise ClientTimeout if a lidar packet is not received withing the
+        Will raise ClientTimeout if a lidar packet is not received within the
         configured timeout.
 
         Args:
             n_frames: number of frames to drop
             full: clear internal buffers first, so data is read from the OS
                   receive buffers (or the network) directly
-
-        Notes:
-            - need some limit to avoid hanging when we're only receiving IMU
-            - some code duplication with __iter__ here
         """
-
-        if self._cli is None:
-            return 0
-
-        # Flush internal buffer completely before looking for frames
         if full:
             self._cli.flush()
 
-        # Look for the last packet in a frame
-        last_packet_ind = (self._metadata.format.columns_per_frame -
-                           self._metadata.format.columns_per_packet)
-
+        last_frame = -1
         n_dropped = 0
         last_ts = time.monotonic()
-        buf = bytearray(self._pf.lidar_packet_size)
-        while n_frames > 0:
-            st = self._cli.consume(buf, self._timeout)
+        while True:
+            st, buf = self._peek()
             if st & _sensor.ClientState.LIDAR_DATA:
-                if LidarPacket(buf, self._pf).view(
-                        ColHeader.MEASUREMENT_ID)[0] == last_packet_ind:
+                frame = LidarPacket(buf, self._pf).view(ColHeader.FRAME_ID)[0]
+                if frame != last_frame:
+                    last_frame = frame
                     n_frames -= 1
+                    if n_frames < 0:
+                        break
                 last_ts = time.monotonic()
-            elif self._timeout and time.monotonic() > last_ts + self._timeout:
-                raise ClientTimeout()
-            elif st == _sensor.ClientState.TIMEOUT:
-                raise ClientTimeout()
-            elif st & _sensor.ClientState.ERROR:
-                raise ClientError("Client returned ERROR state")
-            elif st & _sensor.ClientState.EXIT:
-                break
+            if self._timeout is not None and (time.monotonic() >=
+                                              last_ts + self._timeout):
+                raise ClientTimeout(
+                    f"No packets received within {self._timeout}s")
+            # call for effect and drop packet
+            try:
+                if self._next_packet() is None:
+                    break
+            except ClientOverflow:
+                pass
             n_dropped += 1
 
         return n_dropped
 
+    def buf_use(self) -> int:
+        return self._cli.size
+
     def close(self) -> None:
-        """Shut down producer thread and close network connection."""
-        if self._cli is not None:
+        """Shut down producer thread and close network connection.
+
+        Attributes may be unset if constructor throws an exception.
+        """
+        if hasattr(self, '_cli'):
             self._cli.shutdown()
-        # may be unset if constructor throw and close() is called from del
         if hasattr(self, '_producer'):
             self._producer.join()
 
@@ -235,7 +245,7 @@ class Sensor(PacketSource):
 class Scans:
     """An iterable stream of scans batched from a PacketSource.
 
-    Batching will emitting a scan every time the frame_id increments (i.e. on
+    Batching will emit a scan every time the frame_id increments (i.e. on
     receiving first packet in the next scan). Reordered packets will be handled,
     except across frame boundaries: packets from the previous scan will be
     dropped.
@@ -265,7 +275,7 @@ class Scans:
         Args:
             source: any source of packets
             complete: if True, only return full scans
-            timeout: if non-zero, maximum time to wait for a scan
+            timeout: seconds to wait for a scan before error or None
             _max_latency: (experimental) approximate max number of frames to buffer
         """
         self._source = source
@@ -278,7 +288,7 @@ class Scans:
         h = self._source.metadata.format.pixels_per_column
         packets_per_frame = w // self._source.metadata.format.columns_per_packet
 
-        # if source is a sensor, make a type-specialized reference available
+        # If source is a sensor, make a type-specialized reference available
         sensor = cast(Sensor, self._source) if isinstance(
             self._source, Sensor) else None
 
@@ -286,8 +296,8 @@ class Scans:
         pf = PacketFormat(self._source.metadata)
         batch = _sensor.ScanBatcher(w, pf)
 
-        # time from which to measure timeout
-        last_ts = time.monotonic()
+        # Time from which to measure timeout
+        start_ts = time.monotonic()
 
         it = iter(self._source)
         while True:
@@ -297,16 +307,16 @@ class Scans:
                 return
 
             if self._timeout is not None and (time.monotonic() >=
-                                              last_ts + self._timeout):
-                raise ClientTimeout("Failed to produce a scan before timeout")
+                                              start_ts + self._timeout):
+                raise ClientTimeout(f"No lidar scans within {self._timeout}s")
 
             if isinstance(packet, LidarPacket):
                 if batch(packet._data, ls_write):
                     # Got a new frame, return it and start another
                     ls = LidarScan.from_native(ls_write)
                     if not self._complete or ls.complete:
-                        last_ts = time.monotonic()
                         yield ls
+                        start_ts = time.monotonic()
                     ls_write = _sensor.LidarScan(w, h)
 
                     # Drop data along frame boundaries to maintain _max_latency and

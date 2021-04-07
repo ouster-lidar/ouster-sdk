@@ -234,7 +234,6 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
     } while (success && root["status"].asString() == "INITIALIZING");
 
     update_json_obj(cli.meta, root);
-    success &= cli.meta["status"].asString() == "RUNNING";
 
     success &= do_tcp_cmd(sock_fd, {"get_beam_intrinsics"}, res);
     success &=
@@ -529,10 +528,21 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         success &= res == "set_config_param";
     }
 
+    // wake up from STANDBY, if necessary
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "operating_mode", "NORMAL"}, res);
+    success &= res == "set_config_param";
+
+    // reinitialize to activate new settings
     success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
     success &= res == "reinitialize";
 
+    // will block until no longer INITIALIZING
     success &= collect_metadata(*cli, sock_fd, chrono::seconds{timeout_sec});
+
+    // check for sensor error states
+    auto status = cli->meta["status"].asString();
+    success &= (status != "ERROR" && status != "UNCONFIGURED");
 
     impl::socket_close(sock_fd);
 
