@@ -8,6 +8,10 @@ Ouster Client Python Bindings
               | Dima Garbuzov <dima.garbuzov@ouster.io>
 
 
+.. todo::
+
+   [README] ^^^ should we keep the table at the beginning above? ^^^
+
 Summary
 =======
 Python bindings for ``ouster_example/ouster_client``. Currently only includes low-level wrappers

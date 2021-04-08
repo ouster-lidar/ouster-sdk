@@ -36,9 +36,10 @@ def display_range_2d(hostname: str, lidar_port: int) -> None:
     """
     print("example: display_range_2d")
 
-    # get single scan
+    # get single scan [doc-stag-single-scan]
     sample = client.Scans.sample(hostname, 1, lidar_port)
     scan = next(sample)[0]
+    # [doc-etag-single-scan]
 
     # initialize plot
     fig, ax = plt.subplots()
@@ -65,6 +66,7 @@ def display_all_2d(hostname: str, lidar_port: int, n_scans: int = 5) -> None:
     """
     print("example: display_all_2d")
 
+    # [doc-stag-display-all-2d]
     # take sample of n scans from sensor
     sample = client.Scans.sample(hostname, n_scans, lidar_port)
     metadata = client.Sensor(hostname).metadata
@@ -104,6 +106,7 @@ def display_all_2d(hostname: str, lidar_port: int, n_scans: int = 5) -> None:
     [ax.set_yticks([]) for ax in axarr.ravel()]
     [ax.set_yticklabels([]) for ax in axarr.ravel()]
     plt.show()
+    # [doc-etag-display-all-2d]
 
 
 def display_intensity_live(hostname: str, lidar_port: int) -> None:

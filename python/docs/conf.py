@@ -19,12 +19,13 @@ import sphinx_rtd_theme
 
 # -- Project information -----------------------------------------------------
 
-project = 'ouster-client'
-copyright = '2021, Ouster SW'
+project = 'Ouster SDK Python Client'
+copyright = '2021, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-release = '0.0.2'
+release = '0.1.0dev'
+version = '0.1.0dev'
 
 
 # -- General configuration ---------------------------------------------------
@@ -35,6 +36,8 @@ release = '0.0.2'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.todo',
     'sphinx_autodoc_typehints',
     'sphinx_rtd_theme',
 ]
@@ -54,12 +57,33 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # a list of builtin themes.
 #
 html_theme = 'sphinx_rtd_theme'
-# html_theme = 'alabaster'
+html_theme_options = {
+    'logo_only': True,
+    'display_version': True,
+    # 'prev_next_buttons_location': 'bottom',
+    # 'style_external_links': False,
+    # 'vcs_pageview_mode': '',
+    # 'style_nav_header_background': 'rgb(29, 29, 29)',
+    # Toc options
+    # 'collapse_navigation': True,
+    # 'sticky_navigation': True,
+    'navigation_depth': 2,
+    'includehidden': True,
+    # 'titles_only': False
+}
+
+# show Ouster logo in sidebar header
+html_logo = 'images/Ouster_Logo_TM_Stacked_White_RGB.svg'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# Ouster tweaks to the theme to handle logo size, fonts, etc.
+html_css_files = [
+    'css/ouster_rtd_tweaks.css',
+]
 
 
 # -- Extension configuration -------------------------------------------------
@@ -83,3 +107,7 @@ napoleon_numpy_docstring = False
 # }
 
 # napoleon_use_param = False
+
+# ----- Todos Configs ------
+todo_include_todos = True
+todo_emit_warnings = True
