@@ -13,6 +13,11 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg) {
+    if (w <= 0 || h <= 0)
+        throw std::invalid_argument("lut dimensions must be greater than zero");
+    if (azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h)
+        throw std::invalid_argument("unexpected scan dimensions");
+
     Eigen::ArrayXd encoder(w * h);   // theta_e
     Eigen::ArrayXd azimuth(w * h);   // theta_a
     Eigen::ArrayXd altitude(w * h);  // phi
@@ -59,6 +64,9 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 }
 
 LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
+    if (scan.w * scan.h != lut.direction.rows())
+        throw std::invalid_argument("unexpected scan dimensions");
+
     auto reshaped = Eigen::Map<const Eigen::Array<LidarScan::raw_t, -1, 1>>(
         scan.field(LidarScan::RANGE).data(), scan.h * scan.w);
     auto nooffset = lut.direction.colwise() * reshaped.cast<double>();

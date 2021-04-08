@@ -341,7 +341,9 @@ class LidarScan:
         ...
 
 
-def destagger(field: ndarray, info: SensorInfo) -> ndarray:
+def destagger(field: ndarray,
+              shifts: List[int],
+              inverse: bool = ...) -> ndarray:
     ...
 
 

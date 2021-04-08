@@ -361,11 +361,12 @@ directly.
         Create gen-1 OS-1-64 metadata populated with design values.
         )")
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
-        .def("__str__", [](const sensor_info& i) { return to_string(i); })
-        .def("__repr__", [](const sensor_info& info) {
-            return "<ouster.client.SensorInfo " + info.prod_line + " " +
-                info.sn + " " + info.fw_rev + " " + to_string(info.mode) + ">";
-        });
+        .def("__str__", [](const sensor_info& self) { return to_string(self); })
+        .def("__repr__", [](const sensor_info& self) {
+            return "<ouster.client.SensorInfo " + self.prod_line + " " +
+                self.sn + " " + self.fw_rev + " " + to_string(self.mode) + ">";
+        })
+        .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; });
 
 
     // Lidar Mode
@@ -471,11 +472,27 @@ directly.
             [](LidarScan& self) -> LidarScan::data_t& { return self.data; },
             py::return_value_policy::reference_internal);
 
-    m.def("destagger", [](const ouster::img_t<LidarScan::raw_t>& field,
-                          const sensor_info& sensor) {
-        return ouster::destagger<LidarScan::raw_t>(
-            field, sensor.format.pixel_shift_by_row);
-    });
+    // Destagger overloads for most types
+    m.def("destagger", &ouster::destagger<int8_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<int16_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<int32_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<int64_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<uint8_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<uint16_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<uint32_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<uint64_t>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<float>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
+    m.def("destagger", &ouster::destagger<double>, py::arg("field"),
+          py::arg("shifts"), py::arg("inverse") = false);
 
     py::class_<ScanBatcher>(m, "ScanBatcher")
         .def(py::init<int, packet_format>())

@@ -1,3 +1,4 @@
+from copy import copy
 from os import path
 
 import json
@@ -17,12 +18,14 @@ DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
     (client.TimestampMode.TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"),
 ])
 def test_timestamp_mode(mode, string) -> None:
+    """Check timestamp mode (un)parsing."""
     int(mode)  # make sure nothing is raised
     assert str(mode) == string
     assert client.TimestampMode.from_string(string) == mode
 
 
 def test_timestamp_mode_misc() -> None:
+    """Check some misc properties of timestamp modes."""
     assert len(
         client.TimestampMode.__members__) == 4, "Don't forget to update tests!"
     client.TimestampMode.from_string(
@@ -38,6 +41,7 @@ def test_timestamp_mode_misc() -> None:
     (client.LidarMode.MODE_2048x10, 2048, 10, "2048x10"),
 ])
 def test_lidar_mode(mode, cols, frequency, string) -> None:
+    """Check lidar mode (un)parsing and cols/frequency."""
     int(mode)  # make sure nothing is raised
     assert str(mode) == string
     assert client.LidarMode.from_string(string) == mode
@@ -46,6 +50,7 @@ def test_lidar_mode(mode, cols, frequency, string) -> None:
 
 
 def test_lidar_mode_misc() -> None:
+    """Check some misc properties of the lidar mode."""
     assert len(
         client.LidarMode.__members__) == 6, "Don't forget to update tests!"
     assert client.LidarMode.from_string('foo') == client.LidarMode.MODE_UNSPEC
@@ -69,6 +74,7 @@ def metadata() -> client.SensorInfo:
 
 
 def test_read_info(metadata: client.SensorInfo) -> None:
+    """Check the particular values in the test data."""
     assert metadata.hostname == "os-992011000121"
     assert metadata.sn == "992011000121"
     assert metadata.fw_rev == "v1.14.0-beta.13"
@@ -87,6 +93,7 @@ def test_read_info(metadata: client.SensorInfo) -> None:
 
 
 def test_write_info(metadata: client.SensorInfo) -> None:
+    """Check modifying metadata."""
     metadata.hostname = ""
     metadata.sn = ""
     metadata.fw_rev = ""
@@ -113,9 +120,29 @@ def test_write_info(metadata: client.SensorInfo) -> None:
         metadata.lidar_to_sensor_transform = numpy.zeros((3, 4))
     with pytest.raises(TypeError):
         metadata.extrinsic = numpy.zeros(16)
+    with pytest.raises(TypeError):
+        metadata.beam_altitude_angles = 1  # type: ignore
+    with pytest.raises(TypeError):
+        metadata.beam_azimuth_angles = ["foo"]  # type: ignore
+
+
+def test_copy_info(metadata: client.SensorInfo) -> None:
+    """Check that copy() works."""
+    meta1 = copy(metadata)
+
+    assert meta1 is not metadata
+    assert meta1 == metadata
+
+    meta1.format.columns_per_packet = 42
+    assert meta1 != metadata
+
+    meta2 = copy(metadata)
+    meta2.hostname = "foo"
+    assert meta2 != metadata
 
 
 def test_parse_info() -> None:
+    """Sanity-check parsing from json."""
     with pytest.raises(ValueError):
         client.SensorInfo('/')
     with pytest.raises(ValueError):

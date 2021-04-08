@@ -26,12 +26,14 @@ def destaggered_ref(pixel_shift_by_row: List[int],
     beam_uniformity in ouster_viz, or computer vision algorithms.
 
     Args:
-        pixel_shift_by_row: list of pixel shifts by row from sensor metadata
-        field: staggered h x w view of a specific field
- """
+        pixel_shift_by_row: List of pixel shifts by row from sensor metadata
+        field: Staggered data as a H x W numpy array
+
+    Returns:
+        Destaggered data as a H X W numpy array
+    """
 
     destaggered = np.zeros(field.shape)
-
     nrows = field.shape[0]
 
     # iterate over every row and apply pixel shift
@@ -41,26 +43,114 @@ def destaggered_ref(pixel_shift_by_row: List[int],
     return destaggered
 
 
-def test_destagger() -> None:
-    """Compare client destagger function to reference implementation."""
-
+@pytest.fixture(scope="module")
+def meta() -> client.SensorInfo:
     # load test scan and metadata
     digest_path = path.join(DATA_DIR, "os-992011000121_digest.json")
-    bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
-
     with open(digest_path, 'r') as f:
-        stream = digest.StreamDigest.from_json(f.read())
+        return digest.StreamDigest.from_json(f.read()).meta
 
+
+@pytest.fixture(scope="module")
+def scan(meta) -> client.LidarScan:
+    bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
     with open(bin_path, 'rb') as b:
-        source = digest.LidarBufStream(b, stream.meta)
+        source = digest.LidarBufStream(b, meta)
         scans = client.Scans(source)
-        scan = next(iter(scans))
+        return next(iter(scans))
+
+
+@pytest.mark.parametrize("dtype", [
+    np.uint8, np.uint16, np.uint32, np.uint64, np.int8, np.int16, np.int32,
+    np.int64, np.float32, np.float64
+])
+def test_destagger_type_good(meta, dtype) -> None:
+    """Check that destaggering preserves dtype."""
+    h = meta.format.pixels_per_column
+    w = meta.format.columns_per_frame
+
+    assert client.destagger(meta, np.zeros((h, w), dtype)).dtype == dtype
+    assert client.destagger(meta, np.zeros((h, w, 2), dtype)).dtype == dtype
+
+
+@pytest.mark.parametrize("shape", [(32, 512), (32, 512, 1), (64, 1024, 2),
+                                   (128, 2048, 10)])
+def test_destagger_shape_good(meta, shape) -> None:
+    """Check that (de)staggering preserves shape."""
+    assert client.destagger(meta, np.zeros(shape)).shape == shape
+    assert client.destagger(meta, np.zeros(shape), inverse=True).shape == shape
+
+
+def test_destagger_shape_bad(meta) -> None:
+    """Check that arrays of the wrong shape are rejected."""
+    h = meta.format.pixels_per_column
+    w = meta.format.columns_per_frame
+
+    with pytest.raises(ValueError):
+        client.destagger(meta, np.zeros((0, w)))
+    with pytest.raises(ValueError):
+        client.destagger(meta, np.zeros((h, 0, 2)))
+
+    with pytest.raises(ValueError):
+        client.destagger(meta, np.zeros((h, w + 1)))
+    with pytest.raises(ValueError):
+        client.destagger(meta, np.zeros((h - 1, w)))
+    with pytest.raises(ValueError):
+        client.destagger(meta, np.zeros((h, w - 1, 1)))
+    with pytest.raises(ValueError):
+        client.destagger(meta, np.zeros((h + 1, w, 2)))
+
+
+def test_destagger_inverse(meta) -> None:
+    """Check that stagger/destagger are inverse operations."""
+    h = meta.format.pixels_per_column
+    w = meta.format.columns_per_frame
+    a = np.arange(h * w).reshape((h, w))
+
+    b = client.destagger(meta, a, inverse=True)
+    c = client.destagger(meta, b)
+    assert np.array_equal(a, c)
+
+    d = client.destagger(meta, a)
+    e = client.destagger(meta, d, inverse=True)
+    assert np.array_equal(a, e)
+
+
+def test_destagger_xyz(meta, scan) -> None:
+    """Check that we can destagger the output of xyz projection."""
+    h = meta.format.pixels_per_column
+    w = meta.format.columns_per_frame
+    xyz = client.XYZLut(meta)(scan)
+
+    destaggered = client.destagger(meta, xyz)
+    assert destaggered.shape == (h, w, 3)
+
+
+def test_destagger_correct(meta, scan) -> None:
+    """Compare client destagger function to reference implementation."""
 
     # get destaggered range field using reference implementation
-    destagger_ref = destaggered_ref(stream.meta.format.pixel_shift_by_row,
+    destagger_ref = destaggered_ref(meta.format.pixel_shift_by_row,
                                     scan.field(client.ChanField.RANGE))
 
     # obtain destaggered range field using client implemenation
-    destagger_client = scan.destaggered(stream.meta, client.ChanField.RANGE)
+    destagger_client = client.destagger(meta,
+                                        scan.field(client.ChanField.RANGE))
 
     assert np.array_equal(destagger_ref, destagger_client)
+
+
+def test_destagger_correct_multi(meta, scan) -> None:
+    """Compare client destagger function to reference on stacked fields."""
+
+    ambient = scan.field(client.ChanField.AMBIENT)
+    ambient_stacked = np.repeat(ambient[..., None], 5, axis=2)
+
+    ref = destaggered_ref(meta.format.pixel_shift_by_row, ambient)
+    ref_stacked = np.repeat(ref[..., None], 5, axis=2)
+
+    destaggered_stacked = client.destagger(meta, ambient_stacked)
+
+    assert ambient_stacked.dtype == np.uint32
+    assert destaggered_stacked.dtype == np.uint32
+    assert np.array_equal(ref_stacked, destaggered_stacked)

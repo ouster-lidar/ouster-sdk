@@ -191,18 +191,6 @@ class LidarScan:
         """Return a view of the specified channel field."""
         return self._data[:, field.ind].reshape(self.h, self.w)
 
-    def destaggered(self, info: SensorInfo, field: ChanField) -> np.ndarray:
-        """Return a destaggered copy of the specified channel.
-
-        In the default staggered representation, each column corresponds to a
-        single timestamp. A destaggered representation compensates for the
-        azimuth offset of each beam, returning columns that correspond to a
-        single azimuth angle.
-
-        """
-        return _sensor.destagger(
-            self._data[:, field.ind].reshape(self.h, self.w), info)
-
     def to_native(self) -> _sensor.LidarScan:
         ls = _sensor.LidarScan(self.w, self.h)
         ls.frame_id = self.frame_id
@@ -227,20 +215,60 @@ class LidarScan:
         return ls
 
 
+def destagger(info: SensorInfo,
+              fields: np.ndarray,
+              inverse=False) -> np.ndarray:
+    """Return a destaggered copy of the provided fields.
+
+    In the default staggered representation, each column corresponds to a
+    single timestamp. A destaggered representation compensates for the
+    azimuth offset of each beam, returning columns that correspond to a
+    single azimuth angle.
+
+    Args:
+        info: Sensor metadata associated with the provided data
+        fields: A numpy array of shape H X W or H X W X N
+        inverse: perform inverse "staggering" operation
+
+    Returns:
+        A destaggered numpy array of the same shape
+    """
+    h = info.format.pixels_per_column
+    w = info.format.columns_per_frame
+    shifts = info.format.pixel_shift_by_row
+
+    # remember original shape
+    shape = fields.shape
+    dtype = fields.dtype
+    fields = fields.reshape((h, w, -1))
+
+    # apply destagger to each channel
+    # note: astype() needed due to some strange behavior of the pybind11
+    # bindings. The wrong overload is chosen otherwise (due to the indexing?)
+    return np.dstack([
+        _sensor.destagger(fields[:, :, i].astype(dtype), shifts, inverse)
+        for i in range(fields.shape[2])
+    ]).reshape(shape)
+
+
 def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
     """Return a function that can project scans into cartesian coordinates.
 
     Internally, this will pre-compute a lookup table using the supplied
-    intrinsic parameters. XYZ points are returned as an N x 3 array of doubles,
-    where N is the number of points in a scan (e.g. 131072 for a 128-beam
-    sensor in 1024x10 mode).
+    intrinsic parameters. XYZ points are returned as a H * W x 3 array of
+    doubles, where H is the number of beams and W is the horizontal resolution
+    of the scan.
 
     Args:
         info: sensor metadata
+
+    Returns:
+        A function that computes a numpy array of point coordinates for a scan
     """
     lut = _sensor.XYZLut(info)
 
     def res(ls: LidarScan) -> np.ndarray:
-        return lut(ls.to_native())
+        return lut(ls.to_native()).reshape(info.format.pixels_per_column,
+                                           info.format.columns_per_frame, 3)
 
     return res

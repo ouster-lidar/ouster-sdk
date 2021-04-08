@@ -45,8 +45,8 @@ def display_range_2d(hostname: str, lidar_port: int) -> None:
     fig.canvas.set_window_title("example: display_range_2d")
 
     # plot using imshow
-    plt.imshow(scan.destaggered(
-        client.Sensor(hostname).metadata, client.ChanField.RANGE),
+    plt.imshow(client.destagger(
+        client.Sensor(hostname).metadata, scan.field(client.ChanField.RANGE)),
                resample=False)
 
     # configure and show plot
@@ -89,14 +89,15 @@ def display_all_2d(hostname: str, lidar_port: int, n_scans: int = 5) -> None:
 
     # plot 2D scans
     for count, scan in enumerate(next(sample)):
-        axarr[count,
-              0].imshow(scan.destaggered(metadata, client.ChanField.RANGE))
+        axarr[count, 0].imshow(
+            client.destagger(metadata, scan.field(client.ChanField.RANGE)))
         axarr[count, 1].imshow(
-            scan.destaggered(metadata, client.ChanField.REFLECTIVITY))
-        axarr[count,
-              2].imshow(scan.destaggered(metadata, client.ChanField.AMBIENT))
-        axarr[count,
-              3].imshow(scan.destaggered(metadata, client.ChanField.INTENSITY))
+            client.destagger(metadata,
+                             scan.field(client.ChanField.REFLECTIVITY)))
+        axarr[count, 2].imshow(
+            client.destagger(metadata, scan.field(client.ChanField.AMBIENT)))
+        axarr[count, 3].imshow(
+            client.destagger(metadata, scan.field(client.ChanField.INTENSITY)))
 
     # configure and show plot
     [ax.get_xaxis().set_visible(False) for ax in axarr.ravel()]
@@ -125,9 +126,9 @@ def display_intensity_live(hostname: str, lidar_port: int) -> None:
             for scan in stream:
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(scan.frame_id))
-                signal = scan.destaggered(info=stream.metadata,
-                                          field=client.ChanField.INTENSITY)
-                signal = np.uint8(signal / np.max(signal) * 255)
+                signal = client.destagger(
+                    stream.metadata, scan.field(client.ChanField.INTENSITY))
+                signal = (signal / np.max(signal) * 255).astype(np.uint8)
                 cv2.imshow("scaled intensity", signal)
                 key = cv2.waitKey(1) & 0xFF
                 # 27 is esc
@@ -256,8 +257,8 @@ def main():
     # display_all_2d(args.hostname, args.lidar_port, n_scans = 20)
     # display_intensity_live(args.hostname, args.lidar_port)
     # display_xyz_points(args.hostname, args.lidar_port)
-    # write_xyz_to_csv(args.hostname, args.lidar_port, 
-    #                         cloud_prefix = 'xyz', 
+    # write_xyz_to_csv(args.hostname, args.lidar_port,
+    #                         cloud_prefix = 'xyz',
     #                         n_scans = 5)
     # plot_imu_z_acc_over_time(args.hostname,
     #                         args.lidar_port,

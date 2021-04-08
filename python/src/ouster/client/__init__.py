@@ -14,6 +14,7 @@ from .data import ChanField
 from .data import ColHeader
 from .data import LidarScan
 from .data import XYZLut
+from .data import destagger
 
 from .core import ClientError
 from .core import ClientTimeout
