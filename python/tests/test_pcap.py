@@ -3,7 +3,7 @@ import tempfile
 
 import pytest
 
-import ouster.client._pcap as _pcap
+import ouster.pcap._pcap as _pcap
 
 
 def write_test_pcap(test_file,

@@ -1,4 +1,4 @@
-"""Example code for Ouster sensor python client
+"""Example code for Ouster Python SDK
 
 All examples commented out from main. Feel free to uncomment to try.
 

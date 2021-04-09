@@ -1,6 +1,6 @@
-=============================
-Ouster Client Python Bindings
-=============================
+=================
+Ouster Python SDK
+=================
 
 :Project-type: lib/Python
 :Description: Python bindings for ouster_client
@@ -135,7 +135,7 @@ API Docs
 ========
 API docs are currently `available here`_. To build the html yourself, install the requirements and
 use the Makefile in the ``docs`` subdirectory. Since Python's ``autodoc`` tool actually imports the
-modules to extract docstrings, you'll need to do this in an env with the ``ouster-client`` package
+modules to extract docstrings, you'll need to do this in an env with the ``ouster-sdk`` package
 installed::
 
     cd ./docs
@@ -162,7 +162,7 @@ repo URL should not use the "/simple" siffix. For example::
 
 Examples
 ========
-See ``docs/examples/example.py`` for examples in using the API.
+See ``src/ouster/sdk/examples.py`` for examples in using the API.
 
 Notes
 =====

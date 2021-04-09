@@ -41,10 +41,6 @@ class CMakeBuild(build_ext):
         build_args = ['--config', cfg]
 
         if platform.system() == "Windows":
-            cmake_args += [
-                '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(
-                    cfg.upper(), extdir)
-            ]
             if sys.maxsize > 2**32:
                 cmake_args += ['-A', 'x64']
             build_args += ['--', '/m']
@@ -76,18 +72,23 @@ class CMakeBuild(build_ext):
 
 
 setup(
-    name='ouster-client',
-    url='https://bitbucket.org/ouster_io/ouster_sw',
-    version='0.1.0.dev0',
+    name='ouster-sdk',
+    url='https://github.com/ouster-lidar/ouster_example',
+    version='0.2.0.dev0',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
-    package_data={'ouster.client': ['py.typed']},
-    author='Dima Garbuzov, Chris Bayruns',
-    author_email='dima.garbuzov@ouster.io, chris.bayruns@ouster.io',
-    description='Ouster sensor client python bindings',
+    package_data={
+        'ouster.client': ['py.typed'],
+        'ouster.pcap': ['py.typed'],
+    },
+    author='Ouster SW Developers',
+    author_email='noreply@ouster.io',
+    description='Ouster sensor SDK',
     long_description='',
-    ext_modules=[CMakeExtension('ouster.client._sensor')],
+    ext_modules=[
+        CMakeExtension('ouster.*'),
+    ],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
     python_requires='>=3.6, <4',
@@ -95,12 +96,17 @@ setup(
         'dataclasses >=0.7; python_version >="3.6" and python_version <"3.7"',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
-        'typing-extensions >=3.7'
+        'typing-extensions >=3.7',
     ],
     extras_require={
         'test': ['pytest', 'tox'],
         'dev': [
-            'flake8', 'future', 'mypy', 'pyls-mypy',
-            'python-language-server', 'yapf'
-        ]
+            'flake8', 'future', 'mypy', 'pyls-mypy', 'python-language-server',
+            'yapf'
+        ],
+        'docs': [
+            'Sphinx >=3.5',
+            'sphinx-autodoc-typehints ==1.11.1',
+            'sphinx-rtd-theme ==0.5.2',
+        ],
     })

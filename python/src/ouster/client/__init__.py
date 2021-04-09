@@ -1,17 +1,17 @@
 """Python sensor client."""
 # flake8: noqa (unused imports)
 
-from ._sensor import SensorInfo
-from ._sensor import PacketFormat
-from ._sensor import LidarMode
-from ._sensor import TimestampMode
-from ._sensor import OperatingMode
-from ._sensor import MultipurposeIOMode
-from ._sensor import Polarity
-from ._sensor import NMEABaudRate
-from ._sensor import SensorConfig
-from ._sensor import get_config
-from ._sensor import set_config
+from ._client import SensorInfo
+from ._client import PacketFormat
+from ._client import LidarMode
+from ._client import TimestampMode
+from ._client import OperatingMode
+from ._client import MultipurposeIOMode
+from ._client import Polarity
+from ._client import NMEABaudRate
+from ._client import SensorConfig
+from ._client import get_config
+from ._client import set_config
 
 from .data import BufferT
 from .data import Packet

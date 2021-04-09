@@ -287,7 +287,7 @@ struct PyClient {
     }
 };
 
-PYBIND11_MODULE(_sensor, m) {
+PYBIND11_MODULE(_client, m) {
     // turn off signatures in docstrings: mypy stubs provide better types
     py::options options;
     options.disable_function_signatures();

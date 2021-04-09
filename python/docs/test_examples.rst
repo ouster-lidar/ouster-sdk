@@ -13,7 +13,7 @@ Ok, let's include some part of ``examples.py``:
    literalinclude below also works with files outside of sphinx SOURCE_DIR.
    The correct path to the file should be like ``/../src/ouster/client/_digest.py``
 
-.. literalinclude:: /examples/example.py
+.. literalinclude:: /../src/ouster/sdk/examples.py
    :start-after: [doc-stag-single-scan]
    :end-before: [doc-etag-single-scan]
    :emphasize-lines: 1
@@ -22,7 +22,7 @@ Ok, let's include some part of ``examples.py``:
 
 Another example with more lines and more emphasize:
    
-.. literalinclude:: /examples/example.py
+.. literalinclude:: /../src/ouster/sdk/examples.py
    :start-after: [doc-stag-display-all-2d]
    :end-before: [doc-etag-display-all-2d]
    :emphasize-lines: 2-3,24-32

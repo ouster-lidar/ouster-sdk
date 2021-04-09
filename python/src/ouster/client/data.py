@@ -5,7 +5,7 @@ from typing import Callable, ClassVar, List, Optional, Type, Union
 import numpy.lib.stride_tricks
 import numpy as np
 
-from . import PacketFormat, SensorInfo, _sensor
+from . import PacketFormat, SensorInfo, _client
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -191,11 +191,11 @@ class LidarScan:
         """Return a view of the specified channel field."""
         return self._data[:, field.ind].reshape(self.h, self.w)
 
-    def to_native(self) -> _sensor.LidarScan:
-        ls = _sensor.LidarScan(self.w, self.h)
+    def to_native(self) -> _client.LidarScan:
+        ls = _client.LidarScan(self.w, self.h)
         ls.frame_id = self.frame_id
         ls.headers = [
-            _sensor.BlockHeader(h.timestamp, h.encoder, h.status)
+            _client.BlockHeader(h.timestamp, h.encoder, h.status)
             for h in self.headers
         ]
         ls.data[:] = self._data
@@ -203,7 +203,7 @@ class LidarScan:
 
     @classmethod
     def from_native(cls: Type['LidarScan'],
-                    scan: _sensor.LidarScan) -> 'LidarScan':
+                    scan: _client.LidarScan) -> 'LidarScan':
         ls = cls.__new__(cls)
         ls.w = scan.w
         ls.h = scan.h
@@ -246,7 +246,7 @@ def destagger(info: SensorInfo,
     # note: astype() needed due to some strange behavior of the pybind11
     # bindings. The wrong overload is chosen otherwise (due to the indexing?)
     return np.dstack([
-        _sensor.destagger(fields[:, :, i].astype(dtype), shifts, inverse)
+        _client.destagger(fields[:, :, i].astype(dtype), shifts, inverse)
         for i in range(fields.shape[2])
     ]).reshape(shape)
 
@@ -265,7 +265,7 @@ def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
     Returns:
         A function that computes a numpy array of point coordinates for a scan
     """
-    lut = _sensor.XYZLut(info)
+    lut = _client.XYZLut(info)
 
     def res(ls: LidarScan) -> np.ndarray:
         return lut(ls.to_native()).reshape(info.format.pixels_per_column,

@@ -1,7 +1,7 @@
-"""Ouster sensor python client.
+"""Ouster sensor Python client.
 
-This module is WIP and will contain more idiomatic wrappers around the
-lower-level pyblind11-generated module (ouster.client._sensor).
+This module contains more idiomatic wrappers around the lower-level module
+generated using pybind11.
 """
 from contextlib import closing
 from more_itertools import take
@@ -10,7 +10,7 @@ from typing_extensions import Protocol
 from threading import Thread
 import time
 
-from . import _sensor
+from . import _client
 from . import (ColHeader, PacketFormat, SensorInfo, ImuPacket, LidarPacket,
                LidarScan, Packet)
 
@@ -88,12 +88,12 @@ class Sensor(PacketSource):
         thread (like any other non-daemonized Python thread).
     """
 
-    _cli: _sensor.Client
+    _cli: _client.Client
     _timeout: Optional[float]
     _metadata: SensorInfo
     _pf: PacketFormat
     _producer: Thread
-    _cache: Optional[Tuple[_sensor.ClientState, bytearray]]
+    _cache: Optional[Tuple[_client.ClientState, bytearray]]
 
     def __init__(self,
                  hostname: str = "localhost",
@@ -120,7 +120,7 @@ class Sensor(PacketSource):
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
         """
-        self._cli = _sensor.Client(hostname, lidar_port, imu_port, buf_size)
+        self._cli = _client.Client(hostname, lidar_port, imu_port, buf_size)
         self._timeout = timeout
         self._overflow_err = _overflow_err
         self._flush_before_read = _flush_before_read
@@ -154,22 +154,22 @@ class Sensor(PacketSource):
             st, buf = self._cache
             self._cache = None
 
-        if self._overflow_err and st & _sensor.ClientState.OVERFLOW:
+        if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
-        if st & _sensor.ClientState.LIDAR_DATA:
+        if st & _client.ClientState.LIDAR_DATA:
             return LidarPacket(buf, self._pf)
-        elif st & _sensor.ClientState.IMU_DATA:
+        elif st & _client.ClientState.IMU_DATA:
             return ImuPacket(buf, self._pf)
-        elif st == _sensor.ClientState.TIMEOUT:
+        elif st == _client.ClientState.TIMEOUT:
             raise ClientTimeout(f"No packets received within {self._timeout}s")
-        elif st & _sensor.ClientState.ERROR:
+        elif st & _client.ClientState.ERROR:
             raise ClientError("Client returned ERROR state")
-        elif st & _sensor.ClientState.EXIT:
+        elif st & _client.ClientState.EXIT:
             return None
 
         raise AssertionError("Should be unreachable")
 
-    def _peek(self) -> Tuple[_sensor.ClientState, bytearray]:
+    def _peek(self) -> Tuple[_client.ClientState, bytearray]:
         if self._cache is None:
             # Lidar packets are bigger than IMU: wastes some space but is simple
             buf = bytearray(self._pf.lidar_packet_size)
@@ -203,7 +203,7 @@ class Sensor(PacketSource):
         last_ts = time.monotonic()
         while True:
             st, buf = self._peek()
-            if st & _sensor.ClientState.LIDAR_DATA:
+            if st & _client.ClientState.LIDAR_DATA:
                 frame = LidarPacket(buf, self._pf).view(ColHeader.FRAME_ID)[0]
                 if frame != last_frame:
                     last_frame = frame
@@ -292,9 +292,9 @@ class Scans:
         sensor = cast(Sensor, self._source) if isinstance(
             self._source, Sensor) else None
 
-        ls_write = _sensor.LidarScan(w, h)
+        ls_write = _client.LidarScan(w, h)
         pf = PacketFormat(self._source.metadata)
-        batch = _sensor.ScanBatcher(w, pf)
+        batch = _client.ScanBatcher(w, pf)
 
         # Time from which to measure timeout
         start_ts = time.monotonic()
@@ -317,7 +317,7 @@ class Scans:
                     if not self._complete or ls.complete:
                         yield ls
                         start_ts = time.monotonic()
-                    ls_write = _sensor.LidarScan(w, h)
+                    ls_write = _client.LidarScan(w, h)
 
                     # Drop data along frame boundaries to maintain _max_latency and
                     # clear out already-batched first packet of next frame
@@ -327,7 +327,7 @@ class Scans:
 
                         if drop_frames > 0:
                             sensor.flush(drop_frames)
-                            batch = _sensor.ScanBatcher(w, pf)
+                            batch = _client.ScanBatcher(w, pf)
 
     def close(self) -> None:
         """Close the underlying PacketSource."""
