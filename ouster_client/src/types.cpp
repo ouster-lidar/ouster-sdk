@@ -410,9 +410,10 @@ sensor_config parse_config(const Json::Value& root) {
             root["multipurpose_io_mode"].asString());
     if (!root["sync_pulse_out_angle"].empty())
         config.sync_pulse_out_angle = root["sync_pulse_out_angle"].asInt();
-    if (!root["sync_pulse_out_width"].empty())
+    if (!root["sync_pulse_out_pulse_width"].empty()) {
         config.sync_pulse_out_pulse_width =
             root["sync_pulse_out_pulse_width"].asInt();
+    }
 
     if (!root["nmea_in_polarity"].empty())
         config.nmea_in_polarity =
@@ -462,7 +463,7 @@ sensor_config parse_config(const std::string& meta) {
 
     if (meta.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors)) {
-            throw std::runtime_error{errors.c_str()};
+            throw std::invalid_argument{errors.c_str()};
         }
     }
 
@@ -736,7 +737,8 @@ std::string to_string(const sensor_config& config) {
     }
 
     if (config.nmea_ignore_valid_char) {
-        root["nmea_ignore_valid_char"] = config.nmea_ignore_valid_char.value();
+        root["nmea_ignore_valid_char"] =
+            config.nmea_ignore_valid_char.value() ? 1 : 0;
     }
 
     if (config.nmea_leap_seconds) {

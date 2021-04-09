@@ -286,6 +286,173 @@ class TimestampMode:
     def from_string(cls, s: str) -> TimestampMode:
         ...
 
+class OperatingMode:
+    OPERATING_UNSPEC: ClassVar[OperatingMode]
+    OPERATING_NORMAL: ClassVar[OperatingMode]
+    OPERATING_STANDBY: ClassVar[OperatingMode]
+
+    __members__: ClassVar[dict]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> OperatingMode:
+        ...
+
+class MultipurposeIOMode:
+    MULTIPURPOSE_UNSPEC: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OFF: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_INPUT_NMEA_UART: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_PULSE_SYNC_IN: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_PTP1588: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE: ClassVar[MultipurposeIOMode]
+
+    __members__: ClassVar[dict]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> OperatingMode:
+        ...
+
+class Polarity:
+    POLARITY_UNSPEC: ClassVar[Polarity]
+    POLARITY_ACTIVE_HIGH: ClassVar[Polarity]
+    POLARITY_ACTIVE_LOW: ClassVar[Polarity]
+
+    __members__: ClassVar[dict]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> OperatingMode:
+        ...
+
+class NMEABaudRate:
+    BAUD_UNSPEC: ClassVar[NMEABaudRate]
+    BAUD_9600: ClassVar[NMEABaudRate]
+    BAUD_115200: ClassVar[NMEABaudRate]
+
+    __members__: ClassVar[dict]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> OperatingMode:
+        ...
+
+class SensorConfig:
+    udp_dest: Optional[str]
+    udp_port_lidar: Optional[int]
+    udp_port_imu: Optional[int]
+    ts_mode: Optional[TimestampMode]
+    ld_mode: Optional[LidarMode]
+    operating_mode: Optional[OperationalMode]
+    multipurpose_io_mode: Optional[MultipurposeIOMode]
+    azimuth_window: Optional[tuple]
+    sync_pulse_out_angle: Optional[int]
+    sync_pulse_out_pulse_width: Optional[int]
+    nmea_in_polarity: Optional[Polarity]
+    nmea_baud_rate: Optional[NMEABaudRate]
+    nmea_ignore_valid_char: Optional[bool]
+    nmea_leap_seconds: Optional[int]
+    sync_pulse_in_polarity: Optional[Polarity]
+    sync_pulse_out_polarity: Optional[Polarity]
+    sync_pulse_out_frequency: Optional[int]
+    phase_lock_enable: Optional[bool]
+    phase_lock_offset: Optional[int]
+
+    def __init__(self) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+def set_config(hostname: str, config: SensorConfig, persist: bool) -> None:
+    ...
+
+def get_config(hostname: str, active: bool) -> None:
+    ...
 
 class Version:
     major: int

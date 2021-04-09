@@ -5,6 +5,13 @@ from ._sensor import SensorInfo
 from ._sensor import PacketFormat
 from ._sensor import LidarMode
 from ._sensor import TimestampMode
+from ._sensor import OperatingMode
+from ._sensor import MultipurposeIOMode
+from ._sensor import Polarity
+from ._sensor import NMEABaudRate
+from ._sensor import SensorConfig
+from ._sensor import get_config
+from ._sensor import set_config
 
 from .data import BufferT
 from .data import Packet

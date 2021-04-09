@@ -50,7 +50,7 @@ def test_lidar_mode(mode, cols, frequency, string) -> None:
 
 
 def test_lidar_mode_misc() -> None:
-    """Check some misc properties of the lidar mode."""
+    """Check some misc properties of lidar mode."""
     assert len(
         client.LidarMode.__members__) == 6, "Don't forget to update tests!"
     assert client.LidarMode.from_string('foo') == client.LidarMode.MODE_UNSPEC
@@ -142,7 +142,7 @@ def test_copy_info(metadata: client.SensorInfo) -> None:
 
 
 def test_parse_info() -> None:
-    """Sanity-check parsing from json."""
+    """Sanity check parsing from json."""
     with pytest.raises(ValueError):
         client.SensorInfo('/')
     with pytest.raises(ValueError):

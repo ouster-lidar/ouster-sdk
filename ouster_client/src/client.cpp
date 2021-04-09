@@ -286,9 +286,8 @@ bool get_config(const std::string hostname, sensor_config& config,
     std::string res;
     bool success = true;
 
-    std::string active_or_passive = active ? "active" : "passive";
-    success &=
-        do_tcp_cmd(sock_fd, {"get_config_param", active_or_passive}, res);
+    std::string active_or_staged = active ? "active" : "staged";
+    success &= do_tcp_cmd(sock_fd, {"get_config_param", active_or_staged}, res);
     success &=
         reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
 

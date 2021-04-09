@@ -34,8 +34,17 @@ namespace py = pybind11;
 
 using ouster::sensor::data_format;
 using ouster::sensor::packet_format;
+using ouster::sensor::sensor_config;
 using ouster::sensor::sensor_info;
 using namespace ouster;
+
+namespace pybind11 {
+namespace detail {
+template <typename T>
+struct type_caster<nonstd::optional<T>> : optional_caster<nonstd::optional<T>> {
+};
+}  // namespace detail
+}  // namespace pybind11
 
 /*
  * Extra bit flag compatible with client_state used to signal buffer overflow.
@@ -384,8 +393,8 @@ directly.
         .def_static("from_string", &sensor::lidar_mode_of_string);
     // workaround for https://github.com/pybind/pybind11/issues/2537
     lidar_mode.attr("__str__") = py::cpp_function([](const sensor::lidar_mode& u) { return to_string(u); },
-                                                  py::name("__str__"),
-                                                  py::is_method(lidar_mode));
+                                                py::name("__str__"),
+                                                py::is_method(lidar_mode));
 
     // Timestamp Mode
     auto timestamp_mode = py::enum_<sensor::timestamp_mode>(m, "TimestampMode")
@@ -396,9 +405,97 @@ directly.
         .def_static("from_string", &sensor::timestamp_mode_of_string);
     // workaround for https://github.com/pybind/pybind11/issues/2537
     timestamp_mode.attr("__str__") = py::cpp_function([](const sensor::timestamp_mode& u) { return to_string(u); },
-                                                      py::name("__str__"),
-                                                      py::is_method(timestamp_mode));
+                                                py::name("__str__"),
+                                                py::is_method(timestamp_mode));
 
+    // Operating Mode
+    auto OperatingMode = py::enum_<sensor::OperatingMode>(m, "OperatingMode")
+        .value("OPERATING_UNSPEC", sensor::OperatingMode::OPERATING_UNSPEC)
+        .value("OPERATING_NORMAL", sensor::OperatingMode::OPERATING_NORMAL)
+        .value("OPERATING_STANDBY", sensor::OperatingMode::OPERATING_STANDBY)
+        .def_static("from_string", &sensor::operating_mode_of_string);
+    // workaround for https://github.com/pybind/pybind11/issues/2537
+    OperatingMode.attr("__str__") = py::cpp_function([](const sensor::OperatingMode &u) { return to_string(u); },
+                                                py::name("__str__"),
+                                                py::is_method(OperatingMode));
+
+    // Multipurpose IO Mode
+    auto MultipurposeIOMode = py::enum_<sensor::MultipurposeIOMode>(m, "MultipurposeIOMode")
+        .value("MULTIPURPOSE_UNSPEC", sensor::MultipurposeIOMode::MULTIPURPOSE_UNSPEC)
+        .value("MULTIPURPOSE_OFF", sensor::MultipurposeIOMode::MULTIPURPOSE_OFF)
+        .value("MULTIPURPOSE_INPUT_NMEA_UART", sensor::MultipurposeIOMode::MULTIPURPOSE_INPUT_NMEA_UART)
+        .value("MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC)
+        .value("MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN)
+        .value("MULTIPURPOSE_OUTPUT_FROM_PTP_1588", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_PTP_1588)
+        .value("MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE)
+        .def_static("from_string", &sensor::multipurpose_io_mode_of_string);
+    // workaround for https://github.com/pybind/pybind11/issues/2537
+    MultipurposeIOMode.attr("__str__") = py::cpp_function([](const sensor::MultipurposeIOMode &u) { return to_string(u); },
+                                                py::name("__str__"),
+                                                py::is_method(MultipurposeIOMode));
+
+    // Polarity
+    auto Polarity = py::enum_<sensor::Polarity>(m, "Polarity")
+        .value("POLARITY_UNSPEC", sensor::Polarity::POLARITY_UNSPEC)
+        .value("POLARITY_ACTIVE_LOW", sensor::Polarity::POLARITY_ACTIVE_LOW)
+        .value("POLARITY_ACTIVE_HIGH", sensor::Polarity::POLARITY_ACTIVE_HIGH)
+        .def_static("from_string", &sensor::polarity_of_string);
+    // workaround for https://github.com/pybind/pybind11/issues/2537
+    Polarity.attr("__str__") = py::cpp_function([](const sensor::Polarity &u) { return to_string(u); },
+                                                py::name("__str__"),
+                                                py::is_method(Polarity));
+
+    // NMEABaudRate
+    auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate")
+        .value("BAUD_UNSPEC", sensor::NMEABaudRate::BAUD_UNSPEC)
+        .value("BAUD_9600", sensor::NMEABaudRate::BAUD_9600)
+        .value("BAUD_115200", sensor::NMEABaudRate::BAUD_115200)
+        .def_static("from_string", &sensor::nmea_baud_rate_of_string);
+    // workaround for https://github.com/pybind/pybind11/issues/2537
+    NMEABaudRate.attr("__str__") = py::cpp_function([](const sensor::NMEABaudRate &u) { return to_string(u); }, 
+                                                py::name("__str__"),
+                                                py::is_method(NMEABaudRate));
+
+    // Sensor Config
+    py::class_<sensor_config>(m, "SensorConfig", R"(
+        Sensor Config
+        )")
+        .def(py::init<>(), R"(
+        Args:
+            raw (str): json string to parse
+        )")
+        .def(py::init([](const std::string &s) { return sensor::parse_config(s); }))
+        .def_readwrite("udp_dest", &sensor_config::udp_dest)
+        .def_readwrite("udp_port_lidar", &sensor_config::udp_port_lidar)
+        .def_readwrite("udp_port_imu", &sensor_config::udp_port_imu)
+        .def_readwrite("ts_mode", &sensor_config::ts_mode)
+        .def_readwrite("ld_mode", &sensor_config::ld_mode)
+        .def_readwrite("operating_mode", &sensor_config::operating_mode)
+        .def_readwrite("multipurpose_io_mode", &sensor_config::multipurpose_io_mode)
+        .def_readwrite("azimuth_window", &sensor_config::azimuth_window)
+        .def_readwrite("sync_pulse_out_angle", &sensor_config::sync_pulse_out_angle)
+        .def_readwrite("sync_pulse_out_pulse_width", &sensor_config::sync_pulse_out_pulse_width)
+        .def_readwrite("nmea_in_polarity", &sensor_config::nmea_in_polarity)
+        .def_readwrite("nmea_baud_rate", &sensor_config::nmea_baud_rate)
+        .def_readwrite("nmea_ignore_valid_char", &sensor_config::nmea_ignore_valid_char)
+        .def_readwrite("nmea_leap_seconds", &sensor_config::nmea_leap_seconds)
+        .def_readwrite("sync_pulse_in_polarity", &sensor_config::sync_pulse_in_polarity)
+        .def_readwrite("sync_pulse_out_polarity", &sensor_config::sync_pulse_out_polarity)
+        .def_readwrite("sync_pulse_out_frequency", &sensor_config::sync_pulse_out_frequency)
+        .def_readwrite("phase_lock_enable", &sensor_config::phase_lock_enable)
+        .def_readwrite("phase_lock_offset", &sensor_config::phase_lock_offset)
+        .def_readwrite("udp_port_imu", &sensor_config::udp_port_imu)
+        .def("__str__", [](const sensor_config& i) { return to_string(i); })
+        .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; });
+
+    m.def("set_config", &sensor::set_config, py::arg("hostname"), py::arg("config"), py::arg("persist") = false);
+    m.def("get_config", [](const std::string& hostname, const bool active) {
+        sensor::sensor_config config;
+        if (!sensor::get_config(hostname, config, active)) {
+            throw std::invalid_argument("Error getting sensor config.");
+        }
+        return config;
+    }, py::arg("hostname"), py::arg("active") = true);
     // Version Info
     py::class_<util::version>(m, "Version")
         .def(py::init<>())

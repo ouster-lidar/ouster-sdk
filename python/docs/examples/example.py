@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 
 from ouster import client
 
-
 def get_metadata(hostname: str) -> client.SensorInfo:
     """Print metadata given hostname
 
@@ -233,7 +232,6 @@ def plot_imu_z_acc_over_time(hostname: str,
     ax.ticklabel_format(useOffset=False, style="plain")
     plt.show()
 
-
 def main():
     "Parse arguments and pass them to various examples"
     parser = argparse.ArgumentParser(description='')
@@ -267,7 +265,6 @@ def main():
     #                         args.lidar_port,
     #                         args.imu_port,
     #                         n_seconds=6)
-
 
 if __name__ == "__main__":
     main()

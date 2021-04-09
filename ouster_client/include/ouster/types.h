@@ -119,16 +119,15 @@ struct sensor_config {
 
     optional<AzimuthWindow> azimuth_window;
 
-    optional<int> sync_pulse_out_angle;
-    optional<int> sync_pulse_out_pulse_width;
-
     optional<Polarity> nmea_in_polarity;
-    optional<NMEABaudRate> nmea_baud_rate;
     optional<bool> nmea_ignore_valid_char;
+    optional<NMEABaudRate> nmea_baud_rate;
     optional<int> nmea_leap_seconds;
 
     optional<Polarity> sync_pulse_in_polarity;
     optional<Polarity> sync_pulse_out_polarity;
+    optional<int> sync_pulse_out_angle;
+    optional<int> sync_pulse_out_pulse_width;
     optional<int> sync_pulse_out_frequency;
 
     optional<bool> phase_lock_enable;
