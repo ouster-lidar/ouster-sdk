@@ -16,6 +16,29 @@ import matplotlib.pyplot as plt
 
 from ouster import client
 
+def configure_sensor_params(hostname: str) -> None:
+    """Configure sensor params given hostname
+
+    Args:
+        hostname: hostname of the sensor
+    """
+    print("\nexample: configure_sensor_params")
+
+    # create empty config
+    config = client.SensorConfig()
+
+    # set the values that you need: see sensor docs for param meanings
+    config.phase_lock_enable = True
+    config.ld_mode = client.LidarMode.MODE_1024x10
+
+    # set the config on sensor, using persist bool if desired
+    client.set_config(hostname, config, persist=True)
+
+    # if you like, you can view the entire set of parameters
+    config = client.get_config(hostname)
+    print("sensor config of {}\n: ".format(hostname), config)
+
+
 def get_metadata(hostname: str) -> client.SensorInfo:
     """Print metadata given hostname
 
@@ -253,6 +276,7 @@ def main():
 
     args = parser.parse_args()
 
+    # configure_sensor_params(args.hostname)
     # print(get_metadata(args.hostname))
     # display_range_2d(args.hostname, args.lidar_port)
     # display_all_2d(args.hostname, args.lidar_port, n_scans = 20)

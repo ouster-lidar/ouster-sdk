@@ -109,4 +109,7 @@ setup(
             'sphinx-autodoc-typehints ==1.11.1',
             'sphinx-rtd-theme ==0.5.2',
         ],
+        'examples':[
+            'matplotlib', 'opencv-python'
+        ],
     })
