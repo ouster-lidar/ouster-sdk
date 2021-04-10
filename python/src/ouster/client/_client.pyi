@@ -323,8 +323,8 @@ class MultipurposeIOMode:
     MULTIPURPOSE_OFF: ClassVar[MultipurposeIOMode]
     MULTIPURPOSE_INPUT_NMEA_UART: ClassVar[MultipurposeIOMode]
     MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_PULSE_SYNC_IN: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_PTP1588: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_PTP_1588: ClassVar[MultipurposeIOMode]
     MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE: ClassVar[MultipurposeIOMode]
 
     __members__: ClassVar[dict]
@@ -424,7 +424,7 @@ class SensorConfig:
     udp_port_imu: Optional[int]
     ts_mode: Optional[TimestampMode]
     ld_mode: Optional[LidarMode]
-    operating_mode: Optional[OperationalMode]
+    operating_mode: Optional[OperatingMode]
     multipurpose_io_mode: Optional[MultipurposeIOMode]
     azimuth_window: Optional[tuple]
     sync_pulse_out_angle: Optional[int]
@@ -439,7 +439,12 @@ class SensorConfig:
     phase_lock_enable: Optional[bool]
     phase_lock_offset: Optional[int]
 
+    @overload
     def __init__(self) -> None:
+        ...
+
+    @overload
+    def __init__(self, config_string: str) -> None:
         ...
 
     def __eq__(self, other: object) -> bool:

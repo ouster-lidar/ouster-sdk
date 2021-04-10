@@ -6,6 +6,8 @@
  * file changes. See the mypy documentation for details.
  */
 
+#include "ouster/client.h"
+
 #include <pybind11/eigen.h>
 #include <pybind11/functional.h>
 #include <pybind11/numpy.h>
@@ -25,7 +27,6 @@
 #include <thread>
 #include <utility>
 
-#include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -486,7 +487,8 @@ directly.
         .def_readwrite("phase_lock_offset", &sensor_config::phase_lock_offset)
         .def_readwrite("udp_port_imu", &sensor_config::udp_port_imu)
         .def("__str__", [](const sensor_config& i) { return to_string(i); })
-        .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; });
+        .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
+        .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; });
 
     m.def("set_config", &sensor::set_config, py::arg("hostname"), py::arg("config"), py::arg("persist") = false);
     m.def("get_config", [](const std::string& hostname, const bool active) {

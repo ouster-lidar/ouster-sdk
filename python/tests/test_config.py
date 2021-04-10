@@ -102,61 +102,6 @@ def test_nmea_baud_rate_misc() -> None:
     assert client.NMEABaudRate(0) == client.NMEABaudRate.BAUD_UNSPEC
 
 
-@pytest.fixture()
-def complete_config_string() -> str:
-    complete_config_string = """
-        {"azimuth_window": [0, 360000],
-        "lidar_mode": "1024x10",
-        "multipurpose_io_mode": "OFF",
-        "nmea_baud_rate": "BAUD_9600",
-        "nmea_ignore_valid_char": 0,
-        "nmea_in_polarity": "ACTIVE_HIGH",
-        "nmea_leap_seconds": 0,
-        "operating_mode": "NORMAL",
-        "phase_lock_enable": false,
-        "phase_lock_offset": 0,
-        "sync_pulse_in_polarity": "ACTIVE_HIGH",
-        "sync_pulse_out_angle": 360,
-        "sync_pulse_out_frequency": 1,
-        "sync_pulse_out_polarity": "ACTIVE_HIGH",
-        "sync_pulse_out_pulse_width": 10,
-        "timestamp_mode": "TIME_FROM_INTERNAL_OSC",
-        "udp_dest": "",
-        "udp_port_imu": 7503,
-        "udp_port_lidar": 7502}"""
-    return complete_config_string
-
-
-def test_read_config(complete_config_string: str) -> None:
-    """Check reading from and writing to string."""
-    config = client.SensorConfig(complete_config_string)  # read from string
-
-    # make sure all the values are correct
-    assert config.azimuth_window == (0, 360000)
-    assert config.ld_mode == client.LidarMode.MODE_1024x10
-    assert config.multipurpose_io_mode == client.MultipurposeIOMode.MULTIPURPOSE_OFF
-    assert config.nmea_baud_rate == client.NMEABaudRate.BAUD_9600
-    assert config.nmea_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
-    assert config.nmea_ignore_valid_char is False
-    assert config.nmea_leap_seconds == 0
-    assert config.operating_mode == client.OperatingMode.OPERATING_NORMAL
-    assert config.phase_lock_enable == False
-    assert config.phase_lock_offset == 0
-    assert config.sync_pulse_out_pulse_width == 10
-    assert config.sync_pulse_out_frequency == 1
-    assert config.sync_pulse_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
-    assert config.sync_pulse_out_angle == 360
-    assert config.sync_pulse_out_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
-    assert config.ts_mode == client.TimestampMode.TIME_FROM_INTERNAL_OSC
-    assert config.udp_dest == ""
-    assert config.udp_port_imu == 7503
-    assert config.udp_port_lidar == 7502
-
-    # check output of string
-    assert ''.join(str(config).split()) == ''.join(
-        complete_config_string.split())
-
-
 def test_optional_config() -> None:
     """Check that all fields are optional."""
     config = client.SensorConfig()
@@ -212,6 +157,61 @@ def test_write_config() -> None:
         config.sync_pulse_in_polarity = client.MultipurposeIOMode.MULTIPURPOSE_OFF  # type: ignore
 
 
+@pytest.fixture()
+def complete_config_string() -> str:
+    complete_config_string = """
+        {"azimuth_window": [0, 360000],
+        "lidar_mode": "1024x10",
+        "multipurpose_io_mode": "OFF",
+        "nmea_baud_rate": "BAUD_9600",
+        "nmea_ignore_valid_char": 0,
+        "nmea_in_polarity": "ACTIVE_HIGH",
+        "nmea_leap_seconds": 0,
+        "operating_mode": "NORMAL",
+        "phase_lock_enable": false,
+        "phase_lock_offset": 0,
+        "sync_pulse_in_polarity": "ACTIVE_HIGH",
+        "sync_pulse_out_angle": 360,
+        "sync_pulse_out_frequency": 1,
+        "sync_pulse_out_polarity": "ACTIVE_HIGH",
+        "sync_pulse_out_pulse_width": 10,
+        "timestamp_mode": "TIME_FROM_INTERNAL_OSC",
+        "udp_dest": "",
+        "udp_port_imu": 7503,
+        "udp_port_lidar": 7502}"""
+    return complete_config_string
+
+
+def test_read_config(complete_config_string: str) -> None:
+    """Check reading from and writing to string."""
+    config = client.SensorConfig(complete_config_string)  # read from string
+
+    # make sure all the values are correct
+    assert config.azimuth_window == (0, 360000)
+    assert config.ld_mode == client.LidarMode.MODE_1024x10
+    assert config.multipurpose_io_mode == client.MultipurposeIOMode.MULTIPURPOSE_OFF
+    assert config.nmea_baud_rate == client.NMEABaudRate.BAUD_9600
+    assert config.nmea_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
+    assert config.nmea_ignore_valid_char is False
+    assert config.nmea_leap_seconds == 0
+    assert config.operating_mode == client.OperatingMode.OPERATING_NORMAL
+    assert config.phase_lock_enable is False
+    assert config.phase_lock_offset == 0
+    assert config.sync_pulse_out_pulse_width == 10
+    assert config.sync_pulse_out_frequency == 1
+    assert config.sync_pulse_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
+    assert config.sync_pulse_out_angle == 360
+    assert config.sync_pulse_out_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
+    assert config.ts_mode == client.TimestampMode.TIME_FROM_INTERNAL_OSC
+    assert config.udp_dest == ""
+    assert config.udp_port_imu == 7503
+    assert config.udp_port_lidar == 7502
+
+    # check output of string
+    assert ''.join(str(config).split()) == ''.join(
+        complete_config_string.split())
+
+
 def test_equality_config(complete_config_string: str) -> None:
     """Check equality comparisons."""
 
@@ -248,10 +248,10 @@ def test_equality_config(complete_config_string: str) -> None:
 def test_copy_config(complete_config_string: str) -> None:
     """Check that copy() works."""
     config = client.SensorConfig(complete_config_string)
-    # config1 = copy(config)
+    config1 = copy(config)
 
-    #assert config1 is not config
-    #assert config1 == config
+    assert config1 is not config
+    assert config1 == config
 
 
 def test_parse_config() -> None:
