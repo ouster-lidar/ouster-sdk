@@ -67,3 +67,13 @@ Data
    :members:
 
 .. autofunction:: XYZLut
+
+
+Pcap
+=====
+
+.. automodule:: ouster.pcap
+
+.. automodule:: ouster.pcap.pcap
+   :members: info, record, Pcap, PcapInfo
+
