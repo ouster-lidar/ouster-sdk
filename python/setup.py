@@ -5,6 +5,7 @@ import subprocess
 
 from setuptools import setup, find_namespace_packages, Extension
 from setuptools.command.build_ext import build_ext
+from setuptools.command.sdist import sdist
 
 
 class CMakeExtension(Extension):
@@ -57,10 +58,13 @@ class CMakeBuild(build_ext):
         if toolchain:
             cmake_args += ['-DCMAKE_TOOLCHAIN_FILE=' + toolchain]
 
-        # allow specifying sdk dir in env
+        # use sdk path from env or location in sdist
         sdk_path = env.get('OUSTER_SDK_PATH')
+        sdist_sdk_path = os.path.join(ext.sourcedir, "sdk")
         if sdk_path:
             cmake_args += ['-DOUSTER_SDK_PATH=' + sdk_path]
+        elif os.path.exists(sdist_sdk_path):
+            cmake_args += ['-DOUSTER_SDK_PATH=' + sdist_sdk_path]
 
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
@@ -69,6 +73,20 @@ class CMakeBuild(build_ext):
                               env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args,
                               cwd=self.build_temp)
+
+
+# allow including files from parent directory via symlink
+class SDKDist(sdist):
+    def run(self):
+        created = False
+        try:
+            if not os.path.exists("sdk"):
+                os.symlink("..", "sdk")
+                created = True
+            super().run()
+        finally:
+            if created:
+                os.remove("sdk")
 
 
 setup(
@@ -89,7 +107,10 @@ setup(
     ext_modules=[
         CMakeExtension('ouster.*'),
     ],
-    cmdclass=dict(build_ext=CMakeBuild),
+    cmdclass={
+        'build_ext': CMakeBuild,
+        'sdist': SDKDist,
+    },
     zip_safe=False,
     python_requires='>=3.6, <4',
     install_requires=[
@@ -109,7 +130,5 @@ setup(
             'sphinx-autodoc-typehints ==1.11.1',
             'sphinx-rtd-theme ==0.5.2',
         ],
-        'examples':[
-            'matplotlib', 'opencv-python'
-        ],
+        'examples': ['matplotlib', 'opencv-python'],
     })
