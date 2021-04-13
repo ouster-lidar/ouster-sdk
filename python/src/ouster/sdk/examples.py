@@ -44,8 +44,10 @@ def get_metadata(hostname: str) -> None:
     Args:
         hostname: hostname of the sensor
     """
+# [doc-stag-get-metadata]
     with closing(client.Sensor(hostname)) as source:
         print(source.metadata)
+# [doc-etag-get-metadata]
 
 
 def display_range_2d(hostname: str, lidar_port: int = 7502) -> None:
@@ -121,13 +123,13 @@ def display_all_2d(hostname: str,
             client.destagger(metadata, scan.field(client.ChanField.AMBIENT)))
         axarr[count, 3].imshow(
             client.destagger(metadata, scan.field(client.ChanField.INTENSITY)))
+    # [doc-etag-display-all-2d]
 
     # configure and show plot
     [ax.get_xaxis().set_visible(False) for ax in axarr.ravel()]
     [ax.set_yticks([]) for ax in axarr.ravel()]
     [ax.set_yticklabels([]) for ax in axarr.ravel()]
     plt.show()
-    # [doc-etag-display-all-2d]
 
 
 def display_intensity_live(hostname: str, lidar_port: int = 7502) -> None:
@@ -143,6 +145,7 @@ def display_intensity_live(hostname: str, lidar_port: int = 7502) -> None:
 
     print("press ESC from visualization to exit")
 
+    # [doc-stag-live-plot-intensity]
     # establish sensor connection
     with closing(client.Scans.stream(hostname, lidar_port,
                                      complete=False)) as stream:
@@ -155,6 +158,7 @@ def display_intensity_live(hostname: str, lidar_port: int = 7502) -> None:
                     stream.metadata, scan.field(client.ChanField.INTENSITY))
                 signal = (signal / np.max(signal) * 255).astype(np.uint8)
                 cv2.imshow("scaled intensity", signal)
+                # [doc-etag-live-plot-intensity]
                 key = cv2.waitKey(1) & 0xFF
                 # 27 is esc
                 if key == 27:
@@ -186,12 +190,14 @@ def display_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
 
     plt.title("3D Points from {}".format(hostname))
 
+    # [doc-stag-plot-xyz-points]
     # transform data to 3d points and graph
     xyzlut = client.XYZLut(metadata)
     xyz = xyzlut(scan)
 
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     ax.scatter(x, y, z, c=z / max(z), s=0.2)
+    # [doc-etag-plot-xyz-points]
     plt.show()
 
 

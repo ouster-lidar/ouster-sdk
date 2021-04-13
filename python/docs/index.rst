@@ -6,6 +6,7 @@
    :hidden:
 
    Overview <self>
+   Installation <installation>
    Quick Start <quickstart>
    Developing <devel>
 

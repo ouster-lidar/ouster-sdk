@@ -1,3 +1,5 @@
+.. _devel-instructions:
+
 =============================
 Ouster Python SDK Development
 =============================
@@ -17,9 +19,9 @@ for details.
 
 On Ubuntu using apt::
 
-    # install the dependencies for ouster_example/ouster_client
+    # install the dependencies for ouster_example/ouster_client and ouster_example/ouster_pcap
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev
+         libjsoncpp-dev libtclap-dev libtins
 
 
     #install python3, pip, and pybind11
