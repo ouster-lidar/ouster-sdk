@@ -1,12 +1,13 @@
-.. title:: Ouster Client Python SDK
-   
+.. title:: Ouster Python SDK
+
 .. toctree::
    :caption: Main:
    :maxdepth: 2
    :hidden:
 
-   Home / Ouster SDK <self>
-   Quick Start <quick_start>
+   Overview <self>
+   Quick Start <quickstart>
+   Developing <devel>
 
 
 .. toctree::
@@ -14,17 +15,23 @@
    :maxdepth: 2
    :hidden:
 
+   Annotated Examples <examples>
    API Reference <api>
    Changelog <changelog>
-   Github Ouster SDK <https://github.com/ouster-lidar/ouster_example>
 
 
 .. toctree::
    :hidden:
-   :caption: Second Temp Floor
+   :caption: External Links:
 
-   test_examples
-   TODOs (internal) <todos>
+   Source Code <https://github.com/ouster-lidar/ouster_example>
+   Issue Tracker <https://github.com/ouster-lidar/ouster_example/issues>
+   Sensor User Manual  <https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf>
+   Sample Data <https://ouster.com/resources/lidar-sample-data/>
+
+
+..
+   FAQ <faq>
 
 
 .. include:: ../README.rst

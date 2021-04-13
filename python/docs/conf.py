@@ -19,13 +19,13 @@ import sphinx_rtd_theme
 
 # -- Project information -----------------------------------------------------
 
-project = 'Ouster SDK Python Client'
+project = 'Ouster Python SDK'
 copyright = '2021, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1.0dev'
-version = '0.1.0dev'
+release = '0.2.0.alpha'
+version = '0.2.0.alpha'
 
 
 # -- General configuration ---------------------------------------------------
@@ -72,6 +72,15 @@ html_theme_options = {
     # 'titles_only': False
 }
 
+html_context = {
+    'display_github': True,
+    'github_user': 'ouster-lidar',
+    'github_repo': 'ouster_example',
+    # 'github_version': 'ouster/python-bindings',
+    'github_version': 'master',
+    'conf_py_path': '/python/docs/'
+}
+
 # show Ouster logo in sidebar header
 html_logo = 'images/Ouster_Logo_TM_Stacked_White_RGB.svg'
 
@@ -110,4 +119,5 @@ napoleon_numpy_docstring = False
 
 # ----- Todos Configs ------
 todo_include_todos = True
+todo_link_only = True
 todo_emit_warnings = True

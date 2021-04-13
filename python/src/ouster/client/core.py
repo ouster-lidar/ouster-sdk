@@ -346,8 +346,8 @@ class Scans:
             lidar_port: int = 7502,
             *,
             metadata: Optional[SensorInfo] = None
-    ) -> Iterator[List[LidarScan]]:
-        """Sample n consecutive scans from a sensor.
+    ) -> Tuple[SensorInfo, Iterator[List[LidarScan]]]:
+        """Conveniently sample n consecutive scans from a sensor.
 
         Does not leave UDP ports open. Suitable for interactive use.
 
@@ -356,11 +356,15 @@ class Scans:
             n: number of consecutive frames in each sample
             lidar_port: UDP port to listen on for lidar data
             metadata: explicitly provide metadata for the stream
+
+        Returns:
+            A tuple of metadata queried from the sensor and an iterator that
+            samples n consecutive scans
         """
         with closing(Sensor(hostname, metadata=metadata)) as sensor:
             metadata = sensor.metadata
 
-        while True:
+        def next_batch() -> List[LidarScan]:
             with closing(
                     Sensor(hostname,
                            lidar_port,
@@ -370,8 +374,9 @@ class Scans:
                            _flush_before_read=False)) as source:
                 source.flush(full=True)
                 scans = cls(source, timeout=1.0, complete=True, _max_latency=0)
-                ls = take(n, scans)
-            yield ls
+                return take(n, scans)
+
+        return metadata, iter(next_batch, [])
 
     @classmethod
     def stream(cls,

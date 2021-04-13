@@ -286,6 +286,7 @@ class TimestampMode:
     def from_string(cls, s: str) -> TimestampMode:
         ...
 
+
 class OperatingMode:
     OPERATING_UNSPEC: ClassVar[OperatingMode]
     OPERATING_NORMAL: ClassVar[OperatingMode]
@@ -317,6 +318,7 @@ class OperatingMode:
     @classmethod
     def from_string(cls, s: str) -> OperatingMode:
         ...
+
 
 class MultipurposeIOMode:
     MULTIPURPOSE_UNSPEC: ClassVar[MultipurposeIOMode]
@@ -354,6 +356,7 @@ class MultipurposeIOMode:
     def from_string(cls, s: str) -> OperatingMode:
         ...
 
+
 class Polarity:
     POLARITY_UNSPEC: ClassVar[Polarity]
     POLARITY_ACTIVE_HIGH: ClassVar[Polarity]
@@ -386,6 +389,7 @@ class Polarity:
     def from_string(cls, s: str) -> OperatingMode:
         ...
 
+
 class NMEABaudRate:
     BAUD_UNSPEC: ClassVar[NMEABaudRate]
     BAUD_9600: ClassVar[NMEABaudRate]
@@ -417,6 +421,7 @@ class NMEABaudRate:
     @classmethod
     def from_string(cls, s: str) -> OperatingMode:
         ...
+
 
 class SensorConfig:
     udp_dest: Optional[str]
@@ -453,11 +458,14 @@ class SensorConfig:
     def __ne__(self, other: object) -> bool:
         ...
 
+
 def set_config(hostname: str, config: SensorConfig, persist: bool) -> None:
     ...
 
-def get_config(hostname: str, active: bool) -> None:
+
+def get_config(hostname: str, active: bool = ...) -> SensorConfig:
     ...
+
 
 class Version:
     major: int

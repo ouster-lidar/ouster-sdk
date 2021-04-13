@@ -1,4 +1,4 @@
-"""Example code for Ouster Python SDK
+"""Example code for Ouster Python SDK.
 
 All examples commented out from main. Feel free to uncomment to try.
 
@@ -6,15 +6,13 @@ Note: if you want to run matplotlib within docker you will need tkinter
 """
 
 import argparse
-from more_itertools import time_limited
 from contextlib import closing
 
 import numpy as np
-import cv2
-
-import matplotlib.pyplot as plt
+from more_itertools import time_limited
 
 from ouster import client
+
 
 def configure_sensor_params(hostname: str) -> None:
     """Configure sensor params given hostname
@@ -22,44 +20,45 @@ def configure_sensor_params(hostname: str) -> None:
     Args:
         hostname: hostname of the sensor
     """
-    print("\nexample: configure_sensor_params")
 
     # create empty config
     config = client.SensorConfig()
 
     # set the values that you need: see sensor docs for param meanings
-    config.phase_lock_enable = True
+    config.operating_mode = client.OperatingMode.OPERATING_NORMAL
     config.ld_mode = client.LidarMode.MODE_1024x10
+    config.udp_port_lidar = 7502
+    config.udp_port_imu = 7503
 
     # set the config on sensor, using persist bool if desired
-    client.set_config(hostname, config, persist=True)
+    client.set_config(hostname, config, persist=False)
 
     # if you like, you can view the entire set of parameters
     config = client.get_config(hostname)
-    print("sensor config of {}\n: ".format(hostname), config)
+    print(f"sensor config of {hostname}:\n{config}")
 
 
-def get_metadata(hostname: str) -> client.SensorInfo:
+def get_metadata(hostname: str) -> None:
     """Print metadata given hostname
 
     Args:
         hostname: hostname of the sensor
     """
+    with closing(client.Sensor(hostname)) as source:
+        print(source.metadata)
 
-    return client.Sensor(hostname).metadata
 
-
-def display_range_2d(hostname: str, lidar_port: int) -> None:
+def display_range_2d(hostname: str, lidar_port: int = 7502) -> None:
     """Display range data taken live from sensor as an image
 
     Args:
         hostname: hostname of the sensor
         lidar_port: UDP port to listen on for lidar data
     """
-    print("example: display_range_2d")
+    import matplotlib.pyplot as plt  # type: ignore
 
     # get single scan [doc-stag-single-scan]
-    sample = client.Scans.sample(hostname, 1, lidar_port)
+    metadata, sample = client.Scans.sample(hostname, 1, lidar_port)
     scan = next(sample)[0]
     # [doc-etag-single-scan]
 
@@ -68,9 +67,8 @@ def display_range_2d(hostname: str, lidar_port: int) -> None:
     fig.canvas.set_window_title("example: display_range_2d")
 
     # plot using imshow
-    plt.imshow(client.destagger(
-        client.Sensor(hostname).metadata, scan.field(client.ChanField.RANGE)),
-               resample=False)
+    range = scan.field(client.ChanField.RANGE)
+    plt.imshow(client.destagger(metadata, range), resample=False)
 
     # configure and show plot
     plt.title("Range Data from {}".format(hostname))
@@ -78,7 +76,9 @@ def display_range_2d(hostname: str, lidar_port: int) -> None:
     plt.show()
 
 
-def display_all_2d(hostname: str, lidar_port: int, n_scans: int = 5) -> None:
+def display_all_2d(hostname: str,
+                   lidar_port: int = 7502,
+                   n_scans: int = 5) -> None:
     """Display all channels of n consecutive lidar scans taken live from sensor
 
     Args:
@@ -86,12 +86,11 @@ def display_all_2d(hostname: str, lidar_port: int, n_scans: int = 5) -> None:
         lidar_port: UDP port to listen on for lidar data
         n_scans: number of scans to show
     """
-    print("example: display_all_2d")
+    import matplotlib.pyplot as plt  # type: ignore
 
     # [doc-stag-display-all-2d]
     # take sample of n scans from sensor
-    sample = client.Scans.sample(hostname, n_scans, lidar_port)
-    metadata = client.Sensor(hostname).metadata
+    metadata, sample = client.Scans.sample(hostname, n_scans, lidar_port)
 
     # initialize and configure subplots
     fig, axarr = plt.subplots(n_scans,
@@ -131,7 +130,7 @@ def display_all_2d(hostname: str, lidar_port: int, n_scans: int = 5) -> None:
     # [doc-etag-display-all-2d]
 
 
-def display_intensity_live(hostname: str, lidar_port: int) -> None:
+def display_intensity_live(hostname: str, lidar_port: int = 7502) -> None:
     """
     Display intensity from live sensor
 
@@ -140,8 +139,9 @@ def display_intensity_live(hostname: str, lidar_port: int) -> None:
         lidar_port: UDP port to listen on for lidar data
 
     """
-    print("example: display_intensity_scaled_2d")
-    print("\tpress ESC from visualization to exit")
+    import cv2  # type: ignore
+
+    print("press ESC from visualization to exit")
 
     # establish sensor connection
     with closing(client.Scans.stream(hostname, lidar_port,
@@ -163,64 +163,64 @@ def display_intensity_live(hostname: str, lidar_port: int) -> None:
         cv2.destroyAllWindows()
 
 
-def display_xyz_points(hostname: str, lidar_port: int) -> None:
+def display_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     """Display range from a single scan as 3D points
 
     Args:
         hostname: hostname of the sensor
         lidar_port: UDP port to listen on for lidar data
     """
-
-    print("example: display_xyz_points")
+    import matplotlib.pyplot as plt  # type: ignore
 
     # get single scan
-    metadata = client.Sensor(hostname).metadata
-    xyzlut = client.XYZLut(metadata)
-    sample = client.Scans.sample(hostname, 1, lidar_port, metadata=metadata)
+    metadata, sample = client.Scans.sample(hostname, 1, lidar_port)
     scan = next(sample)[0]
 
     # set up figure
-    fig = plt.figure()
+    plt.figure()
     ax = plt.axes(projection='3d')
-    fig.canvas.set_window_title("example: display_xyz_points")
+    r = 3
+    ax.set_xlim3d([-r, r])
+    ax.set_ylim3d([-r, r])
+    ax.set_zlim3d([-r, r])
+
     plt.title("3D Points from {}".format(hostname))
 
     # transform data to 3d points and graph
+    xyzlut = client.XYZLut(metadata)
     xyz = xyzlut(scan)
-    ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2])
+
+    [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
+    ax.scatter(x, y, z, c=z / max(z), s=0.2)
     plt.show()
 
 
 def write_xyz_to_csv(hostname: str,
-                     lidar_port: int,
-                     cloud_prefix: str,
+                     lidar_port: int = 7502,
+                     cloud_prefix: str = 'xyz',
                      n_scans: int = 5) -> None:
     """Write xyz sample from live sensor to csv
 
     Args:
         hostname: hostname of the sensor
         lidar_port: UDP port to listen on for lidar data
-        cloud_prefix: prefix to written out csvs
+        cloud_prefix: filename prefix for written csvs
         n_scans: number of scans to write
     """
-
-    print("example: write_xyz_to_csv")
-    metadata = client.Sensor(hostname).metadata
+    metadata, sample = client.Scans.sample(hostname, n_scans, lidar_port)
+    h = metadata.format.pixels_per_column
+    w = metadata.format.columns_per_frame
     xyzlut = client.XYZLut(metadata)
-    sample = client.Scans.sample(hostname,
-                                 n_scans,
-                                 lidar_port,
-                                 metadata=metadata)
 
     for count, scan in enumerate(next(sample)):
         out_name = "{}_{}.txt".format(cloud_prefix, count)
         print("writing {}..".format(out_name))
-        np.savetxt(out_name, xyzlut(scan), delimiter=" ")
+        np.savetxt(out_name, xyzlut(scan).reshape(h * w, 3), delimiter=" ")
 
 
 def plot_imu_z_acc_over_time(hostname: str,
-                             lidar_port: int,
-                             imu_port: int,
+                             lidar_port: int = 7502,
+                             imu_port: int = 7503,
                              n_seconds: int = 10) -> None:
     """Plot the z acceleration from the IMU over time
 
@@ -229,20 +229,19 @@ def plot_imu_z_acc_over_time(hostname: str,
         imu_port: UDP port to listen on for imu data
         n_seconds: seconds of time to take a sample over
     """
-    print("example: plot_imu_z_acc_over_time")
+    import matplotlib.pyplot as plt  # type: ignore
 
     # connect to sensor and get imu packets within n_seconds
-    source = client.Sensor(hostname, lidar_port, imu_port)
+    source = client.Sensor(hostname, lidar_port, imu_port, buf_size=640)
     with closing(source):
         ts, z_accel = zip(*[(p.sys_ts, p.accel[2])
-                            for p in list(time_limited(n_seconds, source))
+                            for p in time_limited(n_seconds, source)
                             if isinstance(p, client.ImuPacket)])
 
     # initialize plot
     fig, ax = plt.subplots(figsize=(12.0, 2))
     ax.plot(ts, z_accel)
 
-    fig.canvas.set_window_title("example: plot_imu_z_acc_over_time")
     plt.title("Z Accel from IMU over {} Seconds".format(n_seconds))
     ax.set_xticks(np.arange(min(ts), max(ts), step=((max(ts) - min(ts)) / 5)))
     # add end ticker to x axis
@@ -255,40 +254,45 @@ def plot_imu_z_acc_over_time(hostname: str,
     ax.ticklabel_format(useOffset=False, style="plain")
     plt.show()
 
-def main():
-    "Parse arguments and pass them to various examples"
-    parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--hostname',
-                        dest='hostname',
+
+def main() -> None:
+    examples = {
+        "configure-sensor": configure_sensor_params,
+        "get-metadata": get_metadata,
+        "plot-range-image": display_range_2d,
+        "plot-all-channels": display_all_2d,
+        "plot-xyz-points": display_xyz_points,
+        "plot-imu-z-accel": plot_imu_z_acc_over_time,
+        "live-plot-intensity": display_intensity_live,
+        "write-xyz-to-csv": write_xyz_to_csv,
+    }
+
+    description = "Ouster Python SDK examples. The EXAMPLE must be one of:\n  " + str.join(
+        '\n  ', examples.keys())
+
+    parser = argparse.ArgumentParser(
+        description=description, formatter_class=argparse.RawTextHelpFormatter)
+
+    parser.add_argument('hostname',
+                        metavar='HOSTNAME',
                         type=str,
-                        help='sensor hostname',
-                        required=True)
-    parser.add_argument('--lidar_port',
-                        dest='lidar_port',
-                        default=7502,
-                        type=int,
-                        help='UDP port to listen on for lidar data')
-    parser.add_argument('--imu_port',
-                        dest='imu_port',
-                        default=7503,
-                        type=int,
-                        help='UDP port to listen on for imu data')
+                        help='Sensor hostname, e.g. "os-122033000087"')
+    parser.add_argument('example',
+                        metavar='EXAMPLE',
+                        type=str,
+                        help='Name of the example to run')
 
     args = parser.parse_args()
 
-    # configure_sensor_params(args.hostname)
-    # print(get_metadata(args.hostname))
-    # display_range_2d(args.hostname, args.lidar_port)
-    # display_all_2d(args.hostname, args.lidar_port, n_scans = 20)
-    # display_intensity_live(args.hostname, args.lidar_port)
-    # display_xyz_points(args.hostname, args.lidar_port)
-    # write_xyz_to_csv(args.hostname, args.lidar_port,
-    #                         cloud_prefix = 'xyz',
-    #                         n_scans = 5)
-    # plot_imu_z_acc_over_time(args.hostname,
-    #                         args.lidar_port,
-    #                         args.imu_port,
-    #                         n_seconds=6)
+    try:
+        example = examples[args.example]
+    except KeyError:
+        print(f"No such example: {args.example}")
+        exit(1)
+
+    print(f"example: {args.example}")
+    example(args.hostname)  # type: ignore
+
 
 if __name__ == "__main__":
     main()

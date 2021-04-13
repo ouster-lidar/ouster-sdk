@@ -2,10 +2,17 @@
 API Reference
 =============
 
+
+Module :mod:`ouster.client`
+===========================
+
 .. automodule:: ouster.client
 
+
+----
+
 Core
-====
+----
 
 .. autoexception:: ClientError
 .. autoexception:: ClientTimeout
@@ -24,14 +31,20 @@ Core
 .. autoclass:: Scans
    :members:
 
+----
 
 Metadata
-========
+--------
+
 .. autoclass:: SensorInfo
    :members:
    :undoc-members:
 
 .. autoclass:: PacketFormat
+
+.. autoclass:: SensorConfig
+   :members:
+   :undoc-members:
 
 .. autoclass:: LidarMode
    :members:
@@ -41,9 +54,26 @@ Metadata
    :members:
    :undoc-members:
 
+.. autoclass:: OperatingMode
+   :members:
+   :undoc-members:
+
+.. autoclass:: MultipurposeIOMode
+   :members:
+   :undoc-members:
+
+.. autoclass:: Polarity
+   :members:
+   :undoc-members:
+
+.. autoclass:: NMEABaudRate
+   :members:
+   :undoc-members:
+
+----
 
 Data
-====
+----
 
 .. autodata:: ouster.client.data.BufferT
 
@@ -68,12 +98,31 @@ Data
 
 .. autofunction:: XYZLut
 
+.. autofunction:: destagger
 
-Pcap
-=====
+
+----
+
+Module :mod:`ouster.pcap`
+=========================
 
 .. automodule:: ouster.pcap
 
-.. automodule:: ouster.pcap.pcap
-   :members: info, record, Pcap, PcapInfo
+.. autofunction:: info
 
+.. autoclass:: PcapInfo
+   :members:
+
+.. autofunction:: record
+
+.. autoclass:: Pcap
+   :members:
+
+
+----
+
+Module :mod:`ouster.sdk.examples`
+=================================
+
+.. automodule:: ouster.sdk.examples
+   :members:

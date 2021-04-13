@@ -1,3 +1,3 @@
-.. title:: Ouster SDK & Ouster Client Changelog
+.. title:: Ouster SDK Changelog
 
 .. include:: ../../CHANGELOG.rst
