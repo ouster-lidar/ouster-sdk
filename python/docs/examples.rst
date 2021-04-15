@@ -1,90 +1,66 @@
-==============================
-Annotated Examples & Concepts
-==============================
+===================
+Examples & Concepts
+===================
 
-Below is a loosely connected collection of examples and concepts based on
-using Ouster SDK with samples (pcap) files and with live sensor.
+A loosely connected collection of examples and concepts useful for working with Ouster SDK. If you
+are just starting, you may wish to start with :ref:`quickstart`.
 
-.. _ex-api-concepts-sample:
-
-API Concepts with sample data
-==============================
-
-In this part we continue building on top of :ref:`Quick Start <quickstart>`
-sample data parts and we assume that ``pcap_file`` and ``metadata_file``
-already present as variables:
-
-.. code:: python
-
-   # Path to .pcap sample data files
-   pcap_file = '/path/to/OS1_128.pcap'
-   metadata_file = 'path/to/OS1_2048x10_128.json'
+For convenience, throughout the examples and concepts we will use ``pcap_path`` and
+``metadata_path`` to refer to the variables from the Quick Start Guide.
 
 
-Sensor metadata as :py:class:`.SensorInfo`
-------------------------------------------
+.. _ex-metadata:
 
-The content of ``metadata_file`` (json) is represented by an object
-:py:class:`.SensorInfo`. It's the main object that represents the
-sensor state at the particular moment in time and holds information about
-configured parameters, lidar data mode and intrinsics calibration which are
-different for every sensor.
 
-Thus we almost always need a :py:class:`.SensorInfo` object to
-make sense of any particular stream of Ouster sensor packets data.
+Sensor Metadata and :py:class:`.SensorInfo`
+===========================================
 
-Because ``pcap_file`` internally doesn't store the sensor metadata we need first
-to read it from a separate json file (``metadata_file``). We can do it like this:
+Ouster sensors require metadata to interpret the readings of the sensor. Represented by the object
+:py:class:`.SensorInfo`, its fields include configuration parameters such as 
+``lidar_mode`` and and sensor intrinsics like ``beam_azimuth_angles``.
 
-.. code:: python
-
-    def read_metadata(metadata_file: str) -> client.SensorInfo:
-        with open(metadata_file, 'r') as f:
-            return client.SensorInfo(f.read())
-
-    metadata = read_metadata(metadata_file)
+When you work with a live sensor, the client will automatically fetch the metadata, but recorded
+``pcaps`` must always be accompanied by a ``json`` file containing this object.
 
 .. note::
 
-    Always use the correct ``metadata_file`` with recorded sensor data streams!
- 
-    It's tempting to reuse the same ``metadata_file`` with multiple recorded
-    pcap files but it's a sure way to get yourself into the trouble. The thing
-    is that every sensor has different intrinsics (``beam_azimuth_angles``,
-    ``beam_altitude_angles``), different internal ``data_format`` parameters that
-    defines things like ``columns_per_frame``, ``columns_per_packet``,
-    ``pixel_shift_by_row``. Also for specific recorded session the configuration of
-    ``lidar_mode``, ``column_window`` and other parameters might differ which
-    is all influence to the quality of point cloud that is reconstructed from
-    wire format UDP packets.
- 
-    So, please, always be careful which ``metadata_file`` you use to read
-    ``pcap_file`` and always record the metadata along with recording data from
-    a sensor.
- 
+    Always use the correct ``metadata_path`` with recorded sensor data streams!
 
-Sensor data as a :py:class:`.PacketSource`
-------------------------------------------
+    Using a metadatafile from another sensor or from a previous run with the wrong configuration
+    parameters will error out or give you live-than-desired precision.
 
-:py:class:`.PacketSource` is the basic interface to get the sensor data as
-a stream of packets (:py:class:`.ImuPacket` or :py:class:`.LidarPacket`).
+Since it's crucial to save the correct metadata file, let's see how we can get that from a live
+sensor. Try running the following example::
 
-To get a fully configured and ready to use :py:class:`.PacketSource` from
-``pcap_file`` we use :py:class:`.pcap.Pcap`:
+    $ python -m ouster.sdk.examples $SENSOR_HOSTNAME get-metadata
 
+And now let's look inside the example we just ran:
+
+.. literalinclude:: /../src/ouster/sdk/examples.py
+    :start-after: [doc-stag-get-metadata]
+    :end-before: [doc-etag-get-metadata]
+
+Seems simple enough!
+
+.. _ex-packets:
+
+
+Working Directly with Packets via a :py:class:`.PacketSource`
+=============================================================
+
+The :py:class:`.PacketSource` is the basic interface to get the sensor data as a stream of packets
+(:py:class:`.ImuPacket` or :py:class:`.LidarPacket`).
+
+To get a fully configured and ready to use :py:class:`.PacketSource` from ``pcap_path`` we use
+:py:class:`.pcap.Pcap`:
 
 .. code:: python
 
-    pcap_source = pcap.Pcap(pcap_file, metadata)
+    metadata = client.SensorInfo(metadata_path)
+    pcap_source = pcap.Pcap(pcap_path, metadata)
 
-
-.. note::
-
-    Here we are re-using ``metadata`` object that we've got from ``metadata_file``
-    earlier.
-
-Now we can read packets from ``pcap_source`` (which conforms to
-:py:class:`.PacketSource`) with the following code:
+Now we can read packets from ``pcap_source`` (which conforms to :py:class:`.PacketSource`) with the
+following code:
 
 .. code:: python
 
@@ -103,82 +79,63 @@ Now we can read packets from ``pcap_source`` (which conforms to
             print(f'  acceleration = {packet.accel}')
             print(f'  angular_velocity = {packet.angular_vel}')
 
-:py:class:`.PacketSource` objects also provides access to the sensor metadata via
+Once created, :py:class:`.PacketSource` objects provide access to the sensor metadata via the
 :py:attr:`.PacketSource.metadata` attribute.
 
-Later we will see how to get :py:class:`.PacketSource` from the live Ouster sensor
-but first let's look how we can construct the full :py:class:`.LidarScan` from the
-stream of individual :py:class:`.LidarPacket`'s
+
+.. _ex-lidar-scans:
 
 
-Single frame of lidar data as a :py:class:`.LidarScan`
--------------------------------------------------------
+Working with Frames of Lidar Data as a :py:class:`.LidarScan`
+=============================================================
 
-Every :py:class:`.LidarPacket` contains a set of measurements that comprise a
-small part of the full 360 rotation of the lidar.
+It is often convenient to work with the full 360-degree rotations of the lidar we know as frames,
+instead of working with individual packets. The :py:class:`.LidarPacket` contains a full frame of
+lidar measurements.
 
-.. note::
-
-   For example OS1-128 in ``1024x10`` mode contains 16 Measurement Blocks per one
-   :py:class:`.LidarPacket` and thus needs 64 lidar packets of data for a full
-   :py:class:`.LidarScan`.
-
-   For more details please refer to `Lidar Data Format`_ in Ouster Software
-   User Manual.
-
-To get a stream of :py:class:`.LidarScan`'s we use the :py:class:`.client.Scans`
-object that transforms any :py:class:`.PacketSource` with lidar packets to
-scans:
+To get a stream of :py:class:`.LidarScan`'s we use the :py:class:`.client.Scans` object that
+transforms any :py:class:`.PacketSource` with lidar packets to scans:
 
 .. code:: python
 
-    for scan in client.Scans(pcap_source):
+    for scan in client.Scans(pcap_source): 
         intensities = scan.field(client.ChanField.INTENSITY)
-        ranges = scan.field(client.ChanField.RANGE)
+        ranges = scan.field(client.ChanField.RANGE) 
         print(f'intensities = {intensities.shape}')
         print(f'ranges = {ranges.shape}')
 
 
-We can visualize range measurements (``ranges``) from LidarScan since it's
-a ``np.ndarray`` of size ``H x W`` (``128 x 2048`` for our particular example).
-Let's see one in detail:
+.. _ex-staggered-and-destaggered:
+
+
+Staggered vs Destaggered 2D Representations
+===========================================
+
+The default **staggered** representation of :py:class:`.LidarScan` contains columns which pertain to
+measurements taken at a single timestamp, corresponding directly with the data as it comes in. For a
+more natural 2D image, we therefore **destagger** the field with the :py:func:`.client.destagger`
+function.
+
+Let's take a look at a typical **staggered** representation:
 
 .. figure:: images/lidar_scan_staggered.png
    :align: center
 
-   LidarScan ``RANGE`` field visualised with :py:func:`matplotlib.pyplot.imshow()`
-   and simple gray color mapping for better look.
+   LidarScan ``RANGE`` field visualized with :py:func:`matplotlib.pyplot.imshow()` and simple gray
+   color mapping for better look.
 
-Oh, that doesn't look like a normal image. Believe me it's a bicycle on
-the left patch and trees with a parked cars on the right.
+Oh, that doesn't look like a normal image! What could it be? Surely not a
+bicycle in the left patch, and trees with a parked car on the right...
 
-It's a good place to look into the field destaggering process next (and fix
-the above image view)
-
-.. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#10
-
-
-Staggered vs Destaggered :py:class:`.LidarScan` field
------------------------------------------------------
-
-Default **staggered** representation of :py:class:`.LidarScan` is that one column
-of a channel field view (:py:class:`.ChanField` selector) corresponds to one
-Measurement Block of lidar packet which consists of returned values per every
-pixel in a column and additional headers (see :py:class:`.ColHeader`).
-
-For more natural 2D image field view representation that looks normal for humans
-we need to **destagger** the field array first with :py:func:`.client.destagger`
-function.
-
-Below we get one lidar scan of a particular number from ``pcap_source`` and
-plot destaggered range image.
+Let's see if we can destagger the image and decipher the scene:
 
 .. code::
 
     import matplotlib.pyplot as plt
     from more_itertools import nth
 
-    # ... see above examples for how to get `pcap_source` ...
+    metadata = client.SensorInfo(metadata_path)
+    pcap_source = pcap.Pcap(pcap_path, metadata)
 
     scans = client.Scans(pcap_source)
 
@@ -192,80 +149,63 @@ plot destaggered range image.
 
     plt.imshow(ranges_destaggered, cmap='gray', resample=False)
 
+This should give the scene below, which we have blown up sections of for better visiblity.
 
 .. figure:: images/lidar_scan_destaggered.png
     :align: center
 
-    LidarScan ``RANGE`` field **destaggered** and visualized.
+    **destaggered** LidarScan ``RANGE`` field
 
-Now we can easily use this image in common visual tasks pipeline.
+There's our man on a bicycle, and our beautiful car and tree foregrounded
+against farther-away trees! Now that this makes visual sense, we can easily use
+our data in common visual task pipelines.
 
 .. note::
 
-    We keep **staggered** representation inside because it's convenient and
-    computationaly faster to transform full LidarScan to 3D point cloud, correct for
-    sensor movement in SLAM tasks or parallelize computation per column batches.
-
-    BTW, you can view this particular scene in `Web Slam`_ to see reconstructed
-    point cloud, rotate between different fields in **destaggered** image view
-    and see the video of registered point clouds with our internal SLAM algorithm.
+    By the way, you can view this particular scene in both 2D and 3D at Ouster's `Web Slam`_! Use
+    your mouse to click and move the 3D scene, and the listed controls to rotate between different
+    destaggered image views. The video at the bottom shows the registered point clouds of our
+    internal SLAM algorithm. 
 
 .. _Web Slam: https://webslam.ouster.dev/slam/1610482355.9361048.rVdW_dgws/
 
 
-.. _ex-metadata:
-
-Obtaining metadata from the live sensor
-=======================================
-Ouster sensors require metadata to interpret the readings of the sensor. Let's try dumping your
-sensor's metadata::
-
-    $ python -m ouster.sdk.examples $SENSOR_HOSTNAME get-metadata
-
-That should have dumped a ``json`` object with fields such as ``lidar_mode`` and
-``beam_azimuth_angles`` to your terminal.
-
-Let's look inside the example we just ran:
-
-.. literalinclude:: /../src/ouster/sdk/examples.py
-    :start-after: [doc-stag-get-metadata]
-    :end-before: [doc-etag-get-metadata]
-
-When you work with a live sensor, you will not need to store this metadata as the client will
-automatically fetch it, but recorded ``pcaps`` must always be accompanied by a ``json`` file
-containing this object.
-
 .. _ex-xyzlut:
 
-Working with 3D Points, and the xyzlut
-======================================
+
+Working with 3D Points and the XYZLut
+=====================================
+
+To facilitate working with 3D points, you can create a function via :py:func:`.client.XYZLut` which
+will project any :py:class:`LidarScan` into cartesian coordinates by referencing a precalculated XYZ
+Look-uptable. This function can then be applied to any scan to create a numpy array of ``H x W x
+3``, which represents the cartesian coordintes of the points in the sensor coordinate frame.
+
 .. literalinclude:: /../src/ouster/sdk/examples.py
     :start-after: [doc-stag-plot-xyz-points]
     :end-before: [doc-etag-plot-xyz-points]
     :emphasize-lines: 2-5
     :linenos:
 
-In order to translate a :py:class:`.LidarScan` into 3D, we create the function
-``xyzlut`` (via :py:func:`.client.XYZLut`), which projects any :py:class:`.LidarScan`
-into cartesian coordintes. We then apply it to ``scan`` to create ``xyz``, a
-numpy array of ``H x W x 3`` which gives the cartesian coordinates of the scan in
-the sensor coordinate frame.
-
-To run the code in this example, try::
+If you have a live sensor, you can run this code with one of our examples::
 
     $ python -m ouster.sdk.examples $SENSOR_HOSTNAME plot-xyz-points
 
 That should open a 3D plot of a single scan of your location taken just now by your sensor. You
 should be able to recognize the contours of the scene around you.
 
+.. todo::
+    - add 3D Image, could be the same as the one in quickstart?? if the code is similar..
 
-.. _ex-streaming-and-destaggering:
 
-Streaming, 2D Representations, and Destaggering
-===============================================
+.. _ex-streaming:
 
-Sometimes it is preferable to work with the 2D representation of the data, for example when working
-with the intensity::
+
+Streaming Live Data
+===================
+
+Instead of working with a recorded dataset or a few captured frames of data, let's see if we can get
+a live feed from the senseor::
     
     $ python -m ouster.sdk.examples $SENSOR_HOSTNAME live-plot-intensity
 
@@ -277,27 +217,22 @@ So how did we do that?
 .. literalinclude:: /../src/ouster/sdk/examples.py
    :start-after: [doc-stag-live-plot-intensity]
    :end-before: [doc-etag-live-plot-intensity]
-   :emphasize-lines: 2, 9-10
+   :emphasize-lines: 2
    :linenos:
 
-Notice that instead of taking a ``sample`` as we did above with ``plot-xyz-points``,
-we used :py:meth:`.Scans.stream`, which allows for a continuous live data stream.
-We close the ``stream`` when we are finished, hence the use of :py:func:`.closing` in
-the first highlighted line.
-
-In the second set of highlighted lines, we :py:func:`.client.destagger` to correctly
-arrange the points into a 2D view which makes visual sense. Otherwise every column
-would represent the points captured at the same timestamp instead of the same azimuth
-angle.
+Notice that instead of taking a ``sample`` as we did in previous example, we used
+:py:meth:`.Scans.stream`, which allows for a continuous live data stream.  We close the ``stream``
+when we are finished, hence the use of :py:func:`.closing` in the highlighted line.
 
 To exit the visualization, you can use ``ESC``.
 
 .. _ex-imu:
 
+
 Working with IMU data from the Ouster sensor
 ============================================
-IMU data from the Ouster sensor can be read as :py:class:`~.client.ImuPacket`.
-Like other ``Packets``, you can get them from a :py:class:`.PacketSource`::
+IMU data from the Ouster sensor can be read as :py:class:`~.client.ImuPacket`.  Like other
+``Packets``, you can get them from a :py:class:`.PacketSource`::
     
     with closing(source):
         imu_packet_list = [ p in time_limited(10, source) if isinstance(p, client.ImuPacket) ] 

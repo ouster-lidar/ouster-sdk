@@ -3,221 +3,215 @@
 ==================================
 Quick Start with Ouster Python SDK
 ==================================
+
 This quickstart guide will walk you through visualizing Ouster sensor data quickly, whether from
-sample data or a live sensor. You should already have :ref:`installed<installation-ref>` the Ouster Python SDK. 
+sample data or a live sensor. The first step is to install the SDK with the optional dependencies
+needed to run the examples::
+
+  $ python3 -m pip install ouster-sdk[examples]
+
+.. note::
+
+   To run the example code on Windows 10, you may also find that you need the ``PyQt5`` library.
+
+.. todo::
+
+   Add PyQt5 as a dependency to the ``examples`` extra on Windows
 
 You'll want to start an interactive Python session and keep it open through the sections, as we'll
 be reusing variables created in earlier parts.  To get started, open python and import the ouster
-client::
+client:
+
+.. code:: python
     
-    from ouster import client
+   >>> from ouster import client
+
+If you'd like to start by working with sample data, continue to the section below. If you'd prefer
+to start capturing data from a sensor, you can skip to `Using an Ouster Sensor`_ below.
+
 
 Using Sample Data
 =================
-Download some `sample data`_ (**1.6 GB**) and unzip the download. You should
-have two files:
+
+Download the `sample data`_ (**1.6 GB**) and unzip the contents. You should have two files:
 
   * ``OS1_128.pcap``
   * ``OS1_2048x10_128.json``
 
+The downloaded pcap file contains lidar and imu packets captured from the network . You can read
+more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Software User Manual. The
+JSON file contains metadata queried from the sensor TCP interface necessary to interpret the packet
+data.
+
+Let's load the paths into your open session of python:
+
+.. code:: python
+
+   >>> pcap_path = '/path/to/OS1_128.pcap'
+   >>> metadata_path = '/path/to/OS1_2048x10_128.json'
+
 .. note::
 
-    You can also get the full sample data collection of different sensor
-    models, configurations and environments by visiting `Ouster Sample Data`_ page.
+    The full sample data collection, spanning various sensor models, beam configurations,
+    environments, and use cases, is available at the `Ouster Sample Data`_ page.
 
-In the following parts of this Quick Start guide we will refer to these files
-as using variable names ``pcap_file`` and ``metadata_file``.
+Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the
+metadata separately from ``metadata_path`` first:
+
+.. code:: python
+ 
+   >>> with open(metadata_path, 'r') as f:
+   ...     metadata = client.SensorInfo(f.read())
+
+Now that we've parsed the metadata file into a :py:class:`.SensorInfo`, we can use it to read our
+captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
+:py:class:`.PacketSource` and can be used in many of the same contexts as a real sensor.
 
 .. code:: python
 
-   # Path to .pcap sample data files
-   pcap_file = '/path/to/OS1_128.pcap'
-   metadata_file = 'path/to/OS1_2048x10_128.json'
+    >>> from ouster import pcap
+    >>> source = pcap.Pcap(pcap_path, metadata)
 
-``pcap_file`` represents the `captured packets` from the network in `PCAP format`_.
-In our case it's UDP packets with Imu (:py:class:`.ImuPacket`) and lidar data
-(:py:class:`.LidarPacket`). You can read more about internal structure
-of  `Lidar Data Format`_ and `Imu Data Format`_ in Ouster Software User Manual.
-
-``metadata_file`` is the Ouster Lidar sensor state at the moment of data recording
-which contains the sensor parameters, intrinsics calibration and configuration data
-that is needed for correct interpretation of data packets from ``pcap_file``.
-
-Getting packet stream from pcap file
-------------------------------------
-
-Because ``pcap_file`` contains the packets but no sensor metadata we are loading
-it separately from ``metadata_file`` first:
-
-.. code:: python
-
-    def read_metadata(metadata_file: str) -> client.SensorInfo:
-        with open(metadata_file, 'r') as f:
-            return client.SensorInfo(f.read())
-
-    metadata = read_metadata(metadata_file)
-
-Now we are ready to create :py:class:`.pcap.Pcap` packet source and read packets:
-
-.. code:: python
-
-    from ouster import pcap
-    from contextlib import closing
-
-    with closing(pcap.Pcap(pcap_file, metadata)) as pcap_source:
-        for packet in pcap_source:
-            if isinstance(packet, client.LidarPacket):
-                print('doing things with LidarPacket:')
-                encoder_counts = packet.view(client.ColHeader.ENCODER_COUNT)
-                timestamps = packet.view(client.ColHeader.TIMESTAMP)
-                ranges = packet.view(client.ChanField.RANGE)
-                print(f'  encoder counts = {encoder_counts.shape}')
-                print(f'  timestamps = {timestamps.shape}')
-                print(f'  ranges = {ranges.shape}')
-
-            if isinstance(packet, client.ImuPacket):
-                print('doing things with ImuPacket:')
-                print(f'  acceleration = {packet.accel}')
-                print(f'  angular_velocity = {packet.angular_vel}')
-
-Notice how we use ``metadata`` which is the :py:class:`.SensorInfo` object
-that we created early.
-
-We use :py:func:`.closing()` context to ensure that :py:class:`.PacketSource`
-and corresponging pcap file will be closed later. Keep an eye on importance to
-close and free resources especially once you start reading data from live sensor.
+To visualize data from this pcap file, proceed to `Visualizing Lidar Data`_ below.
 
 
 .. _sample data: https://data.ouster.io/sdk-samples/OS1/OS1_128_sample.zip
 .. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#10
-.. _Imu Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#13
-.. _PCAP format: https://tools.ietf.org/id/draft-gharris-opsawg-pcap-00.html
+.. _IMU Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#13
 .. _Ouster Sample Data: https://ouster.com/resources/lidar-sample-data/
 
 
 Using an Ouster Sensor
-=======================
-If you have a live sensor, we can now duplicate the same work from above making a :py:class:`.PacketSource`,
-but using your sensor as the source. If you don't have an Ouster sensor (yet!), keep your Python
-interpreter open and jump to the next section, `Visualizing your data in 3D`_.
+======================
 
-.. note:: 
-    Connecting to an Ouster sensor is covered in the Networking Guide section of ``Software User
-    Manual`` available on `our website Downloads page`_.
-
-For convenience, let's store the sensor hostname or IP as an enviornment variable::
-
-    $ export SENSOR_HOSTNAME=<sensor hostname or assigned IP address>
-
-To make sure everything is connected, try pinging the sensor::
-
-    $ ping -c1 $SENSOR_HOSTNAME
-
-Next, configure the sensor with the correct ``UDP_DEST``. In your python interpreter::
-
-    hostname = '<SENSOR_HOSTNAME>'
-    udp_dest = '<UDP_DEST>'
-    config = client.SensorConfig()
-    config.udp_dest = udp_dest
-
-    client.set_config(hostname, config)
+If you have access to sensor hardware, you can start reading data by instantiating a
+:py:class:`.PacketSource` that listens for a UDP data stream on a local socket.
 
 .. note::
 
-   ``UDP_DEST`` is the destination to which the sensor sends UDP traffic. On
-   boot, the sensor will not output data until this is set.
+   Connecting to an Ouster sensor is covered in the `Networking Guide`_ section of the Ouster
+   Software User Manual.
 
-.. _our website Downloads page: https://ouster.com/downloads/
+In the following, ``<SENSOR_HOSTNAME>`` shold be substituted for the actual hostname or IP of your
+sensor and ``<UDP_DEST>`` should be the hostname or IP of the machine reading sensor data, per the
+network configuration.
 
-Just like with our sample data, we will want to create a :py:class:`.PacketSource`
-from our sensor::
-    
-    source = client.Sensor(hostname)
+To make sure everything is connected, try pinging the sensor. You should see some output like::
 
+   $ ping -c1 <SENSOR_HOSTNAME>
+   PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
+   64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
 
-Visualizing your data in 2D
-=============================
-
-Quick example on how to combine the stream of lidar packets that we've got
-earlier into :py:class:`.LidarScan` object and visualize the range data as 2D
-range image.
-
-We will read from ``source`` to get the frame number with some interesing
-view.
+Next, you'll need to configure the sensor with the correct destination address or IP
 
 .. code:: python
 
-    from more_itertools import nth
+   >>> hostname = '<SENSOR_HOSTNAME>'
+   >>> config = client.SensorConfig()
+   >>> config.udp_dest = '<UDP_DEST>'
+   >>> config.udp_port_lidar = 7502
+   >>> config.udp_port_imu = 7503
+   >>> config.operating_mode = client.OperatingMode.NORMAL
+   >>> client.set_config(hostname, config)
 
-    with closing(pcap.Pcap(pcap_file, metadata)) as source:
-        
-        # start stream of LidarScan object and get 84th scan
-        scan = nth(client.Scans(source), 84)
+Just like with the sample data, you can create a :py:class:`.PacketSource` from the sensor:
+    
+.. code:: python
 
-        # range measurements for full LidarScan
-        range_field = scan.field(client.ChanField.RANGE)
+   >>> source = client.Sensor(hostname, _overflow_err=False)
 
-        # shift rows of the fields according to sensor intrincics to
-        # recover 2D image
-        range_img = client.destagger(source.metadata, range_field)
 
-        # Plot first 512 column of range data (our of 2048 for better view)
-        plt.imshow(range_img[:, 0:512], cmap='gray', resample=False, vmax=50000)
-        plt.axis('off')
-        plt.show()
+.. _Networking Guide: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#64
 
-        
+
+Visualizing Lidar Data
+======================
+
+At this point, you should have defined ``source`` using either a pcap file or UDP data streaming
+directly from a sensor. Let's read from ``source`` until we get to the 84th frame of data:
+
+.. code:: python
+
+   >>> from contextlib import closing
+   >>> from more_itertools import nth
+   >>> with closing(client.Scans(source)) as scans:
+   ...     scan = nth(client.Scans(source), 84)
+   >>> scan
+   <ouster.client.data.LidarScan object at 0x7f7ccc35fba8>
+
+Now that we have a frame of data available as a `py:class:.LidarScan` datatype, we can extract the
+range measurments and turn them into a range image, where each column corresponds to a single
+azimuth angle:
+
+.. code:: python
+
+   >>> range_field = scan.field(client.ChanField.RANGE)
+   >>> range_img = client.destagger(source.metadata, range_field)
+
+We can plot the results using standard Python tools that work with numpy datatypes. Here, we extract
+the first 512 columns of range data and display the result:
+
+.. code:: python
+
+   >>> import matplotlib.pyplot as plt
+   >>> plt.imshow(range_img[:, 0:512], cmap='gray', resample=False)
+   >>> plt.axis('off')
+   >>> plt.show()
+
+For a more in-depth explanation of the API concepts involved with visualizing your data in 2D see
+:ref:`ex-staggered-and-destaggered`.
+
 .. figure:: images/lidar_scan_range_image.png
-    :align: center
+   :align: center
 
-    LidarScan ``RANGE`` field. Visualised only first 512 column out of 2048
-    with simple gray color mapping.
+   LidarScan ``RANGE`` field. Visualizing only the first 512 column out of 2048 with simple gray
+   color mapping.
 
-For more in-depth explanation of API concepts and examples with the sample
-data see :ref:`ex-api-concepts-sample`.
+We can also plot the results in 3D by projecting the range measurements into cartesian
+coordinates. To do this, we first create a lookup table, then use it to produce X, Y, Z coordinates
+from our scan data:
 
-.. todo::
+.. code:: python
 
-   - nice explanation of XYZ Look up table aka XYZLut
-   - some nice explanation of ``client.Sensor`` ??
+    >>> xyzlut = client.XYZLut(metadata)
+    >>> xyz = xyzlut(scan)
 
+Lastly, we need to re-arrange the resulting numpy array into a shape that's suitable for plotting:
 
-Visualizing your data in 3D
-=============================
-If you've been through either one of the previous sections (or both!), you should now have a
-``source`` from which you can obtain sensor data::
-
-    from contextlib import closing
-    import matplotlib.pyplot as plt
-
-    metadata = source.metadata
-
-    with closing(client.Scans(source)) as scans:
-        scan = next(iter(scans))
-
-    xyzlut = client.XYZLut(metadata)
-    xyz = xyzlut(scan)
-
-    [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
-    ax.scatter(x, y, z, c=z / max(z), s=0.2)
-    plt.show()
+    >>> import numpy as np
+    >>> [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
+    >>> ax = plt.axes(projection='3d')
+    >>> r = 30
+    >>> ax.set_xlim3d([-r, r])
+    >>> ax.set_ylim3d([-r, r])
+    >>> ax.set_zlim3d([0, 2 * r])
+    >>> ax.scatter(x, y, z, c=z / max(z), s=0.2)
+    >>> plt.show()
 
 If you want to learn more about how we transformed the ``scan`` into 3D coordinates to graph, see
 :ref:`ex-xyzlut`.
 
-What Next
-=========
+.. figure:: images/lidar_scan_xyz.png
+   :align: center
 
-You have now officially visualized Ouster lidar in both 2D and 3D data using the Ouster
-Python SDK! Now that you know the basics, you can check out our annotated examples for
-a more detailed look at how to work with our data.
+   Point cloud from sample data. Points colored by Z coordinate value.
+
+
+Next Steps
+==========
+
+You have now officially visualized Ouster lidar in both 2D and 3D data using the Ouster Python SDK!
+Now that you know the basics, you can check out our annotated examples for a more detailed look at
+how to work with our data.
 
 Here are a few things you might be interested in:
 
-    * :ref:`ex-api-concepts-sample`
     * :ref:`ex-metadata`
+    * :ref:`ex-packets`
+    * :ref:`ex-lidar-scans`
+    * :ref:`ex-staggered-and-destaggered`
     * :ref:`ex-xyzlut`
-    * :ref:`ex-streaming-and-destaggering`
+    * :ref:`ex-streaming`
     * :ref:`ex-imu`
     
 .. todo::

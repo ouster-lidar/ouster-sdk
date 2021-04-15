@@ -17,6 +17,9 @@ Building the Python SDK from source requires several dependencies:
 - `Python <https://www.python.org/>`_ >= 3.6 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.2
 
+Linux and macos
+---------------
+
 On Ubuntu 20.04, you can install all build dependencies by running::
 
   $ sudo apt install build-essential cmake \
@@ -29,7 +32,7 @@ On Ubuntu 20.04, you can install all build dependencies by running::
    system. One relatively easy way is to grab the version packaged for Ubuntu 20.04, since it has
    essentially no dependencies of its own::
 
-     $ curl -o /tmp/pybind11.deb "http://archive.ubuntu.com/ubuntu/pool/universe/p/pybind11/pybind11-dev_2.4.3-2build2_all.deb"
+     $ curl -O "http://archive.ubuntu.com/ubuntu/pool/universe/p/pybind11/pybind11-dev_2.4.3-2build2_all.deb"
      $ sudo apt install ./pybind11-dev_2.4.3-2build2_all.deb
 
 On macos >= 10.13, using homebrew, you should be able to run::
@@ -47,6 +50,9 @@ After you have the system dependencies, you can build the SDK with::
   # or just install directly (virtualenv recommended)
   python3 -m pip install $OUSTER_SDK_PATH/python
 
+
+Windows 10
+----------
 
 On Windows 10, you'll have to install Visual Studio, Python and the `vcpkg`_ package manager and
 run::

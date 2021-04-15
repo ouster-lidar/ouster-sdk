@@ -5,7 +5,6 @@
    :hidden:
 
    Overview <self>
-   Installation <installation>
    Quick Start <quickstart>
    Developing <devel>
 
@@ -14,7 +13,7 @@
    :caption: Reference:
    :hidden:
 
-   Annotated Examples & Concepts <examples>
+   Examples & Concepts <examples>
    API Reference <api>
    Changelog <changelog>
 
