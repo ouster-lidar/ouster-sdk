@@ -2,7 +2,6 @@
 
 .. toctree::
    :caption: Main:
-   :maxdepth: 2
    :hidden:
 
    Overview <self>
@@ -13,7 +12,6 @@
 
 .. toctree::
    :caption: Reference:
-   :maxdepth: 2
    :hidden:
 
    Annotated Examples & Concepts <examples>
@@ -36,3 +34,5 @@
 
 
 .. include:: ../README.rst
+
+.. todolist::

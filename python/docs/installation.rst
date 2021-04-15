@@ -11,4 +11,4 @@ That should install ``ouster-sdk`` and some libraries needed to run our examples
 Windows and wish to run the example code, you may also find that you need PyQt5.
 
 If you're running ARM, a non-glibc-based linux distribution, or wish to develop on the Ouster Python
-SDK, you can build from source. See :ref:`devel-instructions`. 
+SDK, you can build from source. See :ref:`devel`.

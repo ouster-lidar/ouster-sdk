@@ -1,119 +1,129 @@
-.. _devel-instructions:
+.. _devel:
 
 =============================
 Ouster Python SDK Development
 =============================
 
-.. todo::
-   Update devel.rst for external consumption
-
 Building
 ========
-Building the python client requires all the build dependencies for ``ouster_example/ouster_client``,
-as well as python3 >= 3.3, pip, and pybind11 >= 2.2. You may wish to refer to the README located at 
-``ouster_example`` for more on building the ouster client.
+Building the Python SDK from source requires several dependencies:
 
-Dependencies can be provided either via system package manager or the ``vcpkg`` package manager. 
-To use ``vcpkg`` set the ``CMAKE_TOOLCHAIN_FILE`` in your environment. See the `vcpkg documentation`_ 
-for details.
+- a C++14-capable compiler
+- `cmake <https://cmake.org/>`_  >= 3.5
+- `eigen <https://eigen.tuxfamily.org>`_ >= 3.3
+- `jsoncpp <https://github.com/open-source-parsers/jsoncpp>`_ >= 1.7
+- `libtins <http://libtins.github.io/>`_ >= 3.4
+- `libpcap <https://www.tcpdump.org/>`_
+- `Python <https://www.python.org/>`_ >= 3.6 (with headers and development libraries)
+- `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.2
 
-On Ubuntu using apt::
+On Ubuntu 20.04, you can install all build dependencies by running::
 
-    # install the dependencies for ouster_example/ouster_client and ouster_example/ouster_pcap
-    sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev libtins
+  $ sudo apt install build-essential cmake \
+                     libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
+                     python3-dev python3-pip pybind11-dev
+
+.. note::
+
+   Ubuntu 18.04 only has pybind11 2.0.1 packaged, so you'll have to install a newer version on the
+   system. One relatively easy way is to grab the version packaged for Ubuntu 20.04, since it has
+   essentially no dependencies of its own::
+
+     $ curl -o /tmp/pybind11.deb "http://archive.ubuntu.com/ubuntu/pool/universe/p/pybind11/pybind11-dev_2.4.3-2build2_all.deb"
+     $ sudo apt install ./pybind11-dev_2.4.3-2build2_all.deb
+
+On macos >= 10.13, using homebrew, you should be able to run::
+
+  $ brew install cmake eigen jsoncpp libtins python3 pybind11
+
+After you have the system dependencies, you can build the SDK with::
+
+  # first, specify the path to the ouster_example repository
+  export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
+
+  # then, build an installable "wheel" package
+  python3 -m pip wheel --no-deps $OUSTER_SDK_PATH/python
+
+  # or just install directly (virtualenv recommended)
+  python3 -m pip install $OUSTER_SDK_PATH/python
 
 
-    #install python3, pip, and pybind11
-    sudo apt install python3-dev python3-pip pybind11-dev 
+On Windows 10, you'll have to install Visual Studio, Python and the `vcpkg`_ package manager and
+run::
 
-Note that the version of pybind11 packaged for Ubuntu 18.04 is too old. The location of the 
-``ouster_client`` source can be specified by adding the parent directory to cmake's module search 
-path.
+  > vcpkg install eigen3 jsoncpp libtins pybind11
 
+The currently tested vcpkg tag is ``2020.11-1``. After that, using a developer powershell prompt::
 
-::
+  # first, specify the path to the ouster_example repository
+  > $env:OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE>
 
-   # optional, if using vcpkg -- assuming jsoncpp, eigen3 and pybind11 are installed
-   export CMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+  # point cmake to the location of vcpkg
+  > $env:CMAKE_TOOLCHAIN_FILE=<PATH TO VCPKG REPO>/scripts/buildsystems/vcpkg.cmake
 
-   # specify path to ouster_util
-   export CMAKE_PREFIX_PATH=/path/to/ouster_sw/lib/ouster_util
+  # then, build an installable "wheel" package
+  > py -m pip wheel --no-deps $OUSTER_SDK_PATH\python
 
-   # do an isolated build with PEP-517 support
-   pip wheel --no-deps /path/to/python-client
+  # or just install directly (virtualenv recommended)
+  > py -m pip install $env:OUSTER_SDK_PATH\python
 
-   # or just install directly (virtualenv recommended)
-   pip install /path/to/python-client
+See the top-level README in the `Ouster Example repository`_ for more details on setting up a
+development environment on Windows.
 
-.. _vcpkg documentation: https://github.com/microsoft/vcpkg/blob/master/README.md
-
+.. _vcpkg: https://github.com/microsoft/vcpkg/blob/master/README.md
+.. _Ouster Example repository: https://github.com/ouster-lidar/ouster_example
 
 Developing
 ==========
-Install in editable mode with pip using `-e` flag, or add as a path dependency for another project with 
-poetry. For a faster development cycle, you can rebuild using ``python setup.py build_ext -i`` instead 
-of reinstalling the package after every change. For a local debug build, you can also add the ``-g``
-flag.
 
-This package comes with a stub file providing type annotations for use with mypy. We don't currently
-run mypy in CI, but all changes should typecheck. To get started, see `the official mypy
-documentation`_.
+Install in editable mode with pip using ``pip install -e``. For a faster development cycle, you can
+rebuild using ``python3 setup.py build_ext -i`` instead of reinstalling the package after every
+change. For a local debug build, you can also add the ``-g`` flag.
 
-.. _the official mypy documentation: https://mypy.readthedocs.io
+The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To run::
+
+  # install and run flake8 linter
+  $ python3 -m pip intall flake8
+  $ cd ${OUSTEr_SDK_PATH}/python
+  $ flake8
+
+  # install and run mypy in an environment with 
+  $ python3 -m pip install mypy
+  $ mypy -p ouster.sdk -p ouster.client -p ouster.pcap
 
 
 Running Tests
 =============
 
-Ouster SDK Python client has unit tests that can be run with ``pytest`` and
-``tox`` to test against multiple python innterpreters versions.
+To run tests while developing, install the ``pytest`` package and run it from the root of the Python
+SDK package::
 
-::
+  $ cd ${OUSTER_SDK_PATH}/python
+  $ pytest
 
-   cd ${OUSTER_SDK_PATH}/python
-   tox
+To run tests against multiple Python versions simultaneously, use the ``tox`` package::
 
-By default ``tox`` is configured to run tests for Pythons versions
-``py{36,37,38,39}`` (set in ``tox.ini``)
+  $ cd ${OUSTER_SDK_PATH}/python
+  $ tox
 
-Additionally ``tox`` has configurations for testing pre-build wheels
-``py{36,37,38,39}-use_wheels`` testenv. The location of the wheels should be passed
-with ``WHEELS_DIR`` env var:
-
-::
-
-   WHEELS_DIR=/pre/build/wheels/dir tox -e "py{36,37,38,39}-use_wheels"
+This will take longer, since it will build the package from a source distribution for each supported
+Python version available.
 
 
 Using Dockerfile.tox
 --------------------
 
-For platform independent tests/validation you can use ``Dockerfile.tox`` that
-pre-configured with all ``ouster-sdk`` build dependencies and can run tests on
-a subset of recent Debian based distros (build arg BASE can ``ubuntu:18.04``,
-``ubuntu:20.04`` and ``debian:10``)
+To simplify testing on multiple platforms, a Dockerfile is included for running ``tox`` on a variety
+of Debian-based distros with all packaged Python versions pre-installed. To build a test image,
+run::
 
-Build Docker image for running ``tox`` tests:
-
-::
-
-   docker build ${OUSTER_SDK_PATH} -t ouster_python_client \
-      -f ${OUSTER_SDK_PATH}/python/Dockerfile.tox \
+  docker build ${OUSTER_SDK_PATH} -t ouster-sdk-focal \
+      -f ${OUSTER_SDK_PATH}/python/integration/Dockerfile.tox \
+      --build-arg BASE=ubuntu:20.04 \
       --build-arg BUILD_UID=$(id -u) \
       --build-arg BUILD_GID=$(id -g)
 
-Run tests with default tox command (only ``py{36,37,38,39``):
+the ``BASE`` argument can be one of ``ubuntu:18.04``, ``ubuntu:20.04`` or ``debian:10``. Then, run
+the container to invoke tox::
 
-::
-
-   docker run -it --rm \
-      -v ${OUSTER_SDK_PATH}:/opt/ws/ouster_sdk \
-      ouster_python_client
-
-Because not all Python interpreter verions included in all stock distros, here
-is the table of BASE/pyXX versions that is covered byt the ``Dockerfile.tox``:
-
-- ``ubuntu:18.04`` x ``py{36,37,38}``
-- ``ubuntu:20.04`` x ``py{38,39}``
-- ``debian:10`` x ``py{37}``
+  docker run -it --rm -v ${OUSTER_SDK_PATH}:/opt/ws/ouster_sdk ouster-sdk-focal

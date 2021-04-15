@@ -6,6 +6,10 @@ API Reference
 Module :mod:`ouster.client`
 ===========================
 
+.. contents::
+   :local:
+   :depth: 4
+
 .. automodule:: ouster.client
 
 

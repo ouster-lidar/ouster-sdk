@@ -155,6 +155,8 @@ the left patch and trees with a parked cars on the right.
 It's a good place to look into the field destaggering process next (and fix
 the above image view)
 
+.. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#10
+
 
 Staggered vs Destaggered :py:class:`.LidarScan` field
 -----------------------------------------------------
