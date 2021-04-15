@@ -16,7 +16,7 @@
    :maxdepth: 2
    :hidden:
 
-   Annotated Examples <examples>
+   Annotated Examples & Concepts <examples>
    API Reference <api>
    Changelog <changelog>
 

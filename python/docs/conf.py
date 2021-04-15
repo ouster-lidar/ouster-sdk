@@ -61,7 +61,7 @@ html_theme_options = {
     'logo_only': True,
     'display_version': True,
     # 'prev_next_buttons_location': 'bottom',
-    # 'style_external_links': False,
+    'style_external_links': True,
     # 'vcs_pageview_mode': '',
     # 'style_nav_header_background': 'rgb(29, 29, 29)',
     # Toc options
