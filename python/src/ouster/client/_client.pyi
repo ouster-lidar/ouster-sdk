@@ -288,7 +288,6 @@ class TimestampMode:
 
 
 class OperatingMode:
-    OPERATING_UNSPEC: ClassVar[OperatingMode]
     OPERATING_NORMAL: ClassVar[OperatingMode]
     OPERATING_STANDBY: ClassVar[OperatingMode]
 
@@ -321,7 +320,6 @@ class OperatingMode:
 
 
 class MultipurposeIOMode:
-    MULTIPURPOSE_UNSPEC: ClassVar[MultipurposeIOMode]
     MULTIPURPOSE_OFF: ClassVar[MultipurposeIOMode]
     MULTIPURPOSE_INPUT_NMEA_UART: ClassVar[MultipurposeIOMode]
     MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC: ClassVar[MultipurposeIOMode]
@@ -358,7 +356,6 @@ class MultipurposeIOMode:
 
 
 class Polarity:
-    POLARITY_UNSPEC: ClassVar[Polarity]
     POLARITY_ACTIVE_HIGH: ClassVar[Polarity]
     POLARITY_ACTIVE_LOW: ClassVar[Polarity]
 
@@ -391,7 +388,6 @@ class Polarity:
 
 
 class NMEABaudRate:
-    BAUD_UNSPEC: ClassVar[NMEABaudRate]
     BAUD_9600: ClassVar[NMEABaudRate]
     BAUD_115200: ClassVar[NMEABaudRate]
 

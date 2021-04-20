@@ -89,7 +89,7 @@ change. For a local debug build, you can also add the ``-g`` flag.
 The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To run::
 
   # install and run flake8 linter
-  $ python3 -m pip intall flake8
+  $ python3 -m pip install flake8
   $ cd ${OUSTEr_SDK_PATH}/python
   $ flake8
 

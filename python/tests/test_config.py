@@ -1,4 +1,5 @@
 from copy import copy
+
 from os import path
 
 import pytest
@@ -9,7 +10,6 @@ DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
 
 @pytest.mark.parametrize("mode, string", [
-    (client.OperatingMode.OPERATING_UNSPEC, "UNKNOWN"),
     (client.OperatingMode.OPERATING_NORMAL, "NORMAL"),
     (client.OperatingMode.OPERATING_STANDBY, "STANDBY"),
 ])
@@ -23,14 +23,13 @@ def test_operating_mode(mode, string) -> None:
 def test_operating_mode_misc() -> None:
     """Check some misc properties of operating modes."""
     assert len(
-        client.OperatingMode.__members__) == 3, "Don't forget to update tests!"
+        client.OperatingMode.__members__) == 2, "Don't forget to update tests!"
     assert client.OperatingMode.from_string(
-        "foo") == client.OperatingMode.OPERATING_UNSPEC
-    assert client.OperatingMode(0) == client.OperatingMode.OPERATING_UNSPEC
+        "foo") is None
+    assert client.OperatingMode(1) == client.OperatingMode.OPERATING_NORMAL
 
 
 @pytest.mark.parametrize("mode, string", [
-    (client.MultipurposeIOMode.MULTIPURPOSE_UNSPEC, "UNKNOWN"),
     (client.MultipurposeIOMode.MULTIPURPOSE_OFF, "OFF"),
     (client.MultipurposeIOMode.MULTIPURPOSE_INPUT_NMEA_UART,
      "INPUT_NMEA_UART"),
@@ -53,15 +52,14 @@ def test_multipurpose_io_mode(mode, string) -> None:
 def test_multipurpose_io_mode_misc() -> None:
     """Check some misc properties of multipurpose mode."""
     assert len(client.MultipurposeIOMode.__members__
-               ) == 7, "Don't forget to update tests!"
+               ) == 6, "Don't forget to update tests!"
     assert client.MultipurposeIOMode.from_string(
-        "foo") == client.MultipurposeIOMode.MULTIPURPOSE_UNSPEC
+        "foo") is None
     assert client.MultipurposeIOMode(
-        0) == client.MultipurposeIOMode.MULTIPURPOSE_UNSPEC
+        1) == client.MultipurposeIOMode.MULTIPURPOSE_OFF
 
 
 @pytest.mark.parametrize("polarity, string", [
-    (client.Polarity.POLARITY_UNSPEC, "UNKNOWN"),
     (client.Polarity.POLARITY_ACTIVE_HIGH, "ACTIVE_HIGH"),
     (client.Polarity.POLARITY_ACTIVE_LOW, "ACTIVE_LOW"),
 ])
@@ -75,14 +73,13 @@ def test_polarity(polarity, string) -> None:
 def test_polarity_misc() -> None:
     """Check some misc properties of polarity."""
     assert len(
-        client.Polarity.__members__) == 3, "Don't forget to update tests!"
+        client.Polarity.__members__) == 2, "Don't forget to update tests!"
     assert client.Polarity.from_string(
-        "foo") == client.Polarity.POLARITY_UNSPEC
-    assert client.Polarity(0) == client.Polarity.POLARITY_UNSPEC
+        "foo") is None
+    assert client.Polarity(1) == client.Polarity.POLARITY_ACTIVE_LOW
 
 
 @pytest.mark.parametrize("nmea_baud_rate, string", [
-    (client.NMEABaudRate.BAUD_UNSPEC, "UNKNOWN"),
     (client.NMEABaudRate.BAUD_9600, "BAUD_9600"),
     (client.NMEABaudRate.BAUD_115200, "BAUD_115200"),
 ])
@@ -96,10 +93,10 @@ def test_nmea_baud_rate(nmea_baud_rate, string) -> None:
 def test_nmea_baud_rate_misc() -> None:
     """Check some misc properties of nmea bad rate."""
     assert len(
-        client.NMEABaudRate.__members__) == 3, "Don't forget to update tests!"
+        client.NMEABaudRate.__members__) == 2, "Don't forget to update tests!"
     assert client.NMEABaudRate.from_string(
-        "foo") == client.NMEABaudRate.BAUD_UNSPEC
-    assert client.NMEABaudRate(0) == client.NMEABaudRate.BAUD_UNSPEC
+        "foo") is None
+    assert client.NMEABaudRate(1) == client.NMEABaudRate.BAUD_9600
 
 
 def test_optional_config() -> None:

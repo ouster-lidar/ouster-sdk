@@ -16,6 +16,10 @@
 #include "ouster/impl/parsing.h"
 #include "ouster/version.h"
 
+using nonstd::make_optional;
+using nonstd::nullopt;
+using nonstd::optional;
+
 namespace ouster {
 
 namespace sensor {
@@ -236,11 +240,6 @@ int frequency_of_lidar_mode(lidar_mode mode) {
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const lidar_mode mode) {
-    os << to_string(mode);
-    return os;
-}
-
 std::string to_string(timestamp_mode mode) {
     auto end = timestamp_mode_strings.end();
     auto res =
@@ -263,11 +262,6 @@ timestamp_mode timestamp_mode_of_string(const std::string& s) {
     return res == end ? timestamp_mode(0) : res->first;
 }
 
-std::ostream& operator<<(std::ostream& os, const timestamp_mode mode) {
-    os << to_string(mode);
-    return os;
-}
-
 std::string to_string(OperatingMode mode) {
     auto end = operating_mode_strings.end();
     auto res =
@@ -279,7 +273,7 @@ std::string to_string(OperatingMode mode) {
     return res == end ? "UNKNOWN" : res->second;
 }
 
-OperatingMode operating_mode_of_string(const std::string& s) {
+optional<OperatingMode> operating_mode_of_string(const std::string& s) {
     auto end = operating_mode_strings.end();
     auto res =
         std::find_if(operating_mode_strings.begin(), end,
@@ -287,12 +281,7 @@ OperatingMode operating_mode_of_string(const std::string& s) {
                          return p.second == s;
                      });
 
-    return res == end ? OperatingMode(0) : res->first;
-}
-
-std::ostream& operator<<(std::ostream& os, const OperatingMode mode) {
-    os << to_string(mode);
-    return os;
+    return res == end ? nullopt : make_optional<OperatingMode>(res->first);
 }
 
 std::string to_string(MultipurposeIOMode mode) {
@@ -306,7 +295,8 @@ std::string to_string(MultipurposeIOMode mode) {
     return res == end ? "UNKNOWN" : res->second;
 }
 
-MultipurposeIOMode multipurpose_io_mode_of_string(const std::string& s) {
+optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
+    const std::string& s) {
     auto end = multipurpose_io_mode_strings.end();
     auto res =
         std::find_if(multipurpose_io_mode_strings.begin(), end,
@@ -314,12 +304,7 @@ MultipurposeIOMode multipurpose_io_mode_of_string(const std::string& s) {
                          return p.second == s;
                      });
 
-    return res == end ? MultipurposeIOMode(0) : res->first;
-}
-
-std::ostream& operator<<(std::ostream& os, const MultipurposeIOMode mode) {
-    os << to_string(mode);
-    return os;
+    return res == end ? nullopt : make_optional<MultipurposeIOMode>(res->first);
 }
 
 std::string to_string(Polarity polarity) {
@@ -332,19 +317,14 @@ std::string to_string(Polarity polarity) {
     return res == end ? "UNKNOWN" : res->second;
 }
 
-Polarity polarity_of_string(const std::string& s) {
+optional<Polarity> polarity_of_string(const std::string& s) {
     auto end = polarity_strings.end();
     auto res = std::find_if(polarity_strings.begin(), end,
                             [&](const std::pair<Polarity, std::string>& p) {
                                 return p.second == s;
                             });
 
-    return res == end ? Polarity(0) : res->first;
-}
-
-std::ostream& operator<<(std::ostream& os, const Polarity polarity) {
-    os << to_string(polarity);
-    return os;
+    return res == end ? nullopt : make_optional<Polarity>(res->first);
 }
 
 std::string to_string(NMEABaudRate rate) {
@@ -357,19 +337,14 @@ std::string to_string(NMEABaudRate rate) {
     return res == end ? "UNKNOWN" : res->second;
 }
 
-NMEABaudRate nmea_baud_rate_of_string(const std::string& s) {
+optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s) {
     auto end = nmea_baud_rate_strings.end();
     auto res = std::find_if(nmea_baud_rate_strings.begin(), end,
                             [&](const std::pair<NMEABaudRate, std::string>& p) {
                                 return p.second == s;
                             });
 
-    return res == end ? NMEABaudRate(0) : res->first;
-}
-
-std::ostream& operator<<(std::ostream& os, const NMEABaudRate rate) {
-    os << to_string(rate);
-    return os;
+    return res == end ? nullopt : make_optional<NMEABaudRate>(res->first);
 }
 
 std::string to_string(AzimuthWindow azimuth_window) {
@@ -402,55 +377,89 @@ sensor_config parse_config(const Json::Value& root) {
             std::make_pair(root["azimuth_window"][0].asInt(),
                            root["azimuth_window"][1].asInt());
 
-    if (!root["operating_mode"].empty())
-        config.operating_mode =
+    if (!root["operating_mode"].empty()) {
+        auto operating_mode =
             operating_mode_of_string(root["operating_mode"].asString());
-    if (!root["multipurpose_io_mode"].empty())
-        config.multipurpose_io_mode = multipurpose_io_mode_of_string(
+        if (operating_mode) {
+            config.operating_mode = operating_mode;
+        } else {
+            throw std::invalid_argument("Unexpected Operating Mode");
+        }
+    }
+    if (!root["multipurpose_io_mode"].empty()) {
+        auto multipurpose_io_mode = multipurpose_io_mode_of_string(
             root["multipurpose_io_mode"].asString());
+        if (multipurpose_io_mode) {
+            config.multipurpose_io_mode = multipurpose_io_mode;
+        } else {
+            throw std::invalid_argument("Unexpected Multipurpose IO Mode");
+        }
+    }
     if (!root["sync_pulse_out_angle"].empty())
         config.sync_pulse_out_angle = root["sync_pulse_out_angle"].asInt();
-    if (!root["sync_pulse_out_pulse_width"].empty()) {
+    if (!root["sync_pulse_out_pulse_width"].empty())
         config.sync_pulse_out_pulse_width =
             root["sync_pulse_out_pulse_width"].asInt();
-    }
 
-    if (!root["nmea_in_polarity"].empty())
-        config.nmea_in_polarity =
+    if (!root["nmea_in_polarity"].empty()) {
+        auto nmea_in_polarity =
             polarity_of_string(root["nmea_in_polarity"].asString());
-    if (!root["nmea_baud_rate"].empty())
-        config.nmea_baud_rate =
+        if (nmea_in_polarity) {
+            config.nmea_in_polarity = nmea_in_polarity;
+        } else {
+            throw std::invalid_argument("Unexpected NMEA Input Polarity");
+        }
+    }
+    if (!root["nmea_baud_rate"].empty()) {
+        auto nmea_baud_rate =
             nmea_baud_rate_of_string(root["nmea_baud_rate"].asString());
+        if (nmea_baud_rate) {
+            config.nmea_baud_rate = nmea_baud_rate;
+        } else {
+            throw std::invalid_argument("Unexpected NMEA Baud Rate");
+        }
+    }
     if (!root["nmea_ignore_valid_char"].empty())
         config.nmea_ignore_valid_char = root["nmea_ignore_valid_char"].asBool();
     if (!root["nmea_leap_seconds"].empty())
         config.nmea_leap_seconds = root["nmea_leap_seconds"].asInt();
 
-    if (!root["sync_pulse_in_polarity"].empty())
-        config.sync_pulse_in_polarity =
+    if (!root["sync_pulse_in_polarity"].empty()) {
+        auto sync_pulse_in_polarity =
             polarity_of_string(root["sync_pulse_in_polarity"].asString());
-    if (!root["sync_pulse_out_polarity"].empty())
-        config.sync_pulse_out_polarity =
+        if (sync_pulse_in_polarity) {
+            config.sync_pulse_in_polarity = sync_pulse_in_polarity;
+        } else {
+            throw std::invalid_argument("Unexpected Sync Pulse Input Polarity");
+        }
+    }
+    if (!root["sync_pulse_out_polarity"].empty()) {
+        auto sync_pulse_out_polarity =
             polarity_of_string(root["sync_pulse_out_polarity"].asString());
+        if (sync_pulse_out_polarity) {
+            config.sync_pulse_out_polarity = sync_pulse_out_polarity;
+        } else {
+            throw std::invalid_argument(
+                "Unexpected Sync Pulse Output Polarity");
+        }
+    }
     if (!root["sync_pulse_out_frequency"].empty())
         config.sync_pulse_out_frequency =
             root["sync_pulse_out_frequency"].asInt();
 
-    if (!root["phase_lock_enable"].empty()) {
+    if (!root["phase_lock_enable"].empty())
         config.phase_lock_enable =
             root["phase_lock_enable"].asString() == "true" ? true : false;
-    }
-    if (!root["phase_lock_offset"].empty()) {
+
+    if (!root["phase_lock_offset"].empty())
         config.phase_lock_offset = root["phase_lock_offset"].asInt();
-    }
 
     // deprecated params from 1.13. set 2.0 configs appropriately
     if (!root["udp_ip"].empty()) config.udp_dest = root["udp_ip"].asString();
-    if (!root["auto_start_flag"].empty()) {
+    if (!root["auto_start_flag"].empty())
         config.operating_mode = root["auto_start_flag"].asBool()
                                     ? sensor::OPERATING_NORMAL
                                     : sensor::OPERATING_STANDBY;
-    }
 
     return config;
 }
@@ -591,85 +600,44 @@ sensor_info metadata_from_json(const std::string& json_file) {
     return parse_metadata(buf.str());
 }
 
-std::string to_string(const sensor_info& info,
-                      const std::set<std::string> only_fields) {
+std::string to_string(const sensor_info& info) {
     Json::Value root{};
 
-    auto to_show = [&only_fields](const std::string& field_str) {
-        return only_fields.empty() || only_fields.count(field_str);
-    };
+    root["client_version"] = ouster::CLIENT_VERSION;
+    root["hostname"] = info.name;
+    root["prod_sn"] = info.sn;
+    root["build_rev"] = info.fw_rev;
+    root["lidar_mode"] = to_string(info.mode);
+    root["prod_line"] = info.prod_line;
 
-    if (to_show("client_version")) {
-        root["client_version"] = ouster::CLIENT_VERSION;
+    root["data_format"]["pixels_per_column"] = info.format.pixels_per_column;
+    root["data_format"]["columns_per_packet"] = info.format.columns_per_packet;
+    root["data_format"]["columns_per_frame"] = info.format.columns_per_frame;
+    for (auto i : info.format.pixel_shift_by_row)
+        root["data_format"]["pixel_shift_by_row"].append(i);
+
+    root["lidar_origin_to_beam_origin_mm"] =
+        info.lidar_origin_to_beam_origin_mm;
+
+    for (auto i : info.beam_azimuth_angles)
+        root["beam_azimuth_angles"].append(i);
+    for (auto i : info.beam_altitude_angles)
+        root["beam_altitude_angles"].append(i);
+
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            root["imu_to_sensor_transform"].append(
+                info.imu_to_sensor_transform(i, j));
+        }
     }
-
-    if (to_show("hostname")) {
-        root["hostname"] = info.name;
-    }
-
-    if (to_show("prod_sn")) {
-        root["prod_sn"] = info.sn;
-    }
-
-    if (to_show("build_rev")) {
-        root["build_rev"] = info.fw_rev;
-    }
-
-    if (to_show("lidar_mode")) {
-        root["lidar_mode"] = to_string(info.mode);
-    }
-
-    if (to_show("prod_line")) {
-        root["prod_line"] = info.prod_line;
-    }
-
-    if (to_show("data_format")) {
-        root["data_format"]["pixels_per_column"] =
-            info.format.pixels_per_column;
-        root["data_format"]["columns_per_packet"] =
-            info.format.columns_per_packet;
-        root["data_format"]["columns_per_frame"] =
-            info.format.columns_per_frame;
-        for (auto i : info.format.pixel_shift_by_row)
-            root["data_format"]["pixel_shift_by_row"].append(i);
-    }
-
-    if (to_show("lidar_origin_to_beam_origin_mm")) {
-        root["lidar_origin_to_beam_origin_mm"] =
-            info.lidar_origin_to_beam_origin_mm;
-    }
-
-    if (to_show("beam_azimuth_angles")) {
-        for (auto i : info.beam_azimuth_angles)
-            root["beam_azimuth_angles"].append(i);
-    }
-
-    if (to_show("beam_altitude_angles")) {
-        for (auto i : info.beam_altitude_angles)
-            root["beam_altitude_angles"].append(i);
-    }
-
-    if (to_show("imu_to_sensor_transform")) {
-        for (size_t i = 0; i < 4; i++) {
-            for (size_t j = 0; j < 4; j++) {
-                root["imu_to_sensor_transform"].append(
-                    info.imu_to_sensor_transform(i, j));
-            }
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            root["lidar_to_sensor_transform"].append(
+                info.lidar_to_sensor_transform(i, j));
         }
     }
 
-    if (to_show("lidar_to_sensor_transform")) {
-        for (size_t i = 0; i < 4; i++) {
-            for (size_t j = 0; j < 4; j++) {
-                root["lidar_to_sensor_transform"].append(
-                    info.lidar_to_sensor_transform(i, j));
-            }
-        }
-    }
-
-    if (to_show("json_calibration_version")) {
-        root["json_calibration_version"] = FW_2_0;
-    }
+    root["json_calibration_version"] = FW_2_0;
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
@@ -677,8 +645,6 @@ std::string to_string(const sensor_info& info,
     builder["indentation"] = "    ";
     return Json::writeString(builder, root);
 }
-
-std::string to_string(const sensor_info& info) { return to_string(info, {}); }
 
 std::string to_string(const sensor_config& config) {
     Json::Value root{};

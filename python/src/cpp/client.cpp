@@ -411,7 +411,6 @@ directly.
 
     // Operating Mode
     auto OperatingMode = py::enum_<sensor::OperatingMode>(m, "OperatingMode")
-        .value("OPERATING_UNSPEC", sensor::OperatingMode::OPERATING_UNSPEC)
         .value("OPERATING_NORMAL", sensor::OperatingMode::OPERATING_NORMAL)
         .value("OPERATING_STANDBY", sensor::OperatingMode::OPERATING_STANDBY)
         .def_static("from_string", &sensor::operating_mode_of_string);
@@ -422,7 +421,6 @@ directly.
 
     // Multipurpose IO Mode
     auto MultipurposeIOMode = py::enum_<sensor::MultipurposeIOMode>(m, "MultipurposeIOMode")
-        .value("MULTIPURPOSE_UNSPEC", sensor::MultipurposeIOMode::MULTIPURPOSE_UNSPEC)
         .value("MULTIPURPOSE_OFF", sensor::MultipurposeIOMode::MULTIPURPOSE_OFF)
         .value("MULTIPURPOSE_INPUT_NMEA_UART", sensor::MultipurposeIOMode::MULTIPURPOSE_INPUT_NMEA_UART)
         .value("MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC)
@@ -437,7 +435,6 @@ directly.
 
     // Polarity
     auto Polarity = py::enum_<sensor::Polarity>(m, "Polarity")
-        .value("POLARITY_UNSPEC", sensor::Polarity::POLARITY_UNSPEC)
         .value("POLARITY_ACTIVE_LOW", sensor::Polarity::POLARITY_ACTIVE_LOW)
         .value("POLARITY_ACTIVE_HIGH", sensor::Polarity::POLARITY_ACTIVE_HIGH)
         .def_static("from_string", &sensor::polarity_of_string);
@@ -448,7 +445,6 @@ directly.
 
     // NMEABaudRate
     auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate")
-        .value("BAUD_UNSPEC", sensor::NMEABaudRate::BAUD_UNSPEC)
         .value("BAUD_9600", sensor::NMEABaudRate::BAUD_9600)
         .value("BAUD_115200", sensor::NMEABaudRate::BAUD_115200)
         .def_static("from_string", &sensor::nmea_baud_rate_of_string);

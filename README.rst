@@ -35,7 +35,7 @@ Building on Linux / macOS
 To install build dependencies on Ubuntu, run::
 
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev
+         libjsoncpp-dev libtclap-dev libtins-dev
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
 
@@ -66,11 +66,12 @@ for dependencies. Follow the official documentation to set up your build environ
   <https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019>`_
 * `Visual Studio CPP Support
   <https://docs.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=vs-2019>`_
-* `Vcpkg, at tag "2020.07" installed and integrated with Visual Studio
+* `Vcpkg, at tag "2020.11-1" installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-**Note** You'll need to run ``git checkout 2020.07`` in the vcpkg directory before bootstrapping to
-use the correct versions of the dependencies. Building may fail unexpectedly if you skip this step.
+**Note** You'll need to run ``git checkout 2020.11-1`` in the vcpkg directory before bootstrapping
+to use the correct versions of the dependencies. Building may fail unexpectedly if you skip this
+step.
 
 Don't forget to integrate vcpkg with Visual Studio after bootstrapping::
 
@@ -179,14 +180,20 @@ Building
 The build dependencies include those of the sample code::
 
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev
+         libjsoncpp-dev libtclap-dev libtins-dev libpcap-dev
 
 and, additionally::
 
     sudo apt install ros-<ROS-VERSION>-ros-core ros-<ROS-VERSION>-pcl-ros \
          ros-<ROS-VERSION>-tf2-geometry-msgs ros-<ROS-VERSION>-rviz
 
-where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``. To build::
+where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``. 
+
+
+If you would like to install dependencies with `rosdep`::
+    rosdep install --from-paths <path to ouster example>
+
+To build::
 
     source /opt/ros/<ROS-VERSION>/setup.bash
     mkdir -p ./myworkspace/src
@@ -225,8 +232,8 @@ where:
   after a few seconds.
 
 Note that if the ``metadata`` parameter is not specified, this command will write metadata to
-``${ROS_HOME}``. By default, the name of this file is based on the hostname of the sensor,
-e.g. ``os-99xxxxxxxxxx.json``.
+``${ROS_HOME}``. By default, the name of this file is based on the hostname of the sensor, e.g.
+``os-99xxxxxxxxxx.json``.
 
 Recording Data
 --------------
@@ -238,8 +245,10 @@ another terminal, run::
 
 This will save a bag file of recorded data in the current working directory. 
 
-It's recommended to
-copy and save the metadata file at ``$(ROS_HOME)/<sensor_hostname>.json`` alongside the bag.
+You should copy and save the metadata file alongside your data. The metadata file be saved either at
+the provided path to `roslaunch` or at ``$(ROS_HOME)/<sensor_hostname>.json`` if you did not provide
+a metadata argument to `roslaunch`. If you do not save the metadata file, you will not be able to
+replay your data later.
 
 .. _rosbag record: https://wiki.ros.org/rosbag/Commandline#rosbag_record
 
@@ -255,9 +264,8 @@ And in a second terminal run `rosbag play`_::
 
     rosbag play --clock <bag files ...>
 
-If a metadata file is not available, the visualizer will default to ``1024x10``. This can be
-overridden with the ``lidar_mode`` parameter. Visualizer output will only be correct if the same
-``lidar_mode`` parameter is used for both recording and replay.
+A metadata file is mandatory for replay of data. See `Recording Data`_ for how
+to obtain the metadata file when recording your data.
 
 .. _rosbag play: https://wiki.ros.org/rosbag/Commandline#rosbag_play
 

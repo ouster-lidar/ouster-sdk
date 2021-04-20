@@ -55,15 +55,10 @@ enum timestamp_mode {
     TIME_FROM_PTP_1588
 };
 
-enum OperatingMode {
-    OPERATING_UNSPEC = 0,
-    OPERATING_NORMAL,
-    OPERATING_STANDBY
-};
+enum OperatingMode { OPERATING_NORMAL = 1, OPERATING_STANDBY };
 
 enum MultipurposeIOMode {
-    MULTIPURPOSE_UNSPEC = 0,
-    MULTIPURPOSE_OFF,
+    MULTIPURPOSE_OFF = 1,
     MULTIPURPOSE_INPUT_NMEA_UART,
     MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC,
     MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN,
@@ -71,13 +66,9 @@ enum MultipurposeIOMode {
     MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE
 };
 
-enum Polarity {
-    POLARITY_UNSPEC = 0,
-    POLARITY_ACTIVE_LOW,
-    POLARITY_ACTIVE_HIGH
-};
+enum Polarity { POLARITY_ACTIVE_LOW = 1, POLARITY_ACTIVE_HIGH };
 
-enum NMEABaudRate { BAUD_UNSPEC = 0, BAUD_9600, BAUD_115200 };
+enum NMEABaudRate { BAUD_9600 = 1, BAUD_115200 };
 
 using AzimuthWindow = std::pair<int, int>;
 
@@ -216,7 +207,7 @@ std::string to_string(OperatingMode mode);
  * @param string
  * @return operating mode corresponding to the string, or 0 on error
  */
-OperatingMode operating_mode_of_string(const std::string& s);
+optional<OperatingMode> operating_mode_of_string(const std::string& s);
 
 /**
  * Get string representation of a multipurpose io mode.
@@ -232,7 +223,8 @@ std::string to_string(MultipurposeIOMode mode);
  * @param string
  * @return multipurpose io mode corresponding to the string, or 0 on error
  */
-MultipurposeIOMode multipurpose_io_mode_of_string(const std::string& s);
+optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
+    const std::string& s);
 
 /**
  * Get string representation of a polarity.
@@ -248,7 +240,7 @@ std::string to_string(Polarity polarity);
  * @param string
  * @return polarity corresponding to the string, or 0 on error
  */
-Polarity polarity_of_string(const std::string& s);
+optional<Polarity> polarity_of_string(const std::string& s);
 
 /**
  * Get string representation of a NMEA Baud Rate
@@ -264,7 +256,7 @@ std::string to_string(NMEABaudRate rate);
  * @param string
  * @return nmea baud rate corresponding to the string, or 0 on error
  */
-NMEABaudRate nmea_baud_rate_of_string(const std::string& s);
+optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
 
 /**
  * Get string representation of an Azimuth Window
@@ -304,18 +296,6 @@ sensor_info metadata_from_json(const std::string& json_file);
 std::string to_string(const sensor_info& metadata);
 
 /**
- * Get a string representation of metadata, with the option to pass select
- * fields which will be included.
- *
- * @param metadata a struct of sensor metadata
- * @param only_fields a set of fields (as strings) to include, if empty -
- *                    include all fields.
- * @return a json metadata string
- */
-std::string to_string(const sensor_info& info,
-                      const std::set<std::string> only_fields);
-
-/**
  * Parse config text blob from the sensor into a sensor_config struct
  *
  * All fields are optional, and will only be set if found.
@@ -335,15 +315,6 @@ sensor_config parse_config(const std::string& config);
  * @return a json sensor config string
  */
 std::string to_string(const sensor_config& config);
-
-/** << operator overload for sensor_config */
-std::ostream& operator<<(std::ostream& os, const lidar_mode mode);
-std::ostream& operator<<(std::ostream& os, const timestamp_mode mode);
-std::ostream& operator<<(std::ostream& os, const OperatingMode mode);
-std::ostream& operator<<(std::ostream& os, const MultipurposeIOMode mode);
-std::ostream& operator<<(std::ostream& os, const Polarity polarity);
-std::ostream& operator<<(std::ostream& os, const NMEABaudRate rate);
-std::ostream& operator<<(std::ostream& os, const sensor_config& config);
 
 /**
  * Table of accessors for extracting data from imu and lidar packets.
