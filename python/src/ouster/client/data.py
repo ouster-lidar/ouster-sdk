@@ -162,7 +162,7 @@ class LidarScan:
     Internally, shares the same memory representation as the C++ LidarScan type
     and should allow passing data without unnecessary copying.
     """
-    N_FIELDS: ClassVar[int] = 4
+    N_FIELDS: ClassVar[int] = _client.LidarScan.N_FIELDS
 
     w: int
     h: int
@@ -180,7 +180,7 @@ class LidarScan:
         self.h = h
         self.frame_id = -1  # init with invalid frame_id
         self.headers = [BlockHeader()] * w
-        self._data = np.ndarray((w * h, 4), dtype=np.uint32, order='F')
+        self._data = np.ndarray((LidarScan.N_FIELDS, w * h), dtype=np.uint32)
 
     @property
     def complete(self) -> bool:
@@ -189,7 +189,7 @@ class LidarScan:
 
     def field(self, field: ChanField) -> np.ndarray:
         """Return a view of the specified channel field."""
-        return self._data[:, field.ind].reshape(self.h, self.w)
+        return self._data[field.ind, :].reshape(self.h, self.w)
 
     def to_native(self) -> _client.LidarScan:
         ls = _client.LidarScan(self.w, self.h)
@@ -211,8 +211,24 @@ class LidarScan:
         ls.headers = [
             BlockHeader(h.timestamp, h.encoder, h.status) for h in scan.headers
         ]
-        ls._data = scan.data.reshape(ls.w * ls.h, 4)
+        ls._data = scan.data
         return ls
+
+
+def _destagger(field: np.ndarray, shifts: List[int],
+               inverse: bool) -> np.ndarray:
+    return {
+        np.dtype(np.int8): _client.destagger_int8,
+        np.dtype(np.int16): _client.destagger_int16,
+        np.dtype(np.int32): _client.destagger_int32,
+        np.dtype(np.int64): _client.destagger_int64,
+        np.dtype(np.uint8): _client.destagger_uint8,
+        np.dtype(np.uint16): _client.destagger_uint16,
+        np.dtype(np.uint32): _client.destagger_uint32,
+        np.dtype(np.uint64): _client.destagger_uint64,
+        np.dtype(np.single): _client.destagger_float,
+        np.dtype(np.double): _client.destagger_double,
+    }[field.dtype](field, shifts, inverse)
 
 
 def destagger(info: SensorInfo,
@@ -239,14 +255,13 @@ def destagger(info: SensorInfo,
 
     # remember original shape
     shape = fields.shape
-    dtype = fields.dtype
     fields = fields.reshape((h, w, -1))
 
     # apply destagger to each channel
     # note: astype() needed due to some strange behavior of the pybind11
     # bindings. The wrong overload is chosen otherwise (due to the indexing?)
     return np.dstack([
-        _client.destagger(fields[:, :, i].astype(dtype), shifts, inverse)
+        _destagger(fields[:, :, i], shifts, inverse)
         for i in range(fields.shape[2])
     ]).reshape(shape)
 

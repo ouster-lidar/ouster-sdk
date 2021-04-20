@@ -113,7 +113,7 @@ class Pcap(PacketSource):
         self._lock = Lock()
 
     def __iter__(self) -> Iterator[Packet]:
-        pf = PacketFormat(self._metadata)
+        pf = PacketFormat.from_info(self._metadata)
 
         buf = bytearray(2**16)
         packet_info = _pcap.packet_info()

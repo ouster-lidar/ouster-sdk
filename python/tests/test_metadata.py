@@ -180,4 +180,4 @@ def test_parse_info() -> None:
 
 
 def test_packet_format(metadata: client.SensorInfo) -> None:
-    client.PacketFormat(metadata)
+    client.PacketFormat.from_info(metadata)

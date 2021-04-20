@@ -24,7 +24,7 @@ def stream_digest():
 
 @pytest.fixture(scope="module")
 def pf(stream_digest):
-    return client.PacketFormat(stream_digest.meta)
+    return client.PacketFormat.from_info(stream_digest.meta)
 
 
 def test_make_packets(pf: client.PacketFormat) -> None:
@@ -129,3 +129,54 @@ def test_read_real_packet(packet: client.LidarPacket) -> None:
     # in 512xN mode, the angle between measurements is exactly 176 encoder ticks
     assert np.all(np.diff(packet.view(client.ColHeader.ENCODER_COUNT)) == 176)
     assert np.all(packet.view(client.ColHeader.VALID) == 0xffffffff)
+
+
+def test_scan_native() -> None:
+    """Check that a native scan is a writeable view of data."""
+    native = client._client.LidarScan(1024, 32)
+
+    assert not native.data.flags.owndata
+    assert native.data.flags.aligned
+    assert native.data.flags.writeable
+
+    native.data[0, 0] = 1
+    assert native.data[0, 0] == 1
+
+    native.data[:] = 42
+    assert (native.data == 42).all()
+
+
+N_FIELDS = client.LidarScan.N_FIELDS
+
+
+def test_scan_from_native() -> None:
+    """Check that converting from a native scan does not copy data."""
+    native = client._client.LidarScan(1024, 32)
+    native.data[:] = np.arange(native.data.size).reshape(N_FIELDS, -1)
+
+    ls = client.LidarScan.from_native(native)
+
+    assert not ls._data.flags.owndata
+    assert ls._data.flags.aligned
+    assert ls._data.flags.writeable
+    assert ls._data.base is native.data.base
+    assert np.array_equal(ls._data, native.data)
+
+    del native
+    ls._data[:] = 42
+    assert (ls._data == 42).all()
+
+
+def test_scan_to_native() -> None:
+    """Check that converting to a native scan copies data."""
+    ls = client.LidarScan(1024, 32)
+
+    ls._data[:] = np.arange(ls._data.size).reshape(N_FIELDS, -1)
+    native = ls.to_native()
+
+    assert ls._data.base is not native.data.base
+    assert np.array_equal(ls._data, native.data)
+
+    ls._data[0, 0] = 42
+    native.data[:] = 1
+    assert ls._data[0, 0] == 42

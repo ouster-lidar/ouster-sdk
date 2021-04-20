@@ -134,7 +134,7 @@ class Sensor(PacketSource):
             if not raw:
                 raise ClientError("Failed to collect metadata")
             self._metadata = SensorInfo(raw)
-        self._pf = PacketFormat(self._metadata)
+        self._pf = PacketFormat.from_info(self._metadata)
 
         # Use args to avoid capturing self causing circular reference
         self._producer = Thread(target=lambda cli, pf: cli.produce(pf),
@@ -293,7 +293,7 @@ class Scans:
             self._source, Sensor) else None
 
         ls_write = _client.LidarScan(w, h)
-        pf = PacketFormat(self._source.metadata)
+        pf = PacketFormat.from_info(self._source.metadata)
         batch = _client.ScanBatcher(w, pf)
 
         # Time from which to measure timeout

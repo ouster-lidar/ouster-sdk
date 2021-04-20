@@ -143,9 +143,6 @@ class DataFormat:
 
 
 class PacketFormat:
-    def __init__(self, info: SensorInfo) -> None:
-        ...
-
     @property
     def lidar_packet_size(self) -> int:
         ...
@@ -206,6 +203,10 @@ class PacketFormat:
         ...
 
     def imu_la_z(self, buf: BufferT) -> float:
+        ...
+
+    @staticmethod
+    def from_info(info: SensorInfo) -> PacketFormat:
         ...
 
 
@@ -498,6 +499,8 @@ class BlockHeader:
 
 
 class LidarScan:
+    N_FIELDS: ClassVar[int]
+
     frame_id: int
     headers: List[BlockHeader]
 
@@ -517,9 +520,53 @@ class LidarScan:
         ...
 
 
-def destagger(field: ndarray,
-              shifts: List[int],
-              inverse: bool = ...) -> ndarray:
+def destagger_int8(field: ndarray, shifts: List[int],
+                   inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_int16(field: ndarray, shifts: List[int],
+                    inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_int32(field: ndarray, shifts: List[int],
+                    inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_int64(field: ndarray, shifts: List[int],
+                    inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_uint8(field: ndarray, shifts: List[int],
+                    inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_uint16(field: ndarray, shifts: List[int],
+                     inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_uint32(field: ndarray, shifts: List[int],
+                     inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_uint64(field: ndarray, shifts: List[int],
+                     inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_float(field: ndarray, shifts: List[int],
+                    inverse: bool) -> ndarray:
+    ...
+
+
+def destagger_double(field: ndarray, shifts: List[int],
+                     inverse: bool) -> ndarray:
     ...
 
 

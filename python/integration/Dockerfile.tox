@@ -37,11 +37,7 @@ RUN set -xe && . /etc/os-release \
 apt-get install -y python3.6-dev \
                    python3.7-dev \
                    python3.8-dev \
-                   curl \
-# Ubuntu 18.04 has too old pybind11 so we are installing manually
-&& curl -o /tmp/pybind11.deb "http://ftp.us.debian.org/debian/pool/main/p/pybind11/pybind11-dev_2.2.4-2_all.deb" \
-&& echo ca3c556f95a6e77bc727c2d168985477ae26f91210bf33e4fc87aa156b560ba7 /tmp/pybind11.deb | sha256sum -c \
-&& dpkg -i /tmp/pybind11.deb \
+                   pybind11-dev \
 ;fi
 
 

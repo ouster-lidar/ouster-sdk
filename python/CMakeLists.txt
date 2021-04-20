@@ -8,7 +8,7 @@ list(APPEND CMAKE_MODULE_PATH ${OUSTER_SDK_PATH}/cmake)
 project(python-ouster-sdk)
 set(CMAKE_CXX_STANDARD 14)
 
-find_package(pybind11 2.2 REQUIRED)
+find_package(pybind11 2.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
 option(BUILD_VIZ OFF)
 find_package(ouster_example REQUIRED)

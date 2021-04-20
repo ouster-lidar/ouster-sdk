@@ -30,7 +30,7 @@ class LidarBufStream(PacketSource):
         ...
 
     def __iter__(self) -> Iterator[LidarPacket]:
-        pf = PacketFormat(self._metadata)
+        pf = PacketFormat.from_info(self._metadata)
         self._bin.seek(0)
         for buf in bufstream.read(self._bin):
             yield LidarPacket(buf, pf)

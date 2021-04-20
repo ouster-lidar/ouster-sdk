@@ -15,25 +15,17 @@ Building the Python SDK from source requires several dependencies:
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
 - `Python <https://www.python.org/>`_ >= 3.6 (with headers and development libraries)
-- `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.2
+- `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
+
 
 Linux and macos
 ---------------
 
-On Ubuntu 20.04, you can install all build dependencies by running::
+On supported Debian-based linux systems, you can install all build dependencies by running::
 
   $ sudo apt install build-essential cmake \
                      libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
                      python3-dev python3-pip pybind11-dev
-
-.. note::
-
-   Ubuntu 18.04 only has pybind11 2.0.1 packaged, so you'll have to install a newer version on the
-   system. One relatively easy way is to grab the version packaged for Ubuntu 20.04, since it has
-   essentially no dependencies of its own::
-
-     $ curl -O "http://archive.ubuntu.com/ubuntu/pool/universe/p/pybind11/pybind11-dev_2.4.3-2build2_all.deb"
-     $ sudo apt install ./pybind11-dev_2.4.3-2build2_all.deb
 
 On macos >= 10.13, using homebrew, you should be able to run::
 
