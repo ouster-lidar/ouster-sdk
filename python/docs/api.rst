@@ -125,8 +125,16 @@ Module :mod:`ouster.pcap`
 
 ----
 
-Module :mod:`ouster.sdk.examples`
-=================================
+Example :mod:`ouster.sdk.examples.client`
+=========================================
 
-.. automodule:: ouster.sdk.examples
+.. automodule:: ouster.sdk.examples.client
    :members:
+
+
+Example :mod:`ouster.sdk.examples.pcap`
+========================================
+
+.. automodule:: ouster.sdk.examples.pcap
+   :members:
+

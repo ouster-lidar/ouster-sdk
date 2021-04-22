@@ -8,7 +8,41 @@ from ouster.pcap import _pcap
 
 @dataclass
 class PcapInfo:
-    """Pcap file information."""
+    """Pcap file information dataclass.
+
+    Used as the output format from function :func:`.pcap.info` and consists
+    a general stats about pcap file.
+
+    Fields:
+
+    ``ipv6_packets``: number of ipv6 packets processed
+
+    ``ipv4_packets``: number of ipv4 packets processed
+
+    ``packets_processed``: total number of all packets processed
+
+    ``packets_reassembled``: total number of IPv4 UDP packets reassembled
+
+    ``non_udp_packets``: number of non UDP packets processed
+
+    ``guessed_lidar_port``: best guess for port with Ouster lidar packets
+    :class:`.client.LidarPacket`
+
+    ``guessed_imu_port``: best guess for port with Ouster imu packets
+    :class:`.client.ImuPacket`
+
+    ``ports``: detailed statistcs organized by port number. One dict element is
+    ``{port_number: PacketsStats}``, where ``PacketsStats`` is a list of tuples
+    with elements of a form ``(packet_size, packet_count)``. For example ports
+    value of::
+
+        {59048: (48, 5), 47808: (24896, 59)}
+
+    means that on port ``59048`` were sent ``5`` packets with a size of
+    ``48`` bytes and on port ``24896`` were sent ``59`` packets with the
+    size of ``24896`` bytes per packet.
+
+    """
     ipv6_packets: int = 0
     ipv4_packets: int = 0
     packets_processed: int = 0
@@ -169,7 +203,7 @@ class Pcap(PacketSource):
 
 
 def info(pcap_path: str, n_packets: int = 1024) -> PcapInfo:
-    """Return some info from sampling data in a pcap file.
+    """Return some stats info from sampling data in a pcap file.
 
     Args:
         pcap_path: File path of recorded pcap

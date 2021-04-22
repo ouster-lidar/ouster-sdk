@@ -9,7 +9,8 @@ import argparse
 from contextlib import closing
 
 import numpy as np
-from more_itertools import time_limited
+from more_itertools import time_limited, side_effect
+from itertools import islice, takewhile
 
 from ouster import client
 
@@ -44,10 +45,10 @@ def get_metadata(hostname: str) -> None:
     Args:
         hostname: hostname of the sensor
     """
-# [doc-stag-get-metadata]
+    # [doc-stag-get-metadata]
     with closing(client.Sensor(hostname)) as source:
         print(source.metadata)
-# [doc-etag-get-metadata]
+    # [doc-etag-get-metadata]
 
 
 def display_range_2d(hostname: str, lidar_port: int = 7502) -> None:
@@ -261,6 +262,72 @@ def plot_imu_z_acc_over_time(hostname: str,
     plt.show()
 
 
+def save_metadata(metadata: client.SensorInfo,
+                  metadata_path: str) -> None:
+    """Save *metadata* (:class:`.client.SensorInfo`) as json to a file
+    *metadata_path*.
+
+    Args:
+        metadata: sensor metadata
+        metadata_path: path to file where json representation of *metadata* will
+                       be stored
+    """
+    with open(metadata_path, 'w') as f:
+        f.write(str(metadata))
+
+def record_pcap(hostname: str,
+                lidar_port: int = 7502,
+                imu_port: int = 7503,
+                n_seconds: int = 100) -> None:
+    """Record data from live sensor to pcap file.
+
+    Args:
+        hostname: hostname of the sensor
+        lidar_port: UDP port to listen on for lidar data
+        imu_port: UDP port to listen on for imu data
+        n_seconds: max seconds of time to record. (Ctrl-Z correctly closes
+                   streams)
+    """
+    import ouster.pcap as pcap
+    from datetime import datetime
+    import time
+
+    # [doc-stag-pcap-record]
+    # get udp_dest from current sensor configuration
+    config = client.get_config(hostname)
+    udp_dest = config.udp_dest or "127.0.0.1"
+
+    # connect to sensor and record lidar/imu packets
+    source = client.Sensor(hostname, lidar_port, imu_port, buf_size=640)
+
+    # get current sensor info
+    metadata = source.metadata
+
+    # make a more descriptive filename for metadata/pcap files with timestamp
+    now = datetime.now()
+    time_part = now.strftime("%Y%m%d_%H%M%S")
+    fname_base = f'{metadata.prod_line}_{metadata.mode}_{time_part}'
+
+    pcap_path = f'{fname_base}.pcap'
+    metadata_path = f'{fname_base}.json'
+
+    print(f'Saving sensor metadata: {metadata_path}')
+    save_metadata(metadata, metadata_path)
+
+    print(f'Capturing packets to a file: {pcap_path} (Ctrl-C to stop early)')
+    with closing(source):
+        source_it = time_limited(n_seconds, source)
+        n_packets = pcap.record(source_it,
+                                pcap_path,
+                                src_ip=hostname,
+                                dst_ip=udp_dest,
+                                lidar_port=lidar_port,
+                                imu_port=imu_port)
+
+        print(f"Captured {n_packets} packets")
+    # [doc-etag-pcap-record]
+
+
 def main() -> None:
     examples = {
         "configure-sensor": configure_sensor_params,
@@ -271,6 +338,7 @@ def main() -> None:
         "plot-imu-z-accel": plot_imu_z_acc_over_time,
         "live-plot-intensity": display_intensity_live,
         "write-xyz-to-csv": write_xyz_to_csv,
+        "record-pcap": record_pcap,
     }
 
     description = "Ouster Python SDK examples. The EXAMPLE must be one of:\n  " + str.join(
@@ -285,6 +353,7 @@ def main() -> None:
                         help='Sensor hostname, e.g. "os-122033000087"')
     parser.add_argument('example',
                         metavar='EXAMPLE',
+                        choices=examples.keys(),
                         type=str,
                         help='Name of the example to run')
 

@@ -18,6 +18,10 @@ needed to run the examples::
 
    Add PyQt5 as a dependency to the ``examples`` extra on Windows
 
+.. todo::
+
+   Add venv example use in example above. I was about to add those ``python -m venv VENV && source ...`` lines but not sure how to nicely put it for Windows users too.
+
 You'll want to start an interactive Python session and keep it open through the sections, as we'll
 be reusing variables created in earlier parts.  To get started, open python and import the ouster
 client:
@@ -212,6 +216,8 @@ Here are a few things you might be interested in:
     * :ref:`ex-staggered-and-destaggered`
     * :ref:`ex-xyzlut`
     * :ref:`ex-streaming`
+    * :ref:`ex-pcap-record`
+    * :ref:`ex-pcap-live-preview`
     * :ref:`ex-imu`
     
 .. todo::

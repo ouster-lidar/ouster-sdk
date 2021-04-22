@@ -118,6 +118,6 @@ napoleon_numpy_docstring = False
 # napoleon_use_param = False
 
 # ----- Todos Configs ------
-todo_include_todos = False
+todo_include_todos = True
 todo_link_only = True
 todo_emit_warnings = True

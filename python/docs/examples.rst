@@ -32,13 +32,14 @@ When you work with a live sensor, the client will automatically fetch the metada
 Since it's crucial to save the correct metadata file, let's see how we can get that from a live
 sensor. Try running the following example::
 
-    $ python -m ouster.sdk.examples $SENSOR_HOSTNAME get-metadata
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME get-metadata
 
 And now let's look inside the example we just ran:
 
-.. literalinclude:: /../src/ouster/sdk/examples.py
+.. literalinclude:: /../src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-get-metadata]
     :end-before: [doc-etag-get-metadata]
+    :dedent:
 
 Seems simple enough!
 
@@ -57,27 +58,15 @@ To get a fully configured and ready to use :py:class:`.PacketSource` from ``pcap
 .. code:: python
 
     metadata = client.SensorInfo(metadata_path)
-    pcap_source = pcap.Pcap(pcap_path, metadata)
+    source = pcap.Pcap(pcap_path, metadata)
 
-Now we can read packets from ``pcap_source`` (which conforms to :py:class:`.PacketSource`) with the
+Now we can read packets from ``source`` (which conforms to :py:class:`.PacketSource`) with the
 following code:
 
-.. code:: python
-
-    for packet in pcap_source:
-        if isinstance(packet, client.LidarPacket):
-            print('doing things with LidarPacket:')
-            encoder_counts = packet.view(client.ColHeader.ENCODER_COUNT)
-            timestamps = packet.view(client.ColHeader.TIMESTAMP)
-            ranges = packet.view(client.ChanField.RANGE)
-            print(f'  encoder counts = {encoder_counts.shape}')
-            print(f'  timestamps = {timestamps.shape}')
-            print(f'  ranges = {ranges.shape}')
-
-        if isinstance(packet, client.ImuPacket):
-            print('doing things with ImuPacket:')
-            print(f'  acceleration = {packet.accel}')
-            print(f'  angular_velocity = {packet.angular_vel}')
+.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+    :start-after: [doc-stag-pcap-read-packets]
+    :end-before: [doc-etag-pcap-read-packets]
+    :dedent:
 
 Once created, :py:class:`.PacketSource` objects provide access to the sensor metadata via the
 :py:attr:`.PacketSource.metadata` attribute.
@@ -98,7 +87,7 @@ transforms any :py:class:`.PacketSource` with lidar packets to scans:
 
 .. code:: python
 
-    for scan in client.Scans(pcap_source): 
+    for scan in client.Scans(source):
         intensities = scan.field(client.ChanField.INTENSITY)
         ranges = scan.field(client.ChanField.RANGE) 
         print(f'intensities = {intensities.shape}')
@@ -135,9 +124,9 @@ Let's see if we can destagger the image and decipher the scene:
     from more_itertools import nth
 
     metadata = client.SensorInfo(metadata_path)
-    pcap_source = pcap.Pcap(pcap_path, metadata)
+    source = pcap.Pcap(pcap_path, metadata)
 
-    scans = client.Scans(pcap_source)
+    scans = client.Scans(source)
 
     # iterate `scans` and get the 84th LidarScan
     scan = nth(scans, 84)
@@ -145,7 +134,7 @@ Let's see if we can destagger the image and decipher the scene:
 
     # destagger ranges, notice `metadata` use, that is needed to get
     # sensor intrinsics and correctly data transforms
-    ranges_destaggered = client.destagger(pcap_source.metadata, ranges)
+    ranges_destaggered = client.destagger(source.metadata, ranges)
 
     plt.imshow(ranges_destaggered, cmap='gray', resample=False)
 
@@ -177,26 +166,36 @@ Working with 3D Points and the XYZLut
 =====================================
 
 To facilitate working with 3D points, you can create a function via :py:func:`.client.XYZLut` which
-will project any :py:class:`LidarScan` into cartesian coordinates by referencing a precalculated XYZ
+will project any :py:class:`.LidarScan` into cartesian coordinates by referencing a precalculated XYZ
 Look-uptable. This function can then be applied to any scan to create a numpy array of ``H x W x
 3``, which represents the cartesian coordintes of the points in the sensor coordinate frame.
 
-.. literalinclude:: /../src/ouster/sdk/examples.py
+.. literalinclude:: /../src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-plot-xyz-points]
     :end-before: [doc-etag-plot-xyz-points]
     :emphasize-lines: 2-5
     :linenos:
+    :dedent:
 
 If you have a live sensor, you can run this code with one of our examples::
 
-    $ python -m ouster.sdk.examples $SENSOR_HOSTNAME plot-xyz-points
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
 
 That should open a 3D plot of a single scan of your location taken just now by your sensor. You
 should be able to recognize the contours of the scene around you.
 
-.. todo::
-    - add 3D Image, could be the same as the one in quickstart?? if the code is similar..
+If you don’t have a live sensor, you can run this code with our pcap examples::
 
+    $ python -m ouster.sdk.examples.pcap OS1_128.pcap \
+      --info-json OS1_2048x10_128.json plot-xyz-points --scan-num 84
+
+
+.. figure:: images/lidar_scan_xyz_84.png
+   :align: center
+
+   Point cloud from sample data (scan 84). Points colored by ``INTENSITY`` value.
+
+For details check the source code of an example :func:`.examples.pcap.pcap_display_xyz_points`
 
 .. _ex-streaming:
 
@@ -207,24 +206,71 @@ Streaming Live Data
 Instead of working with a recorded dataset or a few captured frames of data, let's see if we can get
 a live feed from the senseor::
     
-    $ python -m ouster.sdk.examples $SENSOR_HOSTNAME live-plot-intensity
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-intensity
 
 This should give you a live feed from your sensor that looks like a black and white moving image.
 Try waving your hand or moving around to find yourself within the image!
 
 So how did we do that?
 
-.. literalinclude:: /../src/ouster/sdk/examples.py
+.. literalinclude:: /../src/ouster/sdk/examples/client.py
    :start-after: [doc-stag-live-plot-intensity]
    :end-before: [doc-etag-live-plot-intensity]
-   :emphasize-lines: 2
+   :emphasize-lines: 2-3
    :linenos:
+   :dedent:
 
 Notice that instead of taking a ``sample`` as we did in previous example, we used
 :py:meth:`.Scans.stream`, which allows for a continuous live data stream.  We close the ``stream``
 when we are finished, hence the use of :py:func:`.closing` in the highlighted line.
 
 To exit the visualization, you can use ``ESC``.
+
+
+.. _ex-pcap-record:
+
+
+Recording Sensor Data to pcap
+===============================
+
+It's easy to record data to a pcap file from a live sensor programatically, let's try it first
+with the following example::
+
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+
+This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for *100*
+seconds and store the pcap file along with the sensor info metadata json file into the current
+directory.
+
+The source code of an example below:
+
+.. literalinclude:: /../src/ouster/sdk/examples/client.py
+   :start-after: [doc-stag-pcap-record]
+   :end-before: [doc-etag-pcap-record]
+   :emphasize-lines: 25-30
+   :linenos:
+   :dedent:
+
+Good! The resulting pcap and json files can be used with any examples in the :mod:`.examples.pcap`
+module.
+
+
+.. _ex-pcap-live-preview:
+
+
+Pcap Live Data Preview
+=======================
+
+We can easily view the data that was recorded in the previous section. Based on an example from
+:ref:`ex-streaming` above we have a pcap viewer with additional *stagger*/*destagger* handler on key
+`D` and pause on `SPACE` key  (source code: :func:`.examples.pcap.pcap_2d_viewer`). To run it try
+the following command::
+
+    $ python -m ouster.sdk.examples.pcap OS1_128.pcap \
+      --info-json OS1_2048x10_128.json 2d-viewer
+
+Or substitute example data with pcap and json that you just recorded.
+
 
 .. _ex-imu:
 
@@ -249,5 +295,5 @@ Now you've created ``ts`` and ``z_accel`` which can then be graphed::
 That should give you a graph, albeit without labeled axes. If you have a live sensor, and you want
 to see the prettified graph, try the ``plot-imu-z-accel`` example::
 
-    $ python -m ouster.sdk.examples $SENSOR_HOSTNAME plot-imu-z-accel
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
 
