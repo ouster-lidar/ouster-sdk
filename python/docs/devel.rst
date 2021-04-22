@@ -108,20 +108,18 @@ This will take longer, since it will build the package from a source distributio
 Python version available.
 
 
-Using Dockerfile.tox
---------------------
+Using Dockerfile
+----------------
 
-To simplify testing on multiple platforms, a Dockerfile is included for running ``tox`` on a variety
-of Debian-based distros with all packaged Python versions pre-installed. To build a test image,
-run::
+To simplify testing on multiple linux distros, a Dockerfile is included for running ``tox`` on a
+variety of Debian-based distros with all packaged Python versions pre-installed. To build a test
+image, run::
 
-  docker build ${OUSTER_SDK_PATH} -t ouster-sdk-focal \
-      -f ${OUSTER_SDK_PATH}/python/integration/Dockerfile.tox \
+  docker build ${OUSTER_SDK_PATH} -f ${OUSTER_SDK_PATH}/python/Dockerfile \
       --build-arg BASE=ubuntu:20.04 \
-      --build-arg BUILD_UID=$(id -u) \
-      --build-arg BUILD_GID=$(id -g)
+      -t ouster-sdk-tox \
 
-the ``BASE`` argument can be one of ``ubuntu:18.04``, ``ubuntu:20.04`` or ``debian:10``. Then, run
-the container to invoke tox::
+the ``BASE`` argument will default to ``ubuntu:18.04``, but can also be set to other docker tags,
+e.g. ``ubuntu:20.04`` or ``debian:10``. Then, run the container to invoke tox::
 
-  docker run -it --rm -v ${OUSTER_SDK_PATH}:/opt/ws/ouster_sdk ouster-sdk-focal
+  docker run -it --rm ouster-sdk-tox

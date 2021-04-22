@@ -14,9 +14,6 @@ data. The SDK includes APIs for:
 - Conversion of raw data to range/intensity/ambient/reflectivity images (de-staggering)
 - Efficiently projecting range measurements to cartesian (X, Y, Z) coordinates
 
-.. todo::
-   Add links to examples from features list!
-
 
 Supported Platforms
 ===================
@@ -33,22 +30,24 @@ Building from source is supported on:
 - Macos >= 10.13 (x86-64)
 - Windows 10 (x86-64)
 
-See :ref:`the build instructions <devel>` for requirements needed to build from source distributions
-or from a clone of the repository.
+See the `build instructions`_ for requirements needed to build from a source distribution or from a
+clone of the repository.
 
 
 Installation
 ============
 
-Installing the Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. Once you have those, you
-can install the python SDK::
+The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, run::
 
     $ python3 -m pip install ouster-sdk
 
-If you're running ARM, a non-glibc-based linux distribution, or wish to develop on the Ouster Python
-SDK, you can build from source. See :ref:`devel`.
+If you're running ARM, a non-glibc-based linux distribution, or wish to modify the Ouster Python
+SDK, you will need to build from source.
 
-See the :ref:`Quick Start Section <quickstart>` to begin working with Ouster data!
+See the `quick start`_ section of the documentation to begin working with Ouster data!
+
+.. _quick start: https://static.ouster.dev/sdk-docs/quickstart.html
+.. _build instructions: https://static.ouster.dev/sdk-docs/devel.html
 
 
 Status and Contact Info
