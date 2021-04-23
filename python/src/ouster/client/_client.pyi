@@ -456,7 +456,8 @@ class SensorConfig:
         ...
 
 
-def set_config(hostname: str, config: SensorConfig, persist: bool) -> None:
+def set_config(hostname: str, config: SensorConfig, persist: bool,
+               udp_dest_auto: bool) -> None:
     ...
 
 

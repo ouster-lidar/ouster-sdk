@@ -540,7 +540,12 @@ directly.
         .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; });
 
-    m.def("set_config", &sensor::set_config, py::arg("hostname"), py::arg("config"), py::arg("persist") = false);
+    m.def("set_config", [] (const std::string& hostname, const sensor_config& config, const bool persist, const bool udp_dest_auto) {
+            uint8_t config_flags = 0;
+            if (persist) config_flags |= ouster::sensor::CONFIG_PERSIST;
+            if (udp_dest_auto) config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
+            sensor::set_config(hostname, config, config_flags);
+            }, py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
     m.def("get_config", [](const std::string& hostname, const bool active) {
         sensor::sensor_config config;
         if (!sensor::get_config(hostname, config, active)) {
@@ -622,7 +627,8 @@ directly.
         .def_readwrite("headers", &LidarScan::headers)
         .def_property_readonly("data", [](LidarScan& self) -> py::object {
             return py::array_t<LidarScan::raw_t>(
-                std::vector<size_t>{LidarScan::N_FIELDS, static_cast<size_t>(self.w * self.h)},
+                std::vector<size_t>{LidarScan::N_FIELDS,
+                                    static_cast<size_t>(self.w * self.h)},
                 self.data.data(), py::cast(self));
         });
 

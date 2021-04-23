@@ -55,6 +55,11 @@ enum timestamp_mode {
     TIME_FROM_PTP_1588
 };
 
+enum config_flags : uint8_t {
+    CONFIG_UDP_DEST_AUTO = (1 << 0),
+    CONFIG_PERSIST = (1 << 1)
+};
+
 enum OperatingMode { OPERATING_NORMAL = 1, OPERATING_STANDBY };
 
 enum MultipurposeIOMode {

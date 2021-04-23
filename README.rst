@@ -35,7 +35,7 @@ Building on Linux / macOS
 To install build dependencies on Ubuntu, run::
 
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev libtins-dev
+         libjsoncpp-dev libtclap-dev libtins-dev libpcap-dev
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
 

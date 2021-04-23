@@ -31,8 +31,8 @@ def configure_sensor_params(hostname: str) -> None:
     config.udp_port_lidar = 7502
     config.udp_port_imu = 7503
 
-    # set the config on sensor, using persist bool if desired
-    client.set_config(hostname, config, persist=False)
+    # set the config on sensor, using appropriate flags
+    client.set_config(hostname, config, persist=True, udp_dest_auto=True)
 
     # if you like, you can view the entire set of parameters
     config = client.get_config(hostname)

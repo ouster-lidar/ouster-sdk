@@ -106,17 +106,16 @@ To make sure everything is connected, try pinging the sensor. You should see som
    PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
    64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
 
-Next, you'll need to configure the sensor with the correct destination address or IP
+Next, you'll need to configure the sensor with the config parameters:
 
 .. code:: python
 
    >>> hostname = '<SENSOR_HOSTNAME>'
    >>> config = client.SensorConfig()
-   >>> config.udp_dest = '<UDP_DEST>'
    >>> config.udp_port_lidar = 7502
    >>> config.udp_port_imu = 7503
    >>> config.operating_mode = client.OperatingMode.OPERATING_NORMAL
-   >>> client.set_config(hostname, config)
+   >>> client.set_config(hostname, config, persist=True, udp_dest_auto=True)
 
 Just like with the sample data, you can create a :py:class:`.PacketSource` from the sensor:
     

@@ -118,10 +118,10 @@ bool get_config(const std::string hostname, sensor_config& config,
  *
  * @param hostname sensor hostname
  * @param sensor config
- * @param persist whether config should persist restart on sensor
+ * @param flags flags to pass in
  * @return true if config params successfuly set on sensor
  */
 bool set_config(const std::string hostname, const sensor_config& config,
-                const bool persist = false);
+                const uint8_t config_flags = 0);
 }  // namespace sensor
 }  // namespace ouster

@@ -315,7 +315,7 @@ static std::string auto_start_string(OperatingMode mode) {
 }
 
 bool set_config(const std::string hostname, const sensor_config& config,
-                const bool persist) {
+                const uint8_t config_flags) {
     // open socket
     SOCKET sock_fd = cfg_socket(hostname.c_str());
     if (sock_fd < 0) return false;
@@ -332,6 +332,18 @@ bool set_config(const std::string hostname, const sensor_config& config,
         return success;
     };
 
+    if (config_flags & CONFIG_UDP_DEST_AUTO) {
+        if (config.udp_dest) {
+            throw std::invalid_argument(
+                "set_auto_udp flag conflicts with provided config");
+        }
+        bool success = true;
+        success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
+        success &= res == "set_udp_dest_auto";
+        if (!success) {
+            return false;
+        }
+    }
     // set params
     if (config.udp_dest && !set_param("udp_ip", config.udp_dest.value()))
         return false;
@@ -432,7 +444,7 @@ bool set_config(const std::string hostname, const sensor_config& config,
     success &= res == "reinitialize";
 
     // save if indicated
-    if (persist) {
+    if (config_flags & CONFIG_PERSIST) {
         // use deprecated write_config_txt to support 1.13
         success &= do_tcp_cmd(sock_fd, {"write_config_txt"}, res);
         success &= res == "write_config_txt";
