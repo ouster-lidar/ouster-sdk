@@ -26,13 +26,13 @@ sensor as it was running when the data was recorded.
 Since it's crucial to save the correct metadata file, let's see how we can get that from a live
 sensor. Try running the following example::
 
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME get-metadata
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
 
 And now let's look inside the example we just ran:
 
 .. literalinclude:: /../src/ouster/sdk/examples/client.py
-    :start-after: [doc-stag-get-metadata]
-    :end-before: [doc-etag-get-metadata]
+    :start-after: [doc-stag-fetch-metadata]
+    :end-before: [doc-etag-fetch-metadata]
     :dedent:
 
 Seems simple enough!
@@ -237,7 +237,7 @@ with the following example::
 
     $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
 
-This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for 100
+This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for 10
 seconds and store the pcap file along with the metadata json file into the current directory.
 
 The source code of an example below:
@@ -245,7 +245,7 @@ The source code of an example below:
 .. literalinclude:: /../src/ouster/sdk/examples/client.py
    :start-after: [doc-stag-pcap-record]
    :end-before: [doc-etag-pcap-record]
-   :emphasize-lines: 3-8
+   :emphasize-lines: 10-15
    :linenos:
    :dedent:
 

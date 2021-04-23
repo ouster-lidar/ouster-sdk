@@ -376,7 +376,6 @@ directly.
         Create gen-1 OS-1-64 metadata populated with design values.
         )")
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
-        .def("__str__", [](const sensor_info& self) { return to_string(self); })
         .def("__repr__", [](const sensor_info& self) {
             return "<ouster.client.SensorInfo " + self.prod_line + " " +
                 self.sn + " " + self.fw_rev + " " + to_string(self.mode) + ">";
@@ -553,6 +552,7 @@ directly.
         }
         return config;
     }, py::arg("hostname"), py::arg("active") = true);
+
     // Version Info
     py::class_<util::version>(m, "Version")
         .def(py::init<>())

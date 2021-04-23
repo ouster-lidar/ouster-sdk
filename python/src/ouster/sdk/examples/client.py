@@ -38,16 +38,32 @@ def configure_sensor_params(hostname: str) -> None:
     print(f"sensor config of {hostname}:\n{config}")
 
 
-def get_metadata(hostname: str) -> None:
-    """Print metadata given hostname
+def fetch_metadata(hostname: str) -> None:
+    """Fetch metadata from a sensor and write it to disk.
+
+    Accurately reconstructing point clouds from a sensor data stream
+    requires access to sensor calibration and per-run configuration
+    like the operating mode and azimuth window.
+
+    The client API makes it easy to read metadata and write it to disk
+    for use with recorded data streams.
 
     Args:
         hostname: hostname of the sensor
     """
-    # [doc-stag-get-metadata]
+    # [doc-stag-fetch-metadata]
     with closing(client.Sensor(hostname)) as source:
-        print(source.metadata)
-    # [doc-etag-get-metadata]
+        # print some useful info from
+        print("Retrieved metadata:")
+        print(f"  serial no:        {source.metadata.sn}")
+        print(f"  firmware version: {source.metadata.fw_rev}")
+        print(f"  product line:     {source.metadata.prod_line}")
+        print(f"  lidar mode:       {source.metadata.mode}")
+        print(f"Writing to: {hostname}.json")
+
+        # write metadata to disk
+        source.write_metadata(f"{hostname}.json")
+    # [doc-etag-fetch-metadata]
 
 
 def filter_3d_by_range_and_azimuth(hostname: str,
@@ -310,24 +326,18 @@ def plot_imu_z_accel(hostname: str,
     plt.show()
 
 
-def save_metadata(metadata: client.SensorInfo, metadata_path: str) -> None:
-    """Save *metadata* (:class:`.client.SensorInfo`) as json to a file
-    *metadata_path*.
-
-    Args:
-        metadata: sensor metadata
-        metadata_path: path to file where json representation of *metadata* will
-                       be stored
-    """
-    with open(metadata_path, 'w') as f:
-        f.write(str(metadata))
-
-
 def record_pcap(hostname: str,
                 lidar_port: int = 7502,
                 imu_port: int = 7503,
-                n_seconds: int = 100) -> None:
+                n_seconds: int = 10) -> None:
     """Record data from live sensor to pcap file.
+
+    Note that pcap files recorded this way only preserve the UDP data stream and
+    not networking information, unlike capturing packets directly from a network
+    interface with tools like tcpdump or wireshark.
+
+    See the API docs of :py:func:`.pcap.record` for additional options for
+    writing pcap files.
 
     Args:
         hostname: hostname of the sensor
@@ -339,37 +349,21 @@ def record_pcap(hostname: str,
     import ouster.pcap as pcap
     from datetime import datetime
 
-    # get udp_dest from current sensor configuration
-    config = client.get_config(hostname)
-    udp_dest = config.udp_dest or "127.0.0.1"
-
     # connect to sensor and record lidar/imu packets
-    source = client.Sensor(hostname, lidar_port, imu_port, buf_size=640)
+    with closing(client.Sensor(hostname, lidar_port, imu_port,
+                               buf_size=640)) as source:
 
-    # get current sensor info
-    metadata = source.metadata
+        # make a descriptive filename for metadata/pcap files
+        time_part = datetime.now().strftime("%Y%m%d_%H%M%S")
+        meta = source.metadata
+        fname_base = f"{meta.prod_line}_{meta.sn}_{meta.mode}_{time_part}"
 
-    # make a more descriptive filename for metadata/pcap files with timestamp
-    now = datetime.now()
-    time_part = now.strftime("%Y%m%d_%H%M%S")
-    fname_base = f'{metadata.prod_line}_{metadata.mode}_{time_part}'
+        print(f"Saving sensor metadata to: {fname_base}.json")
+        source.write_metadata(f"{fname_base}.json")
 
-    pcap_path = f'{fname_base}.pcap'
-    metadata_path = f'{fname_base}.json'
-
-    print(f'Saving sensor metadata: {metadata_path}')
-    save_metadata(metadata, metadata_path)
-
-    print(f'Capturing packets to a file: {pcap_path} (Ctrl-C to stop early)')
-    # [doc-stag-pcap-record]
-    with closing(source):
+        print(f"Writing to: {fname_base}.pcap (Ctrl-C to stop early)")
         source_it = time_limited(n_seconds, source)
-        n_packets = pcap.record(source_it,
-                                pcap_path,
-                                src_ip=hostname,
-                                dst_ip=udp_dest,
-                                lidar_port=lidar_port,
-                                imu_port=imu_port)
+        n_packets = pcap.record(source_it, f"{fname_base}.pcap")
 
         print(f"Captured {n_packets} packets")
     # [doc-etag-pcap-record]
@@ -379,7 +373,7 @@ def main() -> None:
     examples = {
         "configure-sensor": configure_sensor_params,
         "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
-        "get-metadata": get_metadata,
+        "fetch-metadata": fetch_metadata,
         "live-plot-intensity": live_plot_intensity,
         "plot-range-image": plot_range_image,
         "plot-all-channels": plot_all_channels,

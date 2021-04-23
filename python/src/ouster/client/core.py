@@ -125,21 +125,36 @@ class Sensor(PacketSource):
         self._overflow_err = _overflow_err
         self._flush_before_read = _flush_before_read
         self._cache = None
+        self._fetched_meta = ""
 
         # Fetch from sensor if not explicitly provided
         if metadata:
             self._metadata = metadata
         else:
-            raw = self._cli.get_metadata()
-            if not raw:
-                raise ClientError("Failed to collect metadata")
-            self._metadata = SensorInfo(raw)
+            self._fetch_metadata()
+            self._metadata = SensorInfo(self._fetched_meta)
         self._pf = PacketFormat.from_info(self._metadata)
 
         # Use args to avoid capturing self causing circular reference
         self._producer = Thread(target=lambda cli, pf: cli.produce(pf),
                                 args=(self._cli, self._pf))
         self._producer.start()
+
+    def _fetch_metadata(self) -> None:
+        if not self._fetched_meta:
+            self._fetched_meta = self._cli.get_metadata()
+            if not self._fetched_meta:
+                raise ClientError("Failed to collect metadata")
+
+    def write_metadata(self, path: str) -> None:
+        """Save metadata to disk.
+
+        Args:
+            path: path to write
+        """
+        self._fetch_metadata()
+        with open(path, 'w') as f:
+            f.write(self._fetched_meta)
 
     @property
     def metadata(self) -> SensorInfo:
@@ -340,12 +355,12 @@ class Scans:
 
     @classmethod
     def sample(
-            cls,
-            hostname: str = "localhost",
-            n: int = 1,
-            lidar_port: int = 7502,
-            *,
-            metadata: Optional[SensorInfo] = None
+        cls,
+        hostname: str = "localhost",
+        n: int = 1,
+        lidar_port: int = 7502,
+        *,
+        metadata: Optional[SensorInfo] = None
     ) -> Tuple[SensorInfo, Iterator[List[LidarScan]]]:
         """Conveniently sample n consecutive scans from a sensor.
 
