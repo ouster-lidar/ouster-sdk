@@ -170,16 +170,18 @@ For a more in-depth explanation of the API concepts involved with visualizing yo
    LidarScan ``RANGE`` field. Visualizing only the first 512 column out of 2048 with simple gray
    color mapping.
 
-We can also plot the results in 3D by projecting the range measurements into cartesian
-coordinates. To do this, we first create a lookup table, then use it to produce X, Y, Z coordinates
-from our scan data:
+We can also plot the results in 3D by projecting the range measurements into cartesian coordinates.
+To do this, we first create a lookup table, then use it to produce X, Y, Z coordinates from our scan
+data with shape (H x W x 3):
 
 .. code:: python
 
     >>> xyzlut = client.XYZLut(metadata)
     >>> xyz = xyzlut(scan)
 
-Lastly, we need to re-arrange the resulting numpy array into a shape that's suitable for plotting:
+Now we rearrange the resulting numpy array into a shape that's suitable for plotting:
+
+.. code:: python
 
     >>> import numpy as np
     >>> [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
@@ -191,8 +193,7 @@ Lastly, we need to re-arrange the resulting numpy array into a shape that's suit
     >>> ax.scatter(x, y, z, c=z / max(z), s=0.2)
     >>> plt.show()
 
-If you want to learn more about how we transformed the ``scan`` into 3D coordinates to graph, see
-:ref:`ex-xyzlut`.
+To learn more about manipulating lidar data, see :ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
 
 .. figure:: images/lidar_scan_xyz.png
    :align: center
@@ -211,15 +212,9 @@ Here are a few things you might be interested in:
 
     * :ref:`ex-metadata`
     * :ref:`ex-packets`
-    * :ref:`ex-lidar-scans`
-    * :ref:`ex-staggered-and-destaggered`
-    * :ref:`ex-xyzlut`
     * :ref:`ex-streaming`
     * :ref:`ex-pcap-record`
-    * :ref:`ex-pcap-live-preview`
+    * :ref:`ex-staggered-and-destaggered`
+    * :ref:`ex-xyzlut`
+    * :ref:`ex-correlating-2d-and-3d`
     * :ref:`ex-imu`
-    
-.. todo::
-    - Api docs link
-    - Github Ouster SDK <https://github.com/ouster-lidar/ouster_example>
-

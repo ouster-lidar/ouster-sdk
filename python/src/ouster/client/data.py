@@ -278,7 +278,7 @@ def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
         info: sensor metadata
 
     Returns:
-        A function that computes a numpy array of point coordinates for a scan
+        A function that computes a numpy array of a scan's point coordinates in meters
     """
     lut = _client.XYZLut(info)
 

@@ -9,8 +9,7 @@ import argparse
 from contextlib import closing
 
 import numpy as np
-from more_itertools import time_limited, side_effect
-from itertools import islice, takewhile
+from more_itertools import time_limited
 
 from ouster import client
 
@@ -51,7 +50,90 @@ def get_metadata(hostname: str) -> None:
     # [doc-etag-get-metadata]
 
 
-def display_range_2d(hostname: str, lidar_port: int = 7502) -> None:
+def filter_3d_by_range_and_azimuth(hostname: str,
+                                   lidar_port: int = 7502,
+                                   range_min: int = 2) -> None:
+    """Easily filter 3D Point Cloud by Range and Azimuth Using the 2D Representation
+
+    Args:
+        hostname: hostname of sensor
+        lidar_port: UDP port to listen on for lidar data
+        range_min: range minimum in meters
+    """
+    import matplotlib.pyplot as plt  # type: ignore
+    import math
+
+    # set up figure
+    plt.figure()
+    ax = plt.axes(projection='3d')
+    r = 3
+    ax.set_xlim3d([-r, r])
+    ax.set_ylim3d([-r, r])
+    ax.set_zlim3d([-r, r])
+
+    plt.title("Filtered 3D Points from {}".format(hostname))
+
+    metadata, sample = client.Scans.sample(hostname, 2, lidar_port)
+    scan = next(sample)[1]
+
+    # [doc-stag-filter-3d]
+    # obtain destaggered range
+    range_destaggered = client.destagger(metadata,
+                                         scan.field(client.ChanField.RANGE))
+
+    # obtain destaggered xyz representation
+    xyzlut = client.XYZLut(metadata)
+    xyz_destaggered = client.destagger(metadata, xyzlut(scan))
+
+    # select only points with more than min range using the range data
+    xyz_filtered = xyz_destaggered * (range_destaggered[:, :, np.newaxis] >
+                                      (range_min * 1000))
+
+    # get first 3/4 of scan
+    to_col = math.floor(metadata.mode.cols * 3 / 4)
+    xyz_filtered = xyz_filtered[:, 0:to_col, :]
+    # [doc-etag-filter-3d]
+
+    [x, y, z] = [c.flatten() for c in np.dsplit(xyz_filtered, 3)]
+    ax.scatter(x, y, z, c=z / max(z), s=0.2)
+    plt.show()
+
+
+def live_plot_intensity(hostname: str, lidar_port: int = 7502) -> None:
+    """Display intensity from live sensor
+
+    Args:
+        hostname: hostname of the sensor
+        lidar_port: UDP port to listen on for lidar data
+
+    """
+    import cv2  # type: ignore
+
+    print("press ESC from visualization to exit")
+
+    # [doc-stag-live-plot-intensity]
+    # establish sensor connection
+    with closing(client.Scans.stream(hostname, lidar_port,
+                                     complete=False)) as stream:
+        show = True
+        while show:
+            for scan in stream:
+                # uncomment if you'd like to see frame id printed
+                # print("frame id: {} ".format(scan.frame_id))
+                signal = client.destagger(
+                    stream.metadata, scan.field(client.ChanField.INTENSITY))
+                signal = (signal / np.max(signal) * 255).astype(np.uint8)
+                cv2.imshow("scaled intensity", signal)
+                key = cv2.waitKey(1) & 0xFF
+                # [doc-etag-live-plot-intensity]
+                # 27 is esc
+                if key == 27:
+                    show = False
+                    break
+        cv2.destroyAllWindows()
+
+
+def plot_range_image(hostname: str, lidar_port: int = 7502) -> None:
     """Display range data taken live from sensor as an image
 
     Args:
@@ -67,7 +149,7 @@ def display_range_2d(hostname: str, lidar_port: int = 7502) -> None:
 
     # initialize plot
     fig, ax = plt.subplots()
-    fig.canvas.set_window_title("example: display_range_2d")
+    fig.canvas.set_window_title("example: plot_range_image")
 
     # plot using imshow
     range = scan.field(client.ChanField.RANGE)
@@ -79,9 +161,9 @@ def display_range_2d(hostname: str, lidar_port: int = 7502) -> None:
     plt.show()
 
 
-def display_all_2d(hostname: str,
-                   lidar_port: int = 7502,
-                   n_scans: int = 5) -> None:
+def plot_all_channels(hostname: str,
+                      lidar_port: int = 7502,
+                      n_scans: int = 5) -> None:
     """Display all channels of n consecutive lidar scans taken live from sensor
 
     Args:
@@ -133,42 +215,7 @@ def display_all_2d(hostname: str,
     plt.show()
 
 
-def display_intensity_live(hostname: str, lidar_port: int = 7502) -> None:
-    """
-    Display intensity from live sensor
-
-    Args:
-        hostname: hostname of the sensor
-        lidar_port: UDP port to listen on for lidar data
-
-    """
-    import cv2  # type: ignore
-
-    print("press ESC from visualization to exit")
-
-    # [doc-stag-live-plot-intensity]
-    # establish sensor connection
-    with closing(client.Scans.stream(hostname, lidar_port,
-                                     complete=False)) as stream:
-        show = True
-        while show:
-            for scan in stream:
-                # uncomment if you'd like to see frame id printed
-                # print("frame id: {} ".format(scan.frame_id))
-                signal = client.destagger(
-                    stream.metadata, scan.field(client.ChanField.INTENSITY))
-                signal = (signal / np.max(signal) * 255).astype(np.uint8)
-                cv2.imshow("scaled intensity", signal)
-                # [doc-etag-live-plot-intensity]
-                key = cv2.waitKey(1) & 0xFF
-                # 27 is esc
-                if key == 27:
-                    show = False
-                    break
-        cv2.destroyAllWindows()
-
-
-def display_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
+def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     """Display range from a single scan as 3D points
 
     Args:
@@ -225,10 +272,10 @@ def write_xyz_to_csv(hostname: str,
         np.savetxt(out_name, xyzlut(scan).reshape(h * w, 3), delimiter=" ")
 
 
-def plot_imu_z_acc_over_time(hostname: str,
-                             lidar_port: int = 7502,
-                             imu_port: int = 7503,
-                             n_seconds: int = 10) -> None:
+def plot_imu_z_accel(hostname: str,
+                     lidar_port: int = 7502,
+                     imu_port: int = 7503,
+                     n_seconds: int = 5) -> None:
     """Plot the z acceleration from the IMU over time
 
     Args:
@@ -238,16 +285,17 @@ def plot_imu_z_acc_over_time(hostname: str,
     """
     import matplotlib.pyplot as plt  # type: ignore
 
+    # [doc-stag-imu-z-accel]
     # connect to sensor and get imu packets within n_seconds
     source = client.Sensor(hostname, lidar_port, imu_port, buf_size=640)
     with closing(source):
         ts, z_accel = zip(*[(p.sys_ts, p.accel[2])
                             for p in time_limited(n_seconds, source)
                             if isinstance(p, client.ImuPacket)])
-
     # initialize plot
     fig, ax = plt.subplots(figsize=(12.0, 2))
     ax.plot(ts, z_accel)
+    # [doc-etag-imu-z-accel]
 
     plt.title("Z Accel from IMU over {} Seconds".format(n_seconds))
     ax.set_xticks(np.arange(min(ts), max(ts), step=((max(ts) - min(ts)) / 5)))
@@ -262,8 +310,7 @@ def plot_imu_z_acc_over_time(hostname: str,
     plt.show()
 
 
-def save_metadata(metadata: client.SensorInfo,
-                  metadata_path: str) -> None:
+def save_metadata(metadata: client.SensorInfo, metadata_path: str) -> None:
     """Save *metadata* (:class:`.client.SensorInfo`) as json to a file
     *metadata_path*.
 
@@ -274,6 +321,7 @@ def save_metadata(metadata: client.SensorInfo,
     """
     with open(metadata_path, 'w') as f:
         f.write(str(metadata))
+
 
 def record_pcap(hostname: str,
                 lidar_port: int = 7502,
@@ -290,9 +338,7 @@ def record_pcap(hostname: str,
     """
     import ouster.pcap as pcap
     from datetime import datetime
-    import time
 
-    # [doc-stag-pcap-record]
     # get udp_dest from current sensor configuration
     config = client.get_config(hostname)
     udp_dest = config.udp_dest or "127.0.0.1"
@@ -315,6 +361,7 @@ def record_pcap(hostname: str,
     save_metadata(metadata, metadata_path)
 
     print(f'Capturing packets to a file: {pcap_path} (Ctrl-C to stop early)')
+    # [doc-stag-pcap-record]
     with closing(source):
         source_it = time_limited(n_seconds, source)
         n_packets = pcap.record(source_it,
@@ -331,12 +378,13 @@ def record_pcap(hostname: str,
 def main() -> None:
     examples = {
         "configure-sensor": configure_sensor_params,
+        "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
         "get-metadata": get_metadata,
-        "plot-range-image": display_range_2d,
-        "plot-all-channels": display_all_2d,
-        "plot-xyz-points": display_xyz_points,
-        "plot-imu-z-accel": plot_imu_z_acc_over_time,
-        "live-plot-intensity": display_intensity_live,
+        "live-plot-intensity": live_plot_intensity,
+        "plot-range-image": plot_range_image,
+        "plot-all-channels": plot_all_channels,
+        "plot-xyz-points": plot_xyz_points,
+        "plot-imu-z-accel": plot_imu_z_accel,
         "write-xyz-to-csv": write_xyz_to_csv,
         "record-pcap": record_pcap,
     }
