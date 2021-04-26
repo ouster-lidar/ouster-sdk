@@ -217,4 +217,5 @@ Here are a few things you might be interested in:
     * :ref:`ex-staggered-and-destaggered`
     * :ref:`ex-xyzlut`
     * :ref:`ex-correlating-2d-and-3d`
+    * :ref:`ex-pcap-to-csv`
     * :ref:`ex-imu`

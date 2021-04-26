@@ -276,7 +276,7 @@ def pcap_to_csv(
 
     Each line in a csv file is:
 
-        RANGE (mm), INTENTSITY, AMBIENT, REFLECTIVITY, X (m), Y (m), Z (m)
+        RANGE (mm), INTENSITY, AMBIENT, REFLECTIVITY, X (m), Y (m), Z (m)
 
     Args:
         pcap_path: path to the pcap file
@@ -284,9 +284,10 @@ def pcap_to_csv(
         num: number of scans to save from pcap to csv files
         csv_dir: path to the directory where csv files will be saved
         csv_prefix: the filename prefix that will be appended with frame number
-        and *csv_ext*
+                    and *csv_ext*
         csv_ext: file extension to use. If it ends with ``.gz`` the output is
-        gzip compressed
+                 gzip compressed
+
     """
     from itertools import islice
 
@@ -296,11 +297,12 @@ def pcap_to_csv(
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir)
 
-    # [doc-stag-pcap-to-csv]
+    
     metadata = read_metadata(metadata_path)
     source = pcap.Pcap(pcap_path, metadata)
 
-    field_names = 'RANGE (mm), INTENTSITY, AMBIENT, REFLECTIVITY, X (m), Y (m), Z (m)'
+    # [doc-stag-pcap-to-csv]
+    field_names = 'RANGE (mm), INTENSITY, AMBIENT, REFLECTIVITY, X (m), Y (m), Z (m)'
     field_fmts = ['%d', '%d', '%d', '%d', '%.8f','%.8f', '%.8f']
 
     channels = [

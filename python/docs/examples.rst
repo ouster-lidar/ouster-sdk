@@ -153,8 +153,8 @@ should be able to recognize the contours of the scene around you.
 
 If you don’t have a live sensor, you can run this code with our pcap examples::
 
-    $ python -m ouster.sdk.examples.pcap OS1_128.pcap \
-      --info-json OS1_2048x10_128.json plot-xyz-points --scan-num 84
+    $ python -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
+      plot-xyz-points --scan-num 84
 
 
 .. figure:: images/lidar_scan_xyz_84.png
@@ -245,7 +245,7 @@ The source code of an example below:
 .. literalinclude:: /../src/ouster/sdk/examples/client.py
    :start-after: [doc-stag-pcap-record]
    :end-before: [doc-etag-pcap-record]
-   :emphasize-lines: 10-15
+   :emphasize-lines: 15
    :linenos:
    :dedent:
 
@@ -264,11 +264,51 @@ We can easily view the data that was recorded in the previous section. Based on 
 `D` and pause on `SPACE` key  (source code: :func:`.examples.pcap.pcap_2d_viewer`). To run it try
 the following command::
 
-    $ python -m ouster.sdk.examples.pcap OS1_128.pcap \
-      --info-json OS1_2048x10_128.json 2d-viewer
+    $ python -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
 
 Or substitute example data with pcap and json that you just recorded.
 
+
+.. _ex-pcap-to-csv:
+
+
+Pcap to CSV
+=======================
+
+Sometimes we want to get a point cloud (``XYZ`` + other fields) as a ``CSV`` file for further
+analysis with other tools.
+
+To convert the first ``5`` scans of sample data from a pcap file, you can try::
+
+    $ python -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
+      pcap-to-csv --scan-num 5
+
+The source code of an example below:
+
+.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+    :start-after: [doc-stag-pcap-to-csv]
+    :end-before: [doc-etag-pcap-to-csv]
+    :emphasize-lines: 37-41
+    :linenos:
+    :dedent:
+
+Because we stored the scan as structured 2D images, we can easily recover it by loading it back into
+a ``numpy.ndarray`` and continuing to use it as a 2D image.
+
+.. code:: python
+
+    import numpy as np
+
+    # read array from CSV
+    frame = np.loadtxt('my_frame_00000.csv', delimiter=',')
+
+    # convert back to "fat" 2D image [H x W x 7] shape
+    frame = frame.reshape((128, -1, frame.shape[1]))
+
+We used ``128`` while restoring 2D image from a CSV file because it's the number of channels of our
+``OS-1-128.pcap`` sample data recording.
+
+Check :func:`.examples.pcap.pcap_to_csv` documentation for further details.
 
 .. _ex-imu:
 

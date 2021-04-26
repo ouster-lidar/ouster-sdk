@@ -349,6 +349,7 @@ def record_pcap(hostname: str,
     import ouster.pcap as pcap
     from datetime import datetime
 
+    # [doc-stag-pcap-record]
     # connect to sensor and record lidar/imu packets
     with closing(client.Sensor(hostname, lidar_port, imu_port,
                                buf_size=640)) as source:
