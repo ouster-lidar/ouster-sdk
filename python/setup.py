@@ -103,7 +103,7 @@ setup(
     author='Ouster SW Developers',
     author_email='noreply@ouster.io',
     description='Ouster sensor SDK',
-    long_description='',
+    license='BSD 3-Clause License',
     ext_modules=[
         CMakeExtension('ouster.*'),
     ],
