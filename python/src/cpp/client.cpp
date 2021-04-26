@@ -540,11 +540,11 @@ directly.
         .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; });
 
-    m.def("set_config", [] (const std::string& hostname, const sensor_config& config, const bool persist, const bool udp_dest_auto) {
+    m.def("set_config", [] (const std::string& hostname, const sensor_config& config, bool persist,  bool udp_dest_auto) {
             uint8_t config_flags = 0;
             if (persist) config_flags |= ouster::sensor::CONFIG_PERSIST;
             if (udp_dest_auto) config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
-            sensor::set_config(hostname, config, config_flags);
+            if(!sensor::set_config(hostname, config, config_flags)) { throw std::runtime_error("Error setting sensor config."); }
             }, R"(
             Set sensor config parameters on sensor.
 
@@ -554,10 +554,10 @@ directly.
                 persist (bool): persist parameters after sensor disconnection (default = False)
                 udp_dest_auto: automatically determine sender's IP at the time command was sent and set it as destination of UDP traffic. Function will error out if config has udp_dest member. (default = False)
             )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
-    m.def("get_config", [](const std::string& hostname, const bool active) {
+    m.def("get_config", [](const std::string& hostname, bool active) {
         sensor::sensor_config config;
         if (!sensor::get_config(hostname, config, active)) {
-            throw std::invalid_argument("Error getting sensor config.");
+            throw std::runtime_error("Error getting sensor config.");
         }
         return config;
     }, R"(

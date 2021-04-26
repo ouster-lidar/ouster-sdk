@@ -110,8 +110,8 @@ std::string get_metadata(client& cli, int timeout_sec = 30);
  * @param active whether to pull active or passive configs
  * @return true if sensor config successfully populated
  */
-bool get_config(const std::string hostname, sensor_config& config,
-                const bool active = true);
+bool get_config(const std::string& hostname, sensor_config& config,
+                bool active = true);
 
 /**
  * Set sensor config on sensor
@@ -121,7 +121,7 @@ bool get_config(const std::string hostname, sensor_config& config,
  * @param flags flags to pass in
  * @return true if config params successfuly set on sensor
  */
-bool set_config(const std::string hostname, const sensor_config& config,
-                const uint8_t config_flags = 0);
+bool set_config(const std::string& hostname, const sensor_config& config,
+                uint8_t config_flags = 0);
 }  // namespace sensor
 }  // namespace ouster

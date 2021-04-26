@@ -271,32 +271,6 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
 
     return success;
 }
-}  // namespace
-
-bool get_config(const std::string hostname, sensor_config& config,
-                const bool active) {
-    Json::CharReaderBuilder builder{};
-    auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
-    Json::Value root{};
-    std::string errors{};
-
-    SOCKET sock_fd = cfg_socket(hostname.c_str());
-    if (sock_fd < 0) return false;
-
-    std::string res;
-    bool success = true;
-
-    std::string active_or_staged = active ? "active" : "staged";
-    success &= do_tcp_cmd(sock_fd, {"get_config_param", active_or_staged}, res);
-    success &=
-        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
-
-    config = parse_config(res);
-
-    impl::socket_close(sock_fd);
-
-    return success;
-}
 
 // conversion for operating_mode (introduced in fw 2.0) to auto_start
 // (deprecated in 1.13)
@@ -314,12 +288,8 @@ static std::string auto_start_string(OperatingMode mode) {
     return res == end ? "UNKNOWN" : res->second;
 }
 
-bool set_config(const std::string hostname, const sensor_config& config,
-                const uint8_t config_flags) {
-    // open socket
-    SOCKET sock_fd = cfg_socket(hostname.c_str());
-    if (sock_fd < 0) return false;
-
+bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
+                       uint8_t config_flags) {
     std::string res;
     bool success = true;
 
@@ -332,18 +302,6 @@ bool set_config(const std::string hostname, const sensor_config& config,
         return success;
     };
 
-    if (config_flags & CONFIG_UDP_DEST_AUTO) {
-        if (config.udp_dest) {
-            throw std::invalid_argument(
-                "set_auto_udp flag conflicts with provided config");
-        }
-        bool success = true;
-        success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
-        success &= res == "set_udp_dest_auto";
-        if (!success) {
-            return false;
-        }
-    }
     // set params
     if (config.udp_dest && !set_param("udp_ip", config.udp_dest.value()))
         return false;
@@ -450,7 +408,56 @@ bool set_config(const std::string hostname, const sensor_config& config,
         success &= res == "write_config_txt";
     }
 
-    // close socket
+    return success;
+}
+}  // namespace
+
+bool get_config(const std::string& hostname, sensor_config& config,
+                bool active) {
+    Json::CharReaderBuilder builder{};
+    auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
+    Json::Value root{};
+    std::string errors{};
+
+    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    if (sock_fd < 0) return false;
+
+    std::string res;
+    bool success = true;
+
+    std::string active_or_staged = active ? "active" : "staged";
+    success &= do_tcp_cmd(sock_fd, {"get_config_param", active_or_staged}, res);
+    success &=
+        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
+
+    config = parse_config(res);
+
+    impl::socket_close(sock_fd);
+
+    return success;
+}
+
+bool set_config(const std::string& hostname, const sensor_config& config,
+                uint8_t config_flags) {
+    // open socket
+    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    if (sock_fd < 0) return false;
+
+    std::string res;
+    bool success = true;
+
+    success = set_config_helper(sock_fd, config, config_flags);
+
+    if (config_flags & CONFIG_UDP_DEST_AUTO) {
+        if (config.udp_dest) {
+            impl::socket_close(sock_fd);
+            throw std::invalid_argument(
+                "UDP_DEST_AUTO flag set but provided config has udp_dest");
+        }
+        success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
+        success &= res == "set_udp_dest_auto";
+    }
+
     impl::socket_close(sock_fd);
 
     return success;
