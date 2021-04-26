@@ -182,7 +182,3 @@ def test_parse_info() -> None:
     metadata['lidar_origin_to_beam_origin_mm'] = 'foo'
     with pytest.raises(RuntimeError):
         client.SensorInfo(json.dumps(metadata))
-
-
-def test_packet_format(metadata: client.SensorInfo) -> None:
-    client.PacketFormat.from_info(metadata)

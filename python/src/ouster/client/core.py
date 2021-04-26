@@ -11,8 +11,8 @@ from threading import Thread
 import time
 
 from . import _client
-from . import (ColHeader, PacketFormat, SensorInfo, ImuPacket, LidarPacket,
-               LidarScan, Packet)
+from . import (ColHeader, SensorInfo, ImuPacket, LidarPacket, LidarScan,
+               Packet)
 
 
 class ClientError(Exception):
@@ -91,7 +91,7 @@ class Sensor(PacketSource):
     _cli: _client.Client
     _timeout: Optional[float]
     _metadata: SensorInfo
-    _pf: PacketFormat
+    _pf: _client.PacketFormat
     _producer: Thread
     _cache: Optional[Tuple[_client.ClientState, bytearray]]
 
@@ -133,7 +133,7 @@ class Sensor(PacketSource):
         else:
             self._fetch_metadata()
             self._metadata = SensorInfo(self._fetched_meta)
-        self._pf = PacketFormat.from_info(self._metadata)
+        self._pf = _client.PacketFormat.from_info(self._metadata)
 
         # Use args to avoid capturing self causing circular reference
         self._producer = Thread(target=lambda cli, pf: cli.produce(pf),
@@ -172,9 +172,9 @@ class Sensor(PacketSource):
         if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
         if st & _client.ClientState.LIDAR_DATA:
-            return LidarPacket(buf, self._pf)
+            return LidarPacket(buf, self._metadata)
         elif st & _client.ClientState.IMU_DATA:
-            return ImuPacket(buf, self._pf)
+            return ImuPacket(buf, self._metadata)
         elif st == _client.ClientState.TIMEOUT:
             raise ClientTimeout(f"No packets received within {self._timeout}s")
         elif st & _client.ClientState.ERROR:
@@ -219,7 +219,8 @@ class Sensor(PacketSource):
         while True:
             st, buf = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = LidarPacket(buf, self._pf).view(ColHeader.FRAME_ID)[0]
+                frame = LidarPacket(buf,
+                                    self._metadata).view(ColHeader.FRAME_ID)[0]
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1
@@ -308,7 +309,7 @@ class Scans:
             self._source, Sensor) else None
 
         ls_write = _client.LidarScan(w, h)
-        pf = PacketFormat.from_info(self._source.metadata)
+        pf = _client.PacketFormat.from_info(self._source.metadata)
         batch = _client.ScanBatcher(w, pf)
 
         # Time from which to measure timeout

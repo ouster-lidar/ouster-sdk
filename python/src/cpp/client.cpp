@@ -303,7 +303,7 @@ directly.
 
     // Packet Format
     py::class_<packet_format>(m, "PacketFormat")
-        .def_static("from_info", [](const sensor_info& info) {
+        .def_static("from_info", [](const sensor_info& info) -> const packet_format& {
             return sensor::get_format(info);
         }, py::return_value_policy::reference)
         .def_readonly("lidar_packet_size", &packet_format::lidar_packet_size)

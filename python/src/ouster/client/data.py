@@ -5,7 +5,7 @@ from typing import Callable, ClassVar, List, Optional, Type, Union
 import numpy.lib.stride_tricks
 import numpy as np
 
-from . import PacketFormat, SensorInfo, _client
+from . import SensorInfo, _client
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -16,14 +16,14 @@ Packet = Union['ImuPacket', 'LidarPacket']
 
 class ImuPacket:
     """Read IMU Packet data from a bufer."""
-    _pf: PacketFormat
+    _pf: _client.PacketFormat
     _data: np.ndarray
 
-    def __init__(self, data: BufferT, pf: PacketFormat) -> None:
-        self._pf = pf
+    def __init__(self, data: BufferT, info: SensorInfo) -> None:
+        self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
-                                   count=pf.imu_packet_size)
+                                   count=self._pf.imu_packet_size)
 
     @property
     def sys_ts(self) -> int:
@@ -95,11 +95,11 @@ class LidarPacket:
     _COL_PREAMBLE_BYTES: ClassVar[int] = 16
     _COL_FOOTER_BYTES: ClassVar[int] = 4
 
-    _pf: PacketFormat
+    _pf: _client.PacketFormat
     _data: np.ndarray
     _column_bytes: int
 
-    def __init__(self, data: BufferT, pf: PacketFormat) -> None:
+    def __init__(self, data: BufferT, info: SensorInfo) -> None:
         """
         This will always alias the supplied buffer-like object. Pass in a copy
         to avoid unintentional aliasing.
@@ -112,10 +112,10 @@ class LidarPacket:
             ValueError if the buffer is smaller than the size specified by the
             packet format.
         """
-        self._pf = pf
+        self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
-                                   count=pf.lidar_packet_size)
+                                   count=self._pf.lidar_packet_size)
         self._column_bytes = LidarPacket._COL_PREAMBLE_BYTES + \
             (LidarPacket._PIXEL_BYTES * self._pf.pixels_per_column) + \
             LidarPacket._COL_FOOTER_BYTES

@@ -1,10 +1,12 @@
 from dataclasses import dataclass
 import time
 from threading import Lock
-from typing import Any, Dict, Iterable, Iterator, Optional, Tuple
+from typing import Dict, Iterable, Iterator, Optional, Tuple
 
-from ouster.client import LidarPacket, ImuPacket, Packet, PacketFormat, PacketSource, SensorInfo
+from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
+                           SensorInfo, _client)
 from ouster.pcap import _pcap
+
 
 @dataclass
 class PcapInfo:
@@ -147,8 +149,6 @@ class Pcap(PacketSource):
         self._lock = Lock()
 
     def __iter__(self) -> Iterator[Packet]:
-        pf = PacketFormat.from_info(self._metadata)
-
         buf = bytearray(2**16)
         packet_info = _pcap.packet_info()
 
@@ -174,10 +174,10 @@ class Pcap(PacketSource):
                 time.sleep(delta)
 
             if packet_info.dst_port == self._lidar_port and n != 0:
-                yield LidarPacket(buf[0:n], pf)
+                yield LidarPacket(buf[0:n], self._metadata)
 
             elif packet_info.dst_port == self._imu_port and n != 0:
-                yield ImuPacket(buf[0:n], pf)
+                yield ImuPacket(buf[0:n], self._metadata)
 
     @property
     def metadata(self) -> SensorInfo:

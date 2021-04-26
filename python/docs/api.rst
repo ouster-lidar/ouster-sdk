@@ -44,8 +44,6 @@ Metadata
    :members:
    :undoc-members:
 
-.. autoclass:: PacketFormat
-
 .. autoclass:: SensorConfig
    :members:
    :undoc-members:

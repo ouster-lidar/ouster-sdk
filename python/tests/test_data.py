@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from ouster import client
+from ouster.client import _client
 
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
@@ -23,32 +24,36 @@ def stream_digest():
 
 
 @pytest.fixture(scope="module")
-def pf(stream_digest):
-    return client.PacketFormat.from_info(stream_digest.meta)
+def info(stream_digest) -> client.SensorInfo:
+    return stream_digest.meta
 
 
-def test_make_packets(pf: client.PacketFormat) -> None:
-    client.ImuPacket(bytes(pf.imu_packet_size), pf)
-    client.ImuPacket(bytearray(pf.imu_packet_size), pf)
+def test_make_packets(info: client.SensorInfo) -> None:
+    pf = _client.PacketFormat.from_info(info)
 
-    with pytest.raises(ValueError):
-        client.ImuPacket(bytes(), pf)
-
-    with pytest.raises(ValueError):
-        client.ImuPacket(bytes(pf.imu_packet_size - 1), pf)
-
-    client.LidarPacket(bytes(pf.lidar_packet_size), pf)
-    client.LidarPacket(bytearray(pf.lidar_packet_size), pf)
+    client.ImuPacket(bytes(pf.imu_packet_size), info)
+    client.ImuPacket(bytearray(pf.imu_packet_size), info)
 
     with pytest.raises(ValueError):
-        client.LidarPacket(bytes(), pf)
+        client.ImuPacket(bytes(), info)
 
     with pytest.raises(ValueError):
-        client.LidarPacket(bytes(pf.lidar_packet_size - 1), pf)
+        client.ImuPacket(bytes(pf.imu_packet_size - 1), info)
+
+    client.LidarPacket(bytes(pf.lidar_packet_size), info)
+    client.LidarPacket(bytearray(pf.lidar_packet_size), info)
+
+    with pytest.raises(ValueError):
+        client.LidarPacket(bytes(), info)
+
+    with pytest.raises(ValueError):
+        client.LidarPacket(bytes(pf.lidar_packet_size - 1), info)
 
 
-def test_imu_packet(pf: client.PacketFormat) -> None:
-    p = client.ImuPacket(bytes(pf.imu_packet_size), pf)
+def test_imu_packet(info: client.SensorInfo) -> None:
+    pf = _client.PacketFormat.from_info(info)
+
+    p = client.ImuPacket(bytes(pf.imu_packet_size), info)
 
     assert p.sys_ts == 0
     assert p.accel_ts == 0
@@ -60,9 +65,11 @@ def test_imu_packet(pf: client.PacketFormat) -> None:
         p.accel_ts = 0  # type: ignore
 
 
-def test_lidar_packet(pf: client.PacketFormat) -> None:
+def test_lidar_packet(info: client.SensorInfo) -> None:
+    pf = _client.PacketFormat.from_info(info)
+
     """Test reading and writing values from empty packets."""
-    p = client.LidarPacket(bytes(pf.lidar_packet_size), pf)
+    p = client.LidarPacket(bytes(pf.lidar_packet_size), info)
     w = pf.columns_per_packet
     h = pf.pixels_per_column
 
@@ -90,7 +97,7 @@ def test_lidar_packet(pf: client.PacketFormat) -> None:
         p.view(client.ColHeader.MEASUREMENT_ID)[0] = 1
 
     # a writeable lidar packet
-    q = client.LidarPacket(bytearray(pf.lidar_packet_size), pf)
+    q = client.LidarPacket(bytearray(pf.lidar_packet_size), info)
 
     q.view(client.ChanField.INTENSITY)[:] = np.ones((h, w))
     assert np.array_equal(q.view(client.ChanField.INTENSITY), np.ones((h, w)))

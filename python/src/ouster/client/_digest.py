@@ -9,7 +9,7 @@ import numpy as np
 
 from . import _bufstream as bufstream
 from . import (LidarPacket, LidarScan, ChanField, ColHeader, Packet, Packets,
-               PacketFormat, PacketSource, SensorInfo, Scans)
+               PacketSource, SensorInfo, Scans)
 
 
 def _md5(a: np.ndarray) -> str:
@@ -30,10 +30,9 @@ class LidarBufStream(PacketSource):
         ...
 
     def __iter__(self) -> Iterator[LidarPacket]:
-        pf = PacketFormat.from_info(self._metadata)
         self._bin.seek(0)
         for buf in bufstream.read(self._bin):
-            yield LidarPacket(buf, pf)
+            yield LidarPacket(buf, self._metadata)
 
     @property
     def metadata(self):
