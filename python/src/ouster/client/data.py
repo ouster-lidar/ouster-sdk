@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, ClassVar, List, Optional, Type, Union
+from typing import Callable, ClassVar, Dict, List, Optional, Type, Union
 
 import numpy.lib.stride_tricks
 import numpy as np
@@ -81,7 +81,7 @@ class ColHeader(Enum):
     MEASUREMENT_ID = (8, np.uint16)
     ENCODER_COUNT = (12, np.uint32)
     # negative offsets are considered relative to the end of the col buffer
-    VALID = (-4, np.uint32)
+    STATUS = (-4, np.uint32)
 
     def __init__(self, offset: int, dtype: type):
         self.offset = offset
@@ -120,40 +120,37 @@ class LidarPacket:
             (LidarPacket._PIXEL_BYTES * self._pf.pixels_per_column) + \
             LidarPacket._COL_FOOTER_BYTES
 
-    def view(self, field: Union[ChanField, ColHeader]) -> np.ndarray:
-        """Create a zero-copy view of the specified data.
+    def field(self, field: ChanField) -> np.ndarray:
+        """Create a view of the specified channel field.
 
         Args:
-            field: Specifies either a channel or column header
+            field: the channel field to view
 
         Returns:
-            view of the specified data as a numpy array
+            A view of the specified field as a numpy array
         """
-        if isinstance(field, ChanField):
-            v = np.lib.stride_tricks.as_strided(
-                self._data[LidarPacket._COL_PREAMBLE_BYTES +
-                           field.offset:].view(dtype=field.dtype),
-                shape=(self._pf.pixels_per_column,
-                       self._pf.columns_per_packet),
-                strides=(LidarPacket._PIXEL_BYTES, self._column_bytes))
-            return v if field.mask is None else v & field.mask
+        v = np.lib.stride_tricks.as_strided(
+            self._data[LidarPacket._COL_PREAMBLE_BYTES +
+                       field.offset:].view(dtype=field.dtype),
+            shape=(self._pf.pixels_per_column, self._pf.columns_per_packet),
+            strides=(LidarPacket._PIXEL_BYTES, self._column_bytes))
+        return v if field.mask is None else v & field.mask
 
-        elif isinstance(field, ColHeader):
-            start = 0 if field.offset >= 0 else self._column_bytes
-            return np.lib.stride_tricks.as_strided(
-                self._data[field.offset + start:].view(dtype=field.dtype),
-                shape=(self._pf.columns_per_packet, ),
-                strides=(self._column_bytes, ))
+    def header(self, header: ColHeader) -> np.ndarray:
+        """Create a view of the specified column header.
 
-        else:
-            raise TypeError("Expected either a Channel or ColHeader")
+        Args:
+            header: the column header to view
 
+        Returns:
+            A view of the specified header as a numpy array
+        """
 
-@dataclass
-class BlockHeader:
-    timestamp: int = 0
-    encoder: int = 0
-    status: int = 0
+        start = 0 if header.offset >= 0 else self._column_bytes
+        return np.lib.stride_tricks.as_strided(
+            self._data[header.offset + start:].view(dtype=header.dtype),
+            shape=(self._pf.columns_per_packet, ),
+            strides=(self._column_bytes, ))
 
 
 class LidarScan:
@@ -167,10 +164,10 @@ class LidarScan:
     w: int
     h: int
     frame_id: int
-    headers: List[BlockHeader]
     _data: np.ndarray
+    _headers: Dict[ColHeader, np.ndarray]
 
-    def __init__(self, w: int, h: int):
+    def __init__(self, h: int, w: int):
         """
         Args:
             w: horizontal resolution of the scan
@@ -179,24 +176,38 @@ class LidarScan:
         self.w = w
         self.h = h
         self.frame_id = -1  # init with invalid frame_id
-        self.headers = [BlockHeader()] * w
         self._data = np.ndarray((LidarScan.N_FIELDS, w * h), dtype=np.uint32)
+        self._headers = {
+            h: np.zeros(w, h.dtype)
+            for h in (ColHeader.TIMESTAMP, ColHeader.ENCODER_COUNT,
+                      ColHeader.STATUS)
+        }
 
     @property
     def complete(self) -> bool:
         """Whether all columns of the scan are valid."""
-        return all(h.status == 0xFFFFFFFF for h in self.headers)
+        return (self.header(ColHeader.STATUS) == 0xFFFFFFFF).all()
 
     def field(self, field: ChanField) -> np.ndarray:
         """Return a view of the specified channel field."""
         return self._data[field.ind, :].reshape(self.h, self.w)
 
+    def header(self, header: ColHeader) -> np.ndarray:
+        """Return the specified column header as a numpy array.
+
+        Note that only TIMESTAMP, ENCODER_COUNT, and STATUS are currently
+        supported.
+        """
+        return self._headers[header]
+
     def to_native(self) -> _client.LidarScan:
         ls = _client.LidarScan(self.w, self.h)
         ls.frame_id = self.frame_id
         ls.headers = [
-            _client.BlockHeader(h.timestamp, h.encoder, h.status)
-            for h in self.headers
+            _client.BlockHeader(
+                self.header(ColHeader.TIMESTAMP)[i],
+                self.header(ColHeader.ENCODER_COUNT)[i],
+                self.header(ColHeader.STATUS)[i]) for i in range(self.w)
         ]
         ls.data[:] = self._data
         return ls
@@ -208,10 +219,19 @@ class LidarScan:
         ls.w = scan.w
         ls.h = scan.h
         ls.frame_id = scan.frame_id
-        ls.headers = [
-            BlockHeader(h.timestamp, h.encoder, h.status) for h in scan.headers
-        ]
         ls._data = scan.data
+        ls._headers = {
+            ColHeader.TIMESTAMP:
+            np.array([h.timestamp for h in scan.headers],
+                     dtype=ColHeader.TIMESTAMP.dtype),
+            ColHeader.ENCODER_COUNT:
+            np.array([h.encoder for h in scan.headers],
+                     dtype=ColHeader.ENCODER_COUNT.dtype),
+            ColHeader.STATUS:
+            np.array([h.status for h in scan.headers],
+                     dtype=ColHeader.STATUS.dtype),
+        }
+
         return ls
 
 

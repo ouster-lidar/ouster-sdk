@@ -39,7 +39,7 @@ def xyz_ref(metadata: client.SensorInfo, scan: client.LidarScan) -> np.ndarray:
         r = scan.field(client.ChanField.RANGE)[u, v]
         n = metadata.lidar_origin_to_beam_origin_mm
 
-        encoder_count = scan.headers[v].encoder
+        encoder_count = scan.header(client.ColHeader.ENCODER_COUNT)[v]
         theta_encoder = 2.0 * pi * (1.0 - encoder_count / 90112.0)
         theta_azimuth = -2.0 * pi * (metadata.beam_azimuth_angles[u] / 360.0)
         phi = 2.0 * pi * (metadata.beam_altitude_angles[u] / 360.0)
@@ -168,13 +168,13 @@ def test_xyz_lut_scan_dims(stream_digest: digest.StreamDigest) -> None:
 
     xyzlut = client.XYZLut(meta)
 
-    assert xyzlut(client.LidarScan(w, h)).shape == (h, w, 3)
+    assert xyzlut(client.LidarScan(h, w)).shape == (h, w, 3)
 
     with pytest.raises(ValueError):
-        xyzlut(client.LidarScan(w, h + 1))
+        xyzlut(client.LidarScan(h + 1, w))
 
     with pytest.raises(ValueError):
-        xyzlut(client.LidarScan(w - 1, h))
+        xyzlut(client.LidarScan(h, w - 1))
 
 
 def test_xyz_calcs(stream_digest: digest.StreamDigest,

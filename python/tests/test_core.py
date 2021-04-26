@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from ouster import client
+from ouster.client import ColHeader, ChanField
 
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
@@ -88,20 +89,22 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert scan.frame_id != -1
     assert scan.h == packets.metadata.format.pixels_per_column
     assert scan.w == packets.metadata.format.columns_per_frame
-    assert len(scan.headers) == scan.w
+    assert len(scan.header(ColHeader.TIMESTAMP)) == scan.w
+    assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
+    assert len(scan.header(ColHeader.STATUS)) == scan.w
 
     assert not scan.complete, "test data should have missing packet!"
 
     # check that the scan is missing exactly one packet's worth of columns
-    valid_columns = [h.status for h in scan.headers].count(0xffffffff)
+    valid_columns = list(scan.header(ColHeader.STATUS)).count(0xffffffff)
     assert valid_columns == (packets.metadata.format.columns_per_frame -
                              packets.metadata.format.columns_per_packet)
 
-    missing_ts = [h.timestamp for h in scan.headers].count(0)
+    missing_ts = list(scan.header(ColHeader.TIMESTAMP)).count(0)
     assert missing_ts == packets.metadata.format.columns_per_packet
 
     # extra zero encoder value for first column
-    zero_enc = [h.encoder for h in scan.headers].count(0)
+    zero_enc = list(scan.header(ColHeader.ENCODER_COUNT)).count(0)
     assert zero_enc == packets.metadata.format.columns_per_packet + 1
 
 
@@ -114,28 +117,28 @@ def test_scans_first_packet(packet: client.LidarPacket,
     h = packet._pf.pixels_per_column
     w = packet._pf.columns_per_packet
 
-    assert np.array_equal(packet.view(client.ChanField.RANGE),
-                          scan.field(client.ChanField.RANGE)[:h, :w])
+    assert np.array_equal(packet.field(ChanField.RANGE),
+                          scan.field(ChanField.RANGE)[:h, :w])
 
-    assert np.array_equal(packet.view(client.ChanField.REFLECTIVITY),
-                          scan.field(client.ChanField.REFLECTIVITY)[:h, :w])
+    assert np.array_equal(packet.field(ChanField.REFLECTIVITY),
+                          scan.field(ChanField.REFLECTIVITY)[:h, :w])
 
-    assert np.array_equal(packet.view(client.ChanField.INTENSITY),
-                          scan.field(client.ChanField.INTENSITY)[:h, :w])
+    assert np.array_equal(packet.field(ChanField.INTENSITY),
+                          scan.field(ChanField.INTENSITY)[:h, :w])
 
-    assert np.array_equal(packet.view(client.ChanField.AMBIENT),
-                          scan.field(client.ChanField.AMBIENT)[:h, :w])
+    assert np.array_equal(packet.field(ChanField.AMBIENT),
+                          scan.field(ChanField.AMBIENT)[:h, :w])
 
-    assert np.all(packet.view(client.ColHeader.FRAME_ID) == scan.frame_id)
+    assert np.all(packet.header(ColHeader.FRAME_ID) == scan.frame_id)
 
-    assert np.array_equal(packet.view(client.ColHeader.TIMESTAMP),
-                          [h.timestamp for h in scan.headers][:w])
+    assert np.array_equal(packet.header(ColHeader.TIMESTAMP),
+                          scan.header(ColHeader.TIMESTAMP)[:w])
 
-    assert np.array_equal(packet.view(client.ColHeader.ENCODER_COUNT),
-                          [h.encoder for h in scan.headers][:w])
+    assert np.array_equal(packet.header(ColHeader.ENCODER_COUNT),
+                          scan.header(ColHeader.ENCODER_COUNT)[:w])
 
-    assert np.array_equal(packet.view(client.ColHeader.VALID),
-                          [h.status for h in scan.headers][:w])
+    assert np.array_equal(packet.header(ColHeader.STATUS),
+                          scan.header(ColHeader.STATUS)[:w])
 
 
 def test_scans_complete(packets: client.PacketSource) -> None:

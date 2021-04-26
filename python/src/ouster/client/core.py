@@ -219,8 +219,8 @@ class Sensor(PacketSource):
         while True:
             st, buf = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = LidarPacket(buf,
-                                    self._metadata).view(ColHeader.FRAME_ID)[0]
+                frame = LidarPacket(buf, self._metadata).header(
+                    ColHeader.FRAME_ID)[0]
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1

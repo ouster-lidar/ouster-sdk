@@ -1,11 +1,8 @@
 import os
-import time
 import argparse
 import numpy as np
 from contextlib import closing
 from more_itertools import nth
-
-from typing import Iterator, Union, List, Tuple
 
 import ouster.pcap as pcap
 import ouster.client as client
@@ -52,7 +49,9 @@ def ae(field: np.ndarray, percentile: float = 0.05):
     return field_res.clip(0, 1.0)
 
 
-def pcap_display_xyz_points(pcap_path: str, metadata_path: str, num: int = 0) -> None:
+def pcap_display_xyz_points(pcap_path: str,
+                            metadata_path: str,
+                            num: int = 0) -> None:
     """Display range from a specified scan number (*num*) as 3D points from
     pcap file located at *pcap_path*
 
@@ -130,8 +129,6 @@ def pcap_2d_viewer(
             client.ChanField.AMBIENT, client.ChanField.REFLECTIVITY
         ]
 
-        xyzlut = client.XYZLut(metadata)
-
         paused = False
         destagger = True
         num = 0
@@ -193,9 +190,9 @@ def pcap_read_packets(
         if isinstance(packet, client.LidarPacket):
             # Now we can process the LidarPacket. In this case, we access
             # the encoder_counts, timestamps, and ranges
-            encoder_counts = packet.view(client.ColHeader.ENCODER_COUNT)
-            timestamps = packet.view(client.ColHeader.TIMESTAMP)
-            ranges = packet.view(client.ChanField.RANGE)
+            encoder_counts = packet.header(client.ColHeader.ENCODER_COUNT)
+            timestamps = packet.header(client.ColHeader.TIMESTAMP)
+            ranges = packet.field(client.ChanField.RANGE)
             print(f'  encoder counts = {encoder_counts.shape}')
             print(f'  timestamps = {timestamps.shape}')
             print(f'  ranges = {ranges.shape}')
@@ -208,9 +205,9 @@ def pcap_read_packets(
 
 
 def pcap_show_one_scan(pcap_path: str,
-                    metadata_path: str,
-                    num: int = 0,
-                    destagger: bool = True) -> None:
+                       metadata_path: str,
+                       num: int = 0,
+                       destagger: bool = True) -> None:
     """Show all 4 channels of one scan (*num*) form pcap file (*pcap_path*)
 
     Args:
@@ -236,7 +233,8 @@ def pcap_show_one_scan(pcap_path: str,
 
     with closing(pcap.Pcap(pcap_path, metadata)) as source:
         scan = nth(client.Scans(source), num)
-        if not scan: return
+        if not scan:
+            return
 
         fields_images = [(sf[0],
                           prepare_field_image(scan, sf[1], source.metadata))
@@ -247,7 +245,7 @@ def pcap_show_one_scan(pcap_path: str,
         axs = fig.subplots(len(fields_images), 1, sharey=True)
 
         for ax, field in zip(axs, fields_images):
-            ax.set_title(field[0], fontdict={'fontsize':10})
+            ax.set_title(field[0], fontdict={'fontsize': 10})
             ax.imshow(field[1], cmap='gray', resample=False)
             ax.set_yticklabels([])
             ax.set_yticks([])
@@ -256,14 +254,12 @@ def pcap_show_one_scan(pcap_path: str,
     # [doc-etag-pcap-show-one]
 
 
-def pcap_to_csv(
-        pcap_path: str,
-        metadata_path: str,
-        num: int = 0,
-        csv_dir: str = ".",
-        csv_prefix: str = "pcap_out",
-        csv_ext: str = "csv"
-) -> None:
+def pcap_to_csv(pcap_path: str,
+                metadata_path: str,
+                num: int = 0,
+                csv_dir: str = ".",
+                csv_prefix: str = "pcap_out",
+                csv_ext: str = "csv") -> None:
     """Write scans from pcap file (*pcap_path*) to plain csv files (one per
     lidar scan).
 
@@ -291,19 +287,16 @@ def pcap_to_csv(
     """
     from itertools import islice
 
-    import csv
-
     # ensure that base csv_dir exists
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir)
 
-    
     metadata = read_metadata(metadata_path)
     source = pcap.Pcap(pcap_path, metadata)
 
     # [doc-stag-pcap-to-csv]
     field_names = 'RANGE (mm), INTENSITY, AMBIENT, REFLECTIVITY, X (m), Y (m), Z (m)'
-    field_fmts = ['%d', '%d', '%d', '%d', '%.8f','%.8f', '%.8f']
+    field_fmts = ['%d', '%d', '%d', '%d', '%.8f', '%.8f', '%.8f']
 
     channels = [
         client.ChanField.RANGE, client.ChanField.INTENSITY,
@@ -329,7 +322,8 @@ def pcap_to_csv(
             frame = np.dstack((*fields_values, xyz))
             frame = client.destagger(metadata, frame)
 
-            csv_path = os.path.join(csv_dir, f'{csv_prefix}_{idx:06d}.{csv_ext}')
+            csv_path = os.path.join(csv_dir,
+                                    f'{csv_prefix}_{idx:06d}.{csv_ext}')
 
             header = '\n'.join([
                 f'pcap file: {pcap_path}', f'frame num: {idx}',
@@ -364,7 +358,9 @@ def main():
     parser = argparse.ArgumentParser(
         description=description, formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument('pcap_path', type=str, help='pcap file with Ouster data packets')
+    parser.add_argument('pcap_path',
+                        type=str,
+                        help='pcap file with Ouster data packets')
 
     parser.add_argument(
         'metadata_path',
@@ -378,14 +374,12 @@ def main():
                         choices=examples.keys(),
                         help='Name of the example to run')
 
-    parser.add_argument(
-        '--scan-num',
-        dest='scan_num',
-        type=int,
-        default=0,
-        help=
-        'LidarScan # to use',
-        required=False)
+    parser.add_argument('--scan-num',
+                        dest='scan_num',
+                        type=int,
+                        default=0,
+                        help='LidarScan # to use',
+                        required=False)
 
     args = parser.parse_args()
 

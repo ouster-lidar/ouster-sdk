@@ -29,7 +29,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "2dfeaebfceadfe130ba1b45ae5aec202",
             "ENCODER_COUNT": "10cacd5f2933bcd2526ece14e785240f",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "f7b78b340f41cae205a5c89a44244448",
@@ -40,7 +40,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "3bebac6b83e976d2f0ea34df2c780cc6",
             "ENCODER_COUNT": "09d95b89745b7de964ec24748783c691",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "44334bae88b5098511f0947d9a448b5d",
@@ -51,7 +51,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "91c318b79107c735774b611dcaa0e76b",
             "ENCODER_COUNT": "ae58065bd8f1425bdb9822deefc24cba",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "7c45795bf91343e540618a112094014d",
@@ -62,7 +62,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "880cefc905a8b47296ed61eb60a9cb25",
             "ENCODER_COUNT": "881cac1f0ece5119b070f822ece9fb06",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "a4d0630536e491b5206d1de5f713b3c8",
@@ -73,7 +73,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "09bc40d9ba4e1c6f430bec0aea2e604a",
             "ENCODER_COUNT": "50b4b391e3fe96ca2e0d9b0536ad54d2",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "59eacb97032da58ece3157822c7f351c",
@@ -84,7 +84,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "f258077392399c4c52c16d7e4e65a411",
             "ENCODER_COUNT": "d5c8b110fd4fb6fd16dad2907dea140c",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "f5bfdf784475400927af36d12468f995",
@@ -95,7 +95,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "d886a39d51e0c732fd6ae2af6194768c",
             "ENCODER_COUNT": "07c6083f2b04609473e8f7309fa80942",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "23446464203d6f473222d77c4fb6c51a",
@@ -106,7 +106,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "b18afbcdc25fb84f6fb2afb677f095a3",
             "ENCODER_COUNT": "dfd468c5befe57fb90b80557f3dc1bda",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "54b8eb56248f45d3c4fe83915050eabe",
@@ -117,7 +117,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "0f766fd7309f53f95dfe77651438936c",
             "ENCODER_COUNT": "38980721e0afba60d9390d21a164ce34",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "e13e8d26537fc5c9fa0104705485cfba",
@@ -128,7 +128,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "db32e4a29c3d471c1b5ac95824d1642e",
             "ENCODER_COUNT": "3809ad03a5bfabbc4e31f0e68172aeab",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "ef2263a03a7e40a83fd978a4707178b3",
@@ -139,7 +139,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "0e8faa063f9381acc7935afd0e046a23",
             "ENCODER_COUNT": "c3510aa8af0a25ba6c35315e54e4c5a4",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "70d9ce2378145242a8d94c16250ab3d2",
@@ -150,7 +150,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "3204060ef7e44c90ae88633330177547",
             "ENCODER_COUNT": "817d926233f4523c44da262b503525ee",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "5b7d7d432fa9bf4b6458c00663828dcc",
@@ -161,7 +161,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "7293d208fbcd0f9b29347d33c5a1f57b",
             "ENCODER_COUNT": "532c64cdb1cdf22ab47a0b28622401fd",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "5443816c05ebc33494876680608e181f",
@@ -172,7 +172,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "5a46b69ed4ae90f3f9ed606027bd332f",
             "ENCODER_COUNT": "dca52191c33cc674d556e3b37189a7e0",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "95324627f44153c18084afbc19d25d21",
@@ -183,7 +183,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "89eb23ca6505c40d0a7746f551312f47",
             "ENCODER_COUNT": "035d97bb671821373f53e77cf603fcd8",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "a3f3bd52bf2258c14166a143971d0b06",
@@ -194,7 +194,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "b3e6b5e13a5046aa2ff4a917e5d82dd1",
             "ENCODER_COUNT": "bf04ac1564f1f70708ba15d0aff3945e",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "1f4c20861dc81bb5eeead36628139d30",
@@ -205,7 +205,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "50171c60ae2071a633e40d19939bcadd",
             "ENCODER_COUNT": "a54d4b19d7353d05c854d7ab175682f3",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "f62d921b8512bc7babf15039e0c6e5c6",
@@ -216,7 +216,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "ae9dfeb0934cc82b9e5dd4518634f79f",
             "ENCODER_COUNT": "860adcb927d6774e5d04e63a79313950",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "9b137009286b96840e57bf2cbcd0ffab",
@@ -227,7 +227,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "3906d134322d6297eff54554fef9eeb1",
             "ENCODER_COUNT": "c0126658bd3866d913ea1332fb0d5aec",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "2f13b5aa3c2ba3d01c170222ffc1c755",
@@ -238,7 +238,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "1f39a0ef6c65622770aebeaff6c230c1",
             "ENCODER_COUNT": "76bd839b73e32076ebc844533247024d",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "aa950b57d2eacb1ea22d03a67dede2ec",
@@ -249,7 +249,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "e8650f5f369c5afcd34b9719630c5de7",
             "ENCODER_COUNT": "92f4203dcf31607b7fb3e0a3030b5fd8",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "12044ca27ae59ee16df96fb6c37a8724",
@@ -260,7 +260,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "87f4245544d6b237ce536c8f222081b4",
             "ENCODER_COUNT": "a406cf18dc3e18ca68508af4a18ded42",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "69e486fa833b93b113592fa70ce30063",
@@ -271,7 +271,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "8f13c03ec24ddb0047131557dd213b46",
             "ENCODER_COUNT": "c6b5fe9044e0b351b30e4ce3bbf5f7d3",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "55497a990547f44079e5140369dfd2b2",
@@ -282,7 +282,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "65b7dbca8808971aa9277565832db892",
             "ENCODER_COUNT": "9f66210a27cb18a70625f5d3f4292580",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "7596f17d742f98d205e30bd33da010e0",
@@ -293,7 +293,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "fd0bd7ec2aaab6bcf320ca3df976c9a2",
             "ENCODER_COUNT": "ade61aff3b2c605bd6173602c93327b1",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "0bd9276934011125852de4e6d668acdc",
@@ -304,7 +304,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "701999763b35b7cc63f5f3071cd16b36",
             "ENCODER_COUNT": "f383f9085198d47faae5f25b2e35303d",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "40f01f5cf8dea052dfc8e2aab2528861",
@@ -315,7 +315,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "87ace1b11ef556976554cd023e042ba6",
             "ENCODER_COUNT": "de59fe410d47cffe216d068e378ac105",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "df8a320c076b8ab0fb1c2695d5e28faf",
@@ -326,7 +326,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "a89fe233a2568960a6b058899ce487a5",
             "ENCODER_COUNT": "8d7868143ad39d3fab4ad37c751eb334",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "5cdb247e69107a9bf112f3e3f3c92110",
@@ -337,7 +337,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "eaa860b4569151bb46f818a53e77f8b8",
             "ENCODER_COUNT": "59caa2ecc2c218e313833beb1f8a4444",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "8c023bcc9dce15d347c94645f5186c47",
@@ -348,7 +348,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "5496674052d8735654aa637e0179455b",
             "ENCODER_COUNT": "69d744c5acd8872c9ba86bf098699103",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "8ea1c0b131be6db245c35fa5844ca4ef",
@@ -359,7 +359,7 @@
             "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
             "MEASUREMENT_ID": "771a15b7057c789e77e74112ec0dcb04",
             "ENCODER_COUNT": "0ad5659327f75dd68167cd8013a338c5",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         },
         {
             "RANGE": "bd358b5c3974b9006dbf939236022622",
@@ -370,7 +370,7 @@
             "FRAME_ID": "695b5a089064e7a3a14f907eaba7e000",
             "MEASUREMENT_ID": "2dfeaebfceadfe130ba1b45ae5aec202",
             "ENCODER_COUNT": "10cacd5f2933bcd2526ece14e785240f",
-            "VALID": "aabd2b2a451504e119a243d8e775fdad"
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
         }
     ],
     "scans": [
@@ -381,7 +381,7 @@
             "AMBIENT": "95d84f2dc7cd52e180c3e0cfdab42278",
             "TIMESTAMP": "993c41618d6b71774eccd322c0ef5b39",
             "ENCODER_COUNT": "810b5589e12e59b50d7c6aa4e6c32ef6",
-            "VALID": "bcd37b7a234ef8ba2385177f1dd93505"
+            "STATUS": "bcd37b7a234ef8ba2385177f1dd93505"
         }
     ]
 }
