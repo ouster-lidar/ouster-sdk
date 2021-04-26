@@ -82,6 +82,8 @@ def test_read_info(metadata: client.SensorInfo) -> None:
     assert metadata.prod_line == "OS-1-32-U0"
     assert metadata.format.columns_per_frame == 512
     assert metadata.format.columns_per_packet == 16
+    assert metadata.format.column_window[0] == 0
+    assert metadata.format.column_window[1] == metadata.format.columns_per_frame - 1
     assert len(metadata.format.pixel_shift_by_row) == 32
     assert metadata.format.pixels_per_column == 32
     assert len(metadata.beam_azimuth_angles) == 32
@@ -102,6 +104,7 @@ def test_write_info(metadata: client.SensorInfo) -> None:
     metadata.format.columns_per_frame = 0
     metadata.format.columns_per_packet = 0
     metadata.format.pixels_per_column = 0
+    metadata.format.column_window = [0, 0]
     metadata.format.pixel_shift_by_row = []
     metadata.beam_azimuth_angles = []
     metadata.beam_altitude_angles = []
@@ -166,6 +169,8 @@ def test_parse_info() -> None:
     assert info.format.pixels_per_column == 64
     assert info.format.columns_per_frame == 1024
     assert info.format.columns_per_packet > 0
+    assert info.format.column_window[0] == 0
+    assert info.format.column_window[1] == 1023
     assert len(info.format.pixel_shift_by_row) == 64
 
     # the lidar_to_sensor_transform json is interpreted as a 4x4 matrix in

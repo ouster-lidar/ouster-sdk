@@ -66,7 +66,8 @@ bool operator==(const data_format& lhs, const data_format& rhs) {
     return (lhs.pixels_per_column == rhs.pixels_per_column &&
             lhs.columns_per_packet == rhs.columns_per_packet &&
             lhs.columns_per_frame == rhs.columns_per_frame &&
-            lhs.pixel_shift_by_row == rhs.pixel_shift_by_row);
+            lhs.pixel_shift_by_row == rhs.pixel_shift_by_row &&
+            lhs.column_window == rhs.column_window);
 }
 
 bool operator!=(const data_format& lhs, const data_format& rhs) {
@@ -115,6 +116,10 @@ bool operator!=(const sensor_config& lhs, const sensor_config& rhs) {
     return !(lhs == rhs);
 }
 
+static ColumnWindow default_column_window(uint32_t columns_per_frame) {
+    return {0, columns_per_frame - 1};
+}
+
 data_format default_data_format(lidar_mode mode) {
     auto repeat = [](int n, const std::vector<int>& v) {
         std::vector<int> res{};
@@ -125,6 +130,7 @@ data_format default_data_format(lidar_mode mode) {
     uint32_t pixels_per_column = 64;
     uint32_t columns_per_packet = 16;
     uint32_t columns_per_frame = n_cols_of_lidar_mode(mode);
+    ColumnWindow column_window = default_column_window(columns_per_frame);
 
     std::vector<int> offset;
     switch (columns_per_frame) {
@@ -141,7 +147,8 @@ data_format default_data_format(lidar_mode mode) {
             throw std::invalid_argument{"default_data_format"};
     }
 
-    return {pixels_per_column, columns_per_packet, columns_per_frame, offset};
+    return {pixels_per_column, columns_per_packet, columns_per_frame, offset,
+            column_window};
 }
 
 static double default_lidar_origin_to_beam_origin(std::string prod_line) {
@@ -154,6 +161,8 @@ static double default_lidar_origin_to_beam_origin(std::string prod_line) {
         lidar_origin_to_beam_origin_mm = 13.762;
     return lidar_origin_to_beam_origin_mm;
 }
+
+
 
 sensor_info default_sensor_info(lidar_mode mode) {
     return sensor::sensor_info{"UNKNOWN",
@@ -515,6 +524,22 @@ sensor_info parse_metadata(const std::string& meta) {
 
         for (const auto& v : root["data_format"]["pixel_shift_by_row"])
             info.format.pixel_shift_by_row.push_back(v.asInt());
+
+        if (root["data_format"].isMember("column_window")) {
+            if (root["data_format"]["column_window"].size() != 2) {
+                throw std::invalid_argument{
+                    "Unexpected size of column_window tuple"};
+            }
+            info.format.column_window.first =
+                root["data_format"]["column_window"][0].asInt();
+            info.format.column_window.second =
+                root["data_format"]["column_window"][1].asInt();
+        } else {
+            std::cerr << "WARNING: No column window found." << std::endl;
+            info.format.column_window =
+                default_column_window(info.format.columns_per_frame);
+        }
+
     } else {
         std::cerr << "WARNING: No data_format found." << std::endl;
         info.format = default_data_format(info.mode);
@@ -615,6 +640,11 @@ std::string to_string(const sensor_info& info) {
     root["data_format"]["columns_per_frame"] = info.format.columns_per_frame;
     for (auto i : info.format.pixel_shift_by_row)
         root["data_format"]["pixel_shift_by_row"].append(i);
+
+    root["data_format"]["column_window"].append(
+        info.format.column_window.first);
+    root["data_format"]["column_window"].append(
+        info.format.column_window.second);
 
     root["lidar_origin_to_beam_origin_mm"] =
         info.lidar_origin_to_beam_origin_mm;

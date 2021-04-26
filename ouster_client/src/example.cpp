@@ -63,10 +63,19 @@ int main(int argc, char* argv[]) {
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
 
+    ouster::sensor::ColumnWindow column_window = info.format.column_window;
+
+    // azimuth_window config param reduce the amount of valid columns per scan
+    // that we will receive
+    int column_window_length =
+        std::abs(column_window.second - column_window.first) + 1;
+
     std::cerr << "  Firmware version:  " << info.fw_rev
               << "\n  Serial number:     " << info.sn
               << "\n  Product line:      " << info.prod_line
-              << "\n  Scan dimensions:   " << w << " x " << h << std::endl;
+              << "\n  Scan dimensions:   " << w << " x " << h
+              << "\n  Column window:     [" << column_window.first << ", "
+              << column_window.second << "]" << std::endl;
 
     // A LidarScan holds lidar data for an entire rotation of the device
     std::vector<LidarScan> scans{N_SCANS, LidarScan{w, h}};
@@ -107,8 +116,9 @@ int main(int argc, char* argv[]) {
                     [](const LidarScan::BlockHeader& h) {
                         return h.status != 0xffffffff;
                     });
-                // retry until we receive a full scan
-                if (n_invalid == 0) i++;
+                // retry until we receive a full set of valid measurements
+                // (accounting for azimuth_window settings if any)
+                if (n_invalid <= w - column_window_length) i++;
             }
         }
 

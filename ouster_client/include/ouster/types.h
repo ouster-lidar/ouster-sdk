@@ -76,6 +76,7 @@ enum Polarity { POLARITY_ACTIVE_LOW = 1, POLARITY_ACTIVE_HIGH };
 enum NMEABaudRate { BAUD_9600 = 1, BAUD_115200 };
 
 using AzimuthWindow = std::pair<int, int>;
+using ColumnWindow = std::pair<int, int>;
 
 enum configuration_version { FW_2_0 = 3 };
 
@@ -84,6 +85,7 @@ struct data_format {
     uint32_t columns_per_packet;
     uint32_t columns_per_frame;
     std::vector<int> pixel_shift_by_row;
+    ColumnWindow column_window;
 };
 
 struct sensor_info {

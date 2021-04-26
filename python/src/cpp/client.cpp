@@ -346,7 +346,8 @@ directly.
         .def_readwrite("pixels_per_column", &data_format::pixels_per_column)
         .def_readwrite("columns_per_packet", &data_format::columns_per_packet)
         .def_readwrite("columns_per_frame", &data_format::columns_per_frame)
-        .def_readwrite("pixel_shift_by_row", &data_format::pixel_shift_by_row);
+        .def_readwrite("pixel_shift_by_row", &data_format::pixel_shift_by_row)
+        .def_readwrite("column_window", &data_format::column_window);
 
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
