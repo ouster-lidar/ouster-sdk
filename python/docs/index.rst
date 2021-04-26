@@ -24,7 +24,7 @@
 
    Source Code <https://github.com/ouster-lidar/ouster_example>
    Issue Tracker <https://github.com/ouster-lidar/ouster_example/issues>
-   Sensor User Manual  <https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf>
+   Sensor Documentation  <https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf>
    Sample Data <https://ouster.com/resources/lidar-sample-data/>
 
 

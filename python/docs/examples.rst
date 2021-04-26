@@ -70,8 +70,8 @@ Staggered vs Destaggered 2D Representations
 ===========================================
 
 The default **staggered** representation of a :py:class:`.LidarScan` has columns which pertain to
-measurements taken at a single timestamp. For a more natural 2D image, we **destagger**
-the field with the :py:func:`.client.destagger` function.
+measurements taken at a single timestamp. For a more natural 2D image, we **destagger** the field
+with the :py:func:`.client.destagger` function.
 
 Let's take a look at a typical **staggered** representation:
 
@@ -81,9 +81,10 @@ Let's take a look at a typical **staggered** representation:
    LidarScan ``RANGE`` field visualized with :py:func:`matplotlib.pyplot.imshow()` and simple gray
    color mapping for better look.
 
-Oh, that doesn't look like a normal image! What could it be? 
+This **staggered** representation definitely doesn't look like a normal image, which shouldn't
+surprise us since its columns pertain to timestamps instead of azimuth angles.
 
-Let's see if we can destagger the image and decipher the scene:
+Let's destagger the image, changing the columns to represent the azimuth angles:
 
 .. code::
 
@@ -112,9 +113,8 @@ This should give the scene below, of which we have magnified two patches for bet
 
     **destaggered** LidarScan ``RANGE`` field
 
-Did you guess that the scene contained a man on a bicycle, a few cars, and many trees? We sure
-didn't! Now that this makes visual sense, we can easily use our data in common visual task
-pipelines.
+After destaggering, we can see the scene contains a man on a bicycle, a few cars, and many trees.
+This image now makes visual sense, and we can easily use this data in common visual task pipelines.
 
 .. note::
 
@@ -194,7 +194,7 @@ chosen the first 270 degrees of rotation.
 
 If you have a live sensor, you can run this code with an example::
     
-    $ python -m ouster.sdk.examples $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
 .. _ex-streaming:
 

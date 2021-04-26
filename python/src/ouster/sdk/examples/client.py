@@ -24,7 +24,7 @@ def configure_sensor_params(hostname: str) -> None:
     # create empty config
     config = client.SensorConfig()
 
-    # set the values that you need: see sensor docs for param meanings
+    # set the values that you need: see sensor documentation for param meanings
     config.operating_mode = client.OperatingMode.OPERATING_NORMAL
     config.ld_mode = client.LidarMode.MODE_1024x10
     config.udp_port_lidar = 7502

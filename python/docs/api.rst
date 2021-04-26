@@ -48,6 +48,10 @@ Metadata
    :members:
    :undoc-members:
 
+.. autofunction:: get_config
+
+.. autofunction:: set_config
+
 .. autoclass:: LidarMode
    :members:
    :undoc-members:

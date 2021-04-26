@@ -351,7 +351,7 @@ directly.
 
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
-        Sensor metadata required to interpret UDP data streams.
+        Sensor metadata required to interpret UDP data streams. Please see sensor documentaiton for the meaning of each property.
         )")
         .def(py::init<>(), R"(
         Args:
@@ -361,18 +361,18 @@ directly.
             new (&self) sensor_info{};
             self = sensor::parse_metadata(s);
         })
-        .def_readwrite("hostname", &sensor_info::name)
-        .def_readwrite("sn", &sensor_info::sn)
-        .def_readwrite("fw_rev", &sensor_info::fw_rev)
-        .def_readwrite("mode", &sensor_info::mode)
-        .def_readwrite("prod_line", &sensor_info::prod_line)
-        .def_readwrite("format", &sensor_info::format)
-        .def_readwrite("beam_azimuth_angles", &sensor_info::beam_azimuth_angles)
-        .def_readwrite("beam_altitude_angles", &sensor_info::beam_altitude_angles)
-        .def_readwrite("imu_to_sensor_transform", &sensor_info::imu_to_sensor_transform)
-        .def_readwrite("lidar_to_sensor_transform", &sensor_info::lidar_to_sensor_transform)
-        .def_readwrite("lidar_origin_to_beam_origin_mm", &sensor_info::lidar_origin_to_beam_origin_mm)
-        .def_readwrite("extrinsic", &sensor_info::extrinsic)
+        .def_readwrite("hostname", &sensor_info::name, "Sensor hostname.")
+        .def_readwrite("sn", &sensor_info::sn, "Sensor serial number.")
+        .def_readwrite("fw_rev", &sensor_info::fw_rev, "Sensor firmware revision.")
+        .def_readwrite("mode", &sensor_info::mode, "Lidar mode, e.g., 1024x10.")
+        .def_readwrite("prod_line", &sensor_info::prod_line, "Product line, e.g., 'OS-1-128'.")
+        .def_readwrite("format", &sensor_info::format,  "Describes the structure of a lidar packet.")
+        .def_readwrite("beam_azimuth_angles", &sensor_info::beam_azimuth_angles, "Beam azimuth angles, useful for XYZ projection.")
+        .def_readwrite("beam_altitude_angles", &sensor_info::beam_altitude_angles, "Beam altitude angles, useful for XYZ projection.")
+        .def_readwrite("imu_to_sensor_transform", &sensor_info::imu_to_sensor_transform, "Homogenous transformation matrix representing IMU offset to Sensor Coordinate Frame.")
+        .def_readwrite("lidar_to_sensor_transform", &sensor_info::lidar_to_sensor_transform, "Homogeneous transformation matrix from Lidar Coordinate Frame to Sensor Coordinate Frame.")
+        .def_readwrite("lidar_origin_to_beam_origin_mm", &sensor_info::lidar_origin_to_beam_origin_mm, "Distance between lidar origin and beam origin in millimeters.")
+        .def_readwrite("extrinsic", &sensor_info::extrinsic, "Extrinsic Matrix.")
         .def_static("from_default", &sensor::default_sensor_info, R"(
         Create gen-1 OS-1-64 metadata populated with design values.
         )")
@@ -385,7 +385,7 @@ directly.
 
 
     // Lidar Mode
-    auto lidar_mode = py::enum_<sensor::lidar_mode>(m, "LidarMode", py::metaclass())
+    auto lidar_mode = py::enum_<sensor::lidar_mode>(m, "LidarMode", "Possible Lidar Modes of sensor, corresponding to horizontal and vertical resolution rates of sensor. See sensor documentaiton for details.", py::metaclass())
         .value("MODE_UNSPEC", sensor::lidar_mode::MODE_UNSPEC)
         .value("MODE_512x10", sensor::lidar_mode::MODE_512x10)
         .value("MODE_512x20", sensor::lidar_mode::MODE_512x20)
@@ -403,17 +403,17 @@ directly.
             };
         })
         .def_property_readonly("cols", [](const sensor::lidar_mode& self) {
-            return sensor::n_cols_of_lidar_mode(self); })
+            return sensor::n_cols_of_lidar_mode(self); }, "Returns columns of lidar mode, e.g., 1024 for LidarMode 1024x10.")
         .def_property_readonly("frequency", [](const sensor::lidar_mode& self) {
-            return sensor::frequency_of_lidar_mode(self); })
-        .def_static("from_string", &sensor::lidar_mode_of_string);
+            return sensor::frequency_of_lidar_mode(self); }, "Returns frequency of lidar mode, e.g. 10 for LidarMode 512x10.")
+        .def_static("from_string", &sensor::lidar_mode_of_string, "Create LidarMode from string.");
     // workaround for https://github.com/pybind/pybind11/issues/2537
     lidar_mode.attr("__str__") = py::cpp_function([](const sensor::lidar_mode& u) { return to_string(u); },
                                                 py::name("__str__"),
-                                                py::is_method(lidar_mode));
+                                                py::is_method(lidar_mode), "Returns string representation of lidar mode.");
 
     // Timestamp Mode
-    auto timestamp_mode = py::enum_<sensor::timestamp_mode>(m, "TimestampMode", py::metaclass())
+    auto timestamp_mode = py::enum_<sensor::timestamp_mode>(m, "TimestampMode", "Possible Timestamp modes of sensor. See sensor documentaiton for details.", py::metaclass())
         .value("TIME_FROM_UNSPEC", sensor::timestamp_mode::TIME_FROM_UNSPEC)
         .value("TIME_FROM_INTERNAL_OSC", sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC)
         .value("TIME_FROM_SYNC_PULSE_IN", sensor::timestamp_mode::TIME_FROM_SYNC_PULSE_IN)
@@ -433,7 +433,7 @@ directly.
                                                 py::is_method(timestamp_mode));
 
     // Operating Mode
-    auto OperatingMode = py::enum_<sensor::OperatingMode>(m, "OperatingMode", py::metaclass())
+    auto OperatingMode = py::enum_<sensor::OperatingMode>(m, "OperatingMode", "Possible Operating modes of sensor. See sensor documentaiton for details.", py::metaclass())
         .value("OPERATING_NORMAL", sensor::OperatingMode::OPERATING_NORMAL)
         .value("OPERATING_STANDBY", sensor::OperatingMode::OPERATING_STANDBY)
         .def_property_readonly_static("__members__", [](py::object) {
@@ -449,7 +449,7 @@ directly.
                                                 py::is_method(OperatingMode));
 
     // Multipurpose IO Mode
-    auto MultipurposeIOMode = py::enum_<sensor::MultipurposeIOMode>(m, "MultipurposeIOMode", py::metaclass())
+    auto MultipurposeIOMode = py::enum_<sensor::MultipurposeIOMode>(m, "MultipurposeIOMode", "Mode of MULTIPURPOSE_IO pin. See sensor documentaiton for details.", py::metaclass())
         .value("MULTIPURPOSE_OFF", sensor::MultipurposeIOMode::MULTIPURPOSE_OFF)
         .value("MULTIPURPOSE_INPUT_NMEA_UART", sensor::MultipurposeIOMode::MULTIPURPOSE_INPUT_NMEA_UART)
         .value("MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC)
@@ -460,6 +460,7 @@ directly.
             return std::map<std::string, sensor::MultipurposeIOMode>{
                 { "MULTIPURPOSE_OFF", sensor::MultipurposeIOMode::MULTIPURPOSE_OFF },
                 { "MULTIPURPOSE_INPUT_NMEA_UART", sensor::MultipurposeIOMode::MULTIPURPOSE_INPUT_NMEA_UART },
+
                 { "MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC },
                 { "MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN },
                 { "MULTIPURPOSE_OUTPUT_FROM_PTP_1588", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_PTP_1588 },
@@ -473,7 +474,7 @@ directly.
                                                 py::is_method(MultipurposeIOMode));
 
     // Polarity
-    auto Polarity = py::enum_<sensor::Polarity>(m, "Polarity", py::metaclass())
+    auto Polarity = py::enum_<sensor::Polarity>(m, "Polarity", "Pulse Polarity. Applicable to several Polarity settings on sensor.", py::metaclass())
         .value("POLARITY_ACTIVE_LOW", sensor::Polarity::POLARITY_ACTIVE_LOW)
         .value("POLARITY_ACTIVE_HIGH", sensor::Polarity::POLARITY_ACTIVE_HIGH)
         .def_property_readonly_static("__members__", [](py::object) {
@@ -489,7 +490,7 @@ directly.
                                                 py::is_method(Polarity));
 
     // NMEABaudRate
-    auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate", py::metaclass())
+    auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate", "Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.", py::metaclass())
         .value("BAUD_9600", sensor::NMEABaudRate::BAUD_9600)
         .value("BAUD_115200", sensor::NMEABaudRate::BAUD_115200)
         .def_property_readonly_static("__members__", [](py::object) {
@@ -506,7 +507,7 @@ directly.
 
     // Sensor Config
     py::class_<sensor_config>(m, "SensorConfig", R"(
-        Sensor Config
+        Corresponds to sensor config parameters. Please see sensor documentaiton for the meaning of each property.
         )")
         .def(py::init<>(), R"(
         Args:
@@ -516,26 +517,25 @@ directly.
             new (&self) sensor_config{};
             self = sensor::parse_config(s);
         })
-        .def_readwrite("udp_dest", &sensor_config::udp_dest)
-        .def_readwrite("udp_port_lidar", &sensor_config::udp_port_lidar)
-        .def_readwrite("udp_port_imu", &sensor_config::udp_port_imu)
-        .def_readwrite("ts_mode", &sensor_config::ts_mode)
-        .def_readwrite("ld_mode", &sensor_config::ld_mode)
-        .def_readwrite("operating_mode", &sensor_config::operating_mode)
-        .def_readwrite("multipurpose_io_mode", &sensor_config::multipurpose_io_mode)
-        .def_readwrite("azimuth_window", &sensor_config::azimuth_window)
-        .def_readwrite("sync_pulse_out_angle", &sensor_config::sync_pulse_out_angle)
-        .def_readwrite("sync_pulse_out_pulse_width", &sensor_config::sync_pulse_out_pulse_width)
-        .def_readwrite("nmea_in_polarity", &sensor_config::nmea_in_polarity)
-        .def_readwrite("nmea_baud_rate", &sensor_config::nmea_baud_rate)
-        .def_readwrite("nmea_ignore_valid_char", &sensor_config::nmea_ignore_valid_char)
-        .def_readwrite("nmea_leap_seconds", &sensor_config::nmea_leap_seconds)
-        .def_readwrite("sync_pulse_in_polarity", &sensor_config::sync_pulse_in_polarity)
-        .def_readwrite("sync_pulse_out_polarity", &sensor_config::sync_pulse_out_polarity)
-        .def_readwrite("sync_pulse_out_frequency", &sensor_config::sync_pulse_out_frequency)
-        .def_readwrite("phase_lock_enable", &sensor_config::phase_lock_enable)
-        .def_readwrite("phase_lock_offset", &sensor_config::phase_lock_offset)
-        .def_readwrite("udp_port_imu", &sensor_config::udp_port_imu)
+        .def_readwrite("udp_dest", &sensor_config::udp_dest, "Destination to which sensor sends UDP traffic.")
+        .def_readwrite("udp_port_lidar", &sensor_config::udp_port_lidar, "Port on UDP destination to which lidar data will be sent.")
+        .def_readwrite("udp_port_imu", &sensor_config::udp_port_imu, "Port on UDP destination to which IMU data will be sent.")
+        .def_readwrite("ts_mode", &sensor_config::ts_mode, "Timestamp mode of sensor. See class TimestampMode.")
+        .def_readwrite("ld_mode", &sensor_config::ld_mode, "Horizontal and Vertical Resolution rate of sensor as mode, e.g., 1024x10. See class LidarMode.")
+        .def_readwrite("operating_mode", &sensor_config::operating_mode, "Operating Mode of sensor. See class OperatingMode.")
+        .def_readwrite("multipurpose_io_mode", &sensor_config::multipurpose_io_mode, "Mode of MULTIPURPOSE_IO pin. See class MultipurposeIOMode.")
+        .def_readwrite("azimuth_window", &sensor_config::azimuth_window, "Tuple representing the visible region of interest of the sensor in millidegrees, .e.g., (0, 360000) for full visibility.")
+        .def_readwrite("sync_pulse_out_angle", &sensor_config::sync_pulse_out_angle, "Polarity of SYNC_PULSE_OUT output. See sensor documentaiton for details." )
+        .def_readwrite("sync_pulse_out_pulse_width", &sensor_config::sync_pulse_out_pulse_width, "SYNC_PULSE_OUT pulse width in ms. See sensor documentaiton for details.")
+        .def_readwrite("nmea_in_polarity", &sensor_config::nmea_in_polarity, "Polarity of NMEA UART input $GPRMC messages. See sensor documentaiton for details.")
+        .def_readwrite("nmea_baud_rate", &sensor_config::nmea_baud_rate, "Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.")
+        .def_readwrite("nmea_ignore_valid_char", &sensor_config::nmea_ignore_valid_char, "NMEA Ignore Valid Char. True corresponds to 1 and False to 0 for property; see sensor documentaiton for details.")
+        .def_readwrite("nmea_leap_seconds", &sensor_config::nmea_leap_seconds, "Integer number of leap seconds that will be added to the UDP timetsamp when calculating seconds since Unix Epoch time. See sensor documentaiton for details.")
+        .def_readwrite("sync_pulse_in_polarity", &sensor_config::sync_pulse_in_polarity, "Polarity of SYNC_PULSE_IN pin. See sensor documentaiton for details.")
+        .def_readwrite("sync_pulse_out_polarity", &sensor_config::sync_pulse_out_polarity, "Polarity of SYNC_PULSE_OUT output. See sensor documentaiton for details." )
+        .def_readwrite("sync_pulse_out_frequency", &sensor_config::sync_pulse_out_frequency, "SYNC_PULSE_OUT rate. See sensor documentaiton for details.")
+        .def_readwrite("phase_lock_enable", &sensor_config::phase_lock_enable, "Enable phase lock. See sensor documentaiton for more details.")
+        .def_readwrite("phase_lock_offset", &sensor_config::phase_lock_offset, "Angle in Lidar Coordinate Frame that sensors are locked to, in millidegrees. See sensor documentaiton for details.")
         .def("__str__", [](const sensor_config& i) { return to_string(i); })
         .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; });
@@ -545,14 +545,28 @@ directly.
             if (persist) config_flags |= ouster::sensor::CONFIG_PERSIST;
             if (udp_dest_auto) config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
             sensor::set_config(hostname, config, config_flags);
-            }, py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
+            }, R"(
+            Set sensor config parameters on sensor.
+
+            Args:
+                hostname (str): hostname of the sensor
+                config (SensorConfig): config to set sensor parameters to
+                persist (bool): persist parameters after sensor disconnection (default = False)
+                udp_dest_auto: automatically determine sender's IP at the time command was sent and set it as destination of UDP traffic. Function will error out if config has udp_dest member. (default = False)
+            )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
     m.def("get_config", [](const std::string& hostname, const bool active) {
         sensor::sensor_config config;
         if (!sensor::get_config(hostname, config, active)) {
             throw std::invalid_argument("Error getting sensor config.");
         }
         return config;
-    }, py::arg("hostname"), py::arg("active") = true);
+    }, R"(
+        Returns sensor config parameters as SensorConfig .
+
+        Args: 
+            hostname (str): hostname of the sensor
+            active (bool): return active or staged sensor configuration
+        )", py::arg("hostname"), py::arg("active") = true);
 
     // Version Info
     py::class_<util::version>(m, "Version")

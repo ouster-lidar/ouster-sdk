@@ -27,7 +27,7 @@ Pre-built binaries are provided on `PyPI <https://pypi.org/>`_ for x86-64 platfo
 Building from source is supported on:
 
 - Ubuntu 18.04, 20.04, and Debian 10 (x86-64)
-- Macos >= 10.13 (x86-64)
+- macOS >= 10.13 (x86-64)
 - Windows 10 (x86-64)
 
 See the `build instructions`_ for requirements needed to build from a source distribution or from a

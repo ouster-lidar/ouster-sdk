@@ -5,30 +5,54 @@ Quick Start with Ouster Python SDK
 ==================================
 
 This quickstart guide will walk you through visualizing Ouster sensor data quickly, whether from
-sample data or a live sensor. The first step is to install the SDK with the optional dependencies
-needed to run the examples::
+sample data or a live sensor from scratch.
 
-  $ python3 -m pip install ouster-sdk[examples]
+
+Installation
+============
+
+The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on `supported platforms`_, run::
+
+    $ python3 -m pip install ouster-sdk[examples]
+
+.. note::
+
+   Newer users to Python should create a suitable `venv`_, `activate`_ it, and ensure that they have
+   `upgraded pip`_ once their venv is activated.
+
+To check that you've succesfully installed the latest version of the Ouster Python SDK, run::
+    
+    $ pip list
 
 .. note::
 
    To run the example code on Windows 10, you may also find that you need the ``PyQt5`` library.
 
-.. todo::
 
-   Add PyQt5 as a dependency to the ``examples`` extra on Windows
+.. _supported platforms: https://static.ouster.dev/sdk-docs/index.html#installation
+.. _upgraded pip: https://pip.pypa.io/en/stable/installing/#upgrading-pip
+.. _venv: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment
+.. _activate: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#activating-a-virtual-environment
 
-.. todo::
 
-   Add venv example use in example above. I was about to add those ``python -m venv VENV && source ...`` lines but not sure how to nicely put it for Windows users too.
+Using this Guide
+================
 
 You'll want to start an interactive Python session and keep it open through the sections, as we'll
-be reusing variables created in earlier parts.  To get started, open python and import the ouster
-client:
+be reusing variables created in earlier parts while explaining what we're doing as we go.
+
+To get started, open a new terminal window and start a python interpreter::
+
+    $ python3
+
+In the python session that opens, import the Ouster Python Client:
 
 .. code:: python
     
    >>> from ouster import client
+
+Throughout this guide we will indicate console commands with ``$`` and python interpreter commands
+with ``>>>``, just as we have above.
 
 If you'd like to start by working with sample data, continue to the section below. If you'd prefer
 to start capturing data from a sensor, you can skip to `Using an Ouster Sensor`_ below.
@@ -43,9 +67,9 @@ Download the `sample data`_ (**1.6 GB**) and unzip the contents. You should have
   * ``OS1_2048x10_128.json``
 
 The downloaded pcap file contains lidar and imu packets captured from the network . You can read
-more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Software User Manual. The
-JSON file contains metadata queried from the sensor TCP interface necessary to interpret the packet
-data.
+more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Sensor Documentation. The
+JSON file contains metadata queried from the sensor TCP interface which is necessary to interpret
+the packet data.
 
 Let's load the paths into your open session of python:
 
@@ -54,10 +78,6 @@ Let's load the paths into your open session of python:
    >>> pcap_path = '/path/to/OS1_128.pcap'
    >>> metadata_path = '/path/to/OS1_2048x10_128.json'
 
-.. note::
-
-    The full sample data collection, spanning various sensor models, beam configurations,
-    environments, and use cases, is available at the `Ouster Sample Data`_ page.
 
 Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the
 metadata separately from ``metadata_path`` first:
@@ -94,19 +114,20 @@ If you have access to sensor hardware, you can start reading data by instantiati
 .. note::
 
    Connecting to an Ouster sensor is covered in the `Networking Guide`_ section of the Ouster
-   Software User Manual.
+   Sensor Documentation.
 
-In the following, ``<SENSOR_HOSTNAME>`` shold be substituted for the actual hostname or IP of your
+In the following, ``<SENSOR_HOSTNAME>`` should be substituted for the actual hostname or IP of your
 sensor and ``<UDP_DEST>`` should be the hostname or IP of the machine reading sensor data, per the
 network configuration.
 
-To make sure everything is connected, try pinging the sensor. You should see some output like::
+To make sure everything is connected, open a separate console window and try pinging the sensor. You
+should see some output like::
 
    $ ping -c1 <SENSOR_HOSTNAME>
    PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
    64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
 
-Next, you'll need to configure the sensor with the config parameters:
+Next, you'll need to configure the sensor with the config parameters. In your open python session:
 
 .. code:: python
 
@@ -122,6 +143,9 @@ Just like with the sample data, you can create a :py:class:`.PacketSource` from 
 .. code:: python
 
    >>> source = client.Sensor(hostname, _overflow_err=False)
+
+Now we have a ``source`` from our sensor! To visualize data from your sensor, proceed to
+`Visualizing Lidar Data`_ directly below.
 
 
 .. _Networking Guide: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#64
@@ -161,18 +185,18 @@ the first 512 columns of range data and display the result:
    >>> plt.axis('off')
    >>> plt.show()
 
-For a more in-depth explanation of the API concepts involved with visualizing your data in 2D see
-:ref:`ex-staggered-and-destaggered`.
-
+.. note::
+    
+    If running ``plt.show`` gives you an error about your Matplotlib backend, you will need a `GUI
+    backend`_ such as TkAgg or Qt5Agg in order to visualize your data with matplotlib.
 .. figure:: images/lidar_scan_range_image.png
    :align: center
 
-   LidarScan ``RANGE`` field. Visualizing only the first 512 column out of 2048 with simple gray
-   color mapping.
+   First 512 columns of LidarScan ``RANGE`` field of sample data with simple gray colormapping.
 
-We can also plot the results in 3D by projecting the range measurements into cartesian coordinates.
-To do this, we first create a lookup table, then use it to produce X, Y, Z coordinates from our scan
-data with shape (H x W x 3):
+In addition to viewing the data in 2D, we can also plot the results in 3D by projecting the range
+measurements into cartesian coordinates.  To do this, we first create a lookup table, then use it to
+produce X, Y, Z coordinates from our scan data with shape (H x W x 3):
 
 .. code:: python
 
@@ -193,12 +217,15 @@ Now we rearrange the resulting numpy array into a shape that's suitable for plot
     >>> ax.scatter(x, y, z, c=z / max(z), s=0.2)
     >>> plt.show()
 
-To learn more about manipulating lidar data, see :ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
+To learn more about manipulating lidar data, see :ref:`ex-staggered-and-destaggered`, :ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
 
 .. figure:: images/lidar_scan_xyz.png
    :align: center
 
    Point cloud from sample data. Points colored by Z coordinate value.
+
+
+.. _GUI backend: https://matplotlib.org/stable/tutorials/introductory/usage.html#the-builtin-backends
 
 
 Next Steps
@@ -219,3 +246,4 @@ Here are a few things you might be interested in:
     * :ref:`ex-correlating-2d-and-3d`
     * :ref:`ex-pcap-to-csv`
     * :ref:`ex-imu`
+
