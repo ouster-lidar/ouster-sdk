@@ -27,7 +27,6 @@ class ClientTimeout(ClientError):
 
 class ClientOverflow(ClientError):
     """Raised when data loss is possible due to internal buffers filling up."""
-
     pass
 
 
@@ -103,7 +102,7 @@ class Sensor(PacketSource):
                  metadata: Optional[SensorInfo] = None,
                  buf_size: int = 128,
                  timeout: Optional[float] = 1.0,
-                 _overflow_err: bool = True,
+                 _overflow_err: bool = False,
                  _flush_before_read: bool = True) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
@@ -197,9 +196,14 @@ class Sensor(PacketSource):
         if self._flush_before_read:
             self.flush(full=True)
 
-        return iter(self._next_packet, None)
+        while True:
+            p = self._next_packet()
+            if p is not None:
+                yield p
+            else:
+                return
 
-    def flush(self, n_frames: int = 1, *, full=False) -> int:
+    def flush(self, n_frames: int = 3, *, full=False) -> int:
         """Drop some data to clear internal buffers.
 
         Will raise ClientTimeout if a lidar packet is not received within the
@@ -387,7 +391,6 @@ class Scans:
                            lidar_port,
                            metadata=metadata,
                            buf_size=n * 128,
-                           _overflow_err=False,
                            _flush_before_read=False)) as source:
                 source.flush(full=True)
                 scans = cls(source, timeout=1.0, complete=True, _max_latency=0)
@@ -421,7 +424,6 @@ class Scans:
                         metadata=metadata,
                         buf_size=buf_size,
                         timeout=timeout,
-                        _overflow_err=True,
                         _flush_before_read=True)
 
         return cls(source, timeout=timeout, complete=complete, _max_latency=1)
