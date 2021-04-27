@@ -1,0 +1,8 @@
+include README.rst CMakeLists.txt mypy.ini tox.ini
+graft docs
+graft src
+graft tests
+
+# add the C++ source via the symlink created by setup.py; prune to avoid a cycle
+graft sdk
+prune sdk/python

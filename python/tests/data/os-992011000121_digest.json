@@ -1,0 +1,387 @@
+{
+    "meta": {
+        "beam_altitude_angles": [20.5477, 19.2919, 18.0171, 16.7242, 15.4141, 14.088, 12.7466, 11.3909, 10.022, 8.641, 7.249, 5.8474, 4.4377, 3.0216, 1.601, 0.1779, -1.2454, -2.6668, -4.0842, -5.4956, -6.8994, -8.2939, -9.6778, -11.0499, -12.409, -13.754, -15.0841, -16.3982, -17.6955, -18.975, -20.2356, -21.4764],
+        "beam_azimuth_angles": [-4.252, -4.2518, -4.2517, -4.2518, -4.2521, -4.2526, -4.2534, -4.2543, -4.2555, -4.2568, -4.2582, -4.2596, -4.2608, -4.2618, -4.2625, -4.2628, -4.2626, -4.262, -4.2611, -4.2599, -4.2586, -4.2572, -4.2558, -4.2546, -4.2536, -4.2528, -4.2522, -4.2518, -4.2517, -4.2517, -4.2519, -4.2521],
+        "build_rev": "v1.14.0-beta.13",
+        "client_version": "0.2.0-dev0",
+        "data_format": {
+            "columns_per_frame": 512,
+            "columns_per_packet": 16,
+            "pixel_shift_by_row": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            "pixels_per_column": 32
+        },
+        "hostname": "os-992011000121",
+        "imu_to_sensor_transform": [1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1],
+        "json_calibration_version": 3,
+        "lidar_mode": "512x10",
+        "lidar_origin_to_beam_origin_mm": 15.806,
+        "lidar_to_sensor_transform": [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1],
+        "prod_line": "OS-1-32-U0",
+        "prod_sn": "992011000121"
+    },
+    "packets": [
+        {
+            "RANGE": "cb70f2d3cd63f89083a1e1356bde4c2e",
+            "REFLECTIVITY": "70443233fdce99adf7a5ec54d4af5012",
+            "SIGNAL": "027d43c4c21fe69ba016815164217df3",
+            "NEAR_IR": "0ae7b22a3187873ecab67480f585e982",
+            "TIMESTAMP": "ba4688c17c83053812c346a21606d9aa",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "2dfeaebfceadfe130ba1b45ae5aec202",
+            "ENCODER_COUNT": "10cacd5f2933bcd2526ece14e785240f",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "f7b78b340f41cae205a5c89a44244448",
+            "REFLECTIVITY": "57b942408e1a0e6de4de4843cf8c98dc",
+            "SIGNAL": "aca10416f723d8dc5d472d50a31a9f34",
+            "NEAR_IR": "1bfdb5fe46952f76d90aca1ae37ddeec",
+            "TIMESTAMP": "1da5fcd2943a3f5274d359d88bd0ffd3",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "3bebac6b83e976d2f0ea34df2c780cc6",
+            "ENCODER_COUNT": "09d95b89745b7de964ec24748783c691",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "44334bae88b5098511f0947d9a448b5d",
+            "REFLECTIVITY": "b9c15f37eca1be361fbca17f92f7df0d",
+            "SIGNAL": "94e41aa2d867b33d3d15d3ea08599ee6",
+            "NEAR_IR": "d06b9722348ebb4eac25b3da251f61ca",
+            "TIMESTAMP": "e3653a5d00f409dc08eb8d4bcfc2780a",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "91c318b79107c735774b611dcaa0e76b",
+            "ENCODER_COUNT": "ae58065bd8f1425bdb9822deefc24cba",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "7c45795bf91343e540618a112094014d",
+            "REFLECTIVITY": "29dd6f3e1e70f8247e3a1722cecd8962",
+            "SIGNAL": "d6ce69e71fc5488a65334b007d36c120",
+            "NEAR_IR": "3983643ea91276fd28faf3b99a0aefe4",
+            "TIMESTAMP": "a9de3f1b2fd737af82db52864ce366a7",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "880cefc905a8b47296ed61eb60a9cb25",
+            "ENCODER_COUNT": "881cac1f0ece5119b070f822ece9fb06",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "a4d0630536e491b5206d1de5f713b3c8",
+            "REFLECTIVITY": "ca345a3995906947faf3eb63303eb9e9",
+            "SIGNAL": "4b223d97af66d4093ff59bf2a67c506e",
+            "NEAR_IR": "3b795361fc72cd3a77952bb8b30ec839",
+            "TIMESTAMP": "be19fff458da456c309b5bc333ee2df6",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "09bc40d9ba4e1c6f430bec0aea2e604a",
+            "ENCODER_COUNT": "50b4b391e3fe96ca2e0d9b0536ad54d2",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "59eacb97032da58ece3157822c7f351c",
+            "REFLECTIVITY": "28e36989a33b2501085b864977d398de",
+            "SIGNAL": "066ad724bf1bda1f6ba6a53cc17f92dc",
+            "NEAR_IR": "7f35b595046b0335daeeeec0832a1ae2",
+            "TIMESTAMP": "3654ef84bc210dd672d2df6db257871b",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "f258077392399c4c52c16d7e4e65a411",
+            "ENCODER_COUNT": "d5c8b110fd4fb6fd16dad2907dea140c",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "f5bfdf784475400927af36d12468f995",
+            "REFLECTIVITY": "f1233c36d91462dad030cf888f41a9ca",
+            "SIGNAL": "8620fe5f26a2b16f2a051801c52bef9b",
+            "NEAR_IR": "f8cd609a09f64ed7135a7bac82901288",
+            "TIMESTAMP": "242447d83e1e9a0519a79f2aa051af99",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "d886a39d51e0c732fd6ae2af6194768c",
+            "ENCODER_COUNT": "07c6083f2b04609473e8f7309fa80942",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "23446464203d6f473222d77c4fb6c51a",
+            "REFLECTIVITY": "0e3b5aac21353a5da91e665d6f58b74c",
+            "SIGNAL": "25a75d7a468026a3817ed5ea5a4e1f08",
+            "NEAR_IR": "0a7888323888327355b6e7871c370b5b",
+            "TIMESTAMP": "d5d25305efdf9a940c91b899fc4617f1",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "b18afbcdc25fb84f6fb2afb677f095a3",
+            "ENCODER_COUNT": "dfd468c5befe57fb90b80557f3dc1bda",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "54b8eb56248f45d3c4fe83915050eabe",
+            "REFLECTIVITY": "2ee1b4c16edd008556ac77da0ddf3840",
+            "SIGNAL": "d30b2ede12f4e524becd9bffa8d26dc4",
+            "NEAR_IR": "2de0ce6708328517f73bb8658e61e803",
+            "TIMESTAMP": "96c2a3e2d4009e7bb1584f8a241cd5e3",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "0f766fd7309f53f95dfe77651438936c",
+            "ENCODER_COUNT": "38980721e0afba60d9390d21a164ce34",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "e13e8d26537fc5c9fa0104705485cfba",
+            "REFLECTIVITY": "78d930331f915c20b6bcaa5e1001425f",
+            "SIGNAL": "38e61402f2595ed8d8076b9e5e298c52",
+            "NEAR_IR": "ae109f9be40e3ddcb83e9417a01caca9",
+            "TIMESTAMP": "38c7292253f90974663047859a2b1725",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "db32e4a29c3d471c1b5ac95824d1642e",
+            "ENCODER_COUNT": "3809ad03a5bfabbc4e31f0e68172aeab",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "ef2263a03a7e40a83fd978a4707178b3",
+            "REFLECTIVITY": "ac26ae004a3a917dd8a845204a1e1f21",
+            "SIGNAL": "0b949d6fc632d3fc07d273e2ae5d3237",
+            "NEAR_IR": "37404376db7756b6b73ebfb27ce5dc58",
+            "TIMESTAMP": "abb4bbe25c39475a026fce2f78043154",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "0e8faa063f9381acc7935afd0e046a23",
+            "ENCODER_COUNT": "c3510aa8af0a25ba6c35315e54e4c5a4",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "70d9ce2378145242a8d94c16250ab3d2",
+            "REFLECTIVITY": "5ff694ef223ade81bad1a78a5a234eae",
+            "SIGNAL": "baca22e08bab845041a75d6e2aaa7770",
+            "NEAR_IR": "c5408254066203ac7f70e7130da4af5a",
+            "TIMESTAMP": "d91bd1e3f3fc7f8a614525a3f3f1c663",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "3204060ef7e44c90ae88633330177547",
+            "ENCODER_COUNT": "817d926233f4523c44da262b503525ee",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "5b7d7d432fa9bf4b6458c00663828dcc",
+            "REFLECTIVITY": "42704d6a9a73e529939ed3b9a0572082",
+            "SIGNAL": "8442536d25e5d949056ff66f61125377",
+            "NEAR_IR": "2672e888b666d94d258b5d1ca5f36782",
+            "TIMESTAMP": "966b9a769a434f3e2a91cc34c11ae545",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "7293d208fbcd0f9b29347d33c5a1f57b",
+            "ENCODER_COUNT": "532c64cdb1cdf22ab47a0b28622401fd",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "5443816c05ebc33494876680608e181f",
+            "REFLECTIVITY": "9165a7bf350f3c0560ba14a1d096b087",
+            "SIGNAL": "0aa002c51bfafaa384acc799b8849fe9",
+            "NEAR_IR": "ea0569a71128a31ac8615f2aa85cf62f",
+            "TIMESTAMP": "f1e281ee570997990f784cfd352a5d52",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "5a46b69ed4ae90f3f9ed606027bd332f",
+            "ENCODER_COUNT": "dca52191c33cc674d556e3b37189a7e0",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "95324627f44153c18084afbc19d25d21",
+            "REFLECTIVITY": "84809cfdfa01b257207377f79f593b80",
+            "SIGNAL": "b03adb9cb2f0d222ebff32457b04af2b",
+            "NEAR_IR": "cf23b18243e32366bac538f08c4a42f5",
+            "TIMESTAMP": "26bab2a712abe11aacaa38bcbfcfcfed",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "89eb23ca6505c40d0a7746f551312f47",
+            "ENCODER_COUNT": "035d97bb671821373f53e77cf603fcd8",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "a3f3bd52bf2258c14166a143971d0b06",
+            "REFLECTIVITY": "a8f7cd24dc5a42e9b97db1526d584e9c",
+            "SIGNAL": "a191da6c96142563953476c5732815c0",
+            "NEAR_IR": "1d8f50b2113aa01643133ca5b010e225",
+            "TIMESTAMP": "b544910ea8b8d8a9a88a0d3fb8c0e1bd",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "b3e6b5e13a5046aa2ff4a917e5d82dd1",
+            "ENCODER_COUNT": "bf04ac1564f1f70708ba15d0aff3945e",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "1f4c20861dc81bb5eeead36628139d30",
+            "REFLECTIVITY": "a924fb69e26e7b0efd33d28e0c8a6270",
+            "SIGNAL": "7184e6e5654168d2ae2fcd238d83a81e",
+            "NEAR_IR": "58dcf06ce324c6f7891e0307dae39a5f",
+            "TIMESTAMP": "67a1d5461c3ee67ad30037a60d884edd",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "50171c60ae2071a633e40d19939bcadd",
+            "ENCODER_COUNT": "a54d4b19d7353d05c854d7ab175682f3",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "f62d921b8512bc7babf15039e0c6e5c6",
+            "REFLECTIVITY": "e477248aa9517216bc5b4a1bef416db9",
+            "SIGNAL": "b18d8a6d8eaaf255414fc9d362c0ba9a",
+            "NEAR_IR": "c6d81aade053c7c4fe5869099ad2c936",
+            "TIMESTAMP": "3c34bde0a81dc6b9db2a57b47050968f",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "ae9dfeb0934cc82b9e5dd4518634f79f",
+            "ENCODER_COUNT": "860adcb927d6774e5d04e63a79313950",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "9b137009286b96840e57bf2cbcd0ffab",
+            "REFLECTIVITY": "13436204c8edaeba5dacaadbf82fed80",
+            "SIGNAL": "dd4893167e29ae2f4ee88330ad6b3a4e",
+            "NEAR_IR": "af9ac777472454f75855b26473b53e4b",
+            "TIMESTAMP": "debdf468c49f3e3c6e559abcbd7d7a98",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "3906d134322d6297eff54554fef9eeb1",
+            "ENCODER_COUNT": "c0126658bd3866d913ea1332fb0d5aec",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "2f13b5aa3c2ba3d01c170222ffc1c755",
+            "REFLECTIVITY": "6ef946f29caf5d29dc5ad3713e19d377",
+            "SIGNAL": "b99df390feabd08f778ae52b299ca937",
+            "NEAR_IR": "f32c02c5565963b6ebd843fe15628faa",
+            "TIMESTAMP": "4a3d94c3d8ae644d60447c2b3ceb958e",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "1f39a0ef6c65622770aebeaff6c230c1",
+            "ENCODER_COUNT": "76bd839b73e32076ebc844533247024d",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "aa950b57d2eacb1ea22d03a67dede2ec",
+            "REFLECTIVITY": "3dac6d26a719437c2f44d45b30bed9a2",
+            "SIGNAL": "0d61404303b1340498487441649c747d",
+            "NEAR_IR": "c77f4501491d98a8c4fd7dd7725aac35",
+            "TIMESTAMP": "8a57b0e54a2ebcc8613d222488bfae76",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "e8650f5f369c5afcd34b9719630c5de7",
+            "ENCODER_COUNT": "92f4203dcf31607b7fb3e0a3030b5fd8",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "12044ca27ae59ee16df96fb6c37a8724",
+            "REFLECTIVITY": "a4aa9e33959c579cdd679f2c5a52263e",
+            "SIGNAL": "69216e42a6e69308fa8f2c4771a3300a",
+            "NEAR_IR": "b2b78e40f5a37ad98e35d378397df282",
+            "TIMESTAMP": "0426df9c7b320c4f19fab31b0980bed9",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "87f4245544d6b237ce536c8f222081b4",
+            "ENCODER_COUNT": "a406cf18dc3e18ca68508af4a18ded42",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "69e486fa833b93b113592fa70ce30063",
+            "REFLECTIVITY": "40054c073ab66fa9eb5779b367544eff",
+            "SIGNAL": "6bcf2f03f0b4eaac4175f83726450a99",
+            "NEAR_IR": "a8592e509e589a0ef15a3bec5976723d",
+            "TIMESTAMP": "a54beabba04c5546bbe274b6a227842e",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "8f13c03ec24ddb0047131557dd213b46",
+            "ENCODER_COUNT": "c6b5fe9044e0b351b30e4ce3bbf5f7d3",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "55497a990547f44079e5140369dfd2b2",
+            "REFLECTIVITY": "2ebe14bcb870159541ba9090e522cd58",
+            "SIGNAL": "caf70c9cd846d1a2019482762c1a531f",
+            "NEAR_IR": "4f7fe9514b4eddebcd533fbae9247f72",
+            "TIMESTAMP": "211d402a72b4c1247ef7f9633fb31980",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "65b7dbca8808971aa9277565832db892",
+            "ENCODER_COUNT": "9f66210a27cb18a70625f5d3f4292580",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "7596f17d742f98d205e30bd33da010e0",
+            "REFLECTIVITY": "41c1aade615903493caa8dd24a2029c9",
+            "SIGNAL": "238b8acb2380ae48e24dbcd649015841",
+            "NEAR_IR": "b55a604e0baa1f78a7cf787eb186243c",
+            "TIMESTAMP": "4f98d976611320895d8dd57bee12683b",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "fd0bd7ec2aaab6bcf320ca3df976c9a2",
+            "ENCODER_COUNT": "ade61aff3b2c605bd6173602c93327b1",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "0bd9276934011125852de4e6d668acdc",
+            "REFLECTIVITY": "efd8fd11e4dc2f572083fc465a85c663",
+            "SIGNAL": "bfa20645c229594aa9efd4f95814a4ab",
+            "NEAR_IR": "27e73da4abad4a4fc8aed418d54d5f1b",
+            "TIMESTAMP": "2666ca5e5318c49d34f6d4b6b613d9c9",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "701999763b35b7cc63f5f3071cd16b36",
+            "ENCODER_COUNT": "f383f9085198d47faae5f25b2e35303d",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "40f01f5cf8dea052dfc8e2aab2528861",
+            "REFLECTIVITY": "cb53522d91475f043e1560a17d7da8b0",
+            "SIGNAL": "86d3ad9441c56c7257f69130db13f4d8",
+            "NEAR_IR": "543a1d9721d9daff3efe9e9e16d52190",
+            "TIMESTAMP": "b1f5f78047381def1f60aa438e180868",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "87ace1b11ef556976554cd023e042ba6",
+            "ENCODER_COUNT": "de59fe410d47cffe216d068e378ac105",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "df8a320c076b8ab0fb1c2695d5e28faf",
+            "REFLECTIVITY": "9602f64c7003ecc927b4bb1caf06c9a1",
+            "SIGNAL": "70980233db5b7df1b3b06544c704339f",
+            "NEAR_IR": "c4631c5bb7c4fca9242be7878c17b557",
+            "TIMESTAMP": "0b54eea824c37cfe7f7005b27dd6853a",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "a89fe233a2568960a6b058899ce487a5",
+            "ENCODER_COUNT": "8d7868143ad39d3fab4ad37c751eb334",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "5cdb247e69107a9bf112f3e3f3c92110",
+            "REFLECTIVITY": "8a9955f64c26aad401dc2995fe9e4555",
+            "SIGNAL": "48b4309dd6dd536a7b49b5b3ed09cda9",
+            "NEAR_IR": "919157f3a8cee05cec3d9dc990952d1e",
+            "TIMESTAMP": "53cdfeb4859ea9b93f510ea46cd16c96",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "eaa860b4569151bb46f818a53e77f8b8",
+            "ENCODER_COUNT": "59caa2ecc2c218e313833beb1f8a4444",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "8c023bcc9dce15d347c94645f5186c47",
+            "REFLECTIVITY": "d137739d24387470772b0e80bc0e1f75",
+            "SIGNAL": "f6cc39d6a3cc794598b2debaacf791f9",
+            "NEAR_IR": "c24934a479679385c054b887e2d5646c",
+            "TIMESTAMP": "a48c4682b19261459b7d3131fdd60fed",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "5496674052d8735654aa637e0179455b",
+            "ENCODER_COUNT": "69d744c5acd8872c9ba86bf098699103",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "8ea1c0b131be6db245c35fa5844ca4ef",
+            "REFLECTIVITY": "5c4e8af1ae410d35852b5e4b7e0ac2fb",
+            "SIGNAL": "5e4237c7aac66f6df03f59663074db12",
+            "NEAR_IR": "610363ad83665d9da6c85ef6815ca163",
+            "TIMESTAMP": "f70132d4a9a156bc3df8d3f4f22ba698",
+            "FRAME_ID": "336c73eaf84d9adb6fba57f312a8f365",
+            "MEASUREMENT_ID": "771a15b7057c789e77e74112ec0dcb04",
+            "ENCODER_COUNT": "0ad5659327f75dd68167cd8013a338c5",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        },
+        {
+            "RANGE": "bd358b5c3974b9006dbf939236022622",
+            "REFLECTIVITY": "6ee77b05b7f8493d13d85fc5956001c7",
+            "SIGNAL": "d24af3c62f00b8e0c4f9a870e390e774",
+            "NEAR_IR": "e0212dbfeaf94656f272942a0d2291eb",
+            "TIMESTAMP": "1b0bde4fbef287a1d7055ae6c2b46847",
+            "FRAME_ID": "695b5a089064e7a3a14f907eaba7e000",
+            "MEASUREMENT_ID": "2dfeaebfceadfe130ba1b45ae5aec202",
+            "ENCODER_COUNT": "10cacd5f2933bcd2526ece14e785240f",
+            "STATUS": "aabd2b2a451504e119a243d8e775fdad"
+        }
+    ],
+    "scans": [
+        {
+            "RANGE": "12aed55550b40521074e307e2e4c1151",
+            "REFLECTIVITY": "778cabf6491a92fdc74979a3a0e5aaeb",
+            "SIGNAL": "d949d34f31d4d7944439a0b63fb6aef1",
+            "NEAR_IR": "95d84f2dc7cd52e180c3e0cfdab42278",
+            "TIMESTAMP": "993c41618d6b71774eccd322c0ef5b39",
+            "ENCODER_COUNT": "810b5589e12e59b50d7c6aa4e6c32ef6",
+            "STATUS": "bcd37b7a234ef8ba2385177f1dd93505"
+        }
+    ]
+}
