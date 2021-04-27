@@ -33,7 +33,7 @@ class ClientOverflow(ClientError):
 class PacketSource(Protocol):
     """Represents a single-sensor data stream."""
     def __iter__(self) -> Iterator[Packet]:
-        """A PacketSource supports Iterable[Packet].
+        """A PacketSource supports ``Iterable[Packet]``.
 
         Currently defined explicitly due to:
         https://github.com/python/typing/issues/561
@@ -42,7 +42,7 @@ class PacketSource(Protocol):
 
     @property
     def metadata(self) -> SensorInfo:
-        """Metadata associated with the data."""
+        """Metadata associated with the packet stream."""
         ...
 
     def close(self) -> None:
@@ -51,7 +51,7 @@ class PacketSource(Protocol):
 
 
 class Packets(PacketSource):
-    """Packets from an iterator."""
+    """Create a :class:`PacketSource` from an existing iterator."""
 
     _it: Iterator[Packet]
     _metadata: SensorInfo
@@ -59,8 +59,8 @@ class Packets(PacketSource):
     def __init__(self, it: Iterable[Packet], metadata: SensorInfo):
         """
         Args:
-            it: a stream of packets
-            metadata: metadata for the packet stream
+            it: A stream of packets
+            metadata: Metadata for the packet stream
         """
         self._it = iter(it)
         self._metadata = metadata
@@ -70,6 +70,7 @@ class Packets(PacketSource):
         return self._metadata
 
     def __iter__(self) -> Iterator[Packet]:
+        """Return the underlying iterator."""
         return self._it
 
     def close(self) -> None:
@@ -118,6 +119,9 @@ class Sensor(PacketSource):
             timeout: seconds to wait for packets before signaling error or None
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
+
+        Raises:
+            ClientError: If initializing the client fails.
         """
         self._cli = _client.Client(hostname, lidar_port, imu_port, buf_size)
         self._timeout = timeout
@@ -192,6 +196,18 @@ class Sensor(PacketSource):
         return self._cache
 
     def __iter__(self) -> Iterator[Packet]:
+        """Access the UDP data stream as an iterator.
+
+        Reading may block waiting for network data for up to the specified
+        timeout. Failing to consume this iterator faster than the data rate of
+        the sensor may cause packets to be dropped.
+
+        Raises:
+            ClientTimeout: If no packets are received within the configured
+                timeout.
+            ClientError: If the client enters an unspecified error state.
+        """
+
         # Attempt to flush any old data before producing packets
         if self._flush_before_read:
             self.flush(full=True)
@@ -206,13 +222,14 @@ class Sensor(PacketSource):
     def flush(self, n_frames: int = 3, *, full=False) -> int:
         """Drop some data to clear internal buffers.
 
-        Will raise ClientTimeout if a lidar packet is not received within the
-        configured timeout.
-
         Args:
             n_frames: number of frames to drop
             full: clear internal buffers first, so data is read from the OS
                   receive buffers (or the network) directly
+
+        Raises:
+            ClientTimeout: if a lidar packet is not received within the
+                configured timeout.
         """
         if full:
             self._cli.flush()
@@ -272,13 +289,8 @@ class Scans:
 
     Optionally filters out incomplete frames and enforces a timeout. A batching
     timeout can be useful to detect when we're only receiving incomplete frames
-    or only imu packets. Also can be configured to manage internal buffers for
+    or only imu packets. Can also be configured to manage internal buffers for
     soft real-time applications.
-
-    Managing the buffer size may eventually be done by the underlying
-    PacketSource. Due to the way the underlying C++ code is structured, it
-    currently needs to interact closely with scan batching in order to drop data
-    intelligently between frame boundaries.
     """
     def __init__(self,
                  source: PacketSource,
@@ -287,11 +299,6 @@ class Scans:
                  timeout: Optional[float] = None,
                  _max_latency: int = 0) -> None:
         """
-        If the packet source is a ``Sensor`` and _max_latency is n > 0, try to
-        manage internal buffers so that we only ever return at most the nth
-        oldest frame. This will drop data earlier than the buffered PacketSource
-        would otherwise.
-
         Args:
             source: any source of packets
             complete: if True, only return full scans
@@ -304,6 +311,8 @@ class Scans:
         self._max_latency = _max_latency
 
     def __iter__(self) -> Iterator[LidarScan]:
+        """Get an iterator."""
+
         w = self._source.metadata.format.columns_per_frame
         h = self._source.metadata.format.pixels_per_column
         packets_per_frame = w // self._source.metadata.format.columns_per_packet

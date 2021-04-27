@@ -5,15 +5,24 @@ Changelog
 [unreleased]
 ============
 
+Added
+-----
+* first release of Python bindings for the provided C++ code. See the README under the ``python``
+  directory for details and links to documentation
+* early version of a C++ API covering the full sensor configuration interface
+* preliminary C++ API for working with pcap files containing a single sensor packet capture
+
+
 Changed
 -------
+
 * reflectivity visualization for changes in the upcoming 2.1 firmware
 * moved most of the visualizer code out of public headers and hid some implementation details
 
 Fixed
 -----
-* visualizer bug causing a small viewport when resizing the window on macos with a retina display
 
+* visualizer bug causing a small viewport when resizing the window on macos with a retina display
 
 [20201209]
 ==========

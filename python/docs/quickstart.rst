@@ -5,7 +5,7 @@ Quick Start with Ouster Python SDK
 ==================================
 
 This quickstart guide will walk you through visualizing Ouster sensor data quickly, whether from
-sample data or a live sensor from scratch.
+sample data or a sensor connected to your machine.
 
 
 Installation
@@ -68,7 +68,7 @@ Download the `sample data`_ (**1.6 GB**) and unzip the contents. You should have
 
 The downloaded pcap file contains lidar and imu packets captured from the network . You can read
 more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Sensor Documentation. The
-JSON file contains metadata queried from the sensor TCP interface which is necessary to interpret
+JSON file contains metadata queried from the sensor TCP interface necessary for interpreting
 the packet data.
 
 Let's load the paths into your open session of python:
@@ -80,7 +80,7 @@ Let's load the paths into your open session of python:
 
 
 Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the
-metadata separately from ``metadata_path`` first:
+metadata from ``metadata_path`` first:
 
 .. code:: python
  
@@ -166,8 +166,13 @@ directly from a sensor. Let's read from ``source`` until we get to the 84th fram
    >>> scan
    <ouster.client.data.LidarScan object at 0x7f7ccc35fba8>
 
-Now that we have a frame of data available as a `py:class:.LidarScan` datatype, we can extract the
-range measurments and turn them into a range image, where each column corresponds to a single
+.. note::
+
+    If you're using a sensor and it takes a few seconds, don't be alarmed! It has to get to the 84th
+    frame of data, which would be 8.4 seconds into recording for a sensor in 1024x10 mode.
+
+Now that we have a frame of data available as a :py:class:`.LidarScan` datatype, we can extract the
+range measurements and turn them into a range image where each column corresponds to a single
 azimuth angle:
 
 .. code:: python
@@ -200,7 +205,7 @@ produce X, Y, Z coordinates from our scan data with shape (H x W x 3):
 
 .. code:: python
 
-    >>> xyzlut = client.XYZLut(metadata)
+    >>> xyzlut = client.XYZLut(source.metadata)
     >>> xyz = xyzlut(scan)
 
 Now we rearrange the resulting numpy array into a shape that's suitable for plotting:

@@ -19,6 +19,16 @@ class ImuPacket:
     _data: np.ndarray
 
     def __init__(self, data: BufferT, info: SensorInfo) -> None:
+        """
+        Args:
+            data: Buffer containing the packet payload
+            pf: Format determining how to interpret the buffer
+
+        Raises:
+            ValueError: If the buffer is smaller than the size specified by the
+                packet format.
+        """
+
         self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
@@ -104,12 +114,12 @@ class LidarPacket:
         to avoid unintentional aliasing.
 
         Args:
-            data: buffer containing the packet payload
-            pf: format determining how to interpret the buffer
+            data: Buffer containing the packet payload
+            pf: Format determining how to interpret the buffer
 
         Raises:
-            ValueError if the buffer is smaller than the size specified by the
-            packet format.
+            ValueError: If the buffer is smaller than the size specified by the
+                packet format.
         """
         self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,
@@ -123,7 +133,7 @@ class LidarPacket:
         """Create a view of the specified channel field.
 
         Args:
-            field: the channel field to view
+            field: The channel field to view
 
         Returns:
             A view of the specified field as a numpy array
@@ -139,7 +149,7 @@ class LidarPacket:
         """Create a view of the specified column header.
 
         Args:
-            header: the column header to view
+            header: The column header to view
 
         Returns:
             A view of the specified header as a numpy array
@@ -169,8 +179,8 @@ class LidarScan:
     def __init__(self, h: int, w: int):
         """
         Args:
-            w: horizontal resolution of the scan
-            h: vertical resolution of the scan
+            h: Vertical resolution of the scan
+            w: Horizontal resolution of the scan
         """
         self.w = w
         self.h = h
@@ -184,13 +194,11 @@ class LidarScan:
 
     def _complete(self,
                   column_window: Optional[Tuple[int, int]] = None) -> bool:
-        """Whether all columns of the scan are valid within given window (if
-        any).
+        """Whether all columns of the scan are valid within given window.
 
         Args:
             column_window: metadata.format.column_window if it's not default
-                           to full scan
-
+                to full scan
         """
         if column_window:
             win_start, win_end = column_window

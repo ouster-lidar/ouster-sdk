@@ -1,3 +1,10 @@
+"""Executable examples for using the pcap APIs.
+
+This module has a rudimentary command line interface. For usage, run::
+
+    $ python -m ouster.sdk.examples.pcap -h
+"""
+
 import os
 import argparse
 import numpy as np
@@ -342,7 +349,6 @@ def pcap_to_csv(pcap_path: str,
 
 
 def main():
-    """Parse arguments and pass them to various pcap examples"""
 
     examples = {
         "plot-xyz-points": pcap_display_xyz_points,

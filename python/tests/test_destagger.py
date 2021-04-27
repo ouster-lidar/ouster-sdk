@@ -2,45 +2,14 @@ from os import path
 
 import numpy as np
 import pytest
-from typing import List
 
 from ouster import client
+from ouster.sdk.examples import reference
 
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
 
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
-
-
-def destaggered_ref(pixel_shift_by_row: List[int],
-                    field: np.ndarray) -> np.ndarray:
-    """Reference implementation for dsetaggering a field of data.
-
-    In the default staggered representation, each column corresponds to a
-    single timestamp. In the destaggered representation, each column
-    corresponds to a single azimuth angle, compensating for the azimuth offset
-    of each beam.
-
-    Destaggering is used for visualizing lidar data as an image or for
-    algorithms that exploit the structure of the lidar data, such as
-    beam_uniformity in ouster_viz, or computer vision algorithms.
-
-    Args:
-        pixel_shift_by_row: List of pixel shifts by row from sensor metadata
-        field: Staggered data as a H x W numpy array
-
-    Returns:
-        Destaggered data as a H X W numpy array
-    """
-
-    destaggered = np.zeros(field.shape)
-    nrows = field.shape[0]
-
-    # iterate over every row and apply pixel shift
-    for u in range(nrows):
-        destaggered[u, :] = np.roll(field[u, :], pixel_shift_by_row[u])
-
-    return destaggered
 
 
 @pytest.fixture(scope="module")
@@ -130,8 +99,8 @@ def test_destagger_correct(meta, scan) -> None:
     """Compare client destagger function to reference implementation."""
 
     # get destaggered range field using reference implementation
-    destagger_ref = destaggered_ref(meta.format.pixel_shift_by_row,
-                                    scan.field(client.ChanField.RANGE))
+    destagger_ref = reference.destagger(meta.format.pixel_shift_by_row,
+                                        scan.field(client.ChanField.RANGE))
 
     # obtain destaggered range field using client implemenation
     destagger_client = client.destagger(meta,
@@ -146,7 +115,7 @@ def test_destagger_correct_multi(meta, scan) -> None:
     near_ir = scan.field(client.ChanField.NEAR_IR)
     near_ir_stacked = np.repeat(near_ir[..., None], 5, axis=2)
 
-    ref = destaggered_ref(meta.format.pixel_shift_by_row, near_ir)
+    ref = reference.destagger(meta.format.pixel_shift_by_row, near_ir)
     ref_stacked = np.repeat(ref[..., None], 5, axis=2)
 
     destaggered_stacked = client.destagger(meta, near_ir_stacked)

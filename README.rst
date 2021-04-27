@@ -190,7 +190,7 @@ and, additionally::
 where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``. 
 
 
-If you would like to install dependencies with `rosdep`::
+Alternatively, if you would like to install dependencies with `rosdep`::
     rosdep install --from-paths <path to ouster example>
 
 To build::

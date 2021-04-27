@@ -10,40 +10,20 @@ from ouster.pcap import _pcap
 
 @dataclass
 class PcapInfo:
-    """Pcap file information dataclass.
+    """Information queried about a packet capture from an Ouster sensor.
 
-    Used as the output format from function :func:`.pcap.info` and consists
-    a general stats about pcap file.
+    Type of the output of :func:`.pcap.info`.
 
-    Fields:
-
-    ``ipv6_packets``: number of ipv6 packets processed
-
-    ``ipv4_packets``: number of ipv4 packets processed
-
-    ``packets_processed``: total number of all packets processed
-
-    ``packets_reassembled``: total number of IPv4 UDP packets reassembled
-
-    ``non_udp_packets``: number of non UDP packets processed
-
-    ``guessed_lidar_port``: best guess for port with Ouster lidar packets
-    :class:`.client.LidarPacket`
-
-    ``guessed_imu_port``: best guess for port with Ouster imu packets
-    :class:`.client.ImuPacket`
-
-    ``ports``: detailed statistcs organized by port number. One dict element is
-    ``{port_number: PacketsStats}``, where ``PacketsStats`` is a list of tuples
-    with elements of a form ``(packet_size, packet_count)``. For example ports
-    value of::
-
-        {59048: (48, 5), 47808: (24896, 59)}
-
-    means that on port ``59048`` were sent ``5`` packets with a size of
-    ``48`` bytes and on port ``24896`` were sent ``59`` packets with the
-    size of ``24896`` bytes per packet.
-
+    Attributes:
+        ipv6_packets: Number of ipv6 packets processed
+        ipv4_packets: Number of ipv4 packets processed
+        packets_processed: Total number of all packets processed
+        packets_reassembled: Total number of IPv4 UDP packets reassembled
+        non_udp_packets: Number of non UDP packets processed
+        guessed_lidar_port: Best guess for port with Ouster lidar packets
+        guessed_imu_port: Best guess for port with Ouster imu packets
+        ports: A mapping from port numbers to the size (in bytes) and number of
+            packets receved on that port.
     """
     ipv6_packets: int = 0
     ipv4_packets: int = 0
@@ -91,7 +71,7 @@ def _guess_lidar_port(stream_data: _pcap.stream_info) -> int:
 
 
 def _guess_ports(stream_data: _pcap.stream_info) -> Tuple[int, int]:
-    """ Guess the ports for lidar and imu streams from a stream_info struct
+    """Guess the ports for lidar and imu streams from a stream_info struct.
 
     Args:
         stream_data: The stream_info struct for a pcap file
@@ -103,7 +83,7 @@ def _guess_ports(stream_data: _pcap.stream_info) -> Tuple[int, int]:
 
 
 class Pcap(PacketSource):
-    """Read a sensor packet stream out of pcap as an iterator."""
+    """Read a sensor packet stream out of a pcap file as an iterator."""
 
     _metadata: SensorInfo
     _handle: Optional[_pcap.playback_handle]
@@ -275,13 +255,13 @@ def record(packets: Iterable[Packet],
            dst_ip: str = "127.0.0.1",
            lidar_port: int = 7502,
            imu_port: int = 7503) -> int:
-    """Record a sequence of sensor packets to a pcap.
+    """Record a sequence of sensor packets to a pcap file.
 
     Args:
         packets: A (finite!) sequence of packets
         pcap_path: Path of the output pcap file
         src_ip: Source IP to use for all packets
-        dst_ip Destination IP to use for all packets
+        dst_ip: Destination IP to use for all packets
         lidar_port: Src/dst port to use for lidar packets
         imu_port: Src/dst port to use for imu packets
 

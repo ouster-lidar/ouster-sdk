@@ -20,7 +20,6 @@
   <build_depend>tf2</build_depend>
   <build_depend>tf2_ros</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
-
   <build_depend>libglew-dev</build_depend>
   <build_depend>libglfw3-dev</build_depend>
   <build_depend>libtclap-dev</build_depend>

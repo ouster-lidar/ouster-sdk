@@ -25,17 +25,22 @@ Core
 .. autoclass:: PacketSource()
    :show-inheritance:
    :members:
+   :special-members: __iter__
 
 .. autoclass:: Packets
    :members:
+   :special-members: __iter__
 
 .. autoclass:: Sensor
    :members:
+   :special-members: __iter__
 
 .. autoclass:: Scans
    :members:
+   :special-members: __iter__
 
 ----
+
 
 Metadata
 --------
@@ -77,6 +82,7 @@ Metadata
    :undoc-members:
 
 ----
+
 
 Data
 ----
@@ -127,16 +133,38 @@ Module :mod:`ouster.pcap`
 
 ----
 
-Example :mod:`ouster.sdk.examples.client`
-=========================================
+Module :mod:`ouster.sdk.examples`
+=================================
+
+.. contents::
+   :local:
+   :depth: 4
+
+.. automodule:: ouster.sdk.examples
+
+----
+
+
+Client Examples :mod:`ouster.sdk.examples.client`
+-------------------------------------------------
 
 .. automodule:: ouster.sdk.examples.client
    :members:
 
+----
 
-Example :mod:`ouster.sdk.examples.pcap`
-========================================
+
+PCAP Examples :mod:`ouster.sdk.examples.pcap`
+---------------------------------------------
 
 .. automodule:: ouster.sdk.examples.pcap
    :members:
 
+----
+
+
+Reference Code :mod:`ouster.sdk.examples.reference`
+---------------------------------------------------
+
+.. automodule:: ouster.sdk.examples.reference
+   :members:

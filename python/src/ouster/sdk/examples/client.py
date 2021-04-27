@@ -1,8 +1,8 @@
-"""Example code for Ouster Python SDK.
+"""Executable examples for using the sensor client APIs.
 
-All examples commented out from main. Feel free to uncomment to try.
+This module has a rudimentary command line interface. For usage, run::
 
-Note: if you want to run matplotlib within docker you will need tkinter
+    $ python -m ouster.sdk.examples.client -h
 """
 
 import argparse

@@ -92,7 +92,7 @@ class SDKDist(sdist):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.2.0.dev0',
+    version='0.2.0',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
@@ -101,7 +101,6 @@ setup(
         'ouster.pcap': ['py.typed'],
     },
     author='Ouster SW Developers',
-    author_email='noreply@ouster.io',
     description='Ouster sensor SDK',
     license='BSD 3-Clause License',
     ext_modules=[

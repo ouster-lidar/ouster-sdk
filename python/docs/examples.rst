@@ -19,12 +19,12 @@ Ouster sensors require metadata to interpret the readings of the sensor. Represe
 :py:class:`.SensorInfo`, its fields include configuration parameters such as 
 ``lidar_mode`` and and sensor intrinsics like ``beam_azimuth_angles``.
 
-When you work with a live sensor, the client will automatically fetch the metadata. Recorded
+When you work with a sensor, the client will automatically fetch the metadata. Recorded
 ``pcaps``, however, must always be accompanied by a ``json`` file containing the metadata of the
 sensor as it was running when the data was recorded. 
 
-Since it's crucial to save the correct metadata file, let's see how we can get that from a live
-sensor. Try running the following example::
+Since it's crucial to save the correct metadata file, let's see how we can get that from a sensor.
+Try running the following example::
 
     $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
 
@@ -144,14 +144,14 @@ Look-uptable. This function can then be applied to any scan to create a numpy ar
     :linenos:
     :dedent:
 
-If you have a live sensor, you can run this code with one of our examples::
+If you have a sensor, you can run this code with one of our examples::
 
     $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
 
 That should open a 3D plot of a single scan of your location taken just now by your sensor. You
 should be able to recognize the contours of the scene around you.
 
-If you don’t have a live sensor, you can run this code with our pcap examples::
+If you don’t have a sensor, you can run this code with our pcap examples::
 
     $ python -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
       plot-xyz-points --scan-num 84
@@ -192,7 +192,7 @@ columns correspond with timestamp).
 Finally, we select only the azimuth columns we're interested in. In this case, we've arbitrarily
 chosen the first 270 degrees of rotation.
 
-If you have a live sensor, you can run this code with an example::
+If you have a sensor, you can run this code with an example::
     
     $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
@@ -232,7 +232,7 @@ To exit the visualization, you can use ``ESC``.
 Recording Sensor Data
 =====================
 
-It's easy to record data to a pcap file from a live sensor programatically. Let's try it first
+It's easy to record data to a pcap file from a sensor programatically. Let's try it first
 with the following example::
 
     $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
@@ -326,7 +326,7 @@ easy, like graph the acceleration in z direction over time. Let's look at some c
 
 Like other ``Packets``, we'll want to get them from a :py:class:`.PacketSource`. After getting ``imu_packet_list``, we obtain the ``sys_ts`` and ``z`` part of ``accel`` and plot them.
 
-If you have a live sensor, you can run the code above with the ``plot-imu-z-accel`` example::
+If you have a sensor, you can run the code above with the ``plot-imu-z-accel`` example::
 
     $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
 
