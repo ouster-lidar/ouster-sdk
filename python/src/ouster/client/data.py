@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, ClassVar, Dict, List, Optional, Type, Union
+from typing import Callable, ClassVar, Dict, List, Optional, Type, Union, Tuple
 
 import numpy.lib.stride_tricks
 import numpy as np
@@ -183,9 +183,28 @@ class LidarScan:
                       ColHeader.STATUS)
         }
 
-    @property
-    def complete(self) -> bool:
-        """Whether all columns of the scan are valid."""
+    def _complete(self,
+                  *,
+                  column_window: Optional[Tuple[int, int]] = None) -> bool:
+        """Whether all columns of the scan are valid within given window (if
+        any).
+
+        Args:
+            column_window: metadata.format.column_window if it's not default
+                           to full scan
+
+        """
+        if column_window:
+            win_start, win_end = column_window
+            if win_start < win_end:
+                return (self.header(ColHeader.STATUS)[win_start:win_end +
+                                                      1] == 0xFFFFFFFF).all()
+            else:
+                valid = (self.header(
+                    ColHeader.STATUS)[win_start:] == 0xFFFFFFFF).all()
+                valid = valid and (self.header(ColHeader.STATUS)[:win_end + 1]
+                                   == 0xFFFFFFFF).all()
+                return valid
         return (self.header(ColHeader.STATUS) == 0xFFFFFFFF).all()
 
     def field(self, field: ChanField) -> np.ndarray:
