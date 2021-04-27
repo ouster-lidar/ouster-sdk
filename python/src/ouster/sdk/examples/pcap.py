@@ -87,7 +87,7 @@ def pcap_display_xyz_points(pcap_path: str,
     xyzlut = client.XYZLut(metadata)
     xyz = xyzlut(scan)
 
-    key = scan.field(client.ChanField.INTENSITY)
+    key = scan.field(client.ChanField.SIGNAL)
 
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     ax.scatter(x, y, z, c=ae(key.flatten()), s=0.2)
@@ -125,8 +125,8 @@ def pcap_2d_viewer(
         print("press ESC from visualization to exit")
 
         channels = [
-            client.ChanField.RANGE, client.ChanField.INTENSITY,
-            client.ChanField.AMBIENT, client.ChanField.REFLECTIVITY
+            client.ChanField.RANGE, client.ChanField.SIGNAL,
+            client.ChanField.NEAR_IR, client.ChanField.REFLECTIVITY
         ]
 
         paused = False
@@ -227,8 +227,8 @@ def pcap_show_one_scan(pcap_path: str,
         return f
 
     show_fields = [('range', client.ChanField.RANGE),
-                   ('intensitiy', client.ChanField.INTENSITY),
-                   ('ambient', client.ChanField.AMBIENT),
+                   ('signal', client.ChanField.SIGNAL),
+                   ('near_ir', client.ChanField.NEAR_IR),
                    ('reflectivity', client.ChanField.REFLECTIVITY)]
 
     with closing(pcap.Pcap(pcap_path, metadata)) as source:
@@ -272,7 +272,7 @@ def pcap_to_csv(pcap_path: str,
 
     Each line in a csv file is:
 
-        RANGE (mm), INTENSITY, AMBIENT, REFLECTIVITY, X (m), Y (m), Z (m)
+        RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (m), Y (m), Z (m)
 
     Args:
         pcap_path: path to the pcap file
@@ -295,12 +295,12 @@ def pcap_to_csv(pcap_path: str,
     source = pcap.Pcap(pcap_path, metadata)
 
     # [doc-stag-pcap-to-csv]
-    field_names = 'RANGE (mm), INTENSITY, AMBIENT, REFLECTIVITY, X (m), Y (m), Z (m)'
-    field_fmts = ['%d', '%d', '%d', '%d', '%.8f', '%.8f', '%.8f']
+    field_names = 'RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (m), Y (m), Z (m)'
+    field_fmts = ['%d', '%d', '%d', '%d', '%.8f','%.8f', '%.8f']
 
     channels = [
-        client.ChanField.RANGE, client.ChanField.INTENSITY,
-        client.ChanField.AMBIENT, client.ChanField.REFLECTIVITY
+        client.ChanField.RANGE, client.ChanField.SIGNAL,
+        client.ChanField.NEAR_IR, client.ChanField.REFLECTIVITY
     ]
 
     with closing(pcap.Pcap(pcap_path, metadata)) as source:

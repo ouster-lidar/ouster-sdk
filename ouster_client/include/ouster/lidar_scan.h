@@ -208,7 +208,7 @@ LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
  *
  * In the default staggered representation, each column corresponds to a single
  * timestamp. In the destaggered representation, each column corresponds to a
- * single azimuth angle, compsenating for the azimuth offset of each beam.
+ * single azimuth angle, compensating for the azimuth offset of each beam.
  *
  * Destaggering is used for visualizing lidar data as an image or for algorithms
  * that exploit the structure of the lidar data, such as beam_uniformity in

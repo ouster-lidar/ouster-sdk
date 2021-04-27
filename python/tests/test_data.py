@@ -78,9 +78,8 @@ def test_lidar_packet(info: client.SensorInfo) -> None:
     assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
                           np.zeros((h, w)))
-    assert np.array_equal(p.field(client.ChanField.INTENSITY), np.zeros(
-        (h, w)))
-    assert np.array_equal(p.field(client.ChanField.AMBIENT), np.zeros((h, w)))
+    assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros((h, w)))
+    assert np.array_equal(p.field(client.ChanField.NEAR_IR), np.zeros((h, w)))
 
     assert len(
         client.ColHeader.__members__) == 5, "Don't forget to update tests!"
@@ -94,7 +93,7 @@ def test_lidar_packet(info: client.SensorInfo) -> None:
 
     # should not be able to modify a packet built from a read-only buffer
     with pytest.raises(ValueError):
-        p.field(client.ChanField.INTENSITY)[0] = 1
+        p.field(client.ChanField.SIGNAL)[0] = 1
 
     with pytest.raises(ValueError):
         p.header(client.ColHeader.MEASUREMENT_ID)[0] = 1
@@ -102,19 +101,19 @@ def test_lidar_packet(info: client.SensorInfo) -> None:
     # a writeable lidar packet
     q = client.LidarPacket(bytearray(pf.lidar_packet_size), info)
 
-    q.field(client.ChanField.INTENSITY)[:] = np.ones((h, w))
-    assert np.array_equal(q.field(client.ChanField.INTENSITY), np.ones((h, w)))
+    q.field(client.ChanField.SIGNAL)[:] = np.ones((h, w))
+    assert np.array_equal(q.field(client.ChanField.SIGNAL), np.ones((h, w)))
 
     # TODO: masking prevents writing RANGE. Need separate get/set for fields
     # q.view(client.ChanField.RANGE)[:] = np.ones((h, w))
     # assert np.array_equal(q.view(client.ChanField.RANGE), np.ones((h, w)))
 
     with pytest.raises(ValueError):
-        q.field(client.ChanField.INTENSITY)[:] = np.ones((w, h))
+        q.field(client.ChanField.SIGNAL)[:] = np.ones((w, h))
     with pytest.raises(ValueError):
-        q.field(client.ChanField.INTENSITY)[:] = np.ones((h - 1, w))
+        q.field(client.ChanField.SIGNAL)[:] = np.ones((h - 1, w))
     with pytest.raises(ValueError):
-        q.field(client.ChanField.INTENSITY)[:] = np.ones((h, w + 1))
+        q.field(client.ChanField.SIGNAL)[:] = np.ones((h, w + 1))
 
     q.header(client.ColHeader.MEASUREMENT_ID)[:] = np.ones(w)
     assert np.array_equal(q.header(client.ColHeader.MEASUREMENT_ID),
@@ -132,8 +131,8 @@ def test_read_real_packet(packet: client.LidarPacket) -> None:
     """Read some arbitrary values from a packet and check header invariants."""
     assert packet.field(client.ChanField.RANGE)[0, 0] == 1723
     assert packet.field(client.ChanField.REFLECTIVITY)[0, 0] == 196
-    assert packet.field(client.ChanField.INTENSITY)[0, 0] == 66
-    assert packet.field(client.ChanField.AMBIENT)[0, 0] == 1768
+    assert packet.field(client.ChanField.SIGNAL)[0, 0] == 66
+    assert packet.field(client.ChanField.NEAR_IR)[0, 0] == 1768
 
     assert np.all(np.diff(packet.header(client.ColHeader.FRAME_ID)) == 0)
     assert np.all(np.diff(packet.header(client.ColHeader.MEASUREMENT_ID)) == 1)

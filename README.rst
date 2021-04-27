@@ -277,7 +277,7 @@ the example ROS code with a sensor or recorded data. Then, run::
 
     rviz -d ouster_example/ouster_ros/viz.rviz
 
-in another terminal with the ROS environment set up. To view lidar intensity, near-IR, and range
+in another terminal with the ROS environment set up. To view lidar signal, near-IR, and range
 images, add ``image:=true`` to the ``roslaunch`` command above.
 
 

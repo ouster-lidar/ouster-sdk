@@ -143,14 +143,14 @@ def test_destagger_correct(meta, scan) -> None:
 def test_destagger_correct_multi(meta, scan) -> None:
     """Compare client destagger function to reference on stacked fields."""
 
-    ambient = scan.field(client.ChanField.AMBIENT)
-    ambient_stacked = np.repeat(ambient[..., None], 5, axis=2)
+    near_ir = scan.field(client.ChanField.NEAR_IR)
+    near_ir_stacked = np.repeat(near_ir[..., None], 5, axis=2)
 
-    ref = destaggered_ref(meta.format.pixel_shift_by_row, ambient)
+    ref = destaggered_ref(meta.format.pixel_shift_by_row, near_ir)
     ref_stacked = np.repeat(ref[..., None], 5, axis=2)
 
-    destaggered_stacked = client.destagger(meta, ambient_stacked)
+    destaggered_stacked = client.destagger(meta, near_ir_stacked)
 
-    assert ambient_stacked.dtype == np.uint32
+    assert near_ir_stacked.dtype == np.uint32
     assert destaggered_stacked.dtype == np.uint32
     assert np.array_equal(ref_stacked, destaggered_stacked)

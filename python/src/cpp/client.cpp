@@ -520,8 +520,8 @@ directly.
         .def_readwrite("udp_dest", &sensor_config::udp_dest, "Destination to which sensor sends UDP traffic.")
         .def_readwrite("udp_port_lidar", &sensor_config::udp_port_lidar, "Port on UDP destination to which lidar data will be sent.")
         .def_readwrite("udp_port_imu", &sensor_config::udp_port_imu, "Port on UDP destination to which IMU data will be sent.")
-        .def_readwrite("ts_mode", &sensor_config::ts_mode, "Timestamp mode of sensor. See class TimestampMode.")
-        .def_readwrite("ld_mode", &sensor_config::ld_mode, "Horizontal and Vertical Resolution rate of sensor as mode, e.g., 1024x10. See class LidarMode.")
+        .def_readwrite("timestamp_mode", &sensor_config::ts_mode, "Timestamp mode of sensor. See class TimestampMode.")
+        .def_readwrite("lidar_mode", &sensor_config::ld_mode, "Horizontal and Vertical Resolution rate of sensor as mode, e.g., 1024x10. See class LidarMode.")
         .def_readwrite("operating_mode", &sensor_config::operating_mode, "Operating Mode of sensor. See class OperatingMode.")
         .def_readwrite("multipurpose_io_mode", &sensor_config::multipurpose_io_mode, "Mode of MULTIPURPOSE_IO pin. See class MultipurposeIOMode.")
         .def_readwrite("azimuth_window", &sensor_config::azimuth_window, "Tuple representing the visible region of interest of the sensor in millidegrees, .e.g., (0, 360000) for full visibility.")
@@ -600,14 +600,14 @@ directly.
         .def(py::init<std::string, int, int, size_t>(),
              py::arg("hostname") = "", py::arg("lidar_port") = 7502,
              py::arg("imu_port") = 7503, py::arg("capacity") = 128)
-        .def(
-            py::init<std::string, std::string, sensor::lidar_mode,
-                     sensor::timestamp_mode, int, int, int, size_t>(),
-            py::arg("hostname"), py::arg("udp_dest_host"),
-            py::arg("mode") = sensor::lidar_mode::MODE_1024x10,
-            py::arg("ts_mode") = sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
-            py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
-            py::arg("timeout_sec") = 30, py::arg("capacity") = 128)
+        .def(py::init<std::string, std::string, sensor::lidar_mode,
+                      sensor::timestamp_mode, int, int, int, size_t>(),
+             py::arg("hostname"), py::arg("udp_dest_host"),
+             py::arg("mode") = sensor::lidar_mode::MODE_1024x10,
+             py::arg("timestamp_mode") =
+                 sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
+             py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
+             py::arg("timeout_sec") = 30, py::arg("capacity") = 128)
         .def("get_metadata", &PyClient::get_metadata,
              py::arg("timeout_sec") = 30)
         .def("shutdown", &PyClient::shutdown)

@@ -11,7 +11,7 @@ data. The SDK includes APIs for:
 - Recording and reading data in pcap format
 - Reading and buffering sensor UDP data streams reliably
 - Frame-based access to lidar data as numpy datatypes
-- Conversion of raw data to range/intensity/ambient/reflectivity images (de-staggering)
+- Conversion of raw data to range/signal/near_ir/reflectivity images (de-staggering)
 - Efficiently projecting range measurements to cartesian (X, Y, Z) coordinates
 
 

@@ -108,7 +108,7 @@ struct sensor_config {
     optional<int> udp_port_lidar;
     optional<int> udp_port_imu;
 
-    // TODO: Kai -- replace ts_mode and ld_mode when timestamp_mode and
+    // TODO: replace ts_mode and ld_mode when timestamp_mode and
     // lidar_mode get changed to CapsCase
     optional<timestamp_mode> ts_mode;
     optional<lidar_mode> ld_mode;

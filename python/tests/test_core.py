@@ -123,11 +123,11 @@ def test_scans_first_packet(packet: client.LidarPacket,
     assert np.array_equal(packet.field(ChanField.REFLECTIVITY),
                           scan.field(ChanField.REFLECTIVITY)[:h, :w])
 
-    assert np.array_equal(packet.field(ChanField.INTENSITY),
-                          scan.field(ChanField.INTENSITY)[:h, :w])
+    assert np.array_equal(packet.field(client.ChanField.SIGNAL),
+                          scan.field(client.ChanField.SIGNAL)[:h, :w])
 
-    assert np.array_equal(packet.field(ChanField.AMBIENT),
-                          scan.field(ChanField.AMBIENT)[:h, :w])
+    assert np.array_equal(packet.field(client.ChanField.NEAR_IR),
+                          scan.field(client.ChanField.NEAR_IR)[:h, :w])
 
     assert np.all(packet.header(ColHeader.FRAME_ID) == scan.frame_id)
 

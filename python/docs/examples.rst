@@ -160,7 +160,7 @@ If you don’t have a live sensor, you can run this code with our pcap examples:
 .. figure:: images/lidar_scan_xyz_84.png
    :align: center
 
-   Point cloud from sample data (scan 84). Points colored by ``INTENSITY`` value.
+   Point cloud from sample data (scan 84). Points colored by ``SIGNAL`` value.
 
 For details check the source code of an example :func:`.examples.pcap.pcap_display_xyz_points`
 
@@ -205,7 +205,7 @@ Streaming Live Data
 Instead of working with a recorded dataset or a few captured frames of data, let's see if we can get
 a live feed from the sensor::
     
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-intensity
+    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
 
 This should give you a live feed from your sensor that looks like a black and white moving image.
 Try waving your hand or moving around to find yourself within the image!
@@ -213,8 +213,8 @@ Try waving your hand or moving around to find yourself within the image!
 So how did we do that?
 
 .. literalinclude:: /../src/ouster/sdk/examples/client.py
-   :start-after: [doc-stag-live-plot-intensity]
-   :end-before: [doc-etag-live-plot-intensity]
+   :start-after: [doc-stag-live-plot-signal]
+   :end-before: [doc-etag-live-plot-signal]
    :emphasize-lines: 2-3
    :linenos:
    :dedent:

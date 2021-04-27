@@ -30,7 +30,7 @@ class Client:
                  hostname: str,
                  udp_dest_host: str,
                  mode: LidarMode = ...,
-                 ts_mode: TimestampMode = ...,
+                 timestamp_mode: TimestampMode = ...,
                  lidar_port: int = ...,
                  imu_port: int = ...,
                  timeout_sec: int = ...,
@@ -424,8 +424,8 @@ class SensorConfig:
     udp_dest: Optional[str]
     udp_port_lidar: Optional[int]
     udp_port_imu: Optional[int]
-    ts_mode: Optional[TimestampMode]
-    ld_mode: Optional[LidarMode]
+    timestamp_mode: Optional[TimestampMode]
+    lidar_mode: Optional[LidarMode]
     operating_mode: Optional[OperatingMode]
     multipurpose_io_mode: Optional[MultipurposeIOMode]
     azimuth_window: Optional[tuple]

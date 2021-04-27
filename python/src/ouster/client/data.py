@@ -63,8 +63,8 @@ class ChanField(Enum):
     """Channel fields available in lidar data."""
     RANGE = (0, 0, np.uint32, 0x000FFFFF)
     REFLECTIVITY = (3, 4, np.uint16, None)
-    INTENSITY = (1, 6, np.uint16, None)
-    AMBIENT = (2, 8, np.uint16, None)
+    SIGNAL = (1, 6, np.uint16, None)
+    NEAR_IR = (2, 8, np.uint16, None)
 
     def __init__(self, ind: int, offset: int, dtype: type,
                  mask: Optional[int]):

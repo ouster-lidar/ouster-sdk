@@ -26,7 +26,7 @@ def configure_sensor_params(hostname: str) -> None:
 
     # set the values that you need: see sensor documentation for param meanings
     config.operating_mode = client.OperatingMode.OPERATING_NORMAL
-    config.ld_mode = client.LidarMode.MODE_1024x10
+    config.lidar_mode = client.LidarMode.MODE_1024x10
     config.udp_port_lidar = 7502
     config.udp_port_imu = 7503
 
@@ -115,8 +115,8 @@ def filter_3d_by_range_and_azimuth(hostname: str,
     plt.show()
 
 
-def live_plot_intensity(hostname: str, lidar_port: int = 7502) -> None:
-    """Display intensity from live sensor
+def live_plot_signal(hostname: str, lidar_port: int = 7502) -> None:
+    """Display signal from live sensor
 
     Args:
         hostname: hostname of the sensor
@@ -127,7 +127,7 @@ def live_plot_intensity(hostname: str, lidar_port: int = 7502) -> None:
 
     print("press ESC from visualization to exit")
 
-    # [doc-stag-live-plot-intensity]
+    # [doc-stag-live-plot-signal]
     # establish sensor connection
     with closing(client.Scans.stream(hostname, lidar_port,
                                      complete=False)) as stream:
@@ -137,11 +137,11 @@ def live_plot_intensity(hostname: str, lidar_port: int = 7502) -> None:
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(scan.frame_id))
                 signal = client.destagger(
-                    stream.metadata, scan.field(client.ChanField.INTENSITY))
+                    stream.metadata, scan.field(client.ChanField.SIGNAL))
                 signal = (signal / np.max(signal) * 255).astype(np.uint8)
-                cv2.imshow("scaled intensity", signal)
+                cv2.imshow("scaled signal", signal)
                 key = cv2.waitKey(1) & 0xFF
-                # [doc-etag-live-plot-intensity]
+                # [doc-etag-live-plot-signal]
                 # 27 is esc
                 if key == 27:
                     show = False
@@ -204,7 +204,7 @@ def plot_all_channels(hostname: str,
     fig.canvas.set_window_title("example: display_all_2D")
 
     # set row and column titles of subplots
-    column_titles = ["range", "reflectivity", "ambient", "intensity"]
+    column_titles = ["range", "reflectivity", "near_ir", "signal"]
     row_titles = ["Scan {}".format(i) for i in list(range(n_scans))]
     for ax, column_title in zip(axarr[0], column_titles):
         ax.set_title(column_title)
@@ -219,9 +219,9 @@ def plot_all_channels(hostname: str,
             client.destagger(metadata,
                              scan.field(client.ChanField.REFLECTIVITY)))
         axarr[count, 2].imshow(
-            client.destagger(metadata, scan.field(client.ChanField.AMBIENT)))
+            client.destagger(metadata, scan.field(client.ChanField.NEAR_IR)))
         axarr[count, 3].imshow(
-            client.destagger(metadata, scan.field(client.ChanField.INTENSITY)))
+            client.destagger(metadata, scan.field(client.ChanField.SIGNAL)))
     # [doc-etag-display-all-2d]
 
     # configure and show plot
@@ -375,7 +375,7 @@ def main() -> None:
         "configure-sensor": configure_sensor_params,
         "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
         "fetch-metadata": fetch_metadata,
-        "live-plot-intensity": live_plot_intensity,
+        "live-plot-signal": live_plot_signal,
         "plot-range-image": plot_range_image,
         "plot-all-channels": plot_all_channels,
         "plot-xyz-points": plot_xyz_points,

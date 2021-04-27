@@ -105,7 +105,7 @@ def test_optional_config() -> None:
 
     # make sure all the values are empty
     assert config.azimuth_window is None
-    assert config.ld_mode is None
+    assert config.lidar_mode is None
     assert config.multipurpose_io_mode is None
     assert config.nmea_baud_rate is None
     assert config.nmea_in_polarity is None
@@ -119,7 +119,7 @@ def test_optional_config() -> None:
     assert config.sync_pulse_in_polarity is None
     assert config.sync_pulse_out_angle is None
     assert config.sync_pulse_out_polarity is None
-    assert config.ts_mode is None
+    assert config.timestamp_mode is None
     assert config.udp_dest is None
     assert config.udp_port_imu is None
     assert config.udp_port_lidar is None
@@ -129,7 +129,7 @@ def test_write_config() -> None:
     """Check modifying config."""
     config = client.SensorConfig()
     config.azimuth_window = (0, 0)
-    config.ld_mode = client.LidarMode.MODE_512x10
+    config.lidar_mode = client.LidarMode.MODE_512x10
     config.multipurpose_io_mode = client.MultipurposeIOMode.MULTIPURPOSE_INPUT_NMEA_UART
     config.nmea_baud_rate = client.NMEABaudRate.BAUD_9600
     config.nmea_in_polarity = client.Polarity.POLARITY_ACTIVE_LOW
@@ -143,13 +143,13 @@ def test_write_config() -> None:
     config.sync_pulse_in_polarity = client.Polarity.POLARITY_ACTIVE_HIGH
     config.sync_pulse_out_angle = 300
     config.sync_pulse_out_polarity = client.Polarity.POLARITY_ACTIVE_LOW
-    config.ts_mode = client.TimestampMode.TIME_FROM_PTP_1588
+    config.timestamp_mode = client.TimestampMode.TIME_FROM_PTP_1588
     config.udp_dest = "udp-dest"
     config.udp_port_imu = 84
     config.udp_port_lidar = 3827
 
     with pytest.raises(TypeError):
-        config.ld_mode = 1  # type: ignore
+        config.lidar_mode = 1  # type: ignore
     with pytest.raises(TypeError):
         config.sync_pulse_in_polarity = client.MultipurposeIOMode.MULTIPURPOSE_OFF  # type: ignore
 
@@ -185,7 +185,7 @@ def test_read_config(complete_config_string: str) -> None:
 
     # make sure all the values are correct
     assert config.azimuth_window == (0, 360000)
-    assert config.ld_mode == client.LidarMode.MODE_1024x10
+    assert config.lidar_mode == client.LidarMode.MODE_1024x10
     assert config.multipurpose_io_mode == client.MultipurposeIOMode.MULTIPURPOSE_OFF
     assert config.nmea_baud_rate == client.NMEABaudRate.BAUD_9600
     assert config.nmea_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
@@ -199,7 +199,7 @@ def test_read_config(complete_config_string: str) -> None:
     assert config.sync_pulse_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
     assert config.sync_pulse_out_angle == 360
     assert config.sync_pulse_out_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
-    assert config.ts_mode == client.TimestampMode.TIME_FROM_INTERNAL_OSC
+    assert config.timestamp_mode == client.TimestampMode.TIME_FROM_INTERNAL_OSC
     assert config.udp_dest == ""
     assert config.udp_port_imu == 7503
     assert config.udp_port_lidar == 7502
