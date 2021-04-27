@@ -11,7 +11,8 @@ Note:
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
 from numpy import ndarray
-from typing import Any, Callable, ClassVar, List, Optional, overload, Union
+from typing import (Any, Callable, ClassVar, List, Optional, overload, Tuple,
+                    Union)
 
 from . import BufferT
 
@@ -140,6 +141,7 @@ class DataFormat:
     columns_per_packet: int
     pixel_shift_by_row: List[int]
     pixels_per_column: int
+    column_window: Tuple[int, int]
 
 
 class PacketFormat:

@@ -104,7 +104,7 @@ def test_write_info(metadata: client.SensorInfo) -> None:
     metadata.format.columns_per_frame = 0
     metadata.format.columns_per_packet = 0
     metadata.format.pixels_per_column = 0
-    metadata.format.column_window = [0, 0]
+    metadata.format.column_window = (0, 0)
     metadata.format.pixel_shift_by_row = []
     metadata.beam_azimuth_angles = []
     metadata.beam_altitude_angles = []

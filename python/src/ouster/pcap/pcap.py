@@ -4,7 +4,7 @@ from threading import Lock
 from typing import Dict, Iterable, Iterator, Optional, Tuple
 
 from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
-                           SensorInfo, _client)
+                           SensorInfo)
 from ouster.pcap import _pcap
 
 

@@ -1,4 +1,4 @@
-import sphinx_rtd_theme
+import sphinx_rtd_theme # noqa
 
 # Configuration file for the Sphinx documentation builder.
 #

@@ -296,7 +296,7 @@ def pcap_to_csv(pcap_path: str,
 
     # [doc-stag-pcap-to-csv]
     field_names = 'RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (m), Y (m), Z (m)'
-    field_fmts = ['%d', '%d', '%d', '%d', '%.8f','%.8f', '%.8f']
+    field_fmts = ['%d', '%d', '%d', '%d', '%.8f', '%.8f', '%.8f']
 
     channels = [
         client.ChanField.RANGE, client.ChanField.SIGNAL,

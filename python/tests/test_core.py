@@ -93,7 +93,7 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
     assert len(scan.header(ColHeader.STATUS)) == scan.w
 
-    assert not scan.complete, "test data should have missing packet!"
+    assert not scan._complete(), "test data should have missing packet!"
 
     # check that the scan is missing exactly one packet's worth of columns
     valid_columns = list(scan.header(ColHeader.STATUS)).count(0xffffffff)

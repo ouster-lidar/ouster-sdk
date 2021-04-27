@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, ClassVar, Dict, List, Optional, Type, Union, Tuple
 
@@ -184,7 +183,6 @@ class LidarScan:
         }
 
     def _complete(self,
-                  *,
                   column_window: Optional[Tuple[int, int]] = None) -> bool:
         """Whether all columns of the scan are valid within given window (if
         any).
