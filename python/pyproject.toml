@@ -1,0 +1,6 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=40.1.0", "wheel", "cmake>=3.1.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

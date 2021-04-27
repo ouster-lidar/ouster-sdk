@@ -34,7 +34,8 @@ add_message_files(FILES PacketMsg.msg)
 add_service_files(FILES OSConfigSrv.srv)
 generate_messages(DEPENDENCIES std_msgs sensor_msgs geometry_msgs)
 
-set(_ouster_ros_INCLUDE_DIRS "include;../ouster_client/include;../ouster_viz/include")
+set(_ouster_ros_INCLUDE_DIRS
+  "include;../ouster_client/include;../ouster_client/include/optional-lite;../ouster_viz/include")
 
 catkin_package(
   INCLUDE_DIRS

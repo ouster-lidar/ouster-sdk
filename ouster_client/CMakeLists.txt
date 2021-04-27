@@ -30,6 +30,7 @@ if(WIN32)
   target_link_libraries(ouster_client PUBLIC ws2_32)
 endif()
 target_include_directories(ouster_client PUBLIC include)
+target_include_directories(ouster_client SYSTEM PUBLIC include/optional-lite)
 
 # ==== Executables ====
 add_executable(ouster_client_example src/example.cpp)
