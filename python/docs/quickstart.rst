@@ -135,8 +135,9 @@ Next, you'll need to configure the sensor with the config parameters. In your op
    >>> config = client.SensorConfig()
    >>> config.udp_port_lidar = 7502
    >>> config.udp_port_imu = 7503
+   >>> config.udp_dest = '<UDP_DEST>'
    >>> config.operating_mode = client.OperatingMode.OPERATING_NORMAL
-   >>> client.set_config(hostname, config, persist=True, udp_dest_auto=True)
+   >>> client.set_config(hostname, config, persist=True)
 
 Just like with the sample data, you can create a :py:class:`.PacketSource` from the sensor:
     

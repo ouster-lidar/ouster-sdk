@@ -446,8 +446,6 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     std::string res;
     bool success = true;
 
-    success = set_config_helper(sock_fd, config, config_flags);
-
     if (config_flags & CONFIG_UDP_DEST_AUTO) {
         if (config.udp_dest) {
             impl::socket_close(sock_fd);
@@ -456,6 +454,10 @@ bool set_config(const std::string& hostname, const sensor_config& config,
         }
         success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
         success &= res == "set_udp_dest_auto";
+    }
+
+    if (success) {
+        success = set_config_helper(sock_fd, config, config_flags);
     }
 
     impl::socket_close(sock_fd);
