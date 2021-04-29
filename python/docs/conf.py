@@ -40,6 +40,7 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx_autodoc_typehints',
     'sphinx_rtd_theme',
+    'sphinx_copybutton',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -121,3 +122,7 @@ napoleon_numpy_docstring = False
 todo_include_todos = True
 todo_link_only = True
 todo_emit_warnings = True
+
+# copybutton configs
+copybutton_prompt_text = r'>>> |\.\.\. |\$ '
+copybutton_prompt_is_regexp = True

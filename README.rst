@@ -191,6 +191,7 @@ where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``.
 
 
 Alternatively, if you would like to install dependencies with `rosdep`::
+
     rosdep install --from-paths <path to ouster example>
 
 To build::
@@ -245,10 +246,10 @@ another terminal, run::
 
 This will save a bag file of recorded data in the current working directory. 
 
-You should copy and save the metadata file alongside your data. The metadata file be saved either at
-the provided path to `roslaunch` or at ``$(ROS_HOME)/<sensor_hostname>.json`` if you did not provide
-a metadata argument to `roslaunch`. If you do not save the metadata file, you will not be able to
-replay your data later.
+You should copy and save the metadata file alongside your data. The metadata file will be saved
+either at the provided path to `roslaunch` or at ``$(ROS_HOME)/<sensor_hostname>.json`` if you did
+not provide a metadata argument to `roslaunch`. If you do not copy over and save your metadata file,
+you will not be able to replay your data later.
 
 .. _rosbag record: https://wiki.ros.org/rosbag/Commandline#rosbag_record
 

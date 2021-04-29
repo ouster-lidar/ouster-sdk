@@ -18,7 +18,7 @@ data. The SDK includes APIs for:
 Supported Platforms
 ===================
 
-Pre-built binaries are provided on `PyPI <https://pypi.org/>`_ for x86-64 platforms including:
+Pre-built binaries are provided on `PyPI <https://pypi.org/project/ouster-sdk/>`_ for x86-64 platforms including:
 
 - Most glibc-based Linux distributions (``manylinux2010_x86_64``)
 - Macos >= 10.13 (``macosx_10_13_x86_64``)

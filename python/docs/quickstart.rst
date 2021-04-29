@@ -164,8 +164,6 @@ directly from a sensor. Let's read from ``source`` until we get to the 84th fram
    >>> from more_itertools import nth
    >>> with closing(client.Scans(source)) as scans:
    ...     scan = nth(client.Scans(source), 84)
-   >>> scan
-   <ouster.client.data.LidarScan object at 0x7f7ccc35fba8>
 
 .. note::
 

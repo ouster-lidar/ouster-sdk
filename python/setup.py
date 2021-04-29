@@ -128,6 +128,7 @@ setup(
             'Sphinx >=3.5',
             'sphinx-autodoc-typehints ==1.11.1',
             'sphinx-rtd-theme ==0.5.2',
+            'sphinx-copybutton ==0.3.1'
         ],
         'examples': ['matplotlib', 'opencv-python'],
     })
