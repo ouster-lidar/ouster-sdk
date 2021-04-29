@@ -29,13 +29,13 @@ def meta(stream_digest: digest.StreamDigest):
 
 def test_sensor_init(meta: client.SensorInfo) -> None:
     """Initializing a data stream with metadata makes no network calls."""
-    with closing(client.Sensor("os.invalid", metadata=meta)):
+    with closing(client.Sensor("os.invalid", 0, 0, metadata=meta)):
         pass
 
 
 def test_sensor_timeout(meta: client.SensorInfo) -> None:
     """Setting a zero timeout reliably raises an exception."""
-    with closing(client.Sensor("os.invalid", metadata=meta,
+    with closing(client.Sensor("os.invalid", 0, 0, metadata=meta,
                                timeout=0.0)) as source:
         with pytest.raises(client.ClientTimeout):
             next(iter(source))
