@@ -55,6 +55,7 @@ COPY . ${OUSTER_SDK_PATH}
 #
 ENTRYPOINT ["sh", "-c", "set -e \
 && rm -rf ./src && cp -a ${OUSTER_SDK_PATH} ./src \
+&& export ARTIFACT_DIR=${ARTIFACT_DIR:-$BUILD_HOME/artifacts} \
 && . /etc/os-release && export ID VERSION_ID \
 && exec python3 -m tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
 ", "tox-entrypoint"]
