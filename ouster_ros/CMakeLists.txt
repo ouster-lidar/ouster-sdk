@@ -10,6 +10,8 @@ project(ouster_ros)
 find_package(Eigen3 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common)
+find_package(tf2_eigen REQUIRED)
 
 find_package(
   catkin REQUIRED
@@ -17,12 +19,10 @@ find_package(
              std_msgs
              sensor_msgs
              geometry_msgs
-             pcl_ros
              pcl_conversions
              roscpp
              tf2
-             tf2_ros
-             tf2_geometry_msgs)
+             tf2_ros)
 
 # ==== Options ====
 set(CMAKE_CXX_STANDARD 14)
@@ -45,7 +45,6 @@ catkin_package(
   CATKIN_DEPENDS
     roscpp
     message_runtime
-    pcl_ros
     std_msgs
     sensor_msgs
     geometry_msgs
@@ -63,10 +62,10 @@ add_subdirectory(../ouster_viz ouster_viz EXCLUDE_FROM_ALL)
 set(BUILD_SHARED_LIBS ${_SAVE_BUILD_SHARED_LIBS})
 
 # catkin adds all include dirs to a single variable, don't try to use targets
-include_directories(${_ouster_ros_INCLUDE_DIRS} SYSTEM ${catkin_INCLUDE_DIRS})
+include_directories(${_ouster_ros_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 
 add_library(ouster_ros src/ros.cpp)
-target_link_libraries(ouster_ros PUBLIC ${catkin_LIBRARIES} ouster_build PRIVATE
+target_link_libraries(ouster_ros PUBLIC ${catkin_LIBRARIES} ouster_build pcl_common PRIVATE
   -Wl,--whole-archive ouster_client ouster_viz -Wl,--no-whole-archive)
 add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 
@@ -80,7 +79,7 @@ target_link_libraries(os_cloud_node ouster_ros ${catkin_LIBRARIES})
 add_dependencies(os_cloud_node ${PROJECT_NAME}_gencpp)
 
 add_executable(viz_node src/viz_node.cpp)
-target_link_libraries(viz_node ouster_ros ${catkin_LIBRARIES} glfw GLEW)
+target_link_libraries(viz_node ouster_ros ${catkin_LIBRARIES} glfw GLEW pcl_common)
 add_dependencies(viz_node ${PROJECT_NAME}_gencpp)
 
 add_executable(img_node src/img_node.cpp)

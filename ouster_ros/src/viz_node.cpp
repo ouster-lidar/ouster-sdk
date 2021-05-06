@@ -2,7 +2,7 @@
  * Example node to visualize ouster lidar data
  */
 
-#include <pcl_ros/point_cloud.h>
+#include <pcl/point_cloud.h>
 #include <ros/console.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
