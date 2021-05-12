@@ -431,6 +431,7 @@ class SensorConfig:
     operating_mode: Optional[OperatingMode]
     multipurpose_io_mode: Optional[MultipurposeIOMode]
     azimuth_window: Optional[tuple]
+    signal_multiplier: Optional[int]
     sync_pulse_out_angle: Optional[int]
     sync_pulse_out_pulse_width: Optional[int]
     nmea_in_polarity: Optional[Polarity]

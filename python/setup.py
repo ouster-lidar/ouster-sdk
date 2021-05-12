@@ -96,7 +96,7 @@ class SDKDist(sdist):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.2.0',
+    version='0.2.1dev0',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],

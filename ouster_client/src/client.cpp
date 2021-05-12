@@ -339,6 +339,11 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
         !set_param("azimuth_window", to_string(config.azimuth_window.value())))
         return false;
 
+    if (config.signal_multiplier &&
+        !set_param("signal_multiplier",
+                   std::to_string(config.signal_multiplier.value())))
+        return false;
+
     if (config.sync_pulse_out_angle &&
         !set_param("sync_pulse_out_angle",
                    std::to_string(config.sync_pulse_out_angle.value())))
