@@ -371,6 +371,9 @@ def record_pcap(hostname: str,
 
 
 def main() -> None:
+
+    from .open3d import sensor_viewer_3d
+
     examples = {
         "configure-sensor": configure_sensor_params,
         "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
@@ -382,6 +385,7 @@ def main() -> None:
         "plot-imu-z-accel": plot_imu_z_accel,
         "write-xyz-to-csv": write_xyz_to_csv,
         "record-pcap": record_pcap,
+        "3d-viewer": sensor_viewer_3d,
     }
 
     description = "Ouster Python SDK examples. The EXAMPLE must be one of:\n  " + str.join(

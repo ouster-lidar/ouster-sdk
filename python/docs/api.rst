@@ -163,6 +163,15 @@ PCAP Examples :mod:`ouster.sdk.examples.pcap`
 ----
 
 
+Open3D Examples :mod:`ouster.sdk.examples.open3d`
+-------------------------------------------------
+
+.. automodule:: ouster.sdk.examples.open3d
+   :members:
+
+----
+
+
 Reference Code :mod:`ouster.sdk.examples.reference`
 ---------------------------------------------------
 

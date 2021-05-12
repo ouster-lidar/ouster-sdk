@@ -54,7 +54,9 @@ Let's make a :py:class:`.PacketSource` from our sample data using :py:class:`.pc
 
 .. code:: python
 
-    metadata = client.SensorInfo(metadata_path)
+    with open(metadata_path, 'r') as f:
+        metadata = client.SensorInfo(f.read())
+
     source = pcap.Pcap(pcap_path, metadata)
 
 Now we can read packets from ``source`` with the following code:
@@ -93,8 +95,7 @@ Let's destagger the image, changing the columns to represent the azimuth angles:
     import matplotlib.pyplot as plt
     from more_itertools import nth
 
-    metadata = client.SensorInfo(metadata_path)
-    source = pcap.Pcap(pcap_path, metadata)
+    # ... `metadata` and `source` variables created as in the previous examples
 
     scans = client.Scans(source)
 
@@ -160,8 +161,7 @@ If you don’t have a sensor, you can run this code with our pcap examples:
 
 .. code:: console
 
-    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
-      plot-xyz-points --scan-num 84
+    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
 
 
 .. figure:: images/lidar_scan_xyz_84.png
@@ -170,6 +170,9 @@ If you don’t have a sensor, you can run this code with our pcap examples:
    Point cloud from sample data (scan 84). Points colored by ``SIGNAL`` value.
 
 For details check the source code of an example :func:`.examples.pcap.pcap_display_xyz_points`
+
+Also check out a more powerful way of visualizing ``xyz`` 3d points with :ref:`ex-open3d`
+
 
 .. _ex-correlating-2d-and-3d:
 
@@ -185,6 +188,7 @@ the 3D points within a certain range and from certain azimuth angles.
     :end-before: [doc-etag-filter-3d]
     :emphasize-lines:  10-11, 15
     :linenos:
+    :dedent:
 
 Since we'd like to filter on azimuth angles, first we first destagger both the 2D and 3D points, so
 that our columns in the ``HxW`` representation correspond to azimuth angle, not timestamp. (See
@@ -297,8 +301,7 @@ To convert the first ``5`` scans of sample data from a pcap file, you can try:
 
 .. code:: console
 
-    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
-      pcap-to-csv --scan-num 5
+    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
 
 The source code of an example below:
 
@@ -326,6 +329,42 @@ We used ``128`` while restoring 2D image from a CSV file because it's the number
 ``OS-1-128.pcap`` sample data recording.
 
 Check :func:`.examples.pcap.pcap_to_csv` documentation for further details.
+
+
+.. _ex-open3d:
+
+
+Open3D as Point Cloud Visualiser
+=================================
+
+More complex and robust ``xyz`` 3D points visualization can be achieved with the Open3D library.
+Here is a simple example to view the same frame ``84`` in a more appealing way::
+
+    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+
+Expected result looks like this (use mouse to move around and ``ESC`` to exit):
+
+.. figure:: images/lidar_scan_xyz_84_3d.png
+   :align: center
+
+   Open3D visualisation of point cloud of sample data (scan 84). Points colored by ``SIGNAL`` value
+   with Ouster ``spezia`` colormap.
+
+The source code of the example below:
+
+.. literalinclude:: /../src/ouster/sdk/examples/open3d.py
+    :start-after: [doc-stag-open3d-one-scan]
+    :end-before: [doc-etag-open3d-one-scan]
+    :emphasize-lines: 1, 17-20, 48-50
+    :linenos:
+    :dedent:
+
+For a `live viewer` of real-time sensor data (implemented with Open3D), you can try::
+
+    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
+
+Check :func:`.examples.open3d.sensor_viewer_3d` for a full source code.
+
 
 .. _ex-imu:
 

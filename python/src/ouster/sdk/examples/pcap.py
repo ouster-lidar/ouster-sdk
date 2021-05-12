@@ -18,7 +18,7 @@ from ouster import client
 
 
 def read_metadata(metadata_path: str) -> client.SensorInfo:
-    """Read metadata json file as :class:`.client.SensorInfo` object
+    """Read metadata json file as :class:`.client.SensorInfo` object.
 
     Args:
         metadata_path: path to json file with sensor info
@@ -31,8 +31,7 @@ def read_metadata(metadata_path: str) -> client.SensorInfo:
 
 
 def ae(field: np.ndarray, percentile: float = 0.05):
-    """Shift/Normalize for better color mapping (non reversible, only viz use
-    cases)
+    """Shift/Normalize for better color mapping (non reversible, only viz use).
 
     WARNING:
         It's a utility function used ONLY for the purpose of 2D images
@@ -54,15 +53,25 @@ def ae(field: np.ndarray, percentile: float = 0.05):
     """
     min_val = np.percentile(field, 100 * percentile)
     max_val = np.percentile(field, 100 * (1 - percentile))
-    field_res = (field.astype(np.float64) - min_val) / (max_val - min_val)
+    # to protect from division by zero
+    spread = max(max_val - min_val, 1)
+    field_res = (field.astype(np.float64) - min_val) / spread
     return field_res.clip(0, 1.0)
+
+
+def colorize(key):
+    """Use Ouster spezia colormap to get from gray to color space."""
+    from ouster.sdk.examples.colormaps import spezia
+    key_img = ae(key)
+    key_img_indices = (255 * key_img).astype(np.uint8)
+    return np.reshape(np.take(spezia, key_img_indices.flat, axis=0),
+                      [key_img.shape[0], key_img.shape[1], 3])
 
 
 def pcap_display_xyz_points(pcap_path: str,
                             metadata_path: str,
                             num: int = 0) -> None:
-    """Display range from a specified scan number (*num*) as 3D points from
-    pcap file located at *pcap_path*
+    """Display range from a specified scan number as 3D points from pcap file.
 
     Args:
         pcap_path: path to the pcap file
@@ -110,8 +119,7 @@ def pcap_2d_viewer(
         metadata_path: str,
         num: int = 0,  # not used in this example
         rate: float = 0.0) -> None:
-    """Simple sensor field visualization pipeline as 2D images from pcap file
-    (*pcap_path*)
+    """Simple sensor field visualization pipeline as 2D images from pcap file.
 
     Args:
         pcap_path: path to the pcap file
@@ -184,8 +192,7 @@ def pcap_read_packets(
         metadata_path: str,
         num: int = 0  # not used in this examples
 ) -> None:
-    """Basic read packets example from pcap file (*pcap_path*)
-
+    """Basic read packets example from pcap file.
     Args:
         pcap_path: path to the pcap file
         metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
@@ -217,7 +224,7 @@ def pcap_show_one_scan(pcap_path: str,
                        metadata_path: str,
                        num: int = 0,
                        destagger: bool = True) -> None:
-    """Show all 4 channels of one scan (*num*) form pcap file (*pcap_path*)
+    """Show all 4 channels of one scan (*num*) form pcap file (*pcap_path*).
 
     Args:
         pcap_path: path to the pcap file
@@ -354,13 +361,18 @@ def pcap_to_csv(pcap_path: str,
 
 
 def main():
+    """Pcap examples runner."""
+
+    from .open3d import (pcap_3d_one_scan, pcap_3d_one_scan_canvas)
 
     examples = {
         "plot-xyz-points": pcap_display_xyz_points,
         "2d-viewer": pcap_2d_viewer,
         "read-packets": pcap_read_packets,
         "plot-one-scan": pcap_show_one_scan,
-        "pcap-to-csv": pcap_to_csv
+        "pcap-to-csv": pcap_to_csv,
+        "3d-one-scan": pcap_3d_one_scan,
+        "3d-one-scan-with-img": pcap_3d_one_scan_canvas,
     }
 
     description = "Ouster Python SDK Pcap examples. The EXAMPLE must be one of:\n  " + str.join(
