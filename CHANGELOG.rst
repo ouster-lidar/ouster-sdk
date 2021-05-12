@@ -19,6 +19,8 @@ Changed
 
 * reflectivity visualization for changes in the upcoming 2.1 firmware
 * moved most of the visualizer code out of public headers and hid some implementation details
+* removed viz_node from ouster_ros and moved image_processing to ouster_client
+* require metadata argument to ouster_ros launch file
 
 Fixed
 -----

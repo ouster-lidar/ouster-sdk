@@ -229,14 +229,14 @@ where:
 
 * ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor
 * ``<udp data destination>`` is the hostname or IP to which the sensor should send data
-* ``<path to metadata json>`` is an optional path to json file to save calibration metadata
+* ``<path to metadata json>`` is the path to the json file to which to save calibration metadata
 * ``<lidar mode>`` is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or ``2048x10``, and
 * ``<viz>`` is either ``true`` or ``false``: if true, a window should open and start displaying data
   after a few seconds.
 
-Note that if the ``metadata`` parameter is not specified, this command will write metadata to
-``${ROS_HOME}``. By default, the name of this file is based on the hostname of the sensor, e.g.
-``os-99xxxxxxxxxx.json``.
+Note that by default the working directory of all ROS nodes is set to ``${ROS_HOME}``, generally
+``$HOME/.ros``, so if ``metadata`` is a relative path, it will write to that path inside
+``${ROS_HOME}``. To avoid this, you can provide an absolute path to ``metadata``.
 
 Recording Data
 --------------
@@ -248,10 +248,10 @@ another terminal, run::
 
 This will save a bag file of recorded data in the current working directory. 
 
-You should copy and save the metadata file alongside your data. The metadata file will be saved
-either at the provided path to `roslaunch` or at ``$(ROS_HOME)/<sensor_hostname>.json`` if you did
-not provide a metadata argument to `roslaunch`. If you do not copy over and save your metadata file,
-you will not be able to replay your data later.
+You should copy and save the metadata file alongside your data. The metadata file will be saved at
+the provided path to `roslaunch`. If you run the node and cannot find the metadata file, try looking
+inside your ``${ROS_HOME}``, generally ``$HOME/.ros``. Regardless, you must retain the metadata
+file, as you will not be able to replay your data later without it.
 
 .. _rosbag record: https://wiki.ros.org/rosbag/Commandline#rosbag_record
 

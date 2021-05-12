@@ -24,7 +24,7 @@ target_include_directories(ouster_build INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/in
 add_dependencies(ouster_build generate_build_header)
 
 # ==== Libraries ====
-add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp)
+add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp src/image_processing.cpp)
 target_link_libraries(ouster_client PUBLIC jsoncpp_lib Eigen3::Eigen ouster_build)
 if(WIN32)
   target_link_libraries(ouster_client PUBLIC ws2_32)

@@ -19,8 +19,6 @@
   <build_depend>tf2_eigen</build_depend>
   <build_depend>libpcl-all-dev</build_depend>
   <build_depend>pcl_conversions</build_depend>
-  <build_depend>libglew-dev</build_depend>
-  <build_depend>libglfw3-dev</build_depend>
   <build_depend>libtclap-dev</build_depend>
   
   <exec_depend>libjsoncpp</exec_depend>
