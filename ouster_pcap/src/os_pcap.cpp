@@ -440,10 +440,13 @@ std::vector<SLL> buffer_to_frag_packets(record_handle& handle, int src_port,
 
 void record_packet(record_handle& handle, int src_port, int dst_port,
                    const uint8_t* buf, size_t buffer_size) {
+    using namespace std::chrono;
+
     // For each of the packets write it to the pcap file
     for (auto item :
          buffer_to_frag_packets(handle, src_port, dst_port, buf, buffer_size)) {
-        handle.pcap_file_writer->write(item);
+        Packet packet(item, Timestamp(system_clock::now().time_since_epoch()));
+        handle.pcap_file_writer->write(packet);
     }
 }
 
