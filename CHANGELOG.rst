@@ -11,6 +11,7 @@ Added
   directory for details and links to documentation
 * early version of a C++ API covering the full sensor configuration interface
 * preliminary C++ API for working with pcap files containing a single sensor packet capture
+* support for signal multiplier config parameter
 
 
 Changed

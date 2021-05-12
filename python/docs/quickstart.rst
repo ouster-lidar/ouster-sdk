@@ -11,18 +11,22 @@ sample data or a sensor connected to your machine.
 Installation
 ============
 
-The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on `supported platforms`_, run::
+The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on `supported platforms`_, run:
 
-    $ python3 -m pip install ouster-sdk[examples]
+.. code:: console
+
+    $ python3 -m pip install 'ouster-sdk[examples]'
 
 .. note::
 
    Newer users to Python should create a suitable `venv`_, `activate`_ it, and ensure that they have
    `upgraded pip`_ once their venv is activated.
 
-To check that you've succesfully installed the latest version of the Ouster Python SDK, run::
+To check that you've succesfully installed the latest version of the Ouster Python SDK, run:
+
+.. code:: console
     
-    $ pip list
+    $ pip3 list
 
 .. note::
 
@@ -41,7 +45,9 @@ Using this Guide
 You'll want to start an interactive Python session and keep it open through the sections, as we'll
 be reusing variables created in earlier parts while explaining what we're doing as we go.
 
-To get started, open a new terminal window and start a python interpreter::
+To get started, open a new terminal window and start a python interpreter:
+
+.. code:: console
 
     $ python3
 
@@ -66,17 +72,26 @@ Download the `sample data`_ (**1.6 GB**) and unzip the contents. You should have
   * ``OS1_128.pcap``
   * ``OS1_2048x10_128.json``
 
-The downloaded pcap file contains lidar and imu packets captured from the network . You can read
+The downloaded pcap file contains lidar and imu packets captured from the network. You can read
 more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Sensor Documentation. The
 JSON file contains metadata queried from the sensor TCP interface necessary for interpreting
 the packet data.
 
-Let's load the paths into your open session of python:
+Let's return to your open sesion of python and change the working directory. Replace
+``<SAMPLE_DATA_DIRECTORY`` below with the absolute path or relative path to the directory where you
+the unzipped ``pcap`` and ``json`` file are located.
 
 .. code:: python
 
-   >>> pcap_path = '/path/to/OS1_128.pcap'
-   >>> metadata_path = '/path/to/OS1_2048x10_128.json'
+   >>> import os
+   >>> os.chdir('<SAMPLE_DATA_DIRECTORY>')
+
+Now that's squared away, let's load the files into your python session:
+
+.. code:: python
+
+   >>> pcap_path = 'OS1_128.pcap'
+   >>> metadata_path = 'OS1_2048x10_128.json'
 
 
 Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the
@@ -117,8 +132,7 @@ If you have access to sensor hardware, you can start reading data by instantiati
    Sensor Documentation.
 
 In the following, ``<SENSOR_HOSTNAME>`` should be substituted for the actual hostname or IP of your
-sensor and ``<UDP_DEST>`` should be the hostname or IP of the machine reading sensor data, per the
-network configuration.
+sensor.
 
 To make sure everything is connected, open a separate console window and try pinging the sensor. You
 should see some output like::
@@ -135,9 +149,8 @@ Next, you'll need to configure the sensor with the config parameters. In your op
    >>> config = client.SensorConfig()
    >>> config.udp_port_lidar = 7502
    >>> config.udp_port_imu = 7503
-   >>> config.udp_dest = '<UDP_DEST>'
    >>> config.operating_mode = client.OperatingMode.OPERATING_NORMAL
-   >>> client.set_config(hostname, config, persist=True)
+   >>> client.set_config(hostname, config, persist=True, udp_dest_auto = True)
 
 Just like with the sample data, you can create a :py:class:`.PacketSource` from the sensor:
     
@@ -163,7 +176,7 @@ directly from a sensor. Let's read from ``source`` until we get to the 84th fram
    >>> from contextlib import closing
    >>> from more_itertools import nth
    >>> with closing(client.Scans(source)) as scans:
-   ...     scan = nth(client.Scans(source), 84)
+   ...     scan = nth(scans, 84)
 
 .. note::
 

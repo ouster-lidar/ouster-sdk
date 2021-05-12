@@ -24,9 +24,11 @@ When you work with a sensor, the client will automatically fetch the metadata. R
 sensor as it was running when the data was recorded. 
 
 Since it's crucial to save the correct metadata file, let's see how we can get that from a sensor.
-Try running the following example::
+Try running the following example:
 
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
+.. code:: console
+
+    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
 
 And now let's look inside the example we just ran:
 
@@ -86,7 +88,7 @@ surprise us since its columns pertain to timestamps instead of azimuth angles.
 
 Let's destagger the image, changing the columns to represent the azimuth angles:
 
-.. code::
+.. code:: python
 
     import matplotlib.pyplot as plt
     from more_itertools import nth
@@ -105,6 +107,7 @@ Let's destagger the image, changing the columns to represent the azimuth angles:
     ranges_destaggered = client.destagger(source.metadata, ranges)
 
     plt.imshow(ranges_destaggered, cmap='gray', resample=False)
+
 
 This should give the scene below, of which we have magnified two patches for better visiblity.
 
@@ -144,16 +147,20 @@ Look-uptable. This function can then be applied to any scan to create a numpy ar
     :linenos:
     :dedent:
 
-If you have a sensor, you can run this code with one of our examples::
+If you have a sensor, you can run this code with one of our examples:
 
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
+.. code:: console
+
+    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
 
 That should open a 3D plot of a single scan of your location taken just now by your sensor. You
 should be able to recognize the contours of the scene around you.
 
-If you don’t have a sensor, you can run this code with our pcap examples::
+If you don’t have a sensor, you can run this code with our pcap examples:
 
-    $ python -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
+.. code:: console
+
+    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
       plot-xyz-points --scan-num 84
 
 
@@ -192,9 +199,11 @@ columns correspond with timestamp).
 Finally, we select only the azimuth columns we're interested in. In this case, we've arbitrarily
 chosen the first 270 degrees of rotation.
 
-If you have a sensor, you can run this code with an example::
+If you have a sensor, you can run this code with an example:
+
+.. code:: console
     
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
+    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
 .. _ex-streaming:
 
@@ -203,9 +212,11 @@ Streaming Live Data
 ===================
 
 Instead of working with a recorded dataset or a few captured frames of data, let's see if we can get
-a live feed from the sensor::
+a live feed from the sensor:
+
+.. code:: console
     
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
+    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
 
 This should give you a live feed from your sensor that looks like a black and white moving image.
 Try waving your hand or moving around to find yourself within the image!
@@ -233,9 +244,11 @@ Recording Sensor Data
 =====================
 
 It's easy to record data to a pcap file from a sensor programatically. Let's try it first
-with the following example::
+with the following example:
 
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+.. code:: console
+
+    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
 
 This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for 10
 seconds and store the pcap file along with the metadata json file into the current directory.
@@ -262,9 +275,11 @@ Pcap Live Data Preview
 We can easily view the data that was recorded in the previous section. Based on an example from
 :ref:`ex-streaming` above we have a pcap viewer with additional *stagger*/*destagger* handler on key
 `D` and pause on `SPACE` key  (source code: :func:`.examples.pcap.pcap_2d_viewer`). To run it try
-the following command::
+the following command:
 
-    $ python -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
+.. code:: console
+
+    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
 
 Or substitute example data with pcap and json that you just recorded.
 
@@ -278,9 +293,11 @@ Pcap to CSV
 Sometimes we want to get a point cloud (``XYZ`` + other fields) as a ``CSV`` file for further
 analysis with other tools.
 
-To convert the first ``5`` scans of sample data from a pcap file, you can try::
+To convert the first ``5`` scans of sample data from a pcap file, you can try:
 
-    $ python -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
+.. code:: console
+
+    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json \
       pcap-to-csv --scan-num 5
 
 The source code of an example below:
@@ -326,7 +343,9 @@ easy, like graph the acceleration in z direction over time. Let's look at some c
 
 Like other ``Packets``, we'll want to get them from a :py:class:`.PacketSource`. After getting ``imu_packet_list``, we obtain the ``sys_ts`` and ``z`` part of ``accel`` and plot them.
 
-If you have a sensor, you can run the code above with the ``plot-imu-z-accel`` example::
+If you have a sensor, you can run the code above with the ``plot-imu-z-accel`` example:
 
-    $ python -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
+.. code:: console
+
+    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
 

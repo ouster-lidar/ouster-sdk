@@ -16,7 +16,7 @@ data. The SDK includes APIs for:
 
 
 Supported Platforms
-===================
+-------------------
 
 Pre-built binaries are provided on `PyPI <https://pypi.org/project/ouster-sdk/>`_ for x86-64 platforms including:
 
@@ -35,7 +35,7 @@ clone of the repository.
 
 
 Installation
-============
+------------
 
 The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, run::
 
@@ -51,7 +51,7 @@ See the `quick start`_ section of the documentation to begin working with Ouster
 
 
 Status and Contact Info
-=======================
+-----------------------
 
 The Ouster Python SDK is currently provided as an early pre-1.0 preview. The APIs are subject to
 change in every release.

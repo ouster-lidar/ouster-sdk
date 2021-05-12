@@ -12,7 +12,8 @@ Summary
 =======
 
 To get started building the client and visualizer libraries, see the `Sample Client and Visualizer`_
-section below. For instructions on ROS, start with the `Example ROS Code`_ section.
+section below. For instructions on ROS, start with the `Example ROS Code`_ section. Python SDK users
+should proceed straight to our `python SDK homepage <python/>`_.
 
 This repository contains sample code for connecting to and configuring ouster sensors, reading and
 visualizing data, and interfacing with ROS.
@@ -20,6 +21,7 @@ visualizing data, and interfacing with ROS.
 * `ouster_client <ouster_client/>`_ contains an example C++ client for ouster sensors
 * `ouster_viz <ouster_viz/>`_ contains a basic point cloud visualizer
 * `ouster_ros <ouster_ros/>`_ contains example ROS nodes for publishing point cloud messages
+* `python <python/>`_ contains the code for the ouster sensor python SDK
 
 
 Sample Client and Visualizer
@@ -280,6 +282,12 @@ the example ROS code with a sensor or recorded data. Then, run::
 
 in another terminal with the ROS environment set up. To view lidar signal, near-IR, and range
 images, add ``image:=true`` to the ``roslaunch`` command above.
+
+
+Ouster Python SDK
+=================
+
+Python SDK users should proceed straight to the `Ouster python SDK homepage <python/>`_.
 
 
 Additional Information
