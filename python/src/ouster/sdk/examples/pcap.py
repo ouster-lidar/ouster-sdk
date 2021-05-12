@@ -7,12 +7,14 @@ This module has a rudimentary command line interface. For usage, run::
 
 import os
 import argparse
-import numpy as np
 from contextlib import closing
+from itertools import islice
+
+import numpy as np
 from more_itertools import nth
 
-import ouster.pcap as pcap
-import ouster.client as client
+from ouster import pcap
+from ouster import client
 
 
 def read_metadata(metadata_path: str) -> client.SensorInfo:
@@ -265,34 +267,29 @@ def pcap_to_csv(pcap_path: str,
                 metadata_path: str,
                 num: int = 0,
                 csv_dir: str = ".",
-                csv_prefix: str = "pcap_out",
+                csv_base: str = "pcap_out",
                 csv_ext: str = "csv") -> None:
-    """Write scans from pcap file (*pcap_path*) to plain csv files (one per
-    lidar scan).
+    """Write scans from a pcap to csv files (one per lidar scan).
 
-    If the *csv_ext* ends in ``.gz``, the file is automatically saved in
-    compressed gzip format. :func:`.numpy.loadtxt` can be used to read gzipped
-    files transparently back to :class:`.numpy.ndarray`.
-
-    Number of saved lines per csv file is always [H x W], which corresponds
-    to a full 2D image representation of a lidar scan.
+    The number of saved lines per csv file is always H x W, which corresponds to
+    a full 2D image representation of a lidar scan.
 
     Each line in a csv file is:
 
-        RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (m), Y (m), Z (m)
+        TIMESTAMP, RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (mm), Y (mm), Z (mm)
+
+    If ``csv_ext`` ends in ``.gz``, the file is automatically saved in
+    compressed gzip format. :func:`.numpy.loadtxt` can be used to read gzipped
+    files transparently back to :class:`.numpy.ndarray`.
 
     Args:
         pcap_path: path to the pcap file
         metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
         num: number of scans to save from pcap to csv files
         csv_dir: path to the directory where csv files will be saved
-        csv_prefix: the filename prefix that will be appended with frame number
-                    and *csv_ext*
-        csv_ext: file extension to use. If it ends with ``.gz`` the output is
-                 gzip compressed
-
+        csv_base: string to use as the base of the filename for pcap output
+        csv_ext: file extension to use, "csv" by default
     """
-    from itertools import islice
 
     # ensure that base csv_dir exists
     if not os.path.exists(csv_dir):
@@ -302,8 +299,8 @@ def pcap_to_csv(pcap_path: str,
     source = pcap.Pcap(pcap_path, metadata)
 
     # [doc-stag-pcap-to-csv]
-    field_names = 'RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (m), Y (m), Z (m)'
-    field_fmts = ['%d', '%d', '%d', '%d', '%.8f', '%.8f', '%.8f']
+    field_names = 'TIMESTAMP (ns), RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (mm), Y (mm), Z (mm)'
+    field_fmts = ['%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d']
 
     channels = [
         client.ChanField.RANGE, client.ChanField.SIGNAL,
@@ -322,25 +319,33 @@ def pcap_to_csv(pcap_path: str,
 
         for idx, scan in enumerate(scans):
 
-            fields_values = [scan.field(ch) for ch in channels]
-            xyz = xyzlut(scan)
+            # copy per-column timestamps for each channel
+            col_timestamps = scan.header(client.ColHeader.TIMESTAMP)
+            timestamps = np.tile(col_timestamps, (scan.h, 1))
 
-            # get lidar data as one frame of [H x W x 7], "fat" 2D image
-            frame = np.dstack((*fields_values, xyz))
+            # grab channel data
+            fields_values = [scan.field(ch) for ch in channels]
+
+            # use integer mm to avoid loss of precision casting timestamps
+            xyz = (xyzlut(scan) * 1000).astype(np.int64)
+
+            # get all data as one H x W x 8 int64 array for savetxt()
+            frame = np.dstack((timestamps, *fields_values, xyz))
+
+            # not necessary, but output points in "image" vs. staggered order
             frame = client.destagger(metadata, frame)
 
-            csv_path = os.path.join(csv_dir,
-                                    f'{csv_prefix}_{idx:06d}.{csv_ext}')
+            # write csv out to file
+            csv_path = os.path.join(csv_dir, f'{csv_base}_{idx:06d}.{csv_ext}')
+            print(f'write frame #{idx}, to file: {csv_path}')
 
             header = '\n'.join([
                 f'pcap file: {pcap_path}', f'frame num: {idx}',
                 f'metadata file: {metadata_path}', field_names
             ])
 
-            print(f'write frame #{idx}, to file: {csv_path}')
-
             np.savetxt(csv_path,
-                       np.reshape(frame, (-1, frame.shape[2])),
+                       frame.reshape(-1, frame.shape[2]),
                        fmt=field_fmts,
                        delimiter=',',
                        header=header)
