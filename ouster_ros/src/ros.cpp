@@ -88,6 +88,72 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
     }
 }
 
+void scan_to_cloud(const ouster::XYZLut& xyz_lut,
+                   ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
+                   ouster_ros::Cloud& cloud,
+                   tf::TransformListener & listener,
+                   const std::string & fixed_frame,
+                   const std::string & sensor_frame) {
+    cloud.resize(ls.w * ls.h);
+    auto points = ouster::cartesian(ls, xyz_lut);
+
+    ros::Time start_stamp, pt_stamp;
+    start_stamp.fromNSec(scan_ts.count());
+    int transformsNotValid = 0;
+    for (auto v = 0; v < ls.w; v++) {
+
+        const auto ts = (ls.header(v).timestamp - scan_ts).count();
+        pt_stamp.fromNSec(ls.header(v).timestamp.count());
+
+        tf::StampedTransform transform;
+        bool transformValid = false;
+        try {
+            listener.lookupTransform(
+                sensor_frame,
+                start_stamp,
+                sensor_frame,
+                pt_stamp,
+                fixed_frame,
+                transform);
+            transformValid = true;
+        }
+        catch(tf::TransformException & ex)
+        {
+            ++transformsNotValid;
+        }
+
+        for (auto u = 0; u < ls.h; u++) {
+            const auto xyz = points.row(u * ls.w + v);
+            const auto pix = ls.data.row(u * ls.w + v);
+
+            auto pt = tf::Point(
+                static_cast<float>(xyz(0)),
+                static_cast<float>(xyz(1)),
+                static_cast<float>(xyz(2)));
+            if(transformValid) {
+                pt = transform * pt;
+            }
+
+            cloud(v, u) = ouster_ros::Point{
+                {{(float)pt.x(), (float)pt.y(), (float)pt.z(), 1.0f}},
+                static_cast<float>(pix(ouster::LidarScan::INTENSITY)),
+                static_cast<uint32_t>(ts),
+                static_cast<uint16_t>(pix(ouster::LidarScan::REFLECTIVITY)),
+                static_cast<uint8_t>(u),
+                static_cast<uint16_t>(pix(ouster::LidarScan::AMBIENT)),
+                static_cast<uint32_t>(pix(ouster::LidarScan::RANGE))};
+        }
+    }
+    if(transformsNotValid!=0) {
+        ROS_WARN("Could not estimate motion of %s accordingly to fixed "
+                 "frame %s, some points (%d/%d) are not corrected based on motion.",
+            sensor_frame.c_str(), 
+            fixed_frame.c_str(), 
+            transformsNotValid*cloud.height, 
+            (int)cloud.size());
+    }
+}
+
 sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
                                             const std::string& frame) {
     sensor_msgs::PointCloud2 msg{};

@@ -11,6 +11,7 @@
   <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
   <arg name="image" default="false" doc="publish range/intensity/ambient image topic"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
+  <arg name="fixed_frame_id" default="" doc="adjust lidar points based on a fixed frame"/>
 
   <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" required="true">
     <param name="~/lidar_mode" type="string" value="$(arg lidar_mode)"/>
@@ -28,6 +29,7 @@
     <remap from="~/lidar_packets" to="/os_node/lidar_packets"/>
     <remap from="~/imu_packets" to="/os_node/imu_packets"/>
     <param name="~/tf_prefix" value="$(arg tf_prefix)"/>
+    <param name="~/fixed_frame_id" value="$(arg fixed_frame_id)"/>
   </node>
 
   <node if="$(arg viz)" pkg="ouster_ros" name="viz_node" type="viz_node" output="screen" required="true">

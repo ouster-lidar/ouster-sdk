@@ -19,6 +19,7 @@
 #include "ouster/types.h"
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/point.h"
+#include <tf/transform_listener.h>
 
 namespace ouster_ros {
 
@@ -66,6 +67,26 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
                    ouster_ros::Cloud& cloud);
+
+/**
+ * Populate a PCL point cloud from a LidarScan taking into account
+ * the movement of the sensor frame compared to a fixed frame. It is
+ * useful to correctly transform each point of the lidar based on
+ * their timestamp when the lidar is moving.
+ * @param xyz_lut lookup table from sensor beam angles (see lidar_scan.h)
+ * @param scan_ts scan start used to caluclate relative timestamps for points
+ * @param ls input lidar data
+ * @param cloud output pcl pointcloud to populate
+ * @param listener TF listener used to interpolate the transform between fixed_frame and sensor_frame
+ * @param fixed_frame the fixed frame
+ * @param sensor_frame the sensor frame
+ */
+void scan_to_cloud(const ouster::XYZLut& xyz_lut,
+                   ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
+                   ouster_ros::Cloud& cloud,
+                   tf::TransformListener & listener,
+                   const std::string & fixed_frame,
+                   const std::string & sensor_frame);
 
 /**
  * Serialize a PCL point cloud to a ROS message
