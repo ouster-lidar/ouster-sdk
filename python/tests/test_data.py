@@ -67,7 +67,6 @@ def test_imu_packet(info: client.SensorInfo) -> None:
 
 def test_lidar_packet(info: client.SensorInfo) -> None:
     pf = _client.PacketFormat.from_info(info)
-
     """Test reading and writing values from empty packets."""
     p = client.LidarPacket(bytes(pf.lidar_packet_size), info)
     w = pf.columns_per_packet
@@ -191,3 +190,76 @@ def test_scan_to_native() -> None:
     ls._data[0, 0] = 42
     native.data[:] = 1
     assert ls._data[0, 0] == 42
+
+
+def test_scan_not_complete() -> None:
+    """Test that not all scans are considered complete."""
+    ls = client.LidarScan(32, 1024)
+
+    status = ls.header(client.ColHeader.STATUS)
+    assert not ls._complete()
+
+    status[0] = 0x01
+    assert not ls._complete()
+    assert not ls._complete((0, 0))
+
+    status[1:] = 0xFFFFFFFF
+    assert not ls._complete()
+
+    status[:] = 0xFFFFFFFF
+    status[-1] = 0x01
+    assert not ls._complete()
+
+    # windows are inclusive but python slicing is not
+    status[:] = 0x00
+    status[:10] = 0xFFFFFFFF
+    assert not ls._complete((0, 10))
+
+    status[:] = 0x00
+    status[11:21] = 0xFFFFFFFF
+    assert not ls._complete((10, 20))
+
+    # window [i, i]
+    status[:] = 0x00
+    status[0] = 0xFFFFFFFF
+    assert not ls._complete()
+    assert not ls._complete((0, 1))
+    assert ls._complete((0, 0))
+
+    status[:] = 0x00
+    status[128] = 0xFFFFFFFF
+    assert not ls._complete()
+    assert not ls._complete((127, 128))
+    assert ls._complete((128, 128))
+
+
+@pytest.mark.parametrize("w, win_start, win_end", [
+    (512, 0, 511),
+    (512, 1, 0),
+    (512, 256, 0),
+    (512, 256, 1),
+    (1024, 0, 1023),
+    (1024, 0, 512),
+    (1024, 0, 0),
+    (1024, 1023, 1023),
+    (1024, 1023, 0),
+    (1024, 1023, 1),
+    (2048, 0, 2047),
+    (2048, 1024, 512),
+    (2048, 1024, 0),
+    (2048, 1024, 1),
+    (2048, 511, 511),
+])
+def test_scan_complete(w, win_start, win_end) -> None:
+    """Set the status headers to the specified window and check _complete()."""
+    ls = client.LidarScan(32, w)
+
+    status = ls.header(client.ColHeader.STATUS)
+
+    if win_start <= win_end:
+        status[win_start:win_end + 1] = 0xFFFFFFFF
+    else:
+        status[0:win_end + 1] = 0xFFFFFFFF
+        status[win_start:] = 0xFFFFFFFF
+
+    assert ls._complete((win_start, win_end))

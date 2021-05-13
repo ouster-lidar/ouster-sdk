@@ -200,18 +200,17 @@ class LidarScan:
             column_window: metadata.format.column_window if it's not default
                 to full scan
         """
-        if column_window:
-            win_start, win_end = column_window
-            if win_start < win_end:
-                return (self.header(ColHeader.STATUS)[win_start:win_end +
-                                                      1] == 0xFFFFFFFF).all()
-            else:
-                valid = (self.header(
-                    ColHeader.STATUS)[win_start:] == 0xFFFFFFFF).all()
-                valid = valid and (self.header(ColHeader.STATUS)[:win_end + 1]
-                                   == 0xFFFFFFFF).all()
-                return valid
-        return (self.header(ColHeader.STATUS) == 0xFFFFFFFF).all()
+        if column_window is None:
+            column_window = (0, self.w - 1)
+
+        win_start, win_end = column_window
+        status = self.header(ColHeader.STATUS)
+
+        if win_start <= win_end:
+            return (status[win_start:win_end + 1] == 0xFFFFFFFF).all()
+        else:
+            return ((status[:win_end + 1] == 0xFFFFFFFF).all()
+                    and (status[win_start:] == 0xFFFFFFFF).all())
 
     def field(self, field: ChanField) -> np.ndarray:
         """Return a view of the specified channel field."""
