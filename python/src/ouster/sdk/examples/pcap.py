@@ -305,7 +305,6 @@ def pcap_to_csv(pcap_path: str,
     metadata = read_metadata(metadata_path)
     source = pcap.Pcap(pcap_path, metadata)
 
-    # [doc-stag-pcap-to-csv]
     field_names = 'TIMESTAMP (ns), RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (mm), Y (mm), Z (mm)'
     field_fmts = ['%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d']
 
@@ -314,6 +313,7 @@ def pcap_to_csv(pcap_path: str,
         client.ChanField.NEAR_IR, client.ChanField.REFLECTIVITY
     ]
 
+    # [doc-stag-pcap-to-csv]
     with closing(pcap.Pcap(pcap_path, metadata)) as source:
 
         # precompute xyzlut to save computation in a loop

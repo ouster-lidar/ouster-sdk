@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import time
 from threading import Lock
 from typing import Dict, Iterable, Iterator, Optional, Tuple
@@ -32,11 +32,11 @@ class PcapInfo:
     non_udp_packets: int = 0
     guessed_lidar_port: Optional[int] = None
     guessed_imu_port: Optional[int] = None
-    ports: Optional[Dict[int, Tuple[int, int]]] = None
+    ports: Dict[int, Tuple[int, int]] = field(default_factory=dict)
 
 
-def _guess_imu_port(stream_data: _pcap.stream_info) -> int:
-    result = 0
+def _guess_imu_port(stream_data: _pcap.stream_info) -> Optional[int]:
+    result = None
     imu_size = 48
     if (imu_size in stream_data.packet_size_to_port):
         correct_packet_size = stream_data.packet_size_to_port[imu_size]
@@ -48,8 +48,8 @@ def _guess_imu_port(stream_data: _pcap.stream_info) -> int:
     return result
 
 
-def _guess_lidar_port(stream_data: _pcap.stream_info) -> int:
-    result = 0
+def _guess_lidar_port(stream_data: _pcap.stream_info) -> Optional[int]:
+    result = None
     lidar_sizes = {3392, 6464, 12608, 24896}
 
     hit_count = 0
@@ -70,7 +70,8 @@ def _guess_lidar_port(stream_data: _pcap.stream_info) -> int:
     return result
 
 
-def _guess_ports(stream_data: _pcap.stream_info) -> Tuple[int, int]:
+def _guess_ports(
+        stream_data: _pcap.stream_info) -> Tuple[Optional[int], Optional[int]]:
     """Guess the ports for lidar and imu streams from a stream_info struct.
 
     Args:
@@ -138,7 +139,7 @@ class Pcap(PacketSource):
         while True:
             with self._lock:
                 if self._handle is None:
-                    break
+                    raise ValueError("I/O operation on closed packet source")
                 if not _pcap.next_packet_info(self._handle, packet_info):
                     break
 
@@ -231,12 +232,13 @@ def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
     """
 
     pcap_info = _pcap.replay_get_pcap_info(pcap_path, 10000)
-    pcap_port_guess = _guess_ports(pcap_info)
+    lidar_port_guess, imu_port_guess = _guess_ports(pcap_info)
 
-    pcap_handle = _pcap.replay_initialize(pcap_path, dst_ip, dst_ip, {
-        pcap_port_guess[0]: dst_lidar_port,
-        pcap_port_guess[1]: dst_imu_port
-    })
+    pcap_handle = _pcap.replay_initialize(
+        pcap_path, dst_ip, dst_ip, {
+            (lidar_port_guess or 0): dst_lidar_port,
+            (imu_port_guess or 0): dst_imu_port
+        })
 
     try:
         packet_info = _pcap.packet_info()

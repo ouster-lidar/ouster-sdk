@@ -35,8 +35,7 @@ class CMakeBuild(build_ext):
             '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
             '-DPYTHON_EXECUTABLE=' + sys.executable
         ]
-        env = os.environ.copy()
-        
+
         # Bug in pybind11 cmake strips symbols with RelWithDebInfo
         # https://github.com/pybind/pybind11/issues/1891
         cfg = 'Debug' if self.debug else 'Release'
@@ -50,17 +49,19 @@ class CMakeBuild(build_ext):
             cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
             build_args += ['--', '-j2']
 
-
+        env = os.environ.copy()
         env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(
             env.get('CXXFLAGS', ''), self.distribution.get_version())
 
-        triplet = env.get('VCPKG_TARGET_TRIPLET')
-        if triplet:
-            cmake_args += ['-DVCPKG_TARGET_TRIPLET=' + triplet]
         # allow specifying toolchain in env
         toolchain = env.get('CMAKE_TOOLCHAIN_FILE')
         if toolchain:
             cmake_args += ['-DCMAKE_TOOLCHAIN_FILE=' + toolchain]
+
+        # specify VCPKG triplet in env
+        triplet = env.get('VCPKG_TARGET_TRIPLET')
+        if triplet:
+            cmake_args += ['-DVCPKG_TARGET_TRIPLET=' + triplet]
 
         # use sdk path from env or location in sdist
         sdk_path = env.get('OUSTER_SDK_PATH')

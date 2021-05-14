@@ -308,7 +308,7 @@ The source code of an example below:
 .. literalinclude:: /../src/ouster/sdk/examples/pcap.py
     :start-after: [doc-stag-pcap-to-csv]
     :end-before: [doc-etag-pcap-to-csv]
-    :emphasize-lines: 37-41
+    :emphasize-lines: 38-42
     :linenos:
     :dedent:
 

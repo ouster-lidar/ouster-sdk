@@ -203,9 +203,10 @@ class Sensor(PacketSource):
         the sensor may cause packets to be dropped.
 
         Raises:
-            ClientTimeout: If no packets are received within the configured
+            ClientTimeout: if no packets are received within the configured
                 timeout.
-            ClientError: If the client enters an unspecified error state.
+            ClientError: if the client enters an unspecified error state.
+            ValueError: if the packet source has already been closed
         """
 
         # Attempt to flush any old data before producing packets
@@ -217,7 +218,7 @@ class Sensor(PacketSource):
             if p is not None:
                 yield p
             else:
-                return
+                raise ValueError("I/O operation on closed packet source")
 
     def flush(self, n_frames: int = 3, *, full=False) -> int:
         """Drop some data to clear internal buffers.

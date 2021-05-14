@@ -1,51 +1,127 @@
 import os
+from random import getrandbits, shuffle
 import tempfile
+from typing import Iterator
+from itertools import chain, islice
 
+from more_itertools import roundrobin
 import pytest
 
-import ouster.pcap._pcap as _pcap
+from ouster import pcap
+from ouster import client
+from ouster.client import _client, _digest
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
-def write_test_pcap(test_file,
-                    total_complete_packets,
-                    total_size,
-                    frag_size,
-                    port,
-                    dst_port,
-                    record=None):
-    '''Write bitpatterns of the specified size to a pcap file.
+def random_lidar_packets(metadata) -> Iterator[client.LidarPacket]:
+    pf = _client.PacketFormat.from_info(metadata)
 
-    Args:
-        test_file: The output file to record pcap to
-        total_complete_packets: The total number of completed packets to record
-        total_size: The number of bytes to record
-        frag_size: The fragmentation size in bytes
-        port: The port to record to
-        dst_port: The target port to record to
-        record: If we have a previous record object, dont recreate it
-    '''
-    if record is None:
-        record = _pcap.record_initialize(test_file, "127.0.0.1", "127.0.0.1",
-                                         frag_size)
-    frag_size = min(frag_size, total_size)
-    frags = max(int(total_size / frag_size), 1)
-    result = []
-    for i in range(0, total_complete_packets):
-        data_out = []
-        for j in range(0, frags):
-            data_out.append(i)
-            data_out.append(j)
-            for k in range(0, (frag_size - 2)):
-                data_out.append(k % 255)
-        _pcap.record_packet(record, port, dst_port, bytearray(data_out))
-
-        result.extend(data_out)
-        result.extend([0 for x in range(len(result), (i + 1) * total_size)])
-
-    return (bytearray(result), record)
+    while True:
+        buf = bytearray(getrandbits(8) for _ in range(pf.lidar_packet_size))
+        yield client.LidarPacket(buf, metadata)
 
 
-@pytest.mark.parametrize("lidar_packets, imu_packets", [
+def random_imu_packets(metadata) -> Iterator[client.ImuPacket]:
+    pf = _client.PacketFormat.from_info(metadata)
+
+    while True:
+        buf = bytearray(getrandbits(8) for _ in range(pf.imu_packet_size))
+        yield client.ImuPacket(buf, metadata)
+
+
+@pytest.fixture
+def n_packets() -> int:
+    return 10
+
+
+@pytest.fixture
+def metadata() -> client.SensorInfo:
+    digest_path = os.path.join(DATA_DIR, "os-992011000121_digest.json")
+    with open(digest_path, 'r') as f:
+        return _digest.StreamDigest.from_json(f.read()).meta
+
+
+@pytest.fixture
+def pcap_path(metadata, n_packets):
+    tmp_dir = tempfile.mkdtemp()
+    file_path = os.path.join(tmp_dir, "pcap_test.pcap")
+
+    packets = islice(
+        roundrobin(random_lidar_packets(metadata),
+                   random_imu_packets(metadata)), n_packets)
+
+    pcap.record(packets, file_path)
+
+    yield file_path
+
+    os.remove(file_path)
+    os.rmdir(tmp_dir)
+
+
+@pytest.fixture
+def pcap_obj(metadata, pcap_path):
+    pc = pcap.Pcap(pcap_path, metadata)
+    yield pc
+    pc.close()
+
+
+@pytest.mark.parametrize('n_packets', [0])
+def test_pcap_info_empty(pcap_path) -> None:
+    """Test that querying an empty pcap returns an empty PcapInfo."""
+    res = pcap.info(pcap_path)
+    assert res == pcap.PcapInfo()
+
+
+@pytest.mark.parametrize('n_packets', [0])
+def test_pcap_read_empty(pcap_obj) -> None:
+    """Check that reading an empty pcap yields an empty list."""
+    assert list(pcap_obj) == []
+
+
+@pytest.mark.parametrize('n_packets', [10])
+def test_pcap_read_10(pcap_obj) -> None:
+    """Check that reading a test pcap produces the right number of packets."""
+    assert len(list(pcap_obj)) == 10
+
+
+@pytest.mark.parametrize('n_packets', [10])
+def test_pcap_info_10(pcap_path) -> None:
+    """Check that reading a test pcap produces the right number of packets."""
+    res = pcap.info(pcap_path)
+    assert res.ipv6_packets == 0
+    assert res.ipv4_packets == 10
+    assert res.packets_processed == 10
+    assert res.packets_reassembled == 10
+    assert res.non_udp_packets == 0
+
+    # default ports
+    assert res.guessed_lidar_port == 7502
+    assert res.guessed_imu_port == 7503
+
+    # roundrobin -> 5 of each
+    assert res.ports == {7502: (6464, 5), 7503: (48, 5)}
+
+
+def test_pcap_reset(pcap_obj) -> None:
+    """Test that resetting a pcap after reading works."""
+    packets1 = list(pcap_obj)
+    pcap_obj.reset()
+    packets2 = list(pcap_obj)
+
+    bufs1 = [bytes(p._data) for p in packets1]
+    bufs2 = [bytes(p._data) for p in packets2]
+    assert bufs1 == bufs2
+
+
+def test_pcap_read_closed(pcap_obj) -> None:
+    """Check that reading from a closed pcap raises an error."""
+    pcap_obj.close()
+    with pytest.raises(ValueError):
+        next(iter(pcap_obj))
+
+
+@pytest.mark.parametrize("n_lidar, n_imu", [
     pytest.param(1, 0, id="one lidar"),
     pytest.param(20, 0, id="multi lidar"),
     pytest.param(0, 1, id="one imu"),
@@ -53,52 +129,22 @@ def write_test_pcap(test_file,
     pytest.param(1, 1, id="one each"),
     pytest.param(20, 20, id="multi each"),
 ])
-def test_read_write_lidar_imu(lidar_packets, imu_packets):
-    lidar_size = 12608
-    imu_size = 48
-    frag_size = 1480
-    lidar_src_port = 7000
-    lidar_dst_port = 7001
-    imu_src_port = 8000
-    imu_dst_port = 8001
-    src_address = "127.0.0.1"
-    dst_address = src_address
-    lidar_buf = bytearray(lidar_size)
-    imu_buf = bytearray(imu_size)
+def test_read_write_lidar_imu(n_lidar, n_imu, metadata):
+    """Test that random packets read back from pcap are identical."""
+    lidar_packets = islice(random_lidar_packets(metadata), n_lidar)
+    imu_packets = islice(random_imu_packets(metadata), n_imu)
+    in_packets = list(chain(lidar_packets, imu_packets))
+
+    shuffle(in_packets)
 
     tmp_dir = tempfile.mkdtemp()
     file_path = os.path.join(tmp_dir, "pcap_test.pcap")
-
     try:
-        lidar_data, record = write_test_pcap(file_path, lidar_packets,
-                                             lidar_size, frag_size,
-                                             lidar_src_port, lidar_dst_port)
-        imu_data, record = write_test_pcap(file_path,
-                                           imu_packets,
-                                           imu_size,
-                                           frag_size,
-                                           imu_src_port,
-                                           imu_dst_port,
-                                           record=record)
-        _pcap.record_uninitialize(record)
-        lidar_result = bytearray()
-        imu_result = bytearray()
-        pcap_read = _pcap.replay_initialize(file_path, src_address,
-                                            dst_address, {})
-
-        info = _pcap.packet_info()
-        while _pcap.next_packet_info(pcap_read, info):
-            if info.dst_port == imu_dst_port:
-                _pcap.read_packet(pcap_read, imu_buf)
-                imu_result += imu_buf
-            if info.dst_port == lidar_dst_port:
-                _pcap.read_packet(pcap_read, lidar_buf)
-                lidar_result += lidar_buf
-
-        assert lidar_data == lidar_result
-        assert imu_data == imu_result
-
-        _pcap.replay_uninitialize(pcap_read)
+        pcap.record(in_packets, file_path)
+        out_packets = list(pcap.Pcap(file_path, metadata))
+        out_bufs = [bytes(p._data) for p in out_packets]
+        in_bufs = [bytes(p._data) for p in in_packets]
+        assert in_bufs == out_bufs
     finally:
         os.remove(file_path)
         os.rmdir(tmp_dir)
