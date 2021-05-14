@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
                     });
                 // retry until we receive a full set of valid measurements
                 // (accounting for azimuth_window settings if any)
-                if (n_invalid <= w - column_window_length) i++;
+                if (n_invalid <= (int)w - column_window_length) i++;
             }
         }
 

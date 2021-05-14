@@ -5,8 +5,6 @@
 
 #pragma once
 
-#include <json/json.h>
-
 #include <Eigen/Eigen>
 #include <set>
 #include <string>
