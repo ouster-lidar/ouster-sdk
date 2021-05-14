@@ -40,7 +40,11 @@ Installation
 The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, run::
 
     $ python3 -m pip install ouster-sdk
-
+.. note::
+   To run on a MacOS M1, you need to prepend all python3 commands with ``arch --x86_64`` to
+   force MacOS to run the intel version of python.
+   ``$ arch --x86_64 python3 -m pip install ouster-sdk``
+   
 If you're running ARM, a non-glibc-based linux distribution, or wish to modify the Ouster Python
 SDK, you will need to build from source.
 
