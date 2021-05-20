@@ -11,29 +11,53 @@ sample data or a sensor connected to your machine.
 Installation
 ============
 
-The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on `supported platforms`_, run:
+The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref:`supported platforms<supported platforms>`, run:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m pip install 'ouster-sdk[examples]'
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m pip install 'ouster-sdk[examples]'
+
+    .. code-tab:: console macOS M1
+        
+        $ arch --x86_64 python3 -m pip install 'ouster-sdk[examples]'
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m pip install 'ouster-sdk[examples]'
+
 
 .. note::
 
    Newer users to Python should create a suitable `venv`_, `activate`_ it, and ensure that they have
-   `upgraded pip`_ once their venv is activated.
+   `upgraded pip`_ once their venv is activated. If you're using venv on Windows, you'll want to use
+   ``python`` and ``pip`` instead of ``py -3`` and ``py -3 -m pip`` in the following Powershell
+   snippets.
+
 
 To check that you've succesfully installed the latest version of the Ouster Python SDK, run:
 
-.. code:: console
+.. tabs::
     
-    $ pip3 list
+    .. code-tab:: console Unix/macOS x64
+
+        $ pip3 list
+
+    .. code-tab:: console macOS M1
+        
+        $ arch --x86_64 python3 -m pip list 
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m pip list
+
 
 .. note::
 
    To run the example code on Windows 10, you may also find that you need the ``PyQt5`` library.
 
 
-.. _supported platforms: https://static.ouster.dev/sdk-docs/index.html#installation
 .. _upgraded pip: https://pip.pypa.io/en/stable/installing/#upgrading-pip
 .. _venv: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment
 .. _activate: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#activating-a-virtual-environment
@@ -45,11 +69,22 @@ Using this Guide
 You'll want to start an interactive Python session and keep it open through the sections, as we'll
 be reusing variables created in earlier parts while explaining what we're doing as we go.
 
-To get started, open a new terminal window and start a python interpreter:
+To get started, open a new console/Powershell window and start a python interpreter:
 
-.. code:: console
+.. tabs::
 
-    $ python3
+    .. code-tab:: console Unix/macOS x64
+        
+        $ python3
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 
+
 
 In the python session that opens, import the Ouster Python Client:
 
@@ -78,7 +113,7 @@ JSON file contains metadata queried from the sensor TCP interface necessary for 
 the packet data.
 
 Let's return to your open sesion of python and change the working directory. Replace
-``<SAMPLE_DATA_DIRECTORY`` below with the absolute path or relative path to the directory where you
+``<SAMPLE_DATA_DIRECTORY>`` below with the absolute path or relative path to the directory where you
 the unzipped ``pcap`` and ``json`` file are located.
 
 .. code:: python
@@ -135,11 +170,28 @@ In the following, ``<SENSOR_HOSTNAME>`` should be substituted for the actual hos
 sensor.
 
 To make sure everything is connected, open a separate console window and try pinging the sensor. You
-should see some output like::
+should see some output like:
 
-   $ ping -c1 <SENSOR_HOSTNAME>
-   PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
-   64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
+.. tabs::
+
+    .. code-tab:: console Unix/macOS x64
+
+       $ ping -c1 <SENSOR_HOSTNAME>
+       PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
+       64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
+    
+    .. code-tab:: console macOS M1
+
+       $ ping -c1 <SENSOR_HOSTNAME>
+       PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
+       64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
+
+    .. code-tab:: powershell Windows x64
+
+       PS > ping /n 10 <SENSOR_HOSTNAME>
+       Pinging <SENSOR_HOSTNAME> (192.0.2.42) with 32 bytes of data:
+       Reply from 192.0.2.42: bytes=32 time=101ms TTL=124
+
 
 Next, you'll need to configure the sensor with the config parameters. In your open python session:
 

@@ -14,14 +14,16 @@ data. The SDK includes APIs for:
 - Conversion of raw data to range/signal/near_ir/reflectivity images (de-staggering)
 - Efficiently projecting range measurements to cartesian (X, Y, Z) coordinates
 
+.. _supported platforms:
+
 
 Supported Platforms
 -------------------
 
-Pre-built binaries are provided on `PyPI <https://pypi.org/project/ouster-sdk/>`_ for x86-64 platforms including:
+Pre-built binaries are provided on `PyPI <https://pypi.org/project/ouster-sdk/>`_ for x86_64 platforms including:
 
 - Most glibc-based Linux distributions (``manylinux2010_x86_64``)
-- Macos >= 10.13 (``macosx_10_13_x86_64``)
+- macOS >= 10.13 (``macosx_10_13_x86_64``)
 - Windows 10 (``win_amd64``)
 
 Building from source is supported on:
@@ -37,14 +39,30 @@ clone of the repository.
 Installation
 ------------
 
-The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, run::
+The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, run:
 
-    $ python3 -m pip install ouster-sdk
+.. tabs::
+
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m pip install ouster-sdk
+
+    .. code-tab:: console macOS M1
+        
+        $ arch --x86_64 python3 -m pip install ouster-sdk
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m pip install ouster-sdk
+
+
 .. note::
-   To run on a MacOS M1, you need to prepend all python3 commands with ``arch --x86_64`` to
-   force MacOS to run the intel version of python.
-   ``$ arch --x86_64 python3 -m pip install ouster-sdk``
+
+    M1 users should be aware that they will need to prepend all python3 commands with ``arch
+    --x86_64`` when working with ouster-sdk to force macOS to run the intel versions of python as
+    numpy support on native M1 has not arrived yet.
    
+
 If you're running ARM, a non-glibc-based linux distribution, or wish to modify the Ouster Python
 SDK, you will need to build from source.
 

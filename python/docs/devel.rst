@@ -33,14 +33,14 @@ On macos >= 10.13, using homebrew, you should be able to run::
 
 After you have the system dependencies, you can build the SDK with::
 
-  # first, specify the path to the ouster_example repository
-  export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
+    # first, specify the path to the ouster_example repository
+    $ export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
 
-  # then, build an installable "wheel" package
-  python3 -m pip wheel --no-deps $OUSTER_SDK_PATH/python
+    # then, build an installable "wheel" package
+    $ python3 -m pip wheel --no-deps $OUSTER_SDK_PATH/python
 
-  # or just install directly (virtualenv recommended)
-  python3 -m pip install $OUSTER_SDK_PATH/python
+    # or just install directly (virtualenv recommended)
+    $ python3 -m pip install $OUSTER_SDK_PATH/python
 
 
 Windows 10
@@ -82,7 +82,7 @@ The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To ru
 
   # install and run flake8 linter
   $ python3 -m pip install flake8
-  $ cd ${OUSTEr_SDK_PATH}/python
+  $ cd ${OUSTER_SDK_PATH}/python
   $ flake8
 
   # install and run mypy in an environment with 

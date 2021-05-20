@@ -26,9 +26,20 @@ sensor as it was running when the data was recorded.
 Since it's crucial to save the correct metadata file, let's see how we can get that from a sensor.
 Try running the following example:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
+
 
 And now let's look inside the example we just ran:
 
@@ -150,18 +161,38 @@ Look-uptable. This function can then be applied to any scan to create a numpy ar
 
 If you have a sensor, you can run this code with one of our examples:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
 
 That should open a 3D plot of a single scan of your location taken just now by your sensor. You
 should be able to recognize the contours of the scene around you.
 
 If you don’t have a sensor, you can run this code with our pcap examples:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
+
+    .. code-tab:: powershell Windows x64
+
+        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
 
 
 .. figure:: images/lidar_scan_xyz_84.png
@@ -205,9 +236,19 @@ chosen the first 270 degrees of rotation.
 
 If you have a sensor, you can run this code with an example:
 
-.. code:: console
+.. tabs::
+
+    .. code-tab:: console Unix/macOS x64
     
-    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
+
+    .. code-tab:: console macOS M1
+    
+        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
+
+    .. code-tab:: powershell Windows x64
+    
+        PS > python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
 .. _ex-streaming:
 
@@ -218,9 +259,19 @@ Streaming Live Data
 Instead of working with a recorded dataset or a few captured frames of data, let's see if we can get
 a live feed from the sensor:
 
-.. code:: console
+.. tabs::
+
+    .. code-tab:: console Unix/macOS x64
     
-    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
+
+    .. code-tab:: console macOS M1
+    
+        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
+
+    .. code-tab:: powershell Windows x64
+    
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
 
 This should give you a live feed from your sensor that looks like a black and white moving image.
 Try waving your hand or moving around to find yourself within the image!
@@ -250,9 +301,20 @@ Recording Sensor Data
 It's easy to record data to a pcap file from a sensor programatically. Let's try it first
 with the following example:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+
+    .. code-tab:: powershell Windows x64
+
+        PS >  py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+
 
 This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for 10
 seconds and store the pcap file along with the metadata json file into the current directory.
@@ -281,9 +343,19 @@ We can easily view the data that was recorded in the previous section. Based on 
 `D` and pause on `SPACE` key  (source code: :func:`.examples.pcap.pcap_2d_viewer`). To run it try
 the following command:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
+
+    .. code-tab:: powershell Windows x64
+
+        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
 
 Or substitute example data with pcap and json that you just recorded.
 
@@ -299,9 +371,20 @@ analysis with other tools.
 
 To convert the first ``5`` scans of sample data from a pcap file, you can try:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
+
 
 The source code of an example below:
 
@@ -338,9 +421,23 @@ Open3D as Point Cloud Visualiser
 =================================
 
 More complex and robust ``xyz`` 3D points visualization can be achieved with the Open3D library.
-Here is a simple example to view the same frame ``84`` in a more appealing way::
+Here is a simple example to view the same frame ``84`` in a more appealing way:
 
-    $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+
+.. tabs::
+
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+     
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+    
 
 Expected result looks like this (use mouse to move around and ``ESC`` to exit):
 
@@ -359,9 +456,21 @@ The source code of the example below:
     :linenos:
     :dedent:
 
-For a `live viewer` of real-time sensor data (implemented with Open3D), you can try::
+For a `live viewer` of real-time sensor data (implemented with Open3D), you can try:
 
-    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
+.. tabs::
+
+    .. code-tab:: console Unix/macOS x64
+
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
+
+    .. code-tab:: console macOS M1
+
+        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
 
 Check :func:`.examples.open3d.sensor_viewer_3d` for a full source code.
 
@@ -384,7 +493,16 @@ Like other ``Packets``, we'll want to get them from a :py:class:`.PacketSource`.
 
 If you have a sensor, you can run the code above with the ``plot-imu-z-accel`` example:
 
-.. code:: console
+.. tabs::
 
-    $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
+    .. code-tab:: console Unix/macOS x64
 
+            $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
+
+    .. code-tab:: console macOS M1
+
+            $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
+
+    .. code-tab:: powershell Windows x64
+
+            PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
