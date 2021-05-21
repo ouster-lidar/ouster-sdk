@@ -41,7 +41,7 @@ To install build dependencies on Ubuntu, run::
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
 
-    brew install cmake pkg-config glfw glew eigen jsoncpp tclap
+    brew install cmake pkg-config glfw glew eigen jsoncpp tclap libtins
 
 To build run the following commands::
 

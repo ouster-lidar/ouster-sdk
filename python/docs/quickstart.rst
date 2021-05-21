@@ -36,6 +36,7 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref
    snippets.
 
 
+
 To check that you've succesfully installed the latest version of the Ouster Python SDK, run:
 
 .. tabs::
@@ -102,10 +103,10 @@ to start capturing data from a sensor, you can skip to `Using an Ouster Sensor`_
 Using Sample Data
 =================
 
-Download the `sample data`_ (**1.6 GB**) and unzip the contents. You should have two files:
+Download the `OS2 bridge sample data`_ (**1.6 GB**) and unzip the contents. You should have two files:
 
-  * ``OS1_128.pcap``
-  * ``OS1_2048x10_128.json``
+  * ``OS2_128_bridge_sample.pcap``
+  * ``OS2_2048x10_128.json``
 
 The downloaded pcap file contains lidar and imu packets captured from the network. You can read
 more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Sensor Documentation. The
@@ -125,8 +126,8 @@ Now that's squared away, let's load the files into your python session:
 
 .. code:: python
 
-   >>> pcap_path = 'OS1_128.pcap'
-   >>> metadata_path = 'OS1_2048x10_128.json'
+   >>> pcap_path = 'OS2_128_bridge_sample.pcap'
+   >>> metadata_path = 'OS2_2048x10_128.json'
 
 
 Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the
@@ -149,10 +150,9 @@ captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
 To visualize data from this pcap file, proceed to `Visualizing Lidar Data`_ below.
 
 
-.. _sample data: https://data.ouster.io/sdk-samples/OS1/OS1_128_sample.zip
+.. _OS2 bridge sample data: https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip
 .. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#10
 .. _IMU Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#13
-.. _Ouster Sample Data: https://ouster.com/resources/lidar-sample-data/
 
 
 Using an Ouster Sensor
@@ -221,19 +221,19 @@ Visualizing Lidar Data
 ======================
 
 At this point, you should have defined ``source`` using either a pcap file or UDP data streaming
-directly from a sensor. Let's read from ``source`` until we get to the 84th frame of data:
+directly from a sensor. Let's read from ``source`` until we get to the 50th frame of data:
 
 .. code:: python
 
    >>> from contextlib import closing
    >>> from more_itertools import nth
    >>> with closing(client.Scans(source)) as scans:
-   ...     scan = nth(scans, 84)
+   ...     scan = nth(scans, 50)
 
 .. note::
 
-    If you're using a sensor and it takes a few seconds, don't be alarmed! It has to get to the 84th
-    frame of data, which would be 8.4 seconds into recording for a sensor in 1024x10 mode.
+    If you're using a sensor and it takes a few seconds, don't be alarmed! It has to get to the 50th
+    frame of data, which would be 5.0 seconds for a sensor running in 1024x10 mode.
 
 Now that we have a frame of data available as a :py:class:`.LidarScan` datatype, we can extract the
 range measurements and turn them into a range image where each column corresponds to a single
@@ -245,12 +245,12 @@ azimuth angle:
    >>> range_img = client.destagger(source.metadata, range_field)
 
 We can plot the results using standard Python tools that work with numpy datatypes. Here, we extract
-the first 512 columns of range data and display the result:
+a column segment of the range data and display the result:
 
 .. code:: python
 
    >>> import matplotlib.pyplot as plt
-   >>> plt.imshow(range_img[:, 0:512], cmap='gray', resample=False)
+   >>> plt.imshow(range_img[:, 640:1024], resample=False)
    >>> plt.axis('off')
    >>> plt.show()
 
@@ -258,10 +258,14 @@ the first 512 columns of range data and display the result:
     
     If running ``plt.show`` gives you an error about your Matplotlib backend, you will need a `GUI
     backend`_ such as TkAgg or Qt5Agg in order to visualize your data with matplotlib.
-.. figure:: images/lidar_scan_range_image.png
-   :align: center
 
-   First 512 columns of LidarScan ``RANGE`` field of sample data with simple gray colormapping.
+
+.. figure:: images/brooklyn_bridge_ls_50_range_image.png
+    :align: center
+    :figwidth: 100%
+   
+    Range image of OS2 sample data. Data taken at Brooklyn Bridge, NYC.
+
 
 In addition to viewing the data in 2D, we can also plot the results in 3D by projecting the range
 measurements into cartesian coordinates.  To do this, we first create a lookup table, then use it to
@@ -279,19 +283,23 @@ Now we rearrange the resulting numpy array into a shape that's suitable for plot
     >>> import numpy as np
     >>> [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     >>> ax = plt.axes(projection='3d')
-    >>> r = 30
+    >>> r = 10
     >>> ax.set_xlim3d([-r, r])
     >>> ax.set_ylim3d([-r, r])
-    >>> ax.set_zlim3d([0, 2 * r])
-    >>> ax.scatter(x, y, z, c=z / max(z), s=0.2)
+    >>> ax.set_zlim3d([-r/2, r/2])
+    >>> plt.axis('off')
+    >>> z_col = np.minimum(np.absolute(z), 5)
+    >>> ax.scatter(x, y, z, c=z_col, s=0.2)
     >>> plt.show()
+
+You should be able to rotate the resulting scene to view it from different angles.
 
 To learn more about manipulating lidar data, see :ref:`ex-staggered-and-destaggered`, :ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
 
-.. figure:: images/lidar_scan_xyz.png
+.. figure:: images/brooklyn_bridge_ls_50_xyz_cut.png
    :align: center
 
-   Point cloud from sample data. Points colored by Z coordinate value.
+   Point cloud from OS2 sample data with colormap on z. Data taken at Brooklyn Bridge, NYC.
 
 
 .. _GUI backend: https://matplotlib.org/stable/tutorials/introductory/usage.html#the-builtin-backends

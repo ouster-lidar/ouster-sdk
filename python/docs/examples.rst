@@ -6,7 +6,11 @@ A loosely connected collection of examples and concepts useful for working with 
 are just starting, please see :ref:`quickstart`.
 
 For convenience, throughout the examples and concepts we will use ``pcap_path`` and
-``metadata_path`` to refer to the variables from the Quick Start Guide.
+``metadata_path`` to refer to the path to a Ouster pcap and metadata file.  The pictures below are
+taken from the `OS1 sample data`_.
+
+
+.. _OS1 sample data: https://data.ouster.io/sdk-samples/OS1/OS1_128_sample.zip
 
 
 .. _ex-metadata:
@@ -198,7 +202,7 @@ If you don’t have a sensor, you can run this code with our pcap examples:
 .. figure:: images/lidar_scan_xyz_84.png
    :align: center
 
-   Point cloud from sample data (scan 84). Points colored by ``SIGNAL`` value.
+   Point cloud from OS1 sample data (scan 84). Points colored by ``SIGNAL`` value.
 
 For details check the source code of an example :func:`.examples.pcap.pcap_display_xyz_points`
 
@@ -369,7 +373,7 @@ Pcap to CSV
 Sometimes we want to get a point cloud (``XYZ`` + other fields) as a ``CSV`` file for further
 analysis with other tools.
 
-To convert the first ``5`` scans of sample data from a pcap file, you can try:
+To convert the first ``5`` scans of our sample data from a pcap file, you can try:
 
 .. tabs::
 
@@ -444,7 +448,7 @@ Expected result looks like this (use mouse to move around and ``ESC`` to exit):
 .. figure:: images/lidar_scan_xyz_84_3d.png
    :align: center
 
-   Open3D visualisation of point cloud of sample data (scan 84). Points colored by ``SIGNAL`` value
+   Open3D visualisation of point cloud of OS1 sample data (scan 84). Points colored by ``SIGNAL`` value
    with Ouster ``spezia`` colormap.
 
 The source code of the example below:
