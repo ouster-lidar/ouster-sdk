@@ -610,7 +610,7 @@ directly.
              py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
              py::arg("timeout_sec") = 30, py::arg("capacity") = 128)
         .def("get_metadata", &PyClient::get_metadata,
-             py::arg("timeout_sec") = 30)
+             py::arg("timeout_sec") = 60)
         .def("shutdown", &PyClient::shutdown)
         .def("consume", &PyClient::consume)
         .def("produce", &PyClient::produce)

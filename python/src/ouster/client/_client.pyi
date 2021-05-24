@@ -135,6 +135,9 @@ class SensorInfo:
     def __eq__(self, other: object) -> bool:
         ...
 
+    def __copy__(self) -> SensorInfo:
+        ...
+
 
 class DataFormat:
     columns_per_frame: int
@@ -458,9 +461,14 @@ class SensorConfig:
     def __ne__(self, other: object) -> bool:
         ...
 
+    def __copy__(self) -> SensorConfig:
+        ...
 
-def set_config(hostname: str, config: SensorConfig, persist: bool,
-               udp_dest_auto: bool) -> None:
+
+def set_config(hostname: str,
+               config: SensorConfig,
+               persist: bool = ...,
+               udp_dest_auto: bool = ...) -> None:
     ...
 
 

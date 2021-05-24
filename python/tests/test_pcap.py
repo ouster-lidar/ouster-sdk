@@ -1,6 +1,5 @@
 import os
 from random import getrandbits, shuffle
-import tempfile
 from typing import Iterator
 from itertools import chain, islice
 
@@ -43,9 +42,8 @@ def metadata() -> client.SensorInfo:
 
 
 @pytest.fixture
-def pcap_path(metadata, n_packets):
-    tmp_dir = tempfile.mkdtemp()
-    file_path = os.path.join(tmp_dir, "pcap_test.pcap")
+def pcap_path(metadata, n_packets, tmpdir):
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     packets = islice(
         roundrobin(random_lidar_packets(metadata),
@@ -54,9 +52,6 @@ def pcap_path(metadata, n_packets):
     pcap.record(packets, file_path)
 
     yield file_path
-
-    os.remove(file_path)
-    os.rmdir(tmp_dir)
 
 
 @pytest.fixture
@@ -129,7 +124,7 @@ def test_pcap_read_closed(pcap_obj) -> None:
     pytest.param(1, 1, id="one each"),
     pytest.param(20, 20, id="multi each"),
 ])
-def test_read_write_lidar_imu(n_lidar, n_imu, metadata):
+def test_read_write_lidar_imu(n_lidar, n_imu, metadata, tmpdir):
     """Test that random packets read back from pcap are identical."""
     lidar_packets = islice(random_lidar_packets(metadata), n_lidar)
     imu_packets = islice(random_imu_packets(metadata), n_imu)
@@ -137,14 +132,10 @@ def test_read_write_lidar_imu(n_lidar, n_imu, metadata):
 
     shuffle(in_packets)
 
-    tmp_dir = tempfile.mkdtemp()
-    file_path = os.path.join(tmp_dir, "pcap_test.pcap")
-    try:
-        pcap.record(in_packets, file_path)
-        out_packets = list(pcap.Pcap(file_path, metadata))
-        out_bufs = [bytes(p._data) for p in out_packets]
-        in_bufs = [bytes(p._data) for p in in_packets]
-        assert in_bufs == out_bufs
-    finally:
-        os.remove(file_path)
-        os.rmdir(tmp_dir)
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
+
+    pcap.record(in_packets, file_path)
+    out_packets = list(pcap.Pcap(file_path, metadata))
+    out_bufs = [bytes(p._data) for p in out_packets]
+    in_bufs = [bytes(p._data) for p in in_packets]
+    assert in_bufs == out_bufs

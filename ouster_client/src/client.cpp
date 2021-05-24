@@ -555,7 +555,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
     // wake up from STANDBY, if necessary
     success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "operating_mode", "NORMAL"}, res);
+        sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
     success &= res == "set_config_param";
 
     // reinitialize to activate new settings

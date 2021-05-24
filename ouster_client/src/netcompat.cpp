@@ -75,7 +75,7 @@ bool socket_exit() {
 
 int socket_set_non_blocking(SOCKET value) {
 #ifdef _WIN32
-    u_long non_blocking_mode = 0;
+    u_long non_blocking_mode = 1;
     return ioctlsocket(value, FIONBIO, &non_blocking_mode);
 #else
     return fcntl(value, F_SETFL, fcntl(value, F_GETFL, 0) | O_NONBLOCK);
