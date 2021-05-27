@@ -10,7 +10,8 @@ set(CMAKE_CXX_STANDARD 14)
 
 find_package(pybind11 2.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
-option(BUILD_VIZ OFF)
+option(BUILD_VIZ "Disabled for Python build" OFF)
+option(BUILD_PCAP "Enabled for Python build" ON)
 find_package(ouster_example REQUIRED)
 
 # Several deprecations in pybind11 since 2.0. Check when changing version reqs.

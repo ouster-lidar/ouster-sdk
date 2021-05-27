@@ -133,7 +133,6 @@ struct PointViz::impl {
           initialized(false) {}
 };
 
-
 static void draw(PointViz::impl& pimpl) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // draw images
@@ -246,13 +245,13 @@ static void handleKeyPress(GLFWwindow* window, int key, int /*scancode*/,
         }
         if (key == GLFW_KEY_SEMICOLON) {
             pimpl->rings.ring_size = std::min(2, pimpl->rings.ring_size + 1);
-            std::cerr << "ring size increased: 10^" << pimpl->rings.ring_size
-                      << std::endl;
+            std::cerr << "ring size radius increased: 10^"
+                      << pimpl->rings.ring_size << std::endl;
         }
         if (key == GLFW_KEY_APOSTROPHE) {
             pimpl->rings.ring_size = std::max(-2, pimpl->rings.ring_size - 1);
-            std::cerr << "ring size decreased: 10^" << pimpl->rings.ring_size
-                      << std::endl;
+            std::cerr << "ring size radius decreased: 10^"
+                      << pimpl->rings.ring_size << std::endl;
         }
         if (key == GLFW_KEY_EQUAL) {
             pimpl->camera.zoomIn();
@@ -500,12 +499,14 @@ void PointViz::cuboidSwap() {
 void PointViz::setCameraTarget(const mat4d& target) {
     pimpl->camera.setTarget(target);
 }
-    
-void PointViz::setPointCloudPalette(const float palette[][3], size_t palette_size) {
-    if(pimpl->palette_texture_id != (GLuint)-1) {
+
+void PointViz::setPointCloudPalette(const float palette[][3],
+                                    size_t palette_size) {
+    if (pimpl->palette_texture_id != (GLuint)-1) {
         load_texture(palette, palette_size, 1, pimpl->palette_texture_id);
     } else {
-        std::cerr << "Cannot set custom palette before initialization" << std::endl;
+        std::cerr << "Cannot set custom palette before initialization"
+                  << std::endl;
     }
 }
 

@@ -37,11 +37,11 @@ Building on Linux / macOS
 To install build dependencies on Ubuntu, run::
 
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev libtins-dev libpcap-dev
+         libjsoncpp-dev libtclap-dev
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
 
-    brew install cmake pkg-config glfw glew eigen jsoncpp tclap libtins
+    brew install cmake pkg-config glfw glew eigen jsoncpp tclap
 
 To build run the following commands::
 
@@ -54,6 +54,7 @@ where ``<path to ouster_example>`` is the location of the ``ouster_example`` sou
 CMake build script supports several optional flags::
 
     -DBUILD_VIZ=OFF                      Do not build the sample visualizer
+    -DBUILD_PCAP=ON                      Build pcap tools. Requres libpcap and libtins dev packages
     -DBUILD_SHARED_LIBS                  Build shared libraries (.dylib or .so)
     -DCMAKE_POSITION_INDEPENDENT_CODE    Standard flag for position independent code
 
@@ -144,11 +145,10 @@ Keyboard controls:
     ``p``         Increase point size
     ``o``         Decrease point size
     ``m``         Cycle point cloud coloring mode
-    ``v``         Toggle color cycling in range image
+    ``v``         Toggle range cycling
     ``n``         Toggle display near-IR image from the sensor
-    ``r``         Toggle auto-rotating
     ``shift + r`` Reset camera
-    ``e``         Change range and signal image size
+    ``e``         Change size of displayed 2D images
     ``;``         Increase spacing in range markers
     ``'``         Decrease spacing in range markers
     ``r``         Toggle auto rotate
@@ -182,9 +182,9 @@ Building
 The build dependencies include those of the sample code::
 
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev libtins-dev libpcap-dev
+         libjsoncpp-dev libtclap-dev
 
-and, additionally::
+Additionally, you should install the ros dependencies::
 
     sudo apt install ros-<ROS-VERSION>-ros-core ros-<ROS-VERSION>-pcl-ros \
          ros-<ROS-VERSION>-tf2-geometry-msgs ros-<ROS-VERSION>-rviz
@@ -271,17 +271,6 @@ A metadata file is mandatory for replay of data. See `Recording Data`_ for how
 to obtain the metadata file when recording your data.
 
 .. _rosbag play: https://wiki.ros.org/rosbag/Commandline#rosbag_play
-
-Visualizing Data in Rviz
-------------------------
-
-To display sensor output using built-in ROS tools (rviz), follow the instructions above for running
-the example ROS code with a sensor or recorded data. Then, run::
-
-    rviz -d ouster_example/ouster_ros/viz.rviz
-
-in another terminal with the ROS environment set up. To view lidar signal, near-IR, and range
-images, add ``image:=true`` to the ``roslaunch`` command above.
 
 
 Ouster Python SDK
