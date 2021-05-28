@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import os
 import time
 from threading import Lock
 from typing import Dict, Iterable, Iterator, Optional, Tuple
@@ -286,6 +287,10 @@ def record(packets: Iterable[Packet],
                 raise ValueError("Unexpected packet type")
             _pcap.record_packet(handle, src_port, dst_port, packet._data)
             n += 1
+    except Exception as e:
+        if os.path.exists(pcap_path) and n == 0:
+            os.remove(pcap_path)
+        raise e
     finally:
         _pcap.record_uninitialize(handle)
 
