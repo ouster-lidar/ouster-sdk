@@ -80,13 +80,15 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
  * @param listener TF listener used to interpolate the transform between fixed_frame and sensor_frame
  * @param fixed_frame the fixed frame
  * @param sensor_frame the sensor frame
+ * @param waitForTransform maximum time to wait to get TF between sensor_frame and fixed_frame accordingly to start and end stamps of the LidarScan (set 0 do disable, but some points may not be corrected if some TFs are not yet received in time)
  */
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
                    ouster_ros::Cloud& cloud,
                    tf::TransformListener & listener,
                    const std::string & fixed_frame,
-                   const std::string & sensor_frame);
+                   const std::string & sensor_frame,
+                   const double & waitForTransform = 0.01);
 
 /**
  * Serialize a PCL point cloud to a ROS message

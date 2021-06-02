@@ -93,12 +93,35 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster_ros::Cloud& cloud,
                    tf::TransformListener & listener,
                    const std::string & fixed_frame,
-                   const std::string & sensor_frame) {
+                   const std::string & sensor_frame,
+                   const double & waitForTransform) {
+                   
+    ros::Time start_stamp, pt_stamp;
+    start_stamp.fromNSec(scan_ts.count());                  // Get first stamp
+    pt_stamp.fromNSec(ls.header(ls.w-1).timestamp.count()); // Get last stamp
+    
+    std::string errorMsg;
+    if(waitForTransform>0.0 && 
+       !listener.waitForTransform(sensor_frame, 
+                                  start_stamp, 
+                                  sensor_frame, 
+                                  pt_stamp, 
+                                  fixed_frame, 
+                                  ros::Duration(waitForTransform), 
+                                  ros::Duration(0.01), 
+                                  &errorMsg))
+    {
+        ROS_WARN("Could not estimate motion of %s accordingly to fixed "
+                 "frame %s, returning empty cloud! (%s)",
+            sensor_frame.c_str(), 
+            fixed_frame.c_str(), 
+            errorMsg.c_str());
+            return;
+    }
+    
     cloud.resize(ls.w * ls.h);
     auto points = ouster::cartesian(ls, xyz_lut);
 
-    ros::Time start_stamp, pt_stamp;
-    start_stamp.fromNSec(scan_ts.count());
     int transformsNotValid = 0;
     for (auto v = 0; v < ls.w; v++) {
 
