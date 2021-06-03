@@ -28,7 +28,7 @@ struct packet_info {
     int src_port;         ///< The source port
     size_t payload_size;  ///< The size of the packet payload
     std::chrono::microseconds
-        timestamp;  ///< The packet timestamp in microseconds
+        timestamp;        ///< The packet timestamp in std::chrono::duration
 };
 
 /**
@@ -197,9 +197,11 @@ void record_uninitialize(record_handle& handle);
  * @param[in] dst_port The destination port to label the packets with
  * @param[in] buf The buffer to record to the pcap file
  * @param[in] buffer_size The size of the buffer to record to the pcap file
+ * @param[in] microsecond_timestamp The timestamp to record the packet as microseconds
  */
 void record_packet(record_handle& handle, int src_port, int dst_port,
-                   const uint8_t* buf, size_t buffer_size);
+                   const uint8_t* buf, size_t buffer_size,
+                   uint64_t microsecond_timestamp);
 
 }  // namespace sensor_utils
 }  // namespace ouster

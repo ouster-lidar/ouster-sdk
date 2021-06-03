@@ -77,7 +77,7 @@ class packet_info:
         ...
 
     @property
-    def timestamp(self) -> datetime.timedelta:
+    def timestamp(self) -> float:
         ...
 
 
@@ -97,7 +97,8 @@ def record_uninitialize(handle: record_handle) -> None:
     ...
 
 
-def record_packet(handle: record_handle, src_port: int, dst_port: int, buf: BufferT) -> None:
+def record_packet(handle: record_handle, src_port: int, dst_port: int, buf: BufferT,
+                  timestamp: float) -> None:
     ...
 
 

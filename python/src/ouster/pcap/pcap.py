@@ -9,6 +9,7 @@ from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
 from ouster.pcap import _pcap
 
 
+# TODO: Look into at possible custom OusterExceptions to raise
 @dataclass
 class PcapInfo:
     """Information queried about a packet capture from an Ouster sensor.
@@ -54,19 +55,18 @@ def _guess_lidar_port(stream_data: _pcap.stream_info) -> Optional[int]:
     lidar_sizes = {3392, 6464, 12608, 24896}
 
     hit_count = 0
-
+    multiple_error_msg = "Error: Multiple possible lidar packets found"
     for s in lidar_sizes:
         if s in stream_data.packet_size_to_port:
             correct_packet_size = stream_data.packet_size_to_port[s]
             hit_count += 1
             if (len(correct_packet_size) > 1):
-                raise ValueError(
-                    "Error: Multiple possible lidar packets found")
+                raise ValueError(multiple_error_msg)
             else:
                 result = list(correct_packet_size)[0]
 
     if (hit_count > 1):
-        raise ValueError("Error: Multiple possible lidar packets found")
+        raise ValueError(multiple_error_msg)
 
     return result
 
@@ -143,6 +143,7 @@ class Pcap(PacketSource):
                     raise ValueError("I/O operation on closed packet source")
                 if not _pcap.next_packet_info(self._handle, packet_info):
                     break
+                timestamp = packet_info.timestamp
 
                 n = _pcap.read_packet(self._handle, buf)
 
@@ -152,14 +153,14 @@ class Pcap(PacketSource):
                 real_delta = time.monotonic() - real_start_ts
                 pcap_delta = (packet_info.timestamp -
                               pcap_start_ts) / self._rate
-                delta = max(0, pcap_delta.total_seconds() - real_delta)
+                delta = max(0, pcap_delta - real_delta)
                 time.sleep(delta)
 
             if packet_info.dst_port == self._lidar_port and n != 0:
-                yield LidarPacket(buf[0:n], self._metadata)
+                yield LidarPacket(buf[0:n], self._metadata, timestamp)
 
             elif packet_info.dst_port == self._imu_port and n != 0:
-                yield ImuPacket(buf[0:n], self._metadata)
+                yield ImuPacket(buf[0:n], self._metadata, timestamp)
 
     @property
     def metadata(self) -> SensorInfo:
@@ -271,10 +272,12 @@ def record(packets: Iterable[Packet],
     Returns:
         Number of packets captured
     """
+    has_timestamp = None
 
     buf_size = 2**16
     n = 0
     handle = _pcap.record_initialize(pcap_path, src_ip, dst_ip, buf_size)
+
     try:
         for packet in packets:
             if isinstance(packet, LidarPacket):
@@ -285,9 +288,17 @@ def record(packets: Iterable[Packet],
                 dst_port = imu_port
             else:
                 raise ValueError("Unexpected packet type")
-            _pcap.record_packet(handle, src_port, dst_port, packet._data)
+
+            if has_timestamp is None:
+                has_timestamp = (packet.capture_timestamp is not None)
+            elif has_timestamp != (packet.capture_timestamp is not None):
+                raise ValueError("Mixing timestamped/untimestamped packets")
+
+            ts = packet.capture_timestamp or time.time()
+            _pcap.record_packet(handle, src_port, dst_port, packet._data, ts)
             n += 1
     except Exception as e:
+        _pcap.record_uninitialize(handle)
         if os.path.exists(pcap_path) and n == 0:
             os.remove(pcap_path)
         raise e

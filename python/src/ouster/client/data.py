@@ -17,8 +17,9 @@ class ImuPacket:
     """Read IMU Packet data from a bufer."""
     _pf: _client.PacketFormat
     _data: np.ndarray
+    capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo) -> None:
+    def __init__(self, data: BufferT, info: SensorInfo, timestamp: Optional[float] = None) -> None:
         """
         Args:
             data: Buffer containing the packet payload
@@ -33,6 +34,8 @@ class ImuPacket:
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
                                    count=self._pf.imu_packet_size)
+
+        self.capture_timestamp = timestamp
 
     @property
     def sys_ts(self) -> int:
@@ -107,8 +110,9 @@ class LidarPacket:
     _pf: _client.PacketFormat
     _data: np.ndarray
     _column_bytes: int
+    capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo) -> None:
+    def __init__(self, data: BufferT, info: SensorInfo, timestamp: Optional[float] = None) -> None:
         """
         This will always alias the supplied buffer-like object. Pass in a copy
         to avoid unintentional aliasing.
@@ -128,6 +132,7 @@ class LidarPacket:
         self._column_bytes = LidarPacket._COL_PREAMBLE_BYTES + \
             (LidarPacket._PIXEL_BYTES * self._pf.pixels_per_column) + \
             LidarPacket._COL_FOOTER_BYTES
+        self.capture_timestamp = timestamp
 
     def field(self, field: ChanField) -> np.ndarray:
         """Create a view of the specified channel field.

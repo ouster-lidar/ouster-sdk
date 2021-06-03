@@ -1,32 +1,54 @@
 import os
-from random import getrandbits, shuffle
+from random import getrandbits, shuffle, random
 from typing import Iterator
 from itertools import chain, islice
 
 from more_itertools import roundrobin
 import pytest
+import time
 
 from ouster import pcap
+from ouster.pcap import _pcap
 from ouster import client
 from ouster.client import _client, _digest
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
+NO_RANDOM_TIME = 0
+RANDOM_FLOAT = 1
 
-def random_lidar_packets(metadata) -> Iterator[client.LidarPacket]:
+# Seed the start timestamp
+current_timestamp = time.time()
+
+
+def random_lidar_packets(metadata, random_time=NO_RANDOM_TIME) -> Iterator[client.LidarPacket]:
+    global current_timestamp
+
     pf = _client.PacketFormat.from_info(metadata)
+
+    timestamp = None
+    current_timestamp += random() * 4.0
+    if random_time == RANDOM_FLOAT:
+        timestamp = current_timestamp
 
     while True:
         buf = bytearray(getrandbits(8) for _ in range(pf.lidar_packet_size))
-        yield client.LidarPacket(buf, metadata)
+        yield client.LidarPacket(buf, metadata, timestamp)
 
 
-def random_imu_packets(metadata) -> Iterator[client.ImuPacket]:
+def random_imu_packets(metadata, random_time=NO_RANDOM_TIME) -> Iterator[client.ImuPacket]:
+    global current_timestamp
+
     pf = _client.PacketFormat.from_info(metadata)
+
+    timestamp = None
+    current_timestamp += random() * 4.0
+    if random_time == RANDOM_FLOAT:
+        timestamp = current_timestamp
 
     while True:
         buf = bytearray(getrandbits(8) for _ in range(pf.imu_packet_size))
-        yield client.ImuPacket(buf, metadata)
+        yield client.ImuPacket(buf, metadata, timestamp)
 
 
 @pytest.fixture
@@ -139,3 +161,127 @@ def test_read_write_lidar_imu(n_lidar, n_imu, metadata, tmpdir):
     out_bufs = [bytes(p._data) for p in out_packets]
     in_bufs = [bytes(p._data) for p in in_packets]
     assert in_bufs == out_bufs
+
+
+@pytest.mark.parametrize("mode", [
+    pytest.param(RANDOM_FLOAT, id="random float timestamp"),
+])
+def test_timestamp_float_read_write(mode, metadata, tmpdir):
+    lidar_packets = islice(random_lidar_packets(metadata, random_time=mode), 10)
+    imu_packets = islice(random_imu_packets(metadata, random_time=mode), 10)
+    in_packets = list(chain(lidar_packets, imu_packets))
+
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
+
+    pcap.record(in_packets, file_path)
+    out_packets = list(pcap.Pcap(file_path, metadata))
+    out_timestamps = []
+    in_timestamps = []
+
+    out_timestamps = [p.capture_timestamp for p in out_packets]
+    in_timestamps = [p.capture_timestamp for p in in_packets]
+
+    assert len(in_timestamps) == len(out_timestamps)
+    for i, o in zip(in_timestamps, out_timestamps):
+        # Make sure to deal with float rounding issues in the compare
+        assert i == pytest.approx(o, abs=1e-6)
+
+
+def test_no_timestamp_read_write(metadata, tmpdir):
+    mode = NO_RANDOM_TIME
+    current_timestamp = time.time()
+    lidar_packets = islice(random_lidar_packets(metadata, random_time=mode), 10)
+    imu_packets = islice(random_imu_packets(metadata, random_time=mode), 10)
+    in_packets = list(chain(lidar_packets, imu_packets))
+
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
+
+    pcap.record(in_packets, file_path)
+    out_packets = list(pcap.Pcap(file_path, metadata))
+    out_timestamps = []
+    in_timestamps = []
+
+    out_timestamps = [p.capture_timestamp for p in out_packets]
+    in_timestamps = [p.capture_timestamp for p in in_packets]
+
+    assert len(in_timestamps) == len(out_timestamps)
+    for i, o in zip(in_timestamps, out_timestamps):
+        assert i is None
+        assert current_timestamp == pytest.approx(o, abs=5e-1)
+
+
+@pytest.mark.parametrize("n_lidar_timestamp, n_lidar_no_timestamp, n_imu_timestamp, n_imu_no_timestamp", [
+    pytest.param(10, 0, 10, 0, id="yes timestamps"),
+    pytest.param(0, 10, 0, 10, id="no timestamps"),
+    pytest.param(10, 10, 0, 0, id="mixed: lidar"),
+    pytest.param(0, 0, 10, 10, id="mixed: imu"),
+    pytest.param(10, 0, 0, 10, id="mixed: lidar ts, imu no ts"),
+    pytest.param(0, 10, 10, 10, id="mixed: lidar no ts, imu ts"),
+    pytest.param(10, 10, 10, 10, id="mixed: lidar ts, lidar no ts, imu ts, imu no ts"),
+])
+def test_mixed_timestamp_write(n_lidar_timestamp, n_lidar_no_timestamp, n_imu_timestamp,
+                               n_imu_no_timestamp, metadata, tmpdir):
+
+    lidar_timestamp_packets = islice(random_lidar_packets(metadata, random_time=RANDOM_FLOAT),
+                                     n_lidar_timestamp)
+    lidar_no_timestamp_packets = islice(random_lidar_packets(metadata, random_time=NO_RANDOM_TIME),
+                                        n_lidar_no_timestamp)
+    imu_timestamp_packets = islice(random_imu_packets(metadata, random_time=RANDOM_FLOAT),
+                                   n_imu_timestamp)
+    imu_no_timestamp_packets = islice(random_imu_packets(metadata, random_time=NO_RANDOM_TIME),
+                                      n_imu_no_timestamp)
+    in_packets = list(chain(lidar_timestamp_packets, lidar_no_timestamp_packets, imu_timestamp_packets,
+                            imu_no_timestamp_packets))
+
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
+
+    yes_timestamps = n_lidar_timestamp + n_imu_timestamp
+    no_timestamps = n_lidar_no_timestamp + n_imu_no_timestamp
+
+    if yes_timestamps > 0 and no_timestamps > 0:
+        with pytest.raises(ValueError):
+            pcap.record(in_packets, file_path)
+    else:
+        pcap.record(in_packets, file_path)
+
+
+def test_write_nonsensical_packet_type(metadata, tmpdir):
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
+
+    in_packets = [42]
+    with pytest.raises(ValueError):
+        pcap.record(in_packets, file_path)
+
+    assert not os.path.exists(file_path), "Didn't clean up empty file"
+
+
+def test_lidar_guess_error(metadata, tmpdir):
+    packets = islice(random_lidar_packets(metadata), 2)
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
+
+    buf_size = 2**16
+    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1", buf_size)
+    try:
+        _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
+        _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
+    finally:
+        _pcap.record_uninitialize(handle)
+
+    with pytest.raises(ValueError):
+        pcap.Pcap(file_path, metadata)
+
+
+def test_imu_guess_error(metadata, tmpdir):
+    packets = islice(random_imu_packets(metadata), 2)
+    file_path = os.path.join(tmpdir, "pcap_test.pcap")
+
+    buf_size = 2**16
+    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1", buf_size)
+    try:
+        _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
+        _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
+    finally:
+        _pcap.record_uninitialize(handle)
+
+    with pytest.raises(ValueError):
+        pcap.Pcap(file_path, metadata)
