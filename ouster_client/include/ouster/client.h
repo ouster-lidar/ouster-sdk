@@ -43,6 +43,7 @@ std::shared_ptr<client> init_client(const std::string& hostname = "",
  *
  * @param hostname hostname or ip of the sensor
  * @param udp_dest_host hostname or ip where the sensor should send data
+ * or "" for automatic detection of destination
  * @param lidar_port port on which the sensor will send lidar data
  * @param imu_port port on which the sensor will send imu data
  * @param timeout_sec how long to wait for the sensor to initialize
