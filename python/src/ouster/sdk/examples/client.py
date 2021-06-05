@@ -8,8 +8,8 @@ This module has a rudimentary command line interface. For usage, run::
 import argparse
 from contextlib import closing
 
-import numpy as np
 from more_itertools import time_limited
+import numpy as np
 
 from ouster import client
 
@@ -136,8 +136,8 @@ def live_plot_signal(hostname: str, lidar_port: int = 7502) -> None:
             for scan in stream:
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(scan.frame_id))
-                signal = client.destagger(
-                    stream.metadata, scan.field(client.ChanField.SIGNAL))
+                signal = client.destagger(stream.metadata,
+                                          scan.field(client.ChanField.SIGNAL))
                 signal = (signal / np.max(signal) * 255).astype(np.uint8)
                 cv2.imshow("scaled signal", signal)
                 key = cv2.waitKey(1) & 0xFF
@@ -371,9 +371,6 @@ def record_pcap(hostname: str,
 
 
 def main() -> None:
-
-    from .open3d import sensor_viewer_3d
-
     examples = {
         "configure-sensor": configure_sensor_params,
         "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
@@ -385,7 +382,6 @@ def main() -> None:
         "plot-imu-z-accel": plot_imu_z_accel,
         "write-xyz-to-csv": write_xyz_to_csv,
         "record-pcap": record_pcap,
-        "3d-viewer": sensor_viewer_3d,
     }
 
     description = "Ouster Python SDK examples. The EXAMPLE must be one of:\n  " + str.join(

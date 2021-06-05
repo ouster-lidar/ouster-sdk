@@ -436,4 +436,4 @@ class Scans:
                         timeout=timeout,
                         _flush_before_read=True)
 
-        return cls(source, timeout=timeout, complete=complete, _max_latency=1)
+        return cls(source, timeout=timeout, complete=complete, _max_latency=2)

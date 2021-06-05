@@ -126,8 +126,7 @@ setup(
     extras_require={
         'test': ['pytest', 'tox'],
         'dev': [
-            'flake8', 'future', 'mypy', 'pyls-mypy', 'python-language-server',
-            'yapf'
+            'flake8', 'future', 'mypy', 'mypy-ls', 'python-lsp-server', 'yapf'
         ],
         'docs': [
             'Sphinx >=3.5',

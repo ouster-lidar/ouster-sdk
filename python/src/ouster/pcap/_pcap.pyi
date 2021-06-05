@@ -1,8 +1,6 @@
 """Type annotations for pcap python bindings."""
-
-import datetime
 from ouster.client import BufferT
-from typing import Dict, Tuple
+from typing import Dict
 
 
 class playback_handle:
@@ -89,7 +87,8 @@ def read_packet(handle: playback_handle, buf: BufferT) -> int:
     ...
 
 
-def record_initialize(file_name: str, src_ip: str, dst_ip: str, frag_size: int) -> record_handle:
+def record_initialize(file_name: str, src_ip: str, dst_ip: str,
+                      frag_size: int) -> record_handle:
     ...
 
 
@@ -97,16 +96,18 @@ def record_uninitialize(handle: record_handle) -> None:
     ...
 
 
-def record_packet(handle: record_handle, src_port: int, dst_port: int, buf: BufferT,
-                  timestamp: float) -> None:
+def record_packet(handle: record_handle, src_port: int, dst_port: int,
+                  buf: BufferT, timestamp: float) -> None:
     ...
 
 
-def replay_get_pcap_info(file_name: str, packets_to_process: int) -> stream_info:
+def replay_get_pcap_info(file_name: str,
+                         packets_to_process: int) -> stream_info:
     ...
 
 
-def replay_initialize(file_name: str, src_ip: str, dst_ip: str, port_map: Dict[int, int]) -> playback_handle:
+def replay_initialize(file_name: str, src_ip: str, dst_ip: str,
+                      port_map: Dict[int, int]) -> playback_handle:
     ...
 
 

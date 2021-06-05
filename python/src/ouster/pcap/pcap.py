@@ -273,11 +273,10 @@ def record(packets: Iterable[Packet],
         Number of packets captured
     """
     has_timestamp = None
-
+    error = False
     buf_size = 2**16
     n = 0
     handle = _pcap.record_initialize(pcap_path, src_ip, dst_ip, buf_size)
-
     try:
         for packet in packets:
             if isinstance(packet, LidarPacket):
@@ -297,12 +296,12 @@ def record(packets: Iterable[Packet],
             ts = packet.capture_timestamp or time.time()
             _pcap.record_packet(handle, src_port, dst_port, packet._data, ts)
             n += 1
-    except Exception as e:
-        _pcap.record_uninitialize(handle)
-        if os.path.exists(pcap_path) and n == 0:
-            os.remove(pcap_path)
-        raise e
+    except Exception:
+        error = True
+        raise
     finally:
         _pcap.record_uninitialize(handle)
+        if error and os.path.exists(pcap_path) and n == 0:
+            os.remove(pcap_path)
 
     return n

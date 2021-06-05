@@ -1,6 +1,45 @@
 """Ouster ``spezia`` colormap."""
 
 import numpy as np
+
+
+def colorize(image: np.ndarray):
+    """Use Ouster spezia colormap to get from gray to color space.
+
+    Args:
+        image: 2D array of values in the range [0, 1]
+
+    Returns:
+        Array of RGB values of the same dimension selected from the color map
+    """
+    key_img_indices = (255 * image).astype(np.uint8)
+    return np.reshape(np.take(spezia, key_img_indices.flat, axis=0),
+                      [image.shape[0], image.shape[1], 3])
+
+
+def normalize(data: np.ndarray, percentile: float = 0.05):
+    """Normalize and clamp data for better color mapping.
+
+    This is a utility function used ONLY for the purpose of 2D image
+    visualization. The resulting values are not fully reversible because the
+    final clipping step discards values outside of [0, 1].
+
+    Args:
+        data: array of data to be transformed for visualization
+        percentile: values in the bottom/top percentile are clambed to 0 and 1
+
+    Returns:
+        An array of doubles with the same shape as ``image`` with values
+        normalized to the range [0, 1].
+    """
+    min_val = np.percentile(data, 100 * percentile)
+    max_val = np.percentile(data, 100 * (1 - percentile))
+    # to protect from division by zero
+    spread = max(max_val - min_val, 1)
+    field_res = (data.astype(np.float64) - min_val) / spread
+    return field_res.clip(0, 1.0)
+
+
 # generated from:
 # https://daniel.lawrence.lu/public/colortransform/#0_2423_964_352_6_2624_1000_513_11_3248_1000_617_15_415_1000_774
 # const int spezia_n = 256;

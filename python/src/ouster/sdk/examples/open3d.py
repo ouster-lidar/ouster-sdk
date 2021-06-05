@@ -1,179 +1,130 @@
 """Ouster Open3D visualizations examples."""
-
 import time
-import threading
+
+from more_itertools import consume, nth
 import numpy as np
-from contextlib import closing
-from more_itertools import nth
+import open3d as o3d  # type: ignore
 
 from ouster import client
+from .colormaps import normalize, colorize
 
-from .pcap import read_metadata, ae, colorize
-
-def sensor_viewer_3d(hostname: str,
-                     lidar_port: int = 7502,
-                     imu_port: int = 7503) -> None:
-    """Open3D viewer of real-time data from sensor.
-
-    Args:
-        hostname: hostname of the sensor
-        lidar_port: UDP port to listen on for lidar data
-        imu_port: UDP port to listen on for imu data
-    """
-    import open3d as o3d
-    from .open3d_utils import view_from
-
-    with closing(client.Sensor(hostname, lidar_port, imu_port,
-                               buf_size=640)) as source:
-
-        xyzlut = client.XYZLut(source.metadata)
-        # Shared data from sensor to animation loop
-        data_ready = False
-        data_xyz = np.array([])
-        data_key_img_color = np.array([])
-
-        data_lock = threading.Lock()
-
-        def fetch_scans() -> None:
-            nonlocal data_lock, data_ready, data_xyz, data_key_img_color
-            for scan in client.Scans(source):
-                xyz = xyzlut(scan)
-                with data_lock:
-                    data_xyz = xyz
-                    key = scan.field(client.ChanField.SIGNAL)
-                    key_img = ae(key)
-                    data_key_img_color = colorize(key_img)
-                    data_ready = True
-
-        # Initialize point cloud with default data (needed for open3d to
-        # render correctly and setup scaling parameter internally)
-        pcd = o3d.geometry.PointCloud()
-
-        w = source.metadata.format.columns_per_frame
-        h = source.metadata.format.pixels_per_column
-
-        pcd.points = o3d.utility.Vector3dVector(30.0 * np.random.rand(h * w, 3))
-        pcd.colors = o3d.utility.Vector3dVector(np.zeros((h * w, 3)))
-
-        initialized = False
-        def animation_callback(vis):
-            nonlocal initialized, pcd
-            nonlocal data_lock, data_ready, data_xyz, data_key_img_color
-            z_near = 1.0
-            if not initialized:
-                ropt = vis.get_render_option()
-                ropt.point_size = 1.0
-                ropt.background_color = np.asarray([0, 0, 0])
-                ropt.light_on = False
-                ctr = vis.get_view_control()
-                ctr.set_zoom(0.2)
-                ctr.set_constant_z_near(z_near)
-                view_from(vis, np.array([2, 1, 2]), np.array([0, 0, 0]))
-                initialized = True
-                return True
-
-            with data_lock:
-                if data_ready:
-                    pcd.points = o3d.utility.Vector3dVector(
-                        data_xyz.reshape((-1, 3)))
-                    pcd.colors = o3d.utility.Vector3dVector(
-                        data_key_img_color.reshape((-1, 3)))
-                    data_ready = False
-                    return True
-
-            # No need to update geometries if scan wasn't changed
-            return False
-
-        # Fetching sensor scans and preparing data in a separate thread
-        t = threading.Thread(target=fetch_scans, name="Sensor", daemon=True)
-        t.start()
-
-        # helper coordinate axes
-        axes = o3d.geometry.TriangleMesh.create_coordinate_frame(0.2)
-
-        # use with animation callback to setup render/view control options
-        o3d.visualization.draw_geometries_with_animation_callback(
-            [pcd, axes], animation_callback)
+Z_NEAR = 1.0
 
 
-def pcap_3d_one_scan(pcap_path: str, metadata_path: str, num: int = 0) -> None:
-    """Render one scan in Open3D viewer from pcap file.
+def view_from(vis: o3d.visualization.Visualizer,
+              from_point: np.ndarray,
+              to_point: np.ndarray = np.array([0, 0, 0])):
+    """Helper to setup view direction for Open3D Visualiser.
 
     Args:
-        pcap_path: path to the pcap file
-        metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
-        num: scan number in a given pcap file (satrs from *0*)
+        from_point: camera location in 3d space as ``[x,y,z]``
+        to_point: camera view direction in 3d space as ``[x,y,z]``
     """
-    import ouster.pcap as pcap
-
-    metadata = read_metadata(metadata_path)
-    source = pcap.Pcap(pcap_path, metadata)
-
-    # get single scan by num
-    scans = client.Scans(source)
-    scan = nth(scans, num)
-
-    if not scan:
-        print(f'ERROR: Scan # {num} in not present in pcap file: {pcap_path}')
-        return    
-
-    # [doc-stag-open3d-one-scan]
-    import open3d as o3d
-    from .open3d_utils import view_from
-
-    # ... ``scan``` is a client.LidarScan object read previously from pcap file
-
-    xyzlut = client.XYZLut(metadata)
-    xyz = xyzlut(scan)
-    key = scan.field(client.ChanField.SIGNAL)
-
-    key_range = scan.field(client.ChanField.RANGE)
-    key[key_range == 0] = 0
-
-    # apply Ouster ``spezia`` colormap to field values
-    key_img = ae(key)
-    key_img_color = colorize(key_img)
-
-    # prepare point cloud for Open3d Visualiser
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
-    pcd.colors = o3d.utility.Vector3dVector(key_img_color.reshape((-1, 3)))
-
-    # helper coordinate axes
-    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(1.0)
-
-    scans_it = iter(scans)
-
-    initialized = False
-
-    def animation_callback(vis):
-        nonlocal initialized, pcd, scans_it, scan
-        if not initialized:
-            ropt = vis.get_render_option()
-            ropt.point_size = 1.0
-            ropt.background_color = np.asarray([0, 0, 0])
-            ropt.light_on = False
-            # view point optimized for frame 84 of OS1_128.pcap sample data
-            # change it for your data or use 'R' key to reset view if you see
-            # nothing in a window
-            ctr = vis.get_view_control()
-            ctr.set_zoom(0.03)
-            view_from(vis, np.array([2, 1, 2]), np.array([-3, 1.5, 0]))
-            initialized = True
-            return True
-
-        # No need to update all geometries if we are not changing them
-        return False
-
-    # use with animation callback to setup render/view control options
-    o3d.visualization.draw_geometries_with_animation_callback(
-        [pcd, axes], animation_callback)
-    # [doc-etag-open3d-one-scan]
+    ctr = vis.get_view_control()
+    up_v = np.array([0, 0, 1])
+    dir_v = to_point - from_point
+    left_v = np.cross(up_v, dir_v)
+    up = np.cross(dir_v, left_v)
+    ctr.set_lookat(to_point)
+    ctr.set_front(-dir_v)
+    ctr.set_up(up)
 
 
-def pcap_3d_one_scan_canvas(pcap_path: str,
-                            metadata_path: str,
-                            num: int = 0) -> None:
+def create_canvas(w: int, h: int) -> o3d.geometry.TriangleMesh:
+    """Create canvas for 2D image.
+
+    Args:
+        w: width of the 2D image in screen coords (pixels)
+        h: height of the 2D image in screen coords (pixels)
+    """
+    pic = o3d.geometry.TriangleMesh()
+    pic.vertices = o3d.utility.Vector3dVector(
+        np.array([[0, 1, 1], [0, -1, 1], [0, -1, -1], [0, 1, -1]]))
+    pic.triangles = o3d.utility.Vector3iVector(
+        np.array([
+            [0, 3, 2],
+            [2, 1, 0],
+        ]))
+    pic.triangle_uvs = o3d.utility.Vector2dVector(
+        np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 1.0], [1.0, 0.0],
+                  [0.0, 0.0]]))
+    im = np.zeros((h, w, 3), dtype=np.float32)
+    pic.textures = [o3d.geometry.Image(im)]
+    pic.triangle_material_ids = o3d.utility.IntVector(
+        np.array([0, 0], dtype=np.int32))
+    return pic
+
+
+def canvas_set_viewport(
+        pic: o3d.geometry.TriangleMesh,
+        camera_params: o3d.camera.PinholeCameraParameters) -> None:
+    """Set the position of the 2D image in space so it seems as static.
+
+    The method should be called on every animation update (animation callback)
+    before rendering so the 2D mesh with texture always appear in the position
+    that would seem "static" for the observer of the scene through the current
+    camera parameters.
+
+    Args:
+        pic: canvas with 2D image, created with :func:`.create_canvas`
+        camera_params: current open3d camera parameters
+    """
+
+    # calculate viewport
+    screen_width = camera_params.intrinsic.width
+
+    pic_img_data = np.asarray(pic.textures[0])
+    canvas_height, canvas_width, _ = pic_img_data.shape
+
+    viewport = ((screen_width - canvas_width) / 2, 0, canvas_width,
+                canvas_height)
+
+    # grab camera parameters
+    intrinsics = camera_params.intrinsic.intrinsic_matrix
+    extrinsics = camera_params.extrinsic
+
+    x_pos, y_pos, width, height = viewport
+    pict_pos = np.array([[x_pos, y_pos], [x_pos + width, y_pos],
+                         [x_pos + width, y_pos + height],
+                         [x_pos, y_pos + height]])
+
+    # put canvas in correct camera view (img frame -> camera frame)
+    assert intrinsics[0, 0] == intrinsics[1, 1]
+    pict_pos = np.append((pict_pos - intrinsics[:2, 2]) / intrinsics[0, 0],
+                         np.ones((pict_pos.shape[0], 1)),
+                         axis=1)
+    pict_pos = pict_pos * (Z_NEAR + 0.001)
+
+    # move canvas to world coords (camera frame -> world frame)
+
+    # invert camera extrinsics: inv([R|T]) = [R'|-R'T]
+    tr = np.eye(extrinsics.shape[0])
+    tr[:3, :3] = np.transpose(extrinsics[:3, :3])
+    tr[:3, 3] = -np.transpose(extrinsics[:3, :3]) @ extrinsics[:3, 3]
+
+    pict_pos = tr @ np.transpose(
+        np.append(pict_pos, np.ones((pict_pos.shape[0], 1)), axis=1))
+    pict_pos = np.transpose(pict_pos / pict_pos[-1])
+
+    # set canvas position
+    pict_vertices = np.asarray(pic.vertices)
+    np.copyto(pict_vertices, pict_pos[:, :3])
+
+
+def canvas_set_image_data(pic: o3d.geometry.TriangleMesh,
+                          img_data: np.ndarray) -> None:
+    """Set 2D image data to 2D canvas.
+
+    Args:
+        pic: 2D canvas creates with :func:`.create_canvas`
+        img_data: image data RGB (i.e. shape ``[h, w, 3]``)
+    """
+    pic_img_data = np.asarray(pic.textures[0])
+    assert pic_img_data.shape == img_data.shape
+    np.copyto(pic_img_data, img_data)
+
+
+def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
     """Render one scan in Open3D viewer from pcap file with 2d image.
 
     Args:
@@ -181,97 +132,154 @@ def pcap_3d_one_scan_canvas(pcap_path: str,
         metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
         num: scan number in a given pcap file (satrs from *0*)
     """
+
+    channels = [c for c in client.ChanField]
+
+    # visualizer state
+    scans_iter = iter(scans)
+    scan = next(scans_iter)
+    metadata = scans.metadata
+    xyzlut = client.XYZLut(metadata)
+
+    channel_ind = 2
+
+    def next_channel(vis):
+        nonlocal channel_ind
+        channel_ind = (channel_ind + 1) % len(channels)
+        update_data(vis)
+        print(f"Visualizing: {channels[channel_ind].name}")
+
+    def toggle_pause(vis):
+        nonlocal paused
+        paused = not paused
+        print(f"Paused: {paused}")
+
+    def right_arrow(vis, action, mods):
+        nonlocal scan
+        if action == 1:
+            print("Skipping forward 10 frames")
+            scan = nth(scans_iter, 10)
+            update_data(vis)
+
+    # create geometries
+    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(0.2)
+    cloud = o3d.geometry.PointCloud()
+    image = create_canvas(metadata.format.columns_per_frame,
+                          metadata.format.pixels_per_column)
+
+    def update_data(vis: o3d.visualization.Visualizer):
+        xyz = xyzlut(scan)
+        key = scan.field(channels[channel_ind])
+
+        # apply colormap to field values
+        key_img = normalize(key)
+        color_img = colorize(key_img)
+
+        # prepare point cloud for Open3d Visualiser
+        cloud.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
+        cloud.colors = o3d.utility.Vector3dVector(color_img.reshape((-1, 3)))
+
+        # prepare canvas for 2d image
+        gray_img = np.dstack([key_img] * 3)
+        canvas_set_image_data(image, client.destagger(metadata, gray_img))
+
+        # signal that point cloud and needs to be re-rendered
+        vis.update_geometry(cloud)
+
+    # initialize vis
+    vis = o3d.visualization.VisualizerWithKeyCallback()
+    vis.create_window()
+
+    ropt = vis.get_render_option()
+    ropt.point_size = 1.0
+    ropt.background_color = np.asarray([0, 0, 0])
+    ropt.light_on = False
+
+    # populate point cloud before adding geometry to avoid camera issues
+    update_data(vis)
+
+    vis.add_geometry(cloud)
+    vis.add_geometry(image)
+    vis.add_geometry(axes)
+
+    # initialize camera settings
+    ctr = vis.get_view_control()
+    ctr.set_constant_z_near(Z_NEAR)
+    ctr.set_zoom(0.2)
+    view_from(vis, np.array([2, 1, 2]), np.array([0, 0, 0]))
+
+    # register keys
+    vis.register_key_callback(ord(" "), toggle_pause)
+    vis.register_key_callback(ord("M"), next_channel)
+    vis.register_key_action_callback(262, right_arrow)
+
+    # main loop
+    last_ts = 0.0
+    while vis.poll_events():
+        ts = time.monotonic()
+
+        # update data at scan frequency to avoid blocking the rendering thread
+        if not paused and ts - last_ts >= 1 / metadata.mode.frequency:
+            scan = next(scans_iter)
+            update_data(vis)
+            last_ts = ts
+
+        # always update 2d image to follow camera
+        canvas_set_viewport(image, ctr.convert_to_pinhole_camera_parameters())
+        vis.update_geometry(image)
+        vis.update_renderer()
+
+    vis.destroy_window()
+
+
+def main() -> None:
+    import argparse
+    import os
     import ouster.pcap as pcap
 
-    metadata = read_metadata(metadata_path)
-    source = pcap.Pcap(pcap_path, metadata)
+    descr = """Example visualizer using the open3d library.
 
-    # get single scan by num
-    scans = client.Scans(source)
-    scan = nth(scans, num)
+    Visualize either pcap data (specified using --pcap) or a running sensor
+    (specified using --sensor). If no metadata file is specified, this will look
+    for a file with the same name as the pcap with the '.json' extension, or
+    query it directly from the sensor.
 
-    if not scan:
-        print(f'ERROR: Scan # {num} in not present in pcap file: {pcap_path}')
-        return
+    Visualizing a running sensor requires the sensor to be configured and
+    sending lidar data to the default UDP port (7502) on the host machine.
+    """
 
-    # [doc-stag-open3d-one-scan-canvas]
-    import open3d as o3d
-    from .open3d_utils import (view_from, create_canvas, canvas_set_image_data,
-                               canvas_set_viewport)
+    parser = argparse.ArgumentParser(description=descr)
+    parser.add_argument('--pause', action='store_true', help='start paused')
+    parser.add_argument('--start', type=int, help='skip to frame number')
+    parser.add_argument('--meta', metavar='PATH', help='path to metadata json')
 
-    # ... ``scan``` is a client.LidarScan object read previously from pcap file
+    required = parser.add_argument_group('one of the following is required')
+    group = required.add_mutually_exclusive_group(required=True)
+    group.add_argument('--sensor', metavar='HOST', help='sensor hostname')
+    group.add_argument('--pcap', metavar='PATH', help='path to pcap file')
 
-    xyzlut = client.XYZLut(metadata)
-    xyz = xyzlut(scan)
-    key = scan.field(client.ChanField.SIGNAL)
+    args = parser.parse_args()
 
-    key_range = scan.field(client.ChanField.RANGE)
-    key[key_range == 0] = 0
+    if args.sensor:
+        scans = client.Scans.stream(args.sensor, metadata=args.meta)
+    elif args.pcap:
+        pcap_path = args.pcap
+        metadata_path = args.meta or os.path.splitext(pcap_path)[0] + ".json"
 
-    # apply Ouster ``spezia`` colormap to field values
-    key_img = ae(key)
-    key_img_color = colorize(key_img)
-    key_img_gray = np.dstack([key_img, key_img, key_img])
+        with open(metadata_path, 'r') as f:
+            metadata = client.SensorInfo(f.read())
 
-    # key_img_rgb = np.dstack([ae(key), ae(key), ae(key)])
+        source = pcap.Pcap(pcap_path, metadata)
+        scans = client.Scans(source)
+        consume(scans, args.start or 0)
 
-    # prepare point cloud for Open3d Visualiser
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
-    pcd.colors = o3d.utility.Vector3dVector(key_img_color.reshape((-1, 3)))
+    try:
+        viewer_3d(scans, paused=args.pause)
+    except (KeyboardInterrupt, StopIteration):
+        pass
+    finally:
+        scans.close()
 
-    # helper coordinate axes
-    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(1.0)
 
-    # prepare canvas for 2d image
-    pict = create_canvas(scan.w, scan.h)
-    canvas_set_image_data(pict, client.destagger(metadata, key_img_gray))
-
-    scans_it = iter(scans)
-
-    initialized = False
-
-    def animation_callback(vis):
-        nonlocal initialized, pcd, pict, scans_it, scan
-        z_near = 1.0
-        if not initialized:
-            ropt = vis.get_render_option()
-            ropt.point_size = 1.0
-            ropt.background_color = np.asarray([0, 0, 0])
-            ropt.light_on = False
-            ctr = vis.get_view_control()
-            ctr.set_zoom(0.03)
-            ctr.set_constant_z_near(z_near)
-            # view point optimized for frame 84 of OS1_128.pcap sample data
-            view_from(vis, np.array([2, 1, 2]), np.array([-3, 1.5, 0]))
-            initialized = True
-            return True
-
-        ctr = vis.get_view_control()
-
-        # slowly rotate for better look-n-feel
-        ctr.rotate(0.1, 0.0)
-
-        # calculate and update canvas position using current camera params
-        camera_params = ctr.convert_to_pinhole_camera_parameters()
-
-        screen_width = camera_params.intrinsic.width
-
-        canvas_height = scan.h
-        canvas_width = scan.w * canvas_height / scan.h
-
-        viewport = ((screen_width - canvas_width) / 2, 0, canvas_width,
-                    canvas_height)
-
-        # canvas position and size on a current screen
-        canvas_set_viewport(pict, viewport,
-                            camera_params.intrinsic.intrinsic_matrix,
-                            camera_params.extrinsic)
-
-        # Always re-render because we are moving canvas along with camera
-        return True
-
-    # use with animation callback to setup render/view control options
-    o3d.visualization.draw_geometries_with_animation_callback(
-        [pcd, axes, pict], animation_callback)
-    # [doc-etag-open3d-one-scan-canvas]
+if __name__ == "__main__":
+    main()

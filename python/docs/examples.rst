@@ -395,7 +395,7 @@ The source code of an example below:
 .. literalinclude:: /../src/ouster/sdk/examples/pcap.py
     :start-after: [doc-stag-pcap-to-csv]
     :end-before: [doc-etag-pcap-to-csv]
-    :emphasize-lines: 38-42
+    :emphasize-lines: 33-37
     :linenos:
     :dedent:
 
@@ -424,60 +424,67 @@ Check :func:`.examples.pcap.pcap_to_csv` documentation for further details.
 Open3D as Point Cloud Visualiser
 =================================
 
-More complex and robust ``xyz`` 3D points visualization can be achieved with the Open3D library.
-Here is a simple example to view the same frame ``84`` in a more appealing way:
+The :mod:`.examples.open3d` module contains a basic visualizer built using the Open3d library, which
+can be used to replay pcap files or visualize a running sensor. The bulk of the visualizer is
+implemented in the :func:`.examples.open3d.viewer_3d` function.
 
+As an example, you can view frame ``84`` from the sample data by running the following command:
 
 .. tabs::
 
     .. code-tab:: console Unix/macOS x64
 
-        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+       $ python3 -m ouster.sdk.examples.open3d --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
      
     .. code-tab:: console macOS M1
 
-        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+       $ arch --x86_64 python3 -m ouster.sdk.examples.open3d --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 3d-one-scan --scan-num 84
+       PS > py -3 -m ouster.sdk.examples.open3d --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
     
+You may also want to try the ``--sensor`` option to display the output of a running sensor. Use the
+``-h`` flag to see a full list of command line options and flags.
 
-Expected result looks like this (use mouse to move around and ``ESC`` to exit):
+Running the example above should open a window displaying a scene from a city intersection,
+reproduced below:
 
 .. figure:: images/lidar_scan_xyz_84_3d.png
    :align: center
 
-   Open3D visualisation of point cloud of OS1 sample data (scan 84). Points colored by ``SIGNAL`` value
-   with Ouster ``spezia`` colormap.
+   Open3D visualization of OS1 sample data (frame 84). Points colored by ``SIGNAL`` field.
 
-The source code of the example below:
+You should be able to click and drag the mouse to look around. You can zoom in and out using the
+mouse wheel, and hold control or shift while dragging to pan and roll, respectively.
 
-.. literalinclude:: /../src/ouster/sdk/examples/open3d.py
-    :start-after: [doc-stag-open3d-one-scan]
-    :end-before: [doc-etag-open3d-one-scan]
-    :emphasize-lines: 1, 17-20, 48-50
-    :linenos:
-    :dedent:
+Hitting the spacebar will start playing back the rest of the pcap in real time. Note that reasonable
+performance for realtime playback requires relatively fast hardware, since Open3d runs all rendering
+and processing in a single thread.
 
-For a `live viewer` of real-time sensor data (implemented with Open3D), you can try:
+All of the visualizer controls are listed in the table below:
 
-.. tabs::
+.. list-table:: Open3d Visualizer Controls
+   :widths: 15 30
+   :header-rows: 1
+   :align: center
 
-    .. code-tab:: console Unix/macOS x64
-
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
-
-    .. code-tab:: powershell Windows x64
-
-        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME 3d-viewer
-
-Check :func:`.examples.open3d.sensor_viewer_3d` for a full source code.
-
+   * - Key
+     - What it does
+   * - **Mouse wheel**
+     - Zoom in an out
+   * - **Left click + drag**
+     - Tilt and rotate the camera
+   * - **Ctrl + left click + drag**
+     - Pan the camera laterally
+   * - **Shift + left click + drag**
+     - Roll the camera
+   * - **Spacebar**
+     - Pause or resume playback
+   * - **"M"**
+     - Cycle through channel fields used for visualization
+   * - **Right arrow key**
+     - When reading a pcap, jump 10 frames forward
 
 .. _ex-imu:
 
@@ -501,12 +508,12 @@ If you have a sensor, you can run the code above with the ``plot-imu-z-accel`` e
 
     .. code-tab:: console Unix/macOS x64
 
-            $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
+       $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
 
     .. code-tab:: console macOS M1
 
-            $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
+       $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
 
     .. code-tab:: powershell Windows x64
 
-            PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
+       PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
