@@ -9,6 +9,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <cmath>
 #include <string>
 #include <thread>
 
@@ -105,7 +106,10 @@ directly.
         .def_readonly("src_ip", &ouster::sensor_utils::packet_info::src_ip)
         .def_readonly("dst_port", &ouster::sensor_utils::packet_info::dst_port)
         .def_readonly("src_port", &ouster::sensor_utils::packet_info::src_port)
-        .def_readonly("timestamp", &ouster::sensor_utils::packet_info::timestamp)
+        .def_property_readonly("timestamp",
+             [](ouster::sensor_utils::packet_info& packet_info) -> double {
+                 return packet_info.timestamp.count() / 1e6;
+             })
         .def_readonly("payload_size", &ouster::sensor_utils::packet_info::payload_size);
     
     
@@ -136,12 +140,13 @@ directly.
     m.def("record_uninitialize", &ouster::sensor_utils::record_uninitialize);
     m.def("record_packet",
           [](ouster::sensor_utils::record_handle& handle,
-             int src_port, int dst_port, py::buffer buf) {
+             int src_port, int dst_port, py::buffer buf, double timestamp) {
               ouster::sensor_utils::record_packet(handle,
                                                   src_port,
                                                   dst_port,
                                                   getptr(buf),
-                                                  getptrsize(buf));
+                                                  getptrsize(buf),
+                                                  llround(timestamp * 1e6));
           });
     // clang-format on
 

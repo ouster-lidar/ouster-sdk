@@ -21,49 +21,59 @@ Building the Python SDK from source requires several dependencies:
 Linux and macos
 ---------------
 
-On supported Debian-based linux systems, you can install all build dependencies by running::
+On supported Debian-based linux systems, you can install all build dependencies by running:
 
-  $ sudo apt install build-essential cmake \
-                     libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
-                     python3-dev python3-pip pybind11-dev
+.. code:: console
 
-On macos >= 10.13, using homebrew, you should be able to run::
+   $ sudo apt install build-essential cmake \
+                      libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
+                      python3-dev python3-pip pybind11-dev
+
+On macos >= 10.13, using homebrew, you should be able to run:
+
+.. code:: console
 
   $ brew install cmake eigen jsoncpp libtins python3 pybind11
 
-After you have the system dependencies, you can build the SDK with::
+After you have the system dependencies, you can build the SDK with:
 
-  # first, specify the path to the ouster_example repository
-  export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
+.. code:: console
 
-  # then, build an installable "wheel" package
-  python3 -m pip wheel --no-deps $OUSTER_SDK_PATH/python
+   # first, specify the path to the ouster_example repository
+   $ export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
 
-  # or just install directly (virtualenv recommended)
-  python3 -m pip install $OUSTER_SDK_PATH/python
+   # then, build an installable "wheel" package
+   $ python3 -m pip wheel --no-deps $OUSTER_SDK_PATH/python
+
+   # or just install directly (virtualenv recommended)
+   $ python3 -m pip install $OUSTER_SDK_PATH/python
 
 
 Windows 10
 ----------
 
 On Windows 10, you'll have to install Visual Studio, Python and the `vcpkg`_ package manager and
-run::
+run:
 
-  > vcpkg install eigen3 jsoncpp libtins pybind11
+.. code:: powershell
 
-The currently tested vcpkg tag is ``2020.11-1``. After that, using a developer powershell prompt::
+   PS > vcpkg install eigen3 jsoncpp libtins pybind11
 
-  # first, specify the path to the ouster_example repository
-  > $env:OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE>
+The currently tested vcpkg tag is ``2020.11-1``. After that, using a developer powershell prompt:
 
-  # point cmake to the location of vcpkg
-  > $env:CMAKE_TOOLCHAIN_FILE=<PATH TO VCPKG REPO>/scripts/buildsystems/vcpkg.cmake
+.. code:: powershell
 
-  # then, build an installable "wheel" package
-  > py -m pip wheel --no-deps $OUSTER_SDK_PATH\python
+   # first, specify the path to the ouster_example repository
+   PS > $env:OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE>
 
-  # or just install directly (virtualenv recommended)
-  > py -m pip install $env:OUSTER_SDK_PATH\python
+   # point cmake to the location of vcpkg
+   PS > $env:CMAKE_TOOLCHAIN_FILE=<PATH TO VCPKG REPO>/scripts/buildsystems/vcpkg.cmake
+
+   # then, build an installable "wheel" package
+   PS > py -m pip wheel --no-deps $env:OUSTER_SDK_PATH\python
+
+   # or just install directly (virtualenv recommended)
+   PS > py -m pip install $env:OUSTER_SDK_PATH\python
 
 See the top-level README in the `Ouster Example repository`_ for more details on setting up a
 development environment on Windows.
@@ -78,31 +88,37 @@ Install in editable mode with pip using ``pip install -e``. For a faster develop
 rebuild using ``python3 setup.py build_ext -i`` instead of reinstalling the package after every
 change. For a local debug build, you can also add the ``-g`` flag.
 
-The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To run::
+The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To run:
 
-  # install and run flake8 linter
-  $ python3 -m pip install flake8
-  $ cd ${OUSTEr_SDK_PATH}/python
-  $ flake8
+.. code:: console
 
-  # install and run mypy in an environment with 
-  $ python3 -m pip install mypy
-  $ mypy -p ouster.sdk -p ouster.client -p ouster.pcap
+   # install and run flake8 linter
+   $ python3 -m pip install flake8
+   $ cd ${OUSTER_SDK_PATH}/python
+   $ flake8
+
+   # install and run mypy in an environment with
+   $ python3 -m pip install mypy
+   $ mypy src/
 
 
 Running Tests
 =============
 
 To run tests while developing, install the ``pytest`` package and run it from the root of the Python
-SDK package::
+SDK package:
 
-  $ cd ${OUSTER_SDK_PATH}/python
-  $ pytest
+.. code:: console
 
-To run tests against multiple Python versions simultaneously, use the ``tox`` package::
+   $ cd ${OUSTER_SDK_PATH}/python
+   $ pytest
 
-  $ cd ${OUSTER_SDK_PATH}/python
-  $ tox
+To run tests against multiple Python versions simultaneously, use the ``tox`` package:
+
+.. code:: console
+
+   $ cd ${OUSTER_SDK_PATH}/python
+   $ tox
 
 This will take longer, since it will build the package from a source distribution for each supported
 Python version available.
@@ -113,13 +129,17 @@ Using Dockerfile
 
 To simplify testing on multiple linux distros, a Dockerfile is included for running ``tox`` on a
 variety of Debian-based distros with all packaged Python versions pre-installed. To build a test
-image, run::
+image, run:
 
-  docker build ${OUSTER_SDK_PATH} -f ${OUSTER_SDK_PATH}/python/Dockerfile \
-      --build-arg BASE=ubuntu:20.04 \
-      -t ouster-sdk-tox \
+.. code:: console
+
+   $ docker build ${OUSTER_SDK_PATH} -f ${OUSTER_SDK_PATH}/python/Dockerfile \
+       --build-arg BASE=ubuntu:20.04 \
+       -t ouster-sdk-tox \
 
 the ``BASE`` argument will default to ``ubuntu:18.04``, but can also be set to other docker tags,
-e.g. ``ubuntu:20.04`` or ``debian:10``. Then, run the container to invoke tox::
+e.g. ``ubuntu:20.04`` or ``debian:10``. Then, run the container to invoke tox:
 
-  docker run -it --rm ouster-sdk-tox
+.. code:: console
+
+   $ docker run -it --rm ouster-sdk-tox

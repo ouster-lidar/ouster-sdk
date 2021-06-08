@@ -12,7 +12,8 @@ Summary
 =======
 
 To get started building the client and visualizer libraries, see the `Sample Client and Visualizer`_
-section below. For instructions on ROS, start with the `Example ROS Code`_ section.
+section below. For instructions on ROS, start with the `Example ROS Code`_ section. Python SDK users
+should proceed straight to our `python SDK homepage <python/>`_.
 
 This repository contains sample code for connecting to and configuring ouster sensors, reading and
 visualizing data, and interfacing with ROS.
@@ -20,6 +21,7 @@ visualizing data, and interfacing with ROS.
 * `ouster_client <ouster_client/>`_ contains an example C++ client for ouster sensors
 * `ouster_viz <ouster_viz/>`_ contains a basic point cloud visualizer
 * `ouster_ros <ouster_ros/>`_ contains example ROS nodes for publishing point cloud messages
+* `python <python/>`_ contains the code for the ouster sensor python SDK
 
 
 Sample Client and Visualizer
@@ -35,7 +37,7 @@ Building on Linux / macOS
 To install build dependencies on Ubuntu, run::
 
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev libtins-dev libpcap-dev
+         libjsoncpp-dev libtclap-dev
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
 
@@ -52,6 +54,7 @@ where ``<path to ouster_example>`` is the location of the ``ouster_example`` sou
 CMake build script supports several optional flags::
 
     -DBUILD_VIZ=OFF                      Do not build the sample visualizer
+    -DBUILD_PCAP=ON                      Build pcap tools. Requres libpcap and libtins dev packages
     -DBUILD_SHARED_LIBS                  Build shared libraries (.dylib or .so)
     -DCMAKE_POSITION_INDEPENDENT_CODE    Standard flag for position independent code
 
@@ -142,11 +145,10 @@ Keyboard controls:
     ``p``         Increase point size
     ``o``         Decrease point size
     ``m``         Cycle point cloud coloring mode
-    ``v``         Toggle color cycling in range image
+    ``v``         Toggle range cycling
     ``n``         Toggle display near-IR image from the sensor
-    ``r``         Toggle auto-rotating
     ``shift + r`` Reset camera
-    ``e``         Change range and signal image size
+    ``e``         Change size of displayed 2D images
     ``;``         Increase spacing in range markers
     ``'``         Decrease spacing in range markers
     ``r``         Toggle auto rotate
@@ -180,9 +182,9 @@ Building
 The build dependencies include those of the sample code::
 
     sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev libtins-dev libpcap-dev
+         libjsoncpp-dev libtclap-dev
 
-and, additionally::
+Additionally, you should install the ros dependencies::
 
     sudo apt install ros-<ROS-VERSION>-ros-core ros-<ROS-VERSION>-pcl-ros \
          ros-<ROS-VERSION>-tf2-geometry-msgs ros-<ROS-VERSION>-rviz
@@ -191,6 +193,7 @@ where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``.
 
 
 Alternatively, if you would like to install dependencies with `rosdep`::
+
     rosdep install --from-paths <path to ouster example>
 
 To build::
@@ -226,14 +229,14 @@ where:
 
 * ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor
 * ``<udp data destination>`` is the hostname or IP to which the sensor should send data
-* ``<path to metadata json>`` is an optional path to json file to save calibration metadata
+* ``<path to metadata json>`` is the path to the json file to which to save calibration metadata
 * ``<lidar mode>`` is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or ``2048x10``, and
 * ``<viz>`` is either ``true`` or ``false``: if true, a window should open and start displaying data
   after a few seconds.
 
-Note that if the ``metadata`` parameter is not specified, this command will write metadata to
-``${ROS_HOME}``. By default, the name of this file is based on the hostname of the sensor, e.g.
-``os-99xxxxxxxxxx.json``.
+Note that by default the working directory of all ROS nodes is set to ``${ROS_HOME}``, generally
+``$HOME/.ros``, so if ``metadata`` is a relative path, it will write to that path inside
+``${ROS_HOME}``. To avoid this, you can provide an absolute path to ``metadata``.
 
 Recording Data
 --------------
@@ -245,10 +248,10 @@ another terminal, run::
 
 This will save a bag file of recorded data in the current working directory. 
 
-You should copy and save the metadata file alongside your data. The metadata file be saved either at
-the provided path to `roslaunch` or at ``$(ROS_HOME)/<sensor_hostname>.json`` if you did not provide
-a metadata argument to `roslaunch`. If you do not save the metadata file, you will not be able to
-replay your data later.
+You should copy and save the metadata file alongside your data. The metadata file will be saved at
+the provided path to `roslaunch`. If you run the node and cannot find the metadata file, try looking
+inside your ``${ROS_HOME}``, generally ``$HOME/.ros``. Regardless, you must retain the metadata
+file, as you will not be able to replay your data later without it.
 
 .. _rosbag record: https://wiki.ros.org/rosbag/Commandline#rosbag_record
 
@@ -269,16 +272,11 @@ to obtain the metadata file when recording your data.
 
 .. _rosbag play: https://wiki.ros.org/rosbag/Commandline#rosbag_play
 
-Visualizing Data in Rviz
-------------------------
 
-To display sensor output using built-in ROS tools (rviz), follow the instructions above for running
-the example ROS code with a sensor or recorded data. Then, run::
+Ouster Python SDK
+=================
 
-    rviz -d ouster_example/ouster_ros/viz.rviz
-
-in another terminal with the ROS environment set up. To view lidar signal, near-IR, and range
-images, add ``image:=true`` to the ``roslaunch`` command above.
+Python SDK users should proceed straight to the `Ouster python SDK homepage <python/>`_.
 
 
 Additional Information

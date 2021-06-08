@@ -24,8 +24,8 @@ copyright = '2021, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-release = '0.2.0'
-version = '0.2.0'
+release = '0.2.1'
+version = '0.2.1'
 
 
 # -- General configuration ---------------------------------------------------
@@ -40,6 +40,8 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx_autodoc_typehints',
     'sphinx_rtd_theme',
+    'sphinx_copybutton',
+    'sphinx_tabs.tabs',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -121,3 +123,11 @@ napoleon_numpy_docstring = False
 todo_include_todos = True
 todo_link_only = True
 todo_emit_warnings = True
+
+# copybutton configs
+# Note: last entry treats four spaces as a prompt to support "continuation lines"
+copybutton_prompt_text = r'>>> |\.\.\. |\$ |PS > |C:\\> |> |    '
+copybutton_prompt_is_regexp = True
+
+# tabs behavior
+sphinx_tabs_disable_tab_closing = True

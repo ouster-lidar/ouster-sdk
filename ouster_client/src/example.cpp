@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
     // azimuth_window config param reduce the amount of valid columns per scan
     // that we will receive
     int column_window_length =
-        std::abs(column_window.second - column_window.first) + 1;
+        (column_window.second - column_window.first + w) % w + 1;
 
     std::cerr << "  Firmware version:  " << info.fw_rev
               << "\n  Serial number:     " << info.sn

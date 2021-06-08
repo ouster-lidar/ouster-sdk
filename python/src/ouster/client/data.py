@@ -17,8 +17,9 @@ class ImuPacket:
     """Read IMU Packet data from a bufer."""
     _pf: _client.PacketFormat
     _data: np.ndarray
+    capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo) -> None:
+    def __init__(self, data: BufferT, info: SensorInfo, timestamp: Optional[float] = None) -> None:
         """
         Args:
             data: Buffer containing the packet payload
@@ -33,6 +34,8 @@ class ImuPacket:
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
                                    count=self._pf.imu_packet_size)
+
+        self.capture_timestamp = timestamp
 
     @property
     def sys_ts(self) -> int:
@@ -107,8 +110,9 @@ class LidarPacket:
     _pf: _client.PacketFormat
     _data: np.ndarray
     _column_bytes: int
+    capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo) -> None:
+    def __init__(self, data: BufferT, info: SensorInfo, timestamp: Optional[float] = None) -> None:
         """
         This will always alias the supplied buffer-like object. Pass in a copy
         to avoid unintentional aliasing.
@@ -128,6 +132,7 @@ class LidarPacket:
         self._column_bytes = LidarPacket._COL_PREAMBLE_BYTES + \
             (LidarPacket._PIXEL_BYTES * self._pf.pixels_per_column) + \
             LidarPacket._COL_FOOTER_BYTES
+        self.capture_timestamp = timestamp
 
     def field(self, field: ChanField) -> np.ndarray:
         """Create a view of the specified channel field.
@@ -200,18 +205,17 @@ class LidarScan:
             column_window: metadata.format.column_window if it's not default
                 to full scan
         """
-        if column_window:
-            win_start, win_end = column_window
-            if win_start < win_end:
-                return (self.header(ColHeader.STATUS)[win_start:win_end +
-                                                      1] == 0xFFFFFFFF).all()
-            else:
-                valid = (self.header(
-                    ColHeader.STATUS)[win_start:] == 0xFFFFFFFF).all()
-                valid = valid and (self.header(ColHeader.STATUS)[:win_end + 1]
-                                   == 0xFFFFFFFF).all()
-                return valid
-        return (self.header(ColHeader.STATUS) == 0xFFFFFFFF).all()
+        if column_window is None:
+            column_window = (0, self.w - 1)
+
+        win_start, win_end = column_window
+        status = self.header(ColHeader.STATUS)
+
+        if win_start <= win_end:
+            return (status[win_start:win_end + 1] == 0xFFFFFFFF).all()
+        else:
+            return ((status[:win_end + 1] == 0xFFFFFFFF).all()
+                    and (status[win_start:] == 0xFFFFFFFF).all())
 
     def field(self, field: ChanField) -> np.ndarray:
         """Return a view of the specified channel field."""
@@ -315,15 +319,18 @@ def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
     """Return a function that can project scans into cartesian coordinates.
 
     Internally, this will pre-compute a lookup table using the supplied
-    intrinsic parameters. XYZ points are returned as a H * W x 3 array of
+    intrinsic parameters. XYZ points are returned as a H x W x 3 array of
     doubles, where H is the number of beams and W is the horizontal resolution
     of the scan.
+
+    The coordinates are reported in meters in the *sensor frame* as
+    defined in the sensor documentation.
 
     Args:
         info: sensor metadata
 
     Returns:
-        A function that computes a numpy array of a scan's point coordinates in meters
+        A function that computes a numpy array of a scan's point coordinates
     """
     lut = _client.XYZLut(info)
 

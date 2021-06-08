@@ -114,6 +114,7 @@ def test_optional_config() -> None:
     assert config.operating_mode is None
     assert config.phase_lock_enable is None
     assert config.phase_lock_offset is None
+    assert config.signal_multiplier is None
     assert config.sync_pulse_out_pulse_width is None
     assert config.sync_pulse_out_frequency is None
     assert config.sync_pulse_in_polarity is None
@@ -138,6 +139,7 @@ def test_write_config() -> None:
     config.operating_mode = client.OperatingMode.OPERATING_STANDBY
     config.phase_lock_enable = True
     config.phase_lock_offset = 180000
+    config.signal_multiplier = 2
     config.sync_pulse_out_pulse_width = 5
     config.sync_pulse_out_frequency = 2
     config.sync_pulse_in_polarity = client.Polarity.POLARITY_ACTIVE_HIGH
@@ -167,6 +169,7 @@ def complete_config_string() -> str:
         "operating_mode": "NORMAL",
         "phase_lock_enable": false,
         "phase_lock_offset": 0,
+        "signal_multiplier": 2,
         "sync_pulse_in_polarity": "ACTIVE_HIGH",
         "sync_pulse_out_angle": 360,
         "sync_pulse_out_frequency": 1,
@@ -194,6 +197,7 @@ def test_read_config(complete_config_string: str) -> None:
     assert config.operating_mode == client.OperatingMode.OPERATING_NORMAL
     assert config.phase_lock_enable is False
     assert config.phase_lock_offset == 0
+    assert config.signal_multiplier == 2
     assert config.sync_pulse_out_pulse_width == 10
     assert config.sync_pulse_out_frequency == 1
     assert config.sync_pulse_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH

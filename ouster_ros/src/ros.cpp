@@ -4,7 +4,6 @@
 #include <ros/ros.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_eigen/tf2_eigen.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <cassert>
 #include <chrono>

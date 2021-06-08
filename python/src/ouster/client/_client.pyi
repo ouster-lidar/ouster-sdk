@@ -135,6 +135,9 @@ class SensorInfo:
     def __eq__(self, other: object) -> bool:
         ...
 
+    def __copy__(self) -> SensorInfo:
+        ...
+
 
 class DataFormat:
     columns_per_frame: int
@@ -431,6 +434,7 @@ class SensorConfig:
     operating_mode: Optional[OperatingMode]
     multipurpose_io_mode: Optional[MultipurposeIOMode]
     azimuth_window: Optional[tuple]
+    signal_multiplier: Optional[int]
     sync_pulse_out_angle: Optional[int]
     sync_pulse_out_pulse_width: Optional[int]
     nmea_in_polarity: Optional[Polarity]
@@ -457,9 +461,14 @@ class SensorConfig:
     def __ne__(self, other: object) -> bool:
         ...
 
+    def __copy__(self) -> SensorConfig:
+        ...
 
-def set_config(hostname: str, config: SensorConfig, persist: bool,
-               udp_dest_auto: bool) -> None:
+
+def set_config(hostname: str,
+               config: SensorConfig,
+               persist: bool = ...,
+               udp_dest_auto: bool = ...) -> None:
     ...
 
 

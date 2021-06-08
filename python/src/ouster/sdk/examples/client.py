@@ -8,8 +8,8 @@ This module has a rudimentary command line interface. For usage, run::
 import argparse
 from contextlib import closing
 
-import numpy as np
 from more_itertools import time_limited
+import numpy as np
 
 from ouster import client
 
@@ -136,8 +136,8 @@ def live_plot_signal(hostname: str, lidar_port: int = 7502) -> None:
             for scan in stream:
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(scan.frame_id))
-                signal = client.destagger(
-                    stream.metadata, scan.field(client.ChanField.SIGNAL))
+                signal = client.destagger(stream.metadata,
+                                          scan.field(client.ChanField.SIGNAL))
                 signal = (signal / np.max(signal) * 255).astype(np.uint8)
                 cv2.imshow("scaled signal", signal)
                 key = cv2.waitKey(1) & 0xFF
