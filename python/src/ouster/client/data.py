@@ -319,15 +319,18 @@ def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
     """Return a function that can project scans into cartesian coordinates.
 
     Internally, this will pre-compute a lookup table using the supplied
-    intrinsic parameters. XYZ points are returned as a H * W x 3 array of
+    intrinsic parameters. XYZ points are returned as a H x W x 3 array of
     doubles, where H is the number of beams and W is the horizontal resolution
     of the scan.
+
+    The coordinates are reported in meters in the *sensor frame* as
+    defined in the sensor documentation.
 
     Args:
         info: sensor metadata
 
     Returns:
-        A function that computes a numpy array of a scan's point coordinates in meters
+        A function that computes a numpy array of a scan's point coordinates
     """
     lut = _client.XYZLut(info)
 

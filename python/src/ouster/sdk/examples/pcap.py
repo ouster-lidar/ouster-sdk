@@ -235,7 +235,7 @@ def pcap_to_csv(source: client.PacketSource,
 def pcap_3d_one_scan(source: client.PacketSource,
                      metadata: client.SensorInfo,
                      num: int = 0) -> None:
-    """Render one scan in Open3D viewer from pcap file.
+    """Render one scan from a pcap file in the Open3D viewer.
 
     Args:
         pcap_path: path to the pcap file
@@ -251,7 +251,7 @@ def pcap_3d_one_scan(source: client.PacketSource,
         print(f"ERROR: Scan # {num} in not present in pcap file")
         exit(1)
 
-    # [doc-etag-open3d-one-scan]
+    # [doc-stag-open3d-one-scan]
     # compute point cloud using client.SensorInfo and client.LidarScan
     xyz = client.XYZLut(metadata)(scan)
 
@@ -259,6 +259,7 @@ def pcap_3d_one_scan(source: client.PacketSource,
     cloud = o3d.geometry.PointCloud(
         o3d.utility.Vector3dVector(xyz.reshape((-1, 3))))
     axes = o3d.geometry.TriangleMesh.create_coordinate_frame(1.0)
+    # [doc-etag-open3d-one-scan]
 
     # initialize visualizer and rendering options
     vis = o3d.visualization.Visualizer()
@@ -279,7 +280,6 @@ def pcap_3d_one_scan(source: client.PacketSource,
     print("Press Q or Excape to exit")
     vis.run()
     vis.destroy_window()
-    # [doc-etag-open3d-one-scan]
 
 
 def main():

@@ -15,12 +15,12 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
         $ python3 -m pip install 'ouster-sdk[examples]'
 
     .. code-tab:: console macOS M1
-        
+
         $ arch --x86_64 python3 -m pip install 'ouster-sdk[examples]'
 
     .. code-tab:: powershell Windows x64
@@ -30,38 +30,36 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref
 
 .. note::
 
-   Newer users to Python should create a suitable `venv`_, `activate`_ it, and ensure that they have
-   `upgraded pip`_ once their venv is activated. If you're using venv on Windows, you'll want to use
-   ``python`` and ``pip`` instead of ``py -3`` and ``py -3 -m pip`` in the following Powershell
-   snippets.
+   **Using a virtual environment** is recommended. Users newer to Python should read the official
+   `venv instructions`_ and ensure that they have `upgraded pip`_ once their venv is activated. If
+   you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py -3`` and
+   ``py -3 -m pip`` in the following Powershell snippets.
+
+   **Apple M1 users** should be aware that they will need to prepend all python3 commands with
+   ``arch --x86_64`` when working with ouster-sdk to force macOS to run the intel versions of python
+   as numpy support on native M1 has not arrived yet.
 
 
-
-To check that you've succesfully installed the latest version of the Ouster Python SDK, run:
+To check that you've successfully installed the latest version of the Ouster Python SDK, run the
+following command and make sure that the ``ouster-sdk`` package is included in the output:
 
 .. tabs::
-    
-    .. code-tab:: console Unix/macOS x64
 
-        $ pip3 list
+    .. code-tab:: console Linux/macOS x64
+
+        $ python3 -m pip list
 
     .. code-tab:: console macOS M1
-        
-        $ arch --x86_64 python3 -m pip list 
+
+        $ arch --x86_64 python3 -m pip list
 
     .. code-tab:: powershell Windows x64
 
         PS > py -3 -m pip list
 
 
-.. note::
-
-   To run the example code on Windows 10, you may also find that you need the ``PyQt5`` library.
-
-
 .. _upgraded pip: https://pip.pypa.io/en/stable/installing/#upgrading-pip
-.. _venv: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment
-.. _activate: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#activating-a-virtual-environment
+.. _venv instructions: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment
 
 
 Using this Guide
@@ -74,8 +72,8 @@ To get started, open a new console/Powershell window and start a python interpre
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
-        
+    .. code-tab:: console Linux/macOS x64
+
         $ python3
 
     .. code-tab:: console macOS M1
@@ -84,26 +82,22 @@ To get started, open a new console/Powershell window and start a python interpre
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 
+        PS > py -3
 
-
-In the python session that opens, import the Ouster Python Client:
-
-.. code:: python
-    
-   >>> from ouster import client
 
 Throughout this guide we will indicate console commands with ``$`` and python interpreter commands
 with ``>>>``, just as we have above.
 
-If you'd like to start by working with sample data, continue to the section below. If you'd prefer
-to start capturing data from a sensor, you can skip to `Using an Ouster Sensor`_ below.
+If you'd like to start by working with sample data, continue to the next section. If you'd prefer to
+start capturing data from a sensor, you can skip to `Using an Ouster Sensor`_ below.
 
 
 Using Sample Data
 =================
 
-Download the `OS2 bridge sample data`_ (**1.6 GB**) and unzip the contents. You should have two files:
+Download the `OS2 bridge sample data`_ (**80 MB**) and unzip the contents. To use subsequent code
+snippets as-is you should extract this file into the same directory from which you're running your
+Python interpreter. You should have two files:
 
   * ``OS2_128_bridge_sample.pcap``
   * ``OS2_2048x10_128.json``
@@ -113,28 +107,18 @@ more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Sensor 
 JSON file contains metadata queried from the sensor TCP interface necessary for interpreting
 the packet data.
 
-Let's return to your open sesion of python and change the working directory. Replace
-``<SAMPLE_DATA_DIRECTORY>`` below with the absolute path or relative path to the directory where you
-the unzipped ``pcap`` and ``json`` file are located.
-
-.. code:: python
-
-   >>> import os
-   >>> os.chdir('<SAMPLE_DATA_DIRECTORY>')
-
-Now that's squared away, let's load the files into your python session:
-
 .. code:: python
 
    >>> pcap_path = 'OS2_128_bridge_sample.pcap'
    >>> metadata_path = 'OS2_2048x10_128.json'
 
-
-Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the
-metadata from ``metadata_path`` first:
+You may have do adjust these paths to the directory where the unzipped ``pcap`` and ``json`` file
+are located. Because our pcap file contains the UDP packet stream but not the sensor metadata, we
+load the metadata from ``metadata_path`` first, using the client module:
 
 .. code:: python
- 
+
+   >>> from ouster import client
    >>> with open(metadata_path, 'r') as f:
    ...     metadata = client.SensorInfo(f.read())
 
@@ -174,12 +158,12 @@ should see some output like:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
        $ ping -c1 <SENSOR_HOSTNAME>
        PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
        64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
-    
+
     .. code-tab:: console macOS M1
 
        $ ping -c1 <SENSOR_HOSTNAME>
@@ -193,11 +177,13 @@ should see some output like:
        Reply from 192.0.2.42: bytes=32 time=101ms TTL=124
 
 
-Next, you'll need to configure the sensor with the config parameters. In your open python session:
+Next, you'll need to configure the sensor with the config parameters using the client module. In
+your open python session:
 
 .. code:: python
 
    >>> hostname = '<SENSOR_HOSTNAME>'
+   >>> from ouster import client
    >>> config = client.SensorConfig()
    >>> config.udp_port_lidar = 7502
    >>> config.udp_port_imu = 7503
@@ -205,7 +191,7 @@ Next, you'll need to configure the sensor with the config parameters. In your op
    >>> client.set_config(hostname, config, persist=True, udp_dest_auto = True)
 
 Just like with the sample data, you can create a :py:class:`.PacketSource` from the sensor:
-    
+
 .. code:: python
 
    >>> source = client.Sensor(hostname)
@@ -255,7 +241,7 @@ a column segment of the range data and display the result:
    >>> plt.show()
 
 .. note::
-    
+
     If running ``plt.show`` gives you an error about your Matplotlib backend, you will need a `GUI
     backend`_ such as TkAgg or Qt5Agg in order to visualize your data with matplotlib.
 
@@ -263,12 +249,12 @@ a column segment of the range data and display the result:
 .. figure:: images/brooklyn_bridge_ls_50_range_image.png
     :align: center
     :figwidth: 100%
-   
+
     Range image of OS2 sample data. Data taken at Brooklyn Bridge, NYC.
 
 
 In addition to viewing the data in 2D, we can also plot the results in 3D by projecting the range
-measurements into cartesian coordinates.  To do this, we first create a lookup table, then use it to
+measurements into Cartesian coordinates. To do this, we first create a lookup table, then use it to
 produce X, Y, Z coordinates from our scan data with shape (H x W x 3):
 
 .. code:: python
@@ -294,7 +280,8 @@ Now we rearrange the resulting numpy array into a shape that's suitable for plot
 
 You should be able to rotate the resulting scene to view it from different angles.
 
-To learn more about manipulating lidar data, see :ref:`ex-staggered-and-destaggered`, :ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
+To learn more about manipulating lidar data, see :ref:`ex-staggered-and-destaggered`,
+:ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
 
 .. figure:: images/brooklyn_bridge_ls_50_xyz_cut.png
    :align: center
@@ -324,4 +311,3 @@ Here are a few things you might be interested in:
     * :ref:`ex-pcap-to-csv`
     * :ref:`ex-open3d`
     * :ref:`ex-imu`
-

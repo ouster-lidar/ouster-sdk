@@ -20,7 +20,7 @@ data. The SDK includes APIs for:
 Supported Platforms
 -------------------
 
-Pre-built binaries are provided on `PyPI <https://pypi.org/project/ouster-sdk/>`_ for x86_64 platforms including:
+Pre-built binaries are provided on `PyPI`_ for x86_64 platforms including:
 
 - Most glibc-based Linux distributions (``manylinux2010_x86_64``)
 - macOS >= 10.13 (``macosx_10_13_x86_64``)
@@ -32,41 +32,19 @@ Building from source is supported on:
 - macOS >= 10.13 (x86-64)
 - Windows 10 (x86-64)
 
-See the `build instructions`_ for requirements needed to build from a source distribution or from a
-clone of the repository.
+.. _PyPI: https://pypi.org/project/ouster-sdk/
 
 
 Installation
 ------------
 
-The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, run:
-
-.. tabs::
-
-    .. code-tab:: console Unix/macOS x64
-
-        $ python3 -m pip install ouster-sdk
-
-    .. code-tab:: console macOS M1
-        
-        $ arch --x86_64 python3 -m pip install ouster-sdk
-
-    .. code-tab:: powershell Windows x64
-
-        PS > py -3 -m pip install ouster-sdk
-
-
-.. note::
-
-    M1 users should be aware that they will need to prepend all python3 commands with ``arch
-    --x86_64`` when working with ouster-sdk to force macOS to run the intel versions of python as
-    numpy support on native M1 has not arrived yet.
-   
+The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, use ``pip`` to grab the
+``ouster-sdk`` package. See the `quick start`_ section of the documentation for more details and to
+begin working with Ouster data!
 
 If you're running ARM, a non-glibc-based linux distribution, or wish to modify the Ouster Python
-SDK, you will need to build from source.
-
-See the `quick start`_ section of the documentation to begin working with Ouster data!
+SDK, you will need to build from source. See the `build instructions`_ for requirements needed to
+build from a source distribution or from a clone of the repository.
 
 .. _quick start: https://static.ouster.dev/sdk-docs/quickstart.html
 .. _build instructions: https://static.ouster.dev/sdk-docs/devel.html

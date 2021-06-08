@@ -133,8 +133,13 @@ setup(
             'sphinx-autodoc-typehints ==1.11.1',
             'sphinx-rtd-theme ==0.5.2',
             'sphinx-copybutton ==0.3.1',
-            'docutils < 0.17',
-            'sphinx-tabs == 3.0.0'
+            'docutils <0.17',
+            'sphinx-tabs ==3.0.0',
+            'open3d',
         ],
-        'examples': ['matplotlib', 'opencv-python', 'open3d'],
+        'examples': [
+            'matplotlib',
+            'opencv-python',
+            'PyQt5; platform_system=="Windows"',
+        ],
     })

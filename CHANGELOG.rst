@@ -2,30 +2,55 @@
 Changelog
 =========
 
+
 [unreleased]
 ============
 
 Added
 -----
-* first release of Python bindings for the provided C++ code. See the README under the ``python``
-  directory for details and links to documentation
-* early version of a C++ API covering the full sensor configuration interface
-* preliminary C++ API for working with pcap files containing a single sensor packet capture
-* support for signal multiplier config parameter
-
+* [python] first release of Python bindings for the provided C++ code. See the README under the
+  ``python`` directory for details and links to documentation (ouster-sdk 0.2.0)
+* [python] added an example for visualization using open3d (ouster-sdk 0.2.1)
+* [python] add support for signal multiplier config param (ouster-sdk 0.2.1)
+* [python] preserve capture timestamps on packets read from pcaps (ouster-sdk 0.2.1)
+* [ouster_client] early version of a C++ API covering the full sensor configuration interface
+* [ouster_pcap] preliminary C++ API for working with pcap files containing a single sensor packet
+  capture
+* [ouster_ros] Dockerfile to easily set up a build environment
 
 Changed
 -------
 
-* reflectivity visualization for changes in the upcoming 2.1 firmware
-* moved most of the visualizer code out of public headers and hid some implementation details
-* removed viz_node from ouster_ros and moved image_processing to ouster_client
-* require metadata argument to ouster_ros launch file
+* [ouster_viz] reflectivity visualization for changes in the upcoming 2.1 firmware
+* [ouster_viz] moved most of the visualizer code out of public headers and hid some implementation
+  details
+* [ouster_ros] require metadata argument to ouster_ros launch file
+* [ouster_ros] ``img_node`` now outputs 16-bit images, which should be more useful. Range image
+  output is now in units of 4mm instead of arbitrary scaling.
+* [ouster_ros] ``img_node`` now outputs reflectivity images as well
+* [ouster_client] increase default initialization timeout to 60 seconds to account for waking up
+  from STANDBY
+* [ouster_pcap] require passing in a capture timestamp instead of always using current time when
+  recording packets
+
+Removed
+-------
+
+* [ouster_ros] removed viz_node and all graphics stack dependencies from the package. The ``viz``
+  flag on the launch file now runs rviz
 
 Fixed
 -----
 
-* visualizer bug causing a small viewport when resizing the window on macos with a retina display
+* [ouster_viz] visualizer bug causing a small viewport when resizing the window on macos with a
+  retina display
+* [ouster_ros] clean up package.xml and ensure that dependencies are installable with rosdep
+* [ouster_ros] update rviz config to use flat squares by default to work around `a bug on intel
+  systems <https://github.com/ros-visualization/rviz/issues/1508>`_
+* [python] bug in determining if a scan is complete with single-column azimuth windows (0.2.1)
+* [python] closed PacketSource iterators will now raise an exception on read (0.2.1)
+* [ouster_pcap] capture timestamps for pcaps recorded on Windows are always zero
+
 
 [20201209]
 ==========
@@ -49,6 +74,7 @@ Changed
   fields. See ``lidar_scan.h`` for API docs
 * add client version field to metadata json, logs, and help text
 * client API renaming to better reflect the Sensor Software Manual
+
 
 [1.14.0-beta.14] - 2020-08-27
 =============================
@@ -82,15 +108,18 @@ Fixed
 * the reference frame of point cloud topics in ``ouster_ros`` is now correctly reported as the "sensor
   frame" defined in the user guide
 
+
 [1.14.0-beta.12] - 2020-07-10
 =============================
 
 *no changes*
 
+
 [1.14.0-beta.11] - 2020-06-17
 =============================
 
 *no changes*
+
 
 [1.14.0-beta.10] - 2020-05-21
 =============================
@@ -120,6 +149,7 @@ Fixed
   origin offset
 * minor regression with destaggering in img_node output in previous beta
 
+
 [1.14.0-beta.4] - 2020-03-17
 ============================
 
@@ -136,6 +166,7 @@ Changed
 -------
 
 * use random ports for lidar and imu data by default when unspecified
+
 
 [1.13.0] - 2020-03-16
 =====================
@@ -160,6 +191,7 @@ Fixed
 * use correct name for json dependency in ``package.xml`` (PR #116)
 * handle udp socket creation error gracefully in client
 
+
 [1.12.0] - 2019-05-02
 =====================
 
@@ -179,6 +211,7 @@ Fixed
 
 * visualizer issue where the point cloud would occasionally occasionally not be displayed using
   newer versions of Eigen
+
 
 [1.11.0] - 2019-03-26
 =====================
@@ -201,6 +234,7 @@ Fixed
 * bug causing ring and reflectivity to be corrupted in os1_cloud_node output
 * misplaced sine in azimuth angle calculation (addresses #42)
 * populate timestamps on image node output (addresses #39)
+
 
 [1.10.0] - 2019-01-27
 =====================

@@ -20,19 +20,19 @@ Obtaining Sensor Metadata
 =========================
 
 Ouster sensors require metadata to interpret the readings of the sensor. Represented by the object
-:py:class:`.SensorInfo`, its fields include configuration parameters such as 
-``lidar_mode`` and and sensor intrinsics like ``beam_azimuth_angles``.
+:py:class:`.SensorInfo`, its fields include configuration parameters such as ``lidar_mode`` and
+sensor intrinsics like ``beam_azimuth_angles``.
 
 When you work with a sensor, the client will automatically fetch the metadata. Recorded
 ``pcaps``, however, must always be accompanied by a ``json`` file containing the metadata of the
-sensor as it was running when the data was recorded. 
+sensor as it was running when the data was recorded.
 
 Since it's crucial to save the correct metadata file, let's see how we can get that from a sensor.
 Try running the following example:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
 
@@ -140,7 +140,7 @@ This image now makes visual sense, and we can easily use this data in common vis
     By the way, you can view this particular scene in both 2D and 3D at Ouster's `Web Slam`_! Use
     your mouse to click and move the 3D scene, and the listed controls to rotate between different
     destaggered image views. The video at the bottom shows the registered point clouds of our
-    internal SLAM algorithm. 
+    internal SLAM algorithm.
 
 .. _Web Slam: https://webslam.ouster.dev/slam/1610482355.9361048.rVdW_dgws/
 
@@ -148,18 +148,18 @@ This image now makes visual sense, and we can easily use this data in common vis
 .. _ex-xyzlut:
 
 
-Working with 3D Points and the XYZLut
+Projecting into Cartesian Coordinates
 =====================================
 
-To facilitate working with 3D points, you can create a function via :py:func:`.client.XYZLut` which
-will project any :py:class:`.LidarScan` into cartesian coordinates by referencing a precalculated XYZ
-Look-uptable. This function can then be applied to any scan to create a numpy array of ``H x W x
-3``, which represents the cartesian coordintes of the points in the sensor coordinate frame.
+To facilitate working with 3D points, you can call :py:func:`.client.XYZLut` to create a function
+which will project a :py:class:`.LidarScan` into Cartesian coordinates using a precomputed lookup
+table. The result of calling this function will be a point cloud represented as a numpy array. See
+the API documentation for :py:func:`.client.XYZLut` for more details.
 
 .. literalinclude:: /../src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-plot-xyz-points]
     :end-before: [doc-etag-plot-xyz-points]
-    :emphasize-lines: 2-5
+    :emphasize-lines: 2-3
     :linenos:
     :dedent:
 
@@ -167,7 +167,7 @@ If you have a sensor, you can run this code with one of our examples:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
 
@@ -186,7 +186,7 @@ If you don’t have a sensor, you can run this code with our pcap examples:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
         $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
 
@@ -210,6 +210,7 @@ Also check out a more powerful way of visualizing ``xyz`` 3d points with :ref:`e
 
 
 .. _ex-correlating-2d-and-3d:
+
 
 Working with 2D and 3D Representations Simultaneously
 =====================================================
@@ -242,16 +243,16 @@ If you have a sensor, you can run this code with an example:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
-    
+    .. code-tab:: console Linux/macOS x64
+
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
     .. code-tab:: console macOS M1
-    
+
         $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
     .. code-tab:: powershell Windows x64
-    
+
         PS > python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
 .. _ex-streaming:
@@ -265,16 +266,16 @@ a live feed from the sensor:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
-    
+    .. code-tab:: console Linux/macOS x64
+
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
 
     .. code-tab:: console macOS M1
-    
+
         $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
 
     .. code-tab:: powershell Windows x64
-    
+
         PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
 
 This should give you a live feed from your sensor that looks like a black and white moving image.
@@ -307,7 +308,7 @@ with the following example:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
 
@@ -339,7 +340,7 @@ module.
 .. _ex-pcap-live-preview:
 
 
-Pcap Live Data Preview
+PCAP Live Data Preview
 =======================
 
 We can easily view the data that was recorded in the previous section. Based on an example from
@@ -349,7 +350,7 @@ the following command:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
         $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
 
@@ -367,7 +368,7 @@ Or substitute example data with pcap and json that you just recorded.
 .. _ex-pcap-to-csv:
 
 
-Pcap to CSV
+Converting PCAPs to CSV
 =======================
 
 Sometimes we want to get a point cloud (``XYZ`` + other fields) as a ``CSV`` file for further
@@ -377,7 +378,7 @@ To convert the first ``5`` scans of our sample data from a pcap file, you can tr
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
         $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
 
@@ -421,29 +422,49 @@ Check :func:`.examples.pcap.pcap_to_csv` documentation for further details.
 .. _ex-open3d:
 
 
-Open3D as Point Cloud Visualiser
-=================================
+Visualization with Open3d
+=========================
 
-The :mod:`.examples.open3d` module contains a basic visualizer built using the Open3d library, which
-can be used to replay pcap files or visualize a running sensor. The bulk of the visualizer is
-implemented in the :func:`.examples.open3d.viewer_3d` function.
+The `Open3d library`_ contains Python bindings for a variety of tools for working with point cloud
+data. Loading data into Open3d is just a matter of reshaping the numpy representation of a point
+cloud, as demonstrated in the :func:`.examples.pcap.pcap_3d_one_scan` example:
+
+.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+    :start-after: [doc-stag-open3d-one-scan]
+    :end-before: [doc-etag-open3d-one-scan]
+    :emphasize-lines: 1-6
+    :linenos:
+    :dedent:
+
+The :mod:`.examples.open3d` module contains a more fully-featured visualizer built using the Open3d
+library, which can be used to replay pcap files or visualize a running sensor. The bulk of the
+visualizer is implemented in the :func:`.examples.open3d.viewer_3d` function.
+
+.. note::
+
+   You'll have to install the `Open3d package`_ from PyPI to run this example. Note that as of
+   version ``0.13.0``, binaries are not yet provided for Python 3.9 or ARM systems.
+
 
 As an example, you can view frame ``84`` from the sample data by running the following command:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
-       $ python3 -m ouster.sdk.examples.open3d --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
-     
+       $ python3 -m ouster.sdk.examples.open3d \
+           --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
+
     .. code-tab:: console macOS M1
 
-       $ arch --x86_64 python3 -m ouster.sdk.examples.open3d --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
+       $ arch --x86_64 python3 -m ouster.sdk.examples.open3d \
+           --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
 
     .. code-tab:: powershell Windows x64
 
-       PS > py -3 -m ouster.sdk.examples.open3d --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
-    
+       PS > py -3 -m ouster.sdk.examples.open3d ^
+           --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
+
 You may also want to try the ``--sensor`` option to display the output of a running sensor. Use the
 ``-h`` flag to see a full list of command line options and flags.
 
@@ -479,6 +500,8 @@ All of the visualizer controls are listed in the table below:
      - Pan the camera laterally
    * - **Shift + left click + drag**
      - Roll the camera
+   * - **"+" / "-"**
+     - Increase or decrease point sizes
    * - **Spacebar**
      - Pause or resume playback
    * - **"M"**
@@ -486,11 +509,15 @@ All of the visualizer controls are listed in the table below:
    * - **Right arrow key**
      - When reading a pcap, jump 10 frames forward
 
+.. _Open3d library: http://www.open3d.org/
+.. _Open3d package: https://pypi.org/project/open3d/
+
 .. _ex-imu:
 
 
-Working with IMU data from the Ouster sensor
+Working with IMU data from the Ouster Sensor
 ============================================
+
 IMU data from the Ouster sensor can be read as :py:class:`~.client.ImuPacket`. Let's do something
 easy, like graph the acceleration in z direction over time. Let's look at some code:
 
@@ -500,13 +527,14 @@ easy, like graph the acceleration in z direction over time. Let's look at some c
     :emphasize-lines: 4-6
     :linenos:
 
-Like other ``Packets``, we'll want to get them from a :py:class:`.PacketSource`. After getting ``imu_packet_list``, we obtain the ``sys_ts`` and ``z`` part of ``accel`` and plot them.
+Like other ``Packets``, we'll want to get them from a :py:class:`.PacketSource`. After getting
+``imu_packet_list``, we obtain the ``sys_ts`` and ``z`` part of ``accel`` and plot them.
 
 If you have a sensor, you can run the code above with the ``plot-imu-z-accel`` example:
 
 .. tabs::
 
-    .. code-tab:: console Unix/macOS x64
+    .. code-tab:: console Linux/macOS x64
 
        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
 

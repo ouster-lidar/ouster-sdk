@@ -125,7 +125,8 @@ todo_link_only = True
 todo_emit_warnings = True
 
 # copybutton configs
-copybutton_prompt_text = r'>>> |\.\.\. |\$ |PS > |C:\\> |> '
+# Note: last entry treats four spaces as a prompt to support "continuation lines"
+copybutton_prompt_text = r'>>> |\.\.\. |\$ |PS > |C:\\> |> |    '
 copybutton_prompt_is_regexp = True
 
 # tabs behavior

@@ -46,16 +46,16 @@ RUN set -xe \
 && mkdir src \
 && ln -s ${OUSTER_SDK_PATH} ./src
 
+
+FROM build-env
+
+RUN /opt/ros/${ROS_DISTRO}/env.sh catkin_make -DCMAKE_BUILD_TYPE=Release
+
 # Entrypoint for running Ouster ros:
 #
-# Usage: docker run --rm -it ouster-ros [COMMAND ..]
-#
-# Without any arguments: run a shell in the build environment. Any arguments are
-# interpreted as a command to run instead.
+# Usage: docker run --rm -it ouster-ros [ouster.launch parameters ..]
 #
 ENTRYPOINT ["bash", "-c", "set -e \
-&& . /opt/ros/${ROS_DISTRO}/setup.bash \
-&& exec \"$@\" \
+&& . ./devel/setup.bash \
+&& roslaunch ouster_ros ouster.launch \"$@\" \
 ", "ros-entrypoint"]
-
-CMD ["/bin/bash"]
