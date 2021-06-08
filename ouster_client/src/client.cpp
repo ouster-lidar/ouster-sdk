@@ -133,7 +133,7 @@ SOCKET udp_data_socket(int port) {
     return sock_fd;
 }
 
-SOCKET cfg_socket(const char* addr) {
+SOCKET cfg_socket(const char* addr, int timeout_ms) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
@@ -142,11 +142,11 @@ SOCKET cfg_socket(const char* addr) {
 
     int ret = getaddrinfo(addr, "7501", &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "getaddrinfo: " << gai_strerror(ret) << std::endl;
+        std::cerr << "cfg getaddrinfo(): " << gai_strerror(ret) << std::endl;
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "getaddrinfo: empty result" << std::endl;
+        std::cerr << "cfg getaddrinfo(): empty result" << std::endl;
         return SOCKET_ERROR;
     }
 
@@ -154,7 +154,7 @@ SOCKET cfg_socket(const char* addr) {
     for (ai = info_start; ai != NULL; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (!impl::socket_valid(sock_fd)) {
-            std::cerr << "socket: " << impl::socket_get_error() << std::endl;
+            std::cerr << "cfg socket(): " << impl::socket_get_error() << std::endl;
             continue;
         }
 
@@ -168,6 +168,13 @@ SOCKET cfg_socket(const char* addr) {
 
     freeaddrinfo(info_start);
     if (ai == NULL) {
+        return SOCKET_ERROR;
+    }
+
+
+    if (!impl::socket_valid(impl::socket_set_rcvtimeout(sock_fd, timeout_ms))) {
+        std::cerr << "cfg socket_set_rcvtimeout:" << impl::socket_get_error() << std::endl;
+        impl::socket_close(sock_fd);
         return SOCKET_ERROR;
     }
 
@@ -194,6 +201,7 @@ bool do_tcp_cmd(SOCKET sock_fd, const std::vector<std::string>& cmd_tokens,
     do {
         len = recv(sock_fd, read_buf.get(), max_res_len, 0);
         if (len < 0) {
+            std::cerr << "do_tcp_cmd recv(): No response to TCP command (" << impl::socket_get_error() << ")" << std::endl;
             return false;
         }
         read_buf.get()[len] = '\0';
@@ -202,7 +210,6 @@ bool do_tcp_cmd(SOCKET sock_fd, const std::vector<std::string>& cmd_tokens,
 
     res = read_ss.str();
     res.erase(res.find_last_not_of(" \r\n\t") + 1);
-
     return true;
 }
 
@@ -413,13 +420,13 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
 }  // namespace
 
 bool get_config(const std::string& hostname, sensor_config& config,
-                bool active) {
+                bool active, int cfg_timeout_ms) {
     Json::CharReaderBuilder builder{};
     auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
     Json::Value root{};
     std::string errors{};
 
-    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    SOCKET sock_fd = cfg_socket(hostname.c_str(), cfg_timeout_ms);
     if (sock_fd < 0) return false;
 
     std::string res;
@@ -438,9 +445,9 @@ bool get_config(const std::string& hostname, sensor_config& config,
 }
 
 bool set_config(const std::string& hostname, const sensor_config& config,
-                uint8_t config_flags) {
+                uint8_t config_flags, int cfg_timeout_ms) {
     // open socket
-    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    SOCKET sock_fd = cfg_socket(hostname.c_str(), cfg_timeout_ms);
     if (sock_fd < 0) return false;
 
     std::string res;
@@ -463,9 +470,9 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     return success;
 }
 
-std::string get_metadata(client& cli, int timeout_sec) {
+std::string get_metadata(client& cli, int timeout_sec, int cfg_timeout_ms) {
     if (!cli.meta) {
-        SOCKET sock_fd = cfg_socket(cli.hostname.c_str());
+        SOCKET sock_fd = cfg_socket(cli.hostname.c_str(), cfg_timeout_ms);
         if (sock_fd < 0) return "";
 
         bool success =
@@ -501,7 +508,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
-                                    int timeout_sec) {
+                                    int timeout_sec, int cfg_timeout_ms) {
     auto cli = init_client(hostname, lidar_port, imu_port);
     if (!cli) return std::shared_ptr<client>();
 
@@ -511,7 +518,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     if (!impl::socket_valid(lidar_port) || !impl::socket_valid(imu_port))
         return std::shared_ptr<client>();
 
-    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    SOCKET sock_fd = cfg_socket(hostname.c_str(), cfg_timeout_ms);
     if (!impl::socket_valid(sock_fd)) return std::shared_ptr<client>();
 
     std::string res;

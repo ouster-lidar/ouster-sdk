@@ -38,6 +38,7 @@
 #endif
 
 #define SOCKET_ERROR -1
+#define SOCKET_SUCCESS 0
 
 #endif  // --------- End Platform Differentiation Block ---------
 
@@ -62,7 +63,7 @@ std::string socket_get_error();
  * @param sock The socket file descriptor to check
  * @return The validity of the socket file descriptor
  */
-bool socket_valid(SOCKET value);
+bool socket_valid(SOCKET sock);
 
 /**
  * Check if the last error was a socket exit event
@@ -75,14 +76,23 @@ bool socket_exit();
  * @param sock The socket file descriptor to set non-blocking
  * @return success
  */
-int socket_set_non_blocking(SOCKET value);
+int socket_set_non_blocking(SOCKET sock);
 
 /**
  * Set a specified socket to reuse
  * @param sock The socket file descriptor to set reuse
  * @return success
  */
-int socket_set_reuse(SOCKET value);
+int socket_set_reuse(SOCKET sock);
+
+/**
+ * Set a specified socket's receive timeout
+ * @param sock The socket file descriptor to add timeout
+ * @param timeout_ms The timeout, in milliseconds
+ * A timeout of zero will be ignored
+ * @return success
+ */
+int socket_set_rcvtimeout(SOCKET sock, int timeout_ms);
 
 }  // namespace impl
 }  // namespace ouster

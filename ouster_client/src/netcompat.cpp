@@ -73,22 +73,34 @@ bool socket_exit() {
 #endif
 }
 
-int socket_set_non_blocking(SOCKET value) {
+int socket_set_non_blocking(SOCKET sock) {
 #ifdef _WIN32
     u_long non_blocking_mode = 0;
-    return ioctlsocket(value, FIONBIO, &non_blocking_mode);
+    return ioctlsocket(sock, FIONBIO, &non_blocking_mode);
 #else
-    return fcntl(value, F_SETFL, fcntl(value, F_GETFL, 0) | O_NONBLOCK);
+    return fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
 #endif
 }
 
-int socket_set_reuse(SOCKET value) {
+int socket_set_reuse(SOCKET sock) {
 #ifdef _WIN32
     u_long reuse = 1;
-    return ioctlsocket(value, SO_REUSEADDR, &reuse);
+    return ioctlsocket(sock, SO_REUSEADDR, &reuse);
 #else
     int option = 1;
-    return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+    return setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+#endif
+}
+
+int socket_set_rcvtimeout(SOCKET sock, int timeout_ms) {
+#ifdef _WIN32
+    DWORD timeout = timeout_ms;
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof timeout);
+#else
+    struct timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = 1000*(timeout_ms % 1000) ;
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 #endif
 }
 
