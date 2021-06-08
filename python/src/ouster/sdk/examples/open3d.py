@@ -159,6 +159,8 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
         if action == 1:
             print("Skipping forward 10 frames")
             scan = nth(scans_iter, 10)
+            if scan is None:
+                raise StopIteration
             update_data(vis)
 
     # create geometries
