@@ -8,8 +8,8 @@
   <arg name="lidar_mode" default="" doc="resolution and rate: either 512x10, 512x20, 1024x10, 1024x20, or 2048x10"/>
   <arg name="timestamp_mode" default="" doc="method used to timestamp measurements: TIME_FROM_INTERNAL_OSC, TIME_FROM_SYNC_PULSE_IN, TIME_FROM_PTP_1588"/>
   <arg name="metadata" default="" doc="override default metadata file for replays"/>
-  <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
-  <arg name="image" default="false" doc="publish range/intensity/ambient image topic"/>
+  <arg name="viz" default="false" doc="whether to run a rviz"/>
+  <arg name="rviz_config" default="-d $(find ouster_ros)/viz.rviz" doc="optional rviz config file"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
 
   <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" required="true">
@@ -30,12 +30,8 @@
     <param name="~/tf_prefix" value="$(arg tf_prefix)"/>
   </node>
 
-  <node if="$(arg viz)" pkg="ouster_ros" name="viz_node" type="viz_node" output="screen" required="true">
-    <remap from="~/os_config" to="/os_node/os_config"/>
-    <remap from="~/lidar_packets" to="/os_node/lidar_packets"/>
-  </node>
-
-  <node if="$(arg image)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
+  <node if="$(arg viz)" pkg="rviz" name="rviz" type="rviz" args="$(arg rviz_config)" output="screen" required="true" />
+  <node if="$(arg viz)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
     <remap from="~/os_config" to="/os_node/os_config"/>
     <remap from="~/points" to="/os_cloud_node/points"/>
   </node>

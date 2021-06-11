@@ -58,6 +58,11 @@ class CMakeBuild(build_ext):
         if toolchain:
             cmake_args += ['-DCMAKE_TOOLCHAIN_FILE=' + toolchain]
 
+        # specify VCPKG triplet in env
+        triplet = env.get('VCPKG_TARGET_TRIPLET')
+        if triplet:
+            cmake_args += ['-DVCPKG_TARGET_TRIPLET=' + triplet]
+
         # use sdk path from env or location in sdist
         sdk_path = env.get('OUSTER_SDK_PATH')
         sdist_sdk_path = os.path.join(ext.sourcedir, "sdk")
@@ -92,7 +97,7 @@ class SDKDist(sdist):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.2.0',
+    version='0.2.1',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
@@ -121,13 +126,20 @@ setup(
     extras_require={
         'test': ['pytest', 'tox'],
         'dev': [
-            'flake8', 'future', 'mypy', 'pyls-mypy', 'python-language-server',
-            'yapf'
+            'flake8', 'future', 'mypy', 'mypy-ls', 'python-lsp-server', 'yapf'
         ],
         'docs': [
             'Sphinx >=3.5',
             'sphinx-autodoc-typehints ==1.11.1',
             'sphinx-rtd-theme ==0.5.2',
+            'sphinx-copybutton ==0.3.1',
+            'docutils <0.17',
+            'sphinx-tabs ==3.0.0',
+            'open3d',
         ],
-        'examples': ['matplotlib', 'opencv-python'],
+        'examples': [
+            'matplotlib',
+            'opencv-python',
+            'PyQt5; platform_system=="Windows"',
+        ],
     })

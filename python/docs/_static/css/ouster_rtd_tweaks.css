@@ -18,3 +18,12 @@ when needed on the page as strikethrough text
     text-decoration: line-through;
 }
 
+/* remove default browser outline (in some browsers,  ...) */
+.sphinx-tabs :focus {
+  outline: none;
+}
+
+/* remove extraspace on highlight ... */
+.sphinx-tabs div[class^=highlight] {
+  margin-bottom: 4px;
+}

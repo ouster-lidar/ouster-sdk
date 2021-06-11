@@ -98,6 +98,7 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
             lhs.ts_mode == rhs.ts_mode && lhs.ld_mode == rhs.ld_mode &&
             lhs.operating_mode == rhs.operating_mode &&
             lhs.azimuth_window == rhs.azimuth_window &&
+            lhs.signal_multiplier == rhs.signal_multiplier &&
             lhs.sync_pulse_out_angle == rhs.sync_pulse_out_angle &&
             lhs.sync_pulse_out_pulse_width == rhs.sync_pulse_out_pulse_width &&
             lhs.nmea_in_polarity == rhs.nmea_in_polarity &&
@@ -161,8 +162,6 @@ static double default_lidar_origin_to_beam_origin(std::string prod_line) {
         lidar_origin_to_beam_origin_mm = 13.762;
     return lidar_origin_to_beam_origin_mm;
 }
-
-
 
 sensor_info default_sensor_info(lidar_mode mode) {
     return sensor::sensor_info{"UNKNOWN",
@@ -385,6 +384,9 @@ sensor_config parse_config(const Json::Value& root) {
         config.azimuth_window =
             std::make_pair(root["azimuth_window"][0].asInt(),
                            root["azimuth_window"][1].asInt());
+
+    if (!root["signal_multiplier"].empty())
+        config.signal_multiplier = root["signal_multiplier"].asInt();
 
     if (!root["operating_mode"].empty()) {
         auto operating_mode =
@@ -713,6 +715,10 @@ std::string to_string(const sensor_config& config) {
         azimuth_window.append(config.azimuth_window.value().first);
         azimuth_window.append(config.azimuth_window.value().second);
         root["azimuth_window"] = azimuth_window;
+    }
+
+    if (config.signal_multiplier) {
+        root["signal_multiplier"] = config.signal_multiplier.value();
     }
 
     if (config.sync_pulse_out_angle) {

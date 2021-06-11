@@ -339,6 +339,11 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
         !set_param("azimuth_window", to_string(config.azimuth_window.value())))
         return false;
 
+    if (config.signal_multiplier &&
+        !set_param("signal_multiplier",
+                   std::to_string(config.signal_multiplier.value())))
+        return false;
+
     if (config.sync_pulse_out_angle &&
         !set_param("sync_pulse_out_angle",
                    std::to_string(config.sync_pulse_out_angle.value())))
@@ -446,8 +451,6 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     std::string res;
     bool success = true;
 
-    success = set_config_helper(sock_fd, config, config_flags);
-
     if (config_flags & CONFIG_UDP_DEST_AUTO) {
         if (config.udp_dest) {
             impl::socket_close(sock_fd);
@@ -456,6 +459,10 @@ bool set_config(const std::string& hostname, const sensor_config& config,
         }
         success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
         success &= res == "set_udp_dest_auto";
+    }
+
+    if (success) {
+        success = set_config_helper(sock_fd, config, config_flags);
     }
 
     impl::socket_close(sock_fd);
@@ -548,7 +555,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
     // wake up from STANDBY, if necessary
     success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "operating_mode", "NORMAL"}, res);
+        sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
     success &= res == "set_config_param";
 
     // reinitialize to activate new settings

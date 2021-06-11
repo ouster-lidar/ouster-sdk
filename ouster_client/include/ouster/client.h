@@ -53,7 +53,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     lidar_mode mode = MODE_UNSPEC,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
-                                    int timeout_sec = 30);
+                                    int timeout_sec = 60);
 
 /**
  * Block for up to timeout_sec until either data is ready or an error occurs.
@@ -98,7 +98,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  * @param timeout_sec how long to wait for the sensor to initialize
  * @return a text blob of metadata parseable into a sensor_info struct
  */
-std::string get_metadata(client& cli, int timeout_sec = 30);
+std::string get_metadata(client& cli, int timeout_sec = 60);
 
 /**
  * Get sensor config from the sensor
