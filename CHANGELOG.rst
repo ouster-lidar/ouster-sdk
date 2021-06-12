@@ -3,53 +3,58 @@ Changelog
 =========
 
 
-[unreleased]
-============
+[20210608]
+==========
 
-Added
------
-* [python] first release of Python bindings for the provided C++ code. See the README under the
-  ``python`` directory for details and links to documentation (ouster-sdk 0.2.0)
-* [python] added an example for visualization using open3d (ouster-sdk 0.2.1)
-* [python] add support for signal multiplier config param (ouster-sdk 0.2.1)
-* [python] preserve capture timestamps on packets read from pcaps (ouster-sdk 0.2.1)
-* [ouster_client] early version of a C++ API covering the full sensor configuration interface
-* [ouster_pcap] preliminary C++ API for working with pcap files containing a single sensor packet
-  capture
-* [ouster_ros] Dockerfile to easily set up a build environment
+ouster_client
+-------------
+* update cmake package version to 0.2.0
+* add support for new signal multiplier config parameter
+* add early version of a C++ API covering the full sensor configuration interface
+* increase default initialization timeout to 60 seconds to account for the worst case: waking up
+  from STANDBY mode
 
-Changed
--------
+ouster_pcap
+-----------
+* ``record_packet()`` now requires passing in a capture timestamp instead of using current time
+* work around libtins issue where capture timestamps for pcaps recorded on Windows are always zero
+* add preliminary C++ API for working with pcap files containing a single sensor packet capture
 
-* [ouster_viz] reflectivity visualization for changes in the upcoming 2.1 firmware
-* [ouster_viz] moved most of the visualizer code out of public headers and hid some implementation
-  details
-* [ouster_ros] require metadata argument to ouster_ros launch file
-* [ouster_ros] ``img_node`` now outputs 16-bit images, which should be more useful. Range image
-  output is now in units of 4mm instead of arbitrary scaling.
-* [ouster_ros] ``img_node`` now outputs reflectivity images as well
-* [ouster_client] increase default initialization timeout to 60 seconds to account for waking up
-  from STANDBY
-* [ouster_pcap] require passing in a capture timestamp instead of always using current time when
-  recording packets
+ouster_ros
+----------
+* update ROS package version to 0.2.0
+* add Dockerfile to easily set up a build environment or run nodes
+* ``img_node`` now outputs 16-bit images, which should be more useful. Range image output is now in
+  units of 4mm instead of arbitrary scaling (addresses #249)
+* ``img_node`` now outputs reflectivity images as well on the ``reflec_image`` topic
+* change ``img_node`` topics to match terminology in sensor documentation: ``ambient_image`` is now
+  ``nearir_image`` and ``intensity_image`` is now ``signal_image``
+* update rviz config to use flat squares by default to work around `a bug on intel systems
+  <https://github.com/ros-visualization/rviz/issues/1508>`_
+* remove viz_node and all graphics stack dependencies from the package. The ``viz`` flag on the
+  launch file now runs rviz (addresses #236)
+* clean up package.xml and ensure that dependencies are installable with rosdep (PR #219)
+* the ``metadata`` argument to ouster_ros launch file is now required. No longer defaults to a name
+  based on the hostname of the sensor
 
-Removed
--------
+ouster_viz
+----------
+* update reflectivity visualization for changes in the upcoming 2.1 firmware. Add new colormap and
+  handle 8-bit reflectivity values
+* move most of the visualizer code out of public headers and hide some implementation details
+* fix visualizer bug causing a small viewport when resizing the window on macos with a retina
+  display
 
-* [ouster_ros] removed viz_node and all graphics stack dependencies from the package. The ``viz``
-  flag on the launch file now runs rviz
-
-Fixed
------
-
-* [ouster_viz] visualizer bug causing a small viewport when resizing the window on macos with a
-  retina display
-* [ouster_ros] clean up package.xml and ensure that dependencies are installable with rosdep
-* [ouster_ros] update rviz config to use flat squares by default to work around `a bug on intel
-  systems <https://github.com/ros-visualization/rviz/issues/1508>`_
-* [python] bug in determining if a scan is complete with single-column azimuth windows (0.2.1)
-* [python] closed PacketSource iterators will now raise an exception on read (0.2.1)
-* [ouster_pcap] capture timestamps for pcaps recorded on Windows are always zero
+python
+------
+* update ouster-sdk version to 0.2.1
+* fix bug in determining if a scan is complete with single-column azimuth windows
+* closed PacketSource iterators will now raise an exception on read
+* add examples for visualization using open3d (see: ``ouster.sdk.examples.open3d``)
+* add support for the new signal multiplier config parameter
+* preserve capture timestamps on packets read from pcaps
+* first release: version 0.2.0 of ouster-sdk. See the README under the ``python`` directory for
+  details and links to documentation
 
 
 [20201209]
