@@ -112,11 +112,13 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                                   &errorMsg))
     {
         ROS_WARN("Could not estimate motion of %s accordingly to fixed "
-                 "frame %s, returning empty cloud! (%s)",
+                 "frame %s, returning possible skewed cloud! (%s)",
             sensor_frame.c_str(), 
             fixed_frame.c_str(), 
             errorMsg.c_str());
-            return;
+        // Do original copy
+        scan_to_cloud(xyz_lut, scan_ts, ls, cloud);
+        return;
     }
     
     cloud.resize(ls.w * ls.h);
