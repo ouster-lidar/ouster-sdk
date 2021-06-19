@@ -1,0 +1,15 @@
+include(CMakeFindDependencyMacro)
+
+# ouster_client dependencies
+find_dependency(Eigen3)
+find_dependency(jsoncpp)
+
+# viz dependencies
+set(OpenGL_GL_PREFERENCE GLVND)
+find_dependency(OpenGL)
+find_dependency(GLEW)
+
+# pcap dependencies (not required for some reason)
+# find_dependency(libtins)
+
+include("${CMAKE_CURRENT_LIST_DIR}/OusterSDKTargets.cmake")
