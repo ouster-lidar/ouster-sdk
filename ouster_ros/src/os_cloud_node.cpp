@@ -35,6 +35,14 @@ int main(int argc, char** argv) {
     auto imu_frame = tf_prefix + "os_imu";
     auto lidar_frame = tf_prefix + "os_lidar";
 
+    ouster_ros::Filter filter;
+    nh.param<float>("filter_min_x", filter.minX, -1000.0);
+    nh.param<float>("filter_max_x", filter.maxX, 1000.0); 
+    nh.param<float>("filter_min_y", filter.minY, -1000.0); 
+    nh.param<float>("filter_max_y", filter.maxY, 1000.0); 
+    nh.param<float>("filter_min_z", filter.minZ, -1000.0); 
+    nh.param<float>("filter_max_z", filter.maxZ, 1000.0); 
+
     ouster_ros::OSConfigSrv cfg{};
     auto client = nh.serviceClient<ouster_ros::OSConfigSrv>("os_config");
     client.waitForExistence();
@@ -66,7 +74,7 @@ int main(int argc, char** argv) {
                     return h.timestamp != std::chrono::nanoseconds{0};
                 });
             if (h != ls.headers.end()) {
-                scan_to_cloud(xyz_lut, h->timestamp, ls, cloud);
+                scan_to_cloud(xyz_lut, h->timestamp, ls, cloud, filter);
                 lidar_pub.publish(ouster_ros::cloud_to_cloud_msg(
                     cloud, h->timestamp, sensor_frame));
             }

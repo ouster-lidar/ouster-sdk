@@ -6,6 +6,7 @@
 #pragma once
 #define PCL_NO_PRECOMPILE
 #include <pcl/point_types.h>
+#include <pcl/filters/passthrough.h>
 
 #include <Eigen/Eigen>
 #include <chrono>
