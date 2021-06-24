@@ -28,6 +28,14 @@
     <remap from="~/lidar_packets" to="/os_node/lidar_packets"/>
     <remap from="~/imu_packets" to="/os_node/imu_packets"/>
     <param name="~/tf_prefix" value="$(arg tf_prefix)"/>
+
+    <!-- Filter out objects near sensor - Used to remove robot from cloud -->
+    <param name="filter_min_x"                    value="-0.0"/>
+    <param name="filter_max_x"                    value="+0.0"/>
+    <param name="filter_min_y"                    value="-0.0"/>
+    <param name="filter_max_y"                    value="+0.0"/>
+    <param name="filter_min_z"                    value="-0.0"/>
+    <param name="filter_max_z"                    value="+0.0"/>
   </node>
 
   <node if="$(arg viz)" pkg="rviz" name="rviz" type="rviz" args="$(arg rviz_config)" output="screen" required="true" />

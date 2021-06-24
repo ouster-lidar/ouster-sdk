@@ -36,12 +36,12 @@ int main(int argc, char** argv) {
     auto lidar_frame = tf_prefix + "os_lidar";
 
     ouster_ros::Filter filter;
-    nh.param<float>("filter_min_x", filter.minX, -1000.0);
-    nh.param<float>("filter_max_x", filter.maxX, 1000.0); 
-    nh.param<float>("filter_min_y", filter.minY, -1000.0); 
-    nh.param<float>("filter_max_y", filter.maxY, 1000.0); 
-    nh.param<float>("filter_min_z", filter.minZ, -1000.0); 
-    nh.param<float>("filter_max_z", filter.maxZ, 1000.0); 
+    nh.param<float>("filter_min_x", filter.minX, -0.0);
+    nh.param<float>("filter_max_x", filter.maxX, +0.0); 
+    nh.param<float>("filter_min_y", filter.minY, -0.0); 
+    nh.param<float>("filter_max_y", filter.maxY, +0.0); 
+    nh.param<float>("filter_min_z", filter.minZ, -0.0); 
+    nh.param<float>("filter_max_z", filter.maxZ, +0.0); 
 
     ouster_ros::OSConfigSrv cfg{};
     auto client = nh.serviceClient<ouster_ros::OSConfigSrv>("os_config");
