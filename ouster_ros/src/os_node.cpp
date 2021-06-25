@@ -130,6 +130,7 @@ int main(int argc, char** argv) {
     auto replay = nh.param("replay", false);
     auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
     auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
+    auto phase_lock_enable = nh.param("enable_phase_lock", std::string{});
 
     // set lidar mode from param
     sensor::lidar_mode lidar_mode = sensor::MODE_UNSPEC;
@@ -198,7 +199,7 @@ int main(int argc, char** argv) {
         ROS_INFO("Waiting for sensor to initialize ...");
 
         auto cli = sensor::init_client(hostname, udp_dest, lidar_mode,
-                                       timestamp_mode, lidar_port, imu_port);
+                                       timestamp_mode, phase_lock_enable, lidar_port, imu_port);
 
         if (!cli) {
             ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());

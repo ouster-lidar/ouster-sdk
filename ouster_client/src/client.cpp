@@ -507,6 +507,7 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode, timestamp_mode ts_mode,
+                                    std::string phase_lock_enable,
                                     int lidar_port, int imu_port,
                                     int timeout_sec) {
     auto cli = init_client(hostname, lidar_port, imu_port);
@@ -550,6 +551,12 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         success &= do_tcp_cmd(
             sock_fd, {"set_config_param", "timestamp_mode", to_string(ts_mode)},
             res);
+        success &= res == "set_config_param";
+    }
+
+    if (phase_lock_enable == "true" || phase_lock_enable == "false") {
+        success &= do_tcp_cmd(
+            sock_fd, {"set_config_param", "phase_lock_enable", phase_lock_enable},res);
         success &= res == "set_config_param";
     }
 
