@@ -206,7 +206,8 @@ int main(int argc, char** argv) {
         }
         ROS_INFO("Sensor initialized successfully");
 
-        // write metadata file to cwd (usually ~/.ros)
+        // write metadata file. If metadata_path is relative, will use cwd
+        // (usually ~/.ros)
         auto metadata = sensor::get_metadata(*cli);
         if (!write_metadata(meta_file, metadata)) {
             ROS_ERROR("Exiting because of failure to write metadata path");
