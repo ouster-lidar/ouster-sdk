@@ -16,7 +16,6 @@
 #include <memory>
 #include <sstream>
 #include <thread>
-#include <chrono>
 
 using namespace Tins;
 #include "ouster/os_pcap.h"
@@ -33,10 +32,8 @@ std::ostream& operator<<(std::ostream& stream_in,
               << std::endl;
     stream_in << "  Packets Reassembled: " << stream_data.packets_reassembled
               << std::endl;
-    stream_in << "  IPV6 Packets: " << stream_data.ipv6_packets
-              << std::endl;
-    stream_in << "  IPV4 Packets: " << stream_data.ipv4_packets
-              << std::endl;
+    stream_in << "  IPV6 Packets: " << stream_data.ipv6_packets << std::endl;
+    stream_in << "  IPV4 Packets: " << stream_data.ipv4_packets << std::endl;
     stream_in << "  Non-UDP Packets: " << stream_data.non_udp_packets
               << std::endl;
     stream_in << "  Ports To Packet Sizes: " << std::endl;
@@ -210,7 +207,9 @@ bool replay_packet(playback_handle& handle) {
         if (raw != NULL) {
             auto temp = (uint32_t*)&(raw->payload()[0]);
             auto size = raw->payload_size();
-            int port = (handle.port_map.count(udp->dport()) == 0) ? udp->dport() : handle.port_map[udp->dport()];
+            int port = (handle.port_map.count(udp->dport()) == 0)
+                           ? udp->dport()
+                           : handle.port_map[udp->dport()];
             memset(&addr, 0, sizeof(addr));
             addr.sin_family = AF_INET;
             addr.sin_port = htons(port);
@@ -240,9 +239,11 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                 IP* ip = pdu->find_pdu<IP>();
                 IPv6* ipv6 = pdu->find_pdu<IPv6>();
                 // Using short circuiting here
-                if((ip && ip->protocol() == PROTOCOL_UDP) || (ipv6 && ipv6->next_header() == PROTOCOL_UDP)) {
+                if ((ip && ip->protocol() == PROTOCOL_UDP) ||
+                    (ipv6 && ipv6->next_header() == PROTOCOL_UDP)) {
                     // reassm is also used in the while loop
-                    reassm = (handle.reassembler.process(*pdu) != IPv4Reassembler::FRAGMENTED);
+                    reassm = (handle.reassembler.process(*pdu) !=
+                              IPv4Reassembler::FRAGMENTED);
                     if (reassm) {
                         result = true;
                         UDP* udp = pdu->find_pdu<UDP>();
@@ -256,15 +257,20 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                         } else {
                             throw "Error: No Ip Packet Found";
                         }
-                        // find_pdu<UDP> will only return NULL when the ipv4 reassembly succeeds on an ipv6 packet, leading to a malformed packet
+                        // find_pdu<UDP> will only return NULL when the ipv4
+                        // reassembly succeeds on an ipv6 packet, leading to a
+                        // malformed packet
                         if (udp != NULL) {
                             info.dst_port = udp->dport();
                             info.src_port = udp->sport();
                             info.payload_size = raw->payload_size();
-                            info.timestamp = static_cast<std::chrono::microseconds>(handle.packet_cache.timestamp());
+                            info.timestamp =
+                                static_cast<std::chrono::microseconds>(
+                                    handle.packet_cache.timestamp());
                             handle.have_new_packet = true;
                         } else {
-                            throw std::runtime_error("Malformed Packet: No UDP Detected");
+                            throw std::runtime_error(
+                                "Malformed Packet: No UDP Detected");
                         }
                     }
                 }
@@ -305,17 +311,22 @@ size_t read_packet(playback_handle& handle, uint8_t* buf, size_t buffer_size) {
 std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
                                                  const std::string& src_ip,
                                                  const std::string& dst_ip,
-                                                 int frag_size) {
+                                                 int frag_size,
+                                                 bool use_sll_encapsulation) {
     std::shared_ptr<record_handle> result = std::make_shared<record_handle>();
 
     result->file_name = file_name;
     result->frag_size = frag_size;
     result->src_ip = src_ip;
     result->dst_ip = dst_ip;
-
-    result->pcap_file_writer.reset(
-        new PacketWriter(file_name, DataLinkType<SLL>()));
-
+    result->use_sll_encapsulation = use_sll_encapsulation;
+    if (use_sll_encapsulation) {
+        result->pcap_file_writer.reset(
+            new PacketWriter(file_name, DataLinkType<SLL>()));
+    } else {
+        result->pcap_file_writer.reset(
+            new PacketWriter(file_name, DataLinkType<EthernetII>()));
+    }
     return result;
 }
 
@@ -342,10 +353,10 @@ header.
 */
 
 // SLL is the linux pcap capture container
-std::vector<SLL> buffer_to_frag_packets(record_handle& handle, int src_port,
-                                        int dst_port, const uint8_t* buf,
-                                        size_t buf_size) {
-    std::vector<SLL> result;
+std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
+                                       int dst_port, const uint8_t* buf,
+                                       size_t buf_size) {
+    std::vector<IP> result;
 
     int id = -1;   ///< This variable is used to track the packet id,
                    ///< if -1 then create a packet and grab its id
@@ -410,26 +421,8 @@ std::vector<SLL> buffer_to_frag_packets(record_handle& handle, int src_port,
             pkt.id(id);
         }
 
-        // Finally we need to wrap this all into a linux packet capture
-        // container
-        auto sll = SLL();
-        sll /= pkt;
-
-        // Nasty libtins bug that causes write to fail
-        // https://www.gitmemory.com/issue/mfontanini/libtins/348/488141933
-        auto _ = sll.serialize();
-        // This is also related to the libtins bug, but pops out differently
-        /*
-         * This is due to the fact that the previous serialize does not treat
-         * the udp packet as if it were decodable. Manually tell libtins to
-         * go in and serialize the udp packet as well
-         */
-        if (sll.inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
-            _ = sll.inner_pdu()->inner_pdu()->inner_pdu()->serialize();
-        }
-
         // Add the resulting packet to the vector
-        result.push_back(sll);
+        result.push_back(pkt);
 
         // Increment the current byte being processed
         i += size;
@@ -445,9 +438,30 @@ void record_packet(record_handle& handle, int src_port, int dst_port,
 
     // For each of the packets write it to the pcap file
     for (auto item :
-             buffer_to_frag_packets(handle, src_port, dst_port, buf, buffer_size)) {
-        Packet packet(item, Timestamp(static_cast<std::chrono::microseconds>(microsecond_timestamp)));
+         buffer_to_frag_packets(handle, src_port, dst_port, buf, buffer_size)) {
+        Packet packet;
+        PDU* pdu;
+        if (handle.use_sll_encapsulation) {
+            pdu = new SLL();
+        } else {
+            pdu = new EthernetII();
+        }
+        *pdu /= item;
+        // Nasty libtins bug that causes write to fail
+        // https://www.gitmemory.com/issue/mfontanini/libtins/348/488141933
+        auto _ = pdu->serialize();
+        /*
+         * The next block is due to the fact that the previous serialize does not treat
+         * the udp packet as if it were decodable. Manually tell libtins to
+         * go in and serialize the udp packet as well
+         */
+        if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
+            _ = pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
+        }
+        packet = Packet(*pdu, Timestamp(static_cast<std::chrono::microseconds>(
+                                  microsecond_timestamp)));
         handle.pcap_file_writer->write(packet);
+        delete pdu;
     }
 }
 

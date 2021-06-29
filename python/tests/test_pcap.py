@@ -106,8 +106,6 @@ def test_pcap_read_10(pcap_obj) -> None:
 def test_pcap_info_10(pcap_path) -> None:
     """Check that reading a test pcap produces the right number of packets."""
     res = pcap.info(pcap_path)
-    assert res.ipv6_packets == 0
-    assert res.ipv4_packets == 10
     assert res.packets_processed == 10
     assert res.packets_reassembled == 10
     assert res.non_udp_packets == 0
@@ -137,14 +135,14 @@ def test_pcap_read_closed(pcap_obj) -> None:
     with pytest.raises(ValueError):
         next(iter(pcap_obj))
 
-
+        
 @pytest.mark.parametrize("n_lidar, n_imu", [
-    pytest.param(1, 0, id="one lidar"),
-    pytest.param(20, 0, id="multi lidar"),
-    pytest.param(0, 1, id="one imu"),
-    pytest.param(0, 20, id="multi imu"),
-    pytest.param(1, 1, id="one each"),
-    pytest.param(20, 20, id="multi each"),
+    pytest.param(1, 0, id="one lidar ether"),
+    pytest.param(20, 0, id="multi lidar ether"),
+    pytest.param(0, 1, id="one imu ether"),
+    pytest.param(0, 20, id="multi imu ether"),
+    pytest.param(1, 1, id="one each ether"),
+    pytest.param(20, 20, id="multi each ether"),
 ])
 def test_read_write_lidar_imu(n_lidar, n_imu, metadata, tmpdir):
     """Test that random packets read back from pcap are identical."""
@@ -160,6 +158,7 @@ def test_read_write_lidar_imu(n_lidar, n_imu, metadata, tmpdir):
     out_packets = list(pcap.Pcap(file_path, metadata))
     out_bufs = [bytes(p._data) for p in out_packets]
     in_bufs = [bytes(p._data) for p in in_packets]
+        
     assert in_bufs == out_bufs
 
 

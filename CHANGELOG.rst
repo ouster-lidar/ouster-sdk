@@ -8,6 +8,7 @@ Changelog
 
 * add preliminary cpack and install support. It should be possible to use a pre-built SDK package
   instead of including the SDK in the build tree of your project
+* switched the default pcap encapsulation to fix an ouster studio bug
 
 
 [20210608]
