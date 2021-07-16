@@ -9,8 +9,9 @@ project(ouster_example VERSION 20210608)
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 option(BUILD_SHARED_LIBS "Build shared libraries." OFF)
-option(BUILD_VIZ "Build Ouster visualizer." ON)
 option(BUILD_PCAP "Build pcap utils." OFF)
+option(BUILD_TESTING "Build tests" OFF)
+option(BUILD_VIZ "Build Ouster visualizer." ON)
 
 set(CMAKE_CXX_STANDARD 11)
 if(MSVC)
@@ -18,6 +19,11 @@ if(MSVC)
   add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
 else()
   add_compile_options(-Wall -Wextra -Werror)
+endif()
+
+# === Testing ===
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    include(CTest)
 endif()
 
 # === Subdirectories ===
@@ -29,6 +35,10 @@ endif()
 
 if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
+endif()
+
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
+    add_subdirectory(tests)
 endif()
 
 # ==== Install ====
@@ -71,3 +81,4 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "cmake, libjsoncpp-dev, libtclap-dev, libeigen3
   libglfw3-dev, libglew-dev, libtins-dev, libpcap-dev")
 
 include(CPack)
+
