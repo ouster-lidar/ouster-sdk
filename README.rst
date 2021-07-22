@@ -114,7 +114,7 @@ and write point clouds out to CSV files::
     ./ouster_client_example <sensor hostname> <udp data destination>
 
 where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
-data destingation>`` is the hostname or IP to which the sensor should send lidar data.
+data destingation>`` is the hostname or IP to which the sensor should send lidar data. You can also supply ``""``, an empty string, to utilize automatic detection.
 
 On Windows, you may need to allow the client/visualizer through the Windows firewall to receive
 sensor data.
@@ -246,7 +246,7 @@ another terminal, run::
 
     rosbag record /os_node/imu_packets /os_node/lidar_packets
 
-This will save a bag file of recorded data in the current working directory. 
+This will save a bag file of recorded data in the current working directory.
 
 You should copy and save the metadata file alongside your data. The metadata file will be saved at
 the provided path to `roslaunch`. If you run the node and cannot find the metadata file, try looking

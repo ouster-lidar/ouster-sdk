@@ -524,9 +524,19 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     std::string res;
     bool success = true;
 
+  // If udp_dest_host is empty string, use automatic addressing with set_udp_dest_auto
+  if (udp_dest_host != "")
+  {
     success &=
-        do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
+      do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
     success &= res == "set_config_param";
+  }
+  else
+  {
+    success &=
+      do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
+      success &= res == "set_udp_dest_auto";
+  }
 
     success &= do_tcp_cmd(
         sock_fd,
