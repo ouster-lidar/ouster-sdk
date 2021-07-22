@@ -10,6 +10,10 @@ Changelog
   instead of including the SDK in the build tree of your project
 * switched the default pcap encapsulation to fix an ouster studio bug
 
+python
+------
+* fix open3d example crash on exit when replaying pcaps on macos (addresses #267)
+
 
 [20210608]
 ==========
