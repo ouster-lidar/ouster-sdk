@@ -10,6 +10,11 @@ Changelog
   instead of including the SDK in the build tree of your project
 * switched the default pcap encapsulation to fix an ouster studio bug
 
+ouster_client
+-------------
+* add a conservative socket read timeout so ``init_client()`` will fail with an error message when
+  another client fails to close a TCP connection (addresses #258)
+
 python
 ------
 * fix open3d example crash on exit when replaying pcaps on macos (addresses #267)

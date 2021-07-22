@@ -42,6 +42,9 @@ namespace {
 // default udp receive buffer size on windows is very low -- use 256K
 const int RCVBUF_SIZE = 256 * 1024;
 
+// timeout for reading from a TCP socket during config
+const int RCVTIMEOUT_SEC = 10;
+
 int32_t get_sock_port(SOCKET sock_fd) {
     struct sockaddr_storage ss;
     socklen_t addrlen = sizeof ss;
@@ -73,11 +76,11 @@ SOCKET udp_data_socket(int port) {
 
     int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "getaddrinfo(): " << gai_strerror(ret) << std::endl;
+        std::cerr << "udp getaddrinfo(): " << gai_strerror(ret) << std::endl;
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "getaddrinfo: empty result" << std::endl;
+        std::cerr << "udp getaddrinfo(): empty result" << std::endl;
         return SOCKET_ERROR;
     }
 
@@ -142,11 +145,11 @@ SOCKET cfg_socket(const char* addr) {
 
     int ret = getaddrinfo(addr, "7501", &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "getaddrinfo: " << gai_strerror(ret) << std::endl;
+        std::cerr << "cfg getaddrinfo(): " << gai_strerror(ret) << std::endl;
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "getaddrinfo: empty result" << std::endl;
+        std::cerr << "cfg getaddrinfo(): empty result" << std::endl;
         return SOCKET_ERROR;
     }
 
@@ -154,7 +157,8 @@ SOCKET cfg_socket(const char* addr) {
     for (ai = info_start; ai != NULL; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (!impl::socket_valid(sock_fd)) {
-            std::cerr << "socket: " << impl::socket_get_error() << std::endl;
+            std::cerr << "cfg socket(): " << impl::socket_get_error()
+                      << std::endl;
             continue;
         }
 
@@ -164,6 +168,13 @@ SOCKET cfg_socket(const char* addr) {
         }
 
         break;
+    }
+
+    if (impl::socket_set_rcvtimeout(sock_fd, RCVTIMEOUT_SEC)) {
+        std::cerr << "cfg set_rcvtimeout(): " << impl::socket_get_error()
+                  << std::endl;
+        impl::socket_close(sock_fd);
+        return SOCKET_ERROR;
     }
 
     freeaddrinfo(info_start);
@@ -194,6 +205,8 @@ bool do_tcp_cmd(SOCKET sock_fd, const std::vector<std::string>& cmd_tokens,
     do {
         len = recv(sock_fd, read_buf.get(), max_res_len, 0);
         if (len < 0) {
+            std::cerr << "do_tcp_cmd recv(): " << impl::socket_get_error()
+                      << std::endl;
             return false;
         }
         read_buf.get()[len] = '\0';
@@ -524,6 +537,13 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     std::string res;
     bool success = true;
 
+    // fail fast if we can't reach the sensor via TCP
+    success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
+    if (!success) {
+        impl::socket_close(sock_fd);
+        return std::shared_ptr<client>();
+    }
+
     success &=
         do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
     success &= res == "set_config_param";
@@ -554,8 +574,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     }
 
     // wake up from STANDBY, if necessary
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
+    success &=
+        do_tcp_cmd(sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
     success &= res == "set_config_param";
 
     // reinitialize to activate new settings
