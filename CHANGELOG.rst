@@ -8,12 +8,16 @@ Changelog
 
 * add preliminary cpack and install support. It should be possible to use a pre-built SDK package
   instead of including the SDK in the build tree of your project
-* switched the default pcap encapsulation to fix an ouster studio bug
 
 ouster_client
 -------------
 * add a conservative socket read timeout so ``init_client()`` will fail with an error message when
   another client fails to close a TCP connection (addresses #258)
+* fall back to binding ipv4 UDP sockets when ipv6 is not available (addresses #261)
+
+ouster_pcap
+-----------
+* switch the default pcap encapsulation to ethernet for Ouster Studio compatibility (addresses #265)
 
 python
 ------
