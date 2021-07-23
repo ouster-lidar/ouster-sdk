@@ -39,12 +39,12 @@ int main(int argc, char** argv) {
                            ouster::CLIENT_VERSION_FULL);
 
         TCLAP::UnlabeledValueArg<std::string> hostname_arg(
-            "hostname", "hostname of the sensor", true, "", "string");
+            "hostname", "hostname of the sensor", true, "", "SENSOR HOSTNAME");
         cmd.add(hostname_arg);
 
         TCLAP::UnlabeledValueArg<std::string> udp_destination_arg(
-            "udp_destination", "destination host for the udp packets", true, "",
-            "string");
+            "udp_destination", "destination host for the udp packets", false,
+            "", "UDP DESTINATION");
         cmd.add(udp_destination_arg);
 
         TCLAP::ValueArg<std::string> mode_arg(
@@ -100,8 +100,13 @@ int main(int argc, char** argv) {
     std::shared_ptr<sensor::client> cli;
 
     if (do_config) {
-        std::cout << "Connecting to " << hostname << "; sending data to "
-                  << udp_dest << std::endl;
+        if (udp_dest.size()) {
+            std::cout << "Sending UDP data to " << udp_dest << std::endl;
+        } else {
+            std::cout << "Using automatic UDP destination" << std::endl;
+        }
+        std::cout << "Waiting for sensor " << hostname << " to initialize ..."
+                  << std::endl;
         cli =
             sensor::init_client(hostname, udp_dest, mode,
                                 sensor::TIME_FROM_UNSPEC, lidar_port, imu_port);

@@ -166,8 +166,8 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    if (!replay && (!hostname.size() || !udp_dest.size())) {
-        ROS_ERROR("Must specify both hostname and udp destination");
+    if (!replay && !hostname.size()) {
+        ROS_ERROR("Must specify a sensor hostname");
         return EXIT_FAILURE;
     }
 
@@ -193,9 +193,12 @@ int main(int argc, char** argv) {
             ROS_ERROR("Error when running in replay mode: %s", e.what());
         }
     } else {
-        ROS_INFO("Connecting to %s; sending data to %s", hostname.c_str(),
-                 udp_dest.c_str());
-        ROS_INFO("Waiting for sensor to initialize ...");
+        if (udp_dest.size()) {
+            ROS_INFO("Sending UDP data to %s", udp_dest.c_str());
+        } else {
+            ROS_INFO("Using automatic UDP destination");
+        }
+        ROS_INFO("Waiting for sensor %s to initialize ...", hostname.c_str());
 
         auto cli = sensor::init_client(hostname, udp_dest, lidar_mode,
                                        timestamp_mode, lidar_port, imu_port);

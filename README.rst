@@ -114,7 +114,8 @@ and write point clouds out to CSV files::
     ./ouster_client_example <sensor hostname> <udp data destination>
 
 where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
-data destingation>`` is the hostname or IP to which the sensor should send lidar data.
+data destingation>`` is the hostname or IP to which the sensor should send lidar data. You can also
+supply ``""``, an empty string, to utilize automatic detection.
 
 On Windows, you may need to allow the client/visualizer through the Windows firewall to receive
 sensor data.
@@ -125,10 +126,10 @@ Running the Sample Visualizer
 Navigate to ``ouster_viz`` under the build directory, which should contain an executable named
 ``simple_viz`` . Run::
 
-    ./simple_viz <flags> <sensor hostname> <udp data destination>
+    ./simple_viz [flags] <sensor hostname> [udp data destination]
 
-where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
-data destingation>`` is the hostname or IP to which the sensor should send lidar data.
+where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``[udp
+data destingation]`` is an optional hostname or IP to which the sensor should send lidar data.
 
 The sample visualizer does not currently include a GUI, but can be controlled with the mouse and
 keyboard:
@@ -212,8 +213,8 @@ new terminal by running::
 
         source myworkspace/devel/setup.bash
 
-Running ROS Nodes with a Live Sensor
-------------------------------------
+Running ROS Nodes with a Sensor
+-------------------------------
 
 Make sure the sensor is connected to the network. See "Connecting to the Sensor" in the `Software
 User Manual`_ for instructions and different options for network configuration.
@@ -221,18 +222,19 @@ User Manual`_ for instructions and different options for network configuration.
 To publish ROS topics from a running sensor, run::
 
     roslaunch ouster_ros ouster.launch sensor_hostname:=<sensor hostname> \
-                                       udp_dest:=<udp data destination> \
-                                       metadata:=<path to metadata json> \
-                                       lidar_mode:=<lidar mode> viz:=<viz>
+                                       metadata:=<path to metadata json>
 
 where:
 
 * ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor
-* ``<udp data destination>`` is the hostname or IP to which the sensor should send data
 * ``<path to metadata json>`` is the path to the json file to which to save calibration metadata
-* ``<lidar mode>`` is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or ``2048x10``, and
-* ``<viz>`` is either ``true`` or ``false``: if true, a window should open and start displaying data
-  after a few seconds.
+
+you can also optionally specify:
+
+* ``udp_dest:=<hostname>`` to specify the hostname or IP to which the sensor should send data
+* ``lidar_mode:=<mode>`` where mode is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or
+  ``2048x10``, and
+* ``viz:=true`` to visualize the sensor output, if you have the rviz ROS package installed
 
 Note that by default the working directory of all ROS nodes is set to ``${ROS_HOME}``, generally
 ``$HOME/.ros``, so if ``metadata`` is a relative path, it will write to that path inside
@@ -246,7 +248,7 @@ another terminal, run::
 
     rosbag record /os_node/imu_packets /os_node/lidar_packets
 
-This will save a bag file of recorded data in the current working directory. 
+This will save a bag file of recorded data in the current working directory.
 
 You should copy and save the metadata file alongside your data. The metadata file will be saved at
 the provided path to `roslaunch`. If you run the node and cannot find the metadata file, try looking

@@ -13,11 +13,22 @@ ouster_client
 -------------
 * add a conservative socket read timeout so ``init_client()`` will fail with an error message when
   another client fails to close a TCP connection (addresses #258)
+* when passed an empty string for the ``udp_dest_host`` parameter, ``init_client()`` will now
+  configure the sensor using ``set_udp_dest_auto``. Previously, this would turn off UDP output on
+  the sensor, so any attempt to read data would time out (PR #255)
 * fall back to binding ipv4 UDP sockets when ipv6 is not available (addresses #261)
 
 ouster_pcap
 -----------
 * switch the default pcap encapsulation to ethernet for Ouster Studio compatibility (addresses #265)
+
+ouster_ros
+----------
+* the ``udp_dest`` parameter to ouster.launch is now optional when connecting to a sensor
+
+ouster_viz
+----------
+* the second CLI argument of simple_viz specifying the UDP data destination is now optional
 
 python
 ------

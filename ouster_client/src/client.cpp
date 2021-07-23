@@ -552,9 +552,15 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         return std::shared_ptr<client>();
     }
 
-    success &=
-        do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
-    success &= res == "set_config_param";
+    // if dest address is not specified, have the sensor to set it automatically
+    if (udp_dest_host == "") {
+        success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
+        success &= res == "set_udp_dest_auto";
+    } else {
+        success &= do_tcp_cmd(
+            sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
+        success &= res == "set_config_param";
+    }
 
     success &= do_tcp_cmd(
         sock_fd,
