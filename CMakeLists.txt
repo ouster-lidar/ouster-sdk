@@ -58,6 +58,9 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
   DESTINATION lib/cmake/OusterSDK)
 
+install(FILES LICENSE LICENSE-bin
+  DESTINATION share)
+
 # ==== Packaging ====
 set(CPACK_PACKAGE_CONTACT "support@ouster.io")
 set(CPACK_PACKAGE_VENDOR "Ouster")

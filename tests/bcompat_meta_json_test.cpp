@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <Eigen/Eigen>
+#include <Eigen/Dense>
 #include <cstdlib>
 #include <map>
 

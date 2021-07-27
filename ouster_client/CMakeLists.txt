@@ -29,7 +29,7 @@ add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lid
 target_link_libraries(ouster_client
   PUBLIC Eigen3::Eigen $<BUILD_INTERFACE:ouster_build>
   PRIVATE jsoncpp_lib)
-target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
+target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32 EIGEN_MPL2_ONLY)
 add_library(OusterSDK::ouster_client ALIAS ouster_client)
 
 if(WIN32)

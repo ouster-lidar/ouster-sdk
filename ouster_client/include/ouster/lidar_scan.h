@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <Eigen/Eigen>
+#include <Eigen/Dense>
 #include <chrono>
 #include <cstddef>
 #include <stdexcept>
