@@ -3,7 +3,13 @@ import time
 
 from more_itertools import consume, nth
 import numpy as np
-import open3d as o3d  # type: ignore
+
+try:
+    import open3d as o3d  # type: ignore
+except ModuleNotFoundError:
+    print("This example requires open3d, which may not be available on all "
+          "platforms. Try running `pip3 install open3d` first.")
+    exit(1)
 
 from ouster import client
 from .colormaps import normalize, colorize
@@ -190,48 +196,53 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
 
     # initialize vis
     vis = o3d.visualization.VisualizerWithKeyCallback()
-    vis.create_window()
+    try:
+        vis.create_window()
 
-    ropt = vis.get_render_option()
-    ropt.point_size = 1.0
-    ropt.background_color = np.asarray([0, 0, 0])
-    ropt.light_on = False
+        ropt = vis.get_render_option()
+        ropt.point_size = 1.0
+        ropt.background_color = np.asarray([0, 0, 0])
+        ropt.light_on = False
 
-    # populate point cloud before adding geometry to avoid camera issues
-    update_data(vis)
+        # populate point cloud before adding geometry to avoid camera issues
+        update_data(vis)
 
-    vis.add_geometry(cloud)
-    vis.add_geometry(image)
-    vis.add_geometry(axes)
+        vis.add_geometry(cloud)
+        vis.add_geometry(image)
+        vis.add_geometry(axes)
 
-    # initialize camera settings
-    ctr = vis.get_view_control()
-    ctr.set_constant_z_near(Z_NEAR)
-    ctr.set_zoom(0.2)
-    view_from(vis, np.array([2, 1, 2]), np.array([0, 0, 0]))
+        # initialize camera settings
+        ctr = vis.get_view_control()
+        ctr.set_constant_z_near(Z_NEAR)
+        ctr.set_zoom(0.2)
+        view_from(vis, np.array([2, 1, 2]), np.array([0, 0, 0]))
 
-    # register keys
-    vis.register_key_callback(ord(" "), toggle_pause)
-    vis.register_key_callback(ord("M"), next_channel)
-    vis.register_key_action_callback(262, right_arrow)
+        # register keys
+        vis.register_key_callback(ord(" "), toggle_pause)
+        vis.register_key_callback(ord("M"), next_channel)
+        vis.register_key_action_callback(262, right_arrow)
 
-    # main loop
-    last_ts = 0.0
-    while vis.poll_events():
-        ts = time.monotonic()
+        # main loop
+        last_ts = 0.0
+        while vis.poll_events():
+            ts = time.monotonic()
 
-        # update data at scan frequency to avoid blocking the rendering thread
-        if not paused and ts - last_ts >= 1 / metadata.mode.frequency:
-            scan = next(scans_iter)
-            update_data(vis)
-            last_ts = ts
+            # update data at scan frequency to avoid blocking the rendering thread
+            if not paused and ts - last_ts >= 1 / metadata.mode.frequency:
+                scan = next(scans_iter)
+                update_data(vis)
+                last_ts = ts
 
-        # always update 2d image to follow camera
-        canvas_set_viewport(image, ctr.convert_to_pinhole_camera_parameters())
-        vis.update_geometry(image)
-        vis.update_renderer()
+            # always update 2d image to follow camera
+            canvas_set_viewport(image,
+                                ctr.convert_to_pinhole_camera_parameters())
+            vis.update_geometry(image)
+            vis.update_renderer()
 
-    vis.destroy_window()
+    finally:
+        # open3d 0.13.0 segfaults on macos during teardown without this
+        o3d.visualization.Visualizer.clear_geometries(vis)
+        vis.destroy_window()
 
 
 def main() -> None:

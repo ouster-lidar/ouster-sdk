@@ -2,7 +2,7 @@
 
 #include <json/json.h>
 
-#include <Eigen/Eigen>
+#include <Eigen/Dense>
 #include <algorithm>
 #include <array>
 #include <cmath>

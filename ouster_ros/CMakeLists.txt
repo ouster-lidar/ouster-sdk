@@ -61,6 +61,9 @@ set(BUILD_SHARED_LIBS ${_SAVE_BUILD_SHARED_LIBS})
 # catkin adds all include dirs to a single variable, don't try to use targets
 include_directories(${_ouster_ros_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 
+# use only MPL-licensed parts of eigen
+add_definitions(-DEIGEN_MPL2_ONLY)
+
 add_library(ouster_ros src/ros.cpp)
 target_link_libraries(ouster_ros PUBLIC ${catkin_LIBRARIES} ouster_build pcl_common PRIVATE
   -Wl,--whole-archive ouster_client -Wl,--no-whole-archive)
@@ -88,4 +91,5 @@ install(
 install(
   DIRECTORY ${_ouster_ros_INCLUDE_DIRS}
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
-install(FILES ouster.launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+install(FILES ../LICENSE ../LICENSE-bin ouster.launch viz.rviz
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

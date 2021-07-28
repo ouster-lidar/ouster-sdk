@@ -28,7 +28,7 @@ struct packet_info {
     int src_port;         ///< The source port
     size_t payload_size;  ///< The size of the packet payload
     std::chrono::microseconds
-        timestamp;        ///< The packet timestamp in std::chrono::duration
+        timestamp;  ///< The packet timestamp in std::chrono::duration
 };
 
 /**
@@ -70,6 +70,7 @@ struct record_handle {
     size_t frag_size;       ///< The size of the udp data fragmentation
     std::unique_ptr<Tins::PacketWriter>
         pcap_file_writer;  ///< Object that holds the pcap writer
+    bool use_sll_encapsulation;
 };
 
 /**
@@ -183,7 +184,8 @@ size_t read_packet(playback_handle& handle, uint8_t* buf, size_t buffer_size);
 std::shared_ptr<record_handle> record_initialize(const std::string& file,
                                                  const std::string& src_ip,
                                                  const std::string& dst_ip,
-                                                 int frag_size);
+                                                 int frag_size,
+                                                 bool use_sll_encapsulation = false);
 /**
  * Uninitialize the record handle, closing underlying file
  * @param[in] handle An initialized handle for the recording state
@@ -197,7 +199,8 @@ void record_uninitialize(record_handle& handle);
  * @param[in] dst_port The destination port to label the packets with
  * @param[in] buf The buffer to record to the pcap file
  * @param[in] buffer_size The size of the buffer to record to the pcap file
- * @param[in] microsecond_timestamp The timestamp to record the packet as microseconds
+ * @param[in] microsecond_timestamp The timestamp to record the packet as
+ * microseconds
  */
 void record_packet(record_handle& handle, int src_port, int dst_port,
                    const uint8_t* buf, size_t buffer_size,

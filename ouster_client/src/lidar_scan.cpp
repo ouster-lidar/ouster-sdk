@@ -1,6 +1,6 @@
 #include "ouster/lidar_scan.h"
 
-#include <Eigen/Eigen>
+#include <Eigen/Dense>
 #include <cmath>
 #include <vector>
 
