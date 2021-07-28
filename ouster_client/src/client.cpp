@@ -42,6 +42,9 @@ namespace {
 // default udp receive buffer size on windows is very low -- use 256K
 const int RCVBUF_SIZE = 256 * 1024;
 
+// timeout for reading from a TCP socket during config
+const int RCVTIMEOUT_SEC = 10;
+
 int32_t get_sock_port(SOCKET sock_fd) {
     struct sockaddr_storage ss;
     socklen_t addrlen = sizeof ss;
@@ -65,7 +68,7 @@ SOCKET udp_data_socket(int port) {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET6;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;
 
@@ -73,64 +76,72 @@ SOCKET udp_data_socket(int port) {
 
     int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "getaddrinfo(): " << gai_strerror(ret) << std::endl;
+        std::cerr << "udp getaddrinfo(): " << gai_strerror(ret) << std::endl;
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "getaddrinfo: empty result" << std::endl;
+        std::cerr << "udp getaddrinfo(): empty result" << std::endl;
         return SOCKET_ERROR;
     }
 
-    SOCKET sock_fd;
-    for (ai = info_start; ai != NULL; ai = ai->ai_next) {
-        sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-        if (!impl::socket_valid(sock_fd)) {
-            std::cerr << "udp socket(): " << impl::socket_get_error()
-                      << std::endl;
-            continue;
-        }
+    // try to bind a dual-stack ipv6 socket, but fall back to ipv4 only if that
+    // fails (when ipv6 is disabled via kernel parameters). Use two passes to
+    // deal with glibc addrinfo ordering:
+    // https://sourceware.org/bugzilla/show_bug.cgi?id=9981
+    for (auto preferred_af : {AF_INET6, AF_INET}) {
+        for (ai = info_start; ai != NULL; ai = ai->ai_next) {
+            if (ai->ai_family != preferred_af) continue;
 
-        int off = 0;
-        if (setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off,
-                       sizeof(off))) {
-            std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                      << std::endl;
-            impl::socket_close(sock_fd);
-            return SOCKET_ERROR;
-        }
+            // choose first addrinfo where bind() succeeds
+            SOCKET sock_fd =
+                socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+            if (!impl::socket_valid(sock_fd)) {
+                std::cerr << "udp socket(): " << impl::socket_get_error()
+                          << std::endl;
+                continue;
+            }
 
-        if (bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
-            impl::socket_close(sock_fd);
-            std::cerr << "udp bind(): " << impl::socket_get_error()
-                      << std::endl;
-            continue;
-        }
+            int off = 0;
+            if (ai->ai_family == AF_INET6 &&
+                setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off,
+                           sizeof(off))) {
+                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
+                          << std::endl;
+                impl::socket_close(sock_fd);
+                continue;
+            }
 
-        break;
+            if (bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
+                std::cerr << "udp bind(): " << impl::socket_get_error()
+                          << std::endl;
+                impl::socket_close(sock_fd);
+                continue;
+            }
+
+            // bind() succeeded; set some options and return
+            if (impl::socket_set_non_blocking(sock_fd)) {
+                std::cerr << "udp fcntl(): " << impl::socket_get_error()
+                          << std::endl;
+                impl::socket_close(sock_fd);
+                return SOCKET_ERROR;
+            }
+
+            if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
+                           sizeof(RCVBUF_SIZE))) {
+                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
+                          << std::endl;
+                impl::socket_close(sock_fd);
+                return SOCKET_ERROR;
+            }
+
+            freeaddrinfo(info_start);
+            return sock_fd;
+        }
     }
 
+    // could not bind() a UDP server socket
     freeaddrinfo(info_start);
-    if (ai == NULL) {
-        impl::socket_close(sock_fd);
-        return SOCKET_ERROR;
-    }
-
-    if (!impl::socket_valid(impl::socket_set_non_blocking(sock_fd))) {
-        std::cerr << "udp fcntl(): " << impl::socket_get_error() << std::endl;
-        impl::socket_close(sock_fd);
-        return SOCKET_ERROR;
-    }
-
-    if (!impl::socket_valid(setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF,
-                                       (char*)&RCVBUF_SIZE,
-                                       sizeof(RCVBUF_SIZE)))) {
-        std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                  << std::endl;
-        impl::socket_close(sock_fd);
-        return SOCKET_ERROR;
-    }
-
-    return sock_fd;
+    return SOCKET_ERROR;
 }
 
 SOCKET cfg_socket(const char* addr) {
@@ -142,11 +153,11 @@ SOCKET cfg_socket(const char* addr) {
 
     int ret = getaddrinfo(addr, "7501", &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "getaddrinfo: " << gai_strerror(ret) << std::endl;
+        std::cerr << "cfg getaddrinfo(): " << gai_strerror(ret) << std::endl;
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "getaddrinfo: empty result" << std::endl;
+        std::cerr << "cfg getaddrinfo(): empty result" << std::endl;
         return SOCKET_ERROR;
     }
 
@@ -154,7 +165,8 @@ SOCKET cfg_socket(const char* addr) {
     for (ai = info_start; ai != NULL; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (!impl::socket_valid(sock_fd)) {
-            std::cerr << "socket: " << impl::socket_get_error() << std::endl;
+            std::cerr << "cfg socket(): " << impl::socket_get_error()
+                      << std::endl;
             continue;
         }
 
@@ -164,6 +176,13 @@ SOCKET cfg_socket(const char* addr) {
         }
 
         break;
+    }
+
+    if (impl::socket_set_rcvtimeout(sock_fd, RCVTIMEOUT_SEC)) {
+        std::cerr << "cfg set_rcvtimeout(): " << impl::socket_get_error()
+                  << std::endl;
+        impl::socket_close(sock_fd);
+        return SOCKET_ERROR;
     }
 
     freeaddrinfo(info_start);
@@ -194,6 +213,8 @@ bool do_tcp_cmd(SOCKET sock_fd, const std::vector<std::string>& cmd_tokens,
     do {
         len = recv(sock_fd, read_buf.get(), max_res_len, 0);
         if (len < 0) {
+            std::cerr << "do_tcp_cmd recv(): " << impl::socket_get_error()
+                      << std::endl;
             return false;
         }
         read_buf.get()[len] = '\0';
@@ -524,19 +545,22 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     std::string res;
     bool success = true;
 
-  // If udp_dest_host is empty string, use automatic addressing with set_udp_dest_auto
-  if (udp_dest_host != "")
-  {
-    success &=
-      do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
-    success &= res == "set_config_param";
-  }
-  else
-  {
-    success &=
-      do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
-      success &= res == "set_udp_dest_auto";
-  }
+    // fail fast if we can't reach the sensor via TCP
+    success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
+    if (!success) {
+        impl::socket_close(sock_fd);
+        return std::shared_ptr<client>();
+    }
+
+    // if dest address is not specified, have the sensor to set it automatically
+    if (udp_dest_host == "") {
+        success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
+        success &= res == "set_udp_dest_auto";
+    } else {
+        success &= do_tcp_cmd(
+            sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
+        success &= res == "set_config_param";
+    }
 
     success &= do_tcp_cmd(
         sock_fd,
@@ -564,8 +588,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     }
 
     // wake up from STANDBY, if necessary
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
+    success &=
+        do_tcp_cmd(sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
     success &= res == "set_config_param";
 
     // reinitialize to activate new settings

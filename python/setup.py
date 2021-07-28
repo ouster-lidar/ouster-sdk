@@ -1,11 +1,24 @@
 import os
 import sys
 import platform
+import shutil
 import subprocess
 
 from setuptools import setup, find_namespace_packages, Extension
 from setuptools.command.build_ext import build_ext
 from setuptools.command.sdist import sdist
+from wheel.bdist_wheel import bdist_wheel
+
+
+# use SDK source location from environment or try to guess
+SRC_PATH = os.path.dirname(os.path.abspath(__file__))
+OUSTER_SDK_PATH = os.getenv('OUSTER_SDK_PATH')
+if OUSTER_SDK_PATH is None:
+    OUSTER_SDK_PATH = os.path.join(SRC_PATH, "sdk")
+if not os.path.exists(OUSTER_SDK_PATH):
+    OUSTER_SDK_PATH = os.path.join(SRC_PATH, "..")
+if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
+    raise RuntimeError(f"Could not guess OUSTER_SDK_PATH")
 
 
 class CMakeExtension(Extension):
@@ -63,13 +76,8 @@ class CMakeBuild(build_ext):
         if triplet:
             cmake_args += ['-DVCPKG_TARGET_TRIPLET=' + triplet]
 
-        # use sdk path from env or location in sdist
-        sdk_path = env.get('OUSTER_SDK_PATH')
-        sdist_sdk_path = os.path.join(ext.sourcedir, "sdk")
-        if sdk_path:
-            cmake_args += ['-DOUSTER_SDK_PATH=' + sdk_path]
-        elif os.path.exists(sdist_sdk_path):
-            cmake_args += ['-DOUSTER_SDK_PATH=' + sdist_sdk_path]
+        # pass OUSTER_SDK_PATH to cmake
+        cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
 
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
@@ -80,8 +88,9 @@ class CMakeBuild(build_ext):
                               cwd=self.build_temp)
 
 
-# allow including files from parent directory via symlink
-class SDKDist(sdist):
+class sdk_sdist(sdist):
+    """Allow including files from parent directory via symlink."""
+
     def run(self):
         created = False
         try:
@@ -94,10 +103,26 @@ class SDKDist(sdist):
                 os.remove("sdk")
 
 
+class sdk_bdist_wheel(bdist_wheel):
+    """Copy files needed by wheel from SDK dir."""
+
+    FILES = ["LICENSE", "LICENSE-bin"]
+
+    def run(self):
+        try:
+            for file in self.FILES:
+                shutil.copy(os.path.join(OUSTER_SDK_PATH, file), ".")
+            super().run()
+        finally:
+            for file in self.FILES:
+                if os.path.exists(file):
+                    os.remove(file)
+
+
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.2.1',
+    version='0.2.2',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
@@ -113,7 +138,8 @@ setup(
     ],
     cmdclass={
         'build_ext': CMakeBuild,
-        'sdist': SDKDist,
+        'sdist': sdk_sdist,
+        'bdist_wheel': sdk_bdist_wheel,
     },
     zip_safe=False,
     python_requires='>=3.6, <4',

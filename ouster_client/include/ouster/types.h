@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <Eigen/Eigen>
+#include <Eigen/Dense>
 #include <set>
 #include <string>
 #include <vector>

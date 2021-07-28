@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>ouster_ros</name>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <description>Ouster example ROS client</description>
   <maintainer email="oss@ouster.io">ouster developers</maintainer>
   <license>BSD</license>
@@ -24,6 +24,8 @@
   <exec_depend>libjsoncpp</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>topic_tools</exec_depend>
+
+  <test_depend>gtest</test_depend>
 
   <export></export>
 </package>

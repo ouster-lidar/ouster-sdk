@@ -87,8 +87,11 @@ def read_packet(handle: playback_handle, buf: BufferT) -> int:
     ...
 
 
-def record_initialize(file_name: str, src_ip: str, dst_ip: str,
-                      frag_size: int) -> record_handle:
+def record_initialize(file_name: str,
+                      src_ip: str,
+                      dst_ip: str,
+                      frag_size: int,
+                      use_sll_encapsulation: bool = ...) -> record_handle:
     ...
 
 

@@ -34,10 +34,7 @@ RUN set -xe \
 && rosdep install -y --from-paths ${OUSTER_SDK_PATH}
 
 # Set up build environment
-COPY --chown=build:build cmake ${OUSTER_SDK_PATH}/cmake
-COPY --chown=build:build ouster_client ${OUSTER_SDK_PATH}/ouster_client
-COPY --chown=build:build ouster_viz ${OUSTER_SDK_PATH}/ouster_viz
-COPY --chown=build:build ouster_ros ${OUSTER_SDK_PATH}/ouster_ros
+COPY --chown=build:build . ${OUSTER_SDK_PATH}
 
 USER build:build
 WORKDIR ${BUILD_HOME}

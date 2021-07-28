@@ -92,5 +92,19 @@ int socket_set_reuse(SOCKET value) {
 #endif
 }
 
+int socket_set_rcvtimeout(SOCKET sock, int timeout_sec) {
+#ifdef _WIN32
+    DWORD timeout_ms = timeout_sec * 1000;
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_ms,
+                      sizeof timeout_ms);
+#else
+    struct timeval tv;
+    tv.tv_sec = timeout_sec;
+    tv.tv_usec = 0;
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,
+                      sizeof tv);
+#endif
+}
+
 }  // namespace impl
 }  // namespace ouster

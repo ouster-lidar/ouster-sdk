@@ -17,8 +17,6 @@ class PcapInfo:
     Type of the output of :func:`.pcap.info`.
 
     Attributes:
-        ipv6_packets: Number of ipv6 packets processed
-        ipv4_packets: Number of ipv4 packets processed
         packets_processed: Total number of all packets processed
         packets_reassembled: Total number of IPv4 UDP packets reassembled
         non_udp_packets: Number of non UDP packets processed
@@ -27,8 +25,6 @@ class PcapInfo:
         ports: A mapping from port numbers to the size (in bytes) and number of
             packets receved on that port.
     """
-    ipv6_packets: int = 0
-    ipv4_packets: int = 0
     packets_processed: int = 0
     packets_reassembled: int = 0
     non_udp_packets: int = 0
@@ -200,8 +196,6 @@ def info(pcap_path: str, n_packets: int = 1024) -> PcapInfo:
     lidar_port, imu_port = _guess_ports(info)
 
     pcap_info = PcapInfo()
-    pcap_info.ipv6_packets = info.ipv6_packets
-    pcap_info.ipv4_packets = info.ipv4_packets
     pcap_info.packets_processed = info.packets_processed
     pcap_info.packets_reassembled = info.packets_reassembled
     pcap_info.non_udp_packets = info.non_udp_packets
@@ -258,7 +252,8 @@ def record(packets: Iterable[Packet],
            src_ip: str = "127.0.0.1",
            dst_ip: str = "127.0.0.1",
            lidar_port: int = 7502,
-           imu_port: int = 7503) -> int:
+           imu_port: int = 7503,
+           use_sll_encapsulation: bool = False) -> int:
     """Record a sequence of sensor packets to a pcap file.
 
     Args:
@@ -268,6 +263,7 @@ def record(packets: Iterable[Packet],
         dst_ip: Destination IP to use for all packets
         lidar_port: Src/dst port to use for lidar packets
         imu_port: Src/dst port to use for imu packets
+        use_sll_encapsulation: Use sll encapsulaiton for pcaps(ouster studio can not read)
 
     Returns:
         Number of packets captured
@@ -276,7 +272,8 @@ def record(packets: Iterable[Packet],
     error = False
     buf_size = 2**16
     n = 0
-    handle = _pcap.record_initialize(pcap_path, src_ip, dst_ip, buf_size)
+    handle = _pcap.record_initialize(pcap_path, src_ip, dst_ip, buf_size,
+                                     use_sll_encapsulation)
     try:
         for packet in packets:
             if isinstance(packet, LidarPacket):
