@@ -11,6 +11,7 @@ Changelog
 
 ouster_client
 -------------
+* update cmake package version to 0.2.1
 * add a conservative socket read timeout so ``init_client()`` will fail with an error message when
   another client fails to close a TCP connection (addresses #258)
 * when passed an empty string for the ``udp_dest_host`` parameter, ``init_client()`` will now
@@ -24,6 +25,7 @@ ouster_pcap
 
 ouster_ros
 ----------
+* update ROS package version to 0.2.1
 * the ``udp_dest`` parameter to ouster.launch is now optional when connecting to a sensor
 
 ouster_viz
@@ -32,6 +34,7 @@ ouster_viz
 
 python
 ------
+* update ouster-sdk version to 0.2.2
 * fix open3d example crash on exit when replaying pcaps on macos (addresses #267)
 
 

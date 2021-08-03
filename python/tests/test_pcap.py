@@ -135,7 +135,7 @@ def test_pcap_read_closed(pcap_obj) -> None:
     with pytest.raises(ValueError):
         next(iter(pcap_obj))
 
-        
+
 @pytest.mark.parametrize("n_lidar, n_imu", [
     pytest.param(1, 0, id="one lidar ether"),
     pytest.param(20, 0, id="multi lidar ether"),
@@ -158,7 +158,7 @@ def test_read_write_lidar_imu(n_lidar, n_imu, metadata, tmpdir):
     out_packets = list(pcap.Pcap(file_path, metadata))
     out_bufs = [bytes(p._data) for p in out_packets]
     in_bufs = [bytes(p._data) for p in in_packets]
-        
+
     assert in_bufs == out_bufs
 
 

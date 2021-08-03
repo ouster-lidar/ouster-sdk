@@ -15,9 +15,8 @@ target_link_libraries(bcompat_meta_json_test OusterSDK::ouster_client GTest::GTe
 
 add_test(NAME bcompat_meta_json_test COMMAND bcompat_meta_json_test --gtest_output=xml:bcompat_meta_json_test.xml)
 set_tests_properties(
-    bcompat_meta_json_test 
-        PROPERTIES 
-        ENVIRONMENT 
+    bcompat_meta_json_test
+        PROPERTIES
+        ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/assets/
 )
-

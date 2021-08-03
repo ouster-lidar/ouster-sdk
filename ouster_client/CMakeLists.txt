@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1.0)
 
 # ==== Project Name ====
 project(ouster_client VERSION 0.2.1)
-set(ouster_client_VERSION_SUFFIX "-dev0")
+set(ouster_client_VERSION_SUFFIX "")
 
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)
@@ -20,7 +20,7 @@ add_custom_command(TARGET generate_build_header PRE_BUILD
   -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/VersionGen.cmake)
 
 add_library(ouster_build INTERFACE)
-target_include_directories(ouster_build INTERFACE 
+target_include_directories(ouster_build INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
 add_dependencies(ouster_build generate_build_header)
 
@@ -35,10 +35,10 @@ add_library(OusterSDK::ouster_client ALIAS ouster_client)
 if(WIN32)
   target_link_libraries(ouster_client PUBLIC ws2_32)
 endif()
-target_include_directories(ouster_client PUBLIC 
-  $<INSTALL_INTERFACE:include> 
+target_include_directories(ouster_client PUBLIC
+  $<INSTALL_INTERFACE:include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_include_directories(ouster_client SYSTEM PUBLIC 
+target_include_directories(ouster_client SYSTEM PUBLIC
   $<INSTALL_INTERFACE:include/optional-lite>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/optional-lite>)
 

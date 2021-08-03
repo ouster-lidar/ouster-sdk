@@ -6,7 +6,7 @@
     "build_date": "2020-10-23T14:05:18Z",
     "build_rev": "v2.0.0-rc.2",
     "client_version": "0.1.0-dev0",
-    "data_format": 
+    "data_format":
     {
         "column_window": [0, 511],
         "columns_per_frame": 512,

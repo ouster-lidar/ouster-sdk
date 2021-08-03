@@ -31,7 +31,7 @@ class PcapInfo:
     guessed_lidar_port: Optional[int] = None
     guessed_imu_port: Optional[int] = None
     ports: Dict[int, Tuple[int, int]] = field(default_factory=dict)
-    
+
 
 def _guess_imu_port(stream_data: _pcap.stream_info) -> Optional[int]:
     result = None
@@ -272,7 +272,8 @@ def record(packets: Iterable[Packet],
     error = False
     buf_size = 2**16
     n = 0
-    handle = _pcap.record_initialize(pcap_path, src_ip, dst_ip, buf_size, use_sll_encapsulation)
+    handle = _pcap.record_initialize(pcap_path, src_ip, dst_ip, buf_size,
+                                     use_sll_encapsulation)
     try:
         for packet in packets:
             if isinstance(packet, LidarPacket):
