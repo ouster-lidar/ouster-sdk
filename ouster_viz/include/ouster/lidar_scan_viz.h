@@ -22,11 +22,6 @@ namespace viz {
  * Helper class to visualize LidarScan.
  */
 class LidarScanViz {
-    AutoExposure range_ae;
-    AutoExposure intensity_ae;
-    AutoExposure ambient_ae;
-    AutoExposure reflectivity_ae;
-    BeamUniformityCorrector ambient_buc;
     util::version firmware_version;
     const std::vector<int> px_offset;
     const double aspect_ratio;
@@ -35,6 +30,11 @@ class LidarScanViz {
     std::atomic_bool show_ambient;
     std::atomic_int display_mode;
     std::atomic_bool cycle_range;
+    AutoExposure range_ae;
+    AutoExposure intensity_ae;
+    AutoExposure ambient_ae;
+    AutoExposure reflectivity_ae;
+    BeamUniformityCorrector ambient_buc;
 
     PointViz& point_viz;
 
@@ -52,7 +52,7 @@ class LidarScanViz {
 
     /**
      * Render both image view and point cloud view to the point_viz.
-     * 
+     *
      * If poses are available, set bool cloud_swap to false and then
      * call point_viz.cloudSwap() manually
      *

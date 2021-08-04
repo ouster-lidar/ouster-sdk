@@ -2,13 +2,13 @@
 
 #include <Eigen/Dense>
 #include <algorithm>
+#include <iostream>
 #include <vector>
 
 namespace ouster {
 namespace viz {
 
 namespace {
-const double ae_percentile = 0.1;
 
 /*
  * damping makes the autoexposure smooth and avoids flickering however, it
@@ -30,11 +30,22 @@ const size_t ae_stride = 4;
 /* if there are too few points, do nothing */
 const size_t ae_min_nonzero_points = 100;
 
+/* default percentile for scaling in autoexposure */
+const double ae_default_percentile = 0.1;
+
 }  // namespace
+
+AutoExposure::AutoExposure()
+    : lo_percentile(ae_default_percentile),
+      hi_percentile(ae_default_percentile) {}
+
+AutoExposure::AutoExposure(double lo_percentile, double hi_percentile)
+    : lo_percentile(lo_percentile), hi_percentile(hi_percentile) {}
 
 void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
     Eigen::Map<Eigen::ArrayXd> key_eigen(image.data(), image.size());
 
+    // int a;
     if (counter == 0) {
         const size_t n = key_eigen.rows();
         std::vector<size_t> indices;
@@ -49,16 +60,20 @@ void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
             // too few nonzero values, nothing to do
             return;
         }
-        const size_t kth_extreme = indices.size() * ae_percentile;
         auto cmp = [&](const size_t a, const size_t b) {
             return key_eigen(a) < key_eigen(b);
         };
-        std::nth_element(indices.begin(), indices.begin() + kth_extreme,
+
+        const size_t lo_kth_extreme = indices.size() * lo_percentile;
+        std::nth_element(indices.begin(), indices.begin() + lo_kth_extreme,
                          indices.end(), cmp);
-        lo = key_eigen[*(indices.begin() + kth_extreme)];
-        std::nth_element(indices.begin() + kth_extreme,
-                         indices.end() - kth_extreme - 1, indices.end(), cmp);
-        hi = key_eigen[*(indices.end() - kth_extreme - 1)];
+        lo = key_eigen[*(indices.begin() + lo_kth_extreme)];
+
+        const size_t hi_kth_extreme = indices.size() * hi_percentile;
+        std::nth_element(indices.begin() + lo_kth_extreme,
+                         indices.end() - hi_kth_extreme - 1, indices.end(),
+                         cmp);
+        hi = key_eigen[*(indices.end() - hi_kth_extreme - 1)];
 
         if (!initialized) {
             initialized = true;
@@ -69,15 +84,28 @@ void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
     if (!initialized) {
         return;
     }
-    // we use exponential smoothing
+
+    // we use the simplest form of exponential smoothing
     lo_state = ae_damping * lo_state + (1.0 - ae_damping) * lo;
     hi_state = ae_damping * hi_state + (1.0 - ae_damping) * hi;
-    counter = (counter + 1) % ae_update_every;
-    key_eigen += ae_percentile - lo_state;
-    key_eigen *= (1.0 - 2 * ae_percentile) / (hi_state - lo_state);
+
+    // Apply affine transformation mapping lo_state to percentile and hi_state
+    // to 1 - percentile. If it would map 0 to positive number, instead map
+    // using only hi_state
+    double lo_hi_scale =
+        (1.0 - (lo_percentile + hi_percentile)) / (hi_state - lo_state);
+    if (lo_hi_scale * (0.0 - lo_state) + lo_percentile <= 0.00) {
+        key_eigen -= lo_state;
+        key_eigen *= lo_hi_scale;
+        key_eigen += lo_percentile;
+    } else {
+        key_eigen *= (1.0 - hi_percentile) / (hi_state);
+    }
 
     // clamp
     key_eigen = key_eigen.max(0.0).min(1.0);
+
+    counter = (counter + 1) % ae_update_every;
 }
 
 namespace {

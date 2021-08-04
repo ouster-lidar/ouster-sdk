@@ -14,11 +14,10 @@ namespace ouster {
 namespace viz {
 
 /**
- * Corrects beam uniformity by minimizing median difference between rows,
- * thereby correcting subtle horizontal line artifacts in images, especially the
- * ambient image.
- */
+ * Functor that adjusts brightness to between 0 and 1 */
 class AutoExposure {
+    const double lo_percentile, hi_percentile;  // percentiles used for scaling
+
     double lo_state = -1.0;
     double hi_state = -1.0;
     double lo = -1.0;
@@ -28,11 +27,17 @@ class AutoExposure {
     int counter = 0;
 
    public:
+    /* default constructor using default percentile values */
+    AutoExposure();
+
+    /* constructor specifying low and high percentiles */
+    AutoExposure(double lo_percentile, double hi_percentile);
+
     /**
      * Scales the image so that contrast is stretched between 0 and 1.
      *
-     * The top percentile is 1 - percentile and the bottom percentile is
-     * percentile. Analogous to imagemagick's -contrast-stretch operation.
+     * The top percentile is 1 - hi_percentile and the bottom percentile is
+     * lo_percentile. Analogous to imagemagick's -contrast-stretch operation.
      *
      * @param image Reference to image, modified in place
      */
@@ -40,8 +45,9 @@ class AutoExposure {
 };
 
 /**
- * Functor that adjusts brightness so that 3rd percentile pixel is black
- * and 97th percentile pixel is white.
+ * Corrects beam uniformity by minimizing median difference between rows,
+ * thereby correcting subtle horizontal line artifacts in images, especially the
+ * ambient image.
  */
 class BeamUniformityCorrector {
    private:
