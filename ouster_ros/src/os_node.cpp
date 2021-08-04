@@ -125,6 +125,7 @@ int main(int argc, char** argv) {
     // empty indicates "not set" since roslaunch xml can't optionally set params
     auto hostname = nh.param("sensor_hostname", std::string{});
     auto udp_dest = nh.param("udp_dest", std::string{});
+    auto mtp_dest = nh.param("mtp_dest", std::string{});
     auto lidar_port = nh.param("lidar_port", 0);
     auto imu_port = nh.param("imu_port", 0);
     auto replay = nh.param("replay", false);
@@ -201,7 +202,7 @@ int main(int argc, char** argv) {
         ROS_INFO("Waiting for sensor %s to initialize ...", hostname.c_str());
 
         auto cli = sensor::init_client(hostname, udp_dest, lidar_mode,
-                                       timestamp_mode, lidar_port, imu_port);
+                                       timestamp_mode, lidar_port, imu_port, mtp_dest);
 
         if (!cli) {
             ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());

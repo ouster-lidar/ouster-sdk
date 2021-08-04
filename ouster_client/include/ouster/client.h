@@ -31,11 +31,16 @@ const util::version min_version = {1, 12, 0};
 /**
  * Listen for sensor data on the specified ports; do not configure the sensor.
  *
+ * @param hostname hostname or ip of the sensor
+ * @param udp_dest_host hostname or ip where the sensor should send data
+ * or "" for automatic detection of destination
  * @param lidar_port port on which the sensor will send lidar data
  * @param imu_port port on which the sensor will send imu data
  * @return pointer owning the resources associated with the connection
  */
 std::shared_ptr<client> init_client(const std::string& hostname = "",
+                                    const std::string& udp_dest_host = "",
+                                    const std::string& mtp_dest_host = "",
                                     int lidar_port = 7502, int imu_port = 7503);
 
 /**
@@ -54,6 +59,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     lidar_mode mode = MODE_UNSPEC,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
+                                    const std::string& mtp_dest_host = "",
                                     int timeout_sec = 60);
 
 /**
