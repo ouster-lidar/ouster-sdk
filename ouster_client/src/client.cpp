@@ -194,7 +194,7 @@ SOCKET mtp_data_socket(int port, const std::string& mtp_group = "",
     }
 
     // join multicast group
-    if (!mtp_group.empty()) {
+    if (!mtp_group.empty() && !mtp_dest_host.empty()) {
         ip_mreq mreq;
         mreq.imr_multiaddr.s_addr = inet_addr(mtp_group.c_str());
         mreq.imr_interface.s_addr = inet_addr(mtp_dest_host.c_str());

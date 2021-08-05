@@ -126,6 +126,7 @@ int main(int argc, char** argv) {
     auto hostname = nh.param("sensor_hostname", std::string{});
     auto udp_dest = nh.param("udp_dest", std::string{});
     auto mtp_dest = nh.param("mtp_dest", std::string{});
+    auto sensor_init = nh.param("sensor_init", false);
     auto lidar_port = nh.param("lidar_port", 0);
     auto imu_port = nh.param("imu_port", 0);
     auto replay = nh.param("replay", false);
@@ -161,6 +162,8 @@ int main(int argc, char** argv) {
     if (!meta_file.size()) {
         if (replay) {
             ROS_ERROR("Must specify metadata file in replay mode");
+        } else if (sensor_init) {
+            ROS_ERROR("Must specify metadata file if sensor was initialized from other client");
         } else {
             ROS_ERROR("Must specify path for metadata output");
         }
@@ -199,10 +202,17 @@ int main(int argc, char** argv) {
         } else {
             ROS_INFO("Using automatic UDP destination");
         }
-        ROS_INFO("Waiting for sensor %s to initialize ...", hostname.c_str());
 
-        auto cli = sensor::init_client(hostname, udp_dest, lidar_mode,
-                                       timestamp_mode, lidar_port, imu_port, mtp_dest);
+        std::shared_ptr<sensor::client> cli;
+        if (sensor_init) {
+            ROS_INFO("Sensor is initialized by other client, get metadata from file ...");
+            cli = sensor::init_client(hostname, udp_dest, mtp_dest,
+                                      lidar_port, imu_port);
+        } else {
+            ROS_INFO("Waiting for sensor to initialize ...");
+            cli = sensor::init_client(hostname, udp_dest, lidar_mode,
+                                      timestamp_mode, lidar_port, imu_port, mtp_dest);
+        }
 
         if (!cli) {
             ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());
@@ -210,16 +220,21 @@ int main(int argc, char** argv) {
         }
         ROS_INFO("Sensor initialized successfully");
 
+        sensor::sensor_info info;
         // write metadata file. If metadata_path is relative, will use cwd
         // (usually ~/.ros)
-        auto metadata = sensor::get_metadata(*cli);
-        if (!write_metadata(meta_file, metadata)) {
-            ROS_ERROR("Exiting because of failure to write metadata path");
-            return EXIT_FAILURE;
+        if (!sensor_init) {
+            auto metadata = sensor::get_metadata(*cli);
+            if (!write_metadata(meta_file, metadata)) {
+                ROS_ERROR("Exiting because of failure to write metadata path");
+                return EXIT_FAILURE;
+            }
+            info = sensor::parse_metadata(metadata);
+        } else {
+            info = sensor::metadata_from_json(meta_file);
         }
 
         // populate sensor info
-        auto info = sensor::parse_metadata(metadata);
         populate_metadata_defaults(info, sensor::MODE_UNSPEC);
         published_metadata = to_string(info);
 

@@ -5,6 +5,7 @@
   <arg name="mtp_dest" default="" doc="IP where the sensor will send data packets via multicast. Used for joining to multicast group"/>  
   <arg name="lidar_port" default="0" doc="port to which the sensor should send lidar data"/>
   <arg name="imu_port" default="0" doc="port to which the sensor should send imu data"/>
+  <arg name="sensor_init" default="false" doc="if true do not configure a sensor; get metadata file and wait for multicast packets"/>
   <arg name="replay" default="false" doc="do not connect to a sensor; expect /os_node/{lidar,imu}_packets from replay"/>
   <arg name="lidar_mode" default="" doc="resolution and rate: either 512x10, 512x20, 1024x10, 1024x20, or 2048x10"/>
   <arg name="timestamp_mode" default="" doc="method used to timestamp measurements: TIME_FROM_INTERNAL_OSC, TIME_FROM_SYNC_PULSE_IN, TIME_FROM_PTP_1588"/>
@@ -20,6 +21,7 @@
     <param name="~/sensor_hostname" value="$(arg sensor_hostname)"/>
     <param name="~/udp_dest" value="$(arg udp_dest)"/>
     <param name="~/mtp_dest" value="$(arg mtp_dest)"/>
+    <param name="~/sensor_init" value="$(arg sensor_init)"/>
     <param name="~/lidar_port" value="$(arg lidar_port)"/>
     <param name="~/imu_port" value="$(arg imu_port)"/>
     <param name="~/metadata" value="$(arg metadata)"/>
