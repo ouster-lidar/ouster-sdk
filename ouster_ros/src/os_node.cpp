@@ -20,6 +20,7 @@
 #include "ouster/types.h"
 #include "ouster_ros/OSConfigSrv.h"
 #include "ouster_ros/PacketMsg.h"
+#include "ouster_ros/SensorMetadata.h"
 #include "ouster_ros/ros.h"
 
 using PacketMsg = ouster_ros::PacketMsg;
@@ -157,14 +158,6 @@ int main(int argc, char** argv) {
     }
 
     auto meta_file = nh.param("metadata", std::string{});
-    if (!meta_file.size()) {
-        if (replay) {
-            ROS_ERROR("Must specify metadata file in replay mode");
-        } else {
-            ROS_ERROR("Must specify path for metadata output");
-        }
-        return EXIT_FAILURE;
-    }
 
     if (!replay && (!hostname.size() || !udp_dest.size())) {
         ROS_ERROR("Must specify both hostname and udp destination");
@@ -178,7 +171,30 @@ int main(int argc, char** argv) {
 
         // populate info for config service
         try {
-            auto info = sensor::metadata_from_json(meta_file);
+            sensor::sensor_info info;
+            if (meta_file.length())
+            {
+              info = sensor::metadata_from_json(meta_file);
+            }
+            else
+            {
+                bool metadata_found = false;
+                std::string metadata;
+                ros::Subscriber meta_sub = nh.subscribe<ouster_ros::SensorMetadata, const ouster_ros::SensorMetadataConstPtr&>("metadata", 1, 
+                  [&](const ouster_ros::SensorMetadataConstPtr& msg)
+                  {
+                      metadata = msg->data;
+                      metadata_found = true;
+                      ROS_INFO("Got sensor metadata");
+                  });
+                while (!metadata_found)
+                {
+                  // wait for metadata
+                  ROS_WARN_THROTTLE(5.0, "Waiting for sensor metadata.");
+                  ros::spinOnce();
+                }
+                info = sensor::parse_metadata(metadata);
+            }
             published_metadata = to_string(info);
 
             ROS_INFO("Using lidar_mode: %s",
@@ -208,9 +224,23 @@ int main(int argc, char** argv) {
 
         // write metadata file to cwd (usually ~/.ros)
         auto metadata = sensor::get_metadata(*cli);
-        if (!write_metadata(meta_file, metadata)) {
-            ROS_ERROR("Exiting because of failure to write metadata path");
-            return EXIT_FAILURE;
+
+        ros::Publisher metadata_pub;
+        if (meta_file.length())
+        {
+            if (!write_metadata(meta_file, metadata)) {
+                ROS_ERROR("Exiting because of failure to write metadata path");
+                return EXIT_FAILURE;
+            }
+        }
+        else
+        {
+            metadata_pub = nh.advertise<ouster_ros::SensorMetadata>("metadata", 1, true);
+
+            // publish the metadata
+            ouster_ros::SensorMetadata data;
+            data.data = metadata;
+            metadata_pub.publish(data);
         }
 
         // populate sensor info
