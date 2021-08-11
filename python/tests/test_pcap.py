@@ -16,7 +16,9 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 NO_RANDOM_TIME = 0
 RANDOM_FLOAT = 1
-
+SLL_PROTO = 42
+ETH_PROTO = 1
+UDP_PROTO = 17
 # Seed the start timestamp
 current_timestamp = time.time()
 
@@ -57,6 +59,11 @@ def n_packets() -> int:
 
 
 @pytest.fixture
+def use_sll() -> int:
+    return False
+
+
+@pytest.fixture
 def metadata() -> client.SensorInfo:
     digest_path = os.path.join(DATA_DIR, "os-992011000121_digest.json")
     with open(digest_path, 'r') as f:
@@ -64,14 +71,14 @@ def metadata() -> client.SensorInfo:
 
 
 @pytest.fixture
-def pcap_path(metadata, n_packets, tmpdir):
+def pcap_path(metadata, n_packets, use_sll, tmpdir):
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     packets = islice(
         roundrobin(random_lidar_packets(metadata),
                    random_imu_packets(metadata)), n_packets)
 
-    pcap.record(packets, file_path)
+    pcap.record(packets, file_path, use_sll_encapsulation=use_sll)
 
     yield file_path
 
@@ -81,13 +88,6 @@ def pcap_obj(metadata, pcap_path):
     pc = pcap.Pcap(pcap_path, metadata)
     yield pc
     pc.close()
-
-
-@pytest.mark.parametrize('n_packets', [0])
-def test_pcap_info_empty(pcap_path) -> None:
-    """Test that querying an empty pcap returns an empty PcapInfo."""
-    res = pcap.info(pcap_path)
-    assert res == pcap.PcapInfo()
 
 
 @pytest.mark.parametrize('n_packets', [0])
@@ -105,17 +105,56 @@ def test_pcap_read_10(pcap_obj) -> None:
 @pytest.mark.parametrize('n_packets', [10])
 def test_pcap_info_10(pcap_path) -> None:
     """Check that reading a test pcap produces the right number of packets."""
-    res = pcap.info(pcap_path)
-    assert res.packets_processed == 10
-    assert res.packets_reassembled == 10
-    assert res.non_udp_packets == 0
+    res = pcap.Pcap(pcap_path, None)
+    ports = {}
+    sizes = {}
+    encap = {}
+    net = {}
+    af = {}
+    for item in pcap._pcap_info(pcap_path):
+        if item.dst_port not in ports:
+            ports[item.dst_port] = 0
+        ports[item.dst_port] += 1
 
+        if item.payload_size not in sizes:
+            sizes[item.payload_size] = 0
+        sizes[item.payload_size] += 1
+
+        if item.encapsulation_protocol not in encap:
+            encap[item.encapsulation_protocol] = 0
+        encap[item.encapsulation_protocol] += 1
+
+        if item.network_protocol not in net:
+            net[item.network_protocol] = 0
+        net[item.network_protocol] += 1
+
+        if item.ip_version not in af:
+            af[item.ip_version] = 0
+        af[item.ip_version] += 1
     # default ports
-    assert res.guessed_lidar_port == 7502
-    assert res.guessed_imu_port == 7503
+    assert res._lidar_port == 7502
 
     # roundrobin -> 5 of each
-    assert res.ports == {7502: (6464, 5), 7503: (48, 5)}
+    assert ports == {7502: 5, 7503: 5}
+    assert sizes == {6464: 5, 48: 5}
+    assert encap == {ETH_PROTO: 10}
+    assert net == {UDP_PROTO: 10}
+    assert af == {4: 10}
+
+
+@pytest.mark.parametrize('n_packets', [10])
+@pytest.mark.parametrize('use_sll', [True, False])
+def test_pcap_info_encap_proto(pcap_path, use_sll) -> None:
+    """Check that reading a test pcap produces the right number of packets."""
+    encap = {}
+
+    for item in pcap._pcap_info(pcap_path):
+
+        if item.encapsulation_protocol not in encap:
+            encap[item.encapsulation_protocol] = 0
+        encap[item.encapsulation_protocol] += 1
+    proto = SLL_PROTO if use_sll else ETH_PROTO
+    assert encap == {proto: 10}
 
 
 def test_pcap_reset(pcap_obj) -> None:

@@ -13,43 +13,6 @@ class record_handle:
         ...
 
 
-class stream_info:
-    def __init__(self) -> None:
-        ...
-
-    @property
-    def ipv4_packets(self) -> int:
-        ...
-
-    @property
-    def ipv6_packets(self) -> int:
-        ...
-
-    @property
-    def non_udp_packets(self) -> int:
-        ...
-
-    @property
-    def packet_size_to_port(self) -> Dict[int, Dict[int, int]]:
-        ...
-
-    @property
-    def packets_processed(self) -> int:
-        ...
-
-    @property
-    def packets_reassembled(self) -> int:
-        ...
-
-    @property
-    def port_to_packet_count(self) -> Dict[int, int]:
-        ...
-
-    @property
-    def port_to_packet_sizes(self) -> Dict[int, Dict[int, int]]:
-        ...
-
-
 class packet_info:
     def __init__(self) -> None:
         ...
@@ -78,6 +41,22 @@ class packet_info:
     def timestamp(self) -> float:
         ...
 
+    @property
+    def fragments_in_packet(self) -> int:
+        ...
+
+    @property
+    def ip_version(self) -> int:
+        ...
+
+    @property
+    def encapsulation_protocol(self) -> int:
+        ...
+
+    @property
+    def network_protocol(self) -> float:
+        ...
+
 
 def next_packet_info(handle: playback_handle, pi: packet_info) -> bool:
     ...
@@ -101,11 +80,6 @@ def record_uninitialize(handle: record_handle) -> None:
 
 def record_packet(handle: record_handle, src_port: int, dst_port: int,
                   buf: BufferT, timestamp: float) -> None:
-    ...
-
-
-def replay_get_pcap_info(file_name: str,
-                         packets_to_process: int) -> stream_info:
     ...
 
 

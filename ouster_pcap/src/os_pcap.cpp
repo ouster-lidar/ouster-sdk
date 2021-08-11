@@ -25,46 +25,6 @@ using us = std::chrono::microseconds;
 namespace ouster {
 namespace sensor_utils {
 
-std::ostream& operator<<(std::ostream& stream_in,
-                         const stream_info& stream_data) {
-    stream_in << "Replay Pcap Info:" << std::endl;
-    stream_in << "  Packets Processed: " << stream_data.packets_processed
-              << std::endl;
-    stream_in << "  Packets Reassembled: " << stream_data.packets_reassembled
-              << std::endl;
-    stream_in << "  IPV6 Packets: " << stream_data.ipv6_packets << std::endl;
-    stream_in << "  IPV4 Packets: " << stream_data.ipv4_packets << std::endl;
-    stream_in << "  Non-UDP Packets: " << stream_data.non_udp_packets
-              << std::endl;
-    stream_in << "  Ports To Packet Sizes: " << std::endl;
-    for (auto item : stream_data.port_to_packet_sizes) {
-        stream_in << "    Port: " << item.first << std::endl;
-        for (auto item2 : item.second) {
-            stream_in << "      Data Size: " << item2.first
-                      << " Count: " << item2.second << std::endl;
-        }
-    }
-    stream_in << "  Port Count: " << std::endl;
-    for (auto item : stream_data.port_to_packet_count) {
-        stream_in << "    Port: " << item.first << " Count: " << item.second
-                  << std::endl;
-    }
-    stream_in << "  Packet Size To Ports: " << std::endl;
-    for (auto item : stream_data.packet_size_to_port) {
-        stream_in << "    Packet Size: " << item.first << std::endl;
-        for (auto item2 : item.second) {
-            stream_in << "      Port: " << item2.first
-                      << " Count: " << item2.second << std::endl;
-        }
-    }
-    stream_in << "  Port Count: " << std::endl;
-    for (auto item : stream_data.port_to_packet_count) {
-        stream_in << "    Port: " << item.first << " Count: " << item.second
-                  << std::endl;
-    }
-    return stream_in;
-}
-
 std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
     stream_in << "Source IP: \"" << data.src_ip << "\" ";
     stream_in << "Source Port: " << data.src_port << std::endl;
@@ -74,6 +34,12 @@ std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
 
     stream_in << "Payload Size: " << data.payload_size << std::endl;
     stream_in << "Timestamp: " << data.timestamp.count() << std::endl;
+
+    stream_in << "Fragments In Packet: " << data.fragments_in_packet
+              << std::endl;
+    stream_in << "Encapsulation Protocol: " << data.encapsulation_protocol
+              << std::endl;
+    stream_in << "Network Protocol: " << data.network_protocol << std::endl;
 
     return stream_in;
 }
@@ -101,66 +67,6 @@ int replay(playback_handle& handle, double rate) {
     }
 
     return packets_sent;
-}
-
-// This function is here so that in the future the same code can be used for
-// live packet captures as well
-std::shared_ptr<stream_info> get_info(BaseSniffer& sniffer,
-                                      size_t max_packets_to_process) {
-    std::shared_ptr<stream_info> result = std::make_shared<stream_info>();
-
-    IPv4Reassembler reassembler;
-    for (auto& packet : sniffer) {
-        if (result->packets_processed >= max_packets_to_process &&
-            max_packets_to_process != 0)
-            break;
-        try {
-            auto pdu = packet.pdu();
-            if (pdu != NULL) {
-                IP* ip = pdu->find_pdu<IP>();
-                IPv6* ipv6 = pdu->find_pdu<IPv6>();
-                if (ip != NULL || ipv6 != NULL) {
-                    result->packets_processed++;
-                    if (reassembler.process(*pdu) !=
-                        IPv4Reassembler::FRAGMENTED) {
-                        result->packets_reassembled++;
-                        auto udp = pdu->find_pdu<UDP>();
-                        auto raw = pdu->find_pdu<RawPDU>();
-                        if (ip != NULL) result->ipv4_packets++;
-                        if (ipv6 != NULL) result->ipv6_packets++;
-                        if (udp != NULL) {
-                            size_t port = udp->dport();
-                            auto packet_size = raw->size();
-                            result->port_to_packet_sizes[port][packet_size]++;
-                            result->port_to_packet_count[port]++;
-                            result->packet_size_to_port[packet_size][port]++;
-                        } else {
-                            result->non_udp_packets++;
-                        }
-                    }
-                }
-            }
-        } catch (exception_base& e) {
-            std::cout << "Issue reading packet: " << e.what() << std::endl;
-            continue;
-        }
-    }
-
-    return result;
-}
-
-std::shared_ptr<stream_info> replay_get_pcap_info(
-    const std::string& file, size_t max_packets_to_process) {
-    std::shared_ptr<stream_info> result;
-    try {
-        FileSniffer sniffer(file, "udp");
-        result = get_info(sniffer, max_packets_to_process);
-    } catch (exception_base& e) {
-        std::cout << "FileSniffer Exception: " << e.what() << std::endl;
-        throw;
-    }
-
-    return result;
 }
 
 std::shared_ptr<playback_handle> replay_initialize(
@@ -231,7 +137,9 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
     bool result = false;
 
     bool reassm = false;
+    int reassm_packets = 0;
     while (!reassm) {
+        reassm_packets++;
         handle.packet_cache = handle.pcap_reader->next_packet();
         if (handle.packet_cache) {
             auto pdu = handle.packet_cache.pdu();
@@ -245,15 +153,23 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                     reassm = (handle.reassembler.process(*pdu) !=
                               IPv4Reassembler::FRAGMENTED);
                     if (reassm) {
+                        info.fragments_in_packet = reassm_packets;
+                        reassm_packets = 0;
+
+                        info.encapsulation_protocol = (int)pdu->pdu_type();
                         result = true;
                         UDP* udp = pdu->find_pdu<UDP>();
                         auto raw = pdu->find_pdu<RawPDU>();
                         if (ip) {
                             info.dst_ip = ip->dst_addr().to_string();
                             info.src_ip = ip->src_addr().to_string();
+                            info.ip_version = 4;
+                            info.network_protocol = ip->protocol();
                         } else if (ipv6) {
                             info.dst_ip = ipv6->dst_addr().to_string();
                             info.src_ip = ipv6->src_addr().to_string();
+                            info.ip_version = 6;
+                            info.network_protocol = ipv6->next_header();
                         } else {
                             throw "Error: No Ip Packet Found";
                         }
@@ -451,9 +367,9 @@ void record_packet(record_handle& handle, int src_port, int dst_port,
         // https://www.gitmemory.com/issue/mfontanini/libtins/348/488141933
         auto _ = pdu->serialize();
         /*
-         * The next block is due to the fact that the previous serialize does not treat
-         * the udp packet as if it were decodable. Manually tell libtins to
-         * go in and serialize the udp packet as well
+         * The next block is due to the fact that the previous serialize does
+         * not treat the udp packet as if it were decodable. Manually tell
+         * libtins to go in and serialize the udp packet as well
          */
         if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
             _ = pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();

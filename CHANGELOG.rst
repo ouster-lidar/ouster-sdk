@@ -8,6 +8,8 @@ Changelog
 
 * add preliminary cpack and install support. It should be possible to use a pre-built SDK package
   instead of including the SDK in the build tree of your project
+* changed up the handling of the pcap info to hopefully streamline it in preperation for
+  multi-stream support
 
 ouster_client
 -------------

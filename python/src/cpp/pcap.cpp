@@ -79,22 +79,6 @@ directly.
 
     // clang-format off
     
-    py::class_<ouster::sensor_utils::stream_info,
-               std::shared_ptr<ouster::sensor_utils::stream_info>>(m, "stream_info")
-        .def(py::init<>())
-        .def("__repr__", [](const ouster::sensor_utils::stream_info& data) {
-                             std::stringstream result;
-                             result << data;
-                             return result.str();})
-        .def_readonly("packets_processed", &ouster::sensor_utils::stream_info::packets_processed)
-        .def_readonly("packets_reassembled", &ouster::sensor_utils::stream_info::packets_reassembled)
-        .def_readonly("port_to_packet_sizes", &ouster::sensor_utils::stream_info::port_to_packet_sizes)
-        .def_readonly("port_to_packet_count", &ouster::sensor_utils::stream_info::port_to_packet_count)
-        .def_readonly("ipv6_packets", &ouster::sensor_utils::stream_info::ipv6_packets)
-        .def_readonly("ipv4_packets", &ouster::sensor_utils::stream_info::ipv4_packets)
-        .def_readonly("non_udp_packets", &ouster::sensor_utils::stream_info::non_udp_packets)
-        .def_readonly("packet_size_to_port", &ouster::sensor_utils::stream_info::packet_size_to_port);
-    
     py::class_<ouster::sensor_utils::packet_info,
                std::shared_ptr<ouster::sensor_utils::packet_info>>(m, "packet_info")
         .def(py::init<>())
@@ -110,7 +94,12 @@ directly.
              [](ouster::sensor_utils::packet_info& packet_info) -> double {
                  return packet_info.timestamp.count() / 1e6;
              })
-        .def_readonly("payload_size", &ouster::sensor_utils::packet_info::payload_size);
+        .def_readonly("payload_size", &ouster::sensor_utils::packet_info::payload_size)
+        .def_readonly("fragments_in_packet",
+                      &ouster::sensor_utils::packet_info::fragments_in_packet)
+        .def_readonly("ip_version", &ouster::sensor_utils::packet_info::ip_version)
+        .def_readonly("encapsulation_protocol", &ouster::sensor_utils::packet_info::encapsulation_protocol)
+        .def_readonly("network_protocol", &ouster::sensor_utils::packet_info::network_protocol);
     
     
     py::class_<ouster::sensor_utils::playback_handle,
@@ -121,7 +110,6 @@ directly.
         .def(py::init<>());
     
     m.def("replay_pcap", &replay_pcap);
-    m.def("replay_get_pcap_info", &ouster::sensor_utils::replay_get_pcap_info, py::return_value_policy::reference);
 
     m.def("replay_initialize",
           py::overload_cast<const std::string&, const std::string&,
