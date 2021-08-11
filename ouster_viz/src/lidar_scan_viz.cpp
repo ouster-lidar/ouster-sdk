@@ -37,7 +37,9 @@ LidarScanViz::LidarScanViz(const sensor::sensor_info& info,
       show_ambient(true),
       display_mode(MODE_INTENSITY),
       cycle_range(false),
-      intensity_ae(0.0, 0.1),
+      intensity_ae(0.02, 0.1,
+                   3),  // intensity is more likely than range to gray out
+                        // blacks out when using AE with higher lo_percentile
       point_viz(point_viz_) {
     point_viz.attachKeyHandler(
         GLFW_KEY_N, [this]() { this->show_ambient = !this->show_ambient; });

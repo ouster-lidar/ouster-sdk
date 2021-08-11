@@ -22,7 +22,7 @@ const double ae_damping = 0.90;
  * for performance reasons, we may not want to update every frame but rather
  * every few frames
  */
-const int ae_update_every = 3;
+const int ae_default_update_every = 3;
 
 /* for performance reasons, only consider a subset of points */
 const size_t ae_stride = 4;
@@ -37,10 +37,19 @@ const double ae_default_percentile = 0.1;
 
 AutoExposure::AutoExposure()
     : lo_percentile(ae_default_percentile),
-      hi_percentile(ae_default_percentile) {}
+      hi_percentile(ae_default_percentile),
+      ae_update_every(ae_default_update_every) {}
 
-AutoExposure::AutoExposure(double lo_percentile, double hi_percentile)
-    : lo_percentile(lo_percentile), hi_percentile(hi_percentile) {}
+AutoExposure::AutoExposure(int update_every)
+    : lo_percentile(ae_default_percentile),
+      hi_percentile(ae_default_percentile),
+      ae_update_every(update_every) {}
+
+AutoExposure::AutoExposure(double lo_percentile, double hi_percentile,
+                           int update_every)
+    : lo_percentile(lo_percentile),
+      hi_percentile(hi_percentile),
+      ae_update_every(update_every) {}
 
 void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
     Eigen::Map<Eigen::ArrayXd> key_eigen(image.data(), image.size());
@@ -89,12 +98,14 @@ void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
     lo_state = ae_damping * lo_state + (1.0 - ae_damping) * lo;
     hi_state = ae_damping * hi_state + (1.0 - ae_damping) * hi;
 
-    // Apply affine transformation mapping lo_state to percentile and hi_state
-    // to 1 - percentile. If it would map 0 to positive number, instead map
-    // using only hi_state
+    // Apply affine transformation mapping lo_state to lo_percentile and
+    // hi_state to 1 - hi_percentile. If it would map 0 to positive number,
+    // instead map using only hi_state
     double lo_hi_scale =
         (1.0 - (lo_percentile + hi_percentile)) / (hi_state - lo_state);
-    if (lo_hi_scale * (0.0 - lo_state) + lo_percentile <= 0.00) {
+
+    if (lo_hi_scale * (0.0 - lo_state) + lo_percentile <= 0.00 &&
+        !std::isinf(lo_hi_scale) && !std::isnan(lo_hi_scale)) {
         key_eigen -= lo_state;
         key_eigen *= lo_hi_scale;
         key_eigen += lo_percentile;

@@ -2,7 +2,7 @@
  * @file
  * @brief ouster_pyclient python module
  *
- * Note: the type annotations in `sensor.pyi` need to be updated whenever this
+ * Note: the type annotations in `client.pyi` need to be updated whenever this
  * file changes. See the mypy documentation for details.
  */
 
@@ -27,6 +27,7 @@
 #include <thread>
 #include <utility>
 
+#include "ouster/image_processing.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -679,6 +680,15 @@ directly.
         });
 
     m.attr("__version__") = VERSION_INFO;
+
+    //  AutoExposure
+    py::class_<viz::AutoExposure>(m, "AutoExposure")
+        .def(py::init<>())
+        .def(py::init<int>(), py::arg("update_every"))
+        .def(py::init<double, double, int>(), py::arg("lo_percentile"),
+             py::arg("hi_percentile"), py::arg("update_every"))
+        .def("__call__", [](viz::AutoExposure& self,
+                            Eigen::Ref<img_t<double>>& image) { self(image); });
 
     return m.ptr();
 }

@@ -12,7 +12,8 @@ except ModuleNotFoundError:
     exit(1)
 
 from ouster import client
-from .colormaps import normalize, colorize
+from ouster.client import _utils
+from .colormaps import colorize
 
 Z_NEAR = 1.0
 
@@ -140,6 +141,12 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
     """
 
     channels = [c for c in client.ChanField]
+    aes = {}
+    for channel_ind, channel in enumerate(channels):
+        if channel == client.ChanField.SIGNAL:
+            aes[channel_ind] = _utils.AutoExposure(0.02, 0.1)
+        else:
+            aes[channel_ind] = _utils.AutoExposure()
 
     # visualizer state
     scans_iter = iter(scans)
@@ -177,18 +184,18 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
 
     def update_data(vis: o3d.visualization.Visualizer):
         xyz = xyzlut(scan)
-        key = scan.field(channels[channel_ind])
+        key = scan.field(channels[channel_ind]).astype(float)
 
         # apply colormap to field values
-        key_img = normalize(key)
-        color_img = colorize(key_img)
+        aes[channel_ind](key)
+        color_img = colorize(key)
 
         # prepare point cloud for Open3d Visualiser
         cloud.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
         cloud.colors = o3d.utility.Vector3dVector(color_img.reshape((-1, 3)))
 
         # prepare canvas for 2d image
-        gray_img = np.dstack([key_img] * 3)
+        gray_img = np.dstack([key] * 3)
         canvas_set_image_data(image, client.destagger(metadata, gray_img))
 
         # signal that point cloud and needs to be re-rendered

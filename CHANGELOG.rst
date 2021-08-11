@@ -33,11 +33,13 @@ ouster_ros
 ouster_viz
 ----------
 * the second CLI argument of simple_viz specifying the UDP data destination is now optional
+* fixed bug in AutoExposure causing more points to be mapped to near-zero values
 
 python
 ------
 * update ouster-sdk version to 0.2.2
 * fix open3d example crash on exit when replaying pcaps on macos (addresses #267)
+* change open3d normalization to use bound AutoExposure
 
 
 [20210608]

@@ -17,6 +17,7 @@ namespace viz {
  * Functor that adjusts brightness to between 0 and 1 */
 class AutoExposure {
     const double lo_percentile, hi_percentile;  // percentiles used for scaling
+    const int ae_update_every;
 
     double lo_state = -1.0;
     double hi_state = -1.0;
@@ -27,11 +28,14 @@ class AutoExposure {
     int counter = 0;
 
    public:
-    /* default constructor using default percentile values */
+    /* default constructor using default percentile and udpate values */
     AutoExposure();
 
-    /* constructor specifying low and high percentiles */
-    AutoExposure(double lo_percentile, double hi_percentile);
+    /* constructor specifying update modulo, and using default percentiles */
+    AutoExposure(int update_every);
+
+    /* constructor specifying low and high percentiles, and update modulo */
+    AutoExposure(double lo_percentile, double hi_percentile, int update_every);
 
     /**
      * Scales the image so that contrast is stretched between 0 and 1.
