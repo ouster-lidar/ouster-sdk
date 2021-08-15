@@ -18,7 +18,7 @@ if OUSTER_SDK_PATH is None:
 if not os.path.exists(OUSTER_SDK_PATH):
     OUSTER_SDK_PATH = os.path.join(SRC_PATH, "..")
 if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
-    raise RuntimeError(f"Could not guess OUSTER_SDK_PATH")
+    raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 
 
 class CMakeExtension(Extension):

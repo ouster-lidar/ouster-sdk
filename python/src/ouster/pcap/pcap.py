@@ -208,7 +208,8 @@ def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
     try:
         packet_info = _pcap.packet_info()
         while _pcap.next_packet_info(pcap_handle, packet_info):
-            yield _pcap.replay_packet(pcap_handle)
+            if packet_info.dst_port in (lidar_port_guess, imu_port_guess):
+                yield _pcap.replay_packet(pcap_handle)
     finally:
         _pcap.replay_uninitialize(pcap_handle)
 

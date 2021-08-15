@@ -105,8 +105,6 @@ bool replay_packet(playback_handle& handle) {
     bool result = false;
     if (handle.have_new_packet) {
         struct sockaddr_in addr;
-
-        result = true;
         auto pdu = handle.packet_cache.pdu();
         auto udp = pdu->find_pdu<UDP>();
         auto raw = pdu->find_pdu<RawPDU>();
@@ -116,20 +114,20 @@ bool replay_packet(playback_handle& handle) {
             int port = (handle.port_map.count(udp->dport()) == 0)
                            ? udp->dport()
                            : handle.port_map[udp->dport()];
-            memset(&addr, 0, sizeof(addr));
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(port);
             IP* ip = pdu->find_pdu<IP>();
             IPv6* ipv6 = pdu->find_pdu<IPv6>();
             if (ip || ipv6) {
+                memset(&addr, 0, sizeof(addr));
+                addr.sin_family = AF_INET;
+                addr.sin_port = htons(port);
                 addr.sin_addr.s_addr = inet_addr(handle.dst_ip.c_str());
+                if (sendto(handle.replay_socket, (char*)temp, size, 0,
+                           (const struct sockaddr*)&addr, sizeof(addr)) > 0) {
+                    result = true;
+                }
             }
-
-            sendto(handle.replay_socket, (char*)temp, size, 0,
-                   (const struct sockaddr*)&addr, sizeof(addr));
         }
     }
-
     return result;
 }
 

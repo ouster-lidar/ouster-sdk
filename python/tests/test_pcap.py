@@ -103,9 +103,9 @@ def test_pcap_read_10(pcap_obj) -> None:
 
 
 @pytest.mark.parametrize('n_packets', [10])
-def test_pcap_info_10(pcap_path) -> None:
+def test_pcap_info_10(pcap_path, metadata) -> None:
     """Check that reading a test pcap produces the right number of packets."""
-    res = pcap.Pcap(pcap_path, None)
+    res = pcap.Pcap(pcap_path, metadata)
     ports = {}
     sizes = {}
     encap = {}
