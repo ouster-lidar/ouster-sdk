@@ -1,8 +1,8 @@
 from enum import Enum
 from typing import Callable, ClassVar, Dict, List, Optional, Type, Union, Tuple
 
-import numpy.lib.stride_tricks
 import numpy as np
+import numpy.lib.stride_tricks
 
 from . import SensorInfo, _client
 

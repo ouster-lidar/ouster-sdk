@@ -144,7 +144,7 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
     aes = {}
     for channel_ind, channel in enumerate(channels):
         if channel == client.ChanField.SIGNAL:
-            aes[channel_ind] = _utils.AutoExposure(0.02, 0.1)
+            aes[channel_ind] = _utils.AutoExposure(0.02, 0.1, 3)
         else:
             aes[channel_ind] = _utils.AutoExposure()
 
