@@ -5,15 +5,14 @@
 
 #pragma once
 
-#include <tins/tins.h>
-
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
+#include <tins/tins.h>
 #include "ouster/impl/netcompat.h"
 
 #define PROTOCOL_UDP 17
@@ -45,41 +44,15 @@ std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
 
 /**
  * Struct to hide the stepwise playback details
- * @TODO This really should be opaque, however pybind does not like opaque
-types, maybe make pybind trampolines to bypass
  */
-struct playback_handle {
-    std::string dst_ip;     ///< The destination IP
-    std::string src_ip;     ///< The source IP
-    std::string file_name;  ///< The filename of the pcap file
-    std::unordered_map<int, int>
-        port_map;  ///< Map containing port rewrite rules
-    SOCKET replay_socket;
-
-    std::unique_ptr<Tins::FileSniffer>
-        pcap_reader;  ///< Object that holds the unified pcap reader
-    Tins::Packet packet_cache;
-    bool have_new_packet;
-
-    Tins::IPv4Reassembler
-        reassembler;  ///< The reassembler mainly for lidar packets
-};
+struct playback_handle;
+std::shared_ptr<playback_handle> playback_handle_init();
 
 /**
  * Struct to hide the record details
- * @TODO This really should be opaque, however pybind does not like opaque
-types, maybe make pybind trampolines to bypass
  */
-struct record_handle {
-    std::string dst_ip;     ///< The destination IP
-    std::string src_ip;     ///< The source IP
-    std::string file_name;  ///< The filename of the output pcap file
-    size_t frag_size;       ///< The size of the udp data fragmentation
-    std::unique_ptr<Tins::PacketWriter>
-        pcap_file_writer;  ///< Object that holds the pcap writer
-    bool use_sll_encapsulation;
-};
-
+struct record_handle;
+std::shared_ptr<record_handle> record_handle_init();
 /**
  * Replay udp packets from pcap file
  * @param[in] handle A handle to the initialized playback struct

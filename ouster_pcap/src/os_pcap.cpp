@@ -25,6 +25,53 @@ using us = std::chrono::microseconds;
 namespace ouster {
 namespace sensor_utils {
 
+struct record_handle {
+public:
+    std::string dst_ip;     ///< The destination IP
+    std::string src_ip;     ///< The source IP
+    std::string file_name;  ///< The filename of the output pcap file
+    size_t frag_size;       ///< The size of the udp data fragmentation
+    std::unique_ptr<Tins::PacketWriter>
+        pcap_file_writer;  ///< Object that holds the pcap writer
+    bool use_sll_encapsulation;
+
+    record_handle() { }
+
+    ~record_handle() { }
+};
+
+std::shared_ptr<record_handle> record_handle_init() {
+    return std::make_shared<record_handle>();
+}
+
+struct playback_handle {
+public:
+    std::string dst_ip;     ///< The destination IP
+    std::string src_ip;     ///< The source IP
+    std::string file_name;  ///< The filename of the pcap file
+    std::unordered_map<int, int>
+        port_map;  ///< Map containing port rewrite rules
+    SOCKET replay_socket;
+
+    std::unique_ptr<Tins::FileSniffer>
+        pcap_reader;  ///< Object that holds the unified pcap reader
+    Tins::Packet packet_cache;
+    bool have_new_packet;
+
+    Tins::IPv4Reassembler
+        reassembler;  ///< The reassembler mainly for lidar packets
+
+    
+    playback_handle() { }
+
+    ~playback_handle() { }
+};
+
+std::shared_ptr<playback_handle> playback_handle_init() {
+    return std::make_shared<playback_handle>();
+}
+
+
 std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
     stream_in << "Source IP: \"" << data.src_ip << "\" ";
     stream_in << "Source Port: " << data.src_port << std::endl;
