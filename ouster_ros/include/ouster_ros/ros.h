@@ -6,10 +6,14 @@
 
 #pragma once
 
+#include <ros/ros.h>
+
 #include <geometry_msgs/TransformStamped.h>
 #include <pcl/point_cloud.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
+
+#include <ouster_ros/SensorMetadata.h>
 
 #include <chrono>
 #include <string>
@@ -25,6 +29,8 @@ namespace ouster_ros {
 namespace sensor = ouster::sensor;
 using Cloud = pcl::PointCloud<Point>;
 using ns = std::chrono::nanoseconds;
+
+std::string get_sensor_metadata_ros(ros::NodeHandle& nh);
 
 /**
  * Read an imu packet into a ROS message. Blocks for up to a second if no data
@@ -87,4 +93,6 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
 geometry_msgs::TransformStamped transform_to_tf_msg(
     const ouster::mat4d& mat, const std::string& frame,
     const std::string& child_frame);
+
+
 }  // namespace ouster_ros

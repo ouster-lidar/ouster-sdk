@@ -16,6 +16,27 @@ namespace ouster_ros {
 
 namespace sensor = ouster::sensor;
 
+std::string get_sensor_metadata_ros(ros::NodeHandle& nh)
+{
+    bool metadata_found = false;
+    std::string metadata;
+    ros::Subscriber meta_sub = nh.subscribe<ouster_ros::SensorMetadata, const ouster_ros::SensorMetadataConstPtr&>("metadata", 1, 
+                  [&](const ouster_ros::SensorMetadataConstPtr& msg)
+    {
+        metadata = msg->data;
+        metadata_found = true;
+        ROS_INFO("Got sensor metadata");
+    });
+    while (!metadata_found && ros::ok())
+    {
+        // wait for metadata
+        ROS_WARN_THROTTLE(5.0, "Waiting for sensor metadata.");
+        ros::WallDuration(0.1).sleep();
+        ros::spinOnce();
+    }
+    return metadata;
+}
+
 bool read_imu_packet(const sensor::client& cli, PacketMsg& m,
                      const sensor::packet_format& pf) {
     m.buf.resize(pf.imu_packet_size + 1);

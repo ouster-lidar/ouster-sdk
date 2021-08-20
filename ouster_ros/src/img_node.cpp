@@ -26,7 +26,6 @@
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
 #include "ouster/types.h"
-#include "ouster_ros/OSConfigSrv.h"
 #include "ouster_ros/ros.h"
 
 namespace sensor = ouster::sensor;
@@ -51,16 +50,15 @@ sensor_msgs::ImagePtr make_image_msg(size_t H, size_t W,
 int main(int argc, char** argv) {
     ros::init(argc, argv, "img_node");
     ros::NodeHandle nh("~");
-
-    ouster_ros::OSConfigSrv cfg{};
-    auto client = nh.serviceClient<ouster_ros::OSConfigSrv>("os_config");
-    client.waitForExistence();
-    if (!client.call(cfg)) {
-        ROS_ERROR("Calling os config service failed");
-        return EXIT_FAILURE;
+    
+    auto metadata = ouster_ros::get_sensor_metadata_ros(nh);
+    if (!metadata.length())
+    {
+      ROS_ERROR("Getting metadata failed.");
+      return EXIT_FAILURE;
     }
 
-    auto info = sensor::parse_metadata(cfg.response.metadata);
+    auto info = sensor::parse_metadata(metadata);
     size_t H = info.format.pixels_per_column;
     size_t W = info.format.columns_per_frame;
 

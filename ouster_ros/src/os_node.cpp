@@ -18,13 +18,11 @@
 
 #include "ouster/build.h"
 #include "ouster/types.h"
-#include "ouster_ros/OSConfigSrv.h"
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/SensorMetadata.h"
 #include "ouster_ros/ros.h"
 
 using PacketMsg = ouster_ros::PacketMsg;
-using OSConfigSrv = ouster_ros::OSConfigSrv;
 namespace sensor = ouster::sensor;
 
 // fill in values that could not be parsed from metadata
@@ -113,16 +111,6 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "os_node");
     ros::NodeHandle nh("~");
 
-    std::string published_metadata;
-    auto srv = nh.advertiseService<OSConfigSrv::Request, OSConfigSrv::Response>(
-        "os_config", [&](OSConfigSrv::Request&, OSConfigSrv::Response& res) {
-            if (published_metadata.size()) {
-                res.metadata = published_metadata;
-                return true;
-            } else
-                return false;
-        });
-
     // empty indicates "not set" since roslaunch xml can't optionally set params
     auto hostname = nh.param("sensor_hostname", std::string{});
     auto udp_dest = nh.param("udp_dest", std::string{});
@@ -191,11 +179,11 @@ int main(int argc, char** argv) {
                 {
                   // wait for metadata
                   ROS_WARN_THROTTLE(5.0, "Waiting for sensor metadata.");
+                  ros::WallDuration(0.1).sleep();
                   ros::spinOnce();
                 }
                 info = sensor::parse_metadata(metadata);
             }
-            published_metadata = to_string(info);
 
             ROS_INFO("Using lidar_mode: %s",
                      sensor::to_string(info.mode).c_str());
@@ -225,7 +213,6 @@ int main(int argc, char** argv) {
         // write metadata file to cwd (usually ~/.ros)
         auto metadata = sensor::get_metadata(*cli);
 
-        ros::Publisher metadata_pub;
         if (meta_file.length())
         {
             if (!write_metadata(meta_file, metadata)) {
@@ -233,20 +220,17 @@ int main(int argc, char** argv) {
                 return EXIT_FAILURE;
             }
         }
-        else
-        {
-            metadata_pub = nh.advertise<ouster_ros::SensorMetadata>("metadata", 1, true);
 
-            // publish the metadata
-            ouster_ros::SensorMetadata data;
-            data.data = metadata;
-            metadata_pub.publish(data);
-        }
+        ros::Publisher metadata_pub = nh.advertise<ouster_ros::SensorMetadata>("metadata", 1, true);
+
+        // publish the metadata
+        ouster_ros::SensorMetadata data;
+        data.data = metadata;
+        metadata_pub.publish(data);
 
         // populate sensor info
         auto info = sensor::parse_metadata(metadata);
         populate_metadata_defaults(info, sensor::MODE_UNSPEC);
-        published_metadata = to_string(info);
 
         ROS_INFO("Using lidar_mode: %s", sensor::to_string(info.mode).c_str());
         ROS_INFO("%s sn: %s firmware rev: %s", info.prod_line.c_str(),

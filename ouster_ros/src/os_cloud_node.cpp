@@ -16,7 +16,6 @@
 
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
-#include "ouster_ros/OSConfigSrv.h"
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/ros.h"
 
@@ -35,15 +34,14 @@ int main(int argc, char** argv) {
     auto imu_frame = tf_prefix + "os_imu";
     auto lidar_frame = tf_prefix + "os_lidar";
 
-    ouster_ros::OSConfigSrv cfg{};
-    auto client = nh.serviceClient<ouster_ros::OSConfigSrv>("os_config");
-    client.waitForExistence();
-    if (!client.call(cfg)) {
-        ROS_ERROR("Calling config service failed");
-        return EXIT_FAILURE;
+    auto metadata = ouster_ros::get_sensor_metadata_ros(nh);
+    if (!metadata.length())
+    {
+      ROS_ERROR("Getting metadata failed.");
+      return EXIT_FAILURE;
     }
 
-    auto info = sensor::parse_metadata(cfg.response.metadata);
+    auto info = sensor::parse_metadata(metadata);
     uint32_t H = info.format.pixels_per_column;
     uint32_t W = info.format.columns_per_frame;
 
