@@ -28,22 +28,6 @@ namespace sensor = ouster::sensor;
 
 ros::Publisher lidar_sparsed_pub;
 
-void pclCallback(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg) {
-    Cloud laserCloudIn;
-    pcl::fromROSMsg(*laserCloudMsg, laserCloudIn);
-
-    Cloud laserCloudOut;
-    for (auto p: laserCloudIn.points) {
-        if (p.ring % 2)
-            laserCloudOut.points.push_back(p);
-    }
-    sensor_msgs::PointCloud2 msg{};
-    pcl::toROSMsg(laserCloudOut, msg);
-    msg.header.frame_id = laserCloudMsg->header.frame_id;
-    msg.header.stamp =  laserCloudMsg->header.stamp;
-    lidar_sparsed_pub.publish(msg);
-}
-
 int main(int argc, char** argv) {
     ros::init(argc, argv, "os_cloud_node");
     ros::NodeHandle nh("~");
@@ -71,7 +55,6 @@ int main(int argc, char** argv) {
     auto lidar_pub = nh.advertise<sensor_msgs::PointCloud2>("points", 10);
     auto imu_pub = nh.advertise<sensor_msgs::Imu>("imu", 100);
 
-    auto lidar_sparsed_sub = nh.subscribe("points", 10, &pclCallback);
     lidar_sparsed_pub = nh.advertise<sensor_msgs::PointCloud2>("points_div_2", 10);
 
     auto xyz_lut = ouster::make_xyz_lut(info);
@@ -91,6 +74,14 @@ int main(int argc, char** argv) {
                 scan_to_cloud(xyz_lut, h->timestamp, ls, cloud);
                 lidar_pub.publish(ouster_ros::cloud_to_cloud_msg(
                     cloud, h->timestamp, sensor_frame));
+                // publish pcl div 2 
+                Cloud cloud_div_2;
+                for (auto p: cloud.points) {
+                    if (p.ring % 2)
+                        cloud_div_2.points.push_back(p);
+                }
+                lidar_sparsed_pub.publish(ouster_ros::cloud_to_cloud_msg(
+                    cloud_div_2, h->timestamp, sensor_frame));                
             }
         }
     };
