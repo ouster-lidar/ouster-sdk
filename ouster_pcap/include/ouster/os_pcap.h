@@ -12,8 +12,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <tins/tins.h>
-#include "ouster/impl/netcompat.h"
 
 #define PROTOCOL_UDP 17
 
@@ -53,27 +51,6 @@ std::shared_ptr<playback_handle> playback_handle_init();
  */
 struct record_handle;
 std::shared_ptr<record_handle> record_handle_init();
-/**
- * Replay udp packets from pcap file
- * @param[in] handle A handle to the initialized playback struct
- * @param[in] double rate Speed multiplier; 1 is real-time, 0 plays back as fast
- * as packets can be read
- * @return number of packets sent
- */
-int replay(playback_handle& handle, double rate);
-
-/**
- * Initialize the stepwise playback handle
- * @param[in] file The file path of the pcap file
- * @param[in] src_ip The source IP to send the packets from
- * @param[in] dst_ip The destination IP to send the packets to
- * @param[in] port_rewrite_map A map to handle destination port retargeting. If
- * a port does not exist in the map, the current port on the packet will be used
- * @return A handle to the initialized playback struct
- */
-std::shared_ptr<playback_handle> replay_initialize(
-    const std::string& file, const std::string& src_ip,
-    const std::string& dst_ip, std::unordered_map<int, int> port_map);
 
 /**
  * Initialize the stepwise playback handle
@@ -93,14 +70,6 @@ void replay_uninitialize(playback_handle& handle);
  * @param[in] handle A handle to the initialized playback struct
  */
 void replay_reset(playback_handle& handle);
-
-/**
- * Send the packet
- * @param[in] handle A handle to the initialized playback struct
- * @return If the packet was successfully sent, false normally means there are
-no more packets
- */
-bool replay_packet(playback_handle& handle);
 
 /**
  * Return the information on the next packet avaliable in the playback_handle

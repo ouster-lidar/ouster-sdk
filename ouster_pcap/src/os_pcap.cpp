@@ -26,7 +26,6 @@ namespace ouster {
 namespace sensor_utils {
 
 struct record_handle {
-public:
     std::string dst_ip;     ///< The destination IP
     std::string src_ip;     ///< The source IP
     std::string file_name;  ///< The filename of the output pcap file
@@ -45,13 +44,7 @@ std::shared_ptr<record_handle> record_handle_init() {
 }
 
 struct playback_handle {
-public:
-    std::string dst_ip;     ///< The destination IP
-    std::string src_ip;     ///< The source IP
     std::string file_name;  ///< The filename of the pcap file
-    std::unordered_map<int, int>
-        port_map;  ///< Map containing port rewrite rules
-    SOCKET replay_socket;
 
     std::unique_ptr<Tins::FileSniffer>
         pcap_reader;  ///< Object that holds the unified pcap reader
@@ -60,7 +53,6 @@ public:
 
     Tins::IPv4Reassembler
         reassembler;  ///< The reassembler mainly for lidar packets
-
     
     playback_handle() { }
 
@@ -91,91 +83,23 @@ std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
     return stream_in;
 }
 
-int replay(playback_handle& handle, double rate) {
-    packet_info info;
-    bool started = false;
-    us pcap_start_time;
-    auto real_start_time = std::chrono::steady_clock::now();
-    int packets_sent = 0;
-    while (next_packet_info(handle, info)) {
-        if (replay_packet(handle)) {
-            if (!started) {
-                started = true;
-                pcap_start_time = us(info.timestamp);
-            }
-
-            if (rate > 0.0) {
-                const auto delta =
-                    (us(info.timestamp) - pcap_start_time) / rate;
-
-                std::this_thread::sleep_until(real_start_time + delta);
-            }
-        }
-    }
-
-    return packets_sent;
-}
-
 std::shared_ptr<playback_handle> replay_initialize(
-    const std::string& file_name, const std::string& src_ip,
-    const std::string& dst_ip, std::unordered_map<int, int> port_map) {
+    const std::string& file_name) {
     std::shared_ptr<playback_handle> result =
         std::make_shared<playback_handle>();
 
     result->file_name = file_name;
-
-    result->src_ip = src_ip;
-    result->dst_ip = dst_ip;
-
-    result->port_map = port_map;
-    result->replay_socket = socket(AF_INET, SOCK_DGRAM, 0);
-
     result->pcap_reader.reset(new FileSniffer(file_name));
+    
     return result;
 }
 
-std::shared_ptr<playback_handle> replay_initialize(const std::string& file) {
-    std::unordered_map<int, int> port_map;
-    return replay_initialize(file, "", "", port_map);
-}
-
 void replay_uninitialize(playback_handle& handle) {
-    ouster::impl::socket_close(handle.replay_socket);
     handle.pcap_reader.reset();
 }
 
 void replay_reset(playback_handle& handle) {
     handle.pcap_reader.reset(new FileSniffer(handle.file_name));
-}
-
-bool replay_packet(playback_handle& handle) {
-    bool result = false;
-    if (handle.have_new_packet) {
-        struct sockaddr_in addr;
-        auto pdu = handle.packet_cache.pdu();
-        auto udp = pdu->find_pdu<UDP>();
-        auto raw = pdu->find_pdu<RawPDU>();
-        if (raw != NULL) {
-            auto temp = (uint32_t*)&(raw->payload()[0]);
-            auto size = raw->payload_size();
-            int port = (handle.port_map.count(udp->dport()) == 0)
-                           ? udp->dport()
-                           : handle.port_map[udp->dport()];
-            IP* ip = pdu->find_pdu<IP>();
-            IPv6* ipv6 = pdu->find_pdu<IPv6>();
-            if (ip || ipv6) {
-                memset(&addr, 0, sizeof(addr));
-                addr.sin_family = AF_INET;
-                addr.sin_port = htons(port);
-                addr.sin_addr.s_addr = inet_addr(handle.dst_ip.c_str());
-                if (sendto(handle.replay_socket, (char*)temp, size, 0,
-                           (const struct sockaddr*)&addr, sizeof(addr)) > 0) {
-                    result = true;
-                }
-            }
-        }
-    }
-    return result;
 }
 
 bool next_packet_info(playback_handle& handle, packet_info& info) {

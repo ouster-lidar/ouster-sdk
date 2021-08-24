@@ -1,5 +1,6 @@
 import os
 import time
+import socket
 from threading import Lock
 from typing import Dict, Iterable, Iterator, Optional
 
@@ -43,7 +44,7 @@ def _guess_lidar_port(stream_data: Dict[int, Dict[int, int]]) -> Optional[int]:
 
 
 def _guess_ports(pcap_path: str):
-    p = _pcap.replay_initialize(pcap_path, "", "", {})
+    p = _pcap.replay_initialize(pcap_path)
     packet_info = _pcap.packet_info()
     loop = True
     count = 10000
@@ -65,7 +66,7 @@ def _guess_ports(pcap_path: str):
 
 
 def _pcap_info(path: str) -> Iterator[_pcap.packet_info]:
-    handle = _pcap.replay_initialize(path, "", "", {})
+    handle = _pcap.replay_initialize(path)
     try:
         while True:
             if handle is None:
@@ -121,7 +122,7 @@ class Pcap(PacketSource):
 
         self._metadata = info
         self._rate = rate
-        self._handle = _pcap.replay_initialize(pcap_path, "", "", {})
+        self._handle = _pcap.replay_initialize(pcap_path)
         self._lock = Lock()
 
     def __iter__(self) -> Iterator[Packet]:
@@ -179,7 +180,8 @@ class Pcap(PacketSource):
                 self._handle = None
 
 
-def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
+def _replay(pcap_path: str, info: SensorInfo,
+            dst_ip: str, dst_lidar_port: int,
             dst_imu_port: int) -> Iterator[bool]:
     """Replay UDP packets out over the network.
 
@@ -188,6 +190,7 @@ def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
 
     Args:
         pcap_path: Path to the pcap file to replay
+        info: The sensor metadata
         dst_ip: IP to send packets to
         dst_lidar_port: Destination port for lidar packets
         dst_imu_port: Destination port for imu packets
@@ -196,25 +199,23 @@ def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
         An iterator that reports whether packets were sent successfully as it's
         consumed.
     """
-
-    lidar_port_guess, imu_port_guess = _guess_ports(pcap_path)
-
-    pcap_handle = _pcap.replay_initialize(
-        pcap_path, dst_ip, dst_ip, {
-            (lidar_port_guess or 0): dst_lidar_port,
-            (imu_port_guess or 0): dst_imu_port
-        })
-
     try:
-        packet_info = _pcap.packet_info()
-        while _pcap.next_packet_info(pcap_handle, packet_info):
-            if packet_info.dst_port in (lidar_port_guess, imu_port_guess):
-                yield _pcap.replay_packet(pcap_handle)
+        socket_out = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+    
+        pcap_handle = Pcap(pcap_path, info)
+        for item in pcap_handle:
+            port = 0
+            if isinstance(item, LidarPacket):
+                port = dst_lidar_port
+            if isinstance(item, ImuPacket):
+                port = dst_imu_port
+
+            socket_out.sendto(item._data.tobytes(), (dst_ip, port))
+            yield True
+        yield False
     finally:
-        _pcap.replay_uninitialize(pcap_handle)
-
-    yield False
-
+        if pcap_handle is not None:
+            pcap_handle.close()
 
 def record(packets: Iterable[Packet],
            pcap_path: str,

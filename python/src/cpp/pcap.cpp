@@ -52,19 +52,6 @@ inline size_t getptrsize(py::buffer& buf) {
     return (size_t)info.size;
 }
 
-// hack: Wrap replay to allow terminating via SIGINT
-// @TODO This is currently not thread safe
-int replay_pcap(std::shared_ptr<ouster::sensor_utils::playback_handle> handle, double rate) {
-    py::gil_scoped_release release;
-
-    auto py_handler = std::signal(SIGINT, [](int) { std::exit(EXIT_SUCCESS); });
-
-    auto res = ouster::sensor_utils::replay(*handle, rate);
-    std::signal(SIGINT, py_handler);
-
-    return res;
-}
-
 // Record functionality removed for a short amount of time
 // until we switch it over to support libtins
 
@@ -114,21 +101,14 @@ directly.
              new (&self) std::shared_ptr<ouster::sensor_utils::record_handle>{
                  ouster::sensor_utils::record_handle_init()};
         });
-    
-    m.def("replay_pcap", &replay_pcap);
 
-    m.def("replay_initialize",
-          py::overload_cast<const std::string&, const std::string&,
-          const std::string&, std::unordered_map<int, int>>(&ouster::sensor_utils::replay_initialize));
+    m.def("replay_initialize", &ouster::sensor_utils::replay_initialize);
     
     m.def("replay_uninitialize", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle) {
         ouster::sensor_utils::replay_uninitialize(*handle);
     });
     m.def("replay_reset", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle) {
         ouster::sensor_utils::replay_reset(*handle);
-    });
-    m.def("replay_packet", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle) -> bool {
-        return ouster::sensor_utils::replay_packet(*handle);
     });
     
     m.def("next_packet_info", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle,
