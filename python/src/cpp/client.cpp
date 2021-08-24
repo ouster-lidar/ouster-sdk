@@ -681,13 +681,18 @@ directly.
 
     m.attr("__version__") = VERSION_INFO;
 
-    //  AutoExposure
+    // Image processing
     py::class_<viz::AutoExposure>(m, "AutoExposure")
         .def(py::init<>())
         .def(py::init<int>(), py::arg("update_every"))
         .def(py::init<double, double, int>(), py::arg("lo_percentile"),
              py::arg("hi_percentile"), py::arg("update_every"))
         .def("__call__", [](viz::AutoExposure& self,
+                            Eigen::Ref<img_t<double>>& image) { self(image); });
+
+    py::class_<viz::BeamUniformityCorrector>(m, "BeamUniformityCorrector")
+        .def(py::init<>())
+        .def("__call__", [](viz::BeamUniformityCorrector& self,
                             Eigen::Ref<img_t<double>>& image) { self(image); });
 
     return m.ptr();

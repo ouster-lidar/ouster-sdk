@@ -597,15 +597,22 @@ class XYZLut:
     def __call__(self, scan: LidarScan) -> ndarray:
         ...
 
+
 class AutoExposure:
     @overload
     def __init__(self) -> None:
         ...
-    
+
     @overload
-    def __init__(self,
-                lo_percentile: float,
-                hi_percentile: float) -> None:
+    def __init__(self, lo_percentile: float, hi_percentile: float,
+                 update_every: int) -> None:
+        ...
+
+    def __call__(self, image: ndarray) -> None:
+        ...
+
+class BeamUniformityCorrector:
+    def __init__(self) -> None:
         ...
 
     def __call__(self, image: ndarray) -> None:
