@@ -227,18 +227,20 @@ To publish ROS topics from a running sensor, run::
 where:
 
 * ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor
-* ``<path to metadata json>`` is the path to the json file to which to save calibration metadata
+* ``<path to metadata json>`` is the path you want to save sensor metadata to
 
-you can also optionally specify:
+Note that by default the working directory of all ROS nodes is set to ``${ROS_HOME}``, generally
+``$HOME/.ros``. If you provide a relative path to ``metadata``, i.e., ``metadata:=meta.json``, it 
+will write to ``${ROS_HOME}/meta.json``. To avoid this, you can provide an absolute path to 
+``metadata``, i.e. ``metadata:=/home/user/meta.json``.
+
+You can also optionally specify:
 
 * ``udp_dest:=<hostname>`` to specify the hostname or IP to which the sensor should send data
 * ``lidar_mode:=<mode>`` where mode is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or
   ``2048x10``, and
 * ``viz:=true`` to visualize the sensor output, if you have the rviz ROS package installed
 
-Note that by default the working directory of all ROS nodes is set to ``${ROS_HOME}``, generally
-``$HOME/.ros``, so if ``metadata`` is a relative path, it will write to that path inside
-``${ROS_HOME}``. To avoid this, you can provide an absolute path to ``metadata``.
 
 Recording Data
 --------------

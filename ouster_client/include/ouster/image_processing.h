@@ -41,7 +41,8 @@ class AutoExposure {
      * Scales the image so that contrast is stretched between 0 and 1.
      *
      * The top percentile is 1 - hi_percentile and the bottom percentile is
-     * lo_percentile. Analogous to imagemagick's -contrast-stretch operation.
+     * lo_percentile. Analogous to linear 'contrast-stretch', i.e.
+     * normalization.
      *
      * @param image Reference to image, modified in place
      */
