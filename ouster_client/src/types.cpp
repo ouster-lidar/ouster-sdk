@@ -679,7 +679,7 @@ std::string to_string(const sensor_info& info) {
 }
 
 std::string to_string(const sensor_config& config) {
-    Json::Value root{};
+    Json::Value root{Json::objectValue};
 
     if (config.udp_dest) {
         root["udp_dest"] = config.udp_dest.value();

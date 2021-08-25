@@ -13,7 +13,12 @@ option(BUILD_PCAP "Build pcap utils." OFF)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 
-set(CMAKE_CXX_STANDARD 11)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
+
 if(MSVC)
   add_compile_options(/W3)
   add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
@@ -22,7 +27,7 @@ else()
 endif()
 
 # === Testing ===
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
 endif()
 
@@ -37,7 +42,7 @@ if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
 endif()
 
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 

@@ -67,6 +67,7 @@ add_definitions(-DEIGEN_MPL2_ONLY)
 add_library(ouster_ros src/ros.cpp)
 target_link_libraries(ouster_ros PUBLIC ${catkin_LIBRARIES} ouster_build pcl_common PRIVATE
   -Wl,--whole-archive ouster_client -Wl,--no-whole-archive)
+target_compile_definitions(ouster_ros PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
 add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 
 # ==== Executables ====

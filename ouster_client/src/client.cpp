@@ -111,6 +111,15 @@ SOCKET udp_data_socket(int port) {
                 continue;
             }
 
+            int on = 1;
+            if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&on,
+                           sizeof(on))) {
+                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
+                          << std::endl;
+                impl::socket_close(sock_fd);
+                continue;
+            }
+
             if (bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
                 std::cerr << "udp bind(): " << impl::socket_get_error()
                           << std::endl;
@@ -123,7 +132,7 @@ SOCKET udp_data_socket(int port) {
                 std::cerr << "udp fcntl(): " << impl::socket_get_error()
                           << std::endl;
                 impl::socket_close(sock_fd);
-                return SOCKET_ERROR;
+                continue;
             }
 
             if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
@@ -131,7 +140,7 @@ SOCKET udp_data_socket(int port) {
                 std::cerr << "udp setsockopt(): " << impl::socket_get_error()
                           << std::endl;
                 impl::socket_close(sock_fd);
-                return SOCKET_ERROR;
+                continue;
             }
 
             freeaddrinfo(info_start);
@@ -175,14 +184,14 @@ SOCKET cfg_socket(const char* addr) {
             continue;
         }
 
-        break;
-    }
+        if (impl::socket_set_rcvtimeout(sock_fd, RCVTIMEOUT_SEC)) {
+            std::cerr << "cfg set_rcvtimeout(): " << impl::socket_get_error()
+                      << std::endl;
+            impl::socket_close(sock_fd);
+            continue;
+        }
 
-    if (impl::socket_set_rcvtimeout(sock_fd, RCVTIMEOUT_SEC)) {
-        std::cerr << "cfg set_rcvtimeout(): " << impl::socket_get_error()
-                  << std::endl;
-        impl::socket_close(sock_fd);
-        return SOCKET_ERROR;
+        break;
     }
 
     freeaddrinfo(info_start);

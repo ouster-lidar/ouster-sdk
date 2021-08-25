@@ -13,6 +13,7 @@ Changelog
 
 ouster_client
 -------------
+* represent empty sensor config with an empty json object instead of null
 * update cmake package version to 0.2.1
 * add a conservative socket read timeout so ``init_client()`` will fail with an error message when
   another client fails to close a TCP connection (addresses #258)
@@ -27,6 +28,7 @@ ouster_pcap
 
 ouster_ros
 ----------
+* fix ``os_node`` crash on shutdown due to Eigen alignment flag not being propogated by catkin
 * update ROS package version to 0.2.1
 * the ``udp_dest`` parameter to ouster.launch is now optional when connecting to a sensor
 

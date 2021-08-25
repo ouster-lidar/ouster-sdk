@@ -49,21 +49,19 @@ def test_sensor_closed(meta: client.SensorInfo) -> None:
             next(iter(source))
 
 
-@pytest.mark.skipif(sys.platform == "win32",
-                    reason="winsock is OK with this; not sure why")
+@pytest.mark.xfail(sys.platform == "linux",
+                   reason="behavior is currently platform-dependent")
 def test_sensor_port_in_use(meta: client.SensorInfo) -> None:
-    """Using an unavailable port will throw."""
+    """Using an unavailable port will not throw."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('localhost', 0))
     _, port = sock.getsockname()
     with closing(sock):
-        with pytest.raises(RuntimeError):
-            with closing(client.Sensor("os.invalid", port, metadata=meta)):
-                pass
+        with closing(client.Sensor("os.invalid", port, metadata=meta)):
+            pass
 
-        with pytest.raises(RuntimeError):
-            with closing(client.Sensor("os.invalid", 0, port, metadata=meta)):
-                pass
+        with closing(client.Sensor("os.invalid", 0, port, metadata=meta)):
+            pass
 
 
 @pytest.fixture(scope="module")
