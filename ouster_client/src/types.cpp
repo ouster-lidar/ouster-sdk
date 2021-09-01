@@ -16,11 +16,11 @@
 #include "ouster/impl/parsing.h"
 #include "ouster/version.h"
 
+namespace ouster {
+
 using nonstd::make_optional;
 using nonstd::nullopt;
 using nonstd::optional;
-
-namespace ouster {
 
 namespace sensor {
 
@@ -359,10 +359,6 @@ std::string to_string(AzimuthWindow azimuth_window) {
     std::stringstream ss;
     ss << "[" << azimuth_window.first << ", " << azimuth_window.second << "]";
     return ss.str();
-}
-
-bool operator==(const AzimuthWindow& lhs, const AzimuthWindow& rhs) {
-    return (lhs.first == rhs.first && lhs.second == rhs.second);
 }
 
 sensor_config parse_config(const Json::Value& root) {

@@ -201,7 +201,7 @@ def _replay(pcap_path: str, info: SensorInfo,
     """
     try:
         socket_out = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-    
+
         pcap_handle = Pcap(pcap_path, info)
         for item in pcap_handle:
             port = 0
@@ -216,6 +216,7 @@ def _replay(pcap_path: str, info: SensorInfo,
     finally:
         if pcap_handle is not None:
             pcap_handle.close()
+
 
 def record(packets: Iterable[Packet],
            pcap_path: str,

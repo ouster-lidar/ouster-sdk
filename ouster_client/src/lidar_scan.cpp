@@ -64,11 +64,16 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 }
 
 LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
-    if (scan.w * scan.h != lut.direction.rows())
-        throw std::invalid_argument("unexpected scan dimensions");
+    return cartesian(scan.field(LidarScan::RANGE), lut);
+}
+
+LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
+                            const XYZLut& lut) {
+    if (range.cols() * range.rows() != lut.direction.rows())
+        throw std::invalid_argument("unexpected image dimensions");
 
     auto reshaped = Eigen::Map<const Eigen::Array<LidarScan::raw_t, -1, 1>>(
-        scan.field(LidarScan::RANGE).data(), scan.h * scan.w);
+        range.data(), range.cols() * range.rows());
     auto nooffset = lut.direction.colwise() * reshaped.cast<double>();
     return (nooffset.array() == 0.0).select(nooffset, nooffset + lut.offset);
 }

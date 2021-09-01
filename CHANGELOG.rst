@@ -39,6 +39,7 @@ ouster_viz
 
 python
 ------
+* ``xyzlut`` can now accept a range image as an ndarray, not just a ``LidarScan``
 * update ouster-sdk version to 0.2.2
 * fix open3d example crash on exit when replaying pcaps on macos (addresses #267)
 * change open3d normalization to use bound AutoExposure

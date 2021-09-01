@@ -594,7 +594,12 @@ class XYZLut:
     def __init__(self, info: SensorInfo) -> None:
         ...
 
+    @overload
     def __call__(self, scan: LidarScan) -> ndarray:
+        ...
+
+    @overload
+    def __call__(self, range: ndarray) -> ndarray:
         ...
 
 

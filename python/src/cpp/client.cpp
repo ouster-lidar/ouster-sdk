@@ -675,6 +675,10 @@ directly.
                  new (&self) XYZLut{};
                  self = make_xyz_lut(sensor);
              })
+        .def("__call__",
+             [](const XYZLut& self, Eigen::Ref<img_t<uint32_t>>& range) {
+                 return cartesian(range, self);
+             })
         .def("__call__", [](const XYZLut& self, const LidarScan& scan) {
             return cartesian(scan, self);
         });

@@ -12,10 +12,9 @@
 
 #include "nonstd/optional.hpp"
 
-using nonstd::nullopt;
-using nonstd::optional;
-
 namespace ouster {
+
+using nonstd::optional;
 
 /** For image operations. */
 template <typename T>

@@ -83,8 +83,7 @@ def record_packet(handle: record_handle, src_port: int, dst_port: int,
     ...
 
 
-def replay_initialize(file_name: str, src_ip: str, dst_ip: str,
-                      port_map: Dict[int, int]) -> playback_handle:
+def replay_initialize(file_name: str) -> playback_handle:
     ...
 
 

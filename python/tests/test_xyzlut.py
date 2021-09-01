@@ -137,3 +137,31 @@ def test_xyz_calcs(stream_digest: digest.StreamDigest,
     xyz_from_lut = xyzlut(scan)
 
     assert np.allclose(xyz_from_docs, xyz_from_lut)
+
+
+def test_xyz_range(stream_digest: digest.StreamDigest, scan: client.LidarScan) -> None:
+    """Test that projection works on an ndarrays as well."""
+    xyzlut = client.XYZLut(stream_digest.meta)
+
+    range = scan.field(client.ChanField.RANGE)
+    xyz_from_scan = xyzlut(scan)
+    xyz_from_range = xyzlut(range)
+    assert np.array_equal(xyz_from_scan, xyz_from_range)
+
+
+def test_xyz_range_dtype(stream_digest: digest.StreamDigest, scan: client.LidarScan) -> None:
+    """Test that projection works on an ndarrays of different dtypes."""
+    xyzlut = client.XYZLut(stream_digest.meta)
+
+    range = scan.field(client.ChanField.RANGE)
+    range[:] = range.astype(np.uint8)
+    xyz_from_scan = xyzlut(scan)
+    xyz_from_range_8 = xyzlut(range.astype(np.uint8))
+    xyz_from_range_16 = xyzlut(range.astype(np.uint16))
+    xyz_from_range_32 = xyzlut(range.astype(np.uint32))
+    xyz_from_range_64 = xyzlut(range.astype(np.uint64))
+
+    assert np.array_equal(xyz_from_scan, xyz_from_range_8)
+    assert np.array_equal(xyz_from_scan, xyz_from_range_16)
+    assert np.array_equal(xyz_from_scan, xyz_from_range_32)
+    assert np.array_equal(xyz_from_scan, xyz_from_range_64)

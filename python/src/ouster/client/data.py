@@ -19,7 +19,10 @@ class ImuPacket:
     _data: np.ndarray
     capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo, timestamp: Optional[float] = None) -> None:
+    def __init__(self,
+                 data: BufferT,
+                 info: SensorInfo,
+                 timestamp: Optional[float] = None) -> None:
         """
         Args:
             data: Buffer containing the packet payload
@@ -112,7 +115,10 @@ class LidarPacket:
     _column_bytes: int
     capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo, timestamp: Optional[float] = None) -> None:
+    def __init__(self,
+                 data: BufferT,
+                 info: SensorInfo,
+                 timestamp: Optional[float] = None) -> None:
         """
         This will always alias the supplied buffer-like object. Pass in a copy
         to avoid unintentional aliasing.
@@ -315,7 +321,9 @@ def destagger(info: SensorInfo,
     ]).reshape(shape)
 
 
-def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
+def XYZLut(
+        info: SensorInfo
+) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
     """Return a function that can project scans into cartesian coordinates.
 
     Internally, this will pre-compute a lookup table using the supplied
@@ -330,12 +338,18 @@ def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
         info: sensor metadata
 
     Returns:
-        A function that computes a numpy array of a scan's point coordinates
+        A function that computes a point cloud given a range image
     """
     lut = _client.XYZLut(info)
 
-    def res(ls: LidarScan) -> np.ndarray:
-        return lut(ls.to_native()).reshape(info.format.pixels_per_column,
-                                           info.format.columns_per_frame, 3)
+    def res(ls: Union[LidarScan, np.ndarray]) -> np.ndarray:
+        if isinstance(ls, LidarScan):
+            xyz = lut(ls.to_native())
+        else:
+            # will create a temporary to cast if dtype != uint32
+            xyz = lut(ls.astype(np.uint32, copy=False))
+
+        return xyz.reshape(info.format.pixels_per_column,
+                           info.format.columns_per_frame, 3)
 
     return res
