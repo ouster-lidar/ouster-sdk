@@ -79,6 +79,7 @@ def test_lidar_packet(info: client.SensorInfo) -> None:
                           np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.NEAR_IR), np.zeros((h, w)))
+    # TODO: what to do with other fields
 
     assert len(
         client.ColHeader.__members__) == 5, "Don't forget to update tests!"
@@ -141,62 +142,85 @@ def test_read_real_packet(packet: client.LidarPacket) -> None:
     assert np.all(packet.header(client.ColHeader.STATUS) == 0xffffffff)
 
 
-def test_scan_native() -> None:
+def test_scan_writeable() -> None:
     """Check that a native scan is a writeable view of data."""
-    native = client._client.LidarScan(1024, 32)
+    ls = client.LidarScan(1024, 32)
 
-    assert not native.data.flags.owndata
-    assert native.data.flags.aligned
-    assert native.data.flags.writeable
+    assert not ls.field(client.ChanField.RANGE).flags.owndata
+    assert not ls.status.flags.owndata
 
-    native.data[0, 0] = 1
-    assert native.data[0, 0] == 1
+    assert ls.field(client.ChanField.SIGNAL).flags.aligned
+    assert ls.measurement_id.flags.aligned
 
-    native.data[:] = 42
-    assert (native.data == 42).all()
+    assert ls.field(client.ChanField.NEAR_IR).flags.aligned
+    assert ls.timestamp.flags.aligned
 
+    ls.field(client.ChanField.RANGE)[0, 0] = 42
+    assert ls.field(client.ChanField.RANGE)[0, 0] == 42
 
-N_FIELDS = client.LidarScan.N_FIELDS
+    ls.field(client.ChanField.RANGE)[:] = 7
+    assert np.all(ls.field(client.ChanField.RANGE) == 7)
+
+    ls.status[-1] = 0xffff
+    assert ls.status[-1] == 0xffff
+    assert ls.header(client.ColHeader.STATUS)[-1] == 0xffff
+
+    ls.header(client.ColHeader.STATUS)[-2] = 0xffff
+    assert ls.status[-2] == 0xffff
+    assert ls.header(client.ColHeader.STATUS)[-2] == 0xffff
+
+    ls.status[:] = 0x1
+    assert np.all(ls.status == 0x1)
+    assert np.all(ls.header(client.ColHeader.STATUS) == 0x1)
 
 
 def test_scan_from_native() -> None:
-    """Check that converting from a native scan does not copy data."""
-    native = client._client.LidarScan(1024, 32)
-    native.data[:] = np.arange(native.data.size).reshape(N_FIELDS, -1)
+    ls = client.LidarScan(1024, 32)
+    ls2 = client.LidarScan.from_native(ls)
 
-    ls = client.LidarScan.from_native(native)
-
-    assert not ls._data.flags.owndata
-    assert ls._data.flags.aligned
-    assert ls._data.flags.writeable
-    assert ls._data.base is native.data.base
-    assert np.array_equal(ls._data, native.data)
-
-    del native
-    ls._data[:] = 42
-    assert (ls._data == 42).all()
+    assert ls is ls2
 
 
 def test_scan_to_native() -> None:
-    """Check that converting to a native scan copies data."""
-    ls = client.LidarScan(32, 1024)
+    ls = client.LidarScan(1024, 32)
+    ls2 = ls.to_native()
 
-    ls._data[:] = np.arange(ls._data.size).reshape(N_FIELDS, -1)
-    native = ls.to_native()
+    assert ls is ls2
 
-    assert ls._data.base is not native.data.base
-    assert np.array_equal(ls._data, native.data)
 
-    ls._data[0, 0] = 42
-    native.data[:] = 1
-    assert ls._data[0, 0] == 42
+def test_scan_field_ref() -> None:
+    """Test that field references keep scans alive."""
+
+    ls = client.LidarScan(512, 16)
+    range = ls.field(client.ChanField.RANGE)
+    range[:] = 42
+
+    del ls
+    assert np.all(range == 42)
+
+    range[:] = 43
+    assert np.all(range == 43)
+
+
+def test_scan_header_ref() -> None:
+    """Test that header references keep scans alive."""
+
+    ls = client.LidarScan(512, 16)
+    status = ls.status
+    status[:] = 0x11
+
+    del ls
+    assert np.all(status == 0x11)
+
+    status[:] = 0x01
+    assert np.all(status == 0x01)
 
 
 def test_scan_not_complete() -> None:
     """Test that not all scans are considered complete."""
     ls = client.LidarScan(32, 1024)
 
-    status = ls.header(client.ColHeader.STATUS)
+    status = ls.status
     assert not ls._complete()
 
     status[0] = 0x01
@@ -254,7 +278,7 @@ def test_scan_complete(w, win_start, win_end) -> None:
     """Set the status headers to the specified window and check _complete()."""
     ls = client.LidarScan(32, w)
 
-    status = ls.header(client.ColHeader.STATUS)
+    status = ls.status
 
     if win_start <= win_end:
         status[win_start:win_end + 1] = 0xFFFFFFFF

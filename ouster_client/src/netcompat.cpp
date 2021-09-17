@@ -18,6 +18,7 @@
 #endif
 
 namespace ouster {
+namespace sensor {
 namespace impl {
 
 #ifdef _WIN32
@@ -107,4 +108,5 @@ int socket_set_rcvtimeout(SOCKET sock, int timeout_sec) {
 }
 
 }  // namespace impl
+}  // namespace sensor
 }  // namespace ouster

@@ -620,34 +620,133 @@ directly.
         .def_property_readonly("size", &PyClient::size);
 
     // Scans
-    py::class_<LidarScan::BlockHeader>(m, "BlockHeader")
-        .def("__init__",
-             [](LidarScan::BlockHeader& self, uint64_t ts, uint32_t encoder,
-                uint32_t status) {
-                 new (&self) LidarScan::BlockHeader{};
-                 self = LidarScan::BlockHeader{LidarScan::ts_t{ts}, encoder,
-                                               status};
-             })
-        .def_property_readonly("timestamp",
-                               [](const LidarScan::BlockHeader& self) {
-                                   return self.timestamp.count();
-                               })
-        .def_readonly("encoder", &LidarScan::BlockHeader::encoder)
-        .def_readonly("status", &LidarScan::BlockHeader::status);
+    py::class_<LidarScan>(m, "LidarScan", py::metaclass(), R"(
+        Represents a single "scan" or "frame" of lidar data.
 
-    py::class_<LidarScan>(m, "LidarScan", py::metaclass())
-        .def_readonly_static("N_FIELDS", &LidarScan::N_FIELDS)
-        .def(py::init<size_t, size_t>())
-        .def_readonly("w", &LidarScan::w)
-        .def_readonly("h", &LidarScan::h)
-        .def_readwrite("frame_id", &LidarScan::frame_id)
-        .def_readwrite("headers", &LidarScan::headers)
-        .def_property_readonly("data", [](LidarScan& self) -> py::object {
-            return py::array_t<LidarScan::raw_t>(
-                std::vector<size_t>{LidarScan::N_FIELDS,
-                                    static_cast<size_t>(self.w * self.h)},
-                self.data.data(), py::cast(self));
-        });
+        This is a "struct of arrays" representation of lidar data. Column headers are
+        stored as contiguous W element arrays, while fields are WxH arrays. Channel
+        fields are staggered, so the ith column header value corresponds to the ith
+        column of data in each field.
+        )")
+        .def_readonly_static("N_FIELDS", &LidarScan::N_FIELDS, "Deprecated.")
+        // TODO: Python and C++ API differ in h/w order for some reason
+        .def("__init__", [](LidarScan& self, size_t h,
+                            size_t w) { new (&self) LidarScan(w, h); })
+        .def_readonly("w", &LidarScan::w,
+                      "Width or horizontal resolution of the scan.")
+        .def_readonly("h", &LidarScan::h,
+                      "Height or vertical resolution of the scan.")
+        .def_readwrite(
+            "frame_id", &LidarScan::frame_id,
+            "Corresponds to the frame id header in the packet format.")
+        .def(
+            "_complete",
+            [](const LidarScan& self,
+               nonstd::optional<sensor::AzimuthWindow> window) {
+                if (!window) window = {0, self.w - 1};
+
+                const auto& status = self.status();
+                auto start = window.value().first;
+                auto end = window.value().second;
+
+                if (start <= end)
+                    return status.segment(start, end - start + 1)
+                        .isConstant(0xffffffff);
+                else
+                    return status.segment(0, end).isConstant(0xffffffff) &&
+                           status.segment(start, self.w - start)
+                               .isConstant(0xffffffff);
+            },
+            py::arg("window") =
+                static_cast<nonstd::optional<sensor::AzimuthWindow>>(
+                    nonstd::nullopt))
+        .def(
+            "field",
+            [](LidarScan& self, py::object& o) {
+                // the argument should be a ChanField enum defined in data.py
+                // note: have to manually use array_t instead of built-in eigen
+                // conversions, since those always cause a copy in pybind11 2.0
+                auto f = LidarScan::Field(o.cast<int>());
+                return py::array_t<uint32_t>(
+                    std::vector<size_t>{static_cast<size_t>(self.h),
+                                        static_cast<size_t>(self.w)},
+                    self.field(f).data(), py::cast(self));
+            },
+            R"(
+        Return a view of the specified channel field.
+
+        Args:
+            field: The channel field to return
+
+        Returns:
+            The specified field as a numpy array
+        )")
+        .def(
+            "header",
+            [](LidarScan& self, py::object& o) {
+                // the argument should be a ColHeader enum defined in data.py
+                auto ind = o.cast<int>();
+                switch (ind) {
+                    case 0:
+                        return py::array(py::dtype::of<uint64_t>(), self.w,
+                                         self.timestamp().data(),
+                                         py::cast(self));
+                    case 1:
+                        // encoder values are deprecated and not included in the
+                        // updated C++ LidarScan API. Access old values instead
+                        return py::array(py::dtype::of<uint32_t>(), {self.w},
+                                         {sizeof(LidarScan::BlockHeader)},
+                                         &self.headers.at(0).encoder,
+                                         py::cast(self));
+                    case 2:
+                        return py::array(py::dtype::of<uint16_t>(), self.w,
+                                         self.measurement_id().data(),
+                                         py::cast(self));
+                    case 3:
+                        return py::array(py::dtype::of<uint32_t>(), self.w,
+                                         self.status().data(), py::cast(self));
+                    default:
+                        throw std::invalid_argument(
+                            "Unexpected index for LidarScan.header()");
+                }
+            },
+            R"(
+        Return the specified column header as a numpy array.
+
+        This function is deprecated. Use the ``measurment_id``, ``timestamp`` or
+        ``status`` properties instead.
+
+        Args:
+            header: The column header to return
+
+        Returns:
+            The specified column header as a numpy array
+        )")
+        .def_property_readonly(
+            "timestamp",
+            [](LidarScan& self) {
+                return py::array(py::dtype::of<uint64_t>(), self.w,
+                                 self.timestamp().data(), py::cast(self));
+            },
+            "The measurement timestamp header as a W-element numpy array.")
+        .def_property_readonly(
+            "measurement_id",
+            [](LidarScan& self) {
+                return py::array(py::dtype::of<uint16_t>(), self.w,
+                                 self.measurement_id().data(), py::cast(self));
+            },
+            "The measurement id header as a W-element numpy array.")
+        .def_property_readonly(
+            "status",
+            [](LidarScan& self) {
+                return py::array(py::dtype::of<uint32_t>(), self.w,
+                                 self.status().data(), py::cast(self));
+            },
+            "The measurement status header as a W-element numpy array.")
+        // for backwards compatibility: previously converted between Python /
+        // native representations, now a noop
+        .def("to_native", [](py::object& self) { return self; })
+        .def_static("from_native", [](py::object& scan) { return scan; });
 
     // Destagger overloads for most numpy scalar types
     m.def("destagger_int8", &ouster::destagger<int8_t>);

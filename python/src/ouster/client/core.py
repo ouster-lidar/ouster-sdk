@@ -323,7 +323,7 @@ class Scans:
         sensor = cast(Sensor, self._source) if isinstance(
             self._source, Sensor) else None
 
-        ls_write = _client.LidarScan(w, h)
+        ls_write = LidarScan(h, w)
         pf = _client.PacketFormat.from_info(self._source.metadata)
         batch = _client.ScanBatcher(w, pf)
 
@@ -344,11 +344,10 @@ class Scans:
             if isinstance(packet, LidarPacket):
                 if batch(packet._data, ls_write):
                     # Got a new frame, return it and start another
-                    ls = LidarScan.from_native(ls_write)
-                    if not self._complete or ls._complete(column_window):
-                        yield ls
-                        start_ts = time.monotonic()
-                    ls_write = _client.LidarScan(w, h)
+                    if not self._complete or ls_write._complete(column_window):
+                        yield ls_write
+                    start_ts = time.monotonic()
+                    ls_write = LidarScan(h, w)
 
                     # Drop data along frame boundaries to maintain _max_latency and
                     # clear out already-batched first packet of next frame

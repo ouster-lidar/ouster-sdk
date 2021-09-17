@@ -34,6 +34,9 @@ class LidarScan {
     using ts_t = std::chrono::nanoseconds;
     using data_t = Eigen::Array<raw_t, Eigen::Dynamic, N_FIELDS>;
 
+    template <typename T>
+    using header_t = Eigen::Array<T, Eigen::Dynamic, 1>;
+
     using DynStride = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
 
     /** XYZ coordinates with dimensions arranged contiguously in columns */
@@ -56,8 +59,14 @@ class LidarScan {
     std::vector<BlockHeader> headers{};
     int32_t frame_id{-1};
 
+   private:
+    header_t<uint64_t> timestamp_;
+    header_t<uint16_t> measurement_id_;
+    header_t<uint32_t> status_;
+
+   public:
     /** The default constructor creates an invalid 0 x 0 scan */
-    LidarScan() = default;
+    LidarScan();
 
     /**
      * Initialize an empty scan with the given horizontal / vertical resolution.
@@ -65,33 +74,24 @@ class LidarScan {
      * @param w horizontal resoulution, i.e. the number of measurements per scan
      * @param h vertical resolution, i.e. the number of channels
      */
-    LidarScan(size_t w, size_t h)
-        : w{static_cast<std::ptrdiff_t>(w)},
-          h{static_cast<std::ptrdiff_t>(h)},
-          data{w * h, N_FIELDS},
-          headers{w, BlockHeader{ts_t{0}, 0, 0}} {};
+    LidarScan(size_t w, size_t h);
 
     /**
      * Access timestamps as a vector.
      *
      * @returns copy of the measurement timestamps as a vector
      */
-    std::vector<LidarScan::ts_t> timestamps() const {
-        std::vector<LidarScan::ts_t> res;
-        res.reserve(headers.size());
-        for (const auto& h : headers) res.push_back(h.timestamp);
-        return res;
-    }
+    [[deprecated]] std::vector<LidarScan::ts_t> timestamps() const;
 
     /**
      * Access measurement block header fields.
      *
      * @return the header values for the specified measurement id
      */
-    BlockHeader& header(size_t m_id) { return headers.at(m_id); }
+    [[deprecated]] BlockHeader& header(size_t m_id);
 
     /** @copydoc header(size_t m_id) */
-    const BlockHeader& header(size_t m_id) const { return headers.at(m_id); }
+    [[deprecated]] const BlockHeader& header(size_t m_id) const;
 
     /**
      * Access measurement block data.
@@ -99,17 +99,12 @@ class LidarScan {
      * @param m_id the measurement id of the desired block
      * @return a view of the measurement block data
      */
-    Eigen::Map<data_t, Eigen::Unaligned, DynStride> block(size_t m_id) {
-        return Eigen::Map<data_t, Eigen::Unaligned, DynStride>(
-            data.row(m_id).data(), h, N_FIELDS, {w * h, w});
-    }
+    [[deprecated]] Eigen::Map<data_t, Eigen::Unaligned, DynStride> block(
+        size_t m_id);
 
     /** @copydoc block(size_t m_id) */
-    Eigen::Map<const data_t, Eigen::Unaligned, DynStride> block(
-        size_t m_id) const {
-        return Eigen::Map<const data_t, Eigen::Unaligned, DynStride>(
-            data.row(m_id).data(), h, N_FIELDS, {w * h, w});
-    }
+    [[deprecated]] Eigen::Map<const data_t, Eigen::Unaligned, DynStride> block(
+        size_t m_id) const;
 
     /**
      * Access a lidar data field.
@@ -117,28 +112,48 @@ class LidarScan {
      * @param f the field to view
      * @return a view of the field data
      */
-    Eigen::Map<img_t<raw_t>> field(Field f) {
-        return Eigen::Map<img_t<raw_t>>(data.col(f).data(), h, w);
-    }
+    Eigen::Map<img_t<raw_t>> field(Field f);
 
     /** @copydoc field(Field f) */
-    Eigen::Map<const img_t<raw_t>> field(Field f) const {
-        return Eigen::Map<const img_t<raw_t>>(data.col(f).data(), h, w);
-    }
+    Eigen::Map<const img_t<raw_t>> field(Field f) const;
+
+    /**
+     * Access the measurement timestamp headers
+     *
+     * @return a view of timestamp as a w-element vector
+     */
+    Eigen::Ref<header_t<uint64_t>> timestamp();
+
+    /** @copydoc timestamp() */
+    Eigen::Ref<const header_t<uint64_t>> timestamp() const;
+
+    /**
+     * Access the measurement id headers
+     *
+     * @return a view of measurement ids as a w-element vector
+     */
+    Eigen::Ref<header_t<uint16_t>> measurement_id();
+
+    /** @copydoc measurement_id() */
+    Eigen::Ref<const header_t<uint16_t>> measurement_id() const;
+
+    /**
+     * Access the measurement status headers
+     *
+     * @return a view of measurement statuses as a w-element vector
+     */
+    Eigen::Ref<header_t<uint32_t>> status();
+
+    /** @copydoc status() */
+    Eigen::Ref<const header_t<uint32_t>> status() const;
 };
 
 /** Equality for column headers. */
-inline bool operator==(const LidarScan::BlockHeader& a,
-                       const LidarScan::BlockHeader& b) {
-    return a.timestamp == b.timestamp && a.encoder == b.encoder &&
-           a.status == b.status;
-}
+bool operator==(const LidarScan::BlockHeader& a,
+                const LidarScan::BlockHeader& b);
 
 /** Equality for scans. */
-inline bool operator==(const LidarScan& a, const LidarScan& b) {
-    return a.w == b.w && a.h == b.h && (a.data == b.data).all() &&
-           a.headers == b.headers && a.frame_id && b.frame_id;
-}
+bool operator==(const LidarScan& a, const LidarScan& b);
 
 /** Not Equality for scans. */
 inline bool operator!=(const LidarScan& a, const LidarScan& b) {
@@ -204,7 +219,7 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
 LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
 
 /**
- * Convert a range image to cartesian points.
+ * Convert a staggered range image to cartesian points.
  *
  * @param a range image in the same format as the RANGE field of a LidarScan
  * @param xyz_lut lookup tables generated by make_xyz_lut

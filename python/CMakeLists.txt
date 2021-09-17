@@ -43,3 +43,12 @@ target_include_directories(_pcap SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_pcap PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/pcap/$<0:>)
+
+# Several deprecations in pybind11 since 2.0. Check when changing version reqs.
+if(MSVC)
+  target_compile_options(_client PRIVATE /wd4996)
+  target_compile_options(_pcap PRIVATE /wd4996)
+else()
+  target_compile_options(_client PRIVATE -Wno-deprecated-declarations)
+  target_compile_options(_pcap PRIVATE -Wno-deprecated-declarations)
+endif()

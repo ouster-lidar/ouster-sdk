@@ -13,6 +13,8 @@ Changelog
 
 ouster_client
 -------------
+* added new accessors for measurement headers to ``LidarScan``, deprecating the existing
+  ``LidarScan::header`` member function
 * represent empty sensor config with an empty json object instead of null
 * update cmake package version to 0.2.1
 * add a conservative socket read timeout so ``init_client()`` will fail with an error message when
@@ -39,6 +41,7 @@ ouster_viz
 
 python
 ------
+* replace ``client.LidarScan`` with native bindings implementing the same API
 * ``xyzlut`` can now accept a range image as an ndarray, not just a ``LidarScan``
 * update ouster-sdk version to 0.2.2
 * fix open3d example crash on exit when replaying pcaps on macos (addresses #267)

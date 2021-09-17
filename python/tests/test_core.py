@@ -104,18 +104,18 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert scan.frame_id != -1
     assert scan.h == packets.metadata.format.pixels_per_column
     assert scan.w == packets.metadata.format.columns_per_frame
-    assert len(scan.header(ColHeader.TIMESTAMP)) == scan.w
+    assert len(scan.timestamp) == scan.w
     assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
-    assert len(scan.header(ColHeader.STATUS)) == scan.w
+    assert len(scan.status) == scan.w
 
     assert not scan._complete(), "test data should have missing packet!"
 
     # check that the scan is missing exactly one packet's worth of columns
-    valid_columns = list(scan.header(ColHeader.STATUS)).count(0xffffffff)
+    valid_columns = list(scan.status).count(0xffffffff)
     assert valid_columns == (packets.metadata.format.columns_per_frame -
                              packets.metadata.format.columns_per_packet)
 
-    missing_ts = list(scan.header(ColHeader.TIMESTAMP)).count(0)
+    missing_ts = list(scan.timestamp).count(0)
     assert missing_ts == packets.metadata.format.columns_per_packet
 
     # extra zero encoder value for first column
@@ -147,13 +147,12 @@ def test_scans_first_packet(packet: client.LidarPacket,
     assert np.all(packet.header(ColHeader.FRAME_ID) == scan.frame_id)
 
     assert np.array_equal(packet.header(ColHeader.TIMESTAMP),
-                          scan.header(ColHeader.TIMESTAMP)[:w])
+                          scan.timestamp[:w])
 
     assert np.array_equal(packet.header(ColHeader.ENCODER_COUNT),
                           scan.header(ColHeader.ENCODER_COUNT)[:w])
 
-    assert np.array_equal(packet.header(ColHeader.STATUS),
-                          scan.header(ColHeader.STATUS)[:w])
+    assert np.array_equal(packet.header(ColHeader.STATUS), scan.status[:w])
 
 
 def test_scans_complete(packets: client.PacketSource) -> None:

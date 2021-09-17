@@ -11,10 +11,9 @@ Note:
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
 from numpy import ndarray
-from typing import (Any, Callable, ClassVar, List, Optional, overload, Tuple,
-                    Union)
+from typing import (Callable, ClassVar, List, Optional, overload, Tuple, Union)
 
-from . import BufferT
+from . import (BufferT, ChanField, ColHeader)
 
 
 class Client:
@@ -498,23 +497,10 @@ class Version:
         ...
 
 
-class BlockHeader:
-    encoder: int
-    status: int
-
-    def __init__(self, timestamp: int, encoder: int, status: int):
-        ...
-
-    @property
-    def timestamp(self) -> int:
-        ...
-
-
 class LidarScan:
     N_FIELDS: ClassVar[int]
 
     frame_id: int
-    headers: List[BlockHeader]
 
     def __init__(self, w: int, h: int) -> None:
         ...
@@ -527,8 +513,32 @@ class LidarScan:
     def h(self) -> int:
         ...
 
+    def header(self, header: ColHeader) -> ndarray:
+        ...
+
+    def field(self, field: ChanField) -> ndarray:
+        ...
+
     @property
-    def data(self) -> ndarray:
+    def timestamp(self) -> ndarray:
+        ...
+
+    @property
+    def measurement_id(self) -> ndarray:
+        ...
+
+    @property
+    def status(self) -> ndarray:
+        ...
+
+    def _complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
+        ...
+
+    def to_native(self) -> LidarScan:
+        ...
+
+    @classmethod
+    def from_native(cls, scan: LidarScan) -> LidarScan:
         ...
 
 
@@ -615,6 +625,7 @@ class AutoExposure:
 
     def __call__(self, image: ndarray) -> None:
         ...
+
 
 class BeamUniformityCorrector:
     def __init__(self) -> None:

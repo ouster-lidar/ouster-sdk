@@ -8,6 +8,91 @@ namespace ouster {
 
 constexpr int LidarScan::N_FIELDS;
 
+LidarScan::LidarScan() = default;
+
+// TODO: scan batching doesn't currently zero out missing fields kinda relying
+// on headers being zeroed here, but that doesn't work when reusing scans
+LidarScan::LidarScan(size_t w, size_t h)
+    : w{static_cast<std::ptrdiff_t>(w)},
+      h{static_cast<std::ptrdiff_t>(h)},
+      data{w * h, N_FIELDS},
+      headers{w, BlockHeader{ts_t{0}, 0, 0}},
+      timestamp_{header_t<uint64_t>::Zero(w)},
+      measurement_id_{header_t<uint16_t>::Zero(w)},
+      status_{header_t<uint32_t>::Zero(w)} {}
+
+std::vector<LidarScan::ts_t> LidarScan::timestamps() const {
+    std::vector<LidarScan::ts_t> res;
+    res.reserve(headers.size());
+    for (const auto& h : headers) res.push_back(h.timestamp);
+    return res;
+}
+
+LidarScan::BlockHeader& LidarScan::header(size_t m_id) {
+    return headers.at(m_id);
+}
+
+const LidarScan::BlockHeader& LidarScan::header(size_t m_id) const {
+    return headers.at(m_id);
+}
+
+Eigen::Map<LidarScan::data_t, Eigen::Unaligned, LidarScan::DynStride>
+LidarScan::block(size_t m_id) {
+    return Eigen::Map<data_t, Eigen::Unaligned, DynStride>(
+        data.row(m_id).data(), h, N_FIELDS, {w * h, w});
+}
+
+Eigen::Map<const LidarScan::data_t, Eigen::Unaligned, LidarScan::DynStride>
+LidarScan::block(size_t m_id) const {
+    return Eigen::Map<const data_t, Eigen::Unaligned, DynStride>(
+        data.row(m_id).data(), h, N_FIELDS, {w * h, w});
+}
+
+Eigen::Map<img_t<LidarScan::raw_t>> LidarScan::field(LidarScan::Field f) {
+    return Eigen::Map<img_t<raw_t>>(data.col(f).data(), h, w);
+}
+
+Eigen::Map<const img_t<LidarScan::raw_t>> LidarScan::field(
+    LidarScan::Field f) const {
+    return Eigen::Map<const img_t<raw_t>>(data.col(f).data(), h, w);
+}
+
+Eigen::Ref<LidarScan::header_t<uint64_t>> LidarScan::timestamp() {
+    return timestamp_;
+}
+Eigen::Ref<const LidarScan::header_t<uint64_t>> LidarScan::timestamp() const {
+    return timestamp_;
+}
+
+Eigen::Ref<LidarScan::header_t<uint16_t>> LidarScan::measurement_id() {
+    return measurement_id_;
+}
+Eigen::Ref<const LidarScan::header_t<uint16_t>> LidarScan::measurement_id()
+    const {
+    return measurement_id_;
+}
+
+Eigen::Ref<LidarScan::header_t<uint32_t>> LidarScan::status() {
+    return status_;
+}
+Eigen::Ref<const LidarScan::header_t<uint32_t>> LidarScan::status() const {
+    return status_;
+}
+
+bool operator==(const LidarScan::BlockHeader& a,
+                const LidarScan::BlockHeader& b) {
+    return a.timestamp == b.timestamp && a.encoder == b.encoder &&
+           a.status == b.status;
+}
+
+bool operator==(const LidarScan& a, const LidarScan& b) {
+    return a.w == b.w && a.h == b.h && (a.data == b.data).all() &&
+           a.headers == b.headers && a.frame_id && b.frame_id &&
+           (a.timestamp() == b.timestamp()).all() &&
+           (a.measurement_id() == b.measurement_id()).all() &&
+           (a.status() == b.status()).all();
+}
+
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     double lidar_origin_to_beam_origin_mm,
                     const mat4d& transform,
@@ -131,7 +216,14 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
             next_m_id = m_id + 1;
         }
 
+        // old header API; will be removed in a future release
         ls_write.header(m_id) = {ts, encoder, status};
+
+        // write new header values
+        ls_write.timestamp()[m_id] = ts.count();
+        ls_write.measurement_id()[m_id] = m_id;
+        ls_write.status()[m_id] = status;
+
         for (uint8_t ipx = 0; ipx < h; ipx++) {
             const uint8_t* px_buf = pf.nth_px(ipx, col_buf);
 

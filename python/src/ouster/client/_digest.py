@@ -81,11 +81,11 @@ class ScanDigest:
         hashes.update({c.name: _md5(ls.field(c)) for c in ChanField})
 
         hashes['TIMESTAMP'] = _md5(
-            ls.header(ColHeader.TIMESTAMP).astype(np.uint64))
+            ls.timestamp.astype(np.uint64))
         hashes['ENCODER_COUNT'] = _md5(
             ls.header(ColHeader.ENCODER_COUNT).astype(np.uint64))
         hashes['STATUS'] = _md5(
-            ls.header(ColHeader.STATUS).astype(np.uint64))
+            ls.status.astype(np.uint64))
 
         return cls(**hashes)
 

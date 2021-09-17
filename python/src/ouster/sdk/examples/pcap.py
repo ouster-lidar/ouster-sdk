@@ -203,8 +203,7 @@ def pcap_to_csv(source: client.PacketSource,
     for idx, scan in enumerate(scans):
 
         # copy per-column timestamps for each channel
-        col_timestamps = scan.header(client.ColHeader.TIMESTAMP)
-        timestamps = np.tile(col_timestamps, (scan.h, 1))
+        timestamps = np.tile(scan.timestamp, (scan.h, 1))
 
         # grab channel data
         fields_values = [scan.field(ch) for ch in client.ChanField]

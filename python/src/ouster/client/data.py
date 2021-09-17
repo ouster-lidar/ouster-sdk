@@ -1,10 +1,11 @@
 from enum import Enum
-from typing import Callable, ClassVar, Dict, List, Optional, Type, Union, Tuple
+from typing import Callable, ClassVar, List, Optional, Union
 
 import numpy as np
 import numpy.lib.stride_tricks
 
 from . import SensorInfo, _client
+from ._client import LidarScan
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -88,19 +89,26 @@ class ChanField(Enum):
         self.dtype = dtype
         self.mask = mask
 
+    def __int__(self) -> int:
+        return self.ind
+
 
 class ColHeader(Enum):
     """Column headers available in lidar data."""
-    TIMESTAMP = (0, np.uint64)
-    FRAME_ID = (10, np.uint16)
-    MEASUREMENT_ID = (8, np.uint16)
-    ENCODER_COUNT = (12, np.uint32)
+    TIMESTAMP = (0, 0, np.uint64)
+    FRAME_ID = (-1, 10, np.uint16)
+    MEASUREMENT_ID = (2, 8, np.uint16)
+    ENCODER_COUNT = (1, 12, np.uint32)
     # negative offsets are considered relative to the end of the col buffer
-    STATUS = (-4, np.uint32)
+    STATUS = (3, -4, np.uint32)
 
-    def __init__(self, offset: int, dtype: type):
+    def __init__(self, ind: int, offset: int, dtype: type):
+        self.ind = ind
         self.offset = offset
         self.dtype = dtype
+
+    def __int__(self) -> int:
+        return self.ind
 
 
 class LidarPacket:
@@ -171,103 +179,6 @@ class LidarPacket:
             self._data[header.offset + start:].view(dtype=header.dtype),
             shape=(self._pf.columns_per_packet, ),
             strides=(self._column_bytes, ))
-
-
-class LidarScan:
-    """Represents a single "scan" or "frame" of lidar data.
-
-    Internally, shares the same memory representation as the C++ LidarScan type
-    and should allow passing data without unnecessary copying.
-    """
-    N_FIELDS: ClassVar[int] = _client.LidarScan.N_FIELDS
-
-    w: int
-    h: int
-    frame_id: int
-    _data: np.ndarray
-    _headers: Dict[ColHeader, np.ndarray]
-
-    def __init__(self, h: int, w: int):
-        """
-        Args:
-            h: Vertical resolution of the scan
-            w: Horizontal resolution of the scan
-        """
-        self.w = w
-        self.h = h
-        self.frame_id = -1  # init with invalid frame_id
-        self._data = np.ndarray((LidarScan.N_FIELDS, w * h), dtype=np.uint32)
-        self._headers = {
-            h: np.zeros(w, h.dtype)
-            for h in (ColHeader.TIMESTAMP, ColHeader.ENCODER_COUNT,
-                      ColHeader.STATUS)
-        }
-
-    def _complete(self,
-                  column_window: Optional[Tuple[int, int]] = None) -> bool:
-        """Whether all columns of the scan are valid within given window.
-
-        Args:
-            column_window: metadata.format.column_window if it's not default
-                to full scan
-        """
-        if column_window is None:
-            column_window = (0, self.w - 1)
-
-        win_start, win_end = column_window
-        status = self.header(ColHeader.STATUS)
-
-        if win_start <= win_end:
-            return (status[win_start:win_end + 1] == 0xFFFFFFFF).all()
-        else:
-            return ((status[:win_end + 1] == 0xFFFFFFFF).all()
-                    and (status[win_start:] == 0xFFFFFFFF).all())
-
-    def field(self, field: ChanField) -> np.ndarray:
-        """Return a view of the specified channel field."""
-        return self._data[field.ind, :].reshape(self.h, self.w)
-
-    def header(self, header: ColHeader) -> np.ndarray:
-        """Return the specified column header as a numpy array.
-
-        Note that only TIMESTAMP, ENCODER_COUNT, and STATUS are currently
-        supported.
-        """
-        return self._headers[header]
-
-    def to_native(self) -> _client.LidarScan:
-        ls = _client.LidarScan(self.w, self.h)
-        ls.frame_id = self.frame_id
-        ls.headers = [
-            _client.BlockHeader(
-                self.header(ColHeader.TIMESTAMP)[i],
-                self.header(ColHeader.ENCODER_COUNT)[i],
-                self.header(ColHeader.STATUS)[i]) for i in range(self.w)
-        ]
-        ls.data[:] = self._data
-        return ls
-
-    @classmethod
-    def from_native(cls: Type['LidarScan'],
-                    scan: _client.LidarScan) -> 'LidarScan':
-        ls = cls.__new__(cls)
-        ls.w = scan.w
-        ls.h = scan.h
-        ls.frame_id = scan.frame_id
-        ls._data = scan.data
-        ls._headers = {
-            ColHeader.TIMESTAMP:
-            np.array([h.timestamp for h in scan.headers],
-                     dtype=ColHeader.TIMESTAMP.dtype),
-            ColHeader.ENCODER_COUNT:
-            np.array([h.encoder for h in scan.headers],
-                     dtype=ColHeader.ENCODER_COUNT.dtype),
-            ColHeader.STATUS:
-            np.array([h.status for h in scan.headers],
-                     dtype=ColHeader.STATUS.dtype),
-        }
-
-        return ls
 
 
 def _destagger(field: np.ndarray, shifts: List[int],
@@ -344,7 +255,7 @@ def XYZLut(
 
     def res(ls: Union[LidarScan, np.ndarray]) -> np.ndarray:
         if isinstance(ls, LidarScan):
-            xyz = lut(ls.to_native())
+            xyz = lut(ls)
         else:
             # will create a temporary to cast if dtype != uint32
             xyz = lut(ls.astype(np.uint32, copy=False))
