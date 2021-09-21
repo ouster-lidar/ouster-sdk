@@ -1,6 +1,7 @@
 #include "ouster/lidar_scan.h"
 
 #include <Eigen/Dense>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -101,11 +102,16 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         if (ls_write.frame_id != f_id) {
             // if not initializing with first packet
             if (ls_write.frame_id != -1) {
-                // zero out remaining missing columns
+                // zero out remaining missing data columns
                 auto rows = h * LidarScan::N_FIELDS;
                 row_view_t{ls_write.data.data(), rows, w}
                     .block(0, next_m_id, rows, w - next_m_id)
                     .setZero();
+
+                // zero out remaining missing headers
+                std::fill(ls_write.headers.begin() + next_m_id,
+                          ls_write.headers.end(),
+                          LidarScan::BlockHeader{LidarScan::ts_t{0}, 0, 0});
 
                 // finish the scan and notify callback
                 std::swap(ls, ls_write);
@@ -119,10 +125,16 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
 
         // zero out missing columns if we jumped forward
         if (m_id >= next_m_id) {
+            // zero out data
             auto rows = h * LidarScan::N_FIELDS;
             row_view_t{ls_write.data.data(), rows, w}
                 .block(0, next_m_id, rows, m_id - next_m_id)
                 .setZero();
+            // zero out headers
+            std::fill(ls_write.headers.begin() + next_m_id,
+                      ls_write.headers.begin() + m_id,
+                      LidarScan::BlockHeader{LidarScan::ts_t{0}, 0, 0});
+
             next_m_id = m_id + 1;
         }
 
