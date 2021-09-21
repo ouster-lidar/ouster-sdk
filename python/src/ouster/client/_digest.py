@@ -123,11 +123,11 @@ class StreamDigest:
         for s, t in zip(self.scans, other.scans):
             s.check(t)
 
-    def to_json(self) -> str:
+    def to_json(self, metadata: str) -> str:
         """Serialize to json."""
         return json.dumps(
             {
-                'meta': json.loads(str(self.meta)),
+                'meta': json.loads(metadata),
                 'packets': [d.hashes for d in self.packets],
                 'scans': [d.hashes for d in self.scans]
             },

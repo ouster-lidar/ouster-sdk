@@ -120,7 +120,7 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.2.4.dev0',
+    version='0.2.4.dev1',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
