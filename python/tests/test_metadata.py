@@ -66,11 +66,11 @@ def test_lidar_mode_misc() -> None:
         client.LidarMode.MODE_1024x10.frequency = 0  # type: ignore
 
 
-@pytest.fixture()
-def metadata() -> client.SensorInfo:
-    digest_path = path.join(DATA_DIR, "os-992011000121_digest.json")
-    with open(digest_path, 'r') as f:
-        return digest.StreamDigest.from_json(f.read()).meta
+@pytest.fixture(scope="module")
+def metadata():
+    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
+    with open(meta_path, 'r') as f:
+        return client.SensorInfo(f.read())
 
 
 def test_read_info(metadata: client.SensorInfo) -> None:

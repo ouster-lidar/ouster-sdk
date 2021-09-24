@@ -63,11 +63,11 @@ def use_sll() -> int:
     return False
 
 
-@pytest.fixture
-def metadata() -> client.SensorInfo:
-    digest_path = os.path.join(DATA_DIR, "os-992011000121_digest.json")
-    with open(digest_path, 'r') as f:
-        return _digest.StreamDigest.from_json(f.read()).meta
+@pytest.fixture()
+def metadata():
+    meta_path = os.path.join(DATA_DIR, "os-992011000121_meta.json")
+    with open(meta_path, 'r') as f:
+        return client.SensorInfo(f.read())
 
 
 @pytest.fixture

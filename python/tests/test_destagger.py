@@ -13,12 +13,10 @@ DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
 
 @pytest.fixture(scope="module")
-def meta() -> client.SensorInfo:
-    # load test scan and metadata
-    digest_path = path.join(DATA_DIR, "os-992011000121_digest.json")
-    with open(digest_path, 'r') as f:
-        return digest.StreamDigest.from_json(f.read()).meta
-
+def meta():
+    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
+    with open(meta_path, 'r') as f:
+        return client.SensorInfo(f.read())
 
 @pytest.fixture(scope="module")
 def scan(meta) -> client.LidarScan:

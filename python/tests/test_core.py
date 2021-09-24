@@ -23,8 +23,10 @@ def stream_digest():
 
 
 @pytest.fixture(scope="module")
-def meta(stream_digest: digest.StreamDigest):
-    return stream_digest.meta
+def meta():
+    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
+    with open(meta_path, 'r') as f:
+        return client.SensorInfo(f.read())
 
 
 def test_sensor_init(meta: client.SensorInfo) -> None:
@@ -65,17 +67,17 @@ def test_sensor_port_in_use(meta: client.SensorInfo) -> None:
 
 
 @pytest.fixture(scope="module")
-def packet(stream_digest):
+def packet(stream_digest: digest.StreamDigest, meta: client.SensorInfo):
     bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
     with open(bin_path, 'rb') as b:
-        return next(iter(digest.LidarBufStream(b, stream_digest.meta)))
+        return next(iter(digest.LidarBufStream(b, meta)))
 
 
 @pytest.fixture
-def packets(stream_digest: digest.StreamDigest):
+def packets(stream_digest: digest.StreamDigest, meta: client.SensorInfo):
     bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
     with open(bin_path, 'rb') as b:
-        yield digest.LidarBufStream(b, stream_digest.meta)
+        yield digest.LidarBufStream(b, meta)
 
 
 def test_scans_simple(packets: client.PacketSource) -> None:

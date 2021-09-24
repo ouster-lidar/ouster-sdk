@@ -99,10 +99,8 @@ class StreamDigest:
 
     Attributes:
         file: Path to file containing a bufstream of packet data to check.
-        meta: Sensor metadata used to parse packets into channel data.
         packets: List of known good hashes of channel data for each packet.
     """
-    meta: SensorInfo
     packets: List[ScanDigest]
     scans: List[ScanDigest]
 
@@ -123,11 +121,10 @@ class StreamDigest:
         for s, t in zip(self.scans, other.scans):
             s.check(t)
 
-    def to_json(self, metadata: str) -> str:
+    def to_json(self) -> str:
         """Serialize to json."""
         return json.dumps(
             {
-                'meta': json.loads(metadata),
                 'packets': [d.hashes for d in self.packets],
                 'scans': [d.hashes for d in self.scans]
             },
@@ -146,13 +143,12 @@ class StreamDigest:
                           source.metadata)
         scan_digests = list(map(ScanDigest.from_scan, Scans(packets)))
 
-        return cls(source.metadata, packet_digests, scan_digests)
+        return cls(packet_digests, scan_digests)
 
     @classmethod
     def from_json(cls, json_data: str) -> 'StreamDigest':
         """Instantiate from json representation."""
         d = json.loads(json_data)
         return cls(
-            meta=SensorInfo(json.dumps(d['meta'])),
             packets=[ScanDigest(**hashes) for hashes in d.get('packets', [])],
             scans=[ScanDigest(**hashes) for hashes in d.get('scans', [])])

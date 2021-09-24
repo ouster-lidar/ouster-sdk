@@ -11,6 +11,13 @@ from ouster.sdk.examples import reference
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
 
+@pytest.fixture()
+def meta():
+    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
+    with open(meta_path, 'r') as f:
+        return client.SensorInfo(f.read())
+
+
 @pytest.fixture
 def stream_digest() -> digest.StreamDigest:
     # load test scan and metadata
@@ -23,20 +30,19 @@ def stream_digest() -> digest.StreamDigest:
 
 
 @pytest.fixture
-def scan(stream_digest: digest.StreamDigest) -> client.LidarScan:
+def scan(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> client.LidarScan:
     bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
 
     with open(bin_path, 'rb') as b:
-        source = digest.LidarBufStream(b, stream_digest.meta)
+        source = digest.LidarBufStream(b, meta)
         scans = client.Scans(source)
         scan = next(iter(scans))
 
     return scan
 
 
-def test_xyz_lut_dims(stream_digest: digest.StreamDigest) -> None:
+def test_xyz_lut_dims(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> None:
     """Check that (in)valid dimensions are handled when creating xyzlut."""
-    meta = stream_digest.meta
     w = meta.format.columns_per_frame
     h = meta.format.pixels_per_column
 
@@ -73,10 +79,8 @@ def test_xyz_lut_dims(stream_digest: digest.StreamDigest) -> None:
         client.XYZLut(meta2)
 
 
-def test_xyz_lut_angles(stream_digest: digest.StreamDigest) -> None:
+def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> None:
     """Check that invalid beam angle dimensions are handled by xyzlut."""
-    meta = stream_digest.meta
-
     meta1 = copy(meta)
     client.XYZLut(meta1)
 
@@ -108,9 +112,8 @@ def test_xyz_lut_angles(stream_digest: digest.StreamDigest) -> None:
         client.XYZLut(meta2)
 
 
-def test_xyz_lut_scan_dims(stream_digest: digest.StreamDigest) -> None:
+def test_xyz_lut_scan_dims(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> None:
     """Check that (in)valid lidar scan dimensions are handled by xyzlut."""
-    meta = stream_digest.meta
     w = meta.format.columns_per_frame
     h = meta.format.pixels_per_column
 
@@ -126,22 +129,23 @@ def test_xyz_lut_scan_dims(stream_digest: digest.StreamDigest) -> None:
 
 
 def test_xyz_calcs(stream_digest: digest.StreamDigest,
-                   scan: client.LidarScan) -> None:
+                   scan: client.LidarScan, meta: client.SensorInfo) -> None:
     """Compare the optimized xyz projection to a reference implementation."""
 
     # compute 3d points using reference implementation
-    xyz_from_docs = reference.xyz_proj(stream_digest.meta, scan)
+    xyz_from_docs = reference.xyz_proj(meta, scan)
 
     # transform data to 3d points using optimized implementation
-    xyzlut = client.XYZLut(stream_digest.meta)
+    xyzlut = client.XYZLut(meta)
     xyz_from_lut = xyzlut(scan)
 
     assert np.allclose(xyz_from_docs, xyz_from_lut)
 
 
-def test_xyz_range(stream_digest: digest.StreamDigest, scan: client.LidarScan) -> None:
+def test_xyz_range(stream_digest: digest.StreamDigest, scan: client.LidarScan,
+                   meta: client.SensorInfo) -> None:
     """Test that projection works on an ndarrays as well."""
-    xyzlut = client.XYZLut(stream_digest.meta)
+    xyzlut = client.XYZLut(meta)
 
     range = scan.field(client.ChanField.RANGE)
     xyz_from_scan = xyzlut(scan)
@@ -149,9 +153,10 @@ def test_xyz_range(stream_digest: digest.StreamDigest, scan: client.LidarScan) -
     assert np.array_equal(xyz_from_scan, xyz_from_range)
 
 
-def test_xyz_range_dtype(stream_digest: digest.StreamDigest, scan: client.LidarScan) -> None:
+def test_xyz_range_dtype(stream_digest: digest.StreamDigest, scan: client.LidarScan,
+                         meta: client.SensorInfo) -> None:
     """Test that projection works on an ndarrays of different dtypes."""
-    xyzlut = client.XYZLut(stream_digest.meta)
+    xyzlut = client.XYZLut(meta)
 
     range = scan.field(client.ChanField.RANGE)
     range[:] = range.astype(np.uint8)
