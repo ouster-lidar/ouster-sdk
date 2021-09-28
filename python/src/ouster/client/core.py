@@ -104,14 +104,15 @@ class Sensor(PacketSource):
                  buf_size: int = 128,
                  timeout: Optional[float] = 1.0,
                  _overflow_err: bool = False,
-                 _flush_before_read: bool = True) -> None:
+                 _flush_before_read: bool = True, 
+                 _legacy_format: bool = True) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
         be updated. The metadata will be fetched over the network from the
         sensor unless explicitly provided using the ``metadata`` parameter.
 
         Args:
-            hostname: hostname of the sensor
+            hostname: hostname or IP address of the sensor
             lidar_port: UDP port to listen on for lidar data
             imu_port: UDP port to listen on for imu data
             metadata: explicitly provide metadata for the stream
@@ -119,6 +120,7 @@ class Sensor(PacketSource):
             timeout: seconds to wait for packets before signaling error or None
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
+            _legacy_format: if True, use legacy metadata format
 
         Raises:
             ClientError: If initializing the client fails.
@@ -129,6 +131,7 @@ class Sensor(PacketSource):
         self._flush_before_read = _flush_before_read
         self._cache = None
         self._fetched_meta = ""
+        self._legacy_format = _legacy_format
 
         # Fetch from sensor if not explicitly provided
         if metadata:
@@ -145,7 +148,7 @@ class Sensor(PacketSource):
 
     def _fetch_metadata(self) -> None:
         if not self._fetched_meta:
-            self._fetched_meta = self._cli.get_metadata()
+            self._fetched_meta = self._cli.get_metadata(legacy = self._legacy_format)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 

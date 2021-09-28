@@ -471,13 +471,13 @@ sensor_config parse_config(const Json::Value& root) {
     return config;
 }
 
-sensor_config parse_config(const std::string& meta) {
+sensor_config parse_config(const std::string& config) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
-    std::stringstream ss{meta};
+    std::stringstream ss{config};
 
-    if (meta.size()) {
+    if (config.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors)) {
             throw std::invalid_argument{errors.c_str()};
         }
@@ -486,7 +486,44 @@ sensor_config parse_config(const std::string& meta) {
     return parse_config(root);
 }
 
-sensor_info parse_metadata(const std::string& meta) {
+bool valid_response(const Json::Value& root, const std::string& tcp_request) {
+    return (root.isMember(tcp_request) && root[tcp_request].isObject());
+}
+
+bool is_new_format(const std::string& metadata) {
+    Json::Value root{};
+    Json::CharReaderBuilder builder{};
+    std::string errors{};
+    std::stringstream ss{metadata};
+
+    if (metadata.size()) {
+        if (!Json::parseFromStream(builder, ss, &root, &errors))
+            throw std::invalid_argument{errors.c_str()};
+    }
+
+    const std::vector<std::string> valid_response_required = {
+        "sensor_info", "beam_intrinsics", "imu_intrinsics", "lidar_intrinsics",
+        "config_param"};
+
+    for (const auto& key : valid_response_required) {
+        if (!valid_response(root, key)) {
+            return false;
+        }
+    }
+
+    const std::vector<std::string> member_required = {"lidar_data_format",
+                                                      "calibration_status"};
+
+    for (const auto& key : member_required) {
+        if (!root.isMember(key)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+sensor_info parse_legacy(const std::string& meta) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
@@ -496,10 +533,11 @@ sensor_info parse_metadata(const std::string& meta) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
             throw std::invalid_argument{errors.c_str()};
     }
-
     sensor_info info{};
 
-    info.name = root["hostname"].asString();
+    // info.name is deprecated - leave blank
+    info.name = "";
+
     info.sn = root["prod_sn"].asString();
     info.fw_rev = root["build_rev"].asString();
     info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
@@ -607,6 +645,78 @@ sensor_info parse_metadata(const std::string& meta) {
     return info;
 }
 
+void update_json_obj(Json::Value& dst, const Json::Value& src) {
+    const std::vector<std::string>& members = src.getMemberNames();
+    for (const auto& key : members) {
+        dst[key] = src[key];
+    }
+}
+
+std::string convert_to_legacy(const std::string& metadata) {
+    if (!is_new_format(metadata))
+        throw std::invalid_argument(
+            "Could not convert invalid non-legacy metadata format");
+
+    Json::Value root{};
+    Json::CharReaderBuilder read_builder{};
+    std::string errors{};
+    std::stringstream ss{metadata};
+
+    if (metadata.size()) {
+        if (!Json::parseFromStream(read_builder, ss, &root, &errors)) {
+            throw std::invalid_argument{errors.c_str()};
+        }
+    }
+    Json::Value result{};
+
+    if (root.isMember("config_param")) {
+        result["lidar_mode"] = root["config_param"]["lidar_mode"];
+    }
+    if (root.isMember("client_version")) {
+        result["client_version"] = root["client_version"];
+    };
+    result["json_calibration_version"] = FW_2_0;
+
+    result["hostname"] = "";
+
+    update_json_obj(result, root["sensor_info"]);
+    update_json_obj(result, root["beam_intrinsics"]);
+    update_json_obj(result, root["imu_intrinsics"]);
+    update_json_obj(result, root["lidar_intrinsics"]);
+
+    if (root.isMember("lidar_data_format") &&
+        root["lidar_data_format"].isObject()) {
+        result["data_format"] = Json::Value{};
+        update_json_obj(result["data_format"], root["lidar_data_format"]);
+    }
+
+    Json::StreamWriterBuilder write_builder;
+    write_builder["enableYAMLCompatibility"] = true;
+    write_builder["precision"] = 6;
+    write_builder["indentation"] = "    ";
+    return Json::writeString(write_builder, result);
+}
+
+sensor_info parse_metadata(const std::string& metadata) {
+    Json::Value root{};
+    Json::CharReaderBuilder builder{};
+    std::string errors{};
+    std::stringstream ss{metadata};
+
+    if (metadata.size()) {
+        if (!Json::parseFromStream(builder, ss, &root, &errors))
+            throw std::invalid_argument{errors.c_str()};
+    }
+
+    sensor_info info{};
+    if (is_new_format(metadata)) {
+        info = parse_legacy(convert_to_legacy(metadata));
+    } else {
+        info = parse_legacy(metadata);
+    }
+    return info;
+}
+
 sensor_info metadata_from_json(const std::string& json_file) {
     std::stringstream buf{};
     std::ifstream ifs{};
@@ -626,8 +736,8 @@ sensor_info metadata_from_json(const std::string& json_file) {
 std::string to_string(const sensor_info& info) {
     Json::Value root{};
 
-    root["client_version"] = ouster::CLIENT_VERSION;
-    root["hostname"] = info.name;
+    root["client_version"] = client_version();
+    root["hostname"] = "";
     root["prod_sn"] = info.sn;
     root["build_rev"] = info.fw_rev;
     root["lidar_mode"] = to_string(info.mode);
@@ -771,6 +881,10 @@ std::string to_string(const sensor_config& config) {
     builder["precision"] = 6;
     builder["indentation"] = "    ";
     return Json::writeString(builder, root);
+}
+
+std::string client_version() {
+    return std::string("ouster_client ").append(ouster::CLIENT_VERSION);
 }
 
 std::ostream& operator<<(std::ostream& os, const sensor_config& config) {

@@ -136,11 +136,11 @@ struct PyClient {
     /*
      * Fetch metadata using the native client handle.
      */
-    std::string get_metadata(int timeout_sec) {
+    std::string get_metadata(int timeout_sec, bool legacy_format) {
         std::lock_guard<std::mutex> cli_lock{cli_mtx_};
         if (!cli_)
             throw std::runtime_error("Client has already been shut down");
-        return sensor::get_metadata(*cli_, timeout_sec);
+        return sensor::get_metadata(*cli_, timeout_sec, legacy_format);
     }
 
     /*
@@ -611,7 +611,7 @@ directly.
              py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
              py::arg("timeout_sec") = 30, py::arg("capacity") = 128)
         .def("get_metadata", &PyClient::get_metadata,
-             py::arg("timeout_sec") = 60)
+             py::arg("timeout_sec") = 60, py::arg("legacy") = true)
         .def("shutdown", &PyClient::shutdown)
         .def("consume", &PyClient::consume)
         .def("produce", &PyClient::produce)

@@ -97,9 +97,11 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  *
  * @param cli client returned by init_client associated with the connection
  * @param timeout_sec how long to wait for the sensor to initialize
+ * @param legacy_format whether to use legacy format of metadata output
  * @return a text blob of metadata parseable into a sensor_info struct
  */
-std::string get_metadata(client& cli, int timeout_sec = 60);
+std::string get_metadata(client& cli, int timeout_sec = 60,
+                         bool legacy_format = true);
 
 /**
  * Get sensor config from the sensor

@@ -75,7 +75,7 @@ def metadata():
 
 def test_read_info(metadata: client.SensorInfo) -> None:
     """Check the particular values in the test data."""
-    assert metadata.hostname == "os-992011000121"
+    assert metadata.hostname == "" # hostname is deprecated
     assert metadata.sn == "992011000121"
     assert metadata.fw_rev == "v1.14.0-beta.13"
     assert metadata.mode == client.LidarMode.MODE_512x10

@@ -236,13 +236,6 @@ bool do_tcp_cmd(SOCKET sock_fd, const std::vector<std::string>& cmd_tokens,
     return true;
 }
 
-void update_json_obj(Json::Value& dst, const Json::Value& src) {
-    const std::vector<std::string>& members = src.getMemberNames();
-    for (const auto& key : members) {
-        dst[key] = src[key];
-    }
-}
-
 bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
     Json::CharReaderBuilder builder{};
     auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
@@ -262,42 +255,48 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
         if (chrono::steady_clock::now() >= timeout_time) return false;
         std::this_thread::sleep_for(chrono::seconds(1));
     } while (success && root["status"].asString() == "INITIALIZING");
-
-    update_json_obj(cli.meta, root);
+    cli.meta["sensor_info"] = root;
 
     success &= do_tcp_cmd(sock_fd, {"get_beam_intrinsics"}, res);
     success &=
         reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
-    update_json_obj(cli.meta, root);
+    cli.meta["beam_intrinsics"] = root;
 
     success &= do_tcp_cmd(sock_fd, {"get_imu_intrinsics"}, res);
     success &=
         reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
-    update_json_obj(cli.meta, root);
+    cli.meta["imu_intrinsics"] = root;
 
     success &= do_tcp_cmd(sock_fd, {"get_lidar_intrinsics"}, res);
     success &=
         reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
-    update_json_obj(cli.meta, root);
+    cli.meta["lidar_intrinsics"] = root;
 
-    // try to query data format
-    bool got_format = true;
-    got_format &= do_tcp_cmd(sock_fd, {"get_lidar_data_format"}, res);
-    got_format &=
-        reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
-    if (got_format) cli.meta["data_format"] = root;
+    success &= do_tcp_cmd(sock_fd, {"get_lidar_data_format"}, res);
+    if (success) {
+        if (reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL)) {
+            cli.meta["lidar_data_format"] = root;
+        } else {
+            cli.meta["lidar_data_format"] = res;
+        }
+    }
 
-    // get lidar mode
+    success &= do_tcp_cmd(sock_fd, {"get_calibration_status"}, res);
+    if (success) {
+        if (reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL)) {
+            cli.meta["calibration_status"] = root;
+        } else {
+            cli.meta["calibration_status"] = res;
+        }
+    }
+
     success &= do_tcp_cmd(sock_fd, {"get_config_param", "active"}, res);
     success &=
         reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
+    cli.meta["config_param"] = root;
 
     // merge extra info into metadata
-    cli.meta["hostname"] = cli.hostname;
-    cli.meta["lidar_mode"] = root["lidar_mode"];
-    cli.meta["client_version"] = ouster::CLIENT_VERSION;
-
-    cli.meta["json_calibration_version"] = FW_2_0;
+    cli.meta["client_version"] = client_version();
 
     return success;
 }
@@ -500,7 +499,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     return success;
 }
 
-std::string get_metadata(client& cli, int timeout_sec) {
+std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     if (!cli.meta) {
         SOCKET sock_fd = cfg_socket(cli.hostname.c_str());
         if (sock_fd < 0) return "";
@@ -517,7 +516,10 @@ std::string get_metadata(client& cli, int timeout_sec) {
     builder["enableYAMLCompatibility"] = true;
     builder["precision"] = 6;
     builder["indentation"] = "    ";
-    return Json::writeString(builder, cli.meta);
+
+    auto metadata_string = Json::writeString(builder, cli.meta);
+
+    return legacy_format ? convert_to_legacy(metadata_string) : metadata_string;
 }
 
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
@@ -609,7 +611,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     success &= collect_metadata(*cli, sock_fd, chrono::seconds{timeout_sec});
 
     // check for sensor error states
-    auto status = cli->meta["status"].asString();
+    auto status = cli->meta["sensor_info"]["status"].asString();
     success &= (status != "ERROR" && status != "UNCONFIGURED");
 
     impl::socket_close(sock_fd);

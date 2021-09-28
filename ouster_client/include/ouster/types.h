@@ -86,7 +86,7 @@ struct data_format {
 };
 
 struct sensor_info {
-    std::string name;
+    [[deprecated]] std::string name;
     std::string sn;
     std::string fw_rev;
     lidar_mode mode;
@@ -295,10 +295,10 @@ sensor_info metadata_from_json(const std::string& json_file);
 /**
  * Get a string representation of metadata. All fields included.
  *
- * @param metadata a struct of sensor metadata
+ * @param info sensor_info struct
  * @return a json metadata string
  */
-std::string to_string(const sensor_info& metadata);
+std::string to_string(const sensor_info& info);
 
 /**
  * Parse config text blob from the sensor into a sensor_config struct
@@ -320,6 +320,21 @@ sensor_config parse_config(const std::string& config);
  * @return a json sensor config string
  */
 std::string to_string(const sensor_config& config);
+
+/**
+ * Convert non-legacy string representation of metadata to legacy
+ *
+ * @param metadata non-legacy string representation of metadata
+ * @return legacy string representation of metadata
+ */
+std::string convert_to_legacy(const std::string& metadata);
+
+/**
+ * Get client version
+ *
+ * @return client version string
+ */
+std::string client_version();
 
 /**
  * Table of accessors for extracting data from imu and lidar packets.
