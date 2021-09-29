@@ -19,11 +19,13 @@ void FATAL(const char* msg) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
+    if (argc != 2 && argc != 3) {
         std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
                   << ouster::BUILD_SYSTEM << ")"
                   << "\n\nUsage: ouster_client_example <sensor_hostname> "
-                     "<data_destination_ip>"
+                     "[<data_destination_ip>]"
+                     "\n\n<data_destination_ip> is optional: leave blank for "
+                     "automatic destination detection"
                   << std::endl;
 
         return EXIT_FAILURE;
@@ -41,7 +43,7 @@ int main(int argc, char* argv[]) {
      * hostname/ip.
      */
     const std::string sensor_hostname = argv[1];
-    const std::string data_destination = argv[2];
+    const std::string data_destination = (argc == 3) ? argv[2] : "";
 
     std::cerr << "Connecting to \"" << sensor_hostname << "\"... ";
 
