@@ -7,11 +7,9 @@ This module has a rudimentary command line interface. For usage, run::
 import os
 import argparse
 from contextlib import closing
-from itertools import islice
 import time
 
 import numpy as np
-from more_itertools import nth
 
 from ouster import client, pcap
 from .colormaps import normalize
@@ -24,6 +22,7 @@ def pcap_display_xyz_points(source: client.PacketSource,
     import matplotlib.pyplot as plt  # type: ignore
 
     # [doc-stag-pcap-plot-xyz-points]
+    from more_itertools import nth
     scan = nth(client.Scans(source), num)
     if not scan:
         print(f"ERROR: Scan # {num} in not present in pcap file")
@@ -133,6 +132,7 @@ def pcap_show_one_scan(source: client.PacketSource,
     """Plot all channels of one scan in 2D using matplotlib."""
     import matplotlib.pyplot as plt  # type: ignore
 
+    from more_itertools import nth
     scan = nth(client.Scans(source), num)
     if not scan:
         print(f"ERROR: Scan # {num} in not present in pcap file")
@@ -156,6 +156,81 @@ def pcap_show_one_scan(source: client.PacketSource,
     # [doc-etag-pcap-show-one]
 
 
+def pcap_to_las(source: client.PacketSource,
+                metadata: client.SensorInfo,
+                num: int = 0,
+                las_dir: str = ".",
+                las_base: str = "las_out",
+                las_ext: str = "las") -> None:
+    "Write scans from a pcap to las files (one per lidar scan)."
+
+    from itertools import islice
+    import laspy
+
+    # precompute xyzlut to save computation in a loop
+    xyzlut = client.XYZLut(metadata)
+
+    # create an iterator of LidarScans from pcap and bound it if num is specified
+    scans = iter(client.Scans(source))
+    if num:
+        scans = islice(scans, num)
+
+    for idx, scan in enumerate(scans):
+
+        xyz = xyzlut(scan)
+
+        las = laspy.create()
+        las.x = xyz[:, :, 0].flatten()
+        las.y = xyz[:, :, 1].flatten()
+        las.z = xyz[:, :, 2].flatten()
+
+        las_path = os.path.join(las_dir, f'{las_base}_{idx:06d}.{las_ext}')
+        print(f'write frame #{idx} to file: {las_path}')
+
+        las.write(las_path)
+
+
+def pcap_to_pcd(source: client.PacketSource,
+                metadata: client.SensorInfo,
+                num: int = 0,
+                pcd_dir: str = ".",
+                pcd_base: str = "pcd_out",
+                pcd_ext: str = "pcd") -> None:
+    "Write scans from a pcap to pcd files (one per lidar scan)."
+
+    from itertools import islice
+    try:
+        import open3d as o3d  # type: ignore
+    except ModuleNotFoundError:
+        print("This example requires open3d, which may not be available on all "
+              "platforms. Try running `pip3 install open3d` first.")
+        exit(1)
+
+    if not os.path.exists(pcd_dir):
+        os.makedirs(pcd_dir)
+
+    # precompute xyzlut to save computation in a loop
+    xyzlut = client.XYZLut(metadata)
+
+    # create an iterator of LidarScans from pcap and bound it if num is specified
+    scans = iter(client.Scans(source))
+    if num:
+        scans = islice(scans, num)
+
+    for idx, scan in enumerate(scans):
+
+        xyz = xyzlut(scan)
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(xyz.reshape(-1, 3))
+
+        pcd_path = os.path.join(pcd_dir, f'{pcd_base}_{idx:06d}.{pcd_ext}')
+        print(f'write frame #{idx} to file: {pcd_path}')
+
+        with open(pcd_path, 'a') as pcd_file:
+            o3d.io.write_point_cloud(pcd_path, pcd)
+
+
 def pcap_to_csv(source: client.PacketSource,
                 metadata: client.SensorInfo,
                 num: int = 0,
@@ -176,8 +251,8 @@ def pcap_to_csv(source: client.PacketSource,
     files transparently back to :class:`.numpy.ndarray`.
 
     Args:
-        pcap_path: path to the pcap file
-        metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
+        source: PacketSource from pcap
+        metadata: associated SensorInfo for PacketSource
         num: number of scans to save from pcap to csv files
         csv_dir: path to the directory where csv files will be saved
         csv_base: string to use as the base of the filename for pcap output
@@ -192,6 +267,7 @@ def pcap_to_csv(source: client.PacketSource,
     field_fmts = ['%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d']
 
     # [doc-stag-pcap-to-csv]
+    from itertools import islice
     # precompute xyzlut to save computation in a loop
     xyzlut = client.XYZLut(metadata)
 
@@ -237,12 +313,18 @@ def pcap_3d_one_scan(source: client.PacketSource,
     """Render one scan from a pcap file in the Open3D viewer.
 
     Args:
-        pcap_path: path to the pcap file
-        metadata_path: path to the .json with metadata (aka :class:`.SensorInfo`)
+        source: PacketSource from pcap
+        metadata: associated SensorInfo for PacketSource
         num: scan number in a given pcap file (satrs from *0*)
     """
-    import open3d as o3d
+    try:
+        import open3d as o3d  # type: ignore
+    except ModuleNotFoundError:
+        print("This example requires open3d, which may not be available on all "
+              "platforms. Try running `pip3 install open3d` first.")
+        exit(1)
 
+    from more_itertools import nth
     # get single scan by index
     scan = nth(client.Scans(source), num)
 
@@ -289,6 +371,8 @@ def main():
         "read-packets": pcap_read_packets,
         "plot-one-scan": pcap_show_one_scan,
         "pcap-to-csv": pcap_to_csv,
+        "pcap-to-pcd": pcap_to_pcd,
+        "pcap-to-las": pcap_to_las,
         "open3d-one-scan": pcap_3d_one_scan,
     }
 

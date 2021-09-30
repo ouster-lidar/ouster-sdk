@@ -162,6 +162,7 @@ setup(
         'examples': [
             'matplotlib',
             'opencv-python',
+            'laspy',
             'PyQt5; platform_system=="Windows"',
         ],
     })
