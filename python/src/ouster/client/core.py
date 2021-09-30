@@ -11,8 +11,7 @@ from threading import Thread
 import time
 
 from . import _client
-from . import (ColHeader, SensorInfo, ImuPacket, LidarPacket, LidarScan,
-               Packet)
+from . import (SensorInfo, ImuPacket, LidarPacket, LidarScan, Packet)
 
 
 class ClientError(Exception):
@@ -244,8 +243,7 @@ class Sensor(PacketSource):
         while True:
             st, buf = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = LidarPacket(buf, self._metadata).header(
-                    ColHeader.FRAME_ID)[0]
+                frame = LidarPacket(buf, self._metadata).frame_id
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1

@@ -6,20 +6,27 @@ message(STATUS "Ouster SDK location: ${OUSTER_SDK_PATH}")
 list(APPEND CMAKE_MODULE_PATH ${OUSTER_SDK_PATH}/cmake)
 
 project(python-ouster-sdk)
-set(CMAKE_CXX_STANDARD 14)
 
-find_package(pybind11 2.0 REQUIRED)
-find_package(Eigen3 REQUIRED)
-option(BUILD_VIZ "Disabled for Python build" OFF)
-option(BUILD_PCAP "Enabled for Python build" ON)
-find_package(OusterSDK REQUIRED)
+# ==== Options ====
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Several deprecations in pybind11 since 2.0. Check when changing version reqs.
 if(MSVC)
-  add_compile_options(/wd4996)
+  add_compile_options(/W3 /wd4996)
+  add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
 else()
-  add_compile_options(-Wno-deprecated-declarations)
+  add_compile_options(-Wall -Wextra -Werror -Wno-deprecated-declarations)
 endif()
+
+option(BUILD_VIZ "Disabled for Python build" OFF)
+option(BUILD_PCAP "Enabled for Python build" ON)
+
+# ==== Requirements ====
+find_package(pybind11 2.0 REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(OusterSDK REQUIRED)
 
 # CMAKE_LIBRARY_OUTPUT_DIRECTORY is set in setup.py to the root of the `ouster`
 # namespace, but we have to provide per-target packages directories for each
@@ -43,12 +50,3 @@ target_include_directories(_pcap SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_pcap PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/pcap/$<0:>)
-
-# Several deprecations in pybind11 since 2.0. Check when changing version reqs.
-if(MSVC)
-  target_compile_options(_client PRIVATE /wd4996)
-  target_compile_options(_pcap PRIVATE /wd4996)
-else()
-  target_compile_options(_client PRIVATE -Wno-deprecated-declarations)
-  target_compile_options(_pcap PRIVATE -Wno-deprecated-declarations)
-endif()

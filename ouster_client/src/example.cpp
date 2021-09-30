@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
         clouds.push_back(ouster::cartesian(scan, lut));
 
         // channel fields can be queried as well
-        auto n_returns = (scan.field(LidarScan::Field::RANGE) != 0).count();
+        auto n_returns = (scan.field(sensor::RANGE) != 0).count();
 
         std::cerr << "  Frame no. " << scan.frame_id << " with " << n_returns
                   << " returns" << std::endl;

@@ -84,17 +84,17 @@ void LidarScanViz::draw(const LidarScan& ls, const size_t which_cloud,
     using glmap_t = Eigen::Map<
         Eigen::Array<GLfloat, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>;
 
-    img_t<double> range = ls.field(LidarScan::RANGE).cast<double>();
+    img_t<double> range = ls.field(sensor::RANGE).cast<double>();
     if (show_image || display_mode == MODE_RANGE) {
         if (!cycle_range) {
             range_ae(range);
         }
     }
-    img_t<double> intensity = ls.field(LidarScan::INTENSITY).cast<double>();
+    img_t<double> intensity = ls.field(sensor::SIGNAL).cast<double>();
     if (show_image || display_mode == MODE_INTENSITY) {
         intensity_ae(intensity);
     }
-    img_t<double> ambient = ls.field(LidarScan::AMBIENT).cast<double>();
+    img_t<double> ambient = ls.field(sensor::NEAR_IR).cast<double>();
     auto intensity_destaggered = destagger<double>(intensity, px_offset);
     auto range_destaggered = destagger<double>(range, px_offset);
     if (cycle_range) {
@@ -134,7 +134,7 @@ void LidarScanViz::draw(const LidarScan& ls, const size_t which_cloud,
         point_viz.imageSwap();
     }
 
-    auto range_data = ls.field(LidarScan::RANGE).data();
+    auto range_data = ls.field(sensor::RANGE).data();
 
     switch (+display_mode) {
         case MODE_INTENSITY:
@@ -149,7 +149,7 @@ void LidarScanViz::draw(const LidarScan& ls, const size_t which_cloud,
             break;
         case MODE_REFLECTIVITY:
             img_t<double> reflectivity =
-                ls.field(LidarScan::REFLECTIVITY).cast<double>();
+                ls.field(sensor::REFLECTIVITY).cast<double>();
             if (firmware_version >= calref_min_version) {
                 // Scale directly from 0-255 to 0-1
                 reflectivity /= 255.0;

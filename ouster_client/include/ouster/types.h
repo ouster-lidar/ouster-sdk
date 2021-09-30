@@ -6,8 +6,11 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <array>
+#include <memory>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "nonstd/optional.hpp"
@@ -321,6 +324,8 @@ sensor_config parse_config(const std::string& config);
  */
 std::string to_string(const sensor_config& config);
 
+const int MAX_FIELDS = 64;
+
 /**
  * Convert non-legacy string representation of metadata to legacy
  *
@@ -337,6 +342,32 @@ std::string convert_to_legacy(const std::string& metadata);
 std::string client_version();
 
 /**
+ * Tag to identitify a paricular value reported in the sensor channel data block
+ */
+enum ChanField {
+    RANGE = 0,
+    SIGNAL = 1,
+    INTENSITY = 1,  // deprecated (gcc 5.4 doesn't support annotations here)
+    NEAR_IR = 2,
+    AMBIENT = 2,  // deprecated
+    REFLECTIVITY = 3,
+    FIELD_MAX = MAX_FIELDS - 1
+};
+
+/**
+ * Get string representation of a channel field
+ *
+ * @param field
+ * @return string representation of the channel field
+ */
+std::string to_string(ChanField field);
+
+/**
+ * Types of channel fields
+ */
+enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
+
+/**
  * Table of accessors for extracting data from imu and lidar packets.
  *
  * In the user guide, refer to section 9 for the lidar packet format and section
@@ -349,38 +380,74 @@ std::string client_version();
  * Use imu_la_{x,y,z} to access the acceleration in the corresponding
  * direction. Use imu_av_{x,y,z} to read the angular velocity.
  */
-struct packet_format {
+struct packet_format final {
     const size_t lidar_packet_size;
     const size_t imu_packet_size;
     const int columns_per_packet;
     const int pixels_per_column;
-    const int encoder_ticks_per_rev;
+    [[deprecated]] const int encoder_ticks_per_rev;
+
+    // Packet header accessors
+    uint16_t frame_id(const uint8_t* lidar_buf) const;
+
+    /**
+     * Get the bit width of the specified channel field.
+     *
+     * @param field the channel field to query
+     * @return a type tag specifying the bitwidth of the requested field or
+     * ChannelFieldTy::VOID if it is not supported by the packet format
+     */
+    ChanFieldType field_type(ChanField f) const;
 
     // Measurement block accessors
-    const uint8_t* (*const nth_col)(int n, const uint8_t* lidar_buf);
-    uint64_t (*const col_timestamp)(const uint8_t* col_buf);
-    uint32_t (*const col_encoder)(const uint8_t* col_buf);
-    uint16_t (*const col_measurement_id)(const uint8_t* col_buf);
-    uint16_t (*const col_frame_id)(const uint8_t* col_buf);
-    uint32_t (*const col_status)(const uint8_t* col_buf);
+    const uint8_t* nth_col(int n, const uint8_t* lidar_buf) const;
+    uint64_t col_timestamp(const uint8_t* col_buf) const;
+    uint16_t col_measurement_id(const uint8_t* col_buf) const;
+    uint32_t col_status(const uint8_t* col_buf) const;
+    [[deprecated]] uint32_t col_encoder(const uint8_t* col_buf) const;
+    [[deprecated]] uint16_t col_frame_id(const uint8_t* col_buf) const;
 
-    // Channel data block accessors
-    const uint8_t* (*const nth_px)(int n, const uint8_t* col_buf);
-    uint32_t (*const px_range)(const uint8_t* px_buf);
-    uint16_t (*const px_reflectivity)(const uint8_t* px_buf);
-    uint16_t (*const px_signal)(const uint8_t* px_buf);
-    uint16_t (*const px_ambient)(const uint8_t* px_buf);
+    /**
+     * Copy the specified channel field out of a packet measurement block.
+     *
+     * T should be an unsigned integer type large enough to store values of the
+     * specified field.
+     *
+     * @param col_buf a measurement block pointer returned by `nth_col()`
+     * @param field the channel field to copy
+     * @param[out] dst destination array of size pixels_per_column * dst_stride
+     * @param dst_stride stride for writing to the destination array
+     */
+    template <typename T,
+              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
+    void col_field(const uint8_t* col_buf, ChanField f, T* dst,
+                   int dst_stride = 1) const;
+
+    // Per-pixel channel data block accessors
+    const uint8_t* nth_px(int n, const uint8_t* col_buf) const;
+    uint32_t px_range(const uint8_t* px_buf) const;
+    uint16_t px_reflectivity(const uint8_t* px_buf) const;
+    uint16_t px_signal(const uint8_t* px_buf) const;
+    uint16_t px_ambient(const uint8_t* px_buf) const;
 
     // IMU packet accessors
-    uint64_t (*const imu_sys_ts)(const uint8_t* imu_buf);
-    uint64_t (*const imu_accel_ts)(const uint8_t* imu_buf);
-    uint64_t (*const imu_gyro_ts)(const uint8_t* imu_buf);
-    float (*const imu_la_x)(const uint8_t* imu_buf);
-    float (*const imu_la_y)(const uint8_t* imu_buf);
-    float (*const imu_la_z)(const uint8_t* imu_buf);
-    float (*const imu_av_x)(const uint8_t* imu_buf);
-    float (*const imu_av_y)(const uint8_t* imu_buf);
-    float (*const imu_av_z)(const uint8_t* imu_buf);
+    uint64_t imu_sys_ts(const uint8_t* imu_buf) const;
+    uint64_t imu_accel_ts(const uint8_t* imu_buf) const;
+    uint64_t imu_gyro_ts(const uint8_t* imu_buf) const;
+    float imu_la_x(const uint8_t* imu_buf) const;
+    float imu_la_y(const uint8_t* imu_buf) const;
+    float imu_la_z(const uint8_t* imu_buf) const;
+    float imu_av_x(const uint8_t* imu_buf) const;
+    float imu_av_y(const uint8_t* imu_buf) const;
+    float imu_av_z(const uint8_t* imu_buf) const;
+
+    struct FieldInfo;
+    friend const packet_format& get_format(const sensor_info&);
+
+   private:
+    packet_format(int pixels_per_column);
+
+    std::shared_ptr<const std::array<FieldInfo, MAX_FIELDS>> fields;
 };
 
 /**

@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import Callable, ClassVar, List, Optional, Union
+from typing import Callable, List, Optional, Union
+import warnings
 
 import numpy as np
 import numpy.lib.stride_tricks
 
-from . import SensorInfo, _client
-from ._client import LidarScan
+from . import ChanField, LidarScan, SensorInfo, _client
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -75,52 +75,31 @@ class ImuPacket:
         ])
 
 
-class ChanField(Enum):
-    """Channel fields available in lidar data."""
-    RANGE = (0, 0, np.uint32, 0x000FFFFF)
-    REFLECTIVITY = (3, 4, np.uint16, None)
-    SIGNAL = (1, 6, np.uint16, None)
-    NEAR_IR = (2, 8, np.uint16, None)
-
-    def __init__(self, ind: int, offset: int, dtype: type,
-                 mask: Optional[int]):
-        self.ind = ind
-        self.offset = offset
-        self.dtype = dtype
-        self.mask = mask
-
-    def __int__(self) -> int:
-        return self.ind
-
-
 class ColHeader(Enum):
-    """Column headers available in lidar data."""
-    TIMESTAMP = (0, 0, np.uint64)
-    FRAME_ID = (-1, 10, np.uint16)
-    MEASUREMENT_ID = (2, 8, np.uint16)
-    ENCODER_COUNT = (1, 12, np.uint32)
-    # negative offsets are considered relative to the end of the col buffer
-    STATUS = (3, -4, np.uint32)
+    """Column headers available in lidar data.
 
-    def __init__(self, ind: int, offset: int, dtype: type):
-        self.ind = ind
-        self.offset = offset
-        self.dtype = dtype
+    This definition is deprecated.
+    """
+    TIMESTAMP = 0
+    ENCODER_COUNT = 1
+    MEASUREMENT_ID = 2
+    STATUS = 3
+    FRAME_ID = 4
 
     def __int__(self) -> int:
-        return self.ind
+        return self.value
 
 
 class LidarPacket:
-    """Read lidar packet data using numpy views."""
+    """Read lidar packet data as numpy arrays.
 
-    _PIXEL_BYTES: ClassVar[int] = 12
-    _COL_PREAMBLE_BYTES: ClassVar[int] = 16
-    _COL_FOOTER_BYTES: ClassVar[int] = 4
-
+    The dimensions of returned arrays depend on the sensor product line and
+    configuration. Measurement headers will be arrays of size matching the
+    configured ``columns_per_packet``, while measurement fields will be 2d
+    arrays of size ``pixels_per_column`` by ``columns_per_packet``.
+    """
     _pf: _client.PacketFormat
     _data: np.ndarray
-    _column_bytes: int
     capture_timestamp: Optional[float]
 
     def __init__(self,
@@ -143,10 +122,12 @@ class LidarPacket:
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
                                    count=self._pf.lidar_packet_size)
-        self._column_bytes = LidarPacket._COL_PREAMBLE_BYTES + \
-            (LidarPacket._PIXEL_BYTES * self._pf.pixels_per_column) + \
-            LidarPacket._COL_FOOTER_BYTES
         self.capture_timestamp = timestamp
+
+    @property
+    def frame_id(self) -> int:
+        """Get the frame id of the packet."""
+        return self._pf.packet_frame_id(self._data)
 
     def field(self, field: ChanField) -> np.ndarray:
         """Create a view of the specified channel field.
@@ -155,30 +136,62 @@ class LidarPacket:
             field: The channel field to view
 
         Returns:
-            A view of the specified field as a numpy array
+            A numpy array containing a copy of the specified field values
         """
-        v = np.lib.stride_tricks.as_strided(
-            self._data[LidarPacket._COL_PREAMBLE_BYTES +
-                       field.offset:].view(dtype=field.dtype),
-            shape=(self._pf.pixels_per_column, self._pf.columns_per_packet),
-            strides=(LidarPacket._PIXEL_BYTES, self._column_bytes))
-        return v if field.mask is None else v & field.mask
+        res = self._pf.packet_field(field, self._data)
+        res.flags.writeable = False
+        return res
 
     def header(self, header: ColHeader) -> np.ndarray:
         """Create a view of the specified column header.
 
+        This method is deprecated. Use the ``timestamp``, ``measurement_id`` or
+        ``status`` properties instead.
+
         Args:
-            header: The column header to view
+            header: The column header to parse
 
         Returns:
-            A view of the specified header as a numpy array
+            A numpy array containing a copy of the specified header values
         """
+        warnings.warn("LidarPacket.header is deprecated", DeprecationWarning)
 
-        start = 0 if header.offset >= 0 else self._column_bytes
-        return np.lib.stride_tricks.as_strided(
-            self._data[header.offset + start:].view(dtype=header.dtype),
-            shape=(self._pf.columns_per_packet, ),
-            strides=(self._column_bytes, ))
+        res = self._pf.packet_header(header, self._data)
+        res.flags.writeable = False
+        return res
+
+    @property
+    def timestamp(self) -> np.ndarray:
+        """Parse the measurement block timestamps out of a packet buffer.
+
+        Returns:
+            An array of the timestamps of all measurement blocks in the packet.
+        """
+        res = self._pf.packet_header(ColHeader.TIMESTAMP, self._data)
+        res.flags.writeable = False
+        return res
+
+    @property
+    def measurement_id(self) -> np.ndarray:
+        """Parse the measurement ids out of a packet buffer.
+
+        Returns:
+            An array of the ids of all measurement blocks in the packet.
+        """
+        res = self._pf.packet_header(ColHeader.MEASUREMENT_ID, self._data)
+        res.flags.writeable = False
+        return res
+
+    @property
+    def status(self) -> np.ndarray:
+        """Parse the measurement statuses of a packet buffer.
+
+        Returns:
+            An array of the statuses of all measurement blocks in the packet.
+        """
+        res = self._pf.packet_header(ColHeader.STATUS, self._data)
+        res.flags.writeable = False
+        return res
 
 
 def _destagger(field: np.ndarray, shifts: List[int],

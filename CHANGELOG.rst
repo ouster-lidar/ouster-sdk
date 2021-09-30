@@ -8,14 +8,20 @@ Changelog
 
 * add preliminary cpack and install support. It should be possible to use a pre-built SDK package
   instead of including the SDK in the build tree of your project
-* changed up the handling of the pcap info to hopefully streamline it in preperation for
-  multi-stream support
 
 ouster_client
 -------------
-* added new accessors for measurement headers to ``LidarScan``, deprecating the existing
-  ``LidarScan::header`` member function
-* represent empty sensor config with an empty json object instead of null
+* the ``LidarScan::Field`` defniition has been moved to ``sensor::ChanField`` and enumerators have
+  been renamed to match the sensor user manual. The old names are still available, but deprecated
+* deprecate accessing encoder values and frame ids from measurement blocks using ``packet_format``
+  as these will not be reported by the sensor in some future configurations
+* add ``packet_frame_id`` member function to ``packet_format``
+* add ``col_field`` member function to ``packet_format`` for parsing channel field values for an
+  entire measurement block
+* add new accessors for measurement headers to ``LidarScan``, deprecating the existing ``header``
+  member function
+* represent empty sensor config with an empty object instead of null in json representation of the
+  ``sensor_config`` datatype
 * update cmake package version to 0.2.1
 * add a conservative socket read timeout so ``init_client()`` will fail with an error message when
   another client fails to close a TCP connection (addresses #258)
@@ -26,6 +32,8 @@ ouster_client
 
 ouster_pcap
 -----------
+* report additional information in the ``packet_info`` struct and remove separate ``stream_info``
+  API
 * switch the default pcap encapsulation to ethernet for Ouster Studio compatibility (addresses #265)
 
 ouster_ros
@@ -41,7 +49,14 @@ ouster_viz
 
 python
 ------
-* replace ``client.LidarScan`` with native bindings implementing the same API
+* breaking change: the ``ChanField`` enum is now implemented as a native binding for easier interop
+  with C++. Unlike Python enums, the bound class itself is no longer sized or iterable; use
+  ``ChanField.values`` to get an immutable sequence of ``ChanField`` values
+* breaking change: arrays returned by ``LidarPacket.field`` and ``LidarPacket.header`` are now
+  immutable. Modifying the underlying packet buffer through these views was never fully supported
+* deprecate ``ColHeader``, ``LidarPacket.header``, and ``LidarScan.header`` in favor of new
+  properties: ``timestamp``, ``measurement_id``, ``status``, and ``frame_id``
+* replace ``LidarScan`` with native bindings implementing the same API
 * ``xyzlut`` can now accept a range image as an ndarray, not just a ``LidarScan``
 * update ouster-sdk version to 0.2.2
 * fix open3d example crash on exit when replaying pcaps on macos (addresses #267)

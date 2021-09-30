@@ -146,15 +146,14 @@ def test_scans_first_packet(packet: client.LidarPacket,
     assert np.array_equal(packet.field(client.ChanField.NEAR_IR),
                           scan.field(client.ChanField.NEAR_IR)[:h, :w])
 
-    assert np.all(packet.header(ColHeader.FRAME_ID) == scan.frame_id)
+    assert packet.frame_id == scan.frame_id
 
-    assert np.array_equal(packet.header(ColHeader.TIMESTAMP),
-                          scan.timestamp[:w])
+    assert np.array_equal(packet.timestamp, scan.timestamp[:w])
 
     assert np.array_equal(packet.header(ColHeader.ENCODER_COUNT),
                           scan.header(ColHeader.ENCODER_COUNT)[:w])
 
-    assert np.array_equal(packet.header(ColHeader.STATUS), scan.status[:w])
+    assert np.array_equal(packet.status, scan.status[:w])
 
 
 def test_scans_complete(packets: client.PacketSource) -> None:

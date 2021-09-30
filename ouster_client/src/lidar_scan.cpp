@@ -48,12 +48,12 @@ LidarScan::block(size_t m_id) const {
         data.row(m_id).data(), h, N_FIELDS, {w * h, w});
 }
 
-Eigen::Map<img_t<LidarScan::raw_t>> LidarScan::field(LidarScan::Field f) {
+Eigen::Map<img_t<LidarScan::raw_t>> LidarScan::field(sensor::ChanField f) {
     return Eigen::Map<img_t<raw_t>>(data.col(f).data(), h, w);
 }
 
 Eigen::Map<const img_t<LidarScan::raw_t>> LidarScan::field(
-    LidarScan::Field f) const {
+    sensor::ChanField f) const {
     return Eigen::Map<const img_t<raw_t>>(data.col(f).data(), h, w);
 }
 
@@ -149,7 +149,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 }
 
 LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
-    return cartesian(scan.field(LidarScan::RANGE), lut);
+    return cartesian(scan.field(sensor::RANGE), lut);
 }
 
 LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
@@ -175,11 +175,11 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         throw std::invalid_argument("unexpected scan dimensions");
 
     bool swapped = false;
+    const uint16_t f_id = pf.frame_id(packet_buf);
 
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
-        const uint16_t f_id = pf.col_frame_id(col_buf);
         const std::chrono::nanoseconds ts(pf.col_timestamp(col_buf));
         const uint32_t encoder = pf.col_encoder(col_buf);
         const uint32_t status = pf.col_status(col_buf);
@@ -224,15 +224,14 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         ls_write.measurement_id()[m_id] = m_id;
         ls_write.status()[m_id] = status;
 
-        for (uint8_t ipx = 0; ipx < h; ipx++) {
-            const uint8_t* px_buf = pf.nth_px(ipx, col_buf);
-
-            ls_write.block(m_id).row(ipx)
-                << static_cast<LidarScan::raw_t>(pf.px_range(px_buf)),
-                static_cast<LidarScan::raw_t>(pf.px_signal(px_buf)),
-                static_cast<LidarScan::raw_t>(pf.px_ambient(px_buf)),
-                static_cast<LidarScan::raw_t>(pf.px_reflectivity(px_buf));
-        }
+        pf.col_field(col_buf, sensor::RANGE,
+                     ls_write.field(sensor::RANGE).col(m_id).data(), w);
+        pf.col_field(col_buf, sensor::REFLECTIVITY,
+                     ls_write.field(sensor::REFLECTIVITY).col(m_id).data(), w);
+        pf.col_field(col_buf, sensor::SIGNAL,
+                     ls_write.field(sensor::SIGNAL).col(m_id).data(), w);
+        pf.col_field(col_buf, sensor::NEAR_IR,
+                     ls_write.field(sensor::NEAR_IR).col(m_id).data(), w);
     }
     return swapped;
 }

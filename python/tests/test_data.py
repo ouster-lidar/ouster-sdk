@@ -81,45 +81,34 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
                           np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.NEAR_IR), np.zeros((h, w)))
-    # TODO: what to do with other fields
 
     assert len(
         client.ColHeader.__members__) == 5, "Don't forget to update tests!"
     assert np.array_equal(p.header(client.ColHeader.TIMESTAMP), np.zeros(w))
+    assert np.array_equal(p.timestamp, np.zeros(w))
     assert np.array_equal(p.header(client.ColHeader.FRAME_ID), np.zeros(w))
     assert np.array_equal(p.header(client.ColHeader.MEASUREMENT_ID),
                           np.zeros(w))
+    assert np.array_equal(p.measurement_id, np.zeros(w))
     assert np.array_equal(p.header(client.ColHeader.ENCODER_COUNT),
                           np.zeros(w))
     assert np.array_equal(p.header(client.ColHeader.STATUS), np.zeros(w))
+    assert np.array_equal(p.status, np.zeros(w))
 
-    # should not be able to modify a packet built from a read-only buffer
+    assert p.frame_id == 0
+
+    # should not be able to modify packet data
     with pytest.raises(ValueError):
         p.field(client.ChanField.SIGNAL)[0] = 1
 
     with pytest.raises(ValueError):
         p.header(client.ColHeader.MEASUREMENT_ID)[0] = 1
 
-    # a writeable lidar packet
-    q = client.LidarPacket(bytearray(pf.lidar_packet_size), meta)
-
-    q.field(client.ChanField.SIGNAL)[:] = np.ones((h, w))
-    assert np.array_equal(q.field(client.ChanField.SIGNAL), np.ones((h, w)))
-
-    # TODO: masking prevents writing RANGE. Need separate get/set for fields
-    # q.view(client.ChanField.RANGE)[:] = np.ones((h, w))
-    # assert np.array_equal(q.view(client.ChanField.RANGE), np.ones((h, w)))
-
     with pytest.raises(ValueError):
-        q.field(client.ChanField.SIGNAL)[:] = np.ones((w, h))
-    with pytest.raises(ValueError):
-        q.field(client.ChanField.SIGNAL)[:] = np.ones((h - 1, w))
-    with pytest.raises(ValueError):
-        q.field(client.ChanField.SIGNAL)[:] = np.ones((h, w + 1))
+        p.status[:] = 1
 
-    q.header(client.ColHeader.MEASUREMENT_ID)[:] = np.ones(w)
-    assert np.array_equal(q.header(client.ColHeader.MEASUREMENT_ID),
-                          np.ones(w))
+    with pytest.raises(AttributeError):
+        p.frame_id = 1  # type: ignore
 
 
 @pytest.fixture(scope="module")
@@ -138,10 +127,13 @@ def test_read_real_packet(packet: client.LidarPacket) -> None:
 
     assert np.all(np.diff(packet.header(client.ColHeader.FRAME_ID)) == 0)
     assert np.all(np.diff(packet.header(client.ColHeader.MEASUREMENT_ID)) == 1)
+    assert np.all(np.diff(packet.timestamp) > 0)
+    assert np.all(np.diff(packet.measurement_id) == 1)
+    assert packet.frame_id == 34266
     # in 512xN mode, the angle between measurements is exactly 176 encoder ticks
     assert np.all(
         np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 176)
-    assert np.all(packet.header(client.ColHeader.STATUS) == 0xffffffff)
+    assert np.all(packet.status == 0xffffffff)
 
 
 def test_scan_writeable() -> None:

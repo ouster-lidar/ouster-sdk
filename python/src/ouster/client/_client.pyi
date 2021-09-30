@@ -11,9 +11,10 @@ Note:
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
 from numpy import ndarray
-from typing import (Callable, ClassVar, List, Optional, overload, Tuple, Union)
+from typing import (Callable, ClassVar, Dict, List, Optional, overload, Tuple,
+                    Union)
 
-from . import (BufferT, ChanField, ColHeader)
+from . import (BufferT, ColHeader)
 
 
 class Client:
@@ -180,6 +181,15 @@ class PacketFormat:
         ...
 
     def col_status(self, col: int, buf: bytes) -> int:
+        ...
+
+    def packet_frame_id(self, buf: BufferT) -> int:
+        ...
+
+    def packet_field(self, field: ChanField, buf: BufferT) -> ndarray:
+        ...
+
+    def packet_header(self, header: ColHeader, buf: BufferT) -> ndarray:
         ...
 
     def imu_sys_ts(self, buf: BufferT) -> int:
@@ -421,6 +431,45 @@ class NMEABaudRate:
 
     @classmethod
     def from_string(cls, s: str) -> OperatingMode:
+        ...
+
+
+class ChanField:
+    RANGE: ClassVar[ChanField]
+    SIGNAL: ClassVar[ChanField]
+    NEAR_IR: ClassVar[ChanField]
+    REFLECTIVITY: ClassVar[ChanField]
+
+    __members__: ClassVar[Dict[str, ChanField]]
+    values: ClassVar[Tuple[ChanField, ...]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
         ...
 
 

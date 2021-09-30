@@ -140,7 +140,7 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
         num: scan number in a given pcap file (satrs from *0*)
     """
 
-    channels = [c for c in client.ChanField]
+    channels = [c for c in client.ChanField.values]
     aes = {}
     for channel_ind, channel in enumerate(channels):
         if channel == client.ChanField.SIGNAL:

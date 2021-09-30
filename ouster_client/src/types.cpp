@@ -8,12 +8,14 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ouster/build.h"
-#include "ouster/impl/parsing.h"
 #include "ouster/version.h"
 
 namespace ouster {
@@ -24,7 +26,7 @@ using nonstd::optional;
 
 namespace sensor {
 
-namespace {
+namespace impl {
 
 const std::array<std::pair<lidar_mode, std::string>, 5> lidar_mode_strings = {
     {{MODE_512x10, "512x10"},
@@ -60,7 +62,15 @@ const std::array<std::pair<Polarity, std::string>, 2> polarity_strings = {
 const std::array<std::pair<NMEABaudRate, std::string>, 2>
     nmea_baud_rate_strings = {
         {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
-}  // namespace
+
+std::array<std::pair<sensor::ChanField, const char*>, 4> chanfield_strings{{
+    {ChanField::RANGE, "RANGE"},
+    {ChanField::SIGNAL, "SIGNAL"},
+    {ChanField::NEAR_IR, "NEAR_IR"},
+    {ChanField::REFLECTIVITY, "REFLECTIVITY"},
+}};
+
+}  // namespace impl
 
 bool operator==(const data_format& lhs, const data_format& rhs) {
     return (lhs.pixels_per_column == rhs.pixels_per_column &&
@@ -178,13 +188,13 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                mat4d::Identity()};
 }
 
-constexpr packet_format packet_1_13 = impl::packet_2_0<64>();
-constexpr packet_format packet_2_0_16 = impl::packet_2_0<16>();
-constexpr packet_format packet_2_0_32 = impl::packet_2_0<32>();
-constexpr packet_format packet_2_0_64 = impl::packet_2_0<64>();
-constexpr packet_format packet_2_0_128 = impl::packet_2_0<128>();
-
 const packet_format& get_format(const sensor_info& info) {
+    static const packet_format packet_1_13{64};
+    static const packet_format packet_2_0_16{16};
+    static const packet_format packet_2_0_32{32};
+    static const packet_format packet_2_0_64{64};
+    static const packet_format packet_2_0_128{128};
+
     switch (info.format.pixels_per_column) {
         case 16:
             return packet_2_0_16;
@@ -200,8 +210,8 @@ const packet_format& get_format(const sensor_info& info) {
 }
 
 std::string to_string(lidar_mode mode) {
-    auto end = lidar_mode_strings.end();
-    auto res = std::find_if(lidar_mode_strings.begin(), end,
+    auto end = impl::lidar_mode_strings.end();
+    auto res = std::find_if(impl::lidar_mode_strings.begin(), end,
                             [&](const std::pair<lidar_mode, std::string>& p) {
                                 return p.first == mode;
                             });
@@ -210,8 +220,8 @@ std::string to_string(lidar_mode mode) {
 }
 
 lidar_mode lidar_mode_of_string(const std::string& s) {
-    auto end = lidar_mode_strings.end();
-    auto res = std::find_if(lidar_mode_strings.begin(), end,
+    auto end = impl::lidar_mode_strings.end();
+    auto res = std::find_if(impl::lidar_mode_strings.begin(), end,
                             [&](const std::pair<lidar_mode, std::string>& p) {
                                 return p.second == s;
                             });
@@ -249,9 +259,9 @@ int frequency_of_lidar_mode(lidar_mode mode) {
 }
 
 std::string to_string(timestamp_mode mode) {
-    auto end = timestamp_mode_strings.end();
+    auto end = impl::timestamp_mode_strings.end();
     auto res =
-        std::find_if(timestamp_mode_strings.begin(), end,
+        std::find_if(impl::timestamp_mode_strings.begin(), end,
                      [&](const std::pair<timestamp_mode, std::string>& p) {
                          return p.first == mode;
                      });
@@ -260,9 +270,9 @@ std::string to_string(timestamp_mode mode) {
 }
 
 timestamp_mode timestamp_mode_of_string(const std::string& s) {
-    auto end = timestamp_mode_strings.end();
+    auto end = impl::timestamp_mode_strings.end();
     auto res =
-        std::find_if(timestamp_mode_strings.begin(), end,
+        std::find_if(impl::timestamp_mode_strings.begin(), end,
                      [&](const std::pair<timestamp_mode, std::string>& p) {
                          return p.second == s;
                      });
@@ -271,9 +281,9 @@ timestamp_mode timestamp_mode_of_string(const std::string& s) {
 }
 
 std::string to_string(OperatingMode mode) {
-    auto end = operating_mode_strings.end();
+    auto end = impl::operating_mode_strings.end();
     auto res =
-        std::find_if(operating_mode_strings.begin(), end,
+        std::find_if(impl::operating_mode_strings.begin(), end,
                      [&](const std::pair<OperatingMode, std::string>& p) {
                          return p.first == mode;
                      });
@@ -282,9 +292,9 @@ std::string to_string(OperatingMode mode) {
 }
 
 optional<OperatingMode> operating_mode_of_string(const std::string& s) {
-    auto end = operating_mode_strings.end();
+    auto end = impl::operating_mode_strings.end();
     auto res =
-        std::find_if(operating_mode_strings.begin(), end,
+        std::find_if(impl::operating_mode_strings.begin(), end,
                      [&](const std::pair<OperatingMode, std::string>& p) {
                          return p.second == s;
                      });
@@ -293,9 +303,9 @@ optional<OperatingMode> operating_mode_of_string(const std::string& s) {
 }
 
 std::string to_string(MultipurposeIOMode mode) {
-    auto end = multipurpose_io_mode_strings.end();
+    auto end = impl::multipurpose_io_mode_strings.end();
     auto res =
-        std::find_if(multipurpose_io_mode_strings.begin(), end,
+        std::find_if(impl::multipurpose_io_mode_strings.begin(), end,
                      [&](const std::pair<MultipurposeIOMode, std::string>& p) {
                          return p.first == mode;
                      });
@@ -305,9 +315,9 @@ std::string to_string(MultipurposeIOMode mode) {
 
 optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
     const std::string& s) {
-    auto end = multipurpose_io_mode_strings.end();
+    auto end = impl::multipurpose_io_mode_strings.end();
     auto res =
-        std::find_if(multipurpose_io_mode_strings.begin(), end,
+        std::find_if(impl::multipurpose_io_mode_strings.begin(), end,
                      [&](const std::pair<MultipurposeIOMode, std::string>& p) {
                          return p.second == s;
                      });
@@ -316,8 +326,8 @@ optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
 }
 
 std::string to_string(Polarity polarity) {
-    auto end = polarity_strings.end();
-    auto res = std::find_if(polarity_strings.begin(), end,
+    auto end = impl::polarity_strings.end();
+    auto res = std::find_if(impl::polarity_strings.begin(), end,
                             [&](const std::pair<Polarity, std::string>& p) {
                                 return p.first == polarity;
                             });
@@ -326,8 +336,8 @@ std::string to_string(Polarity polarity) {
 }
 
 optional<Polarity> polarity_of_string(const std::string& s) {
-    auto end = polarity_strings.end();
-    auto res = std::find_if(polarity_strings.begin(), end,
+    auto end = impl::polarity_strings.end();
+    auto res = std::find_if(impl::polarity_strings.begin(), end,
                             [&](const std::pair<Polarity, std::string>& p) {
                                 return p.second == s;
                             });
@@ -336,8 +346,8 @@ optional<Polarity> polarity_of_string(const std::string& s) {
 }
 
 std::string to_string(NMEABaudRate rate) {
-    auto end = nmea_baud_rate_strings.end();
-    auto res = std::find_if(nmea_baud_rate_strings.begin(), end,
+    auto end = impl::nmea_baud_rate_strings.end();
+    auto res = std::find_if(impl::nmea_baud_rate_strings.begin(), end,
                             [&](const std::pair<NMEABaudRate, std::string>& p) {
                                 return p.first == rate;
                             });
@@ -346,8 +356,8 @@ std::string to_string(NMEABaudRate rate) {
 }
 
 optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s) {
-    auto end = nmea_baud_rate_strings.end();
-    auto res = std::find_if(nmea_baud_rate_strings.begin(), end,
+    auto end = impl::nmea_baud_rate_strings.end();
+    auto res = std::find_if(impl::nmea_baud_rate_strings.begin(), end,
                             [&](const std::pair<NMEABaudRate, std::string>& p) {
                                 return p.second == s;
                             });
@@ -359,6 +369,16 @@ std::string to_string(AzimuthWindow azimuth_window) {
     std::stringstream ss;
     ss << "[" << azimuth_window.first << ", " << azimuth_window.second << "]";
     return ss.str();
+}
+
+std::string to_string(ChanField field) {
+    auto end = impl::chanfield_strings.end();
+    auto res = std::find_if(impl::chanfield_strings.begin(), end,
+                            [&](const std::pair<ChanField, std::string>& p) {
+                                return p.first == field;
+                            });
+
+    return res == end ? "UNKNOWN" : res->second;
 }
 
 sensor_config parse_config(const Json::Value& root) {
@@ -922,6 +942,243 @@ extern const mat4d default_lidar_to_sensor_transform =
     (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
         .finished();
 
+namespace impl {
+
+constexpr int pixel_bytes = 12;
+constexpr int imu_packet_size = 48;
+constexpr int cols_per_packet = 16;
+constexpr int64_t encoder_ticks_per_rev = 90112;
+
+constexpr int column_bytes(int n_pixels) {
+    return 16 + (n_pixels * pixel_bytes) + 4;
+}
+
+constexpr int packet_bytes(int n_pixels) {
+    return cols_per_packet * column_bytes(n_pixels);
+}
+
+}  // namespace impl
+
+struct packet_format::FieldInfo {
+    ChanFieldType ty_tag;
+    size_t offset;
+    uint64_t mask;
+    int shift;
+};
+
+// TODO: a map might be easier to read / less error-prone
+std::array<std::array<packet_format::FieldInfo, MAX_FIELDS>, 16>
+    field_info_table{{
+        {{{UINT32, 0, 0x000fffff, 0},  // range
+          {UINT16, 6, 0, 0},           // signal
+          {UINT16, 8, 0, 0},           // near_ir
+          {UINT16, 4, 0, 0}}},         // reflectivity
+    }};
+
+packet_format::packet_format(int pixels_per_column)
+    : lidar_packet_size(impl::packet_bytes(pixels_per_column)),
+      imu_packet_size(impl::imu_packet_size),
+      columns_per_packet(impl::cols_per_packet),
+      pixels_per_column(pixels_per_column),
+      encoder_ticks_per_rev(impl::encoder_ticks_per_rev),
+      fields{std::make_shared<std::array<packet_format::FieldInfo, MAX_FIELDS>>(
+          std::get<0>(field_info_table))} {}
+
+template <size_t SRC_SIZE, typename T>
+static void col_field_impl(const uint8_t* col_buf, T* dst, size_t offset,
+                           uint64_t mask, int shift, int pixels_per_column,
+                           int dst_stride) {
+    for (int px = 0; px < pixels_per_column; px++) {
+        auto px_src = col_buf + 16 + offset + (px * impl::pixel_bytes);
+        T* px_dst = dst + px * dst_stride;
+        *px_dst = 0;
+        std::memcpy(px_dst, px_src, SRC_SIZE);
+        if (mask) *px_dst &= mask;
+        if (shift) *px_dst <<= shift;
+    }
+}
+
+static size_t field_ty_size(ChanFieldType t) {
+    switch (t) {
+        case UINT8:
+            return 1;
+        case UINT16:
+            return 2;
+        case UINT32:
+            return 3;
+        case UINT64:
+            return 4;
+        default:
+            return 0;
+    }
+}
+
+template <typename T,
+          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
+void packet_format::col_field(const uint8_t* col_buf, ChanField i, T* dst,
+                              int dst_stride) const {
+    const auto& f = fields->at(i);
+
+    if (sizeof(T) < field_ty_size(f.ty_tag))
+        throw std::invalid_argument("Dest type too small for specified field");
+
+    switch (f.ty_tag) {
+        case UINT8:
+            col_field_impl<1, T>(col_buf, dst, f.offset, f.mask, f.shift,
+                                 pixels_per_column, dst_stride);
+            break;
+        case UINT16:
+            col_field_impl<2, T>(col_buf, dst, f.offset, f.mask, f.shift,
+                                 pixels_per_column, dst_stride);
+            break;
+        case UINT32:
+            col_field_impl<4, T>(col_buf, dst, f.offset, f.mask, f.shift,
+                                 pixels_per_column, dst_stride);
+            break;
+        case UINT64:
+            col_field_impl<8, T>(col_buf, dst, f.offset, f.mask, f.shift,
+                                 pixels_per_column, dst_stride);
+            break;
+        default:
+            throw std::invalid_argument("Invalid field for packet format");
+    }
+}
+
+ChanFieldType packet_format::field_type(ChanField f) const {
+    return fields->at(f).ty_tag;
+}
+
+// explicitly instantiate for each field type
+template void packet_format::col_field(const uint8_t*, ChanField, uint8_t*,
+                                       int) const;
+template void packet_format::col_field(const uint8_t*, ChanField, uint16_t*,
+                                       int) const;
+template void packet_format::col_field(const uint8_t*, ChanField, uint32_t*,
+                                       int) const;
+template void packet_format::col_field(const uint8_t*, ChanField, uint64_t*,
+                                       int) const;
+
+uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
+    return col_frame_id(nth_col(0, lidar_buf));
+}
+
+const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
+    return lidar_buf + (n * impl::column_bytes(pixels_per_column));
+}
+
+uint32_t packet_format::col_status(const uint8_t* col_buf) const {
+    uint32_t res;
+    std::memcpy(&res, col_buf + impl::column_bytes(pixels_per_column) - 4,
+                sizeof(uint32_t));
+    return res;
+}
+
+uint64_t packet_format::col_timestamp(const uint8_t* col_buf) const {
+    uint64_t res;
+    std::memcpy(&res, col_buf, sizeof(uint64_t));
+    return res;  // nanoseconds
+}
+
+uint32_t packet_format::col_encoder(const uint8_t* col_buf) const {
+    uint32_t res;
+    std::memcpy(&res, col_buf + 12, sizeof(uint32_t));
+    return res;
+}
+
+uint16_t packet_format::col_measurement_id(const uint8_t* col_buf) const {
+    uint16_t res;
+    std::memcpy(&res, col_buf + 8, sizeof(uint16_t));
+    return res;
+}
+
+uint16_t packet_format::col_frame_id(const uint8_t* col_buf) const {
+    uint16_t res;
+    std::memcpy(&res, col_buf + 10, sizeof(uint16_t));
+    return res;
+}
+
+const uint8_t* packet_format::nth_px(int n, const uint8_t* col_buf) const {
+    return col_buf + 16 + (n * impl::pixel_bytes);
+}
+
+uint32_t packet_format::px_range(const uint8_t* px_buf) const {
+    uint32_t res;
+    std::memcpy(&res, px_buf, sizeof(uint32_t));
+    return res & 0x000fffff;
+}
+
+uint16_t packet_format::px_reflectivity(const uint8_t* px_buf) const {
+    uint16_t res;
+    std::memcpy(&res, px_buf + 4, sizeof(uint16_t));
+    return res;
+}
+
+uint16_t packet_format::px_signal(const uint8_t* px_buf) const {
+    uint16_t res;
+    std::memcpy(&res, px_buf + 6, sizeof(uint16_t));
+    return res;
+}
+
+uint16_t packet_format::px_ambient(const uint8_t* px_buf) const {
+    uint16_t res;
+    std::memcpy(&res, px_buf + 8, sizeof(uint16_t));
+    return res;
+}
+
+uint64_t packet_format::imu_sys_ts(const uint8_t* imu_buf) const {
+    uint64_t res;
+    std::memcpy(&res, imu_buf, sizeof(uint64_t));
+    return res;
+}
+
+uint64_t packet_format::imu_accel_ts(const uint8_t* imu_buf) const {
+    uint64_t res;
+    std::memcpy(&res, imu_buf + 8, sizeof(uint64_t));
+    return res;
+}
+
+uint64_t packet_format::imu_gyro_ts(const uint8_t* imu_buf) const {
+    uint64_t res;
+    std::memcpy(&res, imu_buf + 16, sizeof(uint64_t));
+    return res;
+}
+
+float packet_format::imu_la_x(const uint8_t* imu_buf) const {
+    float res;
+    std::memcpy(&res, imu_buf + 24, sizeof(float));
+    return res;
+}
+
+float packet_format::imu_la_y(const uint8_t* imu_buf) const {
+    float res;
+    std::memcpy(&res, imu_buf + 28, sizeof(float));
+    return res;
+}
+
+float packet_format::imu_la_z(const uint8_t* imu_buf) const {
+    float res;
+    std::memcpy(&res, imu_buf + 32, sizeof(float));
+    return res;
+}
+
+float packet_format::imu_av_x(const uint8_t* imu_buf) const {
+    float res;
+    std::memcpy(&res, imu_buf + 36, sizeof(float));
+    return res;
+}
+
+float packet_format::imu_av_y(const uint8_t* imu_buf) const {
+    float res;
+    std::memcpy(&res, imu_buf + 40, sizeof(float));
+    return res;
+}
+
+float packet_format::imu_av_z(const uint8_t* imu_buf) const {
+    float res;
+    std::memcpy(&res, imu_buf + 44, sizeof(float));
+    return res;
+}
+
 }  // namespace sensor
 
 namespace util {
@@ -950,5 +1207,4 @@ version version_of_string(const std::string& s) {
 };
 
 }  // namespace util
-
 }  // namespace ouster

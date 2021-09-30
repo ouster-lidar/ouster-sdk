@@ -66,7 +66,7 @@ def pcap_2d_viewer(source: client.PacketSource,
     for scan in client.Scans(source):
         print("frame id: {}, num = {}".format(scan.frame_id, num))
 
-        fields = [scan.field(ch) for ch in client.ChanField]
+        fields = [scan.field(ch) for ch in client.ChanField.values]
         if destagger:
             fields = [client.destagger(metadata, f) for f in fields]
 
@@ -110,11 +110,11 @@ def pcap_read_packets(
     for packet in source:
         if isinstance(packet, client.LidarPacket):
             # Now we can process the LidarPacket. In this case, we access
-            # the encoder_counts, timestamps, and ranges
-            encoder_counts = packet.header(client.ColHeader.ENCODER_COUNT)
-            timestamps = packet.header(client.ColHeader.TIMESTAMP)
+            # the measurement ids, timestamps, and ranges
+            measurement_ids = packet.measurement_id
+            timestamps = packet.timestamp
             ranges = packet.field(client.ChanField.RANGE)
-            print(f'  encoder counts = {encoder_counts.shape}')
+            print(f'  encoder counts = {measurement_ids.shape}')
             print(f'  timestamps = {timestamps.shape}')
             print(f'  ranges = {ranges.shape}')
 
@@ -140,9 +140,9 @@ def pcap_show_one_scan(source: client.PacketSource,
 
     # [doc-stag-pcap-show-one]
     fig = plt.figure(constrained_layout=True)
-    axs = fig.subplots(len(client.ChanField), 1, sharey=True)
+    axs = fig.subplots(len(client.ChanField.values), 1, sharey=True)
 
-    for ax, field in zip(axs, client.ChanField):
+    for ax, field in zip(axs, client.ChanField.values):
         img = normalize(scan.field(field))
         if destagger:
             img = client.destagger(metadata, img)
@@ -282,7 +282,7 @@ def pcap_to_csv(source: client.PacketSource,
         timestamps = np.tile(scan.timestamp, (scan.h, 1))
 
         # grab channel data
-        fields_values = [scan.field(ch) for ch in client.ChanField]
+        fields_values = [scan.field(ch) for ch in client.ChanField.values]
 
         # use integer mm to avoid loss of precision casting timestamps
         xyz = (xyzlut(scan) * 1000).astype(np.int64)

@@ -42,8 +42,12 @@ class LidarScan {
     /** XYZ coordinates with dimensions arranged contiguously in columns */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
 
-    /** Data fields reported per channel */
-    enum Field { RANGE, INTENSITY, AMBIENT, REFLECTIVITY };
+    /** Old names provided for compatibility, see sensor::ChanField */
+    using Field [[deprecated]] = sensor::ChanField;
+    [[deprecated]] static constexpr Field RANGE = sensor::RANGE;
+    [[deprecated]] static constexpr Field INTENSITY = sensor::SIGNAL;
+    [[deprecated]] static constexpr Field AMBIENT = sensor::NEAR_IR;
+    [[deprecated]] static constexpr Field REFLECTIVITY = sensor::REFLECTIVITY;
 
     /** Measurement block information, other than the channel data */
     struct BlockHeader {
@@ -112,10 +116,10 @@ class LidarScan {
      * @param f the field to view
      * @return a view of the field data
      */
-    Eigen::Map<img_t<raw_t>> field(Field f);
+    Eigen::Map<img_t<raw_t>> field(sensor::ChanField f);
 
     /** @copydoc field(Field f) */
-    Eigen::Map<const img_t<raw_t>> field(Field f) const;
+    Eigen::Map<const img_t<raw_t>> field(sensor::ChanField f) const;
 
     /**
      * Access the measurement timestamp headers
