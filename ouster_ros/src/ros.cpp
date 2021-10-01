@@ -69,20 +69,24 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
     cloud.resize(ls.w * ls.h);
     auto points = ouster::cartesian(ls, xyz_lut);
 
+    const auto& range = ls.field(ouster::sensor::RANGE);
+    const auto& signal = ls.field(ouster::sensor::SIGNAL);
+    const auto& near_ir = ls.field(ouster::sensor::NEAR_IR);
+    const auto& reflectivity = ls.field(ouster::sensor::REFLECTIVITY);
+
     for (auto u = 0; u < ls.h; u++) {
         for (auto v = 0; v < ls.w; v++) {
             const auto xyz = points.row(u * ls.w + v);
-            const auto pix = ls.data.row(u * ls.w + v);
             const auto ts = (ls.header(v).timestamp - scan_ts).count();
             cloud(v, u) = ouster_ros::Point{
                 {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
                   static_cast<float>(xyz(2)), 1.0f}},
-                static_cast<float>(pix(ouster::LidarScan::INTENSITY)),
+                static_cast<float>(signal(u, v)),
                 static_cast<uint32_t>(ts),
-                static_cast<uint16_t>(pix(ouster::LidarScan::REFLECTIVITY)),
+                static_cast<uint16_t>(reflectivity(u, v)),
                 static_cast<uint8_t>(u),
-                static_cast<uint16_t>(pix(ouster::LidarScan::AMBIENT)),
-                static_cast<uint32_t>(pix(ouster::LidarScan::RANGE))};
+                static_cast<uint16_t>(near_ir(u, v)),
+                static_cast<uint32_t>(range(u,v))};
         }
     }
 }

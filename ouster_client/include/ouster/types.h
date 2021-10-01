@@ -12,6 +12,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include <map>
 
 #include "nonstd/optional.hpp"
 
@@ -447,7 +448,7 @@ struct packet_format final {
    private:
     packet_format(int pixels_per_column);
 
-    std::shared_ptr<const std::array<FieldInfo, MAX_FIELDS>> fields;
+    std::shared_ptr<const std::map<ChanField, FieldInfo>> fields;
 };
 
 /**

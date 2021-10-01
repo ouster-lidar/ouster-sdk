@@ -8,7 +8,10 @@
 #include <Eigen/Dense>
 #include <chrono>
 #include <cstddef>
+#include <map>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "ouster/types.h"
@@ -28,16 +31,13 @@ namespace ouster {
  */
 class LidarScan {
    public:
-    static constexpr int N_FIELDS = 4;
+    [[deprecated]] static constexpr int N_FIELDS = 4;
 
     using raw_t = uint32_t;
     using ts_t = std::chrono::nanoseconds;
-    using data_t = Eigen::Array<raw_t, Eigen::Dynamic, N_FIELDS>;
 
     template <typename T>
     using header_t = Eigen::Array<T, Eigen::Dynamic, 1>;
-
-    using DynStride = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
 
     /** XYZ coordinates with dimensions arranged contiguously in columns */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
@@ -59,16 +59,22 @@ class LidarScan {
     /* Members variables: use with caution, some of these will become private */
     std::ptrdiff_t w{0};
     std::ptrdiff_t h{0};
-    data_t data{};
     std::vector<BlockHeader> headers{};
     int32_t frame_id{-1};
+
+    struct FieldSlot;
 
    private:
     header_t<uint64_t> timestamp_;
     header_t<uint16_t> measurement_id_;
     header_t<uint32_t> status_;
+    std::map<sensor::ChanField, FieldSlot> fields_;
+    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
+        field_types_;
 
    public:
+    using FieldIter = decltype(field_types_)::const_iterator;
+
     /** The default constructor creates an invalid 0 x 0 scan */
     LidarScan();
 
@@ -79,6 +85,15 @@ class LidarScan {
      * @param h vertical resolution, i.e. the number of channels
      */
     LidarScan(size_t w, size_t h);
+
+    /*
+     * Special member functions
+     */
+    LidarScan(const LidarScan& other);
+    LidarScan(LidarScan&& other);
+    LidarScan& operator=(const LidarScan& other);
+    LidarScan& operator=(LidarScan&& other);
+    ~LidarScan();
 
     /**
      * Access timestamps as a vector.
@@ -98,28 +113,33 @@ class LidarScan {
     [[deprecated]] const BlockHeader& header(size_t m_id) const;
 
     /**
-     * Access measurement block data.
-     *
-     * @param m_id the measurement id of the desired block
-     * @return a view of the measurement block data
-     */
-    [[deprecated]] Eigen::Map<data_t, Eigen::Unaligned, DynStride> block(
-        size_t m_id);
-
-    /** @copydoc block(size_t m_id) */
-    [[deprecated]] Eigen::Map<const data_t, Eigen::Unaligned, DynStride> block(
-        size_t m_id) const;
-
-    /**
      * Access a lidar data field.
      *
      * @param f the field to view
      * @return a view of the field data
      */
-    Eigen::Map<img_t<raw_t>> field(sensor::ChanField f);
+    template <typename T = uint32_t,
+              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
+    Eigen::Ref<img_t<T>> field(sensor::ChanField f);
 
     /** @copydoc field(Field f) */
-    Eigen::Map<const img_t<raw_t>> field(sensor::ChanField f) const;
+    template <typename T = uint32_t,
+              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
+    Eigen::Ref<const img_t<T>> field(sensor::ChanField f) const;
+
+    /**
+     * Get the type of the specified field
+     *
+     * @param f the field to query
+     * @return the type tag associated with the field
+     */
+    sensor::ChanFieldType field_type(sensor::ChanField) const;
+
+    /**
+     * A const forward iterator over field / type pairs
+     */
+    FieldIter begin() const;
+    FieldIter end() const;
 
     /**
      * Access the measurement timestamp headers
@@ -150,6 +170,8 @@ class LidarScan {
 
     /** @copydoc status() */
     Eigen::Ref<const header_t<uint32_t>> status() const;
+
+    friend bool operator==(const LidarScan& a, const LidarScan& b);
 };
 
 /** Equality for column headers. */

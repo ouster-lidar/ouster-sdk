@@ -2,24 +2,253 @@
 
 #include <Eigen/Dense>
 #include <cmath>
+#include <type_traits>
 #include <vector>
 
+#include "ouster/types.h"
+
 namespace ouster {
+
+template <typename T>
+struct FieldTag;
+
+template <>
+struct FieldTag<uint8_t> {
+    static constexpr sensor::ChanFieldType tag = sensor::ChanFieldType::UINT8;
+};
+
+template <>
+struct FieldTag<uint16_t> {
+    static constexpr sensor::ChanFieldType tag = sensor::ChanFieldType::UINT16;
+};
+
+template <>
+struct FieldTag<uint32_t> {
+    static constexpr sensor::ChanFieldType tag = sensor::ChanFieldType::UINT32;
+};
+
+template <>
+struct FieldTag<uint64_t> {
+    static constexpr sensor::ChanFieldType tag = sensor::ChanFieldType::UINT64;
+};
+
+struct LidarScan::FieldSlot {
+    sensor::ChanFieldType tag;
+    union {
+        img_t<uint8_t> f8;
+        img_t<uint16_t> f16;
+        img_t<uint32_t> f32;
+        img_t<uint64_t> f64;
+    };
+
+    FieldSlot(sensor::ChanFieldType t, size_t w, size_t h) : tag{t} {
+        switch (t) {
+            case sensor::VOID:
+                break;
+            case sensor::UINT8:
+                new (&f8) img_t<uint8_t>{h, w};
+                break;
+            case sensor::UINT16:
+                new (&f16) img_t<uint16_t>{h, w};
+                break;
+            case sensor::UINT32:
+                new (&f32) img_t<uint32_t>{h, w};
+                break;
+            case sensor::UINT64:
+                new (&f64) img_t<uint64_t>{h, w};
+                break;
+        }
+    }
+
+    FieldSlot() : FieldSlot{sensor::VOID, 0, 0} {};
+
+    ~FieldSlot() { clear(); }
+
+    FieldSlot(const FieldSlot& other) {
+        switch (other.tag) {
+            case sensor::VOID:
+                break;
+            case sensor::UINT8:
+                new (&f8) img_t<uint8_t>{other.f8};
+                break;
+            case sensor::UINT16:
+                new (&f16) img_t<uint16_t>{other.f16};
+                break;
+            case sensor::UINT32:
+                new (&f32) img_t<uint32_t>{other.f32};
+                break;
+            case sensor::UINT64:
+                new (&f64) img_t<uint64_t>{other.f64};
+                break;
+        }
+        tag = other.tag;
+    }
+
+    FieldSlot(FieldSlot&& other) { set_from(other); }
+
+    FieldSlot& operator=(FieldSlot other) {
+        clear();
+        set_from(other);
+        return *this;
+    }
+
+    template <typename T>
+    Eigen::Ref<img_t<T>> get() {
+        if (tag == FieldTag<T>::tag)
+            return get_unsafe<T>();
+        else
+            throw std::invalid_argument("Accessed field at wrong type");
+    }
+
+    template <typename T>
+    Eigen::Ref<const img_t<T>> get() const {
+        if (tag == FieldTag<T>::tag)
+            return get_unsafe<T>();
+        else
+            throw std::invalid_argument("Accessed field at wrong type");
+    }
+
+    friend bool operator==(const FieldSlot& l, const FieldSlot& r) {
+        if (l.tag != r.tag) return false;
+        switch (l.tag) {
+            case sensor::VOID:
+                return true;
+            case sensor::UINT8:
+                return (l.f8 == r.f8).all();
+            case sensor::UINT16:
+                return (l.f16 == r.f16).all();
+            case sensor::UINT32:
+                return (l.f32 == r.f32).all();
+            case sensor::UINT64:
+                return (l.f64 == r.f64).all();
+            default:
+                assert(false);
+        }
+        // unreachable, appease older gcc
+        return false;
+    }
+
+   private:
+    void set_from(FieldSlot& other) {
+        switch (other.tag) {
+            case sensor::VOID:
+                break;
+            case sensor::UINT8:
+                new (&f8) img_t<uint8_t>{std::move(other.f8)};
+                break;
+            case sensor::UINT16:
+                new (&f16) img_t<uint16_t>{std::move(other.f16)};
+                break;
+            case sensor::UINT32:
+                new (&f32) img_t<uint32_t>{std::move(other.f32)};
+                break;
+            case sensor::UINT64:
+                new (&f64) img_t<uint64_t>{std::move(other.f64)};
+                break;
+        }
+        tag = other.tag;
+        other.clear();
+    }
+
+    void clear() {
+        switch (tag) {
+            case sensor::VOID:
+                break;
+            case sensor::UINT8:
+                f8.~img_t<uint8_t>();
+                break;
+            case sensor::UINT16:
+                f16.~img_t<uint16_t>();
+                break;
+            case sensor::UINT32:
+                f32.~img_t<uint32_t>();
+                break;
+            case sensor::UINT64:
+                f64.~img_t<uint64_t>();
+                break;
+        }
+        tag = sensor::VOID;
+    }
+
+    template <typename T>
+    Eigen::Ref<img_t<T>> get_unsafe();
+
+    template <typename T>
+    Eigen::Ref<const img_t<T>> get_unsafe() const;
+};
+
+template <>
+Eigen::Ref<img_t<uint8_t>> LidarScan::FieldSlot::get_unsafe() {
+    return f8;
+}
+
+template <>
+Eigen::Ref<img_t<uint16_t>> LidarScan::FieldSlot::get_unsafe() {
+    return f16;
+}
+
+template <>
+Eigen::Ref<img_t<uint32_t>> LidarScan::FieldSlot::get_unsafe() {
+    return f32;
+}
+
+template <>
+Eigen::Ref<img_t<uint64_t>> LidarScan::FieldSlot::get_unsafe() {
+    return f64;
+}
+
+template <>
+Eigen::Ref<const img_t<uint8_t>> LidarScan::FieldSlot::get_unsafe() const {
+    return f8;
+}
+
+template <>
+Eigen::Ref<const img_t<uint16_t>> LidarScan::FieldSlot::get_unsafe() const {
+    return f16;
+}
+
+template <>
+Eigen::Ref<const img_t<uint32_t>> LidarScan::FieldSlot::get_unsafe() const {
+    return f32;
+}
+
+template <>
+Eigen::Ref<const img_t<uint64_t>> LidarScan::FieldSlot::get_unsafe() const {
+    return f64;
+}
 
 constexpr int LidarScan::N_FIELDS;
 
 LidarScan::LidarScan() = default;
+LidarScan::LidarScan(const LidarScan&) = default;
+LidarScan::LidarScan(LidarScan&&) = default;
+LidarScan& LidarScan::operator=(const LidarScan&) = default;
+LidarScan& LidarScan::operator=(LidarScan&&) = default;
+LidarScan::~LidarScan() = default;
+
+template <typename K, typename V, size_t N>
+using Table = std::array<std::pair<K, V>, N>;
+
+Table<sensor::ChanField, sensor::ChanFieldType, 4> legacy_field_slots{
+    {{sensor::RANGE, sensor::UINT32},
+     {sensor::SIGNAL, sensor::UINT32},
+     {sensor::NEAR_IR, sensor::UINT32},
+     {sensor::REFLECTIVITY, sensor::UINT32}}};
 
 // TODO: scan batching doesn't currently zero out missing fields kinda relying
 // on headers being zeroed here, but that doesn't work when reusing scans
 LidarScan::LidarScan(size_t w, size_t h)
     : w{static_cast<std::ptrdiff_t>(w)},
       h{static_cast<std::ptrdiff_t>(h)},
-      data{w * h, N_FIELDS},
       headers{w, BlockHeader{ts_t{0}, 0, 0}},
       timestamp_{header_t<uint64_t>::Zero(w)},
       measurement_id_{header_t<uint16_t>::Zero(w)},
-      status_{header_t<uint32_t>::Zero(w)} {}
+      status_{header_t<uint32_t>::Zero(w)},
+      field_types_{legacy_field_slots.begin(), legacy_field_slots.end()} {
+    for (const auto& ft : legacy_field_slots) {
+        fields_[ft.first] = FieldSlot{ft.second, w, h};
+    }
+}
 
 std::vector<LidarScan::ts_t> LidarScan::timestamps() const {
     std::vector<LidarScan::ts_t> res;
@@ -36,26 +265,39 @@ const LidarScan::BlockHeader& LidarScan::header(size_t m_id) const {
     return headers.at(m_id);
 }
 
-Eigen::Map<LidarScan::data_t, Eigen::Unaligned, LidarScan::DynStride>
-LidarScan::block(size_t m_id) {
-    return Eigen::Map<data_t, Eigen::Unaligned, DynStride>(
-        data.row(m_id).data(), h, N_FIELDS, {w * h, w});
+template <typename T,
+          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
+Eigen::Ref<img_t<T>> LidarScan::field(sensor::ChanField f) {
+    return fields_.at(f).get<T>();
 }
 
-Eigen::Map<const LidarScan::data_t, Eigen::Unaligned, LidarScan::DynStride>
-LidarScan::block(size_t m_id) const {
-    return Eigen::Map<const data_t, Eigen::Unaligned, DynStride>(
-        data.row(m_id).data(), h, N_FIELDS, {w * h, w});
+template <typename T,
+          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
+Eigen::Ref<const img_t<T>> LidarScan::field(sensor::ChanField f) const {
+    return fields_.at(f).get<T>();
 }
 
-Eigen::Map<img_t<LidarScan::raw_t>> LidarScan::field(sensor::ChanField f) {
-    return Eigen::Map<img_t<raw_t>>(data.col(f).data(), h, w);
+// explicitly instantiate for each supported field type
+template Eigen::Ref<img_t<uint8_t>> LidarScan::field(sensor::ChanField f);
+template Eigen::Ref<img_t<uint16_t>> LidarScan::field(sensor::ChanField f);
+template Eigen::Ref<img_t<uint32_t>> LidarScan::field(sensor::ChanField f);
+template Eigen::Ref<img_t<uint64_t>> LidarScan::field(sensor::ChanField f);
+template Eigen::Ref<const img_t<uint8_t>> LidarScan::field(
+    sensor::ChanField f) const;
+template Eigen::Ref<const img_t<uint16_t>> LidarScan::field(
+    sensor::ChanField f) const;
+template Eigen::Ref<const img_t<uint32_t>> LidarScan::field(
+    sensor::ChanField f) const;
+template Eigen::Ref<const img_t<uint64_t>> LidarScan::field(
+    sensor::ChanField f) const;
+
+sensor::ChanFieldType LidarScan::field_type(sensor::ChanField f) const {
+    return fields_.at(f).tag;
 }
 
-Eigen::Map<const img_t<LidarScan::raw_t>> LidarScan::field(
-    sensor::ChanField f) const {
-    return Eigen::Map<const img_t<raw_t>>(data.col(f).data(), h, w);
-}
+LidarScan::FieldIter LidarScan::begin() const { return field_types_.cbegin(); }
+
+LidarScan::FieldIter LidarScan::end() const { return field_types_.cend(); }
 
 Eigen::Ref<LidarScan::header_t<uint64_t>> LidarScan::timestamp() {
     return timestamp_;
@@ -86,9 +328,9 @@ bool operator==(const LidarScan::BlockHeader& a,
 }
 
 bool operator==(const LidarScan& a, const LidarScan& b) {
-    return a.w == b.w && a.h == b.h && (a.data == b.data).all() &&
-           a.headers == b.headers && a.frame_id && b.frame_id &&
-           (a.timestamp() == b.timestamp()).all() &&
+    return a.frame_id && b.frame_id && a.w == b.w && a.h == b.h &&
+           a.fields_ == b.fields_ && a.field_types_ == b.field_types_ &&
+           a.headers == b.headers && (a.timestamp() == b.timestamp()).all() &&
            (a.measurement_id() == b.measurement_id()).all() &&
            (a.status() == b.status()).all();
 }
@@ -166,11 +408,17 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
 ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
     : w(w), h(pf.pixels_per_column), next_m_id(0), ls_write(w, h), pf(pf) {}
 
-bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
-    using row_view_t =
-        Eigen::Map<Eigen::Array<LidarScan::raw_t, Eigen::Dynamic,
-                                Eigen::Dynamic, Eigen::RowMajor>>;
+/*
+ * Set all field columns in the range [start, end) to zero
+ */
+static void zero_scan_cols(LidarScan& ls, std::ptrdiff_t start,
+                           std::ptrdiff_t end) {
+    for (const auto& ft : ls) {
+        ls.field(ft.first).block(0, start, ls.h, end - start).setZero();
+    }
+}
 
+bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     if (ls.w != w || ls.h != h)
         throw std::invalid_argument("unexpected scan dimensions");
 
@@ -192,10 +440,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
             // if not initializing with first packet
             if (ls_write.frame_id != -1) {
                 // zero out remaining missing columns
-                auto rows = h * LidarScan::N_FIELDS;
-                row_view_t{ls_write.data.data(), rows, w}
-                    .block(0, next_m_id, rows, w - next_m_id)
-                    .setZero();
+                zero_scan_cols(ls_write, next_m_id, w);
 
                 // finish the scan and notify callback
                 std::swap(ls, ls_write);
@@ -209,10 +454,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
 
         // zero out missing columns if we jumped forward
         if (m_id >= next_m_id) {
-            auto rows = h * LidarScan::N_FIELDS;
-            row_view_t{ls_write.data.data(), rows, w}
-                .block(0, next_m_id, rows, m_id - next_m_id)
-                .setZero();
+            zero_scan_cols(ls_write, next_m_id, m_id);
             next_m_id = m_id + 1;
         }
 
@@ -224,14 +466,10 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         ls_write.measurement_id()[m_id] = m_id;
         ls_write.status()[m_id] = status;
 
-        pf.col_field(col_buf, sensor::RANGE,
-                     ls_write.field(sensor::RANGE).col(m_id).data(), w);
-        pf.col_field(col_buf, sensor::REFLECTIVITY,
-                     ls_write.field(sensor::REFLECTIVITY).col(m_id).data(), w);
-        pf.col_field(col_buf, sensor::SIGNAL,
-                     ls_write.field(sensor::SIGNAL).col(m_id).data(), w);
-        pf.col_field(col_buf, sensor::NEAR_IR,
-                     ls_write.field(sensor::NEAR_IR).col(m_id).data(), w);
+        for (const auto& ft : ls_write) {
+            pf.col_field(col_buf, ft.first,
+                         ls_write.field(ft.first).col(m_id).data(), w);
+        }
     }
     return swapped;
 }

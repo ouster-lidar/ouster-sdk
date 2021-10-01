@@ -11,6 +11,9 @@ Changelog
 
 ouster_client
 -------------
+* add methods to query and iterate over available ``LidarScan`` fields and field types
+* breaking change: removed ``LidarScan::block`` and ``LidarScan::data`` members. These can't be
+  supported for different packet profiles
 * the ``LidarScan::Field`` defniition has been moved to ``sensor::ChanField`` and enumerators have
   been renamed to match the sensor user manual. The old names are still available, but deprecated
 * deprecate accessing encoder values and frame ids from measurement blocks using ``packet_format``
@@ -50,8 +53,8 @@ ouster_viz
 python
 ------
 * breaking change: the ``ChanField`` enum is now implemented as a native binding for easier interop
-  with C++. Unlike Python enums, the bound class itself is no longer sized or iterable; use
-  ``ChanField.values`` to get an immutable sequence of ``ChanField`` values
+  with C++. Unlike Python enums, the bound class itself is no longer sized or iterable. Use
+  ``ChanField.values`` to get an immutable sequence of ``ChanField`` values instead
 * breaking change: arrays returned by ``LidarPacket.field`` and ``LidarPacket.header`` are now
   immutable. Modifying the underlying packet buffer through these views was never fully supported
 * deprecate ``ColHeader``, ``LidarPacket.header``, and ``LidarScan.header`` in favor of new

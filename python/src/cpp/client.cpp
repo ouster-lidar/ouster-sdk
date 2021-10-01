@@ -779,9 +779,29 @@ PYBIND11_PLUGIN(_client) {
         .def(
             "field",
             [](LidarScan& self, sensor::ChanField f) {
-                return py::array_t<uint32_t>(
-                    {static_cast<size_t>(self.h), static_cast<size_t>(self.w)},
-                    self.field(f).data(), py::cast(self));
+                std::vector<size_t> dims{static_cast<size_t>(self.h),
+                                         static_cast<size_t>(self.w)};
+
+                switch (self.field_type(f)) {
+                    case sensor::UINT8:
+                        return py::array(py::dtype::of<uint8_t>(), dims,
+                                         self.field<uint8_t>(f).data(),
+                                         py::cast(self));
+                    case sensor::UINT16:
+                        return py::array(py::dtype::of<uint16_t>(), dims,
+                                         self.field<uint16_t>(f).data(),
+                                         py::cast(self));
+                    case sensor::UINT32:
+                        return py::array(py::dtype::of<uint32_t>(), dims,
+                                         self.field<uint32_t>(f).data(),
+                                         py::cast(self));
+                    case sensor::UINT64:
+                        return py::array(py::dtype::of<uint64_t>(), dims,
+                                         self.field<uint64_t>(f).data(),
+                                         py::cast(self));
+                    default:
+                        throw std::logic_error("Invalid field");
+                }
             },
             R"(
         Return a view of the specified channel field.

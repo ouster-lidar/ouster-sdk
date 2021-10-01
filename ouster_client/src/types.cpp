@@ -966,14 +966,14 @@ struct packet_format::FieldInfo {
     int shift;
 };
 
-// TODO: a map might be easier to read / less error-prone
-std::array<std::array<packet_format::FieldInfo, MAX_FIELDS>, 16>
-    field_info_table{{
-        {{{UINT32, 0, 0x000fffff, 0},  // range
-          {UINT16, 6, 0, 0},           // signal
-          {UINT16, 8, 0, 0},           // near_ir
-          {UINT16, 4, 0, 0}}},         // reflectivity
-    }};
+template <typename K, typename V, size_t N>
+using Table = std::array<std::pair<K, V>, N>;
+
+Table<ChanField, packet_format::FieldInfo, 4> legacy_field_info{
+    {{RANGE, {UINT32, 0, 0x000fffff, 0}},
+     {SIGNAL, {UINT16, 6, 0, 0}},
+     {NEAR_IR, {UINT16, 8, 0, 0}},
+     {REFLECTIVITY, {UINT16, 4, 0, 0}}}};
 
 packet_format::packet_format(int pixels_per_column)
     : lidar_packet_size(impl::packet_bytes(pixels_per_column)),
@@ -981,8 +981,8 @@ packet_format::packet_format(int pixels_per_column)
       columns_per_packet(impl::cols_per_packet),
       pixels_per_column(pixels_per_column),
       encoder_ticks_per_rev(impl::encoder_ticks_per_rev),
-      fields{std::make_shared<std::array<packet_format::FieldInfo, MAX_FIELDS>>(
-          std::get<0>(field_info_table))} {}
+      fields{std::make_shared<std::map<ChanField, packet_format::FieldInfo>>(
+          legacy_field_info.begin(), legacy_field_info.end())} {}
 
 template <size_t SRC_SIZE, typename T>
 static void col_field_impl(const uint8_t* col_buf, T* dst, size_t offset,
@@ -1005,9 +1005,9 @@ static size_t field_ty_size(ChanFieldType t) {
         case UINT16:
             return 2;
         case UINT32:
-            return 3;
-        case UINT64:
             return 4;
+        case UINT64:
+            return 8;
         default:
             return 0;
     }
