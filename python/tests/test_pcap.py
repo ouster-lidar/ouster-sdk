@@ -10,7 +10,7 @@ import time
 from ouster import pcap
 from ouster.pcap import _pcap
 from ouster import client
-from ouster.client import _client, _digest
+from ouster.client import _client
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 

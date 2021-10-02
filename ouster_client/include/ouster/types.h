@@ -7,12 +7,13 @@
 
 #include <Eigen/Dense>
 #include <array>
+#include <cstdint>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <type_traits>
 #include <vector>
-#include <map>
 
 #include "nonstd/optional.hpp"
 
@@ -76,10 +77,13 @@ enum Polarity { POLARITY_ACTIVE_LOW = 1, POLARITY_ACTIVE_HIGH };
 
 enum NMEABaudRate { BAUD_9600 = 1, BAUD_115200 };
 
+enum UDPProfileLidar { PROFILE_LIDAR_LEGACY = 1 };
+enum UDPProfileIMU { PROFILE_IMU_LEGACY = 1 };
+
 using AzimuthWindow = std::pair<int, int>;
 using ColumnWindow = std::pair<int, int>;
 
-enum configuration_version { FW_2_0 = 3 };
+enum configuration_version { FW_2_0 = 3, FW_2_2 = 4 };
 
 struct data_format {
     uint32_t pixels_per_column;
@@ -87,6 +91,8 @@ struct data_format {
     uint32_t columns_per_frame;
     std::vector<int> pixel_shift_by_row;
     ColumnWindow column_window;
+    UDPProfileLidar udp_profile_lidar;
+    UDPProfileIMU udp_profile_imu;
 };
 
 struct sensor_info {
@@ -102,6 +108,9 @@ struct sensor_info {
     mat4d imu_to_sensor_transform;
     mat4d lidar_to_sensor_transform;
     mat4d extrinsic;
+    uint64_t initialization_id;
+    uint16_t udp_port_lidar;
+    uint16_t udp_port_imu;
 };
 
 struct sensor_config {
@@ -132,6 +141,10 @@ struct sensor_config {
 
     optional<bool> phase_lock_enable;
     optional<int> phase_lock_offset;
+
+    optional<int> columns_per_packet;
+    optional<UDPProfileLidar> udp_profile_lidar;
+    optional<UDPProfileIMU> udp_profile_imu;
 };
 
 /** Equality/Not-Equality for data_format */
@@ -274,6 +287,38 @@ optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
  * @return string representation of the azimuth window
  */
 std::string to_string(AzimuthWindow azimuth_window);
+
+/**
+ * Get string representation of a lidar profile
+ *
+ * @param packet profile
+ * @return string representation of the lidar profile
+ */
+std::string to_string(UDPProfileLidar profile);
+
+/**
+ * Get lidar profile from string
+ *
+ * @param string
+ * @return lidar profile corresponding to the string, or nullopt on error
+ */
+optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s);
+
+/**
+ * Get string representation of an IMU profile
+ *
+ * @param packet profile
+ * @return string representation of the lidar profile
+ */
+std::string to_string(UDPProfileIMU profile);
+
+/**
+ * Get imu profile from string
+ *
+ * @param string
+ * @return imu profile corresponding to the string, or nullopt on error
+ */
+optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
 
 /**
  * Parse metadata text blob from the sensor into a sensor_info struct.

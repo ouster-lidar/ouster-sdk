@@ -38,7 +38,7 @@ class Client:
                  capacity: int = ...) -> None:
         ...
 
-    def get_metadata(self, timeout_sec: int = ...) -> str:
+    def get_metadata(self, timeout_sec: int = ..., legacy: bool = ...) -> str:
         ...
 
     def shutdown(self) -> None:
@@ -119,6 +119,9 @@ class SensorInfo:
     lidar_to_sensor_transform: ndarray
     lidar_origin_to_beam_origin_mm: float
     extrinsic: ndarray
+    initialization_id: int
+    udp_port_lidar: int
+    udp_port_imu: int
 
     @classmethod
     def from_default(cls, mode: LidarMode) -> SensorInfo:
@@ -145,6 +148,8 @@ class DataFormat:
     pixel_shift_by_row: List[int]
     pixels_per_column: int
     column_window: Tuple[int, int]
+    udp_profile_lidar: UDPProfileLidar
+    udp_profile_imu: UDPProfileIMU
 
 
 class PacketFormat:
@@ -473,6 +478,68 @@ class ChanField:
         ...
 
 
+class UDPProfileLidar:
+    PROFILE_LIDAR_LEGACY: ClassVar[UDPProfileLidar]
+
+    __members__: ClassVar[Dict[str, UDPProfileLidar]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> UDPProfileLidar:
+        ...
+
+
+class UDPProfileIMU:
+    PROFILE_IMU_LEGACY: ClassVar[UDPProfileIMU]
+
+    __members__: ClassVar[Dict[str, UDPProfileIMU]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> UDPProfileIMU:
+        ...
+
+
 class SensorConfig:
     udp_dest: Optional[str]
     udp_port_lidar: Optional[int]
@@ -494,6 +561,9 @@ class SensorConfig:
     sync_pulse_out_frequency: Optional[int]
     phase_lock_enable: Optional[bool]
     phase_lock_offset: Optional[int]
+    columns_per_packet: Optional[int]
+    udp_profile_lidar: Optional[UDPProfileLidar]
+    udp_profile_imu: Optional[UDPProfileIMU]
 
     @overload
     def __init__(self) -> None:

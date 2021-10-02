@@ -103,7 +103,7 @@ class Sensor(PacketSource):
                  buf_size: int = 128,
                  timeout: Optional[float] = 1.0,
                  _overflow_err: bool = False,
-                 _flush_before_read: bool = True, 
+                 _flush_before_read: bool = True,
                  _legacy_format: bool = True) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
@@ -147,7 +147,8 @@ class Sensor(PacketSource):
 
     def _fetch_metadata(self) -> None:
         if not self._fetched_meta:
-            self._fetched_meta = self._cli.get_metadata(legacy = self._legacy_format)
+            self._fetched_meta = self._cli.get_metadata(
+                legacy=self._legacy_format)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 

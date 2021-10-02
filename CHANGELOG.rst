@@ -11,6 +11,11 @@ Changelog
 
 ouster_client
 -------------
+* add support for new configuration parameters: ``udp_profile_lidar``, ``udp_profile_imu`` and
+  ``columns_per_packet``
+* add udp ports, the new initialization id field, and udp profiles to the metadata stored in
+  the ``sensor_info`` struct
+* ``sensor_info::name`` is now deprecated and will stop being populated in the future
 * add methods to query and iterate over available ``LidarScan`` fields and field types
 * breaking change: removed ``LidarScan::block`` and ``LidarScan::data`` members. These can't be
   supported for different packet profiles
@@ -52,6 +57,7 @@ ouster_viz
 
 python
 ------
+* add bindings for new configuration and metadata supported by the client library
 * breaking change: the ``ChanField`` enum is now implemented as a native binding for easier interop
   with C++. Unlike Python enums, the bound class itself is no longer sized or iterable. Use
   ``ChanField.values`` to get an immutable sequence of ``ChanField`` values instead

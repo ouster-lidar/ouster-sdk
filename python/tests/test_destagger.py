@@ -18,6 +18,7 @@ def meta():
     with open(meta_path, 'r') as f:
         return client.SensorInfo(f.read())
 
+
 @pytest.fixture(scope="module")
 def scan(meta) -> client.LidarScan:
     bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")

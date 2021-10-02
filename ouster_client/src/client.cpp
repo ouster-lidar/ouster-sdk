@@ -431,6 +431,21 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
                    std::to_string(config.phase_lock_offset.value())))
         return false;
 
+    if (config.columns_per_packet &&
+        !set_param("columns_per_packet",
+                   std::to_string(config.columns_per_packet.value())))
+        return false;
+
+    if (config.udp_profile_lidar &&
+        !set_param("udp_profile_lidar",
+                   std::to_string(config.udp_profile_lidar.value())))
+        return false;
+
+    if (config.udp_profile_imu &&
+        !set_param("udp_profile_imu",
+                   std::to_string(config.udp_profile_imu.value())))
+        return false;
+
     // reinitialize
     success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
     success &= res == "reinitialize";

@@ -70,6 +70,16 @@ std::array<std::pair<sensor::ChanField, const char*>, 4> chanfield_strings{{
     {ChanField::REFLECTIVITY, "REFLECTIVITY"},
 }};
 
+std::array<std::pair<UDPProfileLidar, std::string>, 32>
+    udp_profile_lidar_strings = {{
+        {PROFILE_LIDAR_LEGACY, "LEGACY"},
+    }};
+
+std::array<std::pair<UDPProfileIMU, std::string>, 32> udp_profile_imu_strings =
+    {{
+        {PROFILE_IMU_LEGACY, "LEGACY"},
+    }};
+
 }  // namespace impl
 
 bool operator==(const data_format& lhs, const data_format& rhs) {
@@ -77,7 +87,9 @@ bool operator==(const data_format& lhs, const data_format& rhs) {
             lhs.columns_per_packet == rhs.columns_per_packet &&
             lhs.columns_per_frame == rhs.columns_per_frame &&
             lhs.pixel_shift_by_row == rhs.pixel_shift_by_row &&
-            lhs.column_window == rhs.column_window);
+            lhs.column_window == rhs.column_window &&
+            lhs.udp_profile_lidar == rhs.udp_profile_lidar &&
+            lhs.udp_profile_imu == rhs.udp_profile_imu);
 }
 
 bool operator!=(const data_format& lhs, const data_format& rhs) {
@@ -94,7 +106,10 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs) {
                 rhs.lidar_origin_to_beam_origin_mm &&
             lhs.imu_to_sensor_transform == rhs.imu_to_sensor_transform &&
             lhs.lidar_to_sensor_transform == rhs.lidar_to_sensor_transform &&
-            lhs.extrinsic == rhs.extrinsic);
+            lhs.extrinsic == rhs.extrinsic &&
+            lhs.initialization_id == rhs.initialization_id &&
+            lhs.udp_port_lidar == rhs.udp_port_lidar &&
+            lhs.udp_port_imu == rhs.udp_port_imu);
 }
 
 bool operator!=(const sensor_info& lhs, const sensor_info& rhs) {
@@ -158,8 +173,13 @@ data_format default_data_format(lidar_mode mode) {
             throw std::invalid_argument{"default_data_format"};
     }
 
-    return {pixels_per_column, columns_per_packet, columns_per_frame, offset,
-            column_window};
+    return {pixels_per_column,
+            columns_per_packet,
+            columns_per_frame,
+            offset,
+            column_window,
+            UDPProfileLidar::PROFILE_LIDAR_LEGACY,
+            UDPProfileIMU::PROFILE_IMU_LEGACY};
 }
 
 static double default_lidar_origin_to_beam_origin(std::string prod_line) {
@@ -185,7 +205,10 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                default_lidar_origin_to_beam_origin("OS-1-64"),
                                default_imu_to_sensor_transform,
                                default_lidar_to_sensor_transform,
-                               mat4d::Identity()};
+                               mat4d::Identity(),
+                               0,
+                               0,
+                               0};
 }
 
 const packet_format& get_format(const sensor_info& info) {
@@ -381,6 +404,46 @@ std::string to_string(ChanField field) {
     return res == end ? "UNKNOWN" : res->second;
 }
 
+std::string to_string(UDPProfileLidar profile) {
+    auto end = impl::udp_profile_lidar_strings.end();
+    auto res =
+        std::find_if(impl::udp_profile_lidar_strings.begin(), end,
+                     [&](const std::pair<UDPProfileLidar, std::string>& p) {
+                         return p.first == profile;
+                     });
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s) {
+    auto end = impl::udp_profile_lidar_strings.end();
+    auto res =
+        std::find_if(impl::udp_profile_lidar_strings.begin(), end,
+                     [&](const std::pair<UDPProfileLidar, std::string>& p) {
+                         return p.second == s;
+                     });
+    return res == end ? nullopt : make_optional<UDPProfileLidar>(res->first);
+}
+
+std::string to_string(UDPProfileIMU profile) {
+    auto end = impl::udp_profile_imu_strings.end();
+    auto res =
+        std::find_if(impl::udp_profile_imu_strings.begin(), end,
+                     [&](const std::pair<UDPProfileIMU, std::string>& p) {
+                         return p.first == profile;
+                     });
+    return res == end ? "UNKNOWN" : res->second;
+}
+
+optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s) {
+    auto end = impl::udp_profile_imu_strings.end();
+    auto res =
+        std::find_if(impl::udp_profile_imu_strings.begin(), end,
+                     [&](const std::pair<UDPProfileIMU, std::string>& p) {
+                         return p.second == s;
+                     });
+    return res == end ? nullopt : make_optional<UDPProfileIMU>(res->first);
+}
+
 sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
@@ -488,6 +551,18 @@ sensor_config parse_config(const Json::Value& root) {
                                     ? sensor::OPERATING_NORMAL
                                     : sensor::OPERATING_STANDBY;
 
+    if (!root["columns_per_packet"].empty())
+        config.columns_per_packet = root["columns_per_packet"].asInt();
+
+    // udp_profiles
+    if (!root["udp_profile_lidar"].empty())
+        config.udp_profile_lidar =
+            udp_profile_lidar_of_string(root["udp_profile_lidar"].asString());
+
+    if (!root["udp_profile_imu"].empty())
+        config.udp_profile_imu =
+            udp_profile_imu_of_string(root["udp_profile_imu"].asString());
+
     return config;
 }
 
@@ -543,6 +618,62 @@ bool is_new_format(const std::string& metadata) {
     return true;
 }
 
+data_format parse_data_format(const Json::Value& root) {
+    data_format format;
+
+    format.pixels_per_column = root["pixels_per_column"].asInt();
+    format.columns_per_packet = root["columns_per_packet"].asInt();
+    format.columns_per_frame = root["columns_per_frame"].asInt();
+
+    if (root["pixel_shift_by_row"].size() != format.pixels_per_column) {
+        throw std::invalid_argument{"Unexpected number of pixel_shift_by_row"};
+    }
+
+    for (const auto& v : root["pixel_shift_by_row"])
+        format.pixel_shift_by_row.push_back(v.asInt());
+
+    if (root.isMember("column_window")) {
+        if (root["column_window"].size() != 2) {
+            throw std::invalid_argument{
+                "Unexpected size of column_window tuple"};
+        }
+        format.column_window.first = root["column_window"][0].asInt();
+        format.column_window.second = root["column_window"][1].asInt();
+    } else {
+        std::cerr << "WARNING: No column window found." << std::endl;
+        format.column_window = default_column_window(format.columns_per_frame);
+    }
+
+    if (root.isMember("udp_profile_lidar")) {
+        // initializing directly triggers -Wmaybe-uninitialized GCC 8.3.1
+        optional<UDPProfileLidar> profile{nullopt};
+        profile =
+            udp_profile_lidar_of_string(root["udp_profile_lidar"].asString());
+        if (profile) {
+            format.udp_profile_lidar = profile.value();
+        } else {
+            throw std::invalid_argument{"Unexpected udp lidar profile"};
+        }
+    } else {
+        std::cerr << "WARNING: No lidar profile found." << std::endl;
+        format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
+    }
+
+    if (root.isMember("udp_profile_imu")) {
+        optional<UDPProfileIMU> profile{nullopt};
+        profile = udp_profile_imu_of_string(root["udp_profile_imu"].asString());
+        if (profile) {
+            format.udp_profile_imu = profile.value();
+        } else {
+            throw std::invalid_argument{"Unexpected udp imu profile"};
+        }
+    } else {
+        format.udp_profile_imu = PROFILE_IMU_LEGACY;
+    }
+
+    return format;
+}
+
 sensor_info parse_legacy(const std::string& meta) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
@@ -555,8 +686,8 @@ sensor_info parse_legacy(const std::string& meta) {
     }
     sensor_info info{};
 
-    // info.name is deprecated - leave blank
-    info.name = "";
+    // info.name is deprecated, will be empty string if not present
+    info.name = root["hostname"].asString();
 
     info.sn = root["prod_sn"].asString();
     info.fw_rev = root["build_rev"].asString();
@@ -565,37 +696,7 @@ sensor_info parse_legacy(const std::string& meta) {
 
     // "data_format" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("data_format")) {
-        info.format.pixels_per_column =
-            root["data_format"]["pixels_per_column"].asInt();
-        info.format.columns_per_packet =
-            root["data_format"]["columns_per_packet"].asInt();
-        info.format.columns_per_frame =
-            root["data_format"]["columns_per_frame"].asInt();
-
-        if (root["data_format"]["pixel_shift_by_row"].size() !=
-            info.format.pixels_per_column) {
-            throw std::invalid_argument{
-                "Unexpected number of pixel_shift_by_row"};
-        }
-
-        for (const auto& v : root["data_format"]["pixel_shift_by_row"])
-            info.format.pixel_shift_by_row.push_back(v.asInt());
-
-        if (root["data_format"].isMember("column_window")) {
-            if (root["data_format"]["column_window"].size() != 2) {
-                throw std::invalid_argument{
-                    "Unexpected size of column_window tuple"};
-            }
-            info.format.column_window.first =
-                root["data_format"]["column_window"][0].asInt();
-            info.format.column_window.second =
-                root["data_format"]["column_window"][1].asInt();
-        } else {
-            std::cerr << "WARNING: No column window found." << std::endl;
-            info.format.column_window =
-                default_column_window(info.format.columns_per_frame);
-        }
-
+        info.format = parse_data_format(root["data_format"]);
     } else {
         std::cerr << "WARNING: No data_format found." << std::endl;
         info.format = default_data_format(info.mode);
@@ -662,6 +763,11 @@ sensor_info parse_legacy(const std::string& meta) {
 
     info.extrinsic = mat4d::Identity();
 
+    // default to 0 if keys are not present
+    info.initialization_id = root["initialization_id"].asInt();
+    info.udp_port_lidar = root["udp_port_lidar"].asInt();
+    info.udp_port_imu = root["udp_port_imu"].asInt();
+
     return info;
 }
 
@@ -691,11 +797,13 @@ std::string convert_to_legacy(const std::string& metadata) {
 
     if (root.isMember("config_param")) {
         result["lidar_mode"] = root["config_param"]["lidar_mode"];
+        result["udp_port_lidar"] = root["config_param"]["udp_port_lidar"];
+        result["udp_port_imu"] = root["config_param"]["udp_port_imu"];
     }
     if (root.isMember("client_version")) {
         result["client_version"] = root["client_version"];
-    };
-    result["json_calibration_version"] = FW_2_0;
+    }
+    result["json_calibration_version"] = FW_2_2;
 
     result["hostname"] = "";
 
@@ -774,6 +882,11 @@ std::string to_string(const sensor_info& info) {
     root["data_format"]["column_window"].append(
         info.format.column_window.second);
 
+    root["data_format"]["udp_profile_lidar"] =
+        to_string(info.format.udp_profile_lidar);
+    root["data_format"]["udp_profile_imu"] =
+        to_string(info.format.udp_profile_imu);
+
     root["lidar_origin_to_beam_origin_mm"] =
         info.lidar_origin_to_beam_origin_mm;
 
@@ -794,6 +907,10 @@ std::string to_string(const sensor_info& info) {
                 info.lidar_to_sensor_transform(i, j));
         }
     }
+
+    root["initialization_id"] = Json::UInt64(info.initialization_id);
+    root["udp_port_lidar"] = info.udp_port_lidar;
+    root["udp_port_imu"] = info.udp_port_imu;
 
     root["json_calibration_version"] = FW_2_0;
 
@@ -894,6 +1011,18 @@ std::string to_string(const sensor_config& config) {
 
     if (config.phase_lock_offset) {
         root["phase_lock_offset"] = config.phase_lock_offset.value();
+    }
+
+    if (config.columns_per_packet) {
+        root["columns_per_packet"] = config.columns_per_packet.value();
+    }
+
+    if (config.udp_profile_lidar) {
+        root["udp_profile_lidar"] = to_string(config.udp_profile_lidar.value());
+    }
+
+    if (config.udp_profile_imu) {
+        root["udp_profile_imu"] = to_string(config.udp_profile_imu.value());
     }
 
     Json::StreamWriterBuilder builder;

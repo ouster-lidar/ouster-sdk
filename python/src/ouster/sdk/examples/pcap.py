@@ -227,8 +227,7 @@ def pcap_to_pcd(source: client.PacketSource,
         pcd_path = os.path.join(pcd_dir, f'{pcd_base}_{idx:06d}.{pcd_ext}')
         print(f'write frame #{idx} to file: {pcd_path}')
 
-        with open(pcd_path, 'a') as pcd_file:
-            o3d.io.write_point_cloud(pcd_path, pcd)
+        o3d.io.write_point_cloud(pcd_path, pcd)
 
 
 def pcap_to_csv(source: client.PacketSource,

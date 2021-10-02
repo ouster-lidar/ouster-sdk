@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1.0)
 
 # ==== Project Name ====
 project(ouster_client VERSION 0.3.0)
-set(ouster_client_VERSION_SUFFIX "dev0")
+set(ouster_client_VERSION_SUFFIX ".dev1")
 
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)

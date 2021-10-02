@@ -43,7 +43,9 @@ testing::Values(
   "2_0_0_os1-991913000010-64",
   "2_1_2_os1-991913000010-64_legacy",
   "2_1_2_os1-991913000010-64",
-  "ouster-studio-reduced-config-v1"
+  "ouster-studio-reduced-config-v1",
+  "2_2_os-992119000444-128_legacy",
+  "2_2_os-992119000444-128"
 ));
 // clang-format on
 
@@ -87,6 +89,7 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     EXPECT_EQ(si.lidar_to_sensor_transform,
               si_expected.lidar_to_sensor_transform);
     EXPECT_EQ(si.extrinsic, si_expected.extrinsic);
+    EXPECT_EQ(si.initialization_id, si_expected.initialization_id);
 }
 
 int main(int argc, char** argv) {

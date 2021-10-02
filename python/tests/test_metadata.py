@@ -6,7 +6,6 @@ import numpy
 import pytest
 
 from ouster import client
-import ouster.client._digest as digest
 
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
@@ -75,7 +74,7 @@ def metadata():
 
 def test_read_info(metadata: client.SensorInfo) -> None:
     """Check the particular values in the test data."""
-    assert metadata.hostname == "" # hostname is deprecated
+    assert metadata.hostname == "os-992011000121"
     assert metadata.sn == "992011000121"
     assert metadata.fw_rev == "v1.14.0-beta.13"
     assert metadata.mode == client.LidarMode.MODE_512x10
@@ -83,15 +82,21 @@ def test_read_info(metadata: client.SensorInfo) -> None:
     assert metadata.format.columns_per_frame == 512
     assert metadata.format.columns_per_packet == 16
     assert metadata.format.column_window[0] == 0
-    assert metadata.format.column_window[1] == metadata.format.columns_per_frame - 1
+    assert metadata.format.column_window[
+        1] == metadata.format.columns_per_frame - 1
     assert len(metadata.format.pixel_shift_by_row) == 32
     assert metadata.format.pixels_per_column == 32
     assert len(metadata.beam_azimuth_angles) == 32
     assert len(metadata.beam_altitude_angles) == 32
+    assert metadata.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
+    assert metadata.format.udp_profile_imu == client.UDPProfileIMU.PROFILE_IMU_LEGACY
     assert metadata.imu_to_sensor_transform.shape == (4, 4)
     assert metadata.lidar_to_sensor_transform.shape == (4, 4)
     assert metadata.lidar_origin_to_beam_origin_mm == 15.806
     assert numpy.array_equal(metadata.extrinsic, numpy.identity(4))
+    assert metadata.initialization_id == 0
+    assert metadata.udp_port_lidar == 0
+    assert metadata.udp_port_imu == 0
 
 
 def test_write_info(metadata: client.SensorInfo) -> None:
@@ -106,12 +111,17 @@ def test_write_info(metadata: client.SensorInfo) -> None:
     metadata.format.pixels_per_column = 0
     metadata.format.column_window = (0, 0)
     metadata.format.pixel_shift_by_row = []
+    metadata.format.udp_profile_lidar = client.UDPProfileLidar(0)
+    metadata.format.udp_profile_imu = client.UDPProfileIMU(0)
     metadata.beam_azimuth_angles = []
     metadata.beam_altitude_angles = []
     metadata.imu_to_sensor_transform = numpy.zeros((4, 4))
     metadata.lidar_to_sensor_transform = numpy.zeros((4, 4))
     metadata.extrinsic = numpy.zeros((4, 4))
     metadata.lidar_origin_to_beam_origin_mm = 0.0
+    metadata.initialization_id = 0
+    metadata.udp_port_lidar = 0
+    metadata.udp_port_imu = 0
 
     assert metadata == client.SensorInfo()
 

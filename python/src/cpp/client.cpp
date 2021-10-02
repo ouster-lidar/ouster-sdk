@@ -434,7 +434,9 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("columns_per_packet", &data_format::columns_per_packet)
         .def_readwrite("columns_per_frame", &data_format::columns_per_frame)
         .def_readwrite("pixel_shift_by_row", &data_format::pixel_shift_by_row)
-        .def_readwrite("column_window", &data_format::column_window);
+        .def_readwrite("column_window", &data_format::column_window)
+        .def_readwrite("udp_profile_lidar", &data_format::udp_profile_lidar)
+        .def_readwrite("udp_profile_imu", &data_format::udp_profile_imu);
 
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
@@ -460,6 +462,9 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("lidar_to_sensor_transform", &sensor_info::lidar_to_sensor_transform, "Homogeneous transformation matrix from Lidar Coordinate Frame to Sensor Coordinate Frame.")
         .def_readwrite("lidar_origin_to_beam_origin_mm", &sensor_info::lidar_origin_to_beam_origin_mm, "Distance between lidar origin and beam origin in millimeters.")
         .def_readwrite("extrinsic", &sensor_info::extrinsic, "Extrinsic Matrix.")
+        .def_readwrite("initialization_id", &sensor_info::initialization_id, "Initialization id.")
+        .def_readwrite("udp_port_lidar", &sensor_info::udp_port_lidar, "Configured port for lidar data.")
+        .def_readwrite("udp_port_imu", &sensor_info::udp_port_imu, "Configured port for imu data.")
         .def_static("from_default", &sensor::default_sensor_info, R"(
         Create gen-1 OS-1-64 metadata populated with design values.
         )")
@@ -622,6 +627,32 @@ PYBIND11_PLUGIN(_client) {
                                                 py::name("__str__"),
                                                 py::is_method(ChanField));
 
+    // UDPProfileLidar
+    auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass())
+        .value("PROFILE_LIDAR_LEGACY", sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY)
+        .def_property_readonly_static("__members__", [](py::object) {
+            return std::map<std::string, sensor::UDPProfileLidar>{
+                { "PROFILE_LIDAR_LEGACY", sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY },
+            };
+        })
+        .def_static("from_string", &sensor::udp_profile_lidar_of_string);
+    UDPProfileLidar.attr("__str__") = py::cpp_function([](const sensor::UDPProfileLidar &u) { return to_string(u); },
+                                                       py::name("__str__"),
+                                                       py::is_method(UDPProfileLidar));
+
+    // UDPProfileIMU
+    auto UDPProfileIMU = py::enum_<sensor::UDPProfileIMU>(m, "UDPProfileIMU", "UDP imu profile.", py::metaclass())
+        .value("PROFILE_IMU_LEGACY", sensor::UDPProfileIMU::PROFILE_IMU_LEGACY)
+        .def_property_readonly_static("__members__", [](py::object) {
+            return std::map<std::string, sensor::UDPProfileIMU>{
+                { "PROFILE_IMU_LEGACY", sensor::UDPProfileIMU::PROFILE_IMU_LEGACY },
+            };
+        })
+        .def_static("from_string", &sensor::udp_profile_lidar_of_string);
+    UDPProfileIMU.attr("__str__") = py::cpp_function([](const sensor::UDPProfileIMU &u) { return to_string(u); },
+                                                     py::name("__str__"),
+                                                     py::is_method(UDPProfileIMU));
+
     // Sensor Config
     py::class_<sensor_config>(m, "SensorConfig", R"(
         Corresponds to sensor config parameters. Please see sensor documentation for the meaning of each property.
@@ -654,6 +685,9 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("sync_pulse_out_frequency", &sensor_config::sync_pulse_out_frequency, "SYNC_PULSE_OUT rate. See sensor documentation for details.")
         .def_readwrite("phase_lock_enable", &sensor_config::phase_lock_enable, "Enable phase lock. See sensor documentation for more details.")
         .def_readwrite("phase_lock_offset", &sensor_config::phase_lock_offset, "Angle in Lidar Coordinate Frame that sensors are locked to, in millidegrees. See sensor documentation for details.")
+        .def_readwrite("columns_per_packet", &sensor_config::columns_per_packet, "Measurement blocks per UDP packet. See sensor documentation for details.")
+        .def_readwrite("udp_profile_lidar", &sensor_config::udp_profile_lidar, "UDP packet format for lidar data. See sensor documentation for details.")
+        .def_readwrite("udp_profile_imu", &sensor_config::udp_profile_imu, "UDP packet format for imu data. See sensor documentation for details.")
         .def("__str__", [](const sensor_config& i) { return to_string(i); })
         .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; });
