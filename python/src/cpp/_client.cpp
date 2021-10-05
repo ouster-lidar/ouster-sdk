@@ -16,29 +16,23 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <iostream>
-#include <memory>
-#include <mutex>
+#include <map>
 #include <stdexcept>
 #include <string>
-#include <thread>
-#include <type_traits>
 #include <utility>
 
+#include "ouster/buffered_udp_source.h"
 #include "ouster/image_processing.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
-using fsec = std::chrono::duration<float>;
 namespace py = pybind11;
 
 using ouster::sensor::data_format;
 using ouster::sensor::packet_format;
 using ouster::sensor::sensor_config;
 using ouster::sensor::sensor_info;
+using ouster::sensor::impl::BufferedUDPSource;
 using namespace ouster;
 
 namespace pybind11 {
@@ -49,10 +43,86 @@ struct type_caster<nonstd::optional<T>> : optional_caster<nonstd::optional<T>> {
 }  // namespace detail
 }  // namespace pybind11
 
-/*
- * Extra bit flag compatible with client_state used to signal buffer overflow.
- */
-constexpr int CLIENT_OVERFLOW = 0x10;
+template <typename K, typename V, size_t N>
+using Table = std::array<std::pair<K, V>, N>;
+
+namespace ouster {
+namespace sensor {
+namespace impl {
+
+extern const Table<lidar_mode, const char*, 6> lidar_mode_strings;
+extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings;
+extern const Table<OperatingMode, const char*, 2> operating_mode_strings;
+extern const Table<MultipurposeIOMode, const char*, 6>
+    multipurpose_io_mode_strings;
+extern const Table<Polarity, const char*, 2> polarity_strings;
+extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
+extern Table<ChanField, const char*, 4> chanfield_strings;
+extern Table<UDPProfileLidar, const char*, 1> udp_profile_lidar_strings;
+extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
+
+}  // namespace impl
+}  // namespace sensor
+}  // namespace ouster
+
+template <typename C, typename E, size_t N>
+void def_enum(C& Enum, const Table<E, const char*, N>& strings_table,
+              const std::string& enum_prefix = "") {
+    // module imports
+    py::object MappingProxy =
+        py::module::import("types").attr("MappingProxyType");
+
+    // in pybind11 2.0, calling value(const char* name, val) doesn't make a
+    // copy of the name argument. When value names aren't statically allocated,
+    // we have to keep them alive via a capsule
+    auto enumerator_names = new std::vector<std::string>{};
+    Enum.attr("_enumerator_names") =
+        py::capsule(enumerator_names, [](PyObject* ptr) {
+            if (!ptr) return;
+            auto vp = static_cast<std::vector<std::string>*>(
+                PyCapsule_GetPointer(ptr, nullptr));
+            delete vp;
+        });
+
+    for (const auto& p : strings_table) {
+        enumerator_names->push_back(enum_prefix + p.second);
+        Enum.value(enumerator_names->back().c_str(), p.first);
+    }
+
+    // use immutable MappingProxy to return members dict
+    std::map<std::string, E> members;
+    for (const auto& p : strings_table) members[p.second] = p.first;
+    py::object py_members = MappingProxy(members);
+    Enum.def_property_readonly_static(
+        "__members__", [=](py::object) { return py_members; },
+        "Returns a mapping of member name->value.");
+
+    // return all values as immutable sequence
+    std::vector<E> values;
+    for (const auto& p : strings_table) values.push_back(p.first);
+    py::object py_values = py::tuple(py::cast(values));
+    Enum.def_property_readonly_static(
+        "values", [=](py::object) { return py_values; },
+        "Returns an immutable sequence of all enum members.");
+
+    // support name / value properties like regular enums
+    Enum.def_property_readonly(
+        "value", [](const E& self) { return static_cast<int>(self); },
+        "The value of the Enum member.");
+    Enum.def_property_readonly(
+        "name", [](const E& self) { return to_string(self); },
+        "The name of the Enum member.");
+    Enum.attr("__str__") =
+        py::cpp_function([](const E& u) { return to_string(u); },
+                         py::name("__str__"), py::is_method(Enum));
+
+    Enum.def_static(
+        "from_string",
+        [=](const std::string& s) {
+            return members.count(s) > 0 ? py::cast(members.at(s)) : py::none();
+        },
+        "Create enum value from string.");
+}
 
 /*
  * Check that buffer is a 1-d byte array of size > bound and return an internal
@@ -71,237 +141,6 @@ inline uint8_t* getptr(size_t bound, py::buffer& buf) {
     return (uint8_t*)info.ptr;
 }
 
-// 32K max packet size, shoould be big enough for 128
-constexpr size_t packet_size = 32768;
-
-/*
- * Wrapper around the lower level C++ API. Must be thread-safe to allow reading
- * data without holding the GIL while other references to the client exist.
- * Provides a large single-producer / single-consumer circular buffer that can
- * be populated by a thread without holding the GIL to deal the relatively small
- * default OS buffer size and high sensor UDP data rate.
- *
- * Locks are not held during the actual buffer reads and writes: thread safety
- * w.r.t the producer relies on the invariants that only the consumer modifies
- * the read index and only the producer modifies the write index, always while
- * holding cv_mtx_ to make sure that cv notifications are not lost between
- * checking the empty/full condition and entering the waiting state.
- */
-struct PyClient {
-    // native client handle
-    std::mutex cli_mtx_;
-    std::shared_ptr<ouster::sensor::client> cli_;
-
-    // protect read/write_ind_ and stop_
-    std::mutex cv_mtx_;
-    std::condition_variable cv_;
-    size_t read_ind_{0}, write_ind_{0};
-
-    // flag for other threads to signal producer to shut down
-    bool stop_{false};
-
-    // internal packet buffer
-    size_t capacity_{0};
-    using entry = std::pair<sensor::client_state, std::unique_ptr<uint8_t[]>>;
-    std::vector<entry> bufs_;
-
-    /*
-     * Initialize the internal circular buffer.
-     *
-     * NOTE: capacity_ is the capacity of the internal buffer vector, not the
-     * max number of buffered packets (which is one less).
-     */
-    explicit PyClient(size_t buf_size) : capacity_{buf_size + 1} {
-        std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
-            return std::make_pair(
-                sensor::CLIENT_ERROR,
-                std::unique_ptr<uint8_t[]>{new uint8_t[packet_size]});
-        });
-    }
-
-    PyClient(const std::string& hostname, int lidar_port, int imu_port,
-             size_t buf_size)
-        : PyClient(buf_size) {
-        cli_ = sensor::init_client(hostname, lidar_port, imu_port);
-        if (!cli_) throw std::runtime_error("Failed to initialize client");
-    }
-
-    PyClient(const std::string& hostname, const std::string& udp_dest_host,
-             sensor::lidar_mode mode, sensor::timestamp_mode ts_mode,
-             int lidar_port, int imu_port, int timeout_sec, size_t buf_size)
-        : PyClient(buf_size) {
-        cli_ = sensor::init_client(hostname, udp_dest_host, mode, ts_mode,
-                                   lidar_port, imu_port, timeout_sec);
-        if (!cli_) throw std::runtime_error("Failed to initialize client");
-    }
-
-    /*
-     * Fetch metadata using the native client handle.
-     */
-    std::string get_metadata(int timeout_sec, bool legacy_format) {
-        std::lock_guard<std::mutex> cli_lock{cli_mtx_};
-        if (!cli_)
-            throw std::runtime_error("Client has already been shut down");
-        return sensor::get_metadata(*cli_, timeout_sec, legacy_format);
-    }
-
-    /*
-     * Signal the producer to exit. Subsequent calls to consume() will return
-     * CLIENT_EXIT instead of blocking. Multiple calls to shutdown() are not an
-     * error.
-     *
-     * Invariant: nothing can access cli_ when stop_ is true. Producer will
-     * release _cli_mtx_ only when it exits the loop.
-     */
-    void shutdown() {
-        {
-            std::unique_lock<std::mutex> lock{cv_mtx_};
-            if (stop_) return;
-            stop_ = true;
-        }
-        cv_.notify_all();
-
-        // close UDP sockets when any producer has exited
-        std::lock_guard<std::mutex> cli_lock{cli_mtx_};
-        cli_.reset();
-    }
-
-    /*
-     * Advance the read index to drop data. Drop all internally buffered data
-     * when n_packets = 0.
-     *
-     * Can only be called by the consumer (also while holding the GIL) to
-     * maintain the invariant that only the reader modifies the read index.
-     */
-    void flush(size_t n_packets) {
-        {
-            std::unique_lock<std::mutex> lock{cv_mtx_};
-            auto sz = (capacity_ + write_ind_ - read_ind_) % capacity_;
-            auto n = (n_packets == 0) ? sz : std::min(sz, n_packets);
-            read_ind_ = (capacity_ + read_ind_ + n) % capacity_;
-        }
-        cv_.notify_one();
-    }
-
-    /*
-     * Get current buffer size in no. packets.
-     */
-    size_t size() {
-        std::unique_lock<std::mutex> lock{cv_mtx_};
-        return (capacity_ + write_ind_ - read_ind_) % capacity_;
-    }
-
-    /*
-     * Get the maximum buffer size in no. packets.
-     *
-     * Note: one less than the size of the internal bufs_ vector
-     */
-    size_t capacity() { return (capacity_ - 1); }
-
-    /*
-     * Read next available buffer in the queue and advance the read index. Block
-     * if the queue is empty for up to `timeout_sec` (zero means wait forever).
-     *
-     * This must be called while holding the GIL to ensure that only a single
-     * consumer runs at a time.
-     */
-    sensor::client_state consume(py::buffer buf, float timeout_sec) {
-        // wait for producer to wake us up if the queue is empty
-        {
-            std::unique_lock<std::mutex> lock{cv_mtx_};
-            bool timeout = !cv_.wait_for(lock, fsec{timeout_sec}, [this] {
-                return stop_ || write_ind_ != read_ind_;
-            });
-            if (timeout)
-                return sensor::TIMEOUT;
-            else if (stop_)
-                return sensor::EXIT;
-        }
-
-        // read data into buffer
-        auto info = buf.request();
-        auto sz = std::min<size_t>(info.size, packet_size);
-        auto& e = bufs_[read_ind_];
-        std::memcpy(info.ptr, e.second.get(), sz);
-
-        // advance read ind and unblock producer, if necessary
-        {
-            std::unique_lock<std::mutex> lock{cv_mtx_};
-            read_ind_ = (read_ind_ + 1) % capacity_;
-        }
-        cv_.notify_one();
-        return e.first;
-    }
-
-    /*
-     * Release the GIL and write data from the network into the circular buffer
-     * until shutdown() is signaled by the reader.
-     *
-     * If reading from the network was blocked because the buffer was full, set
-     * the CLIENT_OVERFLOW flag on the status of the following packet.
-     *
-     * Hold the client mutex to protect client state and prevent multiple
-     * producers from running in parallel
-     */
-    sensor::client_state produce(const packet_format& pf) {
-        py::gil_scoped_release release;
-        std::lock_guard<std::mutex> cli_lock{cli_mtx_};
-
-        auto exit_mask =
-            sensor::client_state(sensor::CLIENT_ERROR | sensor::EXIT);
-        auto st = sensor::client_state(0);
-
-        while (!(st & exit_mask)) {
-            // Wait for consumer to wake us up if the queue is full
-            bool overflow = false;
-            {
-                std::unique_lock<std::mutex> lock{cv_mtx_};
-                while (!stop_ && (write_ind_ + 1) % capacity_ == read_ind_) {
-                    overflow = true;
-                    cv_.wait(lock);
-                }
-                if (stop_) return sensor::EXIT;
-            }
-
-            // Write data and status to circular buffer. EXIT and ERROR status
-            // are just passed through with stale data.
-            st = sensor::poll_client(*cli_);
-            if (st == sensor::TIMEOUT) continue;
-
-            auto& e = bufs_[write_ind_];
-            if (st & sensor::LIDAR_DATA) {
-                if (!sensor::read_lidar_packet(*cli_, e.second.get(), pf))
-                    st = sensor::client_state(st | sensor::CLIENT_ERROR);
-            } else if (st & sensor::IMU_DATA) {
-                if (!sensor::read_imu_packet(*cli_, e.second.get(), pf))
-                    st = sensor::client_state(st | sensor::CLIENT_ERROR);
-            }
-            if (overflow) st = sensor::client_state(st | CLIENT_OVERFLOW);
-            e.first = st;
-
-            // Advance write ind and wake up consumer, if blocked
-            {
-                std::unique_lock<std::mutex> lock{cv_mtx_};
-                write_ind_ = (write_ind_ + 1) % capacity_;
-            }
-            cv_.notify_one();
-        }
-
-        return st;
-    }
-};
-
-namespace ouster {
-namespace sensor {
-namespace impl {
-
-extern std::array<std::pair<sensor::ChanField, const char*>, 4>
-    chanfield_strings;
-
-}
-}  // namespace sensor
-}  // namespace ouster
-
 PYBIND11_PLUGIN(_client) {
     py::module m("_client", R"(
     Sensor client bindings generated by pybind11.
@@ -314,10 +153,6 @@ PYBIND11_PLUGIN(_client) {
     py::options options;
     options.disable_function_signatures();
 
-    // module imports
-    py::object MappingProxy =
-        py::module::import("types").attr("MappingProxyType");
-
     // clang-format off
 
     // Packet Format
@@ -329,25 +164,8 @@ PYBIND11_PLUGIN(_client) {
         .def_readonly("imu_packet_size", &packet_format::imu_packet_size)
         .def_readonly("columns_per_packet", &packet_format::columns_per_packet)
         .def_readonly("pixels_per_column", &packet_format::pixels_per_column)
-        .def_readonly("encoder_ticks_per_rev", &packet_format::encoder_ticks_per_rev)
 
         // Measurement block accessors
-        .def("col_timestamp", [](packet_format& pf, int col, py::buffer buf) {
-            return pf.col_timestamp(pf.nth_col(col, getptr(pf.lidar_packet_size, buf)));
-        })
-        .def("col_encoder", [](packet_format& pf, int col, py::buffer buf) {
-            return pf.col_encoder(pf.nth_col(col, getptr(pf.lidar_packet_size, buf)));
-        })
-        .def("col_measurement_id", [](packet_format& pf, int col, py::buffer buf) {
-            return pf.col_measurement_id(pf.nth_col(col, getptr(pf.lidar_packet_size, buf)));
-        })
-        .def("col_frame_id", [](packet_format& pf, int col, py::buffer buf) {
-            return pf.col_frame_id(pf.nth_col(col, getptr(pf.lidar_packet_size, buf)));
-        })
-        .def("col_status", [](packet_format& pf, int col, py::buffer buf) {
-            return pf.col_status(pf.nth_col(col, getptr(pf.lidar_packet_size, buf)));
-        })
-
         .def("packet_frame_id", [](packet_format& pf, py::buffer buf) {
             return pf.frame_id(getptr(pf.lidar_packet_size, buf));
         })
@@ -440,7 +258,9 @@ PYBIND11_PLUGIN(_client) {
 
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
-        Sensor metadata required to interpret UDP data streams. Please see sensor documentation for the meaning of each property.
+        Sensor metadata required to interpret UDP data streams.
+
+        See the sensor documentation for the meaning of each property.
         )")
         .def(py::init<>(), R"(
         Args:
@@ -476,182 +296,63 @@ PYBIND11_PLUGIN(_client) {
         .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; });
 
 
-    // Lidar Mode
-    auto lidar_mode = py::enum_<sensor::lidar_mode>(m, "LidarMode", "Possible Lidar Modes of sensor, corresponding to horizontal and vertical resolution rates of sensor. See sensor documentation for details.", py::metaclass())
-        .value("MODE_UNSPEC", sensor::lidar_mode::MODE_UNSPEC)
-        .value("MODE_512x10", sensor::lidar_mode::MODE_512x10)
-        .value("MODE_512x20", sensor::lidar_mode::MODE_512x20)
-        .value("MODE_1024x10", sensor::lidar_mode::MODE_1024x10)
-        .value("MODE_1024x20", sensor::lidar_mode::MODE_1024x20)
-        .value("MODE_2048x10", sensor::lidar_mode::MODE_2048x10)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::lidar_mode>{
-                { "MODE_UNSPEC", sensor::lidar_mode::MODE_UNSPEC },
-                { "MODE_512x10", sensor::lidar_mode::MODE_512x10 },
-                { "MODE_512x20", sensor::lidar_mode::MODE_512x20 },
-                { "MODE_1024x10", sensor::lidar_mode::MODE_1024x10 },
-                { "MODE_1024x20", sensor::lidar_mode::MODE_1024x20 },
-                { "MODE_2048x10", sensor::lidar_mode::MODE_2048x10 },
-            };
-        })
-        .def_property_readonly("cols", [](const sensor::lidar_mode& self) {
-            return sensor::n_cols_of_lidar_mode(self); }, "Returns columns of lidar mode, e.g., 1024 for LidarMode 1024x10.")
-        .def_property_readonly("frequency", [](const sensor::lidar_mode& self) {
-            return sensor::frequency_of_lidar_mode(self); }, "Returns frequency of lidar mode, e.g. 10 for LidarMode 512x10.")
-        .def_static("from_string", &sensor::lidar_mode_of_string, "Create LidarMode from string.");
-    // workaround for https://github.com/pybind/pybind11/issues/2537
-    lidar_mode.attr("__str__") = py::cpp_function([](const sensor::lidar_mode& u) { return to_string(u); },
-                                                py::name("__str__"),
-                                                py::is_method(lidar_mode), "Returns string representation of lidar mode.");
+    // Enums
+    auto lidar_mode = py::enum_<sensor::lidar_mode>(m, "LidarMode", R"(
+        Possible Lidar Modes of sensor.
 
-    // Timestamp Mode
-    auto timestamp_mode = py::enum_<sensor::timestamp_mode>(m, "TimestampMode", "Possible Timestamp modes of sensor. See sensor documentation for details.", py::metaclass())
-        .value("TIME_FROM_UNSPEC", sensor::timestamp_mode::TIME_FROM_UNSPEC)
-        .value("TIME_FROM_INTERNAL_OSC", sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC)
-        .value("TIME_FROM_SYNC_PULSE_IN", sensor::timestamp_mode::TIME_FROM_SYNC_PULSE_IN)
-        .value("TIME_FROM_PTP_1588", sensor::timestamp_mode::TIME_FROM_PTP_1588)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::timestamp_mode>{
-                { "TIME_FROM_UNSPEC", sensor::timestamp_mode::TIME_FROM_UNSPEC },
-                { "TIME_FROM_INTERNAL_OSC", sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC },
-                { "TIME_FROM_SYNC_PULSE_IN", sensor::timestamp_mode::TIME_FROM_SYNC_PULSE_IN },
-                { "TIME_FROM_PTP_1588", sensor::timestamp_mode::TIME_FROM_PTP_1588 },
-            };
-        })
-        .def_static("from_string", &sensor::timestamp_mode_of_string);
-    // workaround for https://github.com/pybind/pybind11/issues/2537
-    timestamp_mode.attr("__str__") = py::cpp_function([](const sensor::timestamp_mode& u) { return to_string(u); },
-                                                py::name("__str__"),
-                                                py::is_method(timestamp_mode));
+        Determines to horizontal and vertical resolution rates of sensor. See
+        sensor documentation for details.)", py::metaclass());
+    def_enum(lidar_mode, sensor::impl::lidar_mode_strings, "MODE_");
+    lidar_mode.def_property_readonly("cols", [](const sensor::lidar_mode& self) {
+        return sensor::n_cols_of_lidar_mode(self); },
+        "Returns columns of lidar mode, e.g., 1024 for LidarMode 1024x10.");
+    lidar_mode.def_property_readonly("frequency", [](const sensor::lidar_mode& self) {
+        return sensor::frequency_of_lidar_mode(self); },
+        "Returns frequency of lidar mode, e.g. 10 for LidarMode 512x10.");
+    // TODO: this is wacky
+    lidar_mode.value("MODE_UNSPEC", sensor::lidar_mode::MODE_UNSPEC);
+    lidar_mode.attr("from_string") = py::cpp_function([](const std::string& s) {
+        return sensor::lidar_mode_of_string(s); }, py::name("from_string"), "Create LidarMode from string.");
 
-    // Operating Mode
-    auto OperatingMode = py::enum_<sensor::OperatingMode>(m, "OperatingMode", "Possible Operating modes of sensor. See sensor documentation for details.", py::metaclass())
-        .value("OPERATING_NORMAL", sensor::OperatingMode::OPERATING_NORMAL)
-        .value("OPERATING_STANDBY", sensor::OperatingMode::OPERATING_STANDBY)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::OperatingMode>{
-                { "OPERATING_NORMAL", sensor::OperatingMode::OPERATING_NORMAL },
-                { "OPERATING_STANDBY", sensor::OperatingMode::OPERATING_STANDBY },
-            };
-        })
-        .def_static("from_string", &sensor::operating_mode_of_string);
-    // workaround for https://github.com/pybind/pybind11/issues/2537
-    OperatingMode.attr("__str__") = py::cpp_function([](const sensor::OperatingMode &u) { return to_string(u); },
-                                                py::name("__str__"),
-                                                py::is_method(OperatingMode));
+    auto timestamp_mode = py::enum_<sensor::timestamp_mode>(m, "TimestampMode", R"(
+        Possible Timestamp modes of sensor.
 
-    // Multipurpose IO Mode
-    auto MultipurposeIOMode = py::enum_<sensor::MultipurposeIOMode>(m, "MultipurposeIOMode", "Mode of MULTIPURPOSE_IO pin. See sensor documentation for details.", py::metaclass())
-        .value("MULTIPURPOSE_OFF", sensor::MultipurposeIOMode::MULTIPURPOSE_OFF)
-        .value("MULTIPURPOSE_INPUT_NMEA_UART", sensor::MultipurposeIOMode::MULTIPURPOSE_INPUT_NMEA_UART)
-        .value("MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC)
-        .value("MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN)
-        .value("MULTIPURPOSE_OUTPUT_FROM_PTP_1588", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_PTP_1588)
-        .value("MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::MultipurposeIOMode>{
-                { "MULTIPURPOSE_OFF", sensor::MultipurposeIOMode::MULTIPURPOSE_OFF },
-                { "MULTIPURPOSE_INPUT_NMEA_UART", sensor::MultipurposeIOMode::MULTIPURPOSE_INPUT_NMEA_UART },
+        See sensor documentation for details.)", py::metaclass());
+    def_enum(timestamp_mode, sensor::impl::timestamp_mode_strings);
+    timestamp_mode.value("TIME_FROM_UNSPEC", sensor::timestamp_mode::TIME_FROM_UNSPEC);
+    timestamp_mode.attr("from_string") = py::cpp_function([](const std::string& s) {
+        return sensor::timestamp_mode_of_string(s); }, py::name("from_string"), "Create TimestampMode from string.");
 
-                { "MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC },
-                { "MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN },
-                { "MULTIPURPOSE_OUTPUT_FROM_PTP_1588", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_PTP_1588 },
-                { "MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE", sensor::MultipurposeIOMode::MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE },
-            };
-        })
-        .def_static("from_string", &sensor::multipurpose_io_mode_of_string);
-    // workaround for https://github.com/pybind/pybind11/issues/2537
-    MultipurposeIOMode.attr("__str__") = py::cpp_function([](const sensor::MultipurposeIOMode &u) { return to_string(u); },
-                                                py::name("__str__"),
-                                                py::is_method(MultipurposeIOMode));
+    auto OperatingMode = py::enum_<sensor::OperatingMode>(m, "OperatingMode", R"(
+        Possible Operating modes of sensor.
 
-    // Polarity
-    auto Polarity = py::enum_<sensor::Polarity>(m, "Polarity", "Pulse Polarity. Applicable to several Polarity settings on sensor.", py::metaclass())
-        .value("POLARITY_ACTIVE_LOW", sensor::Polarity::POLARITY_ACTIVE_LOW)
-        .value("POLARITY_ACTIVE_HIGH", sensor::Polarity::POLARITY_ACTIVE_HIGH)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::Polarity>{
-                { "POLARITY_ACTIVE_LOW", sensor::Polarity::POLARITY_ACTIVE_LOW },
-                { "POLARITY_ACTIVE_HIGH", sensor::Polarity::POLARITY_ACTIVE_HIGH },
-            };
-        })
-        .def_static("from_string", &sensor::polarity_of_string);
-    // workaround for https://github.com/pybind/pybind11/issues/2537
-    Polarity.attr("__str__") = py::cpp_function([](const sensor::Polarity &u) { return to_string(u); },
-                                                py::name("__str__"),
-                                                py::is_method(Polarity));
+        See sensor documentation for details.)", py::metaclass());
+    def_enum(OperatingMode, sensor::impl::operating_mode_strings, "OPERATING_");
 
-    // NMEABaudRate
-    auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate", "Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.", py::metaclass())
-        .value("BAUD_9600", sensor::NMEABaudRate::BAUD_9600)
-        .value("BAUD_115200", sensor::NMEABaudRate::BAUD_115200)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::NMEABaudRate>{
-                { "BAUD_9600", sensor::NMEABaudRate::BAUD_9600 },
-                { "BAUD_115200", sensor::NMEABaudRate::BAUD_115200 },
-            };
-        })
-        .def_static("from_string", &sensor::nmea_baud_rate_of_string);
-    // workaround for https://github.com/pybind/pybind11/issues/2537
-    NMEABaudRate.attr("__str__") = py::cpp_function([](const sensor::NMEABaudRate &u) { return to_string(u); }, 
-                                                py::name("__str__"),
-                                                py::is_method(NMEABaudRate));
+    auto MultipurposeIOMode = py::enum_<sensor::MultipurposeIOMode>(m, "MultipurposeIOMode", R"(
+        Mode of MULTIPURPOSE_IO pin.
 
-    // ChanField
+        See sensor documentation for details.)", py::metaclass());
+    def_enum(MultipurposeIOMode, sensor::impl::multipurpose_io_mode_strings, "MULTIPURPOSE_");
+
+    auto Polarity = py::enum_<sensor::Polarity>(m, "Polarity", R"(
+        Pulse Polarity.
+
+        Applicable to several Polarity settings on sensor.)", py::metaclass());
+    def_enum(Polarity, sensor::impl::polarity_strings, "POLARITY_");
+
+    auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate", R"(
+        Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.)", py::metaclass());
+    def_enum(NMEABaudRate, sensor::impl::nmea_baud_rate_strings);
+
     auto ChanField = py::enum_<sensor::ChanField>(m, "ChanField", "Channel data block fields.", py::metaclass());
-    for (const auto& p: sensor::impl::chanfield_strings)
-        ChanField.value(p.second, p.first);
+    def_enum(ChanField, sensor::impl::chanfield_strings);
 
-    // use immutable MappingProxy to return members dict
-    std::map<const char*, sensor::ChanField> chanfield_members;
-    for (const auto& p : sensor::impl::chanfield_strings)
-        chanfield_members[p.second] = p.first;
-    py::object py_chanfield_members = MappingProxy(chanfield_members);
-    ChanField.def_property_readonly_static("__members__", [=](py::object) { return py_chanfield_members; },
-                                           "Returns a mapping of member name->value.");
+    auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass());
+    def_enum(UDPProfileLidar, sensor::impl::udp_profile_lidar_strings, "PROFILE_LIDAR_");
 
-    // return all values as immutable sequence
-    std::vector<sensor::ChanField> chanfield_values;
-    for (const auto& p : sensor::impl::chanfield_strings)
-        chanfield_values.push_back(p.first);
-    py::object py_chanfield_values = py::tuple(py::cast(chanfield_values));
-    ChanField.def_property_readonly_static("values", [=](py::object) { return py_chanfield_values; },
-                                           "Returns an immutable sequence of all enum members.");
-
-    // support name / value properties like regular enums
-    ChanField.def_property_readonly("value", [](sensor::ChanField self) { return static_cast<int>(self); },
-                                    "The value of the Enum member.");
-    ChanField.def_property_readonly("name", [](sensor::ChanField self) { return to_string(self); },
-                                    "The name of the Enum member.");
-    ChanField.attr("__str__") = py::cpp_function([](const sensor::ChanField& u) { return to_string(u); },
-                                                py::name("__str__"),
-                                                py::is_method(ChanField));
-
-    // UDPProfileLidar
-    auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass())
-        .value("PROFILE_LIDAR_LEGACY", sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::UDPProfileLidar>{
-                { "PROFILE_LIDAR_LEGACY", sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY },
-            };
-        })
-        .def_static("from_string", &sensor::udp_profile_lidar_of_string);
-    UDPProfileLidar.attr("__str__") = py::cpp_function([](const sensor::UDPProfileLidar &u) { return to_string(u); },
-                                                       py::name("__str__"),
-                                                       py::is_method(UDPProfileLidar));
-
-    // UDPProfileIMU
-    auto UDPProfileIMU = py::enum_<sensor::UDPProfileIMU>(m, "UDPProfileIMU", "UDP imu profile.", py::metaclass())
-        .value("PROFILE_IMU_LEGACY", sensor::UDPProfileIMU::PROFILE_IMU_LEGACY)
-        .def_property_readonly_static("__members__", [](py::object) {
-            return std::map<std::string, sensor::UDPProfileIMU>{
-                { "PROFILE_IMU_LEGACY", sensor::UDPProfileIMU::PROFILE_IMU_LEGACY },
-            };
-        })
-        .def_static("from_string", &sensor::udp_profile_lidar_of_string);
-    UDPProfileIMU.attr("__str__") = py::cpp_function([](const sensor::UDPProfileIMU &u) { return to_string(u); },
-                                                     py::name("__str__"),
-                                                     py::is_method(UDPProfileIMU));
+    auto UDPProfileIMU = py::enum_<sensor::UDPProfileIMU>(m, "UDPProfileIMU", "UDP imu profile.", py::metaclass());
+    def_enum(UDPProfileIMU, sensor::impl::udp_profile_imu_strings, "PROFILE_IMU_");
 
     // Sensor Config
     py::class_<sensor_config>(m, "SensorConfig", R"(
@@ -693,19 +394,24 @@ PYBIND11_PLUGIN(_client) {
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; });
 
     m.def("set_config", [] (const std::string& hostname, const sensor_config& config, bool persist,  bool udp_dest_auto) {
-            uint8_t config_flags = 0;
-            if (persist) config_flags |= ouster::sensor::CONFIG_PERSIST;
-            if (udp_dest_auto) config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
-            if(!sensor::set_config(hostname, config, config_flags)) { throw std::runtime_error("Error setting sensor config."); }
-            }, R"(
-            Set sensor config parameters on sensor.
+        uint8_t config_flags = 0;
+        if (persist) config_flags |= ouster::sensor::CONFIG_PERSIST;
+        if (udp_dest_auto) config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
+        if (!sensor::set_config(hostname, config, config_flags)) {
+            throw std::runtime_error("Error setting sensor config.");
+        }
+    }, R"(
+        Set sensor config parameters on sensor.
 
-            Args:
-                hostname (str): hostname of the sensor
-                config (SensorConfig): config to set sensor parameters to
-                persist (bool): persist parameters after sensor disconnection (default = False)
-                udp_dest_auto: automatically determine sender's IP at the time command was sent and set it as destination of UDP traffic. Function will error out if config has udp_dest member. (default = False)
-            )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
+        Args:
+            hostname (str): hostname of the sensor
+            config (SensorConfig): config to set sensor parameters to
+            persist (bool): persist parameters after sensor disconnection (default = False)
+            udp_dest_auto: automatically determine sender's IP at the time command was sent
+                and set it as destination of UDP traffic. Function will error out if config has
+                udp_dest member. (default = False)
+        )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
+
     m.def("get_config", [](const std::string& hostname, bool active) {
         sensor::sensor_config config;
         if (!sensor::get_config(hostname, config, active)) {
@@ -715,7 +421,7 @@ PYBIND11_PLUGIN(_client) {
     }, R"(
         Returns sensor config parameters as SensorConfig.
 
-        Args: 
+        Args:
             hostname (str): hostname of the sensor
             active (bool): return active or staged sensor configuration
         )", py::arg("hostname"), py::arg("active") = true);
@@ -746,9 +452,10 @@ PYBIND11_PLUGIN(_client) {
         .value("IMU_DATA", sensor::client_state::IMU_DATA)
         .value("EXIT", sensor::client_state::EXIT)
         // TODO: revisit including in C++ API
-        .value("OVERFLOW", sensor::client_state(CLIENT_OVERFLOW));
+        .value("OVERFLOW",
+               sensor::client_state(BufferedUDPSource::CLIENT_OVERFLOW));
 
-    py::class_<PyClient>(m, "Client")
+    py::class_<BufferedUDPSource>(m, "Client")
         .def(py::init<std::string, int, int, size_t>(),
              py::arg("hostname") = "", py::arg("lidar_port") = 7502,
              py::arg("imu_port") = 7503, py::arg("capacity") = 128)
@@ -760,14 +467,23 @@ PYBIND11_PLUGIN(_client) {
                  sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
              py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
              py::arg("timeout_sec") = 30, py::arg("capacity") = 128)
-        .def("get_metadata", &PyClient::get_metadata,
+        .def("get_metadata", &BufferedUDPSource::get_metadata,
              py::arg("timeout_sec") = 60, py::arg("legacy") = true)
-        .def("shutdown", &PyClient::shutdown)
-        .def("consume", &PyClient::consume)
-        .def("produce", &PyClient::produce)
-        .def("flush", &PyClient::flush, py::arg("n_packets") = 0)
-        .def_property_readonly("capacity", &PyClient::capacity)
-        .def_property_readonly("size", &PyClient::size);
+        .def("shutdown", &BufferedUDPSource::shutdown)
+        .def("consume",
+             [](BufferedUDPSource& self, py::buffer buf, float timeout_sec) {
+                 auto info = buf.request();
+                 return self.consume(static_cast<uint8_t*>(info.ptr), info.size,
+                                     timeout_sec);
+             })
+        .def("produce",
+             [](BufferedUDPSource& self, const packet_format& pf) {
+                 py::gil_scoped_release release;
+                 self.produce(pf);
+             })
+        .def("flush", &BufferedUDPSource::flush, py::arg("n_packets") = 0)
+        .def_property_readonly("capacity", &BufferedUDPSource::capacity)
+        .def_property_readonly("size", &BufferedUDPSource::size);
 
     // Scans
     py::class_<LidarScan>(m, "LidarScan", py::metaclass(), R"(
@@ -853,22 +569,26 @@ PYBIND11_PLUGIN(_client) {
                 auto ind = py::int_(o).cast<int>();
                 switch (ind) {
                     case 0:
-                        return py::array(py::dtype::of<uint64_t>(), static_cast<size_t>(self.w),
+                        return py::array(py::dtype::of<uint64_t>(),
+                                         static_cast<size_t>(self.w),
                                          self.timestamp().data(),
                                          py::cast(self));
                     case 1:
                         // encoder values are deprecated and not included in the
                         // updated C++ LidarScan API. Access old values instead
-                        return py::array(py::dtype::of<uint32_t>(), {static_cast<size_t>(self.w)},
+                        return py::array(py::dtype::of<uint32_t>(),
+                                         {static_cast<size_t>(self.w)},
                                          {sizeof(LidarScan::BlockHeader)},
                                          &self.headers.at(0).encoder,
                                          py::cast(self));
                     case 2:
-                        return py::array(py::dtype::of<uint16_t>(), static_cast<size_t>(self.w),
+                        return py::array(py::dtype::of<uint16_t>(),
+                                         static_cast<size_t>(self.w),
                                          self.measurement_id().data(),
                                          py::cast(self));
                     case 3:
-                        return py::array(py::dtype::of<uint32_t>(), static_cast<size_t>(self.w),
+                        return py::array(py::dtype::of<uint32_t>(),
+                                         static_cast<size_t>(self.w),
                                          self.status().data(), py::cast(self));
                     default:
                         throw std::invalid_argument(

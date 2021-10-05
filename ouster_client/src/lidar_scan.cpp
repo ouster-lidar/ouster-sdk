@@ -238,13 +238,13 @@ Table<sensor::ChanField, sensor::ChanFieldType, 4> legacy_field_slots{
 // TODO: scan batching doesn't currently zero out missing fields kinda relying
 // on headers being zeroed here, but that doesn't work when reusing scans
 LidarScan::LidarScan(size_t w, size_t h)
-    : w{static_cast<std::ptrdiff_t>(w)},
+    : timestamp_{Header<uint64_t>::Zero(w)},
+      measurement_id_{Header<uint16_t>::Zero(w)},
+      status_{Header<uint32_t>::Zero(w)},
+      field_types_{legacy_field_slots.begin(), legacy_field_slots.end()},
+      w{static_cast<std::ptrdiff_t>(w)},
       h{static_cast<std::ptrdiff_t>(h)},
-      headers{w, BlockHeader{ts_t{0}, 0, 0}},
-      timestamp_{header_t<uint64_t>::Zero(w)},
-      measurement_id_{header_t<uint16_t>::Zero(w)},
-      status_{header_t<uint32_t>::Zero(w)},
-      field_types_{legacy_field_slots.begin(), legacy_field_slots.end()} {
+      headers{w, BlockHeader{ts_t{0}, 0, 0}} {
     for (const auto& ft : legacy_field_slots) {
         fields_[ft.first] = FieldSlot{ft.second, w, h};
     }
@@ -299,25 +299,25 @@ LidarScan::FieldIter LidarScan::begin() const { return field_types_.cbegin(); }
 
 LidarScan::FieldIter LidarScan::end() const { return field_types_.cend(); }
 
-Eigen::Ref<LidarScan::header_t<uint64_t>> LidarScan::timestamp() {
+Eigen::Ref<LidarScan::Header<uint64_t>> LidarScan::timestamp() {
     return timestamp_;
 }
-Eigen::Ref<const LidarScan::header_t<uint64_t>> LidarScan::timestamp() const {
+Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::timestamp() const {
     return timestamp_;
 }
 
-Eigen::Ref<LidarScan::header_t<uint16_t>> LidarScan::measurement_id() {
+Eigen::Ref<LidarScan::Header<uint16_t>> LidarScan::measurement_id() {
     return measurement_id_;
 }
-Eigen::Ref<const LidarScan::header_t<uint16_t>> LidarScan::measurement_id()
+Eigen::Ref<const LidarScan::Header<uint16_t>> LidarScan::measurement_id()
     const {
     return measurement_id_;
 }
 
-Eigen::Ref<LidarScan::header_t<uint32_t>> LidarScan::status() {
+Eigen::Ref<LidarScan::Header<uint32_t>> LidarScan::status() {
     return status_;
 }
-Eigen::Ref<const LidarScan::header_t<uint32_t>> LidarScan::status() const {
+Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
     return status_;
 }
 

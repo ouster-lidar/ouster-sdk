@@ -25,7 +25,8 @@ target_include_directories(ouster_build INTERFACE
 add_dependencies(ouster_build generate_build_header)
 
 # ==== Libraries ====
-add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp src/image_processing.cpp)
+add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp
+  src/image_processing.cpp src/buffered_udp_source.cpp)
 target_link_libraries(ouster_client
   PUBLIC Eigen3::Eigen $<BUILD_INTERFACE:ouster_build>
   PRIVATE jsoncpp_lib)

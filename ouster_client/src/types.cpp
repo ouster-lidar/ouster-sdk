@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -28,25 +29,28 @@ namespace sensor {
 
 namespace impl {
 
-const std::array<std::pair<lidar_mode, std::string>, 5> lidar_mode_strings = {
-    {{MODE_512x10, "512x10"},
+template <typename K, typename V, size_t N>
+using Table = std::array<std::pair<K, V>, N>;
+
+extern const Table<lidar_mode, const char*, 6> lidar_mode_strings{
+    {{MODE_UNSPEC, "UNKNOWN"},
+     {MODE_512x10, "512x10"},
      {MODE_512x20, "512x20"},
      {MODE_1024x10, "1024x10"},
      {MODE_1024x20, "1024x20"},
      {MODE_2048x10, "2048x10"}}};
 
-const std::array<std::pair<timestamp_mode, std::string>, 3>
-    timestamp_mode_strings = {
-        {{TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
-         {TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
-         {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
+extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings{
+    {{TIME_FROM_UNSPEC, "UNKNOWN"},
+     {TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
+     {TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
+     {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
 
-const std::array<std::pair<OperatingMode, std::string>, 2>
-    operating_mode_strings = {
-        {{OPERATING_NORMAL, "NORMAL"}, {OPERATING_STANDBY, "STANDBY"}}};
+extern const Table<OperatingMode, const char*, 2> operating_mode_strings{
+    {{OPERATING_NORMAL, "NORMAL"}, {OPERATING_STANDBY, "STANDBY"}}};
 
-const std::array<std::pair<MultipurposeIOMode, std::string>, 6>
-    multipurpose_io_mode_strings = {
+extern const Table<MultipurposeIOMode, const char*, 6>
+    multipurpose_io_mode_strings{
         {{MULTIPURPOSE_OFF, "OFF"},
          {MULTIPURPOSE_INPUT_NMEA_UART, "INPUT_NMEA_UART"},
          {MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC, "OUTPUT_FROM_INTERNAL_OSC"},
@@ -55,32 +59,31 @@ const std::array<std::pair<MultipurposeIOMode, std::string>, 6>
          {MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE,
           "OUTPUT_FROM_ENCODER_ANGLE"}}};
 
-const std::array<std::pair<Polarity, std::string>, 2> polarity_strings = {
+extern const Table<Polarity, const char*, 2> polarity_strings{
     {{POLARITY_ACTIVE_LOW, "ACTIVE_LOW"},
      {POLARITY_ACTIVE_HIGH, "ACTIVE_HIGH"}}};
 
-const std::array<std::pair<NMEABaudRate, std::string>, 2>
-    nmea_baud_rate_strings = {
-        {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
+extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
+    {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-std::array<std::pair<sensor::ChanField, const char*>, 4> chanfield_strings{{
+Table<sensor::ChanField, const char*, 4> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::SIGNAL, "SIGNAL"},
     {ChanField::NEAR_IR, "NEAR_IR"},
     {ChanField::REFLECTIVITY, "REFLECTIVITY"},
 }};
 
-std::array<std::pair<UDPProfileLidar, std::string>, 32>
-    udp_profile_lidar_strings = {{
-        {PROFILE_LIDAR_LEGACY, "LEGACY"},
-    }};
+Table<UDPProfileLidar, const char*, 1> udp_profile_lidar_strings{{
+    {PROFILE_LIDAR_LEGACY, "LEGACY"},
+}};
 
-std::array<std::pair<UDPProfileIMU, std::string>, 32> udp_profile_imu_strings =
-    {{
-        {PROFILE_IMU_LEGACY, "LEGACY"},
-    }};
+Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
+    {PROFILE_IMU_LEGACY, "LEGACY"},
+}};
 
 }  // namespace impl
+
+/* Equality operators */
 
 bool operator==(const data_format& lhs, const data_format& rhs) {
     return (lhs.pixels_per_column == rhs.pixels_per_column &&
@@ -141,6 +144,8 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs) {
     return !(lhs == rhs);
 }
+
+/* Default values */
 
 static ColumnWindow default_column_window(uint32_t columns_per_frame) {
     return {0, columns_per_frame - 1};
@@ -211,46 +216,37 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                0};
 }
 
-const packet_format& get_format(const sensor_info& info) {
-    static const packet_format packet_1_13{64};
-    static const packet_format packet_2_0_16{16};
-    static const packet_format packet_2_0_32{32};
-    static const packet_format packet_2_0_64{64};
-    static const packet_format packet_2_0_128{128};
+extern const std::vector<double> gen1_altitude_angles = {
+    16.611,  16.084,  15.557,  15.029,  14.502,  13.975,  13.447,  12.920,
+    12.393,  11.865,  11.338,  10.811,  10.283,  9.756,   9.229,   8.701,
+    8.174,   7.646,   7.119,   6.592,   6.064,   5.537,   5.010,   4.482,
+    3.955,   3.428,   2.900,   2.373,   1.846,   1.318,   0.791,   0.264,
+    -0.264,  -0.791,  -1.318,  -1.846,  -2.373,  -2.900,  -3.428,  -3.955,
+    -4.482,  -5.010,  -5.537,  -6.064,  -6.592,  -7.119,  -7.646,  -8.174,
+    -8.701,  -9.229,  -9.756,  -10.283, -10.811, -11.338, -11.865, -12.393,
+    -12.920, -13.447, -13.975, -14.502, -15.029, -15.557, -16.084, -16.611,
+};
 
-    switch (info.format.pixels_per_column) {
-        case 16:
-            return packet_2_0_16;
-        case 32:
-            return packet_2_0_32;
-        case 64:
-            return packet_2_0_64;
-        case 128:
-            return packet_2_0_128;
-        default:
-            return packet_1_13;
-    }
-}
+extern const std::vector<double> gen1_azimuth_angles = {
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+};
 
-std::string to_string(lidar_mode mode) {
-    auto end = impl::lidar_mode_strings.end();
-    auto res = std::find_if(impl::lidar_mode_strings.begin(), end,
-                            [&](const std::pair<lidar_mode, std::string>& p) {
-                                return p.first == mode;
-                            });
+extern const mat4d default_imu_to_sensor_transform =
+    (mat4d() << 1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1)
+        .finished();
 
-    return res == end ? "UNKNOWN" : res->second;
-}
+extern const mat4d default_lidar_to_sensor_transform =
+    (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
+        .finished();
 
-lidar_mode lidar_mode_of_string(const std::string& s) {
-    auto end = impl::lidar_mode_strings.end();
-    auto res = std::find_if(impl::lidar_mode_strings.begin(), end,
-                            [&](const std::pair<lidar_mode, std::string>& p) {
-                                return p.second == s;
-                            });
-
-    return res == end ? lidar_mode(0) : res->first;
-}
+/* Misc operations */
 
 uint32_t n_cols_of_lidar_mode(lidar_mode mode) {
     switch (mode) {
@@ -281,111 +277,89 @@ int frequency_of_lidar_mode(lidar_mode mode) {
     }
 }
 
-std::string to_string(timestamp_mode mode) {
-    auto end = impl::timestamp_mode_strings.end();
-    auto res =
-        std::find_if(impl::timestamp_mode_strings.begin(), end,
-                     [&](const std::pair<timestamp_mode, std::string>& p) {
-                         return p.first == mode;
-                     });
+std::string client_version() {
+    return std::string("ouster_client ").append(ouster::CLIENT_VERSION);
+}
 
-    return res == end ? "UNKNOWN" : res->second;
+/* String conversion */
+
+template <typename K, typename V, size_t N>
+static optional<V> lookup(const impl::Table<K, V, N> table, const K& k) {
+    auto end = table.end();
+    auto res = std::find_if(table.begin(), end, [&](const std::pair<K, V>& p) {
+        return p.first == k;
+    });
+
+    return res == end ? nullopt : make_optional<V>(res->second);
+}
+
+template <typename K, size_t N>
+static optional<K> rlookup(const impl::Table<K, const char*, N> table,
+                           const char* v) {
+    auto end = table.end();
+    auto res = std::find_if(table.begin(), end,
+                            [&](const std::pair<K, const char*>& p) {
+                                return std::strcmp(p.second, v) == 0;
+                            });
+
+    return res == end ? nullopt : make_optional<K>(res->first);
+}
+
+std::string to_string(lidar_mode mode) {
+    auto res = lookup(impl::lidar_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
+}
+
+lidar_mode lidar_mode_of_string(const std::string& s) {
+    auto res = rlookup(impl::lidar_mode_strings, s.c_str());
+    return res ? res.value() : lidar_mode::MODE_UNSPEC;
+}
+
+std::string to_string(timestamp_mode mode) {
+    auto res = lookup(impl::timestamp_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
 }
 
 timestamp_mode timestamp_mode_of_string(const std::string& s) {
-    auto end = impl::timestamp_mode_strings.end();
-    auto res =
-        std::find_if(impl::timestamp_mode_strings.begin(), end,
-                     [&](const std::pair<timestamp_mode, std::string>& p) {
-                         return p.second == s;
-                     });
-
-    return res == end ? timestamp_mode(0) : res->first;
+    auto res = rlookup(impl::timestamp_mode_strings, s.c_str());
+    return res ? res.value() : timestamp_mode::TIME_FROM_UNSPEC;
 }
 
 std::string to_string(OperatingMode mode) {
-    auto end = impl::operating_mode_strings.end();
-    auto res =
-        std::find_if(impl::operating_mode_strings.begin(), end,
-                     [&](const std::pair<OperatingMode, std::string>& p) {
-                         return p.first == mode;
-                     });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::operating_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<OperatingMode> operating_mode_of_string(const std::string& s) {
-    auto end = impl::operating_mode_strings.end();
-    auto res =
-        std::find_if(impl::operating_mode_strings.begin(), end,
-                     [&](const std::pair<OperatingMode, std::string>& p) {
-                         return p.second == s;
-                     });
-
-    return res == end ? nullopt : make_optional<OperatingMode>(res->first);
+    return rlookup(impl::operating_mode_strings, s.c_str());
 }
 
 std::string to_string(MultipurposeIOMode mode) {
-    auto end = impl::multipurpose_io_mode_strings.end();
-    auto res =
-        std::find_if(impl::multipurpose_io_mode_strings.begin(), end,
-                     [&](const std::pair<MultipurposeIOMode, std::string>& p) {
-                         return p.first == mode;
-                     });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::multipurpose_io_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
     const std::string& s) {
-    auto end = impl::multipurpose_io_mode_strings.end();
-    auto res =
-        std::find_if(impl::multipurpose_io_mode_strings.begin(), end,
-                     [&](const std::pair<MultipurposeIOMode, std::string>& p) {
-                         return p.second == s;
-                     });
-
-    return res == end ? nullopt : make_optional<MultipurposeIOMode>(res->first);
+    return rlookup(impl::multipurpose_io_mode_strings, s.c_str());
 }
 
 std::string to_string(Polarity polarity) {
-    auto end = impl::polarity_strings.end();
-    auto res = std::find_if(impl::polarity_strings.begin(), end,
-                            [&](const std::pair<Polarity, std::string>& p) {
-                                return p.first == polarity;
-                            });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::polarity_strings, polarity);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<Polarity> polarity_of_string(const std::string& s) {
-    auto end = impl::polarity_strings.end();
-    auto res = std::find_if(impl::polarity_strings.begin(), end,
-                            [&](const std::pair<Polarity, std::string>& p) {
-                                return p.second == s;
-                            });
-
-    return res == end ? nullopt : make_optional<Polarity>(res->first);
+    return rlookup(impl::polarity_strings, s.c_str());
 }
 
 std::string to_string(NMEABaudRate rate) {
-    auto end = impl::nmea_baud_rate_strings.end();
-    auto res = std::find_if(impl::nmea_baud_rate_strings.begin(), end,
-                            [&](const std::pair<NMEABaudRate, std::string>& p) {
-                                return p.first == rate;
-                            });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::nmea_baud_rate_strings, rate);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s) {
-    auto end = impl::nmea_baud_rate_strings.end();
-    auto res = std::find_if(impl::nmea_baud_rate_strings.begin(), end,
-                            [&](const std::pair<NMEABaudRate, std::string>& p) {
-                                return p.second == s;
-                            });
-
-    return res == end ? nullopt : make_optional<NMEABaudRate>(res->first);
+    return rlookup(impl::nmea_baud_rate_strings, s.c_str());
 }
 
 std::string to_string(AzimuthWindow azimuth_window) {
@@ -395,56 +369,29 @@ std::string to_string(AzimuthWindow azimuth_window) {
 }
 
 std::string to_string(ChanField field) {
-    auto end = impl::chanfield_strings.end();
-    auto res = std::find_if(impl::chanfield_strings.begin(), end,
-                            [&](const std::pair<ChanField, std::string>& p) {
-                                return p.first == field;
-                            });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::chanfield_strings, field);
+    return res ? res.value() : "UNKNOWN";
 }
 
 std::string to_string(UDPProfileLidar profile) {
-    auto end = impl::udp_profile_lidar_strings.end();
-    auto res =
-        std::find_if(impl::udp_profile_lidar_strings.begin(), end,
-                     [&](const std::pair<UDPProfileLidar, std::string>& p) {
-                         return p.first == profile;
-                     });
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::udp_profile_lidar_strings, profile);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s) {
-    auto end = impl::udp_profile_lidar_strings.end();
-    auto res =
-        std::find_if(impl::udp_profile_lidar_strings.begin(), end,
-                     [&](const std::pair<UDPProfileLidar, std::string>& p) {
-                         return p.second == s;
-                     });
-    return res == end ? nullopt : make_optional<UDPProfileLidar>(res->first);
+    return rlookup(impl::udp_profile_lidar_strings, s.c_str());
 }
 
 std::string to_string(UDPProfileIMU profile) {
-    auto end = impl::udp_profile_imu_strings.end();
-    auto res =
-        std::find_if(impl::udp_profile_imu_strings.begin(), end,
-                     [&](const std::pair<UDPProfileIMU, std::string>& p) {
-                         return p.first == profile;
-                     });
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::udp_profile_imu_strings, profile);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s) {
-    auto end = impl::udp_profile_imu_strings.end();
-    auto res =
-        std::find_if(impl::udp_profile_imu_strings.begin(), end,
-                     [&](const std::pair<UDPProfileIMU, std::string>& p) {
-                         return p.second == s;
-                     });
-    return res == end ? nullopt : make_optional<UDPProfileIMU>(res->first);
+    return rlookup(impl::udp_profile_imu_strings, s.c_str());
 }
 
-sensor_config parse_config(const Json::Value& root) {
+static sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
     if (!root["udp_dest"].empty())
@@ -581,11 +528,12 @@ sensor_config parse_config(const std::string& config) {
     return parse_config(root);
 }
 
-bool valid_response(const Json::Value& root, const std::string& tcp_request) {
+static bool valid_response(const Json::Value& root,
+                           const std::string& tcp_request) {
     return (root.isMember(tcp_request) && root[tcp_request].isObject());
 }
 
-bool is_new_format(const std::string& metadata) {
+static bool is_new_format(const std::string& metadata) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
@@ -618,7 +566,7 @@ bool is_new_format(const std::string& metadata) {
     return true;
 }
 
-data_format parse_data_format(const Json::Value& root) {
+static data_format parse_data_format(const Json::Value& root) {
     data_format format;
 
     format.pixels_per_column = root["pixels_per_column"].asInt();
@@ -674,7 +622,7 @@ data_format parse_data_format(const Json::Value& root) {
     return format;
 }
 
-sensor_info parse_legacy(const std::string& meta) {
+static sensor_info parse_legacy(const std::string& meta) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
@@ -771,7 +719,7 @@ sensor_info parse_legacy(const std::string& meta) {
     return info;
 }
 
-void update_json_obj(Json::Value& dst, const Json::Value& src) {
+static void update_json_obj(Json::Value& dst, const Json::Value& src) {
     const std::vector<std::string>& members = src.getMemberNames();
     for (const auto& key : members) {
         dst[key] = src[key];
@@ -1032,44 +980,14 @@ std::string to_string(const sensor_config& config) {
     return Json::writeString(builder, root);
 }
 
-std::string client_version() {
-    return std::string("ouster_client ").append(ouster::CLIENT_VERSION);
-}
+/* Packet parsing */
 
-std::ostream& operator<<(std::ostream& os, const sensor_config& config) {
-    os << to_string(config);
-    return os;
-}
-
-extern const std::vector<double> gen1_altitude_angles = {
-    16.611,  16.084,  15.557,  15.029,  14.502,  13.975,  13.447,  12.920,
-    12.393,  11.865,  11.338,  10.811,  10.283,  9.756,   9.229,   8.701,
-    8.174,   7.646,   7.119,   6.592,   6.064,   5.537,   5.010,   4.482,
-    3.955,   3.428,   2.900,   2.373,   1.846,   1.318,   0.791,   0.264,
-    -0.264,  -0.791,  -1.318,  -1.846,  -2.373,  -2.900,  -3.428,  -3.955,
-    -4.482,  -5.010,  -5.537,  -6.064,  -6.592,  -7.119,  -7.646,  -8.174,
-    -8.701,  -9.229,  -9.756,  -10.283, -10.811, -11.338, -11.865, -12.393,
-    -12.920, -13.447, -13.975, -14.502, -15.029, -15.557, -16.084, -16.611,
+struct packet_format::FieldInfo {
+    ChanFieldType ty_tag;
+    size_t offset;
+    uint64_t mask;
+    int shift;
 };
-
-extern const std::vector<double> gen1_azimuth_angles = {
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-};
-
-extern const mat4d default_imu_to_sensor_transform =
-    (mat4d() << 1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1)
-        .finished();
-
-extern const mat4d default_lidar_to_sensor_transform =
-    (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
-        .finished();
 
 namespace impl {
 
@@ -1086,23 +1004,13 @@ constexpr int packet_bytes(int n_pixels) {
     return cols_per_packet * column_bytes(n_pixels);
 }
 
-}  // namespace impl
-
-struct packet_format::FieldInfo {
-    ChanFieldType ty_tag;
-    size_t offset;
-    uint64_t mask;
-    int shift;
-};
-
-template <typename K, typename V, size_t N>
-using Table = std::array<std::pair<K, V>, N>;
-
 Table<ChanField, packet_format::FieldInfo, 4> legacy_field_info{
-    {{RANGE, {UINT32, 0, 0x000fffff, 0}},
-     {SIGNAL, {UINT16, 6, 0, 0}},
-     {NEAR_IR, {UINT16, 8, 0, 0}},
-     {REFLECTIVITY, {UINT16, 4, 0, 0}}}};
+    {{ChanField::RANGE, {UINT32, 0, 0x000fffff, 0}},
+     {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
+     {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
+     {ChanField::REFLECTIVITY, {UINT16, 4, 0, 0}}}};
+
+}  // namespace impl
 
 packet_format::packet_format(int pixels_per_column)
     : lidar_packet_size(impl::packet_bytes(pixels_per_column)),
@@ -1111,7 +1019,7 @@ packet_format::packet_format(int pixels_per_column)
       pixels_per_column(pixels_per_column),
       encoder_ticks_per_rev(impl::encoder_ticks_per_rev),
       fields{std::make_shared<std::map<ChanField, packet_format::FieldInfo>>(
-          legacy_field_info.begin(), legacy_field_info.end())} {}
+          impl::legacy_field_info.begin(), impl::legacy_field_info.end())} {}
 
 template <size_t SRC_SIZE, typename T>
 static void col_field_impl(const uint8_t* col_buf, T* dst, size_t offset,
@@ -1306,6 +1214,27 @@ float packet_format::imu_av_z(const uint8_t* imu_buf) const {
     float res;
     std::memcpy(&res, imu_buf + 44, sizeof(float));
     return res;
+}
+
+const packet_format& get_format(const sensor_info& info) {
+    static const packet_format packet_1_13{64};
+    static const packet_format packet_2_0_16{16};
+    static const packet_format packet_2_0_32{32};
+    static const packet_format packet_2_0_64{64};
+    static const packet_format packet_2_0_128{128};
+
+    switch (info.format.pixels_per_column) {
+        case 16:
+            return packet_2_0_16;
+        case 32:
+            return packet_2_0_32;
+        case 64:
+            return packet_2_0_64;
+        case 128:
+            return packet_2_0_128;
+        default:
+            return packet_1_13;
+    }
 }
 
 }  // namespace sensor

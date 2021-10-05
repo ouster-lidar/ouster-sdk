@@ -33,16 +33,16 @@ class LidarScan {
    public:
     [[deprecated]] static constexpr int N_FIELDS = 4;
 
-    using raw_t = uint32_t;
-    using ts_t = std::chrono::nanoseconds;
+    using raw_t [[deprecated]] = uint32_t;
+    using ts_t [[deprecated]] = std::chrono::nanoseconds;
 
     template <typename T>
-    using header_t = Eigen::Array<T, Eigen::Dynamic, 1>;
+    using Header = Eigen::Array<T, Eigen::Dynamic, 1>;
 
     /** XYZ coordinates with dimensions arranged contiguously in columns */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
 
-    /** Old names provided for compatibility, see sensor::ChanField */
+    /* Old names provided for compatibility, see sensor::ChanField */
     using Field [[deprecated]] = sensor::ChanField;
     [[deprecated]] static constexpr Field RANGE = sensor::RANGE;
     [[deprecated]] static constexpr Field INTENSITY = sensor::SIGNAL;
@@ -50,29 +50,29 @@ class LidarScan {
     [[deprecated]] static constexpr Field REFLECTIVITY = sensor::REFLECTIVITY;
 
     /** Measurement block information, other than the channel data */
-    struct BlockHeader {
+    struct [[deprecated]] BlockHeader {
         ts_t timestamp;
         uint32_t encoder;
         uint32_t status;
     };
 
+   private:
+    struct FieldSlot;
+
+    Header<uint64_t> timestamp_;
+    Header<uint16_t> measurement_id_;
+    Header<uint32_t> status_;
+    std::map<sensor::ChanField, FieldSlot> fields_;
+    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
+        field_types_;
+
+   public:
     /* Members variables: use with caution, some of these will become private */
     std::ptrdiff_t w{0};
     std::ptrdiff_t h{0};
     std::vector<BlockHeader> headers{};
     int32_t frame_id{-1};
 
-    struct FieldSlot;
-
-   private:
-    header_t<uint64_t> timestamp_;
-    header_t<uint16_t> measurement_id_;
-    header_t<uint32_t> status_;
-    std::map<sensor::ChanField, FieldSlot> fields_;
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-        field_types_;
-
-   public:
     using FieldIter = decltype(field_types_)::const_iterator;
 
     /** The default constructor creates an invalid 0 x 0 scan */
@@ -115,7 +115,12 @@ class LidarScan {
     /**
      * Access a lidar data field.
      *
+     * The type parameter T must match the dynamic type of the field. See the
+     * constructor documentation for expected field types or query dynamically
+     * for generic operations.
+     *
      * @param f the field to view
+     * @throw std::invalid_argument if T does not match the runtime field type
      * @return a view of the field data
      */
     template <typename T = uint32_t,
@@ -146,30 +151,30 @@ class LidarScan {
      *
      * @return a view of timestamp as a w-element vector
      */
-    Eigen::Ref<header_t<uint64_t>> timestamp();
+    Eigen::Ref<Header<uint64_t>> timestamp();
 
     /** @copydoc timestamp() */
-    Eigen::Ref<const header_t<uint64_t>> timestamp() const;
+    Eigen::Ref<const Header<uint64_t>> timestamp() const;
 
     /**
      * Access the measurement id headers
      *
      * @return a view of measurement ids as a w-element vector
      */
-    Eigen::Ref<header_t<uint16_t>> measurement_id();
+    Eigen::Ref<Header<uint16_t>> measurement_id();
 
     /** @copydoc measurement_id() */
-    Eigen::Ref<const header_t<uint16_t>> measurement_id() const;
+    Eigen::Ref<const Header<uint16_t>> measurement_id() const;
 
     /**
      * Access the measurement status headers
      *
      * @return a view of measurement statuses as a w-element vector
      */
-    Eigen::Ref<header_t<uint32_t>> status();
+    Eigen::Ref<Header<uint32_t>> status();
 
     /** @copydoc status() */
-    Eigen::Ref<const header_t<uint32_t>> status() const;
+    Eigen::Ref<const Header<uint32_t>> status() const;
 
     friend bool operator==(const LidarScan& a, const LidarScan& b);
 };

@@ -47,7 +47,7 @@ class Client:
     def consume(self, buf: bytearray, timeout_sec: float) -> ClientState:
         ...
 
-    def produce(self, pf: PacketFormat) -> ClientState:
+    def produce(self, pf: PacketFormat) -> None:
         ...
 
     def flush(self, n_packets: int = ...) -> None:
@@ -167,25 +167,6 @@ class PacketFormat:
 
     @property
     def pixels_per_column(self) -> int:
-        ...
-
-    @property
-    def encoder_ticks_per_rev(self) -> int:
-        ...
-
-    def col_timestamp(self, col: int, buf: bytes) -> int:
-        ...
-
-    def col_encoder(self, col: int, buf: bytes) -> int:
-        ...
-
-    def col_measurement_id(self, col: int, buf: bytes) -> int:
-        ...
-
-    def col_frame_id(self, col: int, buf: bytes) -> int:
-        ...
-
-    def col_status(self, col: int, buf: bytes) -> int:
         ...
 
     def packet_frame_id(self, buf: BufferT) -> int:
