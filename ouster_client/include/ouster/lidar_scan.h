@@ -15,6 +15,8 @@
 
 namespace ouster {
 
+static constexpr int N_LIDAR_SCAN_FIELDS = 4;
+
 /**
  * Datastructure for efficient operations on aggregated lidar data.
  *
@@ -28,11 +30,9 @@ namespace ouster {
  */
 class LidarScan {
    public:
-    static constexpr int N_FIELDS = 4;
-
     using raw_t = uint32_t;
     using ts_t = std::chrono::nanoseconds;
-    using data_t = Eigen::Array<raw_t, Eigen::Dynamic, N_FIELDS>;
+    using data_t = Eigen::Array<raw_t, Eigen::Dynamic, N_LIDAR_SCAN_FIELDS>;
 
     using DynStride = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
 
@@ -68,7 +68,7 @@ class LidarScan {
     LidarScan(size_t w, size_t h)
         : w{static_cast<std::ptrdiff_t>(w)},
           h{static_cast<std::ptrdiff_t>(h)},
-          data{w * h, N_FIELDS},
+          data{w * h, N_LIDAR_SCAN_FIELDS},
           headers{w, BlockHeader{ts_t{0}, 0, 0}} {};
 
     /**
@@ -101,14 +101,14 @@ class LidarScan {
      */
     Eigen::Map<data_t, Eigen::Unaligned, DynStride> block(size_t m_id) {
         return Eigen::Map<data_t, Eigen::Unaligned, DynStride>(
-            data.row(m_id).data(), h, N_FIELDS, {w * h, w});
+            data.row(m_id).data(), h, N_LIDAR_SCAN_FIELDS, {w * h, w});
     }
 
     /** @copydoc block(size_t m_id) */
     Eigen::Map<const data_t, Eigen::Unaligned, DynStride> block(
         size_t m_id) const {
         return Eigen::Map<const data_t, Eigen::Unaligned, DynStride>(
-            data.row(m_id).data(), h, N_FIELDS, {w * h, w});
+            data.row(m_id).data(), h, N_LIDAR_SCAN_FIELDS, {w * h, w});
     }
 
     /**

@@ -6,8 +6,6 @@
 
 namespace ouster {
 
-constexpr int LidarScan::N_FIELDS;
-
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     double lidar_origin_to_beam_origin_mm,
                     const mat4d& transform,
@@ -102,7 +100,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
             // if not initializing with first packet
             if (ls_write.frame_id != -1) {
                 // zero out remaining missing columns
-                auto rows = h * LidarScan::N_FIELDS;
+                auto rows = h * N_LIDAR_SCAN_FIELDS;
                 row_view_t{ls_write.data.data(), rows, w}
                     .block(0, next_m_id, rows, w - next_m_id)
                     .setZero();
@@ -119,7 +117,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
 
         // zero out missing columns if we jumped forward
         if (m_id >= next_m_id) {
-            auto rows = h * LidarScan::N_FIELDS;
+            auto rows = h * N_LIDAR_SCAN_FIELDS;
             row_view_t{ls_write.data.data(), rows, w}
                 .block(0, next_m_id, rows, m_id - next_m_id)
                 .setZero();
