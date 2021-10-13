@@ -2,14 +2,11 @@
 
 #include <json/json.h>
 
-#include <Eigen/Dense>
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstring>
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -66,15 +63,19 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 4> chanfield_strings{{
+Table<sensor::ChanField, const char*, 7> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
+    {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
-    {ChanField::NEAR_IR, "NEAR_IR"},
+    {ChanField::SIGNAL2, "SIGNAL2"},
     {ChanField::REFLECTIVITY, "REFLECTIVITY"},
+    {ChanField::REFLECTIVITY2, "REFLECTIVITY2"},
+    {ChanField::NEAR_IR, "NEAR_IR"},
 }};
 
-Table<UDPProfileLidar, const char*, 1> udp_profile_lidar_strings{{
+Table<UDPProfileLidar, const char*, 2> udp_profile_lidar_strings{{
     {PROFILE_LIDAR_LEGACY, "LEGACY"},
+    {PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
 }};
 
 Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
@@ -726,6 +727,9 @@ static void update_json_obj(Json::Value& dst, const Json::Value& src) {
     }
 }
 
+/* version field required by ouster studio */
+enum configuration_version { FW_2_0 = 3, FW_2_2 = 4 };
+
 std::string convert_to_legacy(const std::string& metadata) {
     if (!is_new_format(metadata))
         throw std::invalid_argument(
@@ -860,7 +864,7 @@ std::string to_string(const sensor_info& info) {
     root["udp_port_lidar"] = info.udp_port_lidar;
     root["udp_port_imu"] = info.udp_port_imu;
 
-    root["json_calibration_version"] = FW_2_0;
+    root["json_calibration_version"] = FW_2_2;
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
@@ -978,263 +982,6 @@ std::string to_string(const sensor_config& config) {
     builder["precision"] = 6;
     builder["indentation"] = "    ";
     return Json::writeString(builder, root);
-}
-
-/* Packet parsing */
-
-struct packet_format::FieldInfo {
-    ChanFieldType ty_tag;
-    size_t offset;
-    uint64_t mask;
-    int shift;
-};
-
-namespace impl {
-
-constexpr int pixel_bytes = 12;
-constexpr int imu_packet_size = 48;
-constexpr int cols_per_packet = 16;
-constexpr int64_t encoder_ticks_per_rev = 90112;
-
-constexpr int column_bytes(int n_pixels) {
-    return 16 + (n_pixels * pixel_bytes) + 4;
-}
-
-constexpr int packet_bytes(int n_pixels) {
-    return cols_per_packet * column_bytes(n_pixels);
-}
-
-Table<ChanField, packet_format::FieldInfo, 4> legacy_field_info{
-    {{ChanField::RANGE, {UINT32, 0, 0x000fffff, 0}},
-     {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
-     {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
-     {ChanField::REFLECTIVITY, {UINT16, 4, 0, 0}}}};
-
-}  // namespace impl
-
-packet_format::packet_format(int pixels_per_column)
-    : lidar_packet_size(impl::packet_bytes(pixels_per_column)),
-      imu_packet_size(impl::imu_packet_size),
-      columns_per_packet(impl::cols_per_packet),
-      pixels_per_column(pixels_per_column),
-      encoder_ticks_per_rev(impl::encoder_ticks_per_rev),
-      fields{std::make_shared<std::map<ChanField, packet_format::FieldInfo>>(
-          impl::legacy_field_info.begin(), impl::legacy_field_info.end())} {}
-
-template <size_t SRC_SIZE, typename T>
-static void col_field_impl(const uint8_t* col_buf, T* dst, size_t offset,
-                           uint64_t mask, int shift, int pixels_per_column,
-                           int dst_stride) {
-    for (int px = 0; px < pixels_per_column; px++) {
-        auto px_src = col_buf + 16 + offset + (px * impl::pixel_bytes);
-        T* px_dst = dst + px * dst_stride;
-        *px_dst = 0;
-        std::memcpy(px_dst, px_src, SRC_SIZE);
-        if (mask) *px_dst &= mask;
-        if (shift) *px_dst <<= shift;
-    }
-}
-
-static size_t field_ty_size(ChanFieldType t) {
-    switch (t) {
-        case UINT8:
-            return 1;
-        case UINT16:
-            return 2;
-        case UINT32:
-            return 4;
-        case UINT64:
-            return 8;
-        default:
-            return 0;
-    }
-}
-
-template <typename T,
-          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
-void packet_format::col_field(const uint8_t* col_buf, ChanField i, T* dst,
-                              int dst_stride) const {
-    const auto& f = fields->at(i);
-
-    if (sizeof(T) < field_ty_size(f.ty_tag))
-        throw std::invalid_argument("Dest type too small for specified field");
-
-    switch (f.ty_tag) {
-        case UINT8:
-            col_field_impl<1, T>(col_buf, dst, f.offset, f.mask, f.shift,
-                                 pixels_per_column, dst_stride);
-            break;
-        case UINT16:
-            col_field_impl<2, T>(col_buf, dst, f.offset, f.mask, f.shift,
-                                 pixels_per_column, dst_stride);
-            break;
-        case UINT32:
-            col_field_impl<4, T>(col_buf, dst, f.offset, f.mask, f.shift,
-                                 pixels_per_column, dst_stride);
-            break;
-        case UINT64:
-            col_field_impl<8, T>(col_buf, dst, f.offset, f.mask, f.shift,
-                                 pixels_per_column, dst_stride);
-            break;
-        default:
-            throw std::invalid_argument("Invalid field for packet format");
-    }
-}
-
-ChanFieldType packet_format::field_type(ChanField f) const {
-    return fields->at(f).ty_tag;
-}
-
-// explicitly instantiate for each field type
-template void packet_format::col_field(const uint8_t*, ChanField, uint8_t*,
-                                       int) const;
-template void packet_format::col_field(const uint8_t*, ChanField, uint16_t*,
-                                       int) const;
-template void packet_format::col_field(const uint8_t*, ChanField, uint32_t*,
-                                       int) const;
-template void packet_format::col_field(const uint8_t*, ChanField, uint64_t*,
-                                       int) const;
-
-uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
-    return col_frame_id(nth_col(0, lidar_buf));
-}
-
-const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
-    return lidar_buf + (n * impl::column_bytes(pixels_per_column));
-}
-
-uint32_t packet_format::col_status(const uint8_t* col_buf) const {
-    uint32_t res;
-    std::memcpy(&res, col_buf + impl::column_bytes(pixels_per_column) - 4,
-                sizeof(uint32_t));
-    return res;
-}
-
-uint64_t packet_format::col_timestamp(const uint8_t* col_buf) const {
-    uint64_t res;
-    std::memcpy(&res, col_buf, sizeof(uint64_t));
-    return res;  // nanoseconds
-}
-
-uint32_t packet_format::col_encoder(const uint8_t* col_buf) const {
-    uint32_t res;
-    std::memcpy(&res, col_buf + 12, sizeof(uint32_t));
-    return res;
-}
-
-uint16_t packet_format::col_measurement_id(const uint8_t* col_buf) const {
-    uint16_t res;
-    std::memcpy(&res, col_buf + 8, sizeof(uint16_t));
-    return res;
-}
-
-uint16_t packet_format::col_frame_id(const uint8_t* col_buf) const {
-    uint16_t res;
-    std::memcpy(&res, col_buf + 10, sizeof(uint16_t));
-    return res;
-}
-
-const uint8_t* packet_format::nth_px(int n, const uint8_t* col_buf) const {
-    return col_buf + 16 + (n * impl::pixel_bytes);
-}
-
-uint32_t packet_format::px_range(const uint8_t* px_buf) const {
-    uint32_t res;
-    std::memcpy(&res, px_buf, sizeof(uint32_t));
-    return res & 0x000fffff;
-}
-
-uint16_t packet_format::px_reflectivity(const uint8_t* px_buf) const {
-    uint16_t res;
-    std::memcpy(&res, px_buf + 4, sizeof(uint16_t));
-    return res;
-}
-
-uint16_t packet_format::px_signal(const uint8_t* px_buf) const {
-    uint16_t res;
-    std::memcpy(&res, px_buf + 6, sizeof(uint16_t));
-    return res;
-}
-
-uint16_t packet_format::px_ambient(const uint8_t* px_buf) const {
-    uint16_t res;
-    std::memcpy(&res, px_buf + 8, sizeof(uint16_t));
-    return res;
-}
-
-uint64_t packet_format::imu_sys_ts(const uint8_t* imu_buf) const {
-    uint64_t res;
-    std::memcpy(&res, imu_buf, sizeof(uint64_t));
-    return res;
-}
-
-uint64_t packet_format::imu_accel_ts(const uint8_t* imu_buf) const {
-    uint64_t res;
-    std::memcpy(&res, imu_buf + 8, sizeof(uint64_t));
-    return res;
-}
-
-uint64_t packet_format::imu_gyro_ts(const uint8_t* imu_buf) const {
-    uint64_t res;
-    std::memcpy(&res, imu_buf + 16, sizeof(uint64_t));
-    return res;
-}
-
-float packet_format::imu_la_x(const uint8_t* imu_buf) const {
-    float res;
-    std::memcpy(&res, imu_buf + 24, sizeof(float));
-    return res;
-}
-
-float packet_format::imu_la_y(const uint8_t* imu_buf) const {
-    float res;
-    std::memcpy(&res, imu_buf + 28, sizeof(float));
-    return res;
-}
-
-float packet_format::imu_la_z(const uint8_t* imu_buf) const {
-    float res;
-    std::memcpy(&res, imu_buf + 32, sizeof(float));
-    return res;
-}
-
-float packet_format::imu_av_x(const uint8_t* imu_buf) const {
-    float res;
-    std::memcpy(&res, imu_buf + 36, sizeof(float));
-    return res;
-}
-
-float packet_format::imu_av_y(const uint8_t* imu_buf) const {
-    float res;
-    std::memcpy(&res, imu_buf + 40, sizeof(float));
-    return res;
-}
-
-float packet_format::imu_av_z(const uint8_t* imu_buf) const {
-    float res;
-    std::memcpy(&res, imu_buf + 44, sizeof(float));
-    return res;
-}
-
-const packet_format& get_format(const sensor_info& info) {
-    static const packet_format packet_1_13{64};
-    static const packet_format packet_2_0_16{16};
-    static const packet_format packet_2_0_32{32};
-    static const packet_format packet_2_0_64{64};
-    static const packet_format packet_2_0_128{128};
-
-    switch (info.format.pixels_per_column) {
-        case 16:
-            return packet_2_0_16;
-        case 32:
-            return packet_2_0_32;
-        case 64:
-            return packet_2_0_64;
-        case 128:
-            return packet_2_0_128;
-        default:
-            return packet_1_13;
-    }
 }
 
 }  // namespace sensor

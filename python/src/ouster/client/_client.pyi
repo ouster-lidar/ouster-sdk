@@ -11,8 +11,8 @@ Note:
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
 from numpy import ndarray
-from typing import (Callable, ClassVar, Dict, List, Optional, overload, Tuple,
-                    Union)
+from typing import (Callable, ClassVar, Dict, Iterator, List, Optional,
+                    overload, Tuple, Union)
 
 from . import (BufferT, ColHeader)
 
@@ -172,6 +172,10 @@ class PacketFormat:
     def packet_frame_id(self, buf: BufferT) -> int:
         ...
 
+    @property
+    def fields(self) -> Iterator[ChanField]:
+        ...
+
     def packet_field(self, field: ChanField, buf: BufferT) -> ndarray:
         ...
 
@@ -218,7 +222,8 @@ class LidarMode:
     MODE_512x10: ClassVar[LidarMode]
     MODE_512x20: ClassVar[LidarMode]
 
-    __members__: ClassVar[dict]
+    __members__: ClassVar[Dict[str, LidarMode]]
+    values: ClassVar[Iterator[LidarMode]]
 
     def __init__(self, code: int) -> None:
         ...
@@ -249,6 +254,14 @@ class LidarMode:
     def frequency(self) -> int:
         ...
 
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
     @classmethod
     def from_string(cls, s: str) -> LidarMode:
         ...
@@ -260,174 +273,8 @@ class TimestampMode:
     TIME_FROM_PTP_1588: ClassVar[TimestampMode]
     TIME_FROM_SYNC_PULSE_IN: ClassVar[TimestampMode]
 
-    __members__: ClassVar[dict]
-
-    def __init__(self, code: int) -> None:
-        ...
-
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
-    def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
-        ...
-
-    @classmethod
-    def from_string(cls, s: str) -> TimestampMode:
-        ...
-
-
-class OperatingMode:
-    OPERATING_NORMAL: ClassVar[OperatingMode]
-    OPERATING_STANDBY: ClassVar[OperatingMode]
-
-    __members__: ClassVar[dict]
-
-    def __init__(self, code: int) -> None:
-        ...
-
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
-    def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
-        ...
-
-    @classmethod
-    def from_string(cls, s: str) -> OperatingMode:
-        ...
-
-
-class MultipurposeIOMode:
-    MULTIPURPOSE_OFF: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_INPUT_NMEA_UART: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_PTP_1588: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE: ClassVar[MultipurposeIOMode]
-
-    __members__: ClassVar[dict]
-
-    def __init__(self, code: int) -> None:
-        ...
-
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
-    def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
-        ...
-
-    @classmethod
-    def from_string(cls, s: str) -> OperatingMode:
-        ...
-
-
-class Polarity:
-    POLARITY_ACTIVE_HIGH: ClassVar[Polarity]
-    POLARITY_ACTIVE_LOW: ClassVar[Polarity]
-
-    __members__: ClassVar[dict]
-
-    def __init__(self, code: int) -> None:
-        ...
-
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
-    def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
-        ...
-
-    @classmethod
-    def from_string(cls, s: str) -> OperatingMode:
-        ...
-
-
-class NMEABaudRate:
-    BAUD_9600: ClassVar[NMEABaudRate]
-    BAUD_115200: ClassVar[NMEABaudRate]
-
-    __members__: ClassVar[dict]
-
-    def __init__(self, code: int) -> None:
-        ...
-
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
-    def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
-        ...
-
-    @classmethod
-    def from_string(cls, s: str) -> OperatingMode:
-        ...
-
-
-class ChanField:
-    RANGE: ClassVar[ChanField]
-    SIGNAL: ClassVar[ChanField]
-    NEAR_IR: ClassVar[ChanField]
-    REFLECTIVITY: ClassVar[ChanField]
-
-    __members__: ClassVar[Dict[str, ChanField]]
-    values: ClassVar[Tuple[ChanField, ...]]
+    __members__: ClassVar[Dict[str, TimestampMode]]
+    values: ClassVar[Iterator[TimestampMode]]
 
     def __init__(self, code: int) -> None:
         ...
@@ -458,11 +305,17 @@ class ChanField:
     def value(self) -> int:
         ...
 
+    @classmethod
+    def from_string(cls, s: str) -> TimestampMode:
+        ...
 
-class UDPProfileLidar:
-    PROFILE_LIDAR_LEGACY: ClassVar[UDPProfileLidar]
 
-    __members__: ClassVar[Dict[str, UDPProfileLidar]]
+class OperatingMode:
+    OPERATING_NORMAL: ClassVar[OperatingMode]
+    OPERATING_STANDBY: ClassVar[OperatingMode]
+
+    __members__: ClassVar[Dict[str, OperatingMode]]
+    values: ClassVar[Iterator[OperatingMode]]
 
     def __init__(self, code: int) -> None:
         ...
@@ -483,6 +336,228 @@ class UDPProfileLidar:
         ...
 
     def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> OperatingMode:
+        ...
+
+
+class MultipurposeIOMode:
+    MULTIPURPOSE_OFF: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_INPUT_NMEA_UART: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_PTP_1588: ClassVar[MultipurposeIOMode]
+    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE: ClassVar[MultipurposeIOMode]
+
+    __members__: ClassVar[Dict[str, MultipurposeIOMode]]
+    values: ClassVar[Iterator[MultipurposeIOMode]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> MultipurposeIOMode:
+        ...
+
+
+class Polarity:
+    POLARITY_ACTIVE_HIGH: ClassVar[Polarity]
+    POLARITY_ACTIVE_LOW: ClassVar[Polarity]
+
+    __members__: ClassVar[Dict[str, Polarity]]
+    values: ClassVar[Iterator[Polarity]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> Polarity:
+        ...
+
+
+class NMEABaudRate:
+    BAUD_9600: ClassVar[NMEABaudRate]
+    BAUD_115200: ClassVar[NMEABaudRate]
+
+    __members__: ClassVar[Dict[str, NMEABaudRate]]
+    values: ClassVar[Iterator[NMEABaudRate]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> NMEABaudRate:
+        ...
+
+
+class ChanField:
+    RANGE: ClassVar[ChanField]
+    SIGNAL: ClassVar[ChanField]
+    NEAR_IR: ClassVar[ChanField]
+    REFLECTIVITY: ClassVar[ChanField]
+    RANGE2: ClassVar[ChanField]
+    SIGNAL2: ClassVar[ChanField]
+    REFLECTIVITY2: ClassVar[ChanField]
+
+    __members__: ClassVar[Dict[str, ChanField]]
+    values: ClassVar[Iterator[ChanField]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> ChanField:
+        ...
+
+
+class UDPProfileLidar:
+    PROFILE_LIDAR_LEGACY: ClassVar[UDPProfileLidar]
+    PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL: ClassVar[UDPProfileLidar]
+
+    __members__: ClassVar[Dict[str, UDPProfileLidar]]
+    values: ClassVar[Iterator[UDPProfileLidar]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __eq__(self, other: object) -> bool:
+        ...
+
+    def __getstate__(self) -> tuple:
+        ...
+
+    def __hash__(self) -> int:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    def __ne__(self, other: object) -> bool:
+        ...
+
+    def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
         ...
 
     @classmethod
@@ -494,6 +569,7 @@ class UDPProfileIMU:
     PROFILE_IMU_LEGACY: ClassVar[UDPProfileIMU]
 
     __members__: ClassVar[Dict[str, UDPProfileIMU]]
+    values: ClassVar[Iterator[UDPProfileIMU]]
 
     def __init__(self, code: int) -> None:
         ...
@@ -514,6 +590,14 @@ class UDPProfileIMU:
         ...
 
     def __setstate__(self, st: tuple) -> None:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
         ...
 
     @classmethod
@@ -602,7 +686,12 @@ class LidarScan:
 
     frame_id: int
 
+    @overload
     def __init__(self, w: int, h: int) -> None:
+        ...
+
+    @overload
+    def __init__(self, h: int, w: int, profile: UDPProfileLidar) -> None:
         ...
 
     @property
@@ -632,6 +721,10 @@ class LidarScan:
         ...
 
     def _complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
+        ...
+
+    @property
+    def fields(self) -> Iterator[ChanField]:
         ...
 
     def to_native(self) -> LidarScan:

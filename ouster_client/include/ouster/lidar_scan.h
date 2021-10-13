@@ -18,6 +18,11 @@
 
 namespace ouster {
 
+// forward declarations
+namespace impl {
+struct FieldSlot;
+}
+
 /**
  * Datastructure for efficient operations on aggregated lidar data.
  *
@@ -57,14 +62,16 @@ class LidarScan {
     };
 
    private:
-    struct FieldSlot;
-
     Header<uint64_t> timestamp_;
     Header<uint16_t> measurement_id_;
     Header<uint32_t> status_;
-    std::map<sensor::ChanField, FieldSlot> fields_;
+    std::map<sensor::ChanField, impl::FieldSlot> fields_;
     std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
         field_types_;
+
+    LidarScan(size_t w, size_t h,
+              std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
+                  field_types);
 
    public:
     /* Members variables: use with caution, some of these will become private */
@@ -79,12 +86,32 @@ class LidarScan {
     LidarScan();
 
     /**
-     * Initialize an empty scan with the given horizontal / vertical resolution.
+     * Initialize a scan with fields configured for the LEGACY udp profile.
      *
      * @param w horizontal resoulution, i.e. the number of measurements per scan
      * @param h vertical resolution, i.e. the number of channels
      */
     LidarScan(size_t w, size_t h);
+
+    /**
+     * Initialize a scan with the default fields for a particular udp profile.
+     *
+     * @param w horizontal resoulution, i.e. the number of measurements per scan
+     * @param h vertical resolution, i.e. the number of channels
+     * @param profile udp profile for
+     */
+    LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile);
+
+    /**
+     * Initialize a scan with a custom set of fields.
+     *
+     * @param w horizontal resoulution, i.e. the number of measurements per scan
+     * @param h vertical resolution, i.e. the number of channels
+     * @param begin iterator of pairs of channel fields and types
+     */
+    template <typename Iterator>
+    LidarScan(size_t w, size_t h, Iterator begin, Iterator end)
+        : LidarScan(w, h, {begin, end}){};
 
     /*
      * Special member functions
@@ -271,10 +298,6 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
  * that exploit the structure of the lidar data, such as beam_uniformity in
  * ouster_viz, or computer vision algorithms.
  *
- * For example:
- *     destagger(lidarscan.field(Field::INTENSITY))
- *     destagger(lidarscan.field(Field::INTENSITY).cast<double>())
- *
  * @param img the channel field
  * @param pixel_shift_by_row offsets, usually queried from the sensor
  * @param inverse perform the inverse operation
@@ -283,25 +306,7 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
 template <typename T>
 inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& img,
                           const std::vector<int>& pixel_shift_by_row,
-                          bool inverse = false) {
-    const size_t h = img.rows();
-    const size_t w = img.cols();
-
-    if (pixel_shift_by_row.size() != h)
-        throw std::invalid_argument{"image height does not match shifts size"};
-
-    img_t<T> destaggered{h, w};
-    for (size_t u = 0; u < h; u++) {
-        const std::ptrdiff_t offset =
-            ((inverse ? -1 : 1) * pixel_shift_by_row[u] + w) % w;
-
-        destaggered.row(u).segment(offset, w - offset) =
-            img.row(u).segment(0, w - offset);
-        destaggered.row(u).segment(0, offset) =
-            img.row(u).segment(w - offset, offset);
-    }
-    return destaggered;
-}
+                          bool inverse = false);
 
 /**
  * Generate a staggered version of a channel field.
@@ -326,7 +331,8 @@ class ScanBatcher {
     std::ptrdiff_t w;
     std::ptrdiff_t h;
     uint16_t next_m_id;
-    LidarScan ls_write;
+    std::vector<uint8_t> cache;
+    bool cached_packet = false;
 
    public:
     sensor::packet_format pf;
@@ -350,3 +356,5 @@ class ScanBatcher {
 };
 
 }  // namespace ouster
+
+#include "ouster/impl/lidar_scan_impl.h"

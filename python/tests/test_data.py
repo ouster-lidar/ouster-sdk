@@ -68,14 +68,14 @@ def test_imu_packet(meta: client.SensorInfo) -> None:
 
 
 def test_lidar_packet(meta: client.SensorInfo) -> None:
-    pf = _client.PacketFormat.from_info(meta)
     """Test reading and writing values from empty packets."""
+    pf = _client.PacketFormat.from_info(meta)
     p = client.LidarPacket(bytes(pf.lidar_packet_size), meta)
     w = pf.columns_per_packet
     h = pf.pixels_per_column
 
     assert len(
-        client.ChanField.__members__) == 4, "Don't forget to update tests!"
+        client.ChanField.__members__) == 7, "Don't forget to update tests!"
     assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
                           np.zeros((h, w)))
@@ -217,7 +217,7 @@ def test_scan_not_complete() -> None:
     status = ls.status
     assert not ls._complete()
 
-    status[0] = 0x01
+    status[0] = 0x02
     assert not ls._complete()
     assert not ls._complete((0, 0))
 
@@ -225,7 +225,7 @@ def test_scan_not_complete() -> None:
     assert not ls._complete()
 
     status[:] = 0xFFFFFFFF
-    status[-1] = 0x01
+    status[-1] = 0x02
     assert not ls._complete()
 
     # windows are inclusive but python slicing is not

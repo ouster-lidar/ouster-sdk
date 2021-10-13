@@ -22,8 +22,8 @@ namespace impl {
 
 using fsec = std::chrono::duration<float>;
 
-// 32K max packet size, shoould be big enough for 128
-constexpr size_t packet_size = 32768;
+// 64 big enough for any UDP packet
+constexpr size_t packet_size = 65536;
 
 /*
  * Initialize the internal circular buffer.

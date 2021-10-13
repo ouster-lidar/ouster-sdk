@@ -80,7 +80,8 @@ int main(int argc, char* argv[]) {
               << column_window.second << "]" << std::endl;
 
     // A LidarScan holds lidar data for an entire rotation of the device
-    std::vector<LidarScan> scans{N_SCANS, LidarScan{w, h}};
+    std::vector<LidarScan> scans{
+        N_SCANS, LidarScan{w, h, info.format.udp_profile_lidar}};
 
     // A ScanBatcher can be used to batch packets into scans
     sensor::packet_format pf = sensor::get_format(info);
@@ -116,7 +117,7 @@ int main(int argc, char* argv[]) {
                 auto n_invalid = std::count_if(
                     scans[i].headers.begin(), scans[i].headers.end(),
                     [](const LidarScan::BlockHeader& h) {
-                        return h.status != 0xffffffff;
+                        return !(h.status & 0x01);
                     });
                 // retry until we receive a full set of valid measurements
                 // (accounting for azimuth_window settings if any)

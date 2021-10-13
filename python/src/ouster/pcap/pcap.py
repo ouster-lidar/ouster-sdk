@@ -2,7 +2,7 @@ import os
 import time
 import socket
 from threading import Lock
-from typing import Dict, Iterable, Iterator, Optional
+from typing import (Dict, Iterable, Iterator, Optional, Tuple)
 
 from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
                            SensorInfo)
@@ -43,7 +43,7 @@ def _guess_lidar_port(stream_data: Dict[int, Dict[int, int]]) -> Optional[int]:
     return result
 
 
-def _guess_ports(pcap_path: str):
+def _guess_ports(pcap_path: str) -> Tuple[Optional[int], Optional[int]]:
     p = _pcap.replay_initialize(pcap_path)
     packet_info = _pcap.packet_info()
     loop = True
@@ -83,7 +83,10 @@ def _pcap_info(path: str) -> Iterator[_pcap.packet_info]:
 class Pcap(PacketSource):
     """Read a sensor packet stream out of a pcap file as an iterator."""
 
+    _lidar_port: Optional[int]
+    _imu_port: Optional[int]
     _metadata: SensorInfo
+    _rate: float
     _handle: Optional[_pcap.playback_handle]
     _lock: Lock
 
@@ -117,8 +120,8 @@ class Pcap(PacketSource):
         lidar_port_guess, imu_port_guess = _guess_ports(pcap_path)
 
         # use guessed values unless ports are specified (0 is falsey)
-        self._lidar_port = lidar_port or lidar_port_guess
-        self._imu_port = imu_port or imu_port_guess
+        self._lidar_port = lidar_port or info.udp_port_lidar or lidar_port_guess
+        self._imu_port = imu_port or info.udp_port_imu or imu_port_guess
 
         self._metadata = info
         self._rate = rate
@@ -180,8 +183,7 @@ class Pcap(PacketSource):
                 self._handle = None
 
 
-def _replay(pcap_path: str, info: SensorInfo,
-            dst_ip: str, dst_lidar_port: int,
+def _replay(pcap_path: str, info: SensorInfo, dst_ip: str, dst_lidar_port: int,
             dst_imu_port: int) -> Iterator[bool]:
     """Replay UDP packets out over the network.
 
@@ -200,7 +202,8 @@ def _replay(pcap_path: str, info: SensorInfo,
         consumed.
     """
     try:
-        socket_out = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        socket_out = socket.socket(family=socket.AF_INET,
+                                   type=socket.SOCK_DGRAM)
 
         pcap_handle = Pcap(pcap_path, info)
         for item in pcap_handle:

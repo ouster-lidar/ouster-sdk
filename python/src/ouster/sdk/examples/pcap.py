@@ -66,7 +66,7 @@ def pcap_2d_viewer(source: client.PacketSource,
     for scan in client.Scans(source):
         print("frame id: {}, num = {}".format(scan.frame_id, num))
 
-        fields = [scan.field(ch) for ch in client.ChanField.values]
+        fields = [scan.field(ch) for ch in scan.fields]
         if destagger:
             fields = [client.destagger(metadata, f) for f in fields]
 
@@ -140,9 +140,9 @@ def pcap_show_one_scan(source: client.PacketSource,
 
     # [doc-stag-pcap-show-one]
     fig = plt.figure(constrained_layout=True)
-    axs = fig.subplots(len(client.ChanField.values), 1, sharey=True)
+    axs = fig.subplots(len(list(scan.fields)), 1, sharey=True)
 
-    for ax, field in zip(axs, client.ChanField.values):
+    for ax, field in zip(axs, scan.fields):
         img = normalize(scan.field(field))
         if destagger:
             img = client.destagger(metadata, img)
@@ -202,8 +202,9 @@ def pcap_to_pcd(source: client.PacketSource,
     try:
         import open3d as o3d  # type: ignore
     except ModuleNotFoundError:
-        print("This example requires open3d, which may not be available on all "
-              "platforms. Try running `pip3 install open3d` first.")
+        print(
+            "This example requires open3d, which may not be available on all "
+            "platforms. Try running `pip3 install open3d` first.")
         exit(1)
 
     if not os.path.exists(pcd_dir):
@@ -281,7 +282,7 @@ def pcap_to_csv(source: client.PacketSource,
         timestamps = np.tile(scan.timestamp, (scan.h, 1))
 
         # grab channel data
-        fields_values = [scan.field(ch) for ch in client.ChanField.values]
+        fields_values = [scan.field(ch) for ch in scan.fields]
 
         # use integer mm to avoid loss of precision casting timestamps
         xyz = (xyzlut(scan) * 1000).astype(np.int64)
@@ -319,8 +320,9 @@ def pcap_3d_one_scan(source: client.PacketSource,
     try:
         import open3d as o3d  # type: ignore
     except ModuleNotFoundError:
-        print("This example requires open3d, which may not be available on all "
-              "platforms. Try running `pip3 install open3d` first.")
+        print(
+            "This example requires open3d, which may not be available on all "
+            "platforms. Try running `pip3 install open3d` first.")
         exit(1)
 
     from more_itertools import nth

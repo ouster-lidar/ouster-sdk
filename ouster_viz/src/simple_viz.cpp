@@ -160,8 +160,10 @@ int main(int argc, char** argv) {
     std::mutex swap_mtx;
     bool lidar_scan_ready = false;
 
-    std::unique_ptr<ouster::LidarScan> ls_read(new ouster::LidarScan(W, H));
-    std::unique_ptr<ouster::LidarScan> ls_write(new ouster::LidarScan(W, H));
+    std::unique_ptr<ouster::LidarScan> ls_read(
+        new ouster::LidarScan{W, H, info.format.udp_profile_lidar});
+    std::unique_ptr<ouster::LidarScan> ls_write(
+        new ouster::LidarScan{W, H, info.format.udp_profile_lidar});
 
     auto batch = ouster::ScanBatcher(W, packet_format);
 

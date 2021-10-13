@@ -13,6 +13,7 @@
 #include <set>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "nonstd/optional.hpp"
@@ -41,6 +42,10 @@ extern const std::vector<double> gen1_azimuth_angles;
 extern const mat4d default_imu_to_sensor_transform;
 extern const mat4d default_lidar_to_sensor_transform;
 
+/*
+ * Constants used for configuration. Refer to the sensor documentation for the
+ * meaning of each option.
+ */
 enum lidar_mode {
     MODE_UNSPEC = 0,
     MODE_512x10,
@@ -55,11 +60,6 @@ enum timestamp_mode {
     TIME_FROM_INTERNAL_OSC,
     TIME_FROM_SYNC_PULSE_IN,
     TIME_FROM_PTP_1588
-};
-
-enum config_flags : uint8_t {
-    CONFIG_UDP_DEST_AUTO = (1 << 0),
-    CONFIG_PERSIST = (1 << 1)
 };
 
 enum OperatingMode { OPERATING_NORMAL = 1, OPERATING_STANDBY };
@@ -77,41 +77,15 @@ enum Polarity { POLARITY_ACTIVE_LOW = 1, POLARITY_ACTIVE_HIGH };
 
 enum NMEABaudRate { BAUD_9600 = 1, BAUD_115200 };
 
-enum UDPProfileLidar { PROFILE_LIDAR_LEGACY = 1 };
+enum UDPProfileLidar {
+    PROFILE_LIDAR_LEGACY = 1,
+    PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL
+};
+
 enum UDPProfileIMU { PROFILE_IMU_LEGACY = 1 };
 
 using AzimuthWindow = std::pair<int, int>;
 using ColumnWindow = std::pair<int, int>;
-
-enum configuration_version { FW_2_0 = 3, FW_2_2 = 4 };
-
-struct data_format {
-    uint32_t pixels_per_column;
-    uint32_t columns_per_packet;
-    uint32_t columns_per_frame;
-    std::vector<int> pixel_shift_by_row;
-    ColumnWindow column_window;
-    UDPProfileLidar udp_profile_lidar;
-    UDPProfileIMU udp_profile_imu;
-};
-
-struct sensor_info {
-    [[deprecated]] std::string name;
-    std::string sn;
-    std::string fw_rev;
-    lidar_mode mode;
-    std::string prod_line;
-    data_format format;
-    std::vector<double> beam_azimuth_angles;
-    std::vector<double> beam_altitude_angles;
-    double lidar_origin_to_beam_origin_mm;
-    mat4d imu_to_sensor_transform;
-    mat4d lidar_to_sensor_transform;
-    mat4d extrinsic;
-    uint64_t initialization_id;
-    uint16_t udp_port_lidar;
-    uint16_t udp_port_imu;
-};
 
 struct sensor_config {
     optional<std::string> udp_dest;
@@ -145,6 +119,34 @@ struct sensor_config {
     optional<int> columns_per_packet;
     optional<UDPProfileLidar> udp_profile_lidar;
     optional<UDPProfileIMU> udp_profile_imu;
+};
+
+struct data_format {
+    uint32_t pixels_per_column;
+    uint32_t columns_per_packet;
+    uint32_t columns_per_frame;
+    std::vector<int> pixel_shift_by_row;
+    ColumnWindow column_window;
+    UDPProfileLidar udp_profile_lidar;
+    UDPProfileIMU udp_profile_imu;
+};
+
+struct sensor_info {
+    [[deprecated]] std::string name;
+    std::string sn;
+    std::string fw_rev;
+    lidar_mode mode;
+    std::string prod_line;
+    data_format format;
+    std::vector<double> beam_azimuth_angles;
+    std::vector<double> beam_altitude_angles;
+    double lidar_origin_to_beam_origin_mm;
+    mat4d imu_to_sensor_transform;
+    mat4d lidar_to_sensor_transform;
+    mat4d extrinsic;
+    uint64_t initialization_id;
+    uint16_t udp_port_lidar;
+    uint16_t udp_port_imu;
 };
 
 /** Equality/Not-Equality for data_format */
@@ -370,8 +372,6 @@ sensor_config parse_config(const std::string& config);
  */
 std::string to_string(const sensor_config& config);
 
-const int MAX_FIELDS = 64;
-
 /**
  * Convert non-legacy string representation of metadata to legacy
  *
@@ -391,13 +391,16 @@ std::string client_version();
  * Tag to identitify a paricular value reported in the sensor channel data block
  */
 enum ChanField {
-    RANGE = 0,
-    SIGNAL = 1,
-    INTENSITY = 1,  // deprecated (gcc 5.4 doesn't support annotations here)
-    NEAR_IR = 2,
-    AMBIENT = 2,  // deprecated
-    REFLECTIVITY = 3,
-    FIELD_MAX = MAX_FIELDS - 1
+    RANGE = 1,
+    RANGE2 = 2,
+    INTENSITY = 3,  // deprecated (gcc 5.4 doesn't support annotations here)
+    SIGNAL = 3,
+    SIGNAL2 = 4,
+    REFLECTIVITY = 5,
+    REFLECTIVITY2 = 6,
+    AMBIENT = 7,  // deprecated
+    NEAR_IR = 7,
+    CHAN_FIELD_MAX = 64,
 };
 
 /**
@@ -426,7 +429,22 @@ enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
  * Use imu_la_{x,y,z} to access the acceleration in the corresponding
  * direction. Use imu_av_{x,y,z} to read the angular velocity.
  */
-struct packet_format final {
+class packet_format final {
+    packet_format(const sensor_info& info);
+
+    template <typename T>
+    T px_field(const uint8_t* px_buf, ChanField i) const;
+
+    struct Impl;
+    std::shared_ptr<const Impl> impl_;
+
+    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
+        field_types_;
+
+   public:
+    using FieldIter = decltype(field_types_)::const_iterator;
+
+    const UDPProfileLidar udp_profile_lidar;
     const size_t lidar_packet_size;
     const size_t imu_packet_size;
     const int columns_per_packet;
@@ -441,9 +459,15 @@ struct packet_format final {
      *
      * @param field the channel field to query
      * @return a type tag specifying the bitwidth of the requested field or
-     * ChannelFieldTy::VOID if it is not supported by the packet format
+     * ChannelFieldType::VOID if it is not supported by the packet format
      */
     ChanFieldType field_type(ChanField f) const;
+
+    /**
+     * A const forward iterator over field / type pairs
+     */
+    FieldIter begin() const;
+    FieldIter end() const;
 
     // Measurement block accessors
     const uint8_t* nth_col(int n, const uint8_t* lidar_buf) const;
@@ -487,13 +511,7 @@ struct packet_format final {
     float imu_av_y(const uint8_t* imu_buf) const;
     float imu_av_z(const uint8_t* imu_buf) const;
 
-    struct FieldInfo;
     friend const packet_format& get_format(const sensor_info&);
-
-   private:
-    packet_format(int pixels_per_column);
-
-    std::shared_ptr<const std::map<ChanField, FieldInfo>> fields;
 };
 
 /**

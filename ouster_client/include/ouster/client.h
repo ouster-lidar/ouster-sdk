@@ -116,6 +116,15 @@ std::string get_metadata(client& cli, int timeout_sec = 60,
 bool get_config(const std::string& hostname, sensor_config& config,
                 bool active = true);
 
+
+/**
+ * Flags for set_config()
+ */
+enum config_flags : uint8_t {
+    CONFIG_UDP_DEST_AUTO = (1 << 0),  ///< Set udp_dest automatically
+    CONFIG_PERSIST = (1 << 1)         ///< Make configuration persistent
+};
+
 /**
  * Set sensor config on sensor
  *

@@ -140,19 +140,19 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
         num: scan number in a given pcap file (satrs from *0*)
     """
 
-    channels = [c for c in client.ChanField.values]
+    # visualizer state
+    scans_iter = iter(scans)
+    scan = next(scans_iter)
+    metadata = scans.metadata
+    xyzlut = client.XYZLut(metadata)
+
+    channels = [c for c in scan.fields]
     aes = {}
     for channel_ind, channel in enumerate(channels):
         if channel == client.ChanField.SIGNAL:
             aes[channel_ind] = _utils.AutoExposure(0.02, 0.1, 3)
         else:
             aes[channel_ind] = _utils.AutoExposure()
-
-    # visualizer state
-    scans_iter = iter(scans)
-    scan = next(scans_iter)
-    metadata = scans.metadata
-    xyzlut = client.XYZLut(metadata)
 
     channel_ind = 2
 

@@ -11,6 +11,12 @@ Changelog
 
 ouster_client
 -------------
+* the set of fields available on ``LidarScan`` is now configurable. See the new ``LidarScan``
+  constructors for details.
+* added ``RANGE2``, ``SIGNAL2`` and ``REFLECTIVITY2`` channel fields to support handling data from
+  the second return
+* ``ScanBatcher`` will now parse and populate only the channel fields configured on the
+  ``LidarScan`` passed to ``operator()()``
 * add support for new configuration parameters: ``udp_profile_lidar``, ``udp_profile_imu`` and
   ``columns_per_packet``
 * add udp ports, the new initialization id field, and udp profiles to the metadata stored in
@@ -60,7 +66,8 @@ python
 * add bindings for new configuration and metadata supported by the client library
 * breaking change: the ``ChanField`` enum is now implemented as a native binding for easier interop
   with C++. Unlike Python enums, the bound class itself is no longer sized or iterable. Use
-  ``ChanField.values`` to get an immutable sequence of ``ChanField`` values instead
+  ``ChanField.values`` to iterate over all ``ChanField`` values or ``LidarScan.fields`` for fields
+  available on a particular scan instance
 * breaking change: arrays returned by ``LidarPacket.field`` and ``LidarPacket.header`` are now
   immutable. Modifying the underlying packet buffer through these views was never fully supported
 * deprecate ``ColHeader``, ``LidarPacket.header``, and ``LidarScan.header`` in favor of new

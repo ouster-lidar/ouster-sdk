@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Callable, List, Optional, Union
+from typing import Callable, Iterator, List, Optional, Union
 import warnings
 
 import numpy as np
@@ -129,6 +129,10 @@ class LidarPacket:
         """Get the frame id of the packet."""
         return self._pf.packet_frame_id(self._data)
 
+    @property
+    def fields(self) -> Iterator[ChanField]:
+        return self._pf.fields
+
     def field(self, field: ChanField) -> np.ndarray:
         """Create a view of the specified channel field.
 
@@ -249,6 +253,10 @@ def XYZLut(
         info: SensorInfo
 ) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
     """Return a function that can project scans into cartesian coordinates.
+
+    If called with a numpy array representing a range image, the range image
+    must be in "staggered" form, where each column corresponds to a single
+    measurement block. LidarScan fields are always staggered.
 
     Internally, this will pre-compute a lookup table using the supplied
     intrinsic parameters. XYZ points are returned as a H x W x 3 array of

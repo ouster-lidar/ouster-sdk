@@ -319,6 +319,8 @@ static std::string auto_start_string(OperatingMode mode) {
 
 bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
                        uint8_t config_flags) {
+    using std::to_string;
+
     std::string res;
     bool success = true;
 
@@ -365,12 +367,13 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
         return false;
 
     if (config.azimuth_window &&
-        !set_param("azimuth_window", to_string(config.azimuth_window.value())))
+        !set_param("azimuth_window",
+                   sensor::to_string(config.azimuth_window.value())))
         return false;
 
     if (config.signal_multiplier &&
         !set_param("signal_multiplier",
-                   std::to_string(config.signal_multiplier.value())))
+                   to_string(config.signal_multiplier.value())))
         return false;
 
     if (config.sync_pulse_out_angle &&
@@ -438,12 +441,12 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
 
     if (config.udp_profile_lidar &&
         !set_param("udp_profile_lidar",
-                   std::to_string(config.udp_profile_lidar.value())))
+                   to_string(config.udp_profile_lidar.value())))
         return false;
 
     if (config.udp_profile_imu &&
         !set_param("udp_profile_imu",
-                   std::to_string(config.udp_profile_imu.value())))
+                   to_string(config.udp_profile_imu.value())))
         return false;
 
     // reinitialize
