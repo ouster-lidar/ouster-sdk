@@ -27,13 +27,13 @@ On supported Debian-based linux systems, you can install all build dependencies 
 
    $ sudo apt install build-essential cmake \
                       libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
-                      python3-dev python3-pip pybind11-dev
+                      python3-dev python3-pip pybind11-dev libglfw3-dev libglew-dev
 
 On macos >= 10.13, using homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen jsoncpp libtins python3 pybind11
+  $ brew install cmake eigen jsoncpp libtins python3 pybind11 glfw glew
 
 After you have the system dependencies, you can build the SDK with:
 
@@ -57,7 +57,7 @@ run:
 
 .. code:: powershell
 
-   PS > vcpkg install eigen3 jsoncpp libtins pybind11
+   PS > vcpkg install eigen3 jsoncpp libtins pybind11 glfw3 glew
 
 The currently tested vcpkg tag is ``2020.11-1``. After that, using a developer powershell prompt:
 

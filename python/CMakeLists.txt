@@ -19,7 +19,7 @@ else()
   add_compile_options(-Wall -Wextra -Werror -Wno-error=deprecated-declarations)
 endif()
 
-option(BUILD_VIZ "Disabled for Python build" OFF)
+option(BUILD_VIZ "Enabled for Python build" ON)
 option(BUILD_PCAP "Enabled for Python build" ON)
 
 # ==== Requirements ====
@@ -49,3 +49,10 @@ target_include_directories(_pcap SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_pcap PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/pcap/$<0:>)
+
+pybind11_add_module(_viz src/cpp/_viz.cpp)
+target_link_libraries(_viz PRIVATE ouster_client ouster_viz)
+target_include_directories(_viz SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
+set_target_properties(_viz PROPERTIES
+  POSITION_INDEPENDENT_CODE TRUE
+  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/sdk/$<0:>)
