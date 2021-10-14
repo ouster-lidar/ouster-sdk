@@ -51,11 +51,11 @@ AutoExposure::AutoExposure(double lo_percentile, double hi_percentile,
       hi_percentile(hi_percentile),
       ae_update_every(update_every) {}
 
-void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
+void AutoExposure::operator()(Eigen::Ref<img_t<double>> image, bool update_state) {
     Eigen::Map<Eigen::ArrayXd> key_eigen(image.data(), image.size());
 
     // int a;
-    if (counter == 0) {
+    if (counter == 0 && update_state) {
         const size_t n = key_eigen.rows();
         std::vector<size_t> indices;
         indices.reserve(n);
@@ -95,8 +95,10 @@ void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
     }
 
     // we use the simplest form of exponential smoothing
-    lo_state = ae_damping * lo_state + (1.0 - ae_damping) * lo;
-    hi_state = ae_damping * hi_state + (1.0 - ae_damping) * hi;
+    if (update_state) {
+        lo_state = ae_damping * lo_state + (1.0 - ae_damping) * lo;
+        hi_state = ae_damping * hi_state + (1.0 - ae_damping) * hi;
+    }
 
     // Apply affine transformation mapping lo_state to lo_percentile and
     // hi_state to 1 - hi_percentile. If it would map 0 to positive number,
@@ -116,7 +118,9 @@ void AutoExposure::operator()(Eigen::Ref<img_t<double>> image) {
     // clamp
     key_eigen = key_eigen.max(0.0).min(1.0);
 
-    counter = (counter + 1) % ae_update_every;
+    if (update_state) {
+        counter = (counter + 1) % ae_update_every;
+    }
 }
 
 namespace {

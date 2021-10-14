@@ -42,17 +42,18 @@ struct PyViz {
         const auto xyz_lut = make_xyz_lut(info);
 
         point_viz = std::make_unique<viz::PointViz>(
-            std::vector<viz::CloudSetup>{{xyz_lut.direction.data(),
-                                          xyz_lut.offset.data(), H * W, W,
-                                          info.extrinsic.data()}},
+            std::vector<viz::CloudSetup>{
+                {xyz_lut.direction.data(), xyz_lut.offset.data(), H * W, W,
+                 info.extrinsic.data()},
+                {xyz_lut.direction.data(), xyz_lut.offset.data(), H * W, W,
+                 info.extrinsic.data()}},
             "Ouster Viz (Python)", false);
 
         scan_viz = std::make_unique<viz::LidarScanViz>(info, *point_viz.get());
     }
 
-    void draw(const LidarScan& scan, int cloud_ind, bool cloud_swap,
-              bool show_image) {
-        this->scan_viz->draw(scan, cloud_ind, cloud_swap, show_image);
+    void draw(const LidarScan& scan, int cloud_ind) {
+        this->scan_viz->draw(scan, cloud_ind);
     }
 
     // TODO: should be safe, but maybe there's a less ugly way to do this
@@ -87,8 +88,7 @@ This module is generated from the C++ code and not meant to be used directly.
 
     py::class_<PyViz>(m, "PyViz")
         .def(py::init<const sensor::sensor_info&>())
-        .def("draw", &PyViz::draw, py::arg("scan"), py::arg("cloud_ind") = 0,
-             py::arg("cloud_swap") = true, py::arg("show_image") = true)
+        .def("draw", &PyViz::draw, py::arg("scan"), py::arg("cloud_ind") = 0)
         .def("loop", &PyViz::loop)
         .def("is_quit", &PyViz::is_quit)
         .def("quit", &PyViz::quit);

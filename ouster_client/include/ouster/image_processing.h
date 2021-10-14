@@ -46,7 +46,7 @@ class AutoExposure {
      *
      * @param image Reference to image, modified in place
      */
-    void operator()(Eigen::Ref<img_t<double>> image);
+    void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
 
 /**

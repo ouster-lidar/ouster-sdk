@@ -135,7 +135,7 @@ template Eigen::Ref<const img_t<uint32_t>> LidarScan::field(ChanField f) const;
 template Eigen::Ref<const img_t<uint64_t>> LidarScan::field(ChanField f) const;
 
 ChanFieldType LidarScan::field_type(ChanField f) const {
-    return fields_.at(f).tag;
+    return fields_.count(f) ? fields_.at(f).tag : ChanFieldType::VOID;
 }
 
 LidarScan::FieldIter LidarScan::begin() const { return field_types_.cbegin(); }

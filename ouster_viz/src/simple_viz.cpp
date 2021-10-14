@@ -145,6 +145,8 @@ int main(int argc, char** argv) {
 
     viz::PointViz point_viz(
         {viz::CloudSetup{xyz_lut.direction.data(), xyz_lut.offset.data(), H * W,
+                         W, info.extrinsic.data()},
+         viz::CloudSetup{xyz_lut.direction.data(), xyz_lut.offset.data(), H * W,
                          W, info.extrinsic.data()}},
         "Ouster Viz", false);
 

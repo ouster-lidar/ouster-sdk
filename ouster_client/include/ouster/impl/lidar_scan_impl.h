@@ -226,23 +226,23 @@ inline Eigen::Ref<const img_t<uint64_t>> FieldSlot::get_unsafe() const {
  * Call a generic operation op<T>(f, Args..) with the type parameter T having
  * the correct (dynamic) field type for the LidarScan channel field f
  */
-template <typename F, typename... Args>
-void visit_field(LidarScan& ls, sensor::ChanField f, F&& op, Args&&... args) {
+template <typename SCAN, typename OP, typename... Args>
+void visit_field(SCAN&& ls, sensor::ChanField f, OP&& op, Args&&... args) {
     switch (ls.field_type(f)) {
         case sensor::ChanFieldType::UINT8:
-            op.template operator()(ls.field<uint8_t>(f),
+            op.template operator()(ls.template field<uint8_t>(f),
                                    std::forward<Args>(args)...);
             break;
         case sensor::ChanFieldType::UINT16:
-            op.template operator()(ls.field<uint16_t>(f),
+            op.template operator()(ls.template field<uint16_t>(f),
                                    std::forward<Args>(args)...);
             break;
         case sensor::ChanFieldType::UINT32:
-            op.template operator()(ls.field<uint32_t>(f),
+            op.template operator()(ls.template field<uint32_t>(f),
                                    std::forward<Args>(args)...);
             break;
         case sensor::ChanFieldType::UINT64:
-            op.template operator()(ls.field<uint64_t>(f),
+            op.template operator()(ls.template field<uint64_t>(f),
                                    std::forward<Args>(args)...);
             break;
         default:
@@ -254,10 +254,11 @@ void visit_field(LidarScan& ls, sensor::ChanField f, F&& op, Args&&... args) {
  * Call a generic operation op<T>(f, Args...) for each field of the lidar scan
  * with type parameter T having the correct field type
  */
-template <typename F, typename... Args>
-void foreach_field(LidarScan& ls, F&& op, Args&&... args) {
+template <typename SCAN, typename OP, typename... Args>
+void foreach_field(SCAN&& ls, OP&& op, Args&&... args) {
     for (const auto& ft : ls)
-        visit_field(ls, ft.first, op, ft.first, std::forward<Args>(args)...);
+        visit_field(std::forward<SCAN>(ls), ft.first, std::forward<OP>(op),
+                    ft.first, std::forward<Args>(args)...);
 }
 
 }  // namespace impl

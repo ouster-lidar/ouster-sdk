@@ -5,6 +5,9 @@
 
 #include <cmath>
 #include <iostream>
+#include <mutex>
+#include <set>
+#include <utility>
 
 #include "ouster/colormaps.h"
 #include "ouster/types.h"
@@ -13,16 +16,90 @@ namespace ouster {
 namespace viz {
 
 namespace {
+
+using sensor::ChanField;
+
 enum CloudDisplayMode {
     MODE_RANGE = 0,
-    MODE_INTENSITY = 1,
-    MODE_AMBIENT = 2,
+    MODE_SIGNAL = 1,
+    MODE_NEAR_IR = 2,
     MODE_REFLECTIVITY = 3,
     NUM_MODES = 4
 };
+
+ChanField field_of_mode(CloudDisplayMode display_mode, bool second = false) {
+    switch (display_mode) {
+        case MODE_SIGNAL:
+            return second ? ChanField::SIGNAL2 : ChanField::SIGNAL;
+        case MODE_RANGE:
+            return second ? ChanField::RANGE2 : ChanField::RANGE;
+        case MODE_NEAR_IR:
+            return ChanField::NEAR_IR;
+        case MODE_REFLECTIVITY:
+            return second ? ChanField::REFLECTIVITY2 : ChanField::REFLECTIVITY;
+        default:
+            throw std::runtime_error("Unreachable");
+    }
 }
 
+enum CullingMode { CULLING_OFF = 0, CULLING_ON = 1, NUM_CULLING_MODES = 2 };
+
+using glmap_t = Eigen::Map<img_t<GLfloat>>;
+
 const util::version calref_min_version = {2, 1, 0};
+
+struct read_and_cast {
+    template <typename T, typename U>
+    void operator()(Eigen::Ref<const img_t<T>> field, img_t<U>& dest) {
+        dest = field.template cast<U>();
+    }
+};
+
+}  // namespace
+
+/* key handlers called from point viz draw look thread */
+
+void LidarScanViz::cycle_field_2d_1() {
+    std::lock_guard<std::mutex> lock{mx};
+    image_ind1 = (image_ind1 + 1) % available_fields.size();
+    std::cerr << "2D image: " << to_string(available_fields.at(image_ind1))
+              << "/" << to_string(available_fields.at(image_ind2)) << std::endl;
+}
+
+void LidarScanViz::cycle_field_2d_2() {
+    std::lock_guard<std::mutex> lock{mx};
+    image_ind2 = (image_ind2 + 1) % available_fields.size();
+    std::cerr << "2D image: " << to_string(available_fields.at(image_ind1))
+              << "/" << to_string(available_fields.at(image_ind2)) << std::endl;
+}
+
+void LidarScanViz::cycle_display_mode() {
+    std::lock_guard<std::mutex> lock{mx};
+    this->display_mode = (this->display_mode + 1) % NUM_MODES;
+
+    // TODO: displays a few frames with the wrong palette :p
+    if (this->display_mode == MODE_REFLECTIVITY &&
+        firmware_version >= calref_min_version) {
+        point_viz.setPointCloudPalette(calref, calref_n);
+    } else {
+        point_viz.setPointCloudPalette(spezia, spezia_n);
+    }
+
+    switch (display_mode) {
+        case MODE_SIGNAL:
+            std::cerr << "Point cloud: SIGNAL" << std::endl;
+            break;
+        case MODE_RANGE:
+            std::cerr << "Point cloud: RANGE" << std::endl;
+            break;
+        case MODE_NEAR_IR:
+            std::cerr << "Point cloud: NEAR_IR" << std::endl;
+            break;
+        case MODE_REFLECTIVITY:
+            std::cerr << "Point cloud: REFLECTIVITY" << std::endl;
+            break;
+    }
+}
 
 LidarScanViz::LidarScanViz(const sensor::sensor_info& info,
                            PointViz& point_viz_)
@@ -33,136 +110,120 @@ LidarScanViz::LidarScanViz(const sensor::sensor_info& info,
                    360.0),  // beam angles are in degrees
       h(info.format.pixels_per_column),
       w(info.format.columns_per_frame),
+      range1{h, w},
+      range2{h, w},
+      field_data{},
+      field_procs{},
+      active_fields{},
       imdata(3 * h * w),
-      show_ambient(true),
-      display_mode(MODE_INTENSITY),
-      cycle_range(false),
-      intensity_ae(0.02, 0.1,
-                   3),  // intensity is more likely than range to gray out
-                        // blacks out when using AE with higher lo_percentile
+      display_mode(MODE_SIGNAL),
+      image_ind1(0),
+      image_ind2(2),
+      // intensity is more likely than range to gray out
+      // blacks out when using AE with higher lo_percentile
+      intensity_ae(0.02, 0.1, 3),
       point_viz(point_viz_) {
+    // extra key bindings
     point_viz.attachKeyHandler(
-        GLFW_KEY_N, [this]() { this->show_ambient = !this->show_ambient; });
-    point_viz.attachKeyHandler(GLFW_KEY_M, [this]() {
-        this->display_mode = (this->display_mode + 1) % NUM_MODES;
+        GLFW_KEY_M, std::bind(&LidarScanViz::cycle_display_mode, this));
 
-        // for C++11 compatibility, the plus sign is needed due to
-        // https://stackoverflow.com/questions/25143860/implicit-conversion-from-class-to-enumeration-type-in-switch-conditional
-        switch (+display_mode) {
-            case MODE_INTENSITY:
-                std::cerr << "Coloring point cloud by intensity" << std::endl;
-                break;
-            case MODE_RANGE:
-                std::cerr << "Coloring point cloud by range" << std::endl;
-                break;
-            case MODE_AMBIENT:
-                std::cerr << "Coloring point cloud by ambient" << std::endl;
-                break;
-            case MODE_REFLECTIVITY:
-                std::cerr << "Coloring point cloud by reflectivity"
-                          << std::endl;
-        }
-        if (display_mode == MODE_REFLECTIVITY &&
-            firmware_version >= calref_min_version) {
-            point_viz.setPointCloudPalette(calref, calref_n);
-        } else {
-            point_viz.setPointCloudPalette(spezia, spezia_n);
-        }
-    });
-    point_viz.attachKeyHandler(GLFW_KEY_V, [this]() {
-        this->cycle_range = !this->cycle_range;
-        if (this->cycle_range) {
-            std::cerr << "Cycling range every 2.0 m" << std::endl;
-        } else {
-            std::cerr << "Cycling range disabled" << std::endl;
-        }
-    });
+    point_viz.attachKeyHandler(
+        GLFW_KEY_B, std::bind(&LidarScanViz::cycle_field_2d_1, this));
+
+    point_viz.attachKeyHandler(
+        GLFW_KEY_N, std::bind(&LidarScanViz::cycle_field_2d_2, this));
+
+    // normalization functions for each field
+    //
+    // TODO: passing *_ae without wrapping in a lambda is nice but causes a
+    //       copy, which prevents sharing state with 2nd return processing
+    field_procs[ChanField::RANGE] = {
+        [this](Eigen::Ref<img_t<double>> f) { range_ae(f); }};
+
+    field_procs[ChanField::RANGE2] = {
+        [this](Eigen::Ref<img_t<double>> f) { range_ae(f, false); }};
+
+    field_procs[ChanField::SIGNAL] = {
+        [this](Eigen::Ref<img_t<double>> f) { intensity_ae(f); }};
+
+    field_procs[ChanField::SIGNAL2] = {
+        [this](Eigen::Ref<img_t<double>> f) { intensity_ae(f, false); }};
+
+    if (firmware_version >= calref_min_version)
+        field_procs[ChanField::REFLECTIVITY] = {
+            [](Eigen::Ref<img_t<double>> f) { f /= 255.0; }};
+    else
+        field_procs[ChanField::REFLECTIVITY] = {
+            [this](Eigen::Ref<img_t<double>> f) { reflectivity_ae(f); }};
+
+    if (firmware_version >= calref_min_version)
+        field_procs[ChanField::REFLECTIVITY2] = {
+            [](Eigen::Ref<img_t<double>> f) { f /= 255.0; }};
+    else
+        field_procs[ChanField::REFLECTIVITY2] = {
+            [this](Eigen::Ref<img_t<double>> f) { reflectivity_ae(f, false); }};
+
+    field_procs[ChanField::NEAR_IR] = {
+        [this](Eigen::Ref<img_t<double>> f) {
+            f = destagger<double>(f, px_offset);
+            ambient_buc(f);
+            f = stagger<double>(f, px_offset);
+        },
+        [this](Eigen::Ref<img_t<double>> f) { ambient_ae(f); }};
 }
 
-void LidarScanViz::draw(const LidarScan& ls, const size_t which_cloud,
-                        const bool cloud_swap, const bool show_image) {
-    using glmap_t = Eigen::Map<
-        Eigen::Array<GLfloat, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>;
+void LidarScanViz::draw(const LidarScan& ls, const size_t which_cloud) {
+    // protect against concurrent access in key handlers
+    std::lock_guard<std::mutex> lock{mx};
 
-    img_t<double> range = ls.field(sensor::RANGE).cast<double>();
-    if (show_image || display_mode == MODE_RANGE) {
-        if (!cycle_range) {
-            range_ae(range);
+    point_viz.resizeImage(w, 2 * h);
+    point_viz.setImageAspectRatio(2 * aspect_ratio);
+
+    // select fields to display by index
+    available_fields.clear();
+    for (auto kv : ls) available_fields.push_back(kv.first);
+    auto img_field_1 = available_fields.at(image_ind1);
+    auto img_field_2 = available_fields.at(image_ind2);
+
+    // figure out which fields are actually being displayed
+    auto mode = static_cast<CloudDisplayMode>(display_mode);
+    auto cloud_field_1 = field_of_mode(mode);
+    auto cloud_field_2 = field_of_mode(mode, true);
+    active_fields.clear();
+    active_fields.insert(
+        {cloud_field_1, cloud_field_2, img_field_1, img_field_2});
+
+    // populate field buffers and apply normalization
+    for (const auto field : active_fields) {
+        if (ls.field_type(field)) {
+            impl::visit_field(ls, field, read_and_cast(), field_data[field]);
+            for (auto& proc : field_procs.at(field)) proc(field_data[field]);
         }
     }
-    img_t<double> intensity = ls.field(sensor::SIGNAL).cast<double>();
-    if (show_image || display_mode == MODE_INTENSITY) {
-        intensity_ae(intensity);
+
+    // update first cloud
+    impl::visit_field(ls, ChanField::RANGE, read_and_cast(), range1);
+    double* key1_data = field_data.at(cloud_field_1).data();
+    point_viz.setRangeAndKey(which_cloud, range1.data(), key1_data);
+    point_viz.cloudSwap(which_cloud);
+
+    // TODO: hacked to use two cloud indices per scan for second return
+    if (ls.field_type(ChanField::RANGE2) && ls.field_type(cloud_field_2)) {
+        impl::visit_field(ls, ChanField::RANGE2, read_and_cast(), range2);
+        double* key2_data = field_data.at(cloud_field_2).data();
+        point_viz.setRangeAndKey(which_cloud + 1, range2.data(), key2_data);
+        point_viz.cloudSwap(which_cloud + 1);
     }
-    img_t<double> ambient = ls.field(sensor::NEAR_IR).cast<double>();
-    auto intensity_destaggered = destagger<double>(intensity, px_offset);
-    auto range_destaggered = destagger<double>(range, px_offset);
-    if (cycle_range) {
-        glmap_t(imdata.data(), h, w) =
-            range_destaggered.cast<GLfloat>().unaryExpr(
-                [](const GLfloat x) -> GLfloat {
-                    return std::fmod(x * sensor::range_unit, 2.0) * 0.5;
-                });
-    } else {
-        glmap_t(imdata.data(), h, w) = range_destaggered.cast<GLfloat>();
-    }
+
+    // update 2d image data
+    glmap_t(imdata.data(), h, w) =
+        destagger<double>(field_data.at(img_field_1), px_offset)
+            .cast<GLfloat>();
     glmap_t(imdata.data() + w * h, h, w) =
-        intensity_destaggered.cast<GLfloat>();
-
-    img_t<double> ambient_destaggered{h, w};
-    if ((show_image && show_ambient) || display_mode == MODE_AMBIENT) {
-        // we need to destagger ambient because the
-        // BeamUniformityCorrector only works on destaggered stuff
-        ambient_destaggered = destagger<double>(ambient, px_offset);
-        ambient_buc(ambient_destaggered);
-        ambient_ae(ambient_destaggered);
-        if (show_image && show_ambient) {
-            glmap_t(imdata.data() + 2 * w * h, h, w) =
-                ambient_destaggered.cast<GLfloat>();
-        }
-    }
-
-    if (show_image) {
-        if (show_ambient) {
-            point_viz.resizeImage(w, 3 * h);
-            point_viz.setImageAspectRatio(3 * aspect_ratio);
-        } else {
-            point_viz.resizeImage(w, 2 * h);
-            point_viz.setImageAspectRatio(2 * aspect_ratio);
-        }
-        point_viz.setImage(imdata.data());
-        point_viz.imageSwap();
-    }
-
-    auto range_data = ls.field(sensor::RANGE).data();
-
-    switch (+display_mode) {
-        case MODE_INTENSITY:
-            point_viz.setRangeAndKey(which_cloud, range_data, intensity.data());
-            break;
-        case MODE_RANGE:
-            point_viz.setRangeAndKey(which_cloud, range_data, range.data());
-            break;
-        case MODE_AMBIENT:
-            ambient = stagger<double>(ambient_destaggered, px_offset);
-            point_viz.setRangeAndKey(which_cloud, range_data, ambient.data());
-            break;
-        case MODE_REFLECTIVITY:
-            img_t<double> reflectivity =
-                ls.field(sensor::REFLECTIVITY).cast<double>();
-            if (firmware_version >= calref_min_version) {
-                // Scale directly from 0-255 to 0-1
-                reflectivity /= 255.0;
-            } else {
-                // Apply autoexposure algorithm
-                reflectivity_ae(reflectivity);
-            }
-
-            point_viz.setRangeAndKey(which_cloud, range_data,
-                                     reflectivity.data());
-            break;
-    }
-    if (cloud_swap) point_viz.cloudSwap(which_cloud);
+        destagger<double>(field_data.at(img_field_2), px_offset)
+            .cast<GLfloat>();
+    point_viz.setImage(imdata.data());
+    point_viz.imageSwap();
 }
 
 }  // namespace viz

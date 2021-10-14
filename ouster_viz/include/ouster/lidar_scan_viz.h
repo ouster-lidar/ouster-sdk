@@ -7,7 +7,10 @@
 #include <GL/glew.h>
 
 #include <atomic>
+#include <map>
+#include <set>
 #include <vector>
+#include <mutex>
 
 #include "ouster/image_processing.h"
 #include "ouster/lidar_scan.h"
@@ -22,14 +25,22 @@ namespace viz {
  * Helper class to visualize LidarScan.
  */
 class LidarScanViz {
+    using field_proc = std::function<void(Eigen::Ref<img_t<double>>)>;
+
+    std::mutex mx;
     util::version firmware_version;
     const std::vector<int> px_offset;
     const double aspect_ratio;
     const size_t h, w;
+    img_t<uint32_t> range1, range2;
+    std::map<sensor::ChanField, img_t<double>> field_data;
+    std::map<sensor::ChanField, std::vector<field_proc>> field_procs;
+    std::set<sensor::ChanField> active_fields;
+    std::vector<sensor::ChanField> available_fields;
     std::vector<GLfloat> imdata;
-    std::atomic_bool show_ambient;
-    std::atomic_int display_mode;
-    std::atomic_bool cycle_range;
+    int display_mode;
+    int image_ind1;
+    int image_ind2;
     AutoExposure range_ae;
     AutoExposure intensity_ae;
     AutoExposure ambient_ae;
@@ -37,6 +48,10 @@ class LidarScanViz {
     BeamUniformityCorrector ambient_buc;
 
     PointViz& point_viz;
+
+    void cycle_display_mode();
+    void cycle_field_2d_1();
+    void cycle_field_2d_2();
 
    public:
     /**
@@ -58,11 +73,8 @@ class LidarScanViz {
      *
      * @param ls the scan to visualize
      * @param which_cloud index of the cloud to update with ls data
-     * @param cloud_swap swap in new cloud immediately
-     * @param show_image display the image view for this cloud
      */
-    void draw(const LidarScan& ls, const size_t which_cloud = 0,
-              const bool cloud_swap = true, const bool show_image = true);
+    void draw(const LidarScan& ls, const size_t which_cloud = 0);
 };
 
 }  // namespace viz
