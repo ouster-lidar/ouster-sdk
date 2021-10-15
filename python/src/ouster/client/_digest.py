@@ -8,7 +8,7 @@ from more_itertools import side_effect
 import numpy as np
 
 from . import _bufstream as bufstream
-from . import (LidarPacket, LidarScan, ChanField, ColHeader, Packet, Packets,
+from . import (LidarPacket, LidarScan, ColHeader, Packet, Packets,
                PacketSource, SensorInfo, Scans)
 
 
