@@ -106,12 +106,18 @@ void AutoExposure::operator()(Eigen::Ref<img_t<double>> image, bool update_state
     double lo_hi_scale =
         (1.0 - (lo_percentile + hi_percentile)) / (hi_state - lo_state);
 
-    if (lo_hi_scale * (0.0 - lo_state) + lo_percentile <= 0.00 &&
-        !std::isinf(lo_hi_scale) && !std::isnan(lo_hi_scale)) {
+    if (std::isinf(lo_hi_scale) || std::isnan(lo_hi_scale)) {
+        // map everything relative to hi_state being 0.5 due to small spread or
+        // nan
+        key_eigen *= 0.5 / hi_state;
+    } else if (lo_hi_scale * (0.0 - lo_state) + lo_percentile <= 0.00) {
+        // apply affine transformation
         key_eigen -= lo_state;
         key_eigen *= lo_hi_scale;
         key_eigen += lo_percentile;
     } else {
+        // lo_hi_state transformation would map 0 to positive number
+        // instead, map using only hi_state
         key_eigen *= (1.0 - hi_percentile) / (hi_state);
     }
 

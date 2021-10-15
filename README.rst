@@ -227,7 +227,8 @@ To publish ROS topics from a running sensor, run::
 where:
 
 * ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor
-* ``<path to metadata json>`` is the path you want to save sensor metadata to
+* ``<path to metadata json>`` is the path you want to save sensor metadata to.
+  You must provide a JSON filename at the end, not just a path to a directory.
 
 Note that by default the working directory of all ROS nodes is set to ``${ROS_HOME}``, generally
 ``$HOME/.ros``. If you provide a relative path to ``metadata``, i.e., ``metadata:=meta.json``, it 
