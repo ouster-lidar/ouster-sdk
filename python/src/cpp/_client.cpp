@@ -180,9 +180,20 @@ PYBIND11_PLUGIN(_client) {
         .def_readonly("columns_per_packet", &packet_format::columns_per_packet)
         .def_readonly("pixels_per_column", &packet_format::pixels_per_column)
 
-        // Measurement block accessors
-        .def("packet_frame_id", [](packet_format& pf, py::buffer buf) {
+        .def("packet_type", [](packet_format& pf, py::buffer buf) {
+            return pf.packet_type(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("frame_id", [](packet_format& pf, py::buffer buf) {
             return pf.frame_id(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("prod_sn", [](packet_format& pf, py::buffer buf) {
+            return pf.prod_sn(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("init_id", [](packet_format& pf, py::buffer buf) {
+            return pf.init_id(getptr(pf.lidar_packet_size, buf));
         })
 
         .def_property_readonly("fields", [](const packet_format& self) {
@@ -302,7 +313,7 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("lidar_to_sensor_transform", &sensor_info::lidar_to_sensor_transform, "Homogeneous transformation matrix from Lidar Coordinate Frame to Sensor Coordinate Frame.")
         .def_readwrite("lidar_origin_to_beam_origin_mm", &sensor_info::lidar_origin_to_beam_origin_mm, "Distance between lidar origin and beam origin in millimeters.")
         .def_readwrite("extrinsic", &sensor_info::extrinsic, "Extrinsic Matrix.")
-        .def_readwrite("initialization_id", &sensor_info::initialization_id, "Initialization id.")
+        .def_readwrite("init_id", &sensor_info::init_id, "Initialization id.")
         .def_readwrite("udp_port_lidar", &sensor_info::udp_port_lidar, "Configured port for lidar data.")
         .def_readwrite("udp_port_imu", &sensor_info::udp_port_imu, "Configured port for imu data.")
         .def_static("from_default", &sensor::default_sensor_info, R"(

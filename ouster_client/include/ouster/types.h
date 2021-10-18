@@ -144,7 +144,7 @@ struct sensor_info {
     mat4d imu_to_sensor_transform;
     mat4d lidar_to_sensor_transform;
     mat4d extrinsic;
-    uint64_t initialization_id;
+    uint32_t init_id;
     uint16_t udp_port_lidar;
     uint16_t udp_port_imu;
 };
@@ -451,8 +451,25 @@ class packet_format final {
     const int pixels_per_column;
     [[deprecated]] const int encoder_ticks_per_rev;
 
-    // Packet header accessors
+    /**
+     * Read the packet type packet header
+     */
+    uint16_t packet_type(const uint8_t* lidar_buf) const;
+
+    /**
+     * Read the frame_id packet header
+     */
     uint16_t frame_id(const uint8_t* lidar_buf) const;
+
+    /**
+     * Read the initialization id packet header
+     */
+    uint32_t init_id(const uint8_t* lidar_buf) const;
+
+    /**
+     * Read the packet serial number header
+     */
+    uint64_t prod_sn(const uint8_t* lidar_buf) const;
 
     /**
      * Get the bit width of the specified channel field.

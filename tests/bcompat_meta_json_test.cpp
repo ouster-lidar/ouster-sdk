@@ -89,7 +89,7 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     EXPECT_EQ(si.lidar_to_sensor_transform,
               si_expected.lidar_to_sensor_transform);
     EXPECT_EQ(si.extrinsic, si_expected.extrinsic);
-    EXPECT_EQ(si.initialization_id, si_expected.initialization_id);
+    EXPECT_EQ(si.init_id, si_expected.init_id);
 }
 
 int main(int argc, char** argv) {

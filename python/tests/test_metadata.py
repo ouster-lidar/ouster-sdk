@@ -94,7 +94,7 @@ def test_read_info(metadata: client.SensorInfo) -> None:
     assert metadata.lidar_to_sensor_transform.shape == (4, 4)
     assert metadata.lidar_origin_to_beam_origin_mm == 15.806
     assert numpy.array_equal(metadata.extrinsic, numpy.identity(4))
-    assert metadata.initialization_id == 0
+    assert metadata.init_id == 0
     assert metadata.udp_port_lidar == 0
     assert metadata.udp_port_imu == 0
 
@@ -119,7 +119,7 @@ def test_write_info(metadata: client.SensorInfo) -> None:
     metadata.lidar_to_sensor_transform = numpy.zeros((4, 4))
     metadata.extrinsic = numpy.zeros((4, 4))
     metadata.lidar_origin_to_beam_origin_mm = 0.0
-    metadata.initialization_id = 0
+    metadata.init_id = 0
     metadata.udp_port_lidar = 0
     metadata.udp_port_imu = 0
 

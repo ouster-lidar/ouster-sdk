@@ -119,7 +119,7 @@ class SensorInfo:
     lidar_to_sensor_transform: ndarray
     lidar_origin_to_beam_origin_mm: float
     extrinsic: ndarray
-    initialization_id: int
+    init_id: int
     udp_port_lidar: int
     udp_port_imu: int
 
@@ -169,7 +169,16 @@ class PacketFormat:
     def pixels_per_column(self) -> int:
         ...
 
-    def packet_frame_id(self, buf: BufferT) -> int:
+    def packet_type(self, buf: BufferT) -> int:
+        ...
+
+    def frame_id(self, buf: BufferT) -> int:
+        ...
+
+    def prod_sn(self, buf: BufferT) -> int:
+        ...
+
+    def init_id(self, buf: BufferT) -> int:
         ...
 
     @property

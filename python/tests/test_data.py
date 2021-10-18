@@ -129,7 +129,10 @@ def test_read_real_packet(packet: client.LidarPacket) -> None:
     assert np.all(np.diff(packet.header(client.ColHeader.MEASUREMENT_ID)) == 1)
     assert np.all(np.diff(packet.timestamp) > 0)
     assert np.all(np.diff(packet.measurement_id) == 1)
+    assert packet.packet_type == 0
     assert packet.frame_id == 34266
+    assert packet.init_id == 0
+    assert packet.prod_sn == 0
     # in 512xN mode, the angle between measurements is exactly 176 encoder ticks
     assert np.all(
         np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 176)

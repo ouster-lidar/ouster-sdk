@@ -221,6 +221,16 @@ packet_format::FieldIter packet_format::end() const {
 
 /* Packet headers */
 
+uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        return 0;
+    } else {
+        uint16_t res;
+        std::memcpy(&res, lidar_buf + 0, sizeof(uint16_t));
+        return res;
+    }
+}
+
 uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
         return col_frame_id(nth_col(0, lidar_buf));
@@ -228,6 +238,26 @@ uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
         uint16_t res;
         std::memcpy(&res, lidar_buf + 2, sizeof(uint16_t));
         return res;
+    }
+}
+
+uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        return 0;
+    } else {
+        uint32_t res;
+        std::memcpy(&res, lidar_buf + 4, sizeof(uint32_t));
+        return res & 0x00ffffff;
+    }
+}
+
+uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        return 0;
+    } else {
+        uint64_t res;
+        std::memcpy(&res, lidar_buf + 7, sizeof(uint64_t));
+        return res & 0x000000ffffffffff;
     }
 }
 
@@ -261,7 +291,6 @@ uint32_t packet_format::col_encoder(const uint8_t* col_buf) const {
         std::memcpy(&res, col_buf + 12, sizeof(uint32_t));
         return res;
     } else {
-        // TODO: could try to spoof
         return 0;
     }
 }
@@ -272,7 +301,6 @@ uint16_t packet_format::col_frame_id(const uint8_t* col_buf) const {
         std::memcpy(&res, col_buf + 10, sizeof(uint16_t));
         return res;
     } else {
-        // TODO
         return 0;
     }
 }

@@ -124,10 +124,29 @@ class LidarPacket:
                                    count=self._pf.lidar_packet_size)
         self.capture_timestamp = timestamp
 
+        # check that metadata came from the same sensor initialization as data
+        if self.init_id and self.init_id != info.init_id:
+            raise ValueError("Metadata init id does not match")
+
+    @property
+    def packet_type(self) -> int:
+        """Get the type header of the packet."""
+        return self._pf.packet_type(self._data)
+
     @property
     def frame_id(self) -> int:
         """Get the frame id of the packet."""
-        return self._pf.packet_frame_id(self._data)
+        return self._pf.frame_id(self._data)
+
+    @property
+    def init_id(self) -> int:
+        """Get the initialization id of the packet."""
+        return self._pf.init_id(self._data)
+
+    @property
+    def prod_sn(self) -> int:
+        """Get the serial no header of the packet."""
+        return self._pf.prod_sn(self._data)
 
     @property
     def fields(self) -> Iterator[ChanField]:

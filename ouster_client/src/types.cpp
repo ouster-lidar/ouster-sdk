@@ -111,7 +111,7 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs) {
             lhs.imu_to_sensor_transform == rhs.imu_to_sensor_transform &&
             lhs.lidar_to_sensor_transform == rhs.lidar_to_sensor_transform &&
             lhs.extrinsic == rhs.extrinsic &&
-            lhs.initialization_id == rhs.initialization_id &&
+            lhs.init_id == rhs.init_id &&
             lhs.udp_port_lidar == rhs.udp_port_lidar &&
             lhs.udp_port_imu == rhs.udp_port_imu);
 }
@@ -713,7 +713,7 @@ static sensor_info parse_legacy(const std::string& meta) {
     info.extrinsic = mat4d::Identity();
 
     // default to 0 if keys are not present
-    info.initialization_id = root["initialization_id"].asInt();
+    info.init_id = root["initialization_id"].asInt();
     info.udp_port_lidar = root["udp_port_lidar"].asInt();
     info.udp_port_imu = root["udp_port_imu"].asInt();
 
@@ -860,7 +860,7 @@ std::string to_string(const sensor_info& info) {
         }
     }
 
-    root["initialization_id"] = Json::UInt64(info.initialization_id);
+    root["initialization_id"] = info.init_id;
     root["udp_port_lidar"] = info.udp_port_lidar;
     root["udp_port_imu"] = info.udp_port_imu;
 
