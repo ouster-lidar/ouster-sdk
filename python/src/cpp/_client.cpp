@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <deque>
 #include <map>
 #include <stdexcept>
@@ -27,6 +28,7 @@
 #include "ouster/types.h"
 
 namespace py = pybind11;
+namespace chrono = std::chrono;
 
 using ouster::sensor::data_format;
 using ouster::sensor::packet_format;
@@ -503,9 +505,24 @@ PYBIND11_PLUGIN(_client) {
         .def("shutdown", &BufferedUDPSource::shutdown)
         .def("consume",
              [](BufferedUDPSource& self, py::buffer buf, float timeout_sec) {
+                 // allow interrupting timeout by polling for signals every 10ms
+                 const float interval = 0.01;
                  auto info = buf.request();
-                 return self.consume(static_cast<uint8_t*>(info.ptr), info.size,
-                                     timeout_sec);
+
+                 auto timeout_time = chrono::steady_clock::now() +
+                                     chrono::duration<float>{timeout_sec};
+                 sensor::client_state res = sensor::client_state::TIMEOUT;
+                 do {
+                     res = self.consume(static_cast<uint8_t*>(info.ptr),
+                                        info.size, interval);
+                     if (res != sensor::client_state::TIMEOUT) break;
+
+                     if (PyErr_CheckSignals() != 0)
+                         throw py::error_already_set();
+                     // allow other python threads to run
+                     py::gil_scoped_release release;
+                 } while (chrono::steady_clock::now() < timeout_time);
+                 return res;
              })
         .def("produce",
              [](BufferedUDPSource& self, const packet_format& pf) {

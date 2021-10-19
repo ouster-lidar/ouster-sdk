@@ -3,9 +3,9 @@ from typing import Callable, Iterator, List, Optional, Union
 import warnings
 
 import numpy as np
-import numpy.lib.stride_tricks
 
-from . import ChanField, LidarScan, SensorInfo, _client
+from . import _client
+from ._client import (ChanField, LidarScan, SensorInfo)
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""

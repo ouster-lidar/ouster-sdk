@@ -129,6 +129,10 @@ class Pcap(PacketSource):
         self._lock = Lock()
 
     def __iter__(self) -> Iterator[Packet]:
+        with self._lock:
+            if self._handle is None:
+                raise ValueError("I/O operation on closed packet source")
+
         buf = bytearray(2**16)
         packet_info = _pcap.packet_info()
 
@@ -137,9 +141,8 @@ class Pcap(PacketSource):
         metadata = self._metadata
         while True:
             with self._lock:
-                if self._handle is None:
-                    raise ValueError("I/O operation on closed packet source")
-                if not _pcap.next_packet_info(self._handle, packet_info):
+                if (self._handle is None or
+                        not _pcap.next_packet_info(self._handle, packet_info)):
                     break
                 timestamp = packet_info.timestamp
 
@@ -170,6 +173,7 @@ class Pcap(PacketSource):
             if self._handle is not None:
                 _pcap.replay_reset(self._handle)
 
+    @property
     def closed(self) -> bool:
         """Check if source is closed. Thread-safe."""
         with self._lock:

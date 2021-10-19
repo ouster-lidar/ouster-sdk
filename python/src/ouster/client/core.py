@@ -4,14 +4,16 @@ This module contains more idiomatic wrappers around the lower-level module
 generated using pybind11.
 """
 from contextlib import closing
-from more_itertools import take
 from typing import cast, Iterable, Iterator, List, Optional, Tuple
-from typing_extensions import Protocol
 from threading import Thread
 import time
 
+from more_itertools import take
+from typing_extensions import Protocol
+
 from . import _client
-from . import (SensorInfo, ImuPacket, LidarPacket, LidarScan, Packet)
+from ._client import (SensorInfo, LidarScan)
+from .data import (ImuPacket, LidarPacket, Packet)
 
 
 class ClientError(Exception):
@@ -212,6 +214,9 @@ class Sensor(PacketSource):
             ValueError: if the packet source has already been closed
         """
 
+        if not self._producer.is_alive():
+            raise ValueError("I/O operation on closed packet source")
+
         # Attempt to flush any old data before producing packets
         if self._flush_before_read:
             self.flush(full=True)
@@ -221,7 +226,7 @@ class Sensor(PacketSource):
             if p is not None:
                 yield p
             else:
-                raise ValueError("I/O operation on closed packet source")
+                break
 
     def flush(self, n_frames: int = 3, *, full=False) -> int:
         """Drop some data to clear internal buffers.
