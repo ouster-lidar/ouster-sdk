@@ -110,8 +110,7 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs) {
                 rhs.lidar_origin_to_beam_origin_mm &&
             lhs.imu_to_sensor_transform == rhs.imu_to_sensor_transform &&
             lhs.lidar_to_sensor_transform == rhs.lidar_to_sensor_transform &&
-            lhs.extrinsic == rhs.extrinsic &&
-            lhs.init_id == rhs.init_id &&
+            lhs.extrinsic == rhs.extrinsic && lhs.init_id == rhs.init_id &&
             lhs.udp_port_lidar == rhs.udp_port_lidar &&
             lhs.udp_port_imu == rhs.udp_port_imu);
 }
@@ -873,11 +872,13 @@ std::string to_string(const sensor_info& info) {
     return Json::writeString(builder, root);
 }
 
-std::string to_string(const sensor_config& config) {
+Json::Value to_json(const sensor_config& config, bool compat) {
     Json::Value root{Json::objectValue};
 
     if (config.udp_dest) {
-        root["udp_dest"] = config.udp_dest.value();
+        // use deprecated cofig for 1.13 compatibility
+        const char* key = compat ? "udp_ip" : "udp_dest";
+        root[key] = config.udp_dest.value();
     }
 
     if (config.udp_port_lidar) {
@@ -897,7 +898,14 @@ std::string to_string(const sensor_config& config) {
     }
 
     if (config.operating_mode) {
-        root["operating_mode"] = to_string(config.operating_mode.value());
+        // use deprecated config for 1.13 compatibility
+        auto mode = config.operating_mode.value();
+        if (compat) {
+            root["auto_start_flag"] =
+                (mode == OperatingMode::OPERATING_NORMAL) ? 1 : 0;
+        } else {
+            root["operating_mode"] = to_string(mode);
+        }
     }
 
     if (config.multipurpose_io_mode) {
@@ -976,6 +984,12 @@ std::string to_string(const sensor_config& config) {
     if (config.udp_profile_imu) {
         root["udp_profile_imu"] = to_string(config.udp_profile_imu.value());
     }
+
+    return root;
+}
+
+std::string to_string(const sensor_config& config) {
+    Json::Value root = to_json(config, false);
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;

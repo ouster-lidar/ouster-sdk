@@ -128,6 +128,8 @@ enum config_flags : uint8_t {
 /**
  * Set sensor config on sensor
  *
+ * @throw runtime_error on failure to communcate with the sensor
+ * @throw invalid_argument when config parameters fail validation
  * @param hostname sensor hostname
  * @param sensor config
  * @param flags flags to pass in

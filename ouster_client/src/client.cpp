@@ -37,6 +37,9 @@ struct client {
     }
 };
 
+// defined in types.cpp
+Json::Value to_json(const sensor_config& config, bool compat);
+
 namespace {
 
 // default udp receive buffer size on windows is very low -- use 256K
@@ -297,166 +300,62 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
     return success;
 }
 
-// conversion for operating_mode (introduced in fw 2.0) to auto_start
-// (deprecated in 1.13)
-const std::array<std::pair<OperatingMode, std::string>, 2> auto_start_strings =
-    {{{OPERATING_NORMAL, "1"}, {OPERATING_STANDBY, "0"}}};
-
-static std::string auto_start_string(OperatingMode mode) {
-    auto end = auto_start_strings.end();
-    auto res =
-        std::find_if(auto_start_strings.begin(), end,
-                     [&](const std::pair<OperatingMode, std::string>& p) {
-                         return p.first == mode;
-                     });
-
-    return res == end ? "UNKNOWN" : res->second;
-}
-
 bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
                        uint8_t config_flags) {
-    using std::to_string;
+    std::string res{};
 
-    std::string res;
-    bool success = true;
+    // set automatic udp dest, if flag specified
+    if (config_flags & CONFIG_UDP_DEST_AUTO) {
+        if (config.udp_dest)
+            throw std::invalid_argument(
+                "UDP_DEST_AUTO flag set but provided config has udp_dest");
 
-    auto set_param = [&sock_fd, &res](std::string param_name,
-                                      std::string param_value) {
-        bool success = true;
-        success &= do_tcp_cmd(
-            sock_fd, {"set_config_param", param_name, param_value}, res);
-        success &= res == "set_config_param";
-        return success;
-    };
+        if (!do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res))
+            throw std::runtime_error("Failed to run 'set_udp_dest_auto'");
 
-    // set params
-    if (config.udp_dest && !set_param("udp_ip", config.udp_dest.value()))
-        return false;
-
-    if (config.udp_port_lidar &&
-        !set_param("udp_port_lidar",
-                   std::to_string(config.udp_port_lidar.value())))
-        return false;
-
-    if (config.udp_port_imu &&
-        !set_param("udp_port_imu", std::to_string(config.udp_port_imu.value())))
-        return false;
-
-    if (config.ts_mode &&
-        !set_param("timestamp_mode", to_string(config.ts_mode.value())))
-        return false;
-
-    if (config.ld_mode &&
-        !set_param("lidar_mode", to_string(config.ld_mode.value())))
-        return false;
-
-    // "operating_mode" introduced in fw 2.0. use deprecated 'auto_start_flag'
-    // to support 1.13
-    if (config.operating_mode &&
-        !set_param("auto_start_flag",
-                   auto_start_string(config.operating_mode.value())))
-        return false;
-
-    if (config.multipurpose_io_mode &&
-        !set_param("multipurpose_io_mode",
-                   to_string(config.multipurpose_io_mode.value())))
-        return false;
-
-    if (config.azimuth_window &&
-        !set_param("azimuth_window",
-                   sensor::to_string(config.azimuth_window.value())))
-        return false;
-
-    if (config.signal_multiplier &&
-        !set_param("signal_multiplier",
-                   to_string(config.signal_multiplier.value())))
-        return false;
-
-    if (config.sync_pulse_out_angle &&
-        !set_param("sync_pulse_out_angle",
-                   std::to_string(config.sync_pulse_out_angle.value())))
-        return false;
-
-    if (config.sync_pulse_out_pulse_width &&
-        !set_param("sync_pulse_out_pulse_width",
-                   std::to_string(config.sync_pulse_out_pulse_width.value())))
-        return false;
-
-    if (config.nmea_in_polarity &&
-        !set_param("nmea_in_polarity",
-                   to_string(config.nmea_in_polarity.value())))
-        return false;
-
-    if (config.nmea_baud_rate &&
-        !set_param("nmea_baud_rate", to_string(config.nmea_baud_rate.value())))
-        return false;
-
-    if (config.nmea_ignore_valid_char) {
-        const std::string nmea_ignore_valid_char_string =
-            config.nmea_ignore_valid_char.value() ? "1" : "0";
-        if (!set_param("nmea_ignore_valid_char", nmea_ignore_valid_char_string))
-            return false;
+        if (res != "set_udp_dest_auto")
+            throw std::runtime_error("Error on 'set_udp_dest_auto': " + res);
     }
 
-    if (config.nmea_leap_seconds &&
-        !set_param("nmea_leap_seconds",
-                   std::to_string(config.nmea_leap_seconds.value())))
-        return false;
+    // reset staged config to avoid spurious errors
+    std::string active_params;
+    if (!do_tcp_cmd(sock_fd, {"get_config_param", "active"}, active_params))
+        throw std::runtime_error("Failed to run 'get_config_param'");
+    if (!do_tcp_cmd(sock_fd, {"set_config_param", ".", active_params}, res))
+        throw std::runtime_error("Failed to run 'set_config_param'");
+    if (res != "set_config_param")
+        throw std::runtime_error("Error on 'set_config_param': " + res);
 
-    if (config.sync_pulse_in_polarity &&
-        !set_param("sync_pulse_in_polarity",
-                   to_string(config.sync_pulse_in_polarity.value())))
-        return false;
+    // set all desired config parameters
+    Json::Value config_json = to_json(config, true);
+    for (const auto& key : config_json.getMemberNames()) {
+        auto value = Json::FastWriter().write(config_json[key]);
+        value.erase(std::remove(value.begin(), value.end(), '\n'), value.end());
 
-    if (config.sync_pulse_out_polarity &&
-        !set_param("sync_pulse_out_polarity",
-                   to_string(config.sync_pulse_in_polarity.value())))
-        return false;
+        if (!do_tcp_cmd(sock_fd, {"set_config_param", key, value}, res))
+            throw std::runtime_error("Failed to run 'set_config_param'");
 
-    if (config.sync_pulse_out_frequency &&
-        !set_param("sync_pulse_out_frequency",
-                   std::to_string(config.sync_pulse_out_frequency.value())))
-        return false;
-
-    if (config.phase_lock_enable) {
-        const std::string phase_lock_enable_string =
-            config.phase_lock_enable.value() ? "true" : "false";
-        if (!set_param("phase_lock_enable", phase_lock_enable_string))
-            return false;
+        if (res != "set_config_param")
+            throw std::invalid_argument("Error on 'set_config_param': " + res);
     }
 
-    if (config.phase_lock_offset &&
-        !set_param("phase_lock_offset",
-                   std::to_string(config.phase_lock_offset.value())))
-        return false;
+    // reinitialize to make all staged parameters effective
+    if (!do_tcp_cmd(sock_fd, {"reinitialize"}, res))
+        throw std::runtime_error("Failed to run 'reinitialize'");
 
-    if (config.columns_per_packet &&
-        !set_param("columns_per_packet",
-                   std::to_string(config.columns_per_packet.value())))
-        return false;
+    // reinit will report an error only when staged configs are incompatible
+    if (res != "reinitialize") throw std::invalid_argument(res);
 
-    if (config.udp_profile_lidar &&
-        !set_param("udp_profile_lidar",
-                   to_string(config.udp_profile_lidar.value())))
-        return false;
-
-    if (config.udp_profile_imu &&
-        !set_param("udp_profile_imu",
-                   to_string(config.udp_profile_imu.value())))
-        return false;
-
-    // reinitialize
-    success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
-    success &= res == "reinitialize";
-
-    // save if indicated
+    // save if indicated, use deprecated write_config_txt to support 1.13
     if (config_flags & CONFIG_PERSIST) {
-        // use deprecated write_config_txt to support 1.13
-        success &= do_tcp_cmd(sock_fd, {"write_config_txt"}, res);
-        success &= res == "write_config_txt";
+        if (!do_tcp_cmd(sock_fd, {"write_config_txt"}, res))
+            throw std::runtime_error("Failed to run 'write_config_txt'");
+
+        if (res != "write_config_txt")
+            throw std::runtime_error("Error on 'write_config_txt': " + res);
     }
 
-    return success;
+    return true;
 }
 }  // namespace
 
@@ -491,26 +390,15 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     SOCKET sock_fd = cfg_socket(hostname.c_str());
     if (sock_fd < 0) return false;
 
-    std::string res;
-    bool success = true;
-
-    if (config_flags & CONFIG_UDP_DEST_AUTO) {
-        if (config.udp_dest) {
-            impl::socket_close(sock_fd);
-            throw std::invalid_argument(
-                "UDP_DEST_AUTO flag set but provided config has udp_dest");
-        }
-        success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
-        success &= res == "set_udp_dest_auto";
-    }
-
-    if (success) {
-        success = set_config_helper(sock_fd, config, config_flags);
+    try {
+        set_config_helper(sock_fd, config, config_flags);
+    } catch (...) {
+        impl::socket_close(sock_fd);
+        throw;
     }
 
     impl::socket_close(sock_fd);
-
-    return success;
+    return true;
 }
 
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
