@@ -11,6 +11,7 @@ Changelog
 
 ouster_client
 -------------
+* use ``SO_REUSEPORT`` for UDP sockets on non-windows platforms.
 * the set of fields available on ``LidarScan`` is now configurable. See the new ``LidarScan``
   constructors for details.
 * added ``RANGE2``, ``SIGNAL2`` and ``REFLECTIVITY2`` channel fields to support handling data from

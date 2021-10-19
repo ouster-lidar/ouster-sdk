@@ -111,13 +111,9 @@ SOCKET udp_data_socket(int port) {
                 continue;
             }
 
-            int on = 1;
-            if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&on,
-                           sizeof(on))) {
-                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
+            if (impl::socket_set_reuse(sock_fd)) {
+                std::cerr << "udp socket_set_reuse(): " << impl::socket_get_error()
                           << std::endl;
-                impl::socket_close(sock_fd);
-                continue;
             }
 
             if (bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
