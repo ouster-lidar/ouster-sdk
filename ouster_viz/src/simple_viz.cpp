@@ -145,6 +145,8 @@ int main(int argc, char** argv) {
 
     viz::PointViz point_viz(
         {viz::CloudSetup{xyz_lut.direction.data(), xyz_lut.offset.data(), H * W,
+                         W, info.extrinsic.data()},
+         viz::CloudSetup{xyz_lut.direction.data(), xyz_lut.offset.data(), H * W,
                          W, info.extrinsic.data()}},
         "Ouster Viz", false);
 
@@ -160,8 +162,10 @@ int main(int argc, char** argv) {
     std::mutex swap_mtx;
     bool lidar_scan_ready = false;
 
-    std::unique_ptr<ouster::LidarScan> ls_read(new ouster::LidarScan(W, H));
-    std::unique_ptr<ouster::LidarScan> ls_write(new ouster::LidarScan(W, H));
+    std::unique_ptr<ouster::LidarScan> ls_read(
+        new ouster::LidarScan{W, H, info.format.udp_profile_lidar});
+    std::unique_ptr<ouster::LidarScan> ls_write(
+        new ouster::LidarScan{W, H, info.format.udp_profile_lidar});
 
     auto batch = ouster::ScanBatcher(W, packet_format);
 

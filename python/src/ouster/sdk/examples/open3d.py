@@ -12,7 +12,8 @@ except ModuleNotFoundError:
     exit(1)
 
 from ouster import client
-from .colormaps import normalize, colorize
+from ouster.client import _utils
+from .colormaps import colorize
 
 Z_NEAR = 1.0
 
@@ -130,6 +131,14 @@ def canvas_set_image_data(pic: o3d.geometry.TriangleMesh,
     np.copyto(pic_img_data, img_data)
 
 
+def range_for_field(f: client.ChanField) -> client.ChanField:
+    if f in (client.ChanField.RANGE2, client.ChanField.SIGNAL2,
+             client.ChanField.REFLECTIVITY2):
+        return client.ChanField.RANGE2
+    else:
+        return client.ChanField.RANGE
+
+
 def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
     """Render one scan in Open3D viewer from pcap file with 2d image.
 
@@ -139,21 +148,27 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
         num: scan number in a given pcap file (satrs from *0*)
     """
 
-    channels = [c for c in client.ChanField]
-
     # visualizer state
     scans_iter = iter(scans)
     scan = next(scans_iter)
     metadata = scans.metadata
     xyzlut = client.XYZLut(metadata)
 
-    channel_ind = 2
+    fields = list(scan.fields)
+    aes = {}
+    for field_ind, field in enumerate(fields):
+        if field in (client.ChanField.SIGNAL, client.ChanField.SIGNAL2):
+            aes[field_ind] = _utils.AutoExposure(0.02, 0.1, 3)
+        else:
+            aes[field_ind] = _utils.AutoExposure()
 
-    def next_channel(vis):
-        nonlocal channel_ind
-        channel_ind = (channel_ind + 1) % len(channels)
+    field_ind = 2
+
+    def next_field(vis):
+        nonlocal field_ind
+        field_ind = (field_ind + 1) % len(fields)
         update_data(vis)
-        print(f"Visualizing: {channels[channel_ind].name}")
+        print(f"Visualizing: {fields[field_ind].name}")
 
     def toggle_pause(vis):
         nonlocal paused
@@ -176,19 +191,19 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
                           metadata.format.pixels_per_column)
 
     def update_data(vis: o3d.visualization.Visualizer):
-        xyz = xyzlut(scan)
-        key = scan.field(channels[channel_ind])
+        xyz = xyzlut(scan.field(range_for_field(fields[field_ind])))
+        key = scan.field(fields[field_ind]).astype(float)
 
         # apply colormap to field values
-        key_img = normalize(key)
-        color_img = colorize(key_img)
+        aes[field_ind](key)
+        color_img = colorize(key)
 
         # prepare point cloud for Open3d Visualiser
         cloud.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
         cloud.colors = o3d.utility.Vector3dVector(color_img.reshape((-1, 3)))
 
         # prepare canvas for 2d image
-        gray_img = np.dstack([key_img] * 3)
+        gray_img = np.dstack([key] * 3)
         canvas_set_image_data(image, client.destagger(metadata, gray_img))
 
         # signal that point cloud and needs to be re-rendered
@@ -219,7 +234,7 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
 
         # register keys
         vis.register_key_callback(ord(" "), toggle_pause)
-        vis.register_key_callback(ord("M"), next_channel)
+        vis.register_key_callback(ord("M"), next_field)
         vis.register_key_action_callback(262, right_arrow)
 
         # main loop

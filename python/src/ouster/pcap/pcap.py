@@ -1,43 +1,19 @@
-from dataclasses import dataclass, field
 import os
 import time
+import socket
 from threading import Lock
-from typing import Dict, Iterable, Iterator, Optional, Tuple
+from typing import (Dict, Iterable, Iterator, Optional, Tuple)
 
 from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
                            SensorInfo)
 from ouster.pcap import _pcap
 
 
-# TODO: Look into at possible custom OusterExceptions to raise
-@dataclass
-class PcapInfo:
-    """Information queried about a packet capture from an Ouster sensor.
-
-    Type of the output of :func:`.pcap.info`.
-
-    Attributes:
-        packets_processed: Total number of all packets processed
-        packets_reassembled: Total number of IPv4 UDP packets reassembled
-        non_udp_packets: Number of non UDP packets processed
-        guessed_lidar_port: Best guess for port with Ouster lidar packets
-        guessed_imu_port: Best guess for port with Ouster imu packets
-        ports: A mapping from port numbers to the size (in bytes) and number of
-            packets receved on that port.
-    """
-    packets_processed: int = 0
-    packets_reassembled: int = 0
-    non_udp_packets: int = 0
-    guessed_lidar_port: Optional[int] = None
-    guessed_imu_port: Optional[int] = None
-    ports: Dict[int, Tuple[int, int]] = field(default_factory=dict)
-
-
-def _guess_imu_port(stream_data: _pcap.stream_info) -> Optional[int]:
+def _guess_imu_port(stream_data: Dict[int, Dict[int, int]]) -> Optional[int]:
     result = None
     imu_size = 48
-    if (imu_size in stream_data.packet_size_to_port):
-        correct_packet_size = stream_data.packet_size_to_port[imu_size]
+    if (imu_size in stream_data):
+        correct_packet_size = stream_data[imu_size]
         if (len(correct_packet_size) > 1):
             raise ValueError("Error: Multiple possible imu packets found")
         else:
@@ -46,15 +22,15 @@ def _guess_imu_port(stream_data: _pcap.stream_info) -> Optional[int]:
     return result
 
 
-def _guess_lidar_port(stream_data: _pcap.stream_info) -> Optional[int]:
+def _guess_lidar_port(stream_data: Dict[int, Dict[int, int]]) -> Optional[int]:
     result = None
     lidar_sizes = {3392, 6464, 12608, 24896}
 
     hit_count = 0
     multiple_error_msg = "Error: Multiple possible lidar packets found"
     for s in lidar_sizes:
-        if s in stream_data.packet_size_to_port:
-            correct_packet_size = stream_data.packet_size_to_port[s]
+        if s in stream_data:
+            correct_packet_size = stream_data[s]
             hit_count += 1
             if (len(correct_packet_size) > 1):
                 raise ValueError(multiple_error_msg)
@@ -67,23 +43,50 @@ def _guess_lidar_port(stream_data: _pcap.stream_info) -> Optional[int]:
     return result
 
 
-def _guess_ports(
-        stream_data: _pcap.stream_info) -> Tuple[Optional[int], Optional[int]]:
-    """Guess the ports for lidar and imu streams from a stream_info struct.
+def _guess_ports(pcap_path: str) -> Tuple[Optional[int], Optional[int]]:
+    p = _pcap.replay_initialize(pcap_path)
+    packet_info = _pcap.packet_info()
+    loop = True
+    count = 10000
+    sizes: Dict[int, Dict[int, int]] = {}
 
-    Args:
-        stream_data: The stream_info struct for a pcap file
+    while loop and count > 0:
+        if not _pcap.next_packet_info(p, packet_info):
+            loop = False
+        else:
+            if packet_info.payload_size not in sizes:
+                sizes[packet_info.payload_size] = {}
+            if packet_info.dst_port not in sizes[packet_info.payload_size]:
+                sizes[packet_info.payload_size][packet_info.dst_port] = 0
+            sizes[packet_info.payload_size][packet_info.dst_port] += 1
+        count -= 1
+    _pcap.replay_uninitialize(p)
 
-    Returns:
-        A tuple<int lidar_port, int imu_port> for the guessed lidar and imu ports
-    """
-    return _guess_lidar_port(stream_data), _guess_imu_port(stream_data)
+    return _guess_lidar_port(sizes), _guess_imu_port(sizes)
+
+
+def _pcap_info(path: str) -> Iterator[_pcap.packet_info]:
+    handle = _pcap.replay_initialize(path)
+    try:
+        while True:
+            if handle is None:
+                raise ValueError("I/O operation on closed packet source")
+            packet_info = _pcap.packet_info()
+            if not _pcap.next_packet_info(handle, packet_info):
+                break
+            yield packet_info
+    finally:
+        if handle:
+            _pcap.replay_uninitialize(handle)
 
 
 class Pcap(PacketSource):
     """Read a sensor packet stream out of a pcap file as an iterator."""
 
+    _lidar_port: Optional[int]
+    _imu_port: Optional[int]
     _metadata: SensorInfo
+    _rate: float
     _handle: Optional[_pcap.playback_handle]
     _lock: Lock
 
@@ -114,30 +117,32 @@ class Pcap(PacketSource):
             An iterator of lidar and IMU packets.
         """
 
-        pcap_info = _pcap.replay_get_pcap_info(pcap_path, 10000)
-        lidar_port_guess, imu_port_guess = _guess_ports(pcap_info)
+        lidar_port_guess, imu_port_guess = _guess_ports(pcap_path)
 
         # use guessed values unless ports are specified (0 is falsey)
-        self._lidar_port = lidar_port or lidar_port_guess
-        self._imu_port = imu_port or imu_port_guess
+        self._lidar_port = lidar_port or info.udp_port_lidar or lidar_port_guess
+        self._imu_port = imu_port or info.udp_port_imu or imu_port_guess
 
         self._metadata = info
         self._rate = rate
-        self._handle = _pcap.replay_initialize(pcap_path, "", "", {})
+        self._handle = _pcap.replay_initialize(pcap_path)
         self._lock = Lock()
 
     def __iter__(self) -> Iterator[Packet]:
+        with self._lock:
+            if self._handle is None:
+                raise ValueError("I/O operation on closed packet source")
+
         buf = bytearray(2**16)
         packet_info = _pcap.packet_info()
 
         real_start_ts = time.monotonic()
         pcap_start_ts = None
-
+        metadata = self._metadata
         while True:
             with self._lock:
-                if self._handle is None:
-                    raise ValueError("I/O operation on closed packet source")
-                if not _pcap.next_packet_info(self._handle, packet_info):
+                if (self._handle is None or
+                        not _pcap.next_packet_info(self._handle, packet_info)):
                     break
                 timestamp = packet_info.timestamp
 
@@ -153,10 +158,10 @@ class Pcap(PacketSource):
                 time.sleep(delta)
 
             if packet_info.dst_port == self._lidar_port and n != 0:
-                yield LidarPacket(buf[0:n], self._metadata, timestamp)
+                yield LidarPacket(buf[0:n], metadata, timestamp)
 
             elif packet_info.dst_port == self._imu_port and n != 0:
-                yield ImuPacket(buf[0:n], self._metadata, timestamp)
+                yield ImuPacket(buf[0:n], metadata, timestamp)
 
     @property
     def metadata(self) -> SensorInfo:
@@ -168,6 +173,7 @@ class Pcap(PacketSource):
             if self._handle is not None:
                 _pcap.replay_reset(self._handle)
 
+    @property
     def closed(self) -> bool:
         """Check if source is closed. Thread-safe."""
         with self._lock:
@@ -181,35 +187,7 @@ class Pcap(PacketSource):
                 self._handle = None
 
 
-def info(pcap_path: str, n_packets: int = 1024) -> PcapInfo:
-    """Return some stats info from sampling data in a pcap file.
-
-    Args:
-        pcap_path: File path of recorded pcap
-        n_packets: Number of ip packets / fragments to sample
-
-    Returns:
-        A dictionary mapping destination ports to sizes and packet counts.
-    """
-    info = _pcap.replay_get_pcap_info(pcap_path, n_packets)
-
-    lidar_port, imu_port = _guess_ports(info)
-
-    pcap_info = PcapInfo()
-    pcap_info.packets_processed = info.packets_processed
-    pcap_info.packets_reassembled = info.packets_reassembled
-    pcap_info.non_udp_packets = info.non_udp_packets
-    pcap_info.guessed_lidar_port = lidar_port
-    pcap_info.guessed_imu_port = imu_port
-    pcap_info.ports = {
-        port: list(size_count.items())[0]
-        for port, size_count in info.port_to_packet_sizes.items()
-    }
-
-    return pcap_info
-
-
-def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
+def _replay(pcap_path: str, info: SensorInfo, dst_ip: str, dst_lidar_port: int,
             dst_imu_port: int) -> Iterator[bool]:
     """Replay UDP packets out over the network.
 
@@ -218,6 +196,7 @@ def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
 
     Args:
         pcap_path: Path to the pcap file to replay
+        info: The sensor metadata
         dst_ip: IP to send packets to
         dst_lidar_port: Destination port for lidar packets
         dst_imu_port: Destination port for imu packets
@@ -226,24 +205,24 @@ def _replay(pcap_path: str, dst_ip: str, dst_lidar_port: int,
         An iterator that reports whether packets were sent successfully as it's
         consumed.
     """
-
-    pcap_info = _pcap.replay_get_pcap_info(pcap_path, 10000)
-    lidar_port_guess, imu_port_guess = _guess_ports(pcap_info)
-
-    pcap_handle = _pcap.replay_initialize(
-        pcap_path, dst_ip, dst_ip, {
-            (lidar_port_guess or 0): dst_lidar_port,
-            (imu_port_guess or 0): dst_imu_port
-        })
-
     try:
-        packet_info = _pcap.packet_info()
-        while _pcap.next_packet_info(pcap_handle, packet_info):
-            yield _pcap.replay_packet(pcap_handle)
-    finally:
-        _pcap.replay_uninitialize(pcap_handle)
+        socket_out = socket.socket(family=socket.AF_INET,
+                                   type=socket.SOCK_DGRAM)
 
-    yield False
+        pcap_handle = Pcap(pcap_path, info)
+        for item in pcap_handle:
+            port = 0
+            if isinstance(item, LidarPacket):
+                port = dst_lidar_port
+            if isinstance(item, ImuPacket):
+                port = dst_imu_port
+
+            socket_out.sendto(item._data.tobytes(), (dst_ip, port))
+            yield True
+        yield False
+    finally:
+        if pcap_handle is not None:
+            pcap_handle.close()
 
 
 def record(packets: Iterable[Packet],

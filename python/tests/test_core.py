@@ -23,8 +23,10 @@ def stream_digest():
 
 
 @pytest.fixture(scope="module")
-def meta(stream_digest: digest.StreamDigest):
-    return stream_digest.meta
+def meta():
+    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
+    with open(meta_path, 'r') as f:
+        return client.SensorInfo(f.read())
 
 
 def test_sensor_init(meta: client.SensorInfo) -> None:
@@ -49,35 +51,33 @@ def test_sensor_closed(meta: client.SensorInfo) -> None:
             next(iter(source))
 
 
-@pytest.mark.skipif(sys.platform == "win32",
-                    reason="winsock is OK with this; not sure why")
+@pytest.mark.xfail(sys.platform == "linux",
+                   reason="behavior is currently platform-dependent")
 def test_sensor_port_in_use(meta: client.SensorInfo) -> None:
-    """Using an unavailable port will throw."""
+    """Using an unavailable port will not throw."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('localhost', 0))
     _, port = sock.getsockname()
     with closing(sock):
-        with pytest.raises(RuntimeError):
-            with closing(client.Sensor("os.invalid", port, metadata=meta)):
-                pass
+        with closing(client.Sensor("os.invalid", port, metadata=meta)):
+            pass
 
-        with pytest.raises(RuntimeError):
-            with closing(client.Sensor("os.invalid", 0, port, metadata=meta)):
-                pass
+        with closing(client.Sensor("os.invalid", 0, port, metadata=meta)):
+            pass
 
 
 @pytest.fixture(scope="module")
-def packet(stream_digest):
+def packet(stream_digest: digest.StreamDigest, meta: client.SensorInfo):
     bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
     with open(bin_path, 'rb') as b:
-        return next(iter(digest.LidarBufStream(b, stream_digest.meta)))
+        return next(iter(digest.LidarBufStream(b, meta)))
 
 
 @pytest.fixture
-def packets(stream_digest: digest.StreamDigest):
+def packets(stream_digest: digest.StreamDigest, meta: client.SensorInfo):
     bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
     with open(bin_path, 'rb') as b:
-        yield digest.LidarBufStream(b, stream_digest.meta)
+        yield digest.LidarBufStream(b, meta)
 
 
 def test_scans_simple(packets: client.PacketSource) -> None:
@@ -106,18 +106,18 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert scan.frame_id != -1
     assert scan.h == packets.metadata.format.pixels_per_column
     assert scan.w == packets.metadata.format.columns_per_frame
-    assert len(scan.header(ColHeader.TIMESTAMP)) == scan.w
+    assert len(scan.timestamp) == scan.w
     assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
-    assert len(scan.header(ColHeader.STATUS)) == scan.w
+    assert len(scan.status) == scan.w
 
     assert not scan._complete(), "test data should have missing packet!"
 
     # check that the scan is missing exactly one packet's worth of columns
-    valid_columns = list(scan.header(ColHeader.STATUS)).count(0xffffffff)
+    valid_columns = list(scan.status).count(0xffffffff)
     assert valid_columns == (packets.metadata.format.columns_per_frame -
                              packets.metadata.format.columns_per_packet)
 
-    missing_ts = list(scan.header(ColHeader.TIMESTAMP)).count(0)
+    missing_ts = list(scan.timestamp).count(0)
     assert missing_ts == packets.metadata.format.columns_per_packet
 
     # extra zero encoder value for first column
@@ -146,16 +146,14 @@ def test_scans_first_packet(packet: client.LidarPacket,
     assert np.array_equal(packet.field(client.ChanField.NEAR_IR),
                           scan.field(client.ChanField.NEAR_IR)[:h, :w])
 
-    assert np.all(packet.header(ColHeader.FRAME_ID) == scan.frame_id)
+    assert packet.frame_id == scan.frame_id
 
-    assert np.array_equal(packet.header(ColHeader.TIMESTAMP),
-                          scan.header(ColHeader.TIMESTAMP)[:w])
+    assert np.array_equal(packet.timestamp, scan.timestamp[:w])
 
     assert np.array_equal(packet.header(ColHeader.ENCODER_COUNT),
                           scan.header(ColHeader.ENCODER_COUNT)[:w])
 
-    assert np.array_equal(packet.header(ColHeader.STATUS),
-                          scan.header(ColHeader.STATUS)[:w])
+    assert np.array_equal(packet.status, scan.status[:w])
 
 
 def test_scans_complete(packets: client.PacketSource) -> None:

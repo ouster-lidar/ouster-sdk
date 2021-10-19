@@ -4,15 +4,16 @@ This module contains more idiomatic wrappers around the lower-level module
 generated using pybind11.
 """
 from contextlib import closing
-from more_itertools import take
 from typing import cast, Iterable, Iterator, List, Optional, Tuple
-from typing_extensions import Protocol
 from threading import Thread
 import time
 
+from more_itertools import take
+from typing_extensions import Protocol
+
 from . import _client
-from . import (ColHeader, SensorInfo, ImuPacket, LidarPacket, LidarScan,
-               Packet)
+from ._client import (SensorInfo, LidarScan)
+from .data import (ImuPacket, LidarPacket, Packet)
 
 
 class ClientError(Exception):
@@ -104,14 +105,15 @@ class Sensor(PacketSource):
                  buf_size: int = 128,
                  timeout: Optional[float] = 1.0,
                  _overflow_err: bool = False,
-                 _flush_before_read: bool = True) -> None:
+                 _flush_before_read: bool = True,
+                 _legacy_format: bool = True) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
         be updated. The metadata will be fetched over the network from the
         sensor unless explicitly provided using the ``metadata`` parameter.
 
         Args:
-            hostname: hostname of the sensor
+            hostname: hostname or IP address of the sensor
             lidar_port: UDP port to listen on for lidar data
             imu_port: UDP port to listen on for imu data
             metadata: explicitly provide metadata for the stream
@@ -119,6 +121,7 @@ class Sensor(PacketSource):
             timeout: seconds to wait for packets before signaling error or None
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
+            _legacy_format: if True, use legacy metadata format
 
         Raises:
             ClientError: If initializing the client fails.
@@ -129,6 +132,7 @@ class Sensor(PacketSource):
         self._flush_before_read = _flush_before_read
         self._cache = None
         self._fetched_meta = ""
+        self._legacy_format = _legacy_format
 
         # Fetch from sensor if not explicitly provided
         if metadata:
@@ -145,7 +149,8 @@ class Sensor(PacketSource):
 
     def _fetch_metadata(self) -> None:
         if not self._fetched_meta:
-            self._fetched_meta = self._cli.get_metadata()
+            self._fetched_meta = self._cli.get_metadata(
+                legacy=self._legacy_format)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 
@@ -209,6 +214,9 @@ class Sensor(PacketSource):
             ValueError: if the packet source has already been closed
         """
 
+        if not self._producer.is_alive():
+            raise ValueError("I/O operation on closed packet source")
+
         # Attempt to flush any old data before producing packets
         if self._flush_before_read:
             self.flush(full=True)
@@ -218,7 +226,7 @@ class Sensor(PacketSource):
             if p is not None:
                 yield p
             else:
-                raise ValueError("I/O operation on closed packet source")
+                break
 
     def flush(self, n_frames: int = 3, *, full=False) -> int:
         """Drop some data to clear internal buffers.
@@ -241,8 +249,7 @@ class Sensor(PacketSource):
         while True:
             st, buf = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = LidarPacket(buf, self._metadata).header(
-                    ColHeader.FRAME_ID)[0]
+                frame = LidarPacket(buf, self._metadata).frame_id
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1
@@ -323,7 +330,8 @@ class Scans:
         sensor = cast(Sensor, self._source) if isinstance(
             self._source, Sensor) else None
 
-        ls_write = _client.LidarScan(w, h)
+        ls_write = LidarScan(h, w,
+                             self._source.metadata.format.udp_profile_lidar)
         pf = _client.PacketFormat.from_info(self._source.metadata)
         batch = _client.ScanBatcher(w, pf)
 
@@ -344,11 +352,11 @@ class Scans:
             if isinstance(packet, LidarPacket):
                 if batch(packet._data, ls_write):
                     # Got a new frame, return it and start another
-                    ls = LidarScan.from_native(ls_write)
-                    if not self._complete or ls._complete(column_window):
-                        yield ls
-                        start_ts = time.monotonic()
-                    ls_write = _client.LidarScan(w, h)
+                    if not self._complete or ls_write._complete(column_window):
+                        yield ls_write
+                    start_ts = time.monotonic()
+                    ls_write = LidarScan(
+                        h, w, self._source.metadata.format.udp_profile_lidar)
 
                     # Drop data along frame boundaries to maintain _max_latency and
                     # clear out already-batched first packet of next frame

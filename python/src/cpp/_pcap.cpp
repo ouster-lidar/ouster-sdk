@@ -19,6 +19,8 @@
 #include <pcap/pcap.h>
 
 #include <sstream>
+PYBIND11_MAKE_OPAQUE(std::shared_ptr<ouster::sensor_utils::playback_handle>);
+PYBIND11_MAKE_OPAQUE(std::shared_ptr<ouster::sensor_utils::record_handle>);
 
 namespace py = pybind11;
 
@@ -50,19 +52,6 @@ inline size_t getptrsize(py::buffer& buf) {
     return (size_t)info.size;
 }
 
-// hack: Wrap replay to allow terminating via SIGINT
-// @TODO This is currently not thread safe
-int replay_pcap(ouster::sensor_utils::playback_handle& handle, double rate) {
-    py::gil_scoped_release release;
-
-    auto py_handler = std::signal(SIGINT, [](int) { std::exit(EXIT_SUCCESS); });
-
-    auto res = ouster::sensor_utils::replay(handle, rate);
-    std::signal(SIGINT, py_handler);
-
-    return res;
-}
-
 // Record functionality removed for a short amount of time
 // until we switch it over to support libtins
 
@@ -78,23 +67,6 @@ directly.
     options.disable_function_signatures();
 
     // clang-format off
-    
-    py::class_<ouster::sensor_utils::stream_info,
-               std::shared_ptr<ouster::sensor_utils::stream_info>>(m, "stream_info")
-        .def(py::init<>())
-        .def("__repr__", [](const ouster::sensor_utils::stream_info& data) {
-                             std::stringstream result;
-                             result << data;
-                             return result.str();})
-        .def_readonly("packets_processed", &ouster::sensor_utils::stream_info::packets_processed)
-        .def_readonly("packets_reassembled", &ouster::sensor_utils::stream_info::packets_reassembled)
-        .def_readonly("port_to_packet_sizes", &ouster::sensor_utils::stream_info::port_to_packet_sizes)
-        .def_readonly("port_to_packet_count", &ouster::sensor_utils::stream_info::port_to_packet_count)
-        .def_readonly("ipv6_packets", &ouster::sensor_utils::stream_info::ipv6_packets)
-        .def_readonly("ipv4_packets", &ouster::sensor_utils::stream_info::ipv4_packets)
-        .def_readonly("non_udp_packets", &ouster::sensor_utils::stream_info::non_udp_packets)
-        .def_readonly("packet_size_to_port", &ouster::sensor_utils::stream_info::packet_size_to_port);
-    
     py::class_<ouster::sensor_utils::packet_info,
                std::shared_ptr<ouster::sensor_utils::packet_info>>(m, "packet_info")
         .def(py::init<>())
@@ -110,47 +82,64 @@ directly.
              [](ouster::sensor_utils::packet_info& packet_info) -> double {
                  return packet_info.timestamp.count() / 1e6;
              })
-        .def_readonly("payload_size", &ouster::sensor_utils::packet_info::payload_size);
+        .def_readonly("payload_size", &ouster::sensor_utils::packet_info::payload_size)
+        .def_readonly("fragments_in_packet",
+                      &ouster::sensor_utils::packet_info::fragments_in_packet)
+        .def_readonly("ip_version", &ouster::sensor_utils::packet_info::ip_version)
+        .def_readonly("encapsulation_protocol", &ouster::sensor_utils::packet_info::encapsulation_protocol)
+        .def_readonly("network_protocol", &ouster::sensor_utils::packet_info::network_protocol);
     
     
-    py::class_<ouster::sensor_utils::playback_handle,
-               std::shared_ptr<ouster::sensor_utils::playback_handle>>(m, "playback_handle")
-        .def(py::init<>());
-    py::class_<ouster::sensor_utils::record_handle,
-               std::shared_ptr<ouster::sensor_utils::record_handle>>(m, "record_handle")
-        .def(py::init<>());
+     py::class_<std::shared_ptr<ouster::sensor_utils::playback_handle>>(m, "playback_handle")
+         .def("__init__", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& self) {
+             new (&self) std::shared_ptr<ouster::sensor_utils::playback_handle>{
+                 ouster::sensor_utils::playback_handle_init()};
+         });
     
-    m.def("replay_pcap", &replay_pcap);
-    m.def("replay_get_pcap_info", &ouster::sensor_utils::replay_get_pcap_info, py::return_value_policy::reference);
+    py::class_<std::shared_ptr<ouster::sensor_utils::record_handle>>(m, "record_handle")
+        .def("__init__", [](std::shared_ptr<ouster::sensor_utils::record_handle>& self) {
+             new (&self) std::shared_ptr<ouster::sensor_utils::record_handle>{
+                 ouster::sensor_utils::record_handle_init()};
+        });
 
-    m.def("replay_initialize",
-          py::overload_cast<const std::string&, const std::string&,
-          const std::string&, std::unordered_map<int, int>>(&ouster::sensor_utils::replay_initialize));
-    m.def("replay_uninitialize", &ouster::sensor_utils::replay_uninitialize);
-    m.def("replay_reset", &ouster::sensor_utils::replay_reset);
-    m.def("replay_packet", &ouster::sensor_utils::replay_packet);
-
-    m.def("next_packet_info", &ouster::sensor_utils::next_packet_info);
+    m.def("replay_initialize", &ouster::sensor_utils::replay_initialize);
+    
+    m.def("replay_uninitialize", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle) {
+        ouster::sensor_utils::replay_uninitialize(*handle);
+    });
+    m.def("replay_reset", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle) {
+        ouster::sensor_utils::replay_reset(*handle);
+    });
+    
+    m.def("next_packet_info", [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle,
+                                 ouster::sensor_utils::packet_info& packet_info) -> bool {
+        return ouster::sensor_utils::next_packet_info(*handle, packet_info);
+    });
+    
     m.def("read_packet",
-          [](ouster::sensor_utils::playback_handle& handle, py::buffer buf) {
-              return ouster::sensor_utils::read_packet(handle, getptr(buf), getptrsize(buf));
+          [](std::shared_ptr<ouster::sensor_utils::playback_handle>& handle, py::buffer buf) -> size_t {
+              return ouster::sensor_utils::read_packet(*handle, getptr(buf), getptrsize(buf));
           });
     
     m.def("record_initialize", &ouster::sensor_utils::record_initialize,
           py::arg("file_name"), py::arg("src_ip"), py::arg("dst_ip"),
           py::arg("frag_size"), py::arg("use_sll_encapsulation") = false);
-    m.def("record_uninitialize", &ouster::sensor_utils::record_uninitialize);
+    m.def("record_uninitialize",
+          [](std::shared_ptr<ouster::sensor_utils::record_handle>& handle) {
+              ouster::sensor_utils::record_uninitialize(*handle);
+          });
+    
     m.def("record_packet",
-          [](ouster::sensor_utils::record_handle& handle,
+          [](std::shared_ptr<ouster::sensor_utils::record_handle>& handle,
              int src_port, int dst_port, py::buffer buf, double timestamp) {
-              ouster::sensor_utils::record_packet(handle,
+              ouster::sensor_utils::record_packet(*handle,
                                                   src_port,
                                                   dst_port,
                                                   getptr(buf),
                                                   getptrsize(buf),
                                                   llround(timestamp * 1e6));
+
           });
     // clang-format on
-
     return m.ptr();
 }

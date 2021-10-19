@@ -97,9 +97,11 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  *
  * @param cli client returned by init_client associated with the connection
  * @param timeout_sec how long to wait for the sensor to initialize
+ * @param legacy_format whether to use legacy format of metadata output
  * @return a text blob of metadata parseable into a sensor_info struct
  */
-std::string get_metadata(client& cli, int timeout_sec = 60);
+std::string get_metadata(client& cli, int timeout_sec = 60,
+                         bool legacy_format = true);
 
 /**
  * Get sensor config from the sensor
@@ -114,9 +116,20 @@ std::string get_metadata(client& cli, int timeout_sec = 60);
 bool get_config(const std::string& hostname, sensor_config& config,
                 bool active = true);
 
+
+/**
+ * Flags for set_config()
+ */
+enum config_flags : uint8_t {
+    CONFIG_UDP_DEST_AUTO = (1 << 0),  ///< Set udp_dest automatically
+    CONFIG_PERSIST = (1 << 1)         ///< Make configuration persistent
+};
+
 /**
  * Set sensor config on sensor
  *
+ * @throw runtime_error on failure to communcate with the sensor
+ * @throw invalid_argument when config parameters fail validation
  * @param hostname sensor hostname
  * @param sensor config
  * @param flags flags to pass in

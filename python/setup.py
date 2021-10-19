@@ -9,7 +9,6 @@ from setuptools.command.build_ext import build_ext
 from setuptools.command.sdist import sdist
 from wheel.bdist_wheel import bdist_wheel
 
-
 # use SDK source location from environment or try to guess
 SRC_PATH = os.path.dirname(os.path.abspath(__file__))
 OUSTER_SDK_PATH = os.getenv('OUSTER_SDK_PATH')
@@ -18,7 +17,7 @@ if OUSTER_SDK_PATH is None:
 if not os.path.exists(OUSTER_SDK_PATH):
     OUSTER_SDK_PATH = os.path.join(SRC_PATH, "..")
 if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
-    raise RuntimeError(f"Could not guess OUSTER_SDK_PATH")
+    raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 
 
 class CMakeExtension(Extension):
@@ -90,7 +89,6 @@ class CMakeBuild(build_ext):
 
 class sdk_sdist(sdist):
     """Allow including files from parent directory via symlink."""
-
     def run(self):
         created = False
         try:
@@ -122,7 +120,7 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.2.2',
+    version='0.3.0b1',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
@@ -151,9 +149,7 @@ setup(
     ],
     extras_require={
         'test': ['pytest', 'tox'],
-        'dev': [
-            'flake8', 'future', 'mypy', 'mypy-ls', 'python-lsp-server', 'yapf'
-        ],
+        'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
         'docs': [
             'Sphinx >=3.5',
             'sphinx-autodoc-typehints ==1.11.1',
@@ -166,6 +162,7 @@ setup(
         'examples': [
             'matplotlib',
             'opencv-python',
+            'laspy',
             'PyQt5; platform_system=="Windows"',
         ],
     })

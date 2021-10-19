@@ -281,6 +281,9 @@ static void handleKeyPress(GLFWwindow* window, int key, int /*scancode*/,
         if (key == GLFW_KEY_0) {
             pimpl->camera.toggleOrthographic();
         }
+        if (key == GLFW_KEY_ESCAPE) {
+            pthis->quit = true;
+        }
     } else if (mods == GLFW_MOD_SHIFT) {
         if (key == GLFW_KEY_R) {
             // reset camera
