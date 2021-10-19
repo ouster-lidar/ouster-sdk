@@ -8,7 +8,7 @@ from more_itertools import side_effect
 import numpy as np
 
 from . import _bufstream as bufstream
-from . import (LidarPacket, LidarScan, ChanField, ColHeader, Packet, Packets,
+from . import (LidarPacket, LidarScan, ColHeader, Packet, Packets,
                PacketSource, SensorInfo, Scans)
 
 
@@ -70,7 +70,7 @@ class ScanDigest:
     @classmethod
     def from_packet(cls, p: LidarPacket) -> 'ScanDigest':
         hashes = {}
-        hashes.update({c.name: _md5(p.field(c)) for c in ChanField})
+        hashes.update({c.name: _md5(p.field(c)) for c in p.fields})
         hashes.update({h.name: _md5(p.header(h)) for h in ColHeader})
 
         return cls(**hashes)
@@ -78,14 +78,12 @@ class ScanDigest:
     @classmethod
     def from_scan(cls, ls: LidarScan) -> 'ScanDigest':
         hashes = {}
-        hashes.update({c.name: _md5(ls.field(c)) for c in ChanField})
+        hashes.update({c.name: _md5(ls.field(c)) for c in ls.fields})
 
-        hashes['TIMESTAMP'] = _md5(
-            ls.header(ColHeader.TIMESTAMP).astype(np.uint64))
+        hashes['TIMESTAMP'] = _md5(ls.timestamp.astype(np.uint64))
         hashes['ENCODER_COUNT'] = _md5(
             ls.header(ColHeader.ENCODER_COUNT).astype(np.uint64))
-        hashes['STATUS'] = _md5(
-            ls.header(ColHeader.STATUS).astype(np.uint64))
+        hashes['STATUS'] = _md5(ls.status.astype(np.uint64))
 
         return cls(**hashes)
 
@@ -99,10 +97,8 @@ class StreamDigest:
 
     Attributes:
         file: Path to file containing a bufstream of packet data to check.
-        meta: Sensor metadata used to parse packets into channel data.
         packets: List of known good hashes of channel data for each packet.
     """
-    meta: SensorInfo
     packets: List[ScanDigest]
     scans: List[ScanDigest]
 
@@ -127,7 +123,6 @@ class StreamDigest:
         """Serialize to json."""
         return json.dumps(
             {
-                'meta': json.loads(str(self.meta)),
                 'packets': [d.hashes for d in self.packets],
                 'scans': [d.hashes for d in self.scans]
             },
@@ -146,13 +141,12 @@ class StreamDigest:
                           source.metadata)
         scan_digests = list(map(ScanDigest.from_scan, Scans(packets)))
 
-        return cls(source.metadata, packet_digests, scan_digests)
+        return cls(packet_digests, scan_digests)
 
     @classmethod
     def from_json(cls, json_data: str) -> 'StreamDigest':
         """Instantiate from json representation."""
         d = json.loads(json_data)
         return cls(
-            meta=SensorInfo(json.dumps(d['meta'])),
             packets=[ScanDigest(**hashes) for hashes in d.get('packets', [])],
             scans=[ScanDigest(**hashes) for hashes in d.get('scans', [])])

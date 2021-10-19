@@ -19,6 +19,8 @@ RUN set -xe \
  pybind11-dev \
 # Install any additional available cpython versions for testing
  'python3.[6-9]-dev' \
+ libglfw3-dev \
+ libglew-dev \
 && rm -rf /var/lib/apt/lists
 
 # Set up non-root build user and environment

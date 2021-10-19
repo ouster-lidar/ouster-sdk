@@ -13,17 +13,20 @@ option(BUILD_PCAP "Build pcap utils." OFF)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 
-set(CMAKE_CXX_STANDARD 11)
-if(MSVC)
-  add_compile_options(/W3)
-  add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
-else()
-  add_compile_options(-Wall -Wextra -Werror)
-endif()
+# when building as a top-level project
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_CXX_EXTENSIONS OFF)
 
-# === Testing ===
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    include(CTest)
+  if(MSVC)
+    add_compile_options(/W3)
+    add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
+  else()
+    add_compile_options(-Wall -Wextra -Werror -Wno-error=deprecated-declarations)
+  endif()
+
+  include(CTest)
 endif()
 
 # === Subdirectories ===
@@ -37,8 +40,8 @@ if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
 endif()
 
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
-    add_subdirectory(tests)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
+  add_subdirectory(tests)
 endif()
 
 # ==== Install ====
@@ -81,7 +84,7 @@ set(CPACK_SOURCE_IGNORE_FILES /.git /dist)
 set(CPACK_DEBIAN_PACKAGE_NAME ouster-sdk)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "cmake, libjsoncpp-dev, libtclap-dev, libeigen3-dev,
-  libglfw3-dev, libglew-dev, libtins-dev, libpcap-dev")
+  libglfw3-dev, libglew-dev")
 
 include(CPack)
 

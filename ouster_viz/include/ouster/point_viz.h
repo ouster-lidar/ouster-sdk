@@ -79,7 +79,7 @@ class PointViz {
     /**
      * Constructor
      *
-     * @param viz_setups for setting up point clouds, typically one per sensor
+     * @param viz_setups point cloud parameters
      * @param name name of the visualizer, shown in the title bar
      * @param fork whether or not to run the draw loop in a separate thread.
      *        PLEASE NOTE: the fork will not work on macOS because mac only

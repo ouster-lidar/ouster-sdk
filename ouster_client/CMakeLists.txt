@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.1.0)
 
 # ==== Project Name ====
-project(ouster_client VERSION 0.2.1)
-set(ouster_client_VERSION_SUFFIX "")
+project(ouster_client VERSION 0.3.0)
+set(ouster_client_VERSION_SUFFIX ".dev2")
 
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)
@@ -25,11 +25,12 @@ target_include_directories(ouster_build INTERFACE
 add_dependencies(ouster_build generate_build_header)
 
 # ==== Libraries ====
-add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp src/image_processing.cpp)
+add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp
+  src/image_processing.cpp src/buffered_udp_source.cpp src/parsing.cpp)
 target_link_libraries(ouster_client
   PUBLIC Eigen3::Eigen $<BUILD_INTERFACE:ouster_build>
   PRIVATE jsoncpp_lib)
-target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32 EIGEN_MPL2_ONLY)
+target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32 PRIVATE EIGEN_MPL2_ONLY)
 add_library(OusterSDK::ouster_client ALIAS ouster_client)
 
 if(WIN32)

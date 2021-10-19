@@ -8,7 +8,6 @@ This module has a rudimentary command line interface. For usage, run::
 import argparse
 from contextlib import closing
 
-from more_itertools import time_limited
 import numpy as np
 
 from ouster import client
@@ -302,6 +301,7 @@ def plot_imu_z_accel(hostname: str,
     import matplotlib.pyplot as plt  # type: ignore
 
     # [doc-stag-imu-z-accel]
+    from more_itertools import time_limited
     # connect to sensor and get imu packets within n_seconds
     source = client.Sensor(hostname, lidar_port, imu_port, buf_size=640)
     with closing(source):
@@ -350,6 +350,7 @@ def record_pcap(hostname: str,
     from datetime import datetime
 
     # [doc-stag-pcap-record]
+    from more_itertools import time_limited
     # connect to sensor and record lidar/imu packets
     with closing(client.Sensor(hostname, lidar_port, imu_port,
                                buf_size=640)) as source:

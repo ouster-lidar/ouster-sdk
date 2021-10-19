@@ -24,21 +24,28 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {};
 // clang-format off
 INSTANTIATE_TEST_CASE_P(BCompat, MetaJsonTest,
 testing::Values(
-  "1_12_os1-991937000062-16A0",
-  "1_12_os1-991937000062-64",
-  "1_13_os1-991937000062-16A0",
-  "1_13_os1-991937000062-32A02",
-  "1_13_os1-991937000062-64",
-  "1_14_6cccd_os-882002000138-128",
-  "1_14_6cccd_os-882002000138-32U0",
-  "1_14_6cccd_os-882002000138-64U02",
-  "1_14_beta_os1-991937000062-16A0",
-  "1_14_beta_os1-991937000062-32A02",
-  "1_14_beta_os1-991937000062-64",
-  "1_14_beta_os-882004000055-128",
-  "2_0_rc2_os-992011000121-32U0",
-  "2_0_0_os1-992008000494-128_col_win",
-  "ouster-studio-reduced-config-v1"
+  "1_12_os1-991913000010-64",
+  "1_12_os1-991937000062-16A0_legacy",
+  "1_12_os1-991937000062-64_legacy",
+  "1_13_os1-991913000010-64",
+  "1_13_os1-991937000062-16A0_legacy",
+  "1_13_os1-991937000062-32A02_legacy",
+  "1_13_os1-991937000062-64_legacy",
+  "1_14_6cccd_os-882002000138-128_legacy",
+  "1_14_6cccd_os-882002000138-32U0_legacy",
+  "1_14_6cccd_os-882002000138-64U02_legacy",
+  "1_14_beta_os1-991937000062-16A0_legacy",
+  "1_14_beta_os1-991937000062-32A02_legacy",
+  "1_14_beta_os1-991937000062-64_legacy",
+  "1_14_beta_os-882004000055-128_legacy",
+  "2_0_rc2_os-992011000121-32U0_legacy",
+  "2_0_0_os1-992008000494-128_col_win_legacy",
+  "2_0_0_os1-991913000010-64",
+  "2_1_2_os1-991913000010-64_legacy",
+  "2_1_2_os1-991913000010-64",
+  "ouster-studio-reduced-config-v1",
+  "2_2_os-992119000444-128_legacy",
+  "2_2_os-992119000444-128"
 ));
 // clang-format on
 
@@ -82,6 +89,7 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     EXPECT_EQ(si.lidar_to_sensor_transform,
               si_expected.lidar_to_sensor_transform);
     EXPECT_EQ(si.extrinsic, si_expected.extrinsic);
+    EXPECT_EQ(si.init_id, si_expected.init_id);
 }
 
 int main(int argc, char** argv) {

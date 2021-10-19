@@ -11,6 +11,9 @@ find_package(GLEW REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 
 # ==== Libraries ====
+# use only MPL-licensed parts of eigen
+add_definitions(-DEIGEN_MPL2_ONLY)
+
 add_library(ouster_viz src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp
   src/lidar_scan_viz.cpp)
 target_link_libraries(ouster_viz

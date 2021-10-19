@@ -18,6 +18,7 @@
 #endif
 
 namespace ouster {
+namespace sensor {
 namespace impl {
 
 #ifdef _WIN32
@@ -83,13 +84,14 @@ int socket_set_non_blocking(SOCKET value) {
 }
 
 int socket_set_reuse(SOCKET value) {
-#ifdef _WIN32
-    u_long reuse = 1;
-    return ioctlsocket(value, SO_REUSEADDR, &reuse);
-#else
     int option = 1;
-    return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+#ifndef _WIN32
+    int res =
+        setsockopt(value, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
+    if (res != 0) return res;
 #endif
+    return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, (char*)&option,
+                      sizeof(option));
 }
 
 int socket_set_rcvtimeout(SOCKET sock, int timeout_sec) {
@@ -107,4 +109,5 @@ int socket_set_rcvtimeout(SOCKET sock, int timeout_sec) {
 }
 
 }  // namespace impl
+}  // namespace sensor
 }  // namespace ouster

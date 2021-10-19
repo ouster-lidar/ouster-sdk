@@ -8,11 +8,12 @@ find_package(libtins REQUIRED)
 
 # ==== Libraries ====
 add_library(ouster_pcap src/os_pcap.cpp)
-target_link_libraries(ouster_pcap PUBLIC ouster_client tins)
+target_link_libraries(ouster_pcap PRIVATE tins)
 # https://github.com/microsoft/vcpkg/issues/798
 find_path(TINS_INCLUDE_DIR tins/tins.h)
-target_include_directories(ouster_pcap PUBLIC
+target_include_directories(ouster_pcap PRIVATE
   ${TINS_INCLUDE_DIR}
+  PUBLIC
   $<INSTALL_INTERFACE:include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 add_library(OusterSDK::ouster_pcap ALIAS ouster_pcap)
