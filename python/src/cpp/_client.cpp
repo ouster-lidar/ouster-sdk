@@ -505,16 +505,24 @@ PYBIND11_PLUGIN(_client) {
         .def("shutdown", &BufferedUDPSource::shutdown)
         .def("consume",
              [](BufferedUDPSource& self, py::buffer buf, float timeout_sec) {
-                 // allow interrupting timeout by polling for signals every 10ms
-                 const float interval = 0.01;
+                 using fsec = chrono::duration<float>;
+
                  auto info = buf.request();
 
-                 auto timeout_time = chrono::steady_clock::now() +
-                                     chrono::duration<float>{timeout_sec};
+                 // timeout_sec == 0 means nonblocking, < 0 means forever
+                 auto timeout_time =
+                     timeout_sec >= 0
+                         ? chrono::steady_clock::now() + fsec{timeout_sec}
+                         : chrono::steady_clock::time_point::max();
+
+                 // consume() with 0 timeout means return if no queued packets
+                 float poll_interval = timeout_sec ? 0.1 : 0.0;
+
+                 // allow interrupting timeout from Python by polling
                  sensor::client_state res = sensor::client_state::TIMEOUT;
                  do {
                      res = self.consume(static_cast<uint8_t*>(info.ptr),
-                                        info.size, interval);
+                                        info.size, poll_interval);
                      if (res != sensor::client_state::TIMEOUT) break;
 
                      if (PyErr_CheckSignals() != 0)

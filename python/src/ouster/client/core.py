@@ -172,7 +172,8 @@ class Sensor(PacketSource):
         if self._cache is None:
             # Lidar packets are bigger than IMU: wastes some space but is simple
             buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(buf, self._timeout or 0)
+            st = self._cli.consume(
+                buf, -1 if self._timeout is None else self._timeout)
         else:
             st, buf = self._cache
             self._cache = None
@@ -196,7 +197,8 @@ class Sensor(PacketSource):
         if self._cache is None:
             # Lidar packets are bigger than IMU: wastes some space but is simple
             buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(buf, self._timeout or 0)
+            st = self._cli.consume(
+                buf, -1 if self._timeout is None else self._timeout)
             self._cache = (st, buf)
         return self._cache
 
