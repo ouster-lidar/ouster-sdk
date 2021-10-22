@@ -115,8 +115,8 @@ SOCKET udp_data_socket(int port) {
             }
 
             if (impl::socket_set_reuse(sock_fd)) {
-                std::cerr << "udp socket_set_reuse(): " << impl::socket_get_error()
-                          << std::endl;
+                std::cerr << "udp socket_set_reuse(): "
+                          << impl::socket_get_error() << std::endl;
             }
 
             if (bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
@@ -246,6 +246,7 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
 
     auto timeout_time = chrono::steady_clock::now() + timeout;
 
+    std::string status;
     do {
         success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
         success &=
@@ -253,8 +254,16 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
 
         if (chrono::steady_clock::now() >= timeout_time) return false;
         std::this_thread::sleep_for(chrono::seconds(1));
-    } while (success && root["status"].asString() == "INITIALIZING");
+        status = root["status"].asString();
+    } while (success && status == "INITIALIZING");
     cli.meta["sensor_info"] = root;
+
+    // not all metadata available when sensor isn't RUNNING
+    if (status != "RUNNING") {
+        throw std::runtime_error(
+            "Cannot initialize with sensor status: " + status +
+            ". Please ensure operating mode is set to NORMAL");
+    }
 
     success &= do_tcp_cmd(sock_fd, {"get_beam_intrinsics"}, res);
     success &=
@@ -304,6 +313,15 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
                        uint8_t config_flags) {
     std::string res{};
 
+    // reset staged config to avoid spurious errors
+    std::string active_params;
+    if (!do_tcp_cmd(sock_fd, {"get_config_param", "active"}, active_params))
+        throw std::runtime_error("Failed to run 'get_config_param'");
+    if (!do_tcp_cmd(sock_fd, {"set_config_param", ".", active_params}, res))
+        throw std::runtime_error("Failed to run 'set_config_param'");
+    if (res != "set_config_param")
+        throw std::runtime_error("Error on 'set_config_param': " + res);
+
     // set automatic udp dest, if flag specified
     if (config_flags & CONFIG_UDP_DEST_AUTO) {
         if (config.udp_dest)
@@ -316,15 +334,6 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
         if (res != "set_udp_dest_auto")
             throw std::runtime_error("Error on 'set_udp_dest_auto': " + res);
     }
-
-    // reset staged config to avoid spurious errors
-    std::string active_params;
-    if (!do_tcp_cmd(sock_fd, {"get_config_param", "active"}, active_params))
-        throw std::runtime_error("Failed to run 'get_config_param'");
-    if (!do_tcp_cmd(sock_fd, {"set_config_param", ".", active_params}, res))
-        throw std::runtime_error("Failed to run 'set_config_param'");
-    if (res != "set_config_param")
-        throw std::runtime_error("Error on 'set_config_param': " + res);
 
     // set all desired config parameters
     Json::Value config_json = to_json(config, true);

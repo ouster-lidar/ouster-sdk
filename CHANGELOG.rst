@@ -11,6 +11,7 @@ Changelog
 
 ouster_client
 -------------
+* disable collecting metadata when sensor is in STANDBY mode
 * use ``SO_REUSEPORT`` for UDP sockets on non-windows platforms.
 * the set of fields available on ``LidarScan`` is now configurable. See the new ``LidarScan``
   constructors for details.
@@ -64,6 +65,7 @@ ouster_viz
 
 python
 ------
+* return an error when attempting to initialize ``client.Sensor`` in STANDBY mode
 * add bindings for new configuration and metadata supported by the client library
 * breaking change: the ``ChanField`` enum is now implemented as a native binding for easier interop
   with C++. Unlike Python enums, the bound class itself is no longer sized or iterable. Use
