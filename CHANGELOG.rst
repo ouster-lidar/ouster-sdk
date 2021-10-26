@@ -11,7 +11,10 @@ Changelog
 
 ouster_client
 -------------
+* update cmake package version to 0.3.0
 * disable collecting metadata when sensor is in STANDBY mode
+* breaking change: ``set_config()`` will now produce more informative errors by throwing
+  ``std::invalid_argument`` with an error message when config parameters fail validation
 * use ``SO_REUSEPORT`` for UDP sockets on non-windows platforms.
 * the set of fields available on ``LidarScan`` is now configurable. See the new ``LidarScan``
   constructors for details.
@@ -65,7 +68,12 @@ ouster_viz
 
 python
 ------
+* update ouster-sdk version to 0.3.0
 * return an error when attempting to initialize ``client.Sensor`` in STANDBY mode
+* check for errors while reading from a ``Sensor`` packet source and waiting for a timeout. This
+  should make stopping a process with ``SIGINT`` more reliable
+* add PoC bindings for the ``ouster_viz`` library with a simple example driver. See the
+  ``ouster.sdk.examples.viz`` module
 * add bindings for new configuration and metadata supported by the client library
 * breaking change: the ``ChanField`` enum is now implemented as a native binding for easier interop
   with C++. Unlike Python enums, the bound class itself is no longer sized or iterable. Use
