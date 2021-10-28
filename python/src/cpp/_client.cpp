@@ -539,7 +539,9 @@ PYBIND11_PLUGIN(_client) {
              })
         .def("flush", &BufferedUDPSource::flush, py::arg("n_packets") = 0)
         .def_property_readonly("capacity", &BufferedUDPSource::capacity)
-        .def_property_readonly("size", &BufferedUDPSource::size);
+        .def_property_readonly("size", &BufferedUDPSource::size)
+        .def_property_readonly("lidar_port", &BufferedUDPSource::get_lidar_port)
+        .def_property_readonly("imu_port", &BufferedUDPSource::get_imu_port);
 
     // Scans
     py::class_<LidarScan>(m, "LidarScan", py::metaclass(), R"(

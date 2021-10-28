@@ -580,5 +580,9 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
     return recv_fixed(cli.imu_fd, buf, pf.imu_packet_size);
 }
 
+int get_lidar_port(client& cli) { return get_sock_port(cli.lidar_fd); }
+
+int get_imu_port(client& cli) { return get_sock_port(cli.imu_fd); }
+
 }  // namespace sensor
 }  // namespace ouster

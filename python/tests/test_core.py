@@ -31,8 +31,9 @@ def meta():
 
 def test_sensor_init(meta: client.SensorInfo) -> None:
     """Initializing a data stream with metadata makes no network calls."""
-    with closing(client.Sensor("os.invalid", 0, 0, metadata=meta)):
-        pass
+    with closing(client.Sensor("os.invalid", 0, 0, metadata=meta)) as source:
+        assert source._cli.lidar_port != 0
+        assert source._cli.imu_port != 0
 
 
 def test_sensor_timeout(meta: client.SensorInfo) -> None:
@@ -51,19 +52,18 @@ def test_sensor_closed(meta: client.SensorInfo) -> None:
             next(iter(source))
 
 
-@pytest.mark.xfail(sys.platform == "linux",
-                   reason="behavior is currently platform-dependent")
 def test_sensor_port_in_use(meta: client.SensorInfo) -> None:
-    """Using an unavailable port will not throw."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('localhost', 0))
-    _, port = sock.getsockname()
-    with closing(sock):
-        with closing(client.Sensor("os.invalid", port, metadata=meta)):
-            pass
+    """Instantiating clients listening to the same port does not fail."""
+    with closing(client.Sensor("", 0, 0, metadata=meta)) as source:
+        lidar_port = source._cli.lidar_port
+        imu_port = source._cli.imu_port
 
-        with closing(client.Sensor("os.invalid", 0, port, metadata=meta)):
-            pass
+        with closing(client.Sensor("", lidar_port, imu_port,
+                                   metadata=meta)) as source2:
+            assert source2._cli.lidar_port != 0
+            assert source2._cli.imu_port != 0
+            assert source2._cli.lidar_port == lidar_port
+            assert source2._cli.imu_port == imu_port
 
 
 @pytest.fixture(scope="module")

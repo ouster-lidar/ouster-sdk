@@ -61,6 +61,14 @@ class Client:
     def size(self) -> int:
         ...
 
+    @property
+    def lidar_port(self) -> int:
+        ...
+
+    @property
+    def imu_port(self) -> int:
+        ...
+
 
 class ClientState:
     ERROR: ClassVar[ClientState]
