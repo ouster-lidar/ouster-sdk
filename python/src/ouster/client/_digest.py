@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from hashlib import md5
 import json
 from typing import Any, BinaryIO, Dict, List, Iterable, Iterator
-
+from collections.abc import Iterable as IterableABC
 from more_itertools import side_effect
 import numpy as np
 
@@ -48,7 +48,7 @@ def write_lidar_bufstream(file: str, packets: Iterable[LidarPacket]) -> None:
         bufstream.write(fo, map(lambda p: p._data, packets))
 
 
-class ScanDigest:
+class FieldDigest:
     """Hashes of lidar data fields used for comparison in testing.
 
     Stores a hash of data from each channel and header field. Used to compare
@@ -63,20 +63,33 @@ class ScanDigest:
     def __eq__(self, other: Any):
         return self.hashes == other.hashes
 
-    def check(self, other: 'ScanDigest'):
+    def check(self, other: 'FieldDigest'):
         for k, v in self.hashes.items():
             assert other.hashes.get(k) == v, f"Match failure key: {k}"
 
-    @classmethod
-    def from_packet(cls, p: LidarPacket) -> 'ScanDigest':
-        hashes = {}
-        hashes.update({c.name: _md5(p.field(c)) for c in p.fields})
-        hashes.update({h.name: _md5(p.header(h)) for h in ColHeader})
-
-        return cls(**hashes)
 
     @classmethod
-    def from_scan(cls, ls: LidarScan) -> 'ScanDigest':
+    def from_packets(cls, p: Iterable[LidarPacket]) -> 'FieldDigest':
+        hashes: Dict[str, Any] = {}
+        result_hash: Dict[str, str] = {}
+
+        for item in p:
+            for c in item.fields:
+                if c.name not in hashes:
+                    hashes[c.name] = md5()
+                hashes[c.name].update(item.field(c).tobytes())
+            for h in ColHeader:
+                if h.name not in hashes:
+                    hashes[h.name] = md5()
+                hashes[h.name].update(item.header(h).tobytes())
+
+        for index in hashes:
+            result_hash[index] = hashes[index].hexdigest()
+
+        return cls(**result_hash)
+
+    @classmethod
+    def from_scan(cls, ls: LidarScan) -> 'FieldDigest':
         hashes = {}
         hashes.update({c.name: _md5(ls.field(c)) for c in ls.fields})
 
@@ -84,7 +97,8 @@ class ScanDigest:
         hashes['ENCODER_COUNT'] = _md5(
             ls.header(ColHeader.ENCODER_COUNT).astype(np.uint64))
         hashes['STATUS'] = _md5(ls.status.astype(np.uint64))
-
+        hashes['MEASUREMENT_ID'] = _md5(ls.measurement_id.astype(np.uint16))
+        hashes['FRAME_ID'] = str(ls.frame_id)
         return cls(**hashes)
 
 
@@ -99,8 +113,8 @@ class StreamDigest:
         file: Path to file containing a bufstream of packet data to check.
         packets: List of known good hashes of channel data for each packet.
     """
-    packets: List[ScanDigest]
-    scans: List[ScanDigest]
+    packet_hash: FieldDigest
+    scans: List[FieldDigest]
 
     def check(self, other: 'StreamDigest'):
         """Check that this digest is compatible with another.
@@ -110,11 +124,8 @@ class StreamDigest:
         additional hashes for fields that aren't present here.
         """
 
-        assert len(self.packets) == len(other.packets)
         assert len(self.scans) == len(other.scans)
-
-        for p, q in zip(self.packets, other.packets):
-            p.check(q)
+        self.packet_hash.check(other.packet_hash)
 
         for s, t in zip(self.scans, other.scans):
             s.check(t)
@@ -123,7 +134,7 @@ class StreamDigest:
         """Serialize to json."""
         return json.dumps(
             {
-                'packets': [d.hashes for d in self.packets],
+                'packet_hash': self.packet_hash.hashes,
                 'scans': [d.hashes for d in self.scans]
             },
             indent=4)
@@ -131,22 +142,20 @@ class StreamDigest:
     @classmethod
     def from_packets(cls, source: PacketSource) -> 'StreamDigest':
         """Generate a digest from a packet stream."""
-        packet_digests = []
 
-        def append_to_digest(p: Packet):
-            if isinstance(p, LidarPacket):
-                packet_digests.append(ScanDigest.from_packet(p))
+        plist = [p for p in source if isinstance(p, LidarPacket)]
+        packets = Packets(plist, source.metadata)
 
-        packets = Packets(side_effect(append_to_digest, source),
-                          source.metadata)
-        scan_digests = list(map(ScanDigest.from_scan, Scans(packets)))
+        scan_digests = list(map(FieldDigest.from_scan, Scans(packets)))
+        packet_digest = FieldDigest.from_packets(plist)
 
-        return cls(packet_digests, scan_digests)
+        return cls(packet_hash=packet_digest, scans=scan_digests)
 
     @classmethod
     def from_json(cls, json_data: str) -> 'StreamDigest':
         """Instantiate from json representation."""
         d = json.loads(json_data)
+
         return cls(
-            packets=[ScanDigest(**hashes) for hashes in d.get('packets', [])],
-            scans=[ScanDigest(**hashes) for hashes in d.get('scans', [])])
+            packet_hash=FieldDigest(**d['packet_hash']),
+            scans=[FieldDigest(**hashes) for hashes in d.get('scans', [])])
