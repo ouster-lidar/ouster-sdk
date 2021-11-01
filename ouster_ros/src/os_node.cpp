@@ -24,6 +24,7 @@
 
 using PacketMsg = ouster_ros::PacketMsg;
 using OSConfigSrv = ouster_ros::OSConfigSrv;
+using nonstd::optional;
 namespace sensor = ouster::sensor;
 
 // fill in values that could not be parsed from metadata
@@ -125,11 +126,29 @@ int main(int argc, char** argv) {
     // empty indicates "not set" since roslaunch xml can't optionally set params
     auto hostname = nh.param("sensor_hostname", std::string{});
     auto udp_dest = nh.param("udp_dest", std::string{});
-    auto lidar_port = nh.param("lidar_port", 0);
-    auto imu_port = nh.param("imu_port", 0);
+    auto lidar_port = nh.param("lidar_port", 7502);
+    auto imu_port = nh.param("imu_port", 7503);
     auto replay = nh.param("replay", false);
     auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
     auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
+
+    std::string udp_profile_lidar_arg;
+    nh.param<std::string>("udp_profile_lidar", udp_profile_lidar_arg, "");
+
+    optional<sensor::UDPProfileLidar> udp_profile_lidar;
+    if (udp_profile_lidar_arg.size()) {
+        if (replay)
+            ROS_WARN("UDP Profile Lidar set in replay mode. Will be ignored.");
+
+        // set lidar profile from param
+        udp_profile_lidar =
+            sensor::udp_profile_lidar_of_string(udp_profile_lidar_arg);
+        if (!udp_profile_lidar) {
+            ROS_ERROR("Invalid udp profile lidar: %s",
+                      udp_profile_lidar_arg.c_str());
+            return EXIT_FAILURE;
+        }
+    }
 
     // set lidar mode from param
     sensor::lidar_mode lidar_mode = sensor::MODE_UNSPEC;
@@ -200,8 +219,26 @@ int main(int argc, char** argv) {
         }
         ROS_INFO("Waiting for sensor %s to initialize ...", hostname.c_str());
 
-        auto cli = sensor::init_client(hostname, udp_dest, lidar_mode,
-                                       timestamp_mode, lidar_port, imu_port);
+        sensor::sensor_config config;
+        config.udp_port_imu = imu_port;
+        config.udp_port_lidar = lidar_port;
+        config.udp_profile_lidar = udp_profile_lidar;
+        if (udp_dest.size()) config.udp_dest = udp_dest;
+        config.operating_mode = sensor::OPERATING_NORMAL;
+        if (lidar_mode) config.ld_mode = lidar_mode;
+        if (timestamp_mode) config.ts_mode = timestamp_mode;
+
+        try {
+            set_config(hostname, config);
+        } catch (const std::runtime_error& e) {
+            ROS_ERROR("Errror setting config:  %s", e.what());
+            return EXIT_FAILURE;
+        } catch (const std::invalid_argument& ia) {
+            ROS_ERROR("Error setting config: %s", ia.what());
+            return EXIT_FAILURE;
+        }
+
+        auto cli = sensor::init_client(hostname, lidar_port, imu_port);
 
         if (!cli) {
             ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());
