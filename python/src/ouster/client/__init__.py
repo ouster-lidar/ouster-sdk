@@ -2,6 +2,7 @@
 # flake8: noqa (unused imports)
 
 from ._client import SensorInfo
+from ._client import DataFormat
 from ._client import LidarMode
 from ._client import TimestampMode
 from ._client import OperatingMode

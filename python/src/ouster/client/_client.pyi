@@ -694,7 +694,7 @@ class Version:
         ...
 
     @classmethod
-    def of_string(cls, s: str) -> Version:
+    def from_string(cls, s: str) -> Version:
         ...
 
 

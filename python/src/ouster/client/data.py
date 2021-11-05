@@ -271,7 +271,7 @@ def destagger(info: SensorInfo,
 def XYZLut(
         info: SensorInfo
 ) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
-    """Return a function that can project scans into cartesian coordinates.
+    """Return a function that can project scans into Cartesian coordinates.
 
     If called with a numpy array representing a range image, the range image
     must be in "staggered" form, where each column corresponds to a single

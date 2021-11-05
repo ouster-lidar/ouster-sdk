@@ -515,7 +515,8 @@ PYBIND11_PLUGIN(_client) {
                          ? chrono::steady_clock::now() + fsec{timeout_sec}
                          : chrono::steady_clock::time_point::max();
 
-                 // consume() with 0 timeout means return if no queued packets
+                 // consume() with 0 timeout means return if no queued
+                 // packets
                  float poll_interval = timeout_sec ? 0.1 : 0.0;
 
                  // allow interrupting timeout from Python by polling
@@ -571,7 +572,6 @@ PYBIND11_PLUGIN(_client) {
                  }
                  new (&self) LidarScan(w, h, ft.begin(), ft.end());
              })
-        // TODO: constructor taking field / dtype map
         .def_readonly("w", &LidarScan::w,
                       "Width or horizontal resolution of the scan.")
         .def_readonly("h", &LidarScan::h,
@@ -629,7 +629,8 @@ PYBIND11_PLUGIN(_client) {
         .def(
             "header",
             [](LidarScan& self, py::object& o) {
-                // the argument should be a ColHeader enum defined in data.py
+                // the argument should be a ColHeader enum defined in
+                // data.py
                 auto ind = py::int_(o).cast<int>();
                 switch (ind) {
                     case 0:
@@ -638,8 +639,9 @@ PYBIND11_PLUGIN(_client) {
                                          self.timestamp().data(),
                                          py::cast(self));
                     case 1:
-                        // encoder values are deprecated and not included in the
-                        // updated C++ LidarScan API. Access old values instead
+                        // encoder values are deprecated and not included in
+                        // the updated C++ LidarScan API. Access old values
+                        // instead
                         return py::array(py::dtype::of<uint32_t>(),
                                          {static_cast<size_t>(self.w)},
                                          {sizeof(LidarScan::BlockHeader)},
@@ -698,8 +700,8 @@ PYBIND11_PLUGIN(_client) {
                 return py::make_key_iterator(self.begin(), self.end());
             },
             "Return an iterator of available channel fields.")
-        // for backwards compatibility: previously converted between Python /
-        // native representations, now a noop
+        // for backwards compatibility: previously converted between Python
+        // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })
         .def_static("from_native", [](py::object& scan) { return scan; });
 

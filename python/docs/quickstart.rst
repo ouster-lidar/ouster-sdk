@@ -15,13 +15,9 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux x64/macOS
 
         $ python3 -m pip install 'ouster-sdk[examples]'
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m pip install 'ouster-sdk[examples]'
 
     .. code-tab:: powershell Windows x64
 
@@ -35,23 +31,16 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref
    you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py -3`` and
    ``py -3 -m pip`` in the following Powershell snippets.
 
-   **Apple M1 users** should be aware that they will need to prepend all python3 commands with
-   ``arch --x86_64`` when working with ouster-sdk to force macOS to run the intel versions of python
-   as numpy support on native M1 has not arrived yet.
-
+   **Apple M1 users** should be aware that due to numpy support limitations they will need to use Python >=3.8.
 
 To check that you've successfully installed the latest version of the Ouster Python SDK, run the
 following command and make sure that the ``ouster-sdk`` package is included in the output:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux x64/macOS
 
         $ python3 -m pip list
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m pip list
 
     .. code-tab:: powershell Windows x64
 
@@ -72,13 +61,9 @@ To get started, open a new console/Powershell window and start a python interpre
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux x64/macOS
 
         $ python3
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3
 
     .. code-tab:: powershell Windows x64
 
@@ -301,13 +286,7 @@ how to work with our data.
 
 Here are a few things you might be interested in:
 
-    * :ref:`ex-metadata`
+    * :ref:`ex-basic-sensor`
     * :ref:`ex-packets`
-    * :ref:`ex-streaming`
-    * :ref:`ex-pcap-record`
-    * :ref:`ex-staggered-and-destaggered`
-    * :ref:`ex-xyzlut`
-    * :ref:`ex-correlating-2d-and-3d`
-    * :ref:`ex-pcap-to-csv`
-    * :ref:`ex-open3d`
-    * :ref:`ex-imu`
+    * :ref:`ex-lidar-scans`
+    * :ref:`ex-record-stream-viz`

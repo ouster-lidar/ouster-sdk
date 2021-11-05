@@ -47,10 +47,10 @@ inline bool operator>(const version& u, const version& v) { return !(u <= v); }
 std::string to_string(const version& v);
 
 /**
- * Get lidar mode from string.
+ * Get version from string.
  *
  * @param string
- * @return lidar mode corresponding to the string, or invalid_version on error
+ * @return version corresponding to the string, or invalid_version on error
  */
 version version_of_string(const std::string& s);
 
