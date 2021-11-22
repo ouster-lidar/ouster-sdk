@@ -2,6 +2,8 @@ message(STATUS "Found OusterSDK: ${CMAKE_CURRENT_LIST_FILE}")
 
 include(CMakeFindDependencyMacro)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/Modules/")
+
 # ouster_client dependencies
 find_dependency(Eigen3)
 find_dependency(jsoncpp)
