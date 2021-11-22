@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.1.0)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+# for installation, install only custom find scripts which are not shipped by package
+# managers or cmake itself. This does not apply e.g. to eigen
+set(DEPENDENCY_MODULES ${CMAKE_CURRENT_LIST_DIR}/cmake/Findjsoncpp.cmake)
+
 include(DefaultBuildType)
 
 # ==== Project Name ====
@@ -61,6 +66,9 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
   DESTINATION lib/cmake/OusterSDK)
 
+# we install any custom dependency modules here
+install(FILES ${DEPENDENCY_MODULES}
+    DESTINATION lib/cmake/OusterSDK/Modules)
 install(FILES LICENSE LICENSE-bin
   DESTINATION share)
 
@@ -87,4 +95,3 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "cmake, libjsoncpp-dev, libtclap-dev, libeigen3
   libglfw3-dev, libglew-dev")
 
 include(CPack)
-
