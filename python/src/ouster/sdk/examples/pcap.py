@@ -317,7 +317,7 @@ def main():
         "read-packets": pcap_read_packets,
     }
 
-    description = "Ouster Python SDK Pcap examples. The EXAMPLE must be one of:\n" + str.join(
+    description = "Ouster Python SDK Pcap examples. The EXAMPLE must be one of:\n  " + str.join(
         '\n  ', examples.keys())
 
     parser = argparse.ArgumentParser(

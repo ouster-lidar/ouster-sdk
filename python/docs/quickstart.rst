@@ -13,6 +13,9 @@ Installation
 
 The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref:`supported platforms<supported platforms>`, run:
 
+.. todo:: Since we are adding (fingers crossed) ARM builds, we need to change the tabs below to:
+   ``Linux aarch64/x64`` or similar.
+
 .. tabs::
 
     .. code-tab:: console Linux x64/macOS

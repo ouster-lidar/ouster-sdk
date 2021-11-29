@@ -32,6 +32,8 @@ Building from source is supported on:
 - macOS >= 10.13 (x86-64)
 - Windows 10 (x86-64)
 
+.. todo:: Add ARM and M1 mentions and release the wheels? Also fix ARM mentions later on this page.
+
 .. _PyPI: https://pypi.org/project/ouster-sdk/
 
 

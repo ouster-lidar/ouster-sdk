@@ -170,7 +170,9 @@ A :py:class:`.LidarScan` contains the fields specified at its initialization, qu
 You can run this example on pcaps containing packets containing any type of
 :py:class:`.UDPProfileLidar`. On a packet containing dual returns data, you should note that your
 dtypes will not be consistently ``uint32_t``, as you can tell from the result of running
-``query-scan`` on dual returns data::
+``query-scan`` on dual returns data:
+
+.. code:: console
     
     Available fields and corresponding dtype in LidarScan
     RANGE           uint32
@@ -189,6 +191,8 @@ using :py:class:`.UDPProfileLidar`. Here's an excerpt from the :py:class:`.Scans
     :end-before: [doc-etag-lidarscan-init]
     :dedent:
 
+.. todo:: Fix me, need to decide what code to show here. Because it's no longer a good example since
+   code changed underneath ... (pavlo)
 
 .. _ex-staggered-and-destaggered:
 
@@ -569,3 +573,6 @@ All of the visualizer controls are listed in the table below:
 .. _Open3d library: http://www.open3d.org/
 .. _Open3d package: https://pypi.org/project/open3d/
 
+.. todo:: Add example with ``simple_viz``` Python wrapper (``python -m ouster.sdk.examples.viz``)?
+   Since we have it and it's available in the example I would add the example how to call it,
+   because some people I've heard prefer simple_viz to anything else. (Pavlo)
