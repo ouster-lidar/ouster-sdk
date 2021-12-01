@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -49,17 +50,20 @@ struct ProfileEntry {
     size_t chan_data_size;
 };
 
-static const Table<ChanField, FieldInfo, 4> legacy_field_info{{
+static const Table<ChanField, FieldInfo, 5> legacy_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x000fffff, 0}},
+    {ChanField::FLAGS, {UINT8, 3, 0, 4}},
     {ChanField::REFLECTIVITY, {UINT16, 4, 0, 0}},
     {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
     {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 7> dual_field_info{{
+static const Table<ChanField, FieldInfo, 9> dual_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
+    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
     {ChanField::REFLECTIVITY, {UINT8, 3, 0, 0}},
     {ChanField::RANGE2, {UINT32, 4, 0x0007ffff, 0}},
+    {ChanField::FLAGS2, {UINT8, 6, 0b11111000, 3}},
     {ChanField::REFLECTIVITY2, {UINT8, 7, 0, 0}},
     {ChanField::SIGNAL, {UINT16, 8, 0, 0}},
     {ChanField::SIGNAL2, {UINT16, 10, 0, 0}},
@@ -145,19 +149,23 @@ packet_format::packet_format(const sensor_info& info)
     }
 }
 
-template <size_t SRC_SIZE, typename T>
-static void col_field_impl(const uint8_t* col_buf, T* dst, size_t offset,
+template <typename SRC, typename DST>
+static void col_field_impl(const uint8_t* col_buf, DST* dst, size_t offset,
                            uint64_t mask, int shift, int pixels_per_column,
                            int dst_stride, size_t channel_data_size,
                            size_t col_header_size) {
+    if (sizeof(DST) < sizeof(SRC))
+        throw std::invalid_argument("Dest type too small for specified field");
+
     for (int px = 0; px < pixels_per_column; px++) {
         auto px_src =
             col_buf + col_header_size + offset + (px * channel_data_size);
-        T* px_dst = dst + px * dst_stride;
+        DST* px_dst = dst + px * dst_stride;
         *px_dst = 0;
-        std::memcpy(px_dst, px_src, SRC_SIZE);
+        std::memcpy(px_dst, px_src, sizeof(SRC));
         if (mask) *px_dst &= mask;
-        if (shift) *px_dst <<= shift;
+        if (shift > 0) *px_dst >>= shift;
+        if (shift < 0) *px_dst <<= std::abs(shift);
     }
 }
 
@@ -167,27 +175,24 @@ void packet_format::col_field(const uint8_t* col_buf, ChanField i, T* dst,
                               int dst_stride) const {
     const auto& f = impl_->fields.at(i);
 
-    if (sizeof(T) < impl::field_ty_size(f.ty_tag))
-        throw std::invalid_argument("Dest type too small for specified field");
-
     switch (f.ty_tag) {
         case UINT8:
-            col_field_impl<1, T>(
+            col_field_impl<uint8_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
         case UINT16:
-            col_field_impl<2, T>(
+            col_field_impl<uint16_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
         case UINT32:
-            col_field_impl<4, T>(
+            col_field_impl<uint32_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
         case UINT64:
-            col_field_impl<8, T>(
+            col_field_impl<uint64_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
@@ -321,7 +326,8 @@ T packet_format::px_field(const uint8_t* px_buf, ChanField i) const {
     T res = 0;
     std::memcpy(&res, px_buf + f.offset, impl::field_ty_size(f.ty_tag));
     if (f.mask) res &= f.mask;
-    if (f.shift) res <<= f.shift;
+    if (f.shift > 0) res >>= f.shift;
+    if (f.shift < 0) res <<= std::abs(f.shift);
     return res;
 }
 

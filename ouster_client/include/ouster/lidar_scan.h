@@ -346,6 +346,13 @@ class ScanBatcher {
     ScanBatcher(size_t w, const sensor::packet_format& pf);
 
     /**
+     * Create a batcher given information about the scan and packet format.
+     *
+     * @param info sensor metadata returned from the client
+     */
+    ScanBatcher(const sensor::sensor_info& info);
+
+    /**
      * Add a packet to the scan.
      *
      * @param packet_buf the lidar packet

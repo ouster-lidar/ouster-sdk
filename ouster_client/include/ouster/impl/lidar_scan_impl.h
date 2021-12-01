@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include <Eigen/Dense>
+
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -52,15 +54,19 @@ struct FieldSlot {
                 break;
             case ChanFieldType::UINT8:
                 new (&f8) img_t<uint8_t>{h, w};
+                f8.setZero();
                 break;
             case ChanFieldType::UINT16:
                 new (&f16) img_t<uint16_t>{h, w};
+                f16.setZero();
                 break;
             case ChanFieldType::UINT32:
                 new (&f32) img_t<uint32_t>{h, w};
+                f32.setZero();
                 break;
             case ChanFieldType::UINT64:
                 new (&f64) img_t<uint64_t>{h, w};
+                f64.setZero();
                 break;
         }
     }

@@ -1,5 +1,6 @@
+from copy import deepcopy
 from enum import Enum
-from typing import Callable, Iterator, List, Optional, Union
+from typing import Callable, Iterator, Type, List, Optional, Union
 import warnings
 
 import numpy as np
@@ -9,6 +10,9 @@ from ._client import (ChanField, LidarScan, SensorInfo)
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
+
+FieldDType = Type[np.unsignedinteger]
+"""Numpy dtype of fields."""
 
 Packet = Union['ImuPacket', 'LidarPacket']
 """Packets emitted by a sensor."""
@@ -40,6 +44,15 @@ class ImuPacket:
                                    count=self._pf.imu_packet_size)
 
         self.capture_timestamp = timestamp
+
+    def __deepcopy__(self, memo) -> 'ImuPacket':
+        cls = type(self)
+        cpy = cls.__new__(cls)
+        # don't copy packet format, which is intended to be shared
+        cpy._pf = self._pf
+        cpy._data = deepcopy(self._data, memo)
+        cpy.capture_timestamp = self.capture_timestamp
+        return cpy
 
     @property
     def sys_ts(self) -> int:
@@ -127,6 +140,15 @@ class LidarPacket:
         # check that metadata came from the same sensor initialization as data
         if self.init_id and self.init_id != info.init_id:
             raise ValueError("Metadata init id does not match")
+
+    def __deepcopy__(self, memo) -> 'LidarPacket':
+        cls = type(self)
+        cpy = cls.__new__(cls)
+        # don't copy packet format, which is intended to be shared
+        cpy._pf = self._pf
+        cpy._data = deepcopy(self._data, memo)
+        cpy.capture_timestamp = self.capture_timestamp
+        return cpy
 
     @property
     def packet_type(self) -> int:

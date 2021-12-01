@@ -37,8 +37,10 @@ def xyz_proj(metadata: client.SensorInfo,
         r = scan.field(client.ChanField.RANGE)[u, v]
         n = metadata.lidar_origin_to_beam_origin_mm
 
-        encoder_count = scan.header(client.ColHeader.ENCODER_COUNT)[v]
-        theta_encoder = 2.0 * pi * (1.0 - encoder_count / 90112.0)
+        # scans are always a full frame, so the measurement id is also the index
+        assert scan.measurement_id[v] == v
+
+        theta_encoder = 2.0 * pi * (1.0 - v / scan.w)
         theta_azimuth = -2.0 * pi * (metadata.beam_azimuth_angles[u] / 360.0)
         phi = 2.0 * pi * (metadata.beam_altitude_angles[u] / 360.0)
 

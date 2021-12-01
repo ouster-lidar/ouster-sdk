@@ -1,20 +1,20 @@
 """Utilities for hashing and comparing lidardata."""
+from collections import defaultdict
 from dataclasses import dataclass
-from hashlib import md5
+import hashlib
 import json
-from typing import Any, BinaryIO, Dict, List, Iterable, Iterator
-from collections.abc import Iterable as IterableABC
-from more_itertools import side_effect
+from typing import (BinaryIO, Dict, List, Iterable, Iterator)
+
 import numpy as np
 
 from . import _bufstream as bufstream
-from . import (LidarPacket, LidarScan, ColHeader, Packet, Packets,
-               PacketSource, SensorInfo, Scans)
+from .data import (LidarPacket, LidarScan, ColHeader, SensorInfo)
+from .core import (Packets, PacketSource, Scans)
 
 
 def _md5(a: np.ndarray) -> str:
     """Get md5 hash of a numpy array."""
-    return md5(a.tobytes()).hexdigest()
+    return hashlib.md5(a.tobytes()).hexdigest()
 
 
 class LidarBufStream(PacketSource):
@@ -27,7 +27,6 @@ class LidarBufStream(PacketSource):
     def __init__(self, bin: BinaryIO, meta: SensorInfo):
         self._bin = bin
         self._metadata = meta
-        ...
 
     def __iter__(self) -> Iterator[LidarPacket]:
         self._bin.seek(0)
@@ -60,45 +59,50 @@ class FieldDigest:
     def __init__(self, **args: str):
         self.hashes = args
 
-    def __eq__(self, other: Any):
-        return self.hashes == other.hashes
+    def __eq__(self, other: object):
+        if isinstance(other, FieldDigest):
+            return self.hashes == other.hashes
+        return False
 
     def check(self, other: 'FieldDigest'):
         for k, v in self.hashes.items():
             assert other.hashes.get(k) == v, f"Match failure key: {k}"
 
+    @classmethod
+    def from_packet(cls, packet: LidarPacket) -> 'FieldDigest':
+        return cls.from_packets([packet])
 
     @classmethod
-    def from_packets(cls, p: Iterable[LidarPacket]) -> 'FieldDigest':
-        hashes: Dict[str, Any] = {}
-        result_hash: Dict[str, str] = {}
+    def from_packets(cls, packets: Iterable[LidarPacket]) -> 'FieldDigest':
+        # hashlib._Hash doesn't exist at runtime
+        hashes: Dict[str, 'hashlib._Hash'] = defaultdict(hashlib.md5)
 
-        for item in p:
-            for c in item.fields:
-                if c.name not in hashes:
-                    hashes[c.name] = md5()
-                hashes[c.name].update(item.field(c).tobytes())
+        for packet in packets:
+            # TODO: add packet headers
             for h in ColHeader:
-                if h.name not in hashes:
-                    hashes[h.name] = md5()
-                hashes[h.name].update(item.header(h).tobytes())
+                hashes[h.name].update(packet.header(h).tobytes())
+            for f in packet.fields:
+                hashes[f.name].update(packet.field(f).tobytes())
 
-        for index in hashes:
-            result_hash[index] = hashes[index].hexdigest()
-
-        return cls(**result_hash)
+        return cls(**{k: v.hexdigest() for k, v in hashes.items()})
 
     @classmethod
     def from_scan(cls, ls: LidarScan) -> 'FieldDigest':
         hashes = {}
-        hashes.update({c.name: _md5(ls.field(c)) for c in ls.fields})
 
+        hashes['FRAME_ID'] = str(ls.frame_id)
+
+        # TODO: remove astype
         hashes['TIMESTAMP'] = _md5(ls.timestamp.astype(np.uint64))
-        hashes['ENCODER_COUNT'] = _md5(
-            ls.header(ColHeader.ENCODER_COUNT).astype(np.uint64))
         hashes['STATUS'] = _md5(ls.status.astype(np.uint64))
         hashes['MEASUREMENT_ID'] = _md5(ls.measurement_id.astype(np.uint16))
-        hashes['FRAME_ID'] = str(ls.frame_id)
+
+        # deprecated, zeroed out for non-legacy UDP profiles
+        hashes['ENCODER_COUNT'] = _md5(
+            ls.header(ColHeader.ENCODER_COUNT).astype(np.uint64))
+
+        hashes.update({c.name: _md5(ls.field(c)) for c in ls.fields})
+
         return cls(**hashes)
 
 

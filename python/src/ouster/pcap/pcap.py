@@ -242,7 +242,7 @@ def record(packets: Iterable[Packet],
         dst_ip: Destination IP to use for all packets
         lidar_port: Src/dst port to use for lidar packets
         imu_port: Src/dst port to use for imu packets
-        use_sll_encapsulation: Use sll encapsulaiton for pcaps(ouster studio can not read)
+        use_sll_encapsulation: Use sll encapsulaiton
 
     Returns:
         Number of packets captured

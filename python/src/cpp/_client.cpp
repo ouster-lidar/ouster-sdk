@@ -59,7 +59,7 @@ extern const Table<MultipurposeIOMode, const char*, 6>
     multipurpose_io_mode_strings;
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
-extern Table<ChanField, const char*, 7> chanfield_strings;
+extern Table<ChanField, const char*, 9> chanfield_strings;
 extern Table<UDPProfileLidar, const char*, 2> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 
@@ -326,7 +326,8 @@ PYBIND11_PLUGIN(_client) {
             return "<ouster.client.SensorInfo " + self.prod_line + " " +
                 self.sn + " " + self.fw_rev + " " + to_string(self.mode) + ">";
         })
-        .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; });
+        .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; })
+        .def("__deepcopy__", [](const sensor_info& self, py::dict) { return sensor_info{self}; });
 
 
     // Enums
@@ -424,7 +425,8 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("udp_profile_imu", &sensor_config::udp_profile_imu, "UDP packet format for imu data. See sensor documentation for details.")
         .def("__str__", [](const sensor_config& i) { return to_string(i); })
         .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
-        .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; });
+        .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; })
+        .def("__deepcopy__", [](const sensor_config& self, py::dict) { return sensor_config{self}; });
 
     m.def("set_config", [] (const std::string& hostname, const sensor_config& config, bool persist,  bool udp_dest_auto) {
         uint8_t config_flags = 0;
@@ -700,6 +702,9 @@ PYBIND11_PLUGIN(_client) {
                 return py::make_key_iterator(self.begin(), self.end());
             },
             "Return an iterator of available channel fields.")
+        .def("__eq__", [](const LidarScan& l, const LidarScan& r) { return l == r; })
+        .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
+        .def("__deepcopy__", [](const LidarScan& self, py::dict) { return LidarScan{self}; })
         // for backwards compatibility: previously converted between Python
         // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })
@@ -719,6 +724,7 @@ PYBIND11_PLUGIN(_client) {
 
     py::class_<ScanBatcher>(m, "ScanBatcher")
         .def(py::init<int, packet_format>())
+        .def(py::init<sensor_info>())
         .def("__call__", [](ScanBatcher& self, py::buffer& buf, LidarScan& ls) {
             uint8_t* ptr = getptr(self.pf.lidar_packet_size, buf);
             return self(ptr, ls);

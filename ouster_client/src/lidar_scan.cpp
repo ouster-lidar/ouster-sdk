@@ -169,7 +169,7 @@ bool operator==(const LidarScan::BlockHeader& a,
 }
 
 bool operator==(const LidarScan& a, const LidarScan& b) {
-    return a.frame_id && b.frame_id && a.w == b.w && a.h == b.h &&
+    return a.frame_id == b.frame_id && a.w == b.w && a.h == b.h &&
            a.fields_ == b.fields_ && a.field_types_ == b.field_types_ &&
            (a.timestamp() == b.timestamp()).all() &&
            (a.measurement_id() == b.measurement_id()).all() &&
@@ -252,6 +252,9 @@ ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
       next_m_id(0),
       cache(pf.lidar_packet_size),
       pf(pf) {}
+
+ScanBatcher::ScanBatcher(const sensor::sensor_info& info)
+    : ScanBatcher(info.format.columns_per_frame, sensor::get_format(info)) {}
 
 namespace {
 

@@ -21,5 +21,5 @@ set_tests_properties(
     bcompat_meta_json_test
         PROPERTIES
         ENVIRONMENT
-        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/assets/
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
