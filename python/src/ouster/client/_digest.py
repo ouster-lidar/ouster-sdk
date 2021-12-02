@@ -7,7 +7,6 @@ from typing import (BinaryIO, Dict, List, Iterable, Iterator)
 
 import numpy as np
 
-from . import _bufstream as bufstream
 from .data import (LidarPacket, LidarScan, ColHeader, SensorInfo)
 from .core import (Packets, PacketSource, Scans)
 
@@ -15,37 +14,6 @@ from .core import (Packets, PacketSource, Scans)
 def _md5(a: np.ndarray) -> str:
     """Get md5 hash of a numpy array."""
     return hashlib.md5(a.tobytes()).hexdigest()
-
-
-class LidarBufStream(PacketSource):
-    """Read a lidar data stream from a simple binary format used for testing.
-
-    Note: these packet sources will not have any IMU data.
-    """
-    _metadata: SensorInfo
-
-    def __init__(self, bin: BinaryIO, meta: SensorInfo):
-        self._bin = bin
-        self._metadata = meta
-
-    def __iter__(self) -> Iterator[LidarPacket]:
-        self._bin.seek(0)
-        for buf in bufstream.read(self._bin):
-            yield LidarPacket(buf, self._metadata)
-
-    @property
-    def metadata(self):
-        return self._metadata
-
-    def close(self):
-        self._bin.close()
-
-
-def write_lidar_bufstream(file: str, packets: Iterable[LidarPacket]) -> None:
-    """Write lidar packets to a bufstream."""
-    with open(file, 'wb') as fo:
-        bufstream.write(fo, map(lambda p: p._data, packets))
-
 
 class FieldDigest:
     """Hashes of lidar data fields used for comparison in testing.
@@ -114,8 +82,8 @@ class StreamDigest:
     and compare their hashes against known good values.
 
     Attributes:
-        file: Path to file containing a bufstream of packet data to check.
-        packets: List of known good hashes of channel data for each packet.
+        packet_hash: Hashed fields of the UDP packets
+        scans: List of hashed fields of the LidarScan
     """
     packet_hash: FieldDigest
     scans: List[FieldDigest]
