@@ -24,7 +24,7 @@ def _guess_imu_port(stream_data: Dict[int, Dict[int, int]]) -> Optional[int]:
 
 def _guess_lidar_port(stream_data: Dict[int, Dict[int, int]]) -> Optional[int]:
     result = None
-    lidar_sizes = {3392, 6464, 12608, 24896}
+    lidar_sizes = {3392, 6464, 12608, 24896, 33024}
 
     hit_count = 0
     multiple_error_msg = "Error: Multiple possible lidar packets found"
@@ -120,8 +120,8 @@ class Pcap(PacketSource):
         lidar_port_guess, imu_port_guess = _guess_ports(pcap_path)
 
         # use guessed values unless ports are specified (0 is falsey)
-        self._lidar_port = lidar_port or info.udp_port_lidar or lidar_port_guess
-        self._imu_port = imu_port or info.udp_port_imu or imu_port_guess
+        self._lidar_port = lidar_port or info.udp_port_lidar or lidar_port_guess or 7502
+        self._imu_port = imu_port or info.udp_port_imu or imu_port_guess or 7503
 
         self._metadata = info
         self._rate = rate
