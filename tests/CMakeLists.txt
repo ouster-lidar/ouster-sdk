@@ -21,5 +21,16 @@ set_tests_properties(
     bcompat_meta_json_test
         PROPERTIES
         ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata)
+
+add_executable(lidar_scan_test lidar_scan_test.cpp)
+
+target_link_libraries(lidar_scan_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
+
+add_test(NAME lidar_scan_test COMMAND lidar_scan_test --gtest_output=xml:lidar_scan_test.xml)
+set_tests_properties(
+    lidar_scan_test
+        PROPERTIES 
+        ENVIRONMENT 
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
