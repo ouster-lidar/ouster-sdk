@@ -72,6 +72,15 @@ install(FILES ${DEPENDENCY_MODULES}
 install(FILES LICENSE LICENSE-bin
   DESTINATION share)
 
+# make uninstall
+add_custom_target("uninstall" COMMENT "Uninstall installed files")
+add_custom_command(
+    TARGET "uninstall"
+    POST_BUILD
+    COMMENT "Uninstall files with install_manifest.txt"
+    COMMAND xargs rm -vf < install_manifest.txt || echo Nothing in
+            install_manifest.txt to be uninstalled!
+)
 # ==== Packaging ====
 set(CPACK_PACKAGE_CONTACT "support@ouster.io")
 set(CPACK_PACKAGE_VENDOR "Ouster")
