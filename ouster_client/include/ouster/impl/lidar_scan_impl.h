@@ -231,6 +231,16 @@ inline Eigen::Ref<const img_t<uint64_t>> FieldSlot::get_unsafe() const {
 /*
  * Call a generic operation op<T>(f, Args..) with the type parameter T having
  * the correct (dynamic) field type for the LidarScan channel field f
+ * Example code for the operation<T>:
+ * \code
+ * struct print_field_size {
+ *   template <typename T>
+ *   void operator()(Eigen::Ref<img_t<T>> field) {
+ *       std::cout << "Rows: " + field.rows() << std::endl;
+ *       std::cout << "Cols: " + field.cols() << std::endl;
+ *   }
+ * };
+ * \endcode
  */
 template <typename SCAN, typename OP, typename... Args>
 void visit_field(SCAN&& ls, sensor::ChanField f, OP&& op, Args&&... args) {
