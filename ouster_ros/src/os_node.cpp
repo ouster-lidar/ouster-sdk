@@ -126,8 +126,8 @@ int main(int argc, char** argv) {
     // empty indicates "not set" since roslaunch xml can't optionally set params
     auto hostname = nh.param("sensor_hostname", std::string{});
     auto udp_dest = nh.param("udp_dest", std::string{});
-    auto lidar_port = nh.param("lidar_port", 7502);
-    auto imu_port = nh.param("imu_port", 7503);
+    auto lidar_port = nh.param("lidar_port", 0);
+    auto imu_port = nh.param("imu_port", 0);
     auto replay = nh.param("replay", false);
     auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
     auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
@@ -212,24 +212,36 @@ int main(int argc, char** argv) {
             ROS_ERROR("Error when running in replay mode: %s", e.what());
         }
     } else {
-        if (udp_dest.size()) {
-            ROS_INFO("Sending UDP data to %s", udp_dest.c_str());
-        } else {
-            ROS_INFO("Using automatic UDP destination");
-        }
         ROS_INFO("Waiting for sensor %s to initialize ...", hostname.c_str());
 
+        // use no-config version of init_client to allow for random ports
+        auto cli = sensor::init_client(hostname, lidar_port, imu_port);
+        if (!cli) {
+            ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());
+            return EXIT_FAILURE;
+        }
+
         sensor::sensor_config config;
-        config.udp_port_imu = imu_port;
-        config.udp_port_lidar = lidar_port;
+        config.udp_port_imu = get_imu_port(*cli);
+        config.udp_port_lidar = get_lidar_port(*cli);
         config.udp_profile_lidar = udp_profile_lidar;
-        if (udp_dest.size()) config.udp_dest = udp_dest;
         config.operating_mode = sensor::OPERATING_NORMAL;
         if (lidar_mode) config.ld_mode = lidar_mode;
         if (timestamp_mode) config.ts_mode = timestamp_mode;
 
+        uint8_t config_flags = 0;
+
+        if (udp_dest.size()) {
+            ROS_INFO("Sending UDP data to %s", udp_dest.c_str());
+            config.udp_dest = udp_dest;
+        } else {
+            ROS_INFO("Using automatic UDP destination");
+            config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
+        }
+
         try {
-            set_config(hostname, config);
+            set_config(hostname, config, config_flags);
+            ROS_INFO("Sensor configured successfully");
         } catch (const std::runtime_error& e) {
             ROS_ERROR("Errror setting config:  %s", e.what());
             return EXIT_FAILURE;
@@ -238,17 +250,13 @@ int main(int argc, char** argv) {
             return EXIT_FAILURE;
         }
 
-        auto cli = sensor::init_client(hostname, lidar_port, imu_port);
+        // fetch metadata for client after setting configs
+        auto metadata = sensor::get_metadata(*cli);
 
-        if (!cli) {
-            ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());
-            return EXIT_FAILURE;
-        }
         ROS_INFO("Sensor initialized successfully");
 
         // write metadata file. If metadata_path is relative, will use cwd
         // (usually ~/.ros)
-        auto metadata = sensor::get_metadata(*cli);
         if (!write_metadata(meta_file, metadata)) {
             ROS_ERROR("Exiting because of failure to write metadata path");
             return EXIT_FAILURE;
