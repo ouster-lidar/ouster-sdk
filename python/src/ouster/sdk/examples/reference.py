@@ -64,7 +64,7 @@ def xyz_proj(metadata: client.SensorInfo,
 
 
 def destagger(pixel_shift_by_row: List[int], field: np.ndarray) -> np.ndarray:
-    """Reference implementation for dsetaggering a field of data.
+    """Reference implementation for destaggering a field of data.
 
     In the default staggered representation, each column corresponds to a
     single timestamp. In the destaggered representation, each column

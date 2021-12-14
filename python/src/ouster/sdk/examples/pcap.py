@@ -283,7 +283,7 @@ def pcap_query_scan(source: client.PacketSource,
 def pcap_read_packets(
         source: client.PacketSource,
         metadata: client.SensorInfo,
-        num: int = 0  # not used in this examples
+        num: int = 0  # not used in this example
 ) -> None:
     """Basic read packets example from pcap file. """
     # [doc-stag-pcap-read-packets]

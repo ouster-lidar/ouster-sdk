@@ -291,7 +291,7 @@ PYBIND11_PLUGIN(_client) {
 
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
-        Sensor metadata required to interpret UDP data streams.
+        Sensor Info required to interpret UDP data streams.
 
         See the sensor documentation for the meaning of each property.
         )")
@@ -319,7 +319,7 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("udp_port_lidar", &sensor_info::udp_port_lidar, "Configured port for lidar data.")
         .def_readwrite("udp_port_imu", &sensor_info::udp_port_imu, "Configured port for imu data.")
         .def_static("from_default", &sensor::default_sensor_info, R"(
-        Create gen-1 OS-1-64 metadata populated with design values.
+        Create gen-1 OS-1-64 SensorInfo populated with design values.
         )")
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__repr__", [](const sensor_info& self) {

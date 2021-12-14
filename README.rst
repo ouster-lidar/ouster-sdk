@@ -141,13 +141,14 @@ keyboard:
 Keyboard controls:
 
     ============= ============================================
-        key       what it does
+        Key       What it does
     ============= ============================================
     ``p``         Increase point size
     ``o``         Decrease point size
     ``m``         Cycle point cloud coloring mode
     ``v``         Toggle range cycling
-    ``n``         Toggle display near-IR image from the sensor
+    ``b``         Cycle top 2D image
+    ``n``         Cycle bottom 2D image
     ``shift + r`` Reset camera
     ``e``         Change size of displayed 2D images
     ``;``         Increase spacing in range markers
@@ -157,7 +158,8 @@ Keyboard controls:
     ``s``         Camera pitch down
     ``a``         Camera yaw left
     ``d``         Camera yaw right
-    ``1``         Toggle point cloud visibility
+    ``1``         Toggle first return point cloud visibility
+    ``2``         Toggle second return point cloud visibility
     ``0``         Toggle orthographic camera
     ``=``         Zoom in
     ``-``         Zoom out

@@ -172,6 +172,7 @@ class LidarPacket:
 
     @property
     def fields(self) -> Iterator[ChanField]:
+        """Get available fields of LidarScan as Iterator."""
         return self._pf.fields
 
     def field(self, field: ChanField) -> np.ndarray:
