@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
             ROS_INFO("received lidar config request: R1=%s, R2=%s", req.key.c_str(), req.value.c_str());
             bool result = sensor::set_config_from_string(hostname, req.key, req.value, req.config_flag);
             if(result){
-                ROS_INFO("Lidar reinitializing with new config");
+                ROS_INFO("config success. Lidar reinitializing with new config");
                 res.success = true;
                 return true;
             }
