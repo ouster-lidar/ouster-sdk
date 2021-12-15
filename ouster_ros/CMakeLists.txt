@@ -29,7 +29,7 @@ option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 
 # ==== Catkin ====
 add_message_files(FILES PacketMsg.msg)
-add_service_files(FILES OSConfigSrv.srv)
+add_service_files(FILES OSConfigSrv.srv LidarConfigSrv.srv)
 generate_messages(DEPENDENCIES std_msgs sensor_msgs geometry_msgs)
 
 set(_ouster_ros_INCLUDE_DIRS

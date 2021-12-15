@@ -1,0 +1,5 @@
+string key
+string value
+uint8 config_flag
+---
+bool success

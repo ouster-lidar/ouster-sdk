@@ -19,11 +19,13 @@
 #include "ouster/build.h"
 #include "ouster/types.h"
 #include "ouster_ros/OSConfigSrv.h"
+#include "ouster_ros/LidarConfigSrv.h"
 #include "ouster_ros/PacketMsg.h"
 #include "ouster_ros/ros.h"
 
 using PacketMsg = ouster_ros::PacketMsg;
 using OSConfigSrv = ouster_ros::OSConfigSrv;
+using LidarConfigSrv = ouster_ros::LidarConfigSrv;
 namespace sensor = ouster::sensor;
 
 // fill in values that could not be parsed from metadata
@@ -130,6 +132,26 @@ int main(int argc, char** argv) {
     auto replay = nh.param("replay", false);
     auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
     auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
+
+    //ROS service to set lidar parameters
+    auto configsrv = nh.advertiseService<LidarConfigSrv::Request, LidarConfigSrv::Response>(
+        "lidar_config", [&](LidarConfigSrv::Request& req, LidarConfigSrv::Response& res){
+
+            //For debugging: print received commands
+            ROS_INFO("received lidar config request: R1=%s, R2=%s", req.key.c_str(), req.value.c_str());
+            bool result = sensor::set_config_from_string(hostname, req.key, req.value, req.config_flag);
+            if(result){
+                ROS_INFO("Lidar reinitializing with new config");
+                res.success = true;
+                return true;
+            }
+            else{
+                ROS_INFO("Failed to set new config");
+                res.success = false;
+                return false;
+            }
+
+    });
 
     // set lidar mode from param
     sensor::lidar_mode lidar_mode = sensor::MODE_UNSPEC;

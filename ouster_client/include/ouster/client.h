@@ -137,5 +137,20 @@ enum config_flags : uint8_t {
  */
 bool set_config(const std::string& hostname, const sensor_config& config,
                 uint8_t config_flags = 0);
+
+/**
+ * Set sensor config on sensor using string inputs
+ *
+ * @throw runtime_error on failure to communcate with the sensor
+ * @throw invalid_argument when config parameters fail validation
+ * @param hostname sensor hostname
+ * @param key the parameter key to change
+ * @param value the value/input of the parameter
+ * @param flags flags to pass in
+ * @return true if config params successfuly set on sensor
+ */
+bool set_config_from_string(const std::string& hostname, const std::string key,
+                const std::string value, uint8_t config_flags = 0);
+
 }  // namespace sensor
 }  // namespace ouster

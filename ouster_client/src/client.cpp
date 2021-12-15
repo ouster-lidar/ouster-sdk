@@ -357,6 +357,55 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
 
     return true;
 }
+
+bool set_config_helper_from_string(SOCKET sock_fd, const std::string key,
+                       const std::string value, uint8_t config_flags = 0) {
+    std::string res{};
+
+    // set automatic udp dest, if flag specified
+    if (config_flags & CONFIG_UDP_DEST_AUTO) {
+
+        if (!do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res))
+            throw std::runtime_error("Failed to run 'set_udp_dest_auto'");
+
+        if (res != "set_udp_dest_auto")
+            throw std::runtime_error("Error on 'set_udp_dest_auto': " + res);
+    }
+
+    // reset staged config to avoid spurious errors
+    std::string active_params;
+    if (!do_tcp_cmd(sock_fd, {"get_config_param", "active"}, active_params))
+        throw std::runtime_error("Failed to run 'get_config_param'");
+    if (!do_tcp_cmd(sock_fd, {"set_config_param", ".", active_params}, res))
+        throw std::runtime_error("Failed to run 'set_config_param'");
+    if (res != "set_config_param")
+        throw std::runtime_error("Error on 'set_config_param': " + res);
+
+    // set the desired config parameters
+    if (!do_tcp_cmd(sock_fd, {"set_config_param", key, value}, res))
+            throw std::runtime_error("Failed to set config param");
+
+    if (res != "set_config_param")
+        throw std::runtime_error("Error on 'set_config_param': " + res);
+
+    // reinitialize to make all staged parameters effective
+    if (!do_tcp_cmd(sock_fd, {"reinitialize"}, res))
+        throw std::runtime_error("Failed to run 'reinitialize'");
+
+    // reinit will report an error only when staged configs are incompatible
+    if (res != "reinitialize") throw std::invalid_argument(res);
+
+    // save if indicated, use deprecated write_config_txt to support 1.13
+    if (config_flags & CONFIG_PERSIST) {
+        if (!do_tcp_cmd(sock_fd, {"write_config_txt"}, res))
+            throw std::runtime_error("Failed to run 'write_config_txt'");
+
+        if (res != "write_config_txt")
+            throw std::runtime_error("Error on 'write_config_txt': " + res);
+    }
+
+    return true;
+}
 }  // namespace
 
 bool get_config(const std::string& hostname, sensor_config& config,
@@ -570,6 +619,26 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
     return recv_fixed(cli.imu_fd, buf, pf.imu_packet_size);
 }
+
+bool set_config_from_string(const std::string& hostname, const std::string key,
+                 const std::string value, uint8_t config_flags){
+
+    // open socket
+    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    if (sock_fd < 0) return false;
+
+    try {
+        set_config_helper_from_string(sock_fd, key, value, config_flags);
+    } catch (...) {
+        impl::socket_close(sock_fd);
+        throw;
+    }
+
+    impl::socket_close(sock_fd);
+    return true;
+}
+
+
 
 }  // namespace sensor
 }  // namespace ouster
