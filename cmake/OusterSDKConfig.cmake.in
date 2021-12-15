@@ -8,12 +8,14 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/Modules/")
 find_dependency(Eigen3)
 find_dependency(jsoncpp)
 
-# viz dependencies
-set(OpenGL_GL_PREFERENCE GLVND)
-find_dependency(OpenGL)
-find_dependency(Threads)
-find_dependency(GLEW)
-find_dependency(glfw3)
+if(@BUILD_VIZ@)
+    # viz dependencies
+    set(OpenGL_GL_PREFERENCE GLVND)
+    find_dependency(OpenGL)
+    find_dependency(Threads)
+    find_dependency(GLEW)
+    find_dependency(glfw3)
+endif()
 
 # pcap dependencies (no cmake config on debian 10)
 # find_dependency(libtins)
