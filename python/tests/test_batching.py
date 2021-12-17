@@ -121,7 +121,7 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     ls = client.LidarScan(info.format.pixels_per_column,
                           info.format.columns_per_frame, fields)
 
-    # we exoect zero initialized fields
+    # we expect zero initialized fields
     for f in ls.fields:
         assert np.count_nonzero(ls.field(f)) == 0
 
@@ -135,3 +135,40 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     # and the content shouldn't be zero after batching
     for f in ls.fields:
         assert np.count_nonzero(ls.field(f)) > 0
+
+
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+def test_incompatible_profile(lidar_stream: client.PacketSource) -> None:
+    """Test batching of a LidarScan with custom fields set."""
+
+    info = lidar_stream.metadata
+    assert info.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
+
+    packets_per_frame = (info.format.columns_per_frame //
+                         info.format.columns_per_packet)
+
+    batch = ScanBatcher(lidar_stream.metadata)
+
+    ls = client.LidarScan(info.format.pixels_per_column,
+                          info.format.columns_per_frame,
+                          client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+
+    # Try to decode a legacy packet into a dual returns scan
+    # TODO change exception thrown on the cpp side
+    with pytest.raises(IndexError):
+        for p in take(packets_per_frame, lidar_stream):
+            batch(p._data, ls)
+
+    batch = ScanBatcher(lidar_stream.metadata)
+
+    fields = {
+        client.ChanField.RANGE: np.uint8,
+    }
+    ls = client.LidarScan(info.format.pixels_per_column,
+                          info.format.columns_per_frame,
+                          fields)
+
+    # Test for decoding scans to a bad dest buffer type
+    with pytest.raises(ValueError):
+        for p in take(packets_per_frame, lidar_stream):
+            batch(p._data, ls)

@@ -87,6 +87,8 @@ LidarScan::LidarScan(
       headers{w, BlockHeader{ts_t{0}, 0, 0}} {
     // TODO: error on duplicate fields
     for (const auto& ft : field_types_) {
+        if(fields_.count(ft.first) > 0)
+            throw std::invalid_argument("Duplicated fields found");
         fields_[ft.first] = impl::FieldSlot{ft.second, w, h};
     }
 }
