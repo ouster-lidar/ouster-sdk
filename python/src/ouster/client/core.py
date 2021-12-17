@@ -169,14 +169,8 @@ class Sensor(PacketSource):
         return self._metadata
 
     def _next_packet(self) -> Optional[Packet]:
-        if self._cache is None:
-            # Lidar packets are bigger than IMU: wastes some space but is simple
-            buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(
-                buf, -1 if self._timeout is None else self._timeout)
-        else:
-            st, buf = self._cache
-            self._cache = None
+        st, buf = self._peek()
+        self._cache = None
 
         if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
@@ -211,8 +205,8 @@ class Sensor(PacketSource):
 
         Raises:
             ClientTimeout: if no packets are received within the configured
-                timeout.
-            ClientError: if the client enters an unspecified error state.
+                timeout
+            ClientError: if the client enters an unspecified error state
             ValueError: if the packet source has already been closed
         """
 
@@ -238,9 +232,12 @@ class Sensor(PacketSource):
             full: clear internal buffers first, so data is read from the OS
                   receive buffers (or the network) directly
 
+        Returns:
+            The number of packets dropped
+
         Raises:
             ClientTimeout: if a lidar packet is not received within the
-                configured timeout.
+                configured timeout
         """
         if full:
             self._cli.flush()
@@ -249,25 +246,23 @@ class Sensor(PacketSource):
         n_dropped = 0
         last_ts = time.monotonic()
         while True:
+            # check next packet to see if it's the start of a new frame
             st, buf = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = LidarPacket(buf, self._metadata).frame_id
+                frame = self._pf.frame_id(buf)
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1
                     if n_frames < 0:
                         break
                 last_ts = time.monotonic()
+            # check for timeout
             if self._timeout is not None and (time.monotonic() >=
                                               last_ts + self._timeout):
                 raise ClientTimeout(
                     f"No packets received within {self._timeout}s")
-            # call for effect and drop packet
-            try:
-                if self._next_packet() is None:
-                    break
-            except ClientOverflow:
-                pass
+            # drop cached packet
+            self._cache = None
             n_dropped += 1
 
         return n_dropped
