@@ -198,9 +198,11 @@ PYBIND11_PLUGIN(_client) {
             return pf.init_id(getptr(pf.lidar_packet_size, buf));
         })
 
-        .def_property_readonly("fields", [](const packet_format& self) {
+        // NOTE: keep_alive seems to be ignored without cpp_function wrapper
+        .def_property_readonly("fields", py::cpp_function([](const packet_format& self) {
                 return py::make_key_iterator(self.begin(), self.end());
-        }, "Return an iterator of available channel fields.")
+        }, py::keep_alive<0, 1>()),
+        "Return an iterator of available channel fields.")
 
         .def("packet_field", [](packet_format& pf, sensor::ChanField f, py::buffer buf) -> py::array {
             auto buf_ptr = getptr(pf.lidar_packet_size, buf);
@@ -698,9 +700,12 @@ PYBIND11_PLUGIN(_client) {
             "The measurement status header as a W-element numpy array.")
         .def_property_readonly(
             "fields",
-            [](const LidarScan& self) {
-                return py::make_key_iterator(self.begin(), self.end());
-            },
+            // NOTE: keep_alive seems to be ignored without cpp_function wrapper
+            py::cpp_function(
+                [](LidarScan& self) {
+                    return py::make_key_iterator(self.begin(), self.end());
+                },
+                py::keep_alive<0, 1>()),
             "Return an iterator of available channel fields.")
         .def("__eq__", [](const LidarScan& l, const LidarScan& r) { return l == r; })
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })

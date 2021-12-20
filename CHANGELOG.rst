@@ -68,7 +68,8 @@ ouster_viz
 
 python
 ------
-* update ouster-sdk version to 0.3.0
+* fix potential use-after-free in ``LidarScan.fields``
+* update ouster-sdk version to 0.3.0b1
 * return an error when attempting to initialize ``client.Sensor`` in STANDBY mode
 * check for errors while reading from a ``Sensor`` packet source and waiting for a timeout. This
   should make stopping a process with ``SIGINT`` more reliable

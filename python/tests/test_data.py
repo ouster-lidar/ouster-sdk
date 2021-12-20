@@ -109,8 +109,7 @@ def test_read_legacy_packet(packet: client.LidarPacket) -> None:
     assert packet.init_id == 0
     assert packet.prod_sn == 0
     # in 1024xN mode, the angle between measurements is exactly 88 encoder ticks
-    assert np.all(
-        np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 88)
+    assert np.all(np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 88)
     assert np.all(packet.status == 0xffffffff)
 
 
@@ -261,6 +260,19 @@ def test_scan_complete(w, win_start, win_end) -> None:
     assert ls._complete((win_start, win_end))
 
 
+def test_scan_fields_ref() -> None:
+    """Make sure ref to fields keeps scan alive."""
+    fields = client.LidarScan(32, 1024).fields
+
+    # should fail (or trip asan) if the field iterator doesn't keep scan alive
+    assert set(fields) == {
+        client.ChanField.RANGE,
+        client.ChanField.REFLECTIVITY,
+        client.ChanField.SIGNAL,
+        client.ChanField.NEAR_IR,
+    }
+
+
 def test_scan_default_fields() -> None:
     """Default scan has the expected fields for the LEGACY profile."""
     ls = client.LidarScan(32, 1024)
@@ -320,7 +332,6 @@ def test_scan_custom() -> None:
 
 def test_scan_eq_fields() -> None:
     """Test equality between scans with different fields."""
-
     ls0 = client.LidarScan(32, 1024)
     ls1 = client.LidarScan(32, 1024,
                            client.UDPProfileLidar.PROFILE_LIDAR_LEGACY)
