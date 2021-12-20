@@ -79,12 +79,12 @@ sensor::ChanField suitable_return(sensor::ChanField input_field, bool second) {
                           : sensor::ChanField::RANGE;
         case sensor::ChanField::SIGNAL:
         case sensor::ChanField::SIGNAL2:
-            return second ? sensor::ChanField::RANGE2
-                          : sensor::ChanField::RANGE;
+            return second ? sensor::ChanField::SIGNAL2
+                          : sensor::ChanField::SIGNAL;
         case sensor::ChanField::REFLECTIVITY:
         case sensor::ChanField::REFLECTIVITY2:
-            return second ? sensor::ChanField::RANGE2
-                          : sensor::ChanField::RANGE;
+            return second ? sensor::ChanField::REFLECTIVITY2
+                          : sensor::ChanField::REFLECTIVITY;
         case sensor::ChanField::NEAR_IR:
             return sensor::ChanField::NEAR_IR;
         default:
@@ -115,8 +115,8 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
 
     ouster::img_t<uint16_t> reflectivity;
     ouster::impl::visit_field(
-        ls, suitable_return(sensor::ChanField::SIGNAL, second), read_and_cast(),
-        reflectivity);
+        ls, suitable_return(sensor::ChanField::REFLECTIVITY, second),
+        read_and_cast(), reflectivity);
 
     auto points = ouster::cartesian(range, xyz_lut);
 

@@ -6,9 +6,6 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /PointCloud21
-        - /TF1/Frames1
-        - /PointCloud22
       Splitter Ratio: 0.5654885768890381
     Tree Height: 756
   - Class: rviz/Selection
@@ -85,30 +82,36 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Class: rviz/Image
-      Enabled: false
-      Image Topic: /img_node/nearir_image
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: near ir
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: raw
+    - Alpha: 1
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: z
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: true
+      Max Color: 255; 255; 255
+      Max Intensity: 15
+      Min Color: 0; 0; 0
+      Min Intensity: -10
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.029999999329447746
+      Style: Flat Squares
+      Topic: /os_cloud_node/points2
       Unreliable: false
-      Value: false
-    - Class: rviz/Image
-      Enabled: false
-      Image Topic: /img_node/signal_image
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: signal
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: raw
-      Unreliable: false
-      Value: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
     - Class: rviz/Image
       Enabled: true
       Image Topic: /img_node/reflec_image
@@ -133,66 +136,25 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: false
-    - Class: rviz/TF
-      Enabled: true
-      Frame Timeout: 15
-      Frames:
-        All Enabled: false
-        os_imu:
-          Value: false
-        os_lidar:
-          Value: false
-        os_sensor:
-          Value: true
-      Marker Alpha: 1
-      Marker Scale: 1
-      Name: TF
-      Show Arrows: true
-      Show Axes: true
-      Show Names: true
-      Tree:
-        os_sensor:
-          os_imu:
-            {}
-          os_lidar:
-            {}
-      Update Interval: 0
-      Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: Intensity
-      Decay Time: 0
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Min Color: 0; 0; 0
-      Name: PointCloud2
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 3
-      Size (m): 0.009999999776482582
-      Style: Flat Squares
-      Topic: /os_cloud_node/points2
-      Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: true
     - Class: rviz/Image
       Enabled: false
-      Image Topic: /img_node/range_image2
+      Image Topic: /img_node/signal_image
       Max Value: 1
       Median window: 5
       Min Value: 0
-      Name: range 2
+      Name: signal
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /img_node/nearir_image
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: near ir
       Normalize Range: true
       Queue Size: 2
       Transport Hint: raw
@@ -212,6 +174,18 @@ Visualization Manager:
       Value: false
     - Class: rviz/Image
       Enabled: false
+      Image Topic: /img_node/range_image2
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: range 2
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: false
       Image Topic: /img_node/signal_image2
       Max Value: 1
       Median window: 5
@@ -222,6 +196,30 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: false
+    - Class: rviz/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+        os_imu:
+          Value: false
+        os_lidar:
+          Value: false
+        os_sensor:
+          Value: true
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        os_sensor:
+          os_imu:
+            {}
+          os_lidar:
+            {}
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -268,6 +266,7 @@ Visualization Manager:
       Near Clip Distance: 0.009999999776482582
       Pitch: 1.2703977823257446
       Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
       Yaw: 4.513584136962891
     Saved: ~
 Window Geometry:
