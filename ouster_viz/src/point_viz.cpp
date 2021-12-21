@@ -617,6 +617,12 @@ void PointViz::drawLoop() {
     // since drawLoop may be called from a different thread,
     // we should set the opengl context to be current
     glfwMakeContextCurrent(pimpl->window);
+    auto initialized = gltInit();
+    glFrontFace(GL_CW);
+    if (initialized == GL_FALSE) {
+        std::cerr << "Error initializing GLT" << std::endl;
+        return;
+    }
     do {
         draw(*pimpl);
         glfwPollEvents();

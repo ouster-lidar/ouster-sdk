@@ -11,6 +11,9 @@
 #include "common.h"
 #include "ouster/point_viz.h"
 
+#define GLT_IMPLEMENTATION
+#include <gltext.h>
+
 namespace ouster {
 namespace viz {
 namespace impl {
@@ -120,6 +123,14 @@ class Cuboids {
     GLuint cuboid_rgba_id;
     GLuint xyz_buffer;
 
+    // We use two different coordinate system conventions in point viz. The
+    // lidar points come in a "robotics" convention where the z-axis is pointing
+    // up. The text loaded from GLText is in a standard opengl convention which
+    // is a right-handed convention with x-right, y-down, and z pointing into
+    // the screen. This transformation takes text loaded through GLText and puts
+    // it in a reference frame using the robotics convention
+    mat4f T_robotics_opengl;
+
    public:
     bool enabled;
 
@@ -134,7 +145,9 @@ class Cuboids {
                   4, 5, 1, 0, 0, 2, 6, 4, 5, 7, 3, 1},
           edge_indices{0, 1, 1, 3, 3, 2, 2, 0, 4, 5, 5, 7,
                        7, 6, 6, 4, 0, 4, 1, 5, 2, 6, 3, 7},
-          enabled{true} {}
+          enabled{true} {
+        T_robotics_opengl << 0, -1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0, 0, 0, 1;
+    }
 
     /**
      * initializes shader program, vertex buffers and handles after OpenGL
@@ -178,6 +191,7 @@ class Cuboids {
                               0,         // stride
                               (void*)0   // array buffer offset
         );
+
         for (const auto& cuboid : cuboids) {
             const mat4f pose = cuboid.pose;
             glUniformMatrix4fv(cuboid_pose_id, 1, GL_FALSE, pose.data());
@@ -189,6 +203,74 @@ class Cuboids {
             glUniform4fv(cuboid_rgba_id, 1, rgba.data());
             glDrawElements(GL_LINES, 24, GL_UNSIGNED_BYTE, edge_indices.data());
         }
+
+        gltBeginDraw();
+        gltColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+        // draw text
+        for (const auto& cuboid : cuboids) {
+            if (cuboid.text.empty()) {
+                continue;
+            }
+            auto text = gltCreateText();
+            auto err = gltSetText(text, cuboid.text.c_str());
+            if (err == GL_FALSE) {
+                std::cerr << "error setting text" << std::endl;
+            }
+            // Contruct Transform to be applied to the model of the text such
+            // that it's pointing at the camera to display information to the
+            // user
+            mat4f text_pose = cuboid.pose;
+            // Text loaded from glText is in what we're calling the "OpenGL"
+            // coordinate frame (x-right, y-down, z-forward). We need to convert
+            // this into the format used by the rest of the visualizer so we can
+            // apply the transformations in the correct coordinate frame
+            mat4f T_text_world = text_pose * T_robotics_opengl.transpose();
+
+            // Retrieve the offset and view from the current camera position
+            mat4f offset = camera.get_offset_mat().cast<float>();
+            mat4f view = camera.get_view().cast<float>();
+
+            // Text shader interprets coordinate system in x-right, y-down,
+            // z-forward (into the screen) coordinate system. This is different
+            // than the one the point viz is using (x-right, y-up, z-backwards).
+            // Since the view calculating is expecting coordinates wrt the
+            // ouster format, convert back to that and apply the transformation
+            // taking the points into the view reference frame.
+            mat4f T_text_view = view * offset * T_text_world;
+            // We need to remove the rotation component of the transform taking
+            // points in the text frame and representing them in the view frame.
+            // However since the viewport and text are in different coordinate
+            // frames, this isn't simply setting the rotation as the identity.
+            Eigen::Matrix3f R_no_rotation;
+            // clang-format off
+            R_no_rotation << 1,  0,  0, 
+                             0, -1,  0, 
+                             0,  0, -1;
+            // clang-format on
+            // Apply scaling to the text
+            constexpr float SCALING_FACTOR = 0.01F;
+
+            T_text_view.block<3, 3>(0, 0) = (SCALING_FACTOR * R_no_rotation);
+
+            // We want the text slightly above the cuboid so we can read it. Up
+            // in this coordinate frame is in the y-dimension
+            T_text_view(1, 3) += 1;
+
+            // Calculate the concatenation of the following transforms:
+            // * Transform taking points in the model (text) into the world
+            // frame
+            // * Transform taking points in the world frame into the view frame
+            // * Transform taking points in the view frame and projecting them
+            //   between 0 and 1 in the z-dimension for clipping (projection
+            //   frame)
+            mat4f mvp = camera.get_proj().cast<float>() * T_text_view;
+            gltDrawText(text, mvp.data());
+            gltDeleteText(text);
+        }
+
+        gltEndDraw();
+
         glDisableVertexAttribArray(cuboid_xyz_id);
     };
 
