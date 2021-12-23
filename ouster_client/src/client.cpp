@@ -159,11 +159,20 @@ SOCKET cfg_socket(const char* addr) {
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
+    // try to parse as numeric address first: avoids spurious errors from DNS
+    // lookup when not using a hostname (and should be faster)
+    hints.ai_flags = AI_NUMERICHOST;
     int ret = getaddrinfo(addr, "7501", &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "cfg getaddrinfo(): " << gai_strerror(ret) << std::endl;
-        return SOCKET_ERROR;
+        hints.ai_flags = 0;
+        ret = getaddrinfo(addr, "7501", &hints, &info_start);
+        if (ret != 0) {
+            std::cerr << "cfg getaddrinfo(): " << gai_strerror(ret)
+                      << std::endl;
+            return SOCKET_ERROR;
+        }
     }
+
     if (info_start == NULL) {
         std::cerr << "cfg getaddrinfo(): empty result" << std::endl;
         return SOCKET_ERROR;
