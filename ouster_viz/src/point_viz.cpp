@@ -547,8 +547,8 @@ bool PointViz::initialize() {
     glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 #endif
     glfwWindowHint(GLFW_SAMPLES, GLFW_DONT_CARE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
     // Open a window and create its OpenGL context
     pimpl->window = glfwCreateWindow(default_window_width,

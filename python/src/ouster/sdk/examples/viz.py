@@ -27,7 +27,6 @@ def main() -> None:
 
     args = parser.parse_args()
 
-
     if args.sensor:
         hostname = args.sensor
         if args.lidar_port or (not args.no_auto_dest):
@@ -40,7 +39,7 @@ def main() -> None:
 
         print("Initializing...")
         scans = client.Scans.stream(hostname,
-                                    config.udp_port_lidar,
+                                    config.udp_port_lidar or 7502,
                                     complete=False)
 
     elif args.pcap:

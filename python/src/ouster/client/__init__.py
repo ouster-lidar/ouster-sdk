@@ -18,6 +18,7 @@ from ._client import set_config
 from ._client import LidarScan
 
 from .data import BufferT
+from .data import FieldDType
 from .data import Packet
 from .data import ImuPacket
 from .data import LidarPacket

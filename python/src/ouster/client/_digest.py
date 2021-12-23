@@ -3,17 +3,18 @@ from collections import defaultdict
 from dataclasses import dataclass
 import hashlib
 import json
-from typing import (BinaryIO, Dict, List, Iterable, Iterator)
+from typing import (Dict, List, Iterable)
 
 import numpy as np
 
-from .data import (LidarPacket, LidarScan, ColHeader, SensorInfo)
+from .data import (LidarPacket, LidarScan, ColHeader)
 from .core import (Packets, PacketSource, Scans)
 
 
 def _md5(a: np.ndarray) -> str:
     """Get md5 hash of a numpy array."""
     return hashlib.md5(a.tobytes()).hexdigest()
+
 
 class FieldDigest:
     """Hashes of lidar data fields used for comparison in testing.

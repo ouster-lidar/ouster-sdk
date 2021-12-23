@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Iterator
+from typing import Dict, Iterator
 
 from more_itertools import take
 import numpy as np
@@ -113,7 +113,7 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     batch = ScanBatcher(lidar_stream.metadata)
 
     # create LidarScan with only 2 fields
-    fields = {
+    fields: Dict[client.ChanField, client.FieldDType] = {
         client.ChanField.RANGE: np.uint32,
         client.ChanField.SIGNAL: np.uint16
     }

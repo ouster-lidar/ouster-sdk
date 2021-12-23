@@ -59,7 +59,7 @@ run:
 
    PS > vcpkg install eigen3 jsoncpp libtins pybind11 glfw3 glew
 
-The currently tested vcpkg tag is ``2020.11-1``. After that, using a developer powershell prompt:
+The currently tested vcpkg tag is ``2021.05.12``. After that, using a developer powershell prompt:
 
 .. code:: powershell
 
