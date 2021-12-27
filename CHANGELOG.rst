@@ -63,7 +63,6 @@ ouster_ros
 
 ouster_viz
 ----------
-* add functionality to display text over cuboids. Visualization now requires OpenGL 3.3
 * the second CLI argument of simple_viz specifying the UDP data destination is now optional
 * fixed bug in AutoExposure causing more points to be mapped to near-zero values
 

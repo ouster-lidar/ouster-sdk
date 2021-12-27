@@ -22,8 +22,6 @@ target_link_libraries(ouster_viz
 target_include_directories(ouster_viz PUBLIC
   $<INSTALL_INTERFACE:include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_include_directories(ouster_viz SYSTEM PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>)
 add_library(OusterSDK::ouster_viz ALIAS ouster_viz)
 
 # ==== Executables ====

@@ -26,7 +26,6 @@ using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
 struct Cuboid {
     mat4f pose;
     std::array<GLfloat, 4> rgba;
-    std::string text;
 };
 
 /**
