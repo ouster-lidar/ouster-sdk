@@ -29,13 +29,17 @@ class ImuPacket:
                  info: SensorInfo,
                  timestamp: Optional[float] = None) -> None:
         """
+        This will always alias the supplied buffer-like object. Pass in a copy
+        to avoid unintentional aliasing.
+
         Args:
             data: Buffer containing the packet payload
-            pf: Format determining how to interpret the buffer
+            info: Metadata associated with the sensor packet stream
+            timestamp: A capture timestamp, in microseconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
-                packet format.
+                packet format
         """
 
         self._pf = _client.PacketFormat.from_info(info)
@@ -125,11 +129,12 @@ class LidarPacket:
 
         Args:
             data: Buffer containing the packet payload
-            pf: Format determining how to interpret the buffer
+            info: Metadata associated with the sensor packet stream
+            timestamp: A capture timestamp, in microseconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
-                packet format.
+                packet format, or if the init_id doesn't match the metadata
         """
         self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,

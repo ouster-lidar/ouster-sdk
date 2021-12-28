@@ -8,31 +8,26 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
-#include <tuple>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-
-#define PROTOCOL_UDP 17
+#include <string>
 
 namespace ouster {
 namespace sensor_utils {
 
 struct packet_info {
-    std::string dst_ip;   ///< The destination IP
-    std::string src_ip;   ///< The source IP
-    int dst_port;         ///< The destination port
-    int src_port;         ///< The source port
-    size_t payload_size;  ///< The size of the packet payload
-    std::chrono::microseconds
-        timestamp;            ///< The packet timestamp in std::chrono::duration
-    int fragments_in_packet;  ///< Number of fragments in the packet
-    int ip_version;  ///< The version of the ip stack (if it is there, otherwise
-                     ///< this will be 0)
-    int encapsulation_protocol;  ///< The protocol of the encapsulation
-    int network_protocol;  ///< The protocol of the network layer. Values listed
-                           ///< here
-                           ///< https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
+    using ts = std::chrono::microseconds;
+
+    // TODO: use numerical IPs for efficient filtering
+    std::string dst_ip;          ///< The destination IP
+    std::string src_ip;          ///< The source IP
+    int dst_port;                ///< The destination port
+    int src_port;                ///< The source port
+    size_t payload_size;         ///< The size of the packet payload
+    ts timestamp;                ///< The packet capture timestamp
+    int fragments_in_packet;     ///< Number of fragments in the packet
+    int ip_version;              ///< The ip version, 4 or 6
+    int encapsulation_protocol;  ///< PCAP encapsulation type
+    // TODO: remove, library ignores non-UDP packes
+    int network_protocol;        ///< IANA protocol number. Always 17 (UDP)
 };
 
 /**
@@ -44,13 +39,11 @@ std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
  * Struct to hide the stepwise playback details
  */
 struct playback_handle;
-std::shared_ptr<playback_handle> playback_handle_init();
 
 /**
  * Struct to hide the record details
  */
 struct record_handle;
-std::shared_ptr<record_handle> record_handle_init();
 
 /**
  * Initialize the stepwise playback handle
@@ -102,6 +95,7 @@ std::shared_ptr<record_handle> record_initialize(
     const std::string& file, const std::string& src_ip,
     const std::string& dst_ip, int frag_size,
     bool use_sll_encapsulation = false);
+
 /**
  * Uninitialize the record handle, closing underlying file
  * @param[in] handle An initialized handle for the recording state
