@@ -68,6 +68,7 @@ ouster_viz
 
 python
 ------
+* release builds for wheels on Windows now use the VS 2017 toolchain and runtime (previously 2019)
 * fix potential use-after-free in ``LidarScan.fields``
 * update ouster-sdk version to 0.3.0b1
 * return an error when attempting to initialize ``client.Sensor`` in STANDBY mode
