@@ -1,6 +1,7 @@
+from collections import defaultdict
 import os
 from random import getrandbits, shuffle, random
-from typing import Iterator
+from typing import Dict, Iterable, Iterator, List
 from itertools import chain, islice
 
 from more_itertools import roundrobin
@@ -23,7 +24,9 @@ UDP_PROTO = 17
 current_timestamp = time.time()
 
 
-def random_lidar_packets(metadata, random_time=NO_RANDOM_TIME) -> Iterator[client.LidarPacket]:
+def random_lidar_packets(metadata,
+                         random_time=NO_RANDOM_TIME
+                         ) -> Iterator[client.LidarPacket]:
     global current_timestamp
 
     pf = _client.PacketFormat.from_info(metadata)
@@ -38,7 +41,9 @@ def random_lidar_packets(metadata, random_time=NO_RANDOM_TIME) -> Iterator[clien
         yield client.LidarPacket(buf, metadata, timestamp)
 
 
-def random_imu_packets(metadata, random_time=NO_RANDOM_TIME) -> Iterator[client.ImuPacket]:
+def random_imu_packets(metadata,
+                       random_time=NO_RANDOM_TIME
+                       ) -> Iterator[client.ImuPacket]:
     global current_timestamp
 
     pf = _client.PacketFormat.from_info(metadata)
@@ -63,20 +68,13 @@ def use_sll() -> int:
     return False
 
 
-@pytest.fixture()
-def metadata():
-    meta_path = os.path.join(DATA_DIR, "os-992011000121_meta.json")
-    with open(meta_path, 'r') as f:
-        return client.SensorInfo(f.read())
-
-
 @pytest.fixture
-def pcap_path(metadata, n_packets, use_sll, tmpdir):
+def pcap_path(meta, n_packets, use_sll, tmpdir) -> Iterable[str]:
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
-    packets = islice(
-        roundrobin(random_lidar_packets(metadata),
-                   random_imu_packets(metadata)), n_packets)
+    packets: Iterable[client.Packet] = islice(
+        roundrobin(random_lidar_packets(meta), random_imu_packets(meta)),
+        n_packets)
 
     pcap.record(packets, file_path, use_sll_encapsulation=use_sll)
 
@@ -84,55 +82,45 @@ def pcap_path(metadata, n_packets, use_sll, tmpdir):
 
 
 @pytest.fixture
-def pcap_obj(metadata, pcap_path):
-    pc = pcap.Pcap(pcap_path, metadata)
+def pcap_obj(meta, pcap_path) -> Iterable[pcap.Pcap]:
+    pc = pcap.Pcap(pcap_path, meta)
     yield pc
     pc.close()
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize('n_packets', [0])
-def test_pcap_read_empty(pcap_obj) -> None:
-    """Check that reading an empty pcap yields an empty list."""
+def test_pcap_read_empty(meta, pcap_path) -> None:
+    """Check reading with fully specified ports doesn't fail."""
+    pcap_obj = pcap.Pcap(pcap_path, meta)
+    assert pcap_obj.ports == (0, 0)
     assert list(pcap_obj) == []
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize('n_packets', [10])
 def test_pcap_read_10(pcap_obj) -> None:
     """Check that reading a test pcap produces the right number of packets."""
+    assert pcap_obj.ports == (7502, 7503)
     assert len(list(pcap_obj)) == 10
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize('n_packets', [10])
-def test_pcap_info_10(pcap_path, metadata) -> None:
-    """Check that reading a test pcap produces the right number of packets."""
-    res = pcap.Pcap(pcap_path, metadata)
-    ports = {}
-    sizes = {}
-    encap = {}
-    net = {}
-    af = {}
-    for item in pcap._pcap_info(pcap_path):
-        if item.dst_port not in ports:
-            ports[item.dst_port] = 0
+def test_pcap_info_10(pcap_path, meta) -> None:
+    """Test reading packet headers with private helper."""
+    ports: Dict[int, int] = defaultdict(int)
+    sizes: Dict[int, int] = defaultdict(int)
+    encap: Dict[int, int] = defaultdict(int)
+    net: Dict[int, int] = defaultdict(int)
+    af: Dict[int, int] = defaultdict(int)
+
+    for item in pcap._packet_info_stream(pcap_path):
         ports[item.dst_port] += 1
-
-        if item.payload_size not in sizes:
-            sizes[item.payload_size] = 0
         sizes[item.payload_size] += 1
-
-        if item.encapsulation_protocol not in encap:
-            encap[item.encapsulation_protocol] = 0
         encap[item.encapsulation_protocol] += 1
-
-        if item.network_protocol not in net:
-            net[item.network_protocol] = 0
         net[item.network_protocol] += 1
-
-        if item.ip_version not in af:
-            af[item.ip_version] = 0
         af[item.ip_version] += 1
-    # default ports
-    assert res._lidar_port == 7502
 
     # roundrobin -> 5 of each
     assert ports == {7502: 5, 7503: 5}
@@ -142,21 +130,21 @@ def test_pcap_info_10(pcap_path, metadata) -> None:
     assert af == {4: 10}
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize('n_packets', [10])
 @pytest.mark.parametrize('use_sll', [True, False])
 def test_pcap_info_encap_proto(pcap_path, use_sll) -> None:
-    """Check that reading a test pcap produces the right number of packets."""
-    encap = {}
+    """Test reading/writing pcaps with different encapsulation."""
+    encap: Dict[int, int] = defaultdict(int)
 
-    for item in pcap._pcap_info(pcap_path):
-
-        if item.encapsulation_protocol not in encap:
-            encap[item.encapsulation_protocol] = 0
+    for item in pcap._packet_info_stream(pcap_path):
         encap[item.encapsulation_protocol] += 1
+
     proto = SLL_PROTO if use_sll else ETH_PROTO
     assert encap == {proto: 10}
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_pcap_reset(pcap_obj) -> None:
     """Test that resetting a pcap after reading works."""
     packets1 = list(pcap_obj)
@@ -168,6 +156,7 @@ def test_pcap_reset(pcap_obj) -> None:
     assert bufs1 == bufs2
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_pcap_read_closed(pcap_obj) -> None:
     """Check that reading from a closed pcap raises an error."""
     pcap_obj.close()
@@ -175,6 +164,7 @@ def test_pcap_read_closed(pcap_obj) -> None:
         next(iter(pcap_obj))
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize("n_lidar, n_imu", [
     pytest.param(1, 0, id="one lidar ether"),
     pytest.param(20, 0, id="multi lidar ether"),
@@ -183,36 +173,37 @@ def test_pcap_read_closed(pcap_obj) -> None:
     pytest.param(1, 1, id="one each ether"),
     pytest.param(20, 20, id="multi each ether"),
 ])
-def test_read_write_lidar_imu(n_lidar, n_imu, metadata, tmpdir):
+def test_read_write_lidar_imu(n_lidar, n_imu, meta, tmpdir) -> None:
     """Test that random packets read back from pcap are identical."""
-    lidar_packets = islice(random_lidar_packets(metadata), n_lidar)
-    imu_packets = islice(random_imu_packets(metadata), n_imu)
-    in_packets = list(chain(lidar_packets, imu_packets))
+    lidar_packets = islice(random_lidar_packets(meta), n_lidar)
+    imu_packets = islice(random_imu_packets(meta), n_imu)
+    in_packets: List[client.Packet] = list(chain(lidar_packets, imu_packets))
 
     shuffle(in_packets)
 
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     pcap.record(in_packets, file_path)
-    out_packets = list(pcap.Pcap(file_path, metadata))
+    out_packets = list(pcap.Pcap(file_path, meta))
     out_bufs = [bytes(p._data) for p in out_packets]
     in_bufs = [bytes(p._data) for p in in_packets]
 
     assert in_bufs == out_bufs
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize("mode", [
     pytest.param(RANDOM_FLOAT, id="random float timestamp"),
 ])
-def test_timestamp_float_read_write(mode, metadata, tmpdir):
-    lidar_packets = islice(random_lidar_packets(metadata, random_time=mode), 10)
-    imu_packets = islice(random_imu_packets(metadata, random_time=mode), 10)
+def test_timestamp_float_read_write(mode, meta, tmpdir):
+    lidar_packets = islice(random_lidar_packets(meta, random_time=mode), 10)
+    imu_packets = islice(random_imu_packets(meta, random_time=mode), 10)
     in_packets = list(chain(lidar_packets, imu_packets))
 
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     pcap.record(in_packets, file_path)
-    out_packets = list(pcap.Pcap(file_path, metadata))
+    out_packets = list(pcap.Pcap(file_path, meta))
     out_timestamps = []
     in_timestamps = []
 
@@ -225,17 +216,18 @@ def test_timestamp_float_read_write(mode, metadata, tmpdir):
         assert i == pytest.approx(o, abs=1e-6)
 
 
-def test_no_timestamp_read_write(metadata, tmpdir):
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+def test_no_timestamp_read_write(meta, tmpdir):
     mode = NO_RANDOM_TIME
     current_timestamp = time.time()
-    lidar_packets = islice(random_lidar_packets(metadata, random_time=mode), 10)
-    imu_packets = islice(random_imu_packets(metadata, random_time=mode), 10)
+    lidar_packets = islice(random_lidar_packets(meta, random_time=mode), 10)
+    imu_packets = islice(random_imu_packets(meta, random_time=mode), 10)
     in_packets = list(chain(lidar_packets, imu_packets))
 
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     pcap.record(in_packets, file_path)
-    out_packets = list(pcap.Pcap(file_path, metadata))
+    out_packets = list(pcap.Pcap(file_path, meta))
     out_timestamps = []
     in_timestamps = []
 
@@ -248,28 +240,36 @@ def test_no_timestamp_read_write(metadata, tmpdir):
         assert current_timestamp == pytest.approx(o, abs=5e-1)
 
 
-@pytest.mark.parametrize("n_lidar_timestamp, n_lidar_no_timestamp, n_imu_timestamp, n_imu_no_timestamp", [
-    pytest.param(10, 0, 10, 0, id="yes timestamps"),
-    pytest.param(0, 10, 0, 10, id="no timestamps"),
-    pytest.param(10, 10, 0, 0, id="mixed: lidar"),
-    pytest.param(0, 0, 10, 10, id="mixed: imu"),
-    pytest.param(10, 0, 0, 10, id="mixed: lidar ts, imu no ts"),
-    pytest.param(0, 10, 10, 10, id="mixed: lidar no ts, imu ts"),
-    pytest.param(10, 10, 10, 10, id="mixed: lidar ts, lidar no ts, imu ts, imu no ts"),
-])
-def test_mixed_timestamp_write(n_lidar_timestamp, n_lidar_no_timestamp, n_imu_timestamp,
-                               n_imu_no_timestamp, metadata, tmpdir):
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+@pytest.mark.parametrize(
+    "n_lidar_timestamp, n_lidar_no_timestamp, n_imu_timestamp, n_imu_no_timestamp",
+    [
+        pytest.param(10, 0, 10, 0, id="yes timestamps"),
+        pytest.param(0, 10, 0, 10, id="no timestamps"),
+        pytest.param(10, 10, 0, 0, id="mixed: lidar"),
+        pytest.param(0, 0, 10, 10, id="mixed: imu"),
+        pytest.param(10, 0, 0, 10, id="mixed: lidar ts, imu no ts"),
+        pytest.param(0, 10, 10, 10, id="mixed: lidar no ts, imu ts"),
+        pytest.param(10, 10, 10, 10, id="mixed: all"),
+    ])
+def test_mixed_timestamp_write(n_lidar_timestamp, n_lidar_no_timestamp,
+                               n_imu_timestamp, n_imu_no_timestamp, meta,
+                               tmpdir) -> None:
 
-    lidar_timestamp_packets = islice(random_lidar_packets(metadata, random_time=RANDOM_FLOAT),
-                                     n_lidar_timestamp)
-    lidar_no_timestamp_packets = islice(random_lidar_packets(metadata, random_time=NO_RANDOM_TIME),
-                                        n_lidar_no_timestamp)
-    imu_timestamp_packets = islice(random_imu_packets(metadata, random_time=RANDOM_FLOAT),
-                                   n_imu_timestamp)
-    imu_no_timestamp_packets = islice(random_imu_packets(metadata, random_time=NO_RANDOM_TIME),
-                                      n_imu_no_timestamp)
-    in_packets = list(chain(lidar_timestamp_packets, lidar_no_timestamp_packets, imu_timestamp_packets,
-                            imu_no_timestamp_packets))
+    lidar_timestamp_packets = islice(
+        random_lidar_packets(meta, random_time=RANDOM_FLOAT),
+        n_lidar_timestamp)
+    lidar_no_timestamp_packets = islice(
+        random_lidar_packets(meta, random_time=NO_RANDOM_TIME),
+        n_lidar_no_timestamp)
+    imu_timestamp_packets = islice(
+        random_imu_packets(meta, random_time=RANDOM_FLOAT), n_imu_timestamp)
+    imu_no_timestamp_packets = islice(
+        random_imu_packets(meta, random_time=NO_RANDOM_TIME),
+        n_imu_no_timestamp)
+    in_packets: List[client.Packet] = list(
+        chain(lidar_timestamp_packets, lidar_no_timestamp_packets,
+              imu_timestamp_packets, imu_no_timestamp_packets))
 
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
@@ -283,43 +283,49 @@ def test_mixed_timestamp_write(n_lidar_timestamp, n_lidar_no_timestamp, n_imu_ti
         pcap.record(in_packets, file_path)
 
 
-def test_write_nonsensical_packet_type(metadata, tmpdir):
+def test_write_nonsensical_packet_type(tmpdir) -> None:
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     in_packets = [42]
     with pytest.raises(ValueError):
-        pcap.record(in_packets, file_path)
+        pcap.record(in_packets, file_path)  # type: ignore
 
     assert not os.path.exists(file_path), "Didn't clean up empty file"
 
 
-def test_lidar_guess_error(metadata, tmpdir):
-    packets = islice(random_lidar_packets(metadata), 2)
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+def test_lidar_guess_error(meta, tmpdir) -> None:
+    packets = islice(random_lidar_packets(meta), 2)
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     buf_size = 2**16
-    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1", buf_size)
+    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1",
+                                     buf_size)
     try:
         _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
         _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
     finally:
         _pcap.record_uninitialize(handle)
 
-    with pytest.raises(ValueError):
-        pcap.Pcap(file_path, metadata)
+    source = pcap.Pcap(file_path, meta)
+    assert len(source._guesses) > 1
+    assert len(list(source)) == 1
 
 
-def test_imu_guess_error(metadata, tmpdir):
-    packets = islice(random_imu_packets(metadata), 2)
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+def test_imu_guess_error(meta, tmpdir) -> None:
+    packets = islice(random_imu_packets(meta), 2)
     file_path = os.path.join(tmpdir, "pcap_test.pcap")
 
     buf_size = 2**16
-    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1", buf_size)
+    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1",
+                                     buf_size)
     try:
         _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
         _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
     finally:
         _pcap.record_uninitialize(handle)
 
-    with pytest.raises(ValueError):
-        pcap.Pcap(file_path, metadata)
+    source = pcap.Pcap(file_path, meta)
+    assert len(source._guesses) > 1
+    assert len(list(source)) == 1

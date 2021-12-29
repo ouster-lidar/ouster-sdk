@@ -11,6 +11,7 @@
   <arg name="viz" default="false" doc="whether to run a rviz"/>
   <arg name="rviz_config" default="-d $(find ouster_ros)/viz.rviz" doc="optional rviz config file"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
+  <arg name="udp_profile_lidar" default="" doc="lidar packet profile: LEGACY, RNG19_RFL8_SIG16_NIR16_DUAL"/>
 
   <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" required="true">
     <param name="~/lidar_mode" type="string" value="$(arg lidar_mode)"/>
@@ -21,6 +22,7 @@
     <param name="~/lidar_port" value="$(arg lidar_port)"/>
     <param name="~/imu_port" value="$(arg imu_port)"/>
     <param name="~/metadata" value="$(arg metadata)"/>
+    <param name="~/udp_profile_lidar" value="$(arg udp_profile_lidar)"/>
   </node>
 
   <node pkg="ouster_ros" type="os_cloud_node" name="os_cloud_node" output="screen" required="true">
@@ -34,6 +36,7 @@
   <node if="$(arg viz)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
     <remap from="~/os_config" to="/os_node/os_config"/>
     <remap from="~/points" to="/os_cloud_node/points"/>
+    <remap from="~/points2" to="/os_cloud_node/points2"/>
   </node>
 
   <!-- for compatibility with < 1.13 rosbags -->

@@ -4,7 +4,7 @@ This module contains more idiomatic wrappers around the lower-level module
 generated using pybind11.
 """
 from contextlib import closing
-from typing import cast, Iterable, Iterator, List, Optional, Tuple
+from typing import cast, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 from threading import Thread
 import time
 
@@ -12,8 +12,8 @@ from more_itertools import take
 from typing_extensions import Protocol
 
 from . import _client
-from ._client import (SensorInfo, LidarScan)
-from .data import (ImuPacket, LidarPacket, Packet)
+from ._client import (SensorInfo, LidarScan, UDPProfileLidar)
+from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet)
 
 
 class ClientError(Exception):
@@ -54,7 +54,7 @@ class PacketSource(Protocol):
 class Packets(PacketSource):
     """Create a :class:`PacketSource` from an existing iterator."""
 
-    _it: Iterator[Packet]
+    _it: Iterable[Packet]
     _metadata: SensorInfo
 
     def __init__(self, it: Iterable[Packet], metadata: SensorInfo):
@@ -63,7 +63,7 @@ class Packets(PacketSource):
             it: A stream of packets
             metadata: Metadata for the packet stream
         """
-        self._it = iter(it)
+        self._it = it
         self._metadata = metadata
 
     @property
@@ -72,7 +72,7 @@ class Packets(PacketSource):
 
     def __iter__(self) -> Iterator[Packet]:
         """Return the underlying iterator."""
-        return self._it
+        return iter(self._it)
 
     def close(self) -> None:
         pass
@@ -169,13 +169,8 @@ class Sensor(PacketSource):
         return self._metadata
 
     def _next_packet(self) -> Optional[Packet]:
-        if self._cache is None:
-            # Lidar packets are bigger than IMU: wastes some space but is simple
-            buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(buf, self._timeout or 0)
-        else:
-            st, buf = self._cache
-            self._cache = None
+        st, buf = self._peek()
+        self._cache = None
 
         if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
@@ -196,7 +191,8 @@ class Sensor(PacketSource):
         if self._cache is None:
             # Lidar packets are bigger than IMU: wastes some space but is simple
             buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(buf, self._timeout or 0)
+            st = self._cli.consume(
+                buf, -1 if self._timeout is None else self._timeout)
             self._cache = (st, buf)
         return self._cache
 
@@ -209,8 +205,8 @@ class Sensor(PacketSource):
 
         Raises:
             ClientTimeout: if no packets are received within the configured
-                timeout.
-            ClientError: if the client enters an unspecified error state.
+                timeout
+            ClientError: if the client enters an unspecified error state
             ValueError: if the packet source has already been closed
         """
 
@@ -236,9 +232,12 @@ class Sensor(PacketSource):
             full: clear internal buffers first, so data is read from the OS
                   receive buffers (or the network) directly
 
+        Returns:
+            The number of packets dropped
+
         Raises:
             ClientTimeout: if a lidar packet is not received within the
-                configured timeout.
+                configured timeout
         """
         if full:
             self._cli.flush()
@@ -247,25 +246,23 @@ class Sensor(PacketSource):
         n_dropped = 0
         last_ts = time.monotonic()
         while True:
+            # check next packet to see if it's the start of a new frame
             st, buf = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = LidarPacket(buf, self._metadata).frame_id
+                frame = self._pf.frame_id(buf)
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1
                     if n_frames < 0:
                         break
                 last_ts = time.monotonic()
+            # check for timeout
             if self._timeout is not None and (time.monotonic() >=
                                               last_ts + self._timeout):
                 raise ClientTimeout(
                     f"No packets received within {self._timeout}s")
-            # call for effect and drop packet
-            try:
-                if self._next_packet() is None:
-                    break
-            except ClientOverflow:
-                pass
+            # drop cached packet
+            self._cache = None
             n_dropped += 1
 
         return n_dropped
@@ -305,6 +302,7 @@ class Scans:
                  *,
                  complete: bool = False,
                  timeout: Optional[float] = None,
+                 fields: Optional[Dict[ChanField, FieldDType]] = None,
                  _max_latency: int = 0) -> None:
         """
         Args:
@@ -317,6 +315,10 @@ class Scans:
         self._complete = complete
         self._timeout = timeout
         self._max_latency = _max_latency
+        # used to initialize LidarScan
+        self._fields: Union[Dict[ChanField, FieldDType], UDPProfileLidar] = (
+            fields if fields is not None else
+            self._source.metadata.format.udp_profile_lidar)
 
     def __iter__(self) -> Iterator[LidarScan]:
         """Get an iterator."""
@@ -330,8 +332,7 @@ class Scans:
         sensor = cast(Sensor, self._source) if isinstance(
             self._source, Sensor) else None
 
-        ls_write = LidarScan(h, w,
-                             self._source.metadata.format.udp_profile_lidar)
+        ls_write = None
         pf = _client.PacketFormat.from_info(self._source.metadata)
         batch = _client.ScanBatcher(w, pf)
 
@@ -343,6 +344,9 @@ class Scans:
             try:
                 packet = next(it)
             except StopIteration:
+                if ls_write is not None:
+                    if not self._complete or ls_write._complete(column_window):
+                        yield ls_write
                 return
 
             if self._timeout is not None and (time.monotonic() >=
@@ -350,13 +354,14 @@ class Scans:
                 raise ClientTimeout(f"No lidar scans within {self._timeout}s")
 
             if isinstance(packet, LidarPacket):
+                ls_write = ls_write or LidarScan(h, w, self._fields)
+
                 if batch(packet._data, ls_write):
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write._complete(column_window):
                         yield ls_write
                     start_ts = time.monotonic()
-                    ls_write = LidarScan(
-                        h, w, self._source.metadata.format.udp_profile_lidar)
+                    ls_write = None
 
                     # Drop data along frame boundaries to maintain _max_latency and
                     # clear out already-batched first packet of next frame
@@ -417,14 +422,16 @@ class Scans:
         return metadata, iter(next_batch, [])
 
     @classmethod
-    def stream(cls,
-               hostname: str = "localhost",
-               lidar_port: int = 7502,
-               *,
-               buf_size: int = 640,
-               timeout: float = 1.0,
-               complete: bool = True,
-               metadata: Optional[SensorInfo] = None) -> 'Scans':
+    def stream(
+            cls,
+            hostname: str = "localhost",
+            lidar_port: int = 7502,
+            *,
+            buf_size: int = 640,
+            timeout: Optional[float] = 1.0,
+            complete: bool = True,
+            metadata: Optional[SensorInfo] = None,
+            fields: Optional[Dict[ChanField, FieldDType]] = None) -> 'Scans':
         """Stream scans from a sensor.
 
         Will drop frames preemptively to avoid filling up internal buffers and
@@ -444,4 +451,8 @@ class Scans:
                         timeout=timeout,
                         _flush_before_read=True)
 
-        return cls(source, timeout=timeout, complete=complete, _max_latency=2)
+        return cls(source,
+                   timeout=timeout,
+                   complete=complete,
+                   fields=fields,
+                   _max_latency=2)

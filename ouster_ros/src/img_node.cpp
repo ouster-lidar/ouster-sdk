@@ -64,43 +64,72 @@ int main(int argc, char** argv) {
     size_t H = info.format.pixels_per_column;
     size_t W = info.format.columns_per_frame;
 
+    auto udp_profile_lidar = info.format.udp_profile_lidar;
+    const int n_returns =
+        (udp_profile_lidar == sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY)
+            ? 1
+            : 2;
+
     const auto& px_offset = info.format.pixel_shift_by_row;
 
-    ros::Publisher range_image_pub =
-        nh.advertise<sensor_msgs::Image>("range_image", 100);
+    std::vector<ros::Publisher> img_pubs;
+    std::vector<viz::AutoExposure> aes;
+
     ros::Publisher nearir_image_pub =
         nh.advertise<sensor_msgs::Image>("nearir_image", 100);
-    ros::Publisher signal_image_pub =
-        nh.advertise<sensor_msgs::Image>("signal_image", 100);
-    ros::Publisher reflec_image_pub =
-        nh.advertise<sensor_msgs::Image>("reflec_image", 100);
+
+    std::vector<ros::Publisher> range_image_pubs;
+    std::vector<ros::Publisher> signal_image_pubs;
+    std::vector<ros::Publisher> reflec_image_pubs;
+
+    auto topic = [](auto base, int ind) {
+        if (ind == 0) return std::string(base);
+        return std::string(base) +
+               std::to_string(ind + 1);  // need second return to return 2
+    };
+    for (int i = 0; i < n_returns; i++) {
+        ros::Publisher range_image_pub =
+            nh.advertise<sensor_msgs::Image>(topic("range_image", i), 100);
+        range_image_pubs.push_back(range_image_pub);
+
+        ros::Publisher signal_image_pub =
+            nh.advertise<sensor_msgs::Image>(topic("signal_image", i), 100);
+        signal_image_pubs.push_back(signal_image_pub);
+
+        ros::Publisher reflec_image_pub =
+            nh.advertise<sensor_msgs::Image>(topic("reflec_image", i), 100);
+        reflec_image_pubs.push_back(reflec_image_pub);
+    }
 
     ouster_ros::Cloud cloud{};
 
     viz::AutoExposure nearir_ae, signal_ae, reflec_ae;
     viz::BeamUniformityCorrector nearir_buc;
 
-    ouster::img_t<double> nearir_image_eigen(H, W);
-    ouster::img_t<double> signal_image_eigen(H, W);
-    ouster::img_t<double> reflec_image_eigen(H, W);
+    sensor_msgs::ImagePtr nearir_image;
 
-    auto cloud_handler = [&](const sensor_msgs::PointCloud2::ConstPtr& m) {
+    auto base_cloud_handler = [&](const sensor_msgs::PointCloud2::ConstPtr& m,
+                                  int return_index) {
         pcl::fromROSMsg(*m, cloud);
 
         auto range_image = make_image_msg(H, W, m->header.stamp);
-        auto nearir_image = make_image_msg(H, W, m->header.stamp);
         auto signal_image = make_image_msg(H, W, m->header.stamp);
         auto reflec_image = make_image_msg(H, W, m->header.stamp);
+        nearir_image = make_image_msg(H, W, m->header.stamp);
+
+        ouster::img_t<double> nearir_image_eigen(H, W);
+        ouster::img_t<double> signal_image_eigen(H, W);
+        ouster::img_t<double> reflec_image_eigen(H, W);
 
         // views into message data
         auto range_image_map = Eigen::Map<ouster::img_t<pixel_type>>(
             (pixel_type*)range_image->data.data(), H, W);
-        auto nearir_image_map = Eigen::Map<ouster::img_t<pixel_type>>(
-            (pixel_type*)nearir_image->data.data(), H, W);
         auto signal_image_map = Eigen::Map<ouster::img_t<pixel_type>>(
             (pixel_type*)signal_image->data.data(), H, W);
         auto reflec_image_map = Eigen::Map<ouster::img_t<pixel_type>>(
             (pixel_type*)reflec_image->data.data(), H, W);
+        auto nearir_image_map = Eigen::Map<ouster::img_t<pixel_type>>(
+            (pixel_type*)nearir_image->data.data(), H, W);
 
         // copy data out of Cloud message, with destaggering
         for (size_t u = 0; u < H; u++) {
@@ -108,41 +137,57 @@ int main(int argc, char** argv) {
                 const size_t vv = (v + W - px_offset[u]) % W;
                 const auto& pt = cloud[u * W + vv];
 
-                // 16 bit img: use 4mm resolution and throw out returns > 260m
+                // 16 bit img: use 4mm resolution and throw out returns >
+                // 260m
                 auto r = (pt.range + 0b10) >> 2;
                 range_image_map(u, v) = r > pixel_value_max ? 0 : r;
 
-                nearir_image_eigen(u, v) = pt.ambient;
                 signal_image_eigen(u, v) = pt.intensity;
                 reflec_image_eigen(u, v) = pt.reflectivity;
+                nearir_image_eigen(u, v) = pt.ambient;
             }
         }
 
-        // image processing
+        const bool first = (return_index == 0);
+
+        signal_ae(signal_image_eigen, first);
+        reflec_ae(reflec_image_eigen, first);
         nearir_buc(nearir_image_eigen);
-        nearir_ae(nearir_image_eigen);
-        signal_ae(signal_image_eigen);
-        reflec_ae(reflec_image_eigen);
+        nearir_ae(nearir_image_eigen, first);
         nearir_image_eigen = nearir_image_eigen.sqrt();
         signal_image_eigen = signal_image_eigen.sqrt();
 
         // copy data into image messages
-        nearir_image_map =
-            (nearir_image_eigen * pixel_value_max).cast<pixel_type>();
         signal_image_map =
             (signal_image_eigen * pixel_value_max).cast<pixel_type>();
         reflec_image_map =
             (reflec_image_eigen * pixel_value_max).cast<pixel_type>();
+        if (first)
+            nearir_image_map =
+                (nearir_image_eigen * pixel_value_max).cast<pixel_type>();
 
-        // publish
-        range_image_pub.publish(range_image);
-        nearir_image_pub.publish(nearir_image);
-        signal_image_pub.publish(signal_image);
-        reflec_image_pub.publish(reflec_image);
+        // publish at return index
+        range_image_pubs[return_index].publish(range_image);
+        signal_image_pubs[return_index].publish(signal_image);
+        reflec_image_pubs[return_index].publish(reflec_image);
     };
 
-    auto pc_sub =
-        nh.subscribe<sensor_msgs::PointCloud2>("points", 100, cloud_handler);
+    auto first_cloud_handler =
+        [&](const sensor_msgs::PointCloud2::ConstPtr& m) {
+            base_cloud_handler(m, 0);
+            nearir_image_pub.publish(nearir_image);
+        };
+
+    auto second_cloud_handler =
+        [&](const sensor_msgs::PointCloud2::ConstPtr& m) {
+            base_cloud_handler(m, 1);
+        };
+
+    // image processing
+    auto pc1_sub = nh.subscribe<sensor_msgs::PointCloud2>(
+        topic("points", 0), 100, first_cloud_handler);
+    auto pc2_sub = nh.subscribe<sensor_msgs::PointCloud2>(
+        topic("points", 1), 100, second_cloud_handler);
 
     ros::spin();
     return EXIT_SUCCESS;

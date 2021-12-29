@@ -1,5 +1,6 @@
+from copy import deepcopy
 from enum import Enum
-from typing import Callable, Iterator, List, Optional, Union
+from typing import Callable, Iterator, Type, List, Optional, Union
 import warnings
 
 import numpy as np
@@ -9,6 +10,9 @@ from ._client import (ChanField, LidarScan, SensorInfo)
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
+
+FieldDType = Type[np.unsignedinteger]
+"""Numpy dtype of fields."""
 
 Packet = Union['ImuPacket', 'LidarPacket']
 """Packets emitted by a sensor."""
@@ -25,13 +29,17 @@ class ImuPacket:
                  info: SensorInfo,
                  timestamp: Optional[float] = None) -> None:
         """
+        This will always alias the supplied buffer-like object. Pass in a copy
+        to avoid unintentional aliasing.
+
         Args:
             data: Buffer containing the packet payload
-            pf: Format determining how to interpret the buffer
+            info: Metadata associated with the sensor packet stream
+            timestamp: A capture timestamp, in microseconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
-                packet format.
+                packet format
         """
 
         self._pf = _client.PacketFormat.from_info(info)
@@ -40,6 +48,15 @@ class ImuPacket:
                                    count=self._pf.imu_packet_size)
 
         self.capture_timestamp = timestamp
+
+    def __deepcopy__(self, memo) -> 'ImuPacket':
+        cls = type(self)
+        cpy = cls.__new__(cls)
+        # don't copy packet format, which is intended to be shared
+        cpy._pf = self._pf
+        cpy._data = deepcopy(self._data, memo)
+        cpy.capture_timestamp = self.capture_timestamp
+        return cpy
 
     @property
     def sys_ts(self) -> int:
@@ -112,11 +129,12 @@ class LidarPacket:
 
         Args:
             data: Buffer containing the packet payload
-            pf: Format determining how to interpret the buffer
+            info: Metadata associated with the sensor packet stream
+            timestamp: A capture timestamp, in microseconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
-                packet format.
+                packet format, or if the init_id doesn't match the metadata
         """
         self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,
@@ -127,6 +145,15 @@ class LidarPacket:
         # check that metadata came from the same sensor initialization as data
         if self.init_id and self.init_id != info.init_id:
             raise ValueError("Metadata init id does not match")
+
+    def __deepcopy__(self, memo) -> 'LidarPacket':
+        cls = type(self)
+        cpy = cls.__new__(cls)
+        # don't copy packet format, which is intended to be shared
+        cpy._pf = self._pf
+        cpy._data = deepcopy(self._data, memo)
+        cpy.capture_timestamp = self.capture_timestamp
+        return cpy
 
     @property
     def packet_type(self) -> int:
@@ -150,6 +177,7 @@ class LidarPacket:
 
     @property
     def fields(self) -> Iterator[ChanField]:
+        """Get available fields of LidarScan as Iterator."""
         return self._pf.fields
 
     def field(self, field: ChanField) -> np.ndarray:
@@ -271,7 +299,7 @@ def destagger(info: SensorInfo,
 def XYZLut(
         info: SensorInfo
 ) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
-    """Return a function that can project scans into cartesian coordinates.
+    """Return a function that can project scans into Cartesian coordinates.
 
     If called with a numpy array representing a range image, the range image
     must be in "staggered" form, where each column corresponds to a single
