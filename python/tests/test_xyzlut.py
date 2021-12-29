@@ -1,5 +1,4 @@
 from copy import copy
-from os import path
 
 import numpy as np
 import pytest
@@ -8,39 +7,8 @@ from ouster import client
 import ouster.client._digest as digest
 from ouster.sdk.examples import reference
 
-DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
-
-@pytest.fixture()
-def meta():
-    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
-    with open(meta_path, 'r') as f:
-        return client.SensorInfo(f.read())
-
-
-@pytest.fixture
-def stream_digest() -> digest.StreamDigest:
-    # load test scan and metadata
-    digest_path = path.join(DATA_DIR, "os-992011000121_digest.json")
-
-    with open(digest_path, 'r') as f:
-        stream_digest = digest.StreamDigest.from_json(f.read())
-
-    return stream_digest
-
-
-@pytest.fixture
-def scan(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> client.LidarScan:
-    bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
-
-    with open(bin_path, 'rb') as b:
-        source = digest.LidarBufStream(b, meta)
-        scans = client.Scans(source)
-        scan = next(iter(scans))
-
-    return scan
-
-
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_xyz_lut_dims(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> None:
     """Check that (in)valid dimensions are handled when creating xyzlut."""
     w = meta.format.columns_per_frame
@@ -79,6 +47,7 @@ def test_xyz_lut_dims(stream_digest: digest.StreamDigest, meta: client.SensorInf
         client.XYZLut(meta2)
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> None:
     """Check that invalid beam angle dimensions are handled by xyzlut."""
     meta1 = copy(meta)
@@ -112,6 +81,7 @@ def test_xyz_lut_angles(stream_digest: digest.StreamDigest, meta: client.SensorI
         client.XYZLut(meta2)
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_xyz_lut_scan_dims(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> None:
     """Check that (in)valid lidar scan dimensions are handled by xyzlut."""
     w = meta.format.columns_per_frame

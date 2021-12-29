@@ -1,0 +1,34 @@
+{
+    "packet_hash": {
+        "TIMESTAMP": "060e7ccbcf80ef9632dec5688e47a6d1",
+        "ENCODER_COUNT": "620f0b67a91f7f74151bc5be745b7110",
+        "MEASUREMENT_ID": "ab4e111268cce8326714d9308aafd5fe",
+        "STATUS": "ebf96a2536e5a247f7ef6edb3f66292a",
+        "FRAME_ID": "c99a74c555371a433d121f551d6c6398",
+        "RANGE": "03ec29cd989be70a882090996e8969a1",
+        "RANGE2": "211a3b157ce6c31e36082d1b6b7be681",
+        "SIGNAL": "6f96a89247ff974c0d6282284d6d67c2",
+        "SIGNAL2": "a8882b61b0992645a45d98a20ce5b394",
+        "REFLECTIVITY": "ac787621c3801831eaa74f28c54dc650",
+        "REFLECTIVITY2": "34a0f11475e553768c4aeb42989a0666",
+        "NEAR_IR": "50d1fe8a5c054a1ce84133f18d01b824",
+        "FLAGS": "0bb2f219090b02f48d8c1998009e1e4d",
+        "FLAGS2": "0b53385e7cb208e773b89756fc97714d"
+    },
+    "scans": [
+        {
+            "FRAME_ID": "1453",
+            "TIMESTAMP": "060e7ccbcf80ef9632dec5688e47a6d1",
+            "STATUS": "4c81b69242689aca8a87c05726f5322a",
+            "MEASUREMENT_ID": "ab4e111268cce8326714d9308aafd5fe",
+            "ENCODER_COUNT": "0829f71740aab1ab98b33eae21dee122",
+            "RANGE": "b7e7a2a5aa86516f86fd2e8f56b8f6b0",
+            "RANGE2": "67b3d847d10084cef0e33a958591cdb5",
+            "SIGNAL": "34eebc68c847201262a62fb8e00182e4",
+            "SIGNAL2": "b3a4c7f899ac136349a320425ed23374",
+            "REFLECTIVITY": "e0873ecae1da2f575c3918c9b4dc0130",
+            "REFLECTIVITY2": "3c6ec9fcc23d08e37367115bd67200f6",
+            "NEAR_IR": "2180bfb449a67456e77d640287400635"
+        }
+    ]
+}

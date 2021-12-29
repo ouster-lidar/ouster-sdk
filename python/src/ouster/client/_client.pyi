@@ -14,7 +14,7 @@ from numpy import ndarray
 from typing import (Callable, ClassVar, Dict, Iterator, List, Optional,
                     overload, Tuple, Union)
 
-from . import (BufferT, ColHeader)
+from .data import (BufferT, ColHeader, FieldDType)
 
 
 class Client:
@@ -61,6 +61,14 @@ class Client:
     def size(self) -> int:
         ...
 
+    @property
+    def lidar_port(self) -> int:
+        ...
+
+    @property
+    def imu_port(self) -> int:
+        ...
+
 
 class ClientState:
     ERROR: ClassVar[ClientState]
@@ -70,21 +78,12 @@ class ClientState:
     TIMEOUT: ClassVar[ClientState]
     OVERFLOW: ClassVar[ClientState]
 
-    __members__: ClassVar[dict]
+    __members__: ClassVar[Dict[str, ClientState]]
 
     def __init__(self, x: int) -> None:
         ...
 
     def __and__(self, s: ClientState) -> int:
-        ...
-
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
         ...
 
     def __int__(self) -> int:
@@ -93,13 +92,7 @@ class ClientState:
     def __invert__(self) -> int:
         ...
 
-    def __ne__(self, other: object) -> bool:
-        ...
-
     def __or__(self, s: ClientState) -> int:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     def __xor__(self, s: ClientState) -> int:
@@ -133,12 +126,6 @@ class SensorInfo:
 
     @overload
     def __init__(self, metadata: str) -> None:
-        ...
-
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __copy__(self) -> SensorInfo:
         ...
 
 
@@ -237,22 +224,7 @@ class LidarMode:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -288,22 +260,7 @@ class TimestampMode:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -329,22 +286,7 @@ class OperatingMode:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -374,22 +316,7 @@ class MultipurposeIOMode:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -415,22 +342,7 @@ class Polarity:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -456,22 +368,7 @@ class NMEABaudRate:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -489,12 +386,14 @@ class NMEABaudRate:
 
 class ChanField:
     RANGE: ClassVar[ChanField]
-    SIGNAL: ClassVar[ChanField]
-    NEAR_IR: ClassVar[ChanField]
-    REFLECTIVITY: ClassVar[ChanField]
     RANGE2: ClassVar[ChanField]
+    SIGNAL: ClassVar[ChanField]
     SIGNAL2: ClassVar[ChanField]
+    REFLECTIVITY: ClassVar[ChanField]
     REFLECTIVITY2: ClassVar[ChanField]
+    FLAGS: ClassVar[ChanField]
+    FLAGS2: ClassVar[ChanField]
+    NEAR_IR: ClassVar[ChanField]
 
     __members__: ClassVar[Dict[str, ChanField]]
     values: ClassVar[Iterator[ChanField]]
@@ -502,22 +401,7 @@ class ChanField:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -543,22 +427,7 @@ class UDPProfileLidar:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -583,22 +452,7 @@ class UDPProfileIMU:
     def __init__(self, code: int) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __getstate__(self) -> tuple:
-        ...
-
-    def __hash__(self) -> int:
-        ...
-
     def __int__(self) -> int:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __setstate__(self, st: tuple) -> None:
         ...
 
     @property
@@ -647,15 +501,6 @@ class SensorConfig:
     def __init__(self, config_string: str) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
-    def __ne__(self, other: object) -> bool:
-        ...
-
-    def __copy__(self) -> SensorConfig:
-        ...
-
 
 def set_config(hostname: str,
                config: SensorConfig,
@@ -676,9 +521,6 @@ class Version:
     def __init__(self) -> None:
         ...
 
-    def __eq__(self, other: object) -> bool:
-        ...
-
     def __le__(self, v: Version) -> bool:
         ...
 
@@ -686,7 +528,7 @@ class Version:
         ...
 
     @classmethod
-    def of_string(cls, s: str) -> Version:
+    def from_string(cls, s: str) -> Version:
         ...
 
 
@@ -701,6 +543,11 @@ class LidarScan:
 
     @overload
     def __init__(self, h: int, w: int, profile: UDPProfileLidar) -> None:
+        ...
+
+    @overload
+    def __init__(self, h: int, w: int, fields: Dict[ChanField,
+                                                    FieldDType]) -> None:
         ...
 
     @property
@@ -795,7 +642,12 @@ def destagger_double(field: ndarray, shifts: List[int],
 
 
 class ScanBatcher:
+    @overload
     def __init__(self, w: int, pf: PacketFormat) -> None:
+        ...
+
+    @overload
+    def __init__(self, info: SensorInfo) -> None:
         ...
 
     def __call__(self, buf: BufferT, ls: LidarScan) -> bool:

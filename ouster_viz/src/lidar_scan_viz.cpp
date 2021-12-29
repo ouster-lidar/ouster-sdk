@@ -182,6 +182,7 @@ void LidarScanViz::draw(const LidarScan& ls, const size_t which_cloud) {
     // select fields to display by index
     available_fields.clear();
     for (auto kv : ls) available_fields.push_back(kv.first);
+
     auto img_field_1 = available_fields.at(image_ind1);
     auto img_field_2 = available_fields.at(image_ind2);
 

@@ -27,6 +27,12 @@ find_package(pybind11 2.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OusterSDK REQUIRED)
 
+# when building as a top-level project
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
+  target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
+endif()
+
 # CMAKE_LIBRARY_OUTPUT_DIRECTORY is set in setup.py to the root of the `ouster`
 # namespace, but we have to provide per-target packages directories for each
 # extension module here.

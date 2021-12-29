@@ -6,7 +6,7 @@
 
 #include <GL/glew.h>
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -48,7 +48,7 @@ struct CloudSetup {
     /**
      * Set up the input to the PointViz
      *
-     * @param xyz cartesian point clouds in the same format as impl::Cloud::xyz,
+     * @param xyz Cartesian point clouds in the same format as impl::Cloud::xyz,
      *        compatible with output of make_xyz_lut. Non-owning raw pointer
      * @param n number of points, e.g. 64 * 2048 = 131072
      * @param w number of poses, e.g. 2048
@@ -239,7 +239,7 @@ class PointViz {
     void setCameraTarget(const mat4d& target);
 
     /**
-     * Set point cloud color palette. 
+     * Set point cloud color palette.
      *
      * @param palette the new palette to use
      * @param palette_size the number of colors in the new palette

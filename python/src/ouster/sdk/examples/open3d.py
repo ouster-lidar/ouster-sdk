@@ -1,4 +1,4 @@
-"""Ouster Open3D visualizations examples."""
+"""Ouster Open3D visualizer"""
 import time
 
 from more_itertools import consume, nth

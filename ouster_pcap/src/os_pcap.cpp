@@ -1,11 +1,5 @@
-// TODO:
-// - check that the header casting is idiomatic libpcap
-// - warn on dropped packets
-//   + when pcap contains garbage
-//   + when fragments missing, buffer reused before sending
-// - split up reading / playback
-// - improve error reporting
-// - support ipv6
+#include "ouster/os_pcap.h"
+
 #include <stddef.h>
 #include <tins/tins.h>
 
@@ -14,16 +8,14 @@
 #include <exception>
 #include <iostream>
 #include <memory>
-#include <sstream>
 #include <thread>
 
 using namespace Tins;
-#include "ouster/os_pcap.h"
-
-using us = std::chrono::microseconds;
 
 namespace ouster {
 namespace sensor_utils {
+
+static constexpr int PROTOCOL_UDP = 17;
 
 struct record_handle {
     std::string dst_ip;     ///< The destination IP
@@ -34,14 +26,10 @@ struct record_handle {
         pcap_file_writer;  ///< Object that holds the pcap writer
     bool use_sll_encapsulation;
 
-    record_handle() { }
+    record_handle() {}
 
-    ~record_handle() { }
+    ~record_handle() {}
 };
-
-std::shared_ptr<record_handle> record_handle_init() {
-    return std::make_shared<record_handle>();
-}
 
 struct playback_handle {
     std::string file_name;  ///< The filename of the pcap file
@@ -53,16 +41,11 @@ struct playback_handle {
 
     Tins::IPv4Reassembler
         reassembler;  ///< The reassembler mainly for lidar packets
-    
-    playback_handle() { }
 
-    ~playback_handle() { }
+    playback_handle() {}
+
+    ~playback_handle() {}
 };
-
-std::shared_ptr<playback_handle> playback_handle_init() {
-    return std::make_shared<playback_handle>();
-}
-
 
 std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
     stream_in << "Source IP: \"" << data.src_ip << "\" ";
@@ -90,7 +73,7 @@ std::shared_ptr<playback_handle> replay_initialize(
 
     result->file_name = file_name;
     result->pcap_reader.reset(new FileSniffer(file_name));
-    
+
     return result;
 }
 
@@ -140,7 +123,8 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                             info.ip_version = 6;
                             info.network_protocol = ipv6->next_header();
                         } else {
-                            throw "Error: No Ip Packet Found";
+                            throw std::runtime_error(
+                                "Malformed packet: no IP headers");
                         }
                         // find_pdu<UDP> will only return NULL when the ipv4
                         // reassembly succeeds on an ipv6 packet, leading to a
@@ -149,9 +133,7 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                             info.dst_port = udp->dport();
                             info.src_port = udp->sport();
                             info.payload_size = raw->payload_size();
-                            info.timestamp =
-                                static_cast<std::chrono::microseconds>(
-                                    handle.packet_cache.timestamp());
+                            info.timestamp = handle.packet_cache.timestamp();
                             handle.have_new_packet = true;
                         } else {
                             throw std::runtime_error(
@@ -319,8 +301,6 @@ std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
 void record_packet(record_handle& handle, int src_port, int dst_port,
                    const uint8_t* buf, size_t buffer_size,
                    uint64_t microsecond_timestamp) {
-    using namespace std::chrono;
-
     // For each of the packets write it to the pcap file
     for (auto item :
          buffer_to_frag_packets(handle, src_port, dst_port, buf, buffer_size)) {
@@ -343,8 +323,8 @@ void record_packet(record_handle& handle, int src_port, int dst_port,
         if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
             _ = pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
         }
-        packet = Packet(*pdu, Timestamp(static_cast<std::chrono::microseconds>(
-                                  microsecond_timestamp)));
+        packet = Packet(
+            *pdu, Timestamp(std::chrono::microseconds{microsecond_timestamp}));
         handle.pcap_file_writer->write(packet);
         delete pdu;
     }

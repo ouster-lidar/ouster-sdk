@@ -12,6 +12,39 @@ import numpy as np
 
 from ouster import client
 
+# TODO: (kai) someone with dual returns sensor test this please
+
+
+def configure_dual_returns(hostname: str) -> None:
+    """Configure sensor to use dual returns profile given hostname
+
+    Args:
+        hostname: hostname of the sensor
+    """
+    config = client.get_config(hostname)
+    if (config.lidar_mode == client.LidarMode.MODE_2048x10) or (config.lidar_mode
+            == client.LidarMode.MODE_1024x20):
+        print(f"Changing lidar_mode from {str(config.lidar_mode)} to 1024x10 to"
+              "  enable to dual returns. Will not persist change.")
+        config.lidar_mode = client.LidarMode.MODE_1024x10
+
+    # [doc-stag-config-udp-profile]
+    config.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    # [doc-etag-config-udp-profile]
+
+    try:
+        client.set_config(hostname, config, persist=False, udp_dest_auto=False)
+    except ValueError:
+        print("error: Your sensor does not support dual returns. Please"
+              " check the hardware revision and firmware version vs release"
+              " notes.")
+        return
+
+    print("Retrieving sensor metadata..")
+    with closing(client.Sensor(hostname)) as source:
+        # print some useful info from
+        print(f"udp profile lidar: {str(source.metadata.format.udp_profile_lidar)}")
+
 
 def configure_sensor_params(hostname: str) -> None:
     """Configure sensor params given hostname
@@ -20,6 +53,7 @@ def configure_sensor_params(hostname: str) -> None:
         hostname: hostname of the sensor
     """
 
+    # [doc-stag-configure]
     # create empty config
     config = client.SensorConfig()
 
@@ -31,6 +65,7 @@ def configure_sensor_params(hostname: str) -> None:
 
     # set the config on sensor, using appropriate flags
     client.set_config(hostname, config, persist=True, udp_dest_auto=True)
+    # [doc-etag-configure]
 
     # if you like, you can view the entire set of parameters
     config = client.get_config(hostname)
@@ -148,88 +183,6 @@ def live_plot_signal(hostname: str, lidar_port: int = 7502) -> None:
         cv2.destroyAllWindows()
 
 
-def plot_range_image(hostname: str, lidar_port: int = 7502) -> None:
-    """Display range data taken live from sensor as an image
-
-    Args:
-        hostname: hostname of the sensor
-        lidar_port: UDP port to listen on for lidar data
-    """
-    import matplotlib.pyplot as plt  # type: ignore
-
-    # get single scan [doc-stag-single-scan]
-    metadata, sample = client.Scans.sample(hostname, 1, lidar_port)
-    scan = next(sample)[0]
-    # [doc-etag-single-scan]
-
-    # initialize plot
-    fig, ax = plt.subplots()
-    fig.canvas.set_window_title("example: plot_range_image")
-
-    # plot using imshow
-    range = scan.field(client.ChanField.RANGE)
-    plt.imshow(client.destagger(metadata, range), resample=False)
-
-    # configure and show plot
-    plt.title("Range Data from {}".format(hostname))
-    plt.axis('off')
-    plt.show()
-
-
-def plot_all_channels(hostname: str,
-                      lidar_port: int = 7502,
-                      n_scans: int = 5) -> None:
-    """Display all channels of n consecutive lidar scans taken live from sensor
-
-    Args:
-        hostname: hostname of the sensor
-        lidar_port: UDP port to listen on for lidar data
-        n_scans: number of scans to show
-    """
-    import matplotlib.pyplot as plt  # type: ignore
-
-    # [doc-stag-display-all-2d]
-    # take sample of n scans from sensor
-    metadata, sample = client.Scans.sample(hostname, n_scans, lidar_port)
-
-    # initialize and configure subplots
-    fig, axarr = plt.subplots(n_scans,
-                              4,
-                              sharex=True,
-                              sharey=True,
-                              figsize=(12.0, n_scans * .75),
-                              tight_layout=True)
-    fig.suptitle("{} consecutive scans from {}".format(n_scans, hostname))
-    fig.canvas.set_window_title("example: display_all_2D")
-
-    # set row and column titles of subplots
-    column_titles = ["range", "reflectivity", "near_ir", "signal"]
-    row_titles = ["Scan {}".format(i) for i in list(range(n_scans))]
-    for ax, column_title in zip(axarr[0], column_titles):
-        ax.set_title(column_title)
-    for ax, row_title in zip(axarr[:, 0], row_titles):
-        ax.set_ylabel(row_title)
-
-    # plot 2D scans
-    for count, scan in enumerate(next(sample)):
-        axarr[count, 0].imshow(
-            client.destagger(metadata, scan.field(client.ChanField.RANGE)))
-        axarr[count, 1].imshow(
-            client.destagger(metadata,
-                             scan.field(client.ChanField.REFLECTIVITY)))
-        axarr[count, 2].imshow(
-            client.destagger(metadata, scan.field(client.ChanField.NEAR_IR)))
-        axarr[count, 3].imshow(
-            client.destagger(metadata, scan.field(client.ChanField.SIGNAL)))
-    # [doc-etag-display-all-2d]
-
-    # configure and show plot
-    [ax.get_xaxis().set_visible(False) for ax in axarr.ravel()]
-    [ax.set_yticks([]) for ax in axarr.ravel()]
-    [ax.set_yticklabels([]) for ax in axarr.ravel()]
-    plt.show()
-
-
 def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     """Display range from a single scan as 3D points
 
@@ -256,73 +209,11 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     # [doc-stag-plot-xyz-points]
     # transform data to 3d points and graph
     xyzlut = client.XYZLut(metadata)
-    xyz = xyzlut(scan)
+    xyz = xyzlut(scan.field(client.ChanField.RANGE))
 
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     ax.scatter(x, y, z, c=z / max(z), s=0.2)
     # [doc-etag-plot-xyz-points]
-    plt.show()
-
-
-def write_xyz_to_csv(hostname: str,
-                     lidar_port: int = 7502,
-                     cloud_prefix: str = 'xyz',
-                     n_scans: int = 5) -> None:
-    """Write xyz sample from live sensor to csv
-
-    Args:
-        hostname: hostname of the sensor
-        lidar_port: UDP port to listen on for lidar data
-        cloud_prefix: filename prefix for written csvs
-        n_scans: number of scans to write
-    """
-    metadata, sample = client.Scans.sample(hostname, n_scans, lidar_port)
-    h = metadata.format.pixels_per_column
-    w = metadata.format.columns_per_frame
-    xyzlut = client.XYZLut(metadata)
-
-    for count, scan in enumerate(next(sample)):
-        out_name = "{}_{}.txt".format(cloud_prefix, count)
-        print("writing {}..".format(out_name))
-        np.savetxt(out_name, xyzlut(scan).reshape(h * w, 3), delimiter=" ")
-
-
-def plot_imu_z_accel(hostname: str,
-                     lidar_port: int = 7502,
-                     imu_port: int = 7503,
-                     n_seconds: int = 5) -> None:
-    """Plot the z acceleration from the IMU over time
-
-    Args:
-        hostname: hostname of the sensor
-        imu_port: UDP port to listen on for imu data
-        n_seconds: seconds of time to take a sample over
-    """
-    import matplotlib.pyplot as plt  # type: ignore
-
-    # [doc-stag-imu-z-accel]
-    from more_itertools import time_limited
-    # connect to sensor and get imu packets within n_seconds
-    source = client.Sensor(hostname, lidar_port, imu_port, buf_size=640)
-    with closing(source):
-        ts, z_accel = zip(*[(p.sys_ts, p.accel[2])
-                            for p in time_limited(n_seconds, source)
-                            if isinstance(p, client.ImuPacket)])
-    # initialize plot
-    fig, ax = plt.subplots(figsize=(12.0, 2))
-    ax.plot(ts, z_accel)
-    # [doc-etag-imu-z-accel]
-
-    plt.title("Z Accel from IMU over {} Seconds".format(n_seconds))
-    ax.set_xticks(np.arange(min(ts), max(ts), step=((max(ts) - min(ts)) / 5)))
-    # add end ticker to x axis
-    ax.set_xticks(list(ax.get_xticks()) + [max(ts)])
-
-    ax.set_xlim([min(ts), max(ts)])
-    ax.set_ylabel("z accel")
-    ax.set_xlabel("timestamp (ns)")
-
-    ax.ticklabel_format(useOffset=False, style="plain")
     plt.show()
 
 
@@ -373,15 +264,12 @@ def record_pcap(hostname: str,
 
 def main() -> None:
     examples = {
+        "configure-dual-returns": configure_dual_returns,
         "configure-sensor": configure_sensor_params,
-        "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
         "fetch-metadata": fetch_metadata,
+        "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
         "live-plot-signal": live_plot_signal,
-        "plot-range-image": plot_range_image,
-        "plot-all-channels": plot_all_channels,
         "plot-xyz-points": plot_xyz_points,
-        "plot-imu-z-accel": plot_imu_z_accel,
-        "write-xyz-to-csv": write_xyz_to_csv,
         "record-pcap": record_pcap,
     }
 

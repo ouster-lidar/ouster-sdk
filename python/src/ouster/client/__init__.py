@@ -2,6 +2,7 @@
 # flake8: noqa (unused imports)
 
 from ._client import SensorInfo
+from ._client import DataFormat
 from ._client import LidarMode
 from ._client import TimestampMode
 from ._client import OperatingMode
@@ -17,6 +18,7 @@ from ._client import set_config
 from ._client import LidarScan
 
 from .data import BufferT
+from .data import FieldDType
 from .data import Packet
 from .data import ImuPacket
 from .data import LidarPacket
