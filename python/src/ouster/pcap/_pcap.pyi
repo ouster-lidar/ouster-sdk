@@ -71,14 +71,6 @@ def read_packet(handle: playback_handle, buf: BufferT) -> int:
     ...
 
 
-# def replay_packet(handle: playback_handle) -> bool:
-#     ...
-
-
-# def replay_pcap(handle: playback_handle, rate: float) -> int:
-#     ...
-
-
 def replay_reset(handle: playback_handle) -> None:
     ...
 

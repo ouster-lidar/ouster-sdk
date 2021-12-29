@@ -184,8 +184,7 @@ Building
 
 The build dependencies include those of the sample code::
 
-    sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev
+    sudo apt install build-essential cmake libeigen3-dev libjsoncpp-dev
 
 Additionally, you should install the ros dependencies::
 
