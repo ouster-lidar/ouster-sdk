@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <stdexcept>
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"

@@ -6,7 +6,7 @@
 
 #include <GL/glew.h>
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <array>
 #include <atomic>
 #include <cstddef>

@@ -60,7 +60,7 @@ ouster_pcap
 ouster_ros
 ----------
 * update ROS package version to 0.3.0
-* allow setting the packet profile in ouster.luanch with the ``udp_profile_lidar`` parameter
+* allow setting the packet profile in ouster.launch with the ``udp_profile_lidar`` parameter
 * publish additional cloud and image topics for the second return when running in dual returns mode
 * fix ``os_node`` crash on shutdown due to Eigen alignment flag not being propogated by catkin
 * update ROS package version to 0.2.1

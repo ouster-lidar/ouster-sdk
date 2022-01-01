@@ -52,8 +52,8 @@ After you have the system dependencies, you can build the SDK with:
 Windows 10
 ----------
 
-On Windows 10, you'll have to install Visual Studio, Python and the `vcpkg`_ package manager and
-run:
+On Windows 10, you'll have to install the Visual Studio 2017 Build Tools, Python and the `vcpkg`_
+package manager and run:
 
 .. code:: powershell
 

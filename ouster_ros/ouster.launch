@@ -22,7 +22,7 @@
     <param name="~/lidar_port" value="$(arg lidar_port)"/>
     <param name="~/imu_port" value="$(arg imu_port)"/>
     <param name="~/metadata" value="$(arg metadata)"/>
-    <param name="udp_profile_lidar" value="$(arg udp_profile_lidar)"/>
+    <param name="~/udp_profile_lidar" value="$(arg udp_profile_lidar)"/>
   </node>
 
   <node pkg="ouster_ros" type="os_cloud_node" name="os_cloud_node" output="screen" required="true">

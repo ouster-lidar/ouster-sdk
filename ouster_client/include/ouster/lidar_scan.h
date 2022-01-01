@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <chrono>
 #include <cstddef>
 #include <map>

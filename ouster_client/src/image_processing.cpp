@@ -1,6 +1,7 @@
 #include "ouster/image_processing.h"
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
+#include <Eigen/LU>
 #include <algorithm>
 #include <iostream>
 #include <vector>
