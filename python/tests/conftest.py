@@ -1,5 +1,6 @@
 from contextlib import closing
 from os import path
+from typing import Iterator
 
 import pytest
 
@@ -42,20 +43,41 @@ def meta(base_name: str):
 
 
 @pytest.fixture
-def packet(base_name: str, meta: client.SensorInfo) -> client.LidarPacket:
-    pcap_path = path.join(DATA_DIR, f"{base_name}.pcap")
-    with closing(pcap.Pcap(pcap_path, meta)) as source:
-        for p in source:
-            if isinstance(p, client.LidarPacket):
-                return p
-        raise RuntimeError("Failed to find lidar packet in text fixture")
+def meta_2_0():
+    meta_path = path.join(DATA_DIR, f"{TESTS['legacy-2.0']}.json")
+    with open(meta_path, 'r') as f:
+        return client.SensorInfo(f.read())
 
 
 @pytest.fixture
-def packets(base_name: str, meta: client.SensorInfo) -> client.PacketSource:
-    pcap_path = path.join(DATA_DIR, f"{base_name}.pcap")
-    with closing(pcap.Pcap(pcap_path, meta)) as source:
-        ps = list(source)
+def real_pcap_path(base_name: str, meta: client.SensorInfo) -> str:
+    return path.join(DATA_DIR, f"{base_name}.pcap")
+
+
+@pytest.fixture
+def real_pcap(real_pcap_path: str,
+              meta: client.SensorInfo) -> Iterator[pcap.Pcap]:
+    pcap_obj = pcap.Pcap(real_pcap_path, meta)
+    yield pcap_obj
+    pcap_obj.close()
+
+
+@pytest.fixture
+def packet(real_pcap_path: str, meta: client.SensorInfo) -> client.LidarPacket:
+    # note: don't want to depend on the pcap fixture, since this consumes the
+    # iterator and it can be shared
+    with closing(pcap.Pcap(real_pcap_path, meta)) as real_pcap:
+        for p in real_pcap:
+            if isinstance(p, client.LidarPacket):
+                return p
+        raise RuntimeError("Failed to find lidar packet in test fixture")
+
+
+@pytest.fixture
+def packets(real_pcap_path: str,
+            meta: client.SensorInfo) -> client.PacketSource:
+    with closing(pcap.Pcap(real_pcap_path, meta)) as real_pcap:
+        ps = list(real_pcap)
         return client.Packets(ps, meta)
 
 
