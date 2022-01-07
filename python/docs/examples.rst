@@ -546,7 +546,7 @@ The visualizer can be controlled with mouse and keyboard:
 
 .. include:: ../../README.rst
     :start-line: 136
-    :end-line: 167
+    :end-line: 169
 
 To run the visualizer with a sensor:
 

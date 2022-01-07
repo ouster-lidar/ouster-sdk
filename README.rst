@@ -146,7 +146,6 @@ Keyboard controls:
     ``p``         Increase point size
     ``o``         Decrease point size
     ``m``         Cycle point cloud coloring mode
-    ``v``         Toggle range cycling
     ``b``         Cycle top 2D image
     ``n``         Cycle bottom 2D image
     ``shift + r`` Reset camera
