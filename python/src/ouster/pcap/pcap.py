@@ -33,6 +33,7 @@ class _UDPStreamInfo:
 
 class _stream_info:
     """Gather some useful info about UDP data in a pcap."""
+
     def __init__(self, infos: Iterable[_pcap.packet_info]) -> None:
         self.total_packets = 0
         self.encapsulation_protocol = set()
@@ -60,51 +61,53 @@ def _guess_ports(udp_streams: Dict[_UDPStreamKey, _UDPStreamInfo],
     """Find possible UDP sources matching the metadata.
 
     The current approach is roughly: 1) treat each unique source / destination
-    port and IP as a single logical 'stream' of data. 2) filter out streams that
-    don't match the expected destination ports and packet sizes specified in the
-    metadata. 3) produce pairs of lidar/imu streams that have matching source
-    IPs, or None if a corresponding stream can't be found.
+    port and IP as a single logical 'stream' of data, 2) filter out streams that
+    don't match the expected packet sizes specified by the metadata, 3) pair up
+    any potential lidar/imu streams that appear to be coming from the same
+    sensor (have matching source IPs) 4) and finally, filter out the pairs that
+    contradict any ports specified in the metadata.
 
     Returns:
         List of dst port pairs that probably contain lidar/imu data. Duplicate
         entries are possible and indicate packets from distinct sources.
     """
 
-    # yapf: disable
-    # ports are zero if not specified (e.g. in older metadata)
-    def filter_keys(size: int, dst_port: int) -> Set[Optional[_UDPStreamKey]]:
-        return {k for k, v in udp_streams.items()
-                if (size in v.payload_size)
-                and (not dst_port or k.dst_port == dst_port)}
+    # allow lone streams when there's no matching data from the same ip
+    lidar_keys: Set[Optional[_UDPStreamKey]] = {None}
+    imu_keys: Set[Optional[_UDPStreamKey]] = {None}
 
-    # find all lidar and imu 'streams' that match metadata
+    # find all lidar and imu 'streams' that match expected packet sizes
     pf = _client.PacketFormat.from_info(info)
-    lidar_keys = filter_keys(pf.lidar_packet_size, info.udp_port_lidar)
-    imu_keys = filter_keys(pf.imu_packet_size, info.udp_port_imu)
+    ss = udp_streams.items()
+    lidar_keys |= {k for k, v in ss if pf.lidar_packet_size in v.payload_size}
+    imu_keys |= {k for k, v in ss if pf.imu_packet_size in v.payload_size}
 
     # find all src ips for candidate streams
     lidar_src_ips = {k.src_ip for k in lidar_keys if k}
     imu_src_ips = {k.src_ip for k in imu_keys if k}
 
-    # allow lone streams when there's no matching data from the same ip
-    lidar_keys.add(None)
-    imu_keys.add(None)
-
-    # full join on matching src ip to produce distinct lidar/imu stream choices
-    keys = [(kl, ki) for kl in lidar_keys for ki in imu_keys
-            if (not kl and ki and ki.src_ip not in lidar_src_ips)
-            or (kl and not ki and kl.src_ip not in imu_src_ips)
-            or (kl and ki and kl.src_ip == ki.src_ip)]
-    # yapf: enable
+    # yapf: disable
+    # "full outer join" on src_ip to produce lidar/imu streams from one source
+    keys = [(klidar, kimu) for klidar in lidar_keys for kimu in imu_keys
+            if (klidar and kimu and klidar.src_ip == kimu.src_ip)
+            or (not klidar and kimu and kimu.src_ip not in lidar_src_ips)
+            or (klidar and not kimu and klidar.src_ip not in imu_src_ips)]
 
     # map down to just dst port pairs, with 0 meaning none found
-    ports = [(kl.dst_port if kl else 0, ki.dst_port if ki else 0)
-             for (kl, ki) in keys]
+    ports = [(klidar.dst_port if klidar else 0, kimu.dst_port if kimu else 0)
+             for (klidar, kimu) in keys]
+
+    # filter out candidates that don't match specified ports
+    lidar_spec, imu_spec = info.udp_port_lidar, info.udp_port_imu
+    guesses = [(plidar, pimu) for plidar, pimu in ports
+               if (plidar == lidar_spec or lidar_spec == 0 or plidar == 0)
+               and (pimu == imu_spec or imu_spec == 0 or pimu == 0)]
+    # yapf: enable
 
     # sort sensor ports to prefer both found > just lidar > just imu
-    ports.sort(reverse=True, key=lambda p: (p[0] != 0, p[1] != 0, p))
+    guesses.sort(reverse=True, key=lambda p: (p[0] != 0, p[1] != 0, p))
 
-    return ports
+    return guesses
 
 
 def _packet_info_stream(path: str) -> Iterator[_pcap.packet_info]:
@@ -147,8 +150,7 @@ class Pcap(PacketSource):
         When not specified, ports are guessed by sampling some packets and
         looking for the expected packet size based on the sensor metadata. If
         packets that might be valid sensor data appear on multiple ports, one is
-        chosen arbitrarily. See ``_guess_streams`` for details. on the
-        heuristics.
+        chosen arbitrarily. See ``_guess_ports`` for details. on the heuristics.
 
         Packets with the selected destination port that clearly don't match the
         metadata (e.g. wrong size or init_id) will be silently ignored.
@@ -178,13 +180,12 @@ class Pcap(PacketSource):
         stats = _stream_info(islice(_packet_info_stream(pcap_path), n_packets))
         self._guesses = _guess_ports(stats.udp_streams, self._metadata)
 
-        # if ports were inferred, they must be equal or more specific
+        # fill in unspecified (0) ports with inferred values
         if len(self._guesses) > 0:
             lidar_guess, imu_guess = self._guesses[0]
-            assert lidar_port == lidar_guess or lidar_port <= 0
-            assert imu_port == imu_guess or imu_port <= 0
-            self._metadata.udp_port_lidar = lidar_guess
-            self._metadata.udp_port_imu = imu_guess
+            # guess != port only if port == 0 or guess == 0
+            self._metadata.udp_port_lidar = lidar_guess or lidar_port
+            self._metadata.udp_port_imu = imu_guess or imu_port
 
         self._rate = rate
         self._handle = _pcap.replay_initialize(pcap_path)

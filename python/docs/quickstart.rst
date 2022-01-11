@@ -187,6 +187,7 @@ Just like with the sample data, you can create a :py:class:`.PacketSource` from 
 .. code:: python
 
    >>> source = client.Sensor(hostname)
+   >>> info = source.metadata
 
 Now we have a ``source`` from our sensor! To visualize data from your sensor, proceed to
 `Visualizing Lidar Data`_ directly below.
