@@ -3,9 +3,11 @@ Changelog
 =========
 
 
-[unreleased]
+[20220107]
 ============
 
+* add support for arm64 macos and linux. Releases are now built and tested on these platforms
+* add support for Python 3.10
 * update supported vcpkg tag to 2021.05.12
 * add preliminary cpack and install support. It should be possible to use a pre-built SDK package
   instead of including the SDK in the build tree of your project
@@ -73,7 +75,7 @@ ouster_viz
 
 python
 ------
-* update ouster-sdk version to 0.3.0b3
+* update ouster-sdk version to 0.3.0
 * improve heuristics for identifying sensor data in pcaps, including new packet formats
 * release builds for wheels on Windows now use the VS 2017 toolchain and runtime (previously 2019)
 * fix potential use-after-free in ``LidarScan.fields``

@@ -4,7 +4,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(DefaultBuildType)
 
 # ==== Project Name ====
-project(ouster_example VERSION 20210608)
+project(ouster_example VERSION 20220107)
 
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
