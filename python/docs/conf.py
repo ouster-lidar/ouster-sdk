@@ -16,8 +16,14 @@ import sphinx_rtd_theme # noqa
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
-
 # -- Project information -----------------------------------------------------
+import subprocess
+import tempfile
+from string import Template
+import atexit
+import shutil
+import os
+import sys
 
 project = 'Ouster Python SDK'
 copyright = '2021, Ouster, Inc.'
@@ -27,6 +33,30 @@ author = 'Ouster SW'
 version = '0.3'
 release = '0.3.0'
 
+temp_dir = tempfile.mkdtemp()
+temp_doxy_file = os.path.join(temp_dir, "Doxyfile")
+output_dir = os.path.join(sys.argv[2], ".doctrees")
+os.makedirs(output_dir, exist_ok=True)
+
+
+def temp_dir_cleanup():
+    shutil.rmtree(temp_dir)
+
+
+atexit.register(temp_dir_cleanup)
+
+dictionary = {
+    'project': project,
+    'version': release,
+    'output_dir': output_dir
+}
+
+with open('Doxyfile', 'r') as template_file:
+    template = Template(template_file.read())
+    with open(temp_doxy_file, 'w') as template_file_out:
+        template_file_out.write(template.substitute(dictionary))
+
+subprocess.call("doxygen " + temp_doxy_file, shell=True)
 
 # -- General configuration ---------------------------------------------------
 
@@ -42,8 +72,10 @@ extensions = [
     'sphinx_rtd_theme',
     'sphinx_copybutton',
     'sphinx_tabs.tabs',
+    'breathe'
 ]
 
+breathe_projects = {'cpp_api': os.path.join(output_dir, "xml")}
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -131,3 +163,5 @@ copybutton_prompt_is_regexp = True
 
 # tabs behavior
 sphinx_tabs_disable_tab_closing = True
+
+

@@ -21,6 +21,8 @@ RUN set -xe \
  'python3.[6-9]-dev' \
  libglfw3-dev \
  libglew-dev \
+ python3-breathe \
+ doxygen \
 && rm -rf /var/lib/apt/lists
 
 # Set up non-root build user and environment

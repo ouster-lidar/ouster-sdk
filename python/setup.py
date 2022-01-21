@@ -157,6 +157,7 @@ setup(
             'docutils <0.17',
             'sphinx-tabs ==3.0.0',
             'open3d',
+            'breathe'
         ],
         'examples': [
             'matplotlib',
