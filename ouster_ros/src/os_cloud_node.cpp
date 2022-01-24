@@ -6,7 +6,6 @@
 #include <ros/console.h>
 #include <ros/ros.h>
 #include <ros/service.h>
-#include <ros/assert.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf2_ros/static_transform_broadcaster.h>
@@ -14,7 +13,6 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
-#include <cassert>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
