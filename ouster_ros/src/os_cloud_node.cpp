@@ -6,6 +6,7 @@
 #include <ros/console.h>
 #include <ros/ros.h>
 #include <ros/service.h>
+#include <ros/assert.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf2_ros/static_transform_broadcaster.h>
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <cassert>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -28,6 +30,8 @@ namespace sensor = ouster::sensor;
 int main(int argc, char** argv) {
     ros::init(argc, argv, "os_cloud_node");
     ros::NodeHandle nh("~");
+
+    uint32_t channel_reduction_ratio = nh.param("channel_reduction_ratio", 1);
 
     auto tf_prefix = nh.param("tf_prefix", std::string{});
     if (!tf_prefix.empty() && tf_prefix.back() != '/') tf_prefix.append("/");
@@ -47,6 +51,15 @@ int main(int argc, char** argv) {
     uint32_t H = info.format.pixels_per_column;
     uint32_t W = info.format.columns_per_frame;
     auto udp_profile_lidar = info.format.udp_profile_lidar;
+
+    if(channel_reduction_ratio != 1){
+        if(channel_reduction_ratio <= 0) 
+            throw std::invalid_argument("channel_reduction_ratio must be greater than zero");
+        if(H <= channel_reduction_ratio)
+            throw std::invalid_argument("channel_reduction_ratio must be less than or equal to the lidar channel count");
+        if(ceil(log2(channel_reduction_ratio)) != floor(log2(channel_reduction_ratio))) 
+            throw std::invalid_argument("channel_reduction_ratio must be 2^n");
+    }
 
     const int n_returns =
         (udp_profile_lidar == sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY)
@@ -71,7 +84,7 @@ int main(int argc, char** argv) {
     auto xyz_lut = ouster::make_xyz_lut(info);
 
     ouster::LidarScan ls{W, H, udp_profile_lidar};
-    Cloud cloud{W, H};
+    Cloud cloud{W, H / channel_reduction_ratio};
 
     ouster::ScanBatcher batch(W, pf);
 
@@ -83,7 +96,7 @@ int main(int argc, char** argv) {
                 });
             if (h != ls.headers.end()) {
                 for (int i = 0; i < n_returns; i++) {
-                    scan_to_cloud(xyz_lut, h->timestamp, ls, cloud, i);
+                    scan_to_cloud(xyz_lut, h->timestamp, ls, cloud, channel_reduction_ratio, i);
                     lidar_pubs[i].publish(ouster_ros::cloud_to_cloud_msg(
                         cloud, h->timestamp, sensor_frame));
                 }

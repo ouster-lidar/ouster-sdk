@@ -241,6 +241,7 @@ You can also optionally specify:
 * ``lidar_mode:=<mode>`` where mode is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or
   ``2048x10``, and
 * ``viz:=true`` to visualize the sensor output, if you have the rviz ROS package installed
+* ``channel_reduction_ratio:=<int>`` to reduce the amount of channels used for the output cloud. So a 128 beam lidar with a channel_reduction_ratio of 4 would result in a simulated 32 beam lidar. (Value has to be 2^n)
 
 
 Recording Data

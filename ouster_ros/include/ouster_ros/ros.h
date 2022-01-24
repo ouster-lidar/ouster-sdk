@@ -63,10 +63,11 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
  * @param ls input lidar data
  * @param return_index index of return desired starting at 0
  * @param cloud output pcl pointcloud to populate
+ * @param channel_reduction_ratio ratio at which to reduce channel count
  */
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
-                   ouster_ros::Cloud& cloud, int return_index = 0);
+                   ouster_ros::Cloud& cloud, uint32_t channel_reduction_ratio, int return_index = 0);
 
 /**
  * Serialize a PCL point cloud to a ROS message

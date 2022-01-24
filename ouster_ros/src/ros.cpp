@@ -94,9 +94,17 @@ sensor::ChanField suitable_return(sensor::ChanField input_field, bool second) {
 
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
-                   ouster_ros::Cloud& cloud, int return_index) {
+                   ouster_ros::Cloud& cloud, uint32_t channel_reduction_ratio, int return_index) {
+    if(channel_reduction_ratio != 1){
+        if(channel_reduction_ratio <= 0) 
+            throw std::invalid_argument("channel_reduction_ratio must be greater than zero");
+        if(ls.h <= channel_reduction_ratio)
+            throw std::invalid_argument("channel_reduction_ratio must be less than or equal to the lidar channel count");
+        if(ceil(log2(channel_reduction_ratio)) != floor(log2(channel_reduction_ratio))) 
+            throw std::invalid_argument("channel_reduction_ratio must be 2^n");
+    }
     bool second = (return_index == 1);
-    cloud.resize(ls.w * ls.h);
+    cloud.resize(ls.w * ls.h / channel_reduction_ratio);
 
     ouster::img_t<uint16_t> near_ir;
     ouster::impl::visit_field(
@@ -120,11 +128,11 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
 
     auto points = ouster::cartesian(range, xyz_lut);
 
-    for (auto u = 0; u < ls.h; u++) {
+    for (auto u = 0, w = 0; u < ls.h; u += channel_reduction_ratio, w++) {
         for (auto v = 0; v < ls.w; v++) {
             const auto xyz = points.row(u * ls.w + v);
             const auto ts = (ls.header(v).timestamp - scan_ts).count();
-            cloud(v, u) = ouster_ros::Point{
+            cloud(v, w) = ouster_ros::Point{
                 {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
                   static_cast<float>(xyz(2)), 1.0f}},
                 static_cast<float>(signal(u, v)),
