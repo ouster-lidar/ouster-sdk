@@ -91,7 +91,7 @@ void load_texture(const F& texture, const size_t width, const size_t height,
  */
 static const std::string point_vertex_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
 
             attribute vec3 xyz;
             attribute vec3 offset;
@@ -133,7 +133,7 @@ static const std::string point_vertex_shader_code =
             })SHADER";
 static const std::string point_fragment_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
             varying float vcolor;
             varying vec4 overlay_rgba;
             uniform sampler2D palette;
@@ -143,7 +143,7 @@ static const std::string point_fragment_shader_code =
             })SHADER";
 static const std::string ring_vertex_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
             attribute vec3 ring_xyz;
             uniform float ring_range;
             uniform mat4 proj_view;
@@ -153,13 +153,13 @@ static const std::string ring_vertex_shader_code =
             })SHADER";
 static const std::string ring_fragment_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
             void main() {
                 gl_FragColor = vec4(0.15, 0.15, 0.15, 1);
             })SHADER";
 static const std::string cuboid_vertex_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
             attribute vec3 cuboid_xyz;
             uniform vec4 cuboid_rgba;
             uniform mat4 pose;
@@ -171,14 +171,14 @@ static const std::string cuboid_vertex_shader_code =
             })SHADER";
 static const std::string cuboid_fragment_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
             varying vec4 rgba;
             void main() {
                 gl_FragColor = rgba;
             })SHADER";
 static const std::string image_vertex_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
             attribute vec2 vertex;
             attribute vec2 vertex_uv;
             varying vec2 uv;
@@ -188,7 +188,7 @@ static const std::string image_vertex_shader_code =
             })SHADER";
 static const std::string image_fragment_shader_code =
     R"SHADER(
-            #version 120
+            #version 130
             varying vec2 uv;
             uniform sampler2D image;
             uniform sampler2D mask;

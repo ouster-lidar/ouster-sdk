@@ -15,7 +15,7 @@ find_package(glfw3 CONFIG REQUIRED)
 add_definitions(-DEIGEN_MPL2_ONLY)
 
 add_library(ouster_viz src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp
-  src/lidar_scan_viz.cpp)
+  src/lidar_scan_viz.cpp src/gltext.cpp)
 target_link_libraries(ouster_viz
   PUBLIC Threads::Threads glfw GLEW::GLEW OpenGL::GL
   PRIVATE ouster_client)

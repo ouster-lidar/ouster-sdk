@@ -162,6 +162,9 @@ class Camera {
     void toggleOrthographic();
     mat4d proj_view() const;
     mat4d proj_view_target() const;
+    mat4d get_proj() const;
+    mat4d get_view() const;
+    mat4d get_offset_mat() const;
 };
 
 }  // namespace impl

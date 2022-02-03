@@ -1,5 +1,6 @@
 #include "ouster/point_viz.h"
 
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
 #include <condition_variable>
@@ -547,8 +548,8 @@ bool PointViz::initialize() {
     glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 #endif
     glfwWindowHint(GLFW_SAMPLES, GLFW_DONT_CARE);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
     // Open a window and create its OpenGL context
     pimpl->window = glfwCreateWindow(default_window_width,
@@ -563,6 +564,11 @@ bool PointViz::initialize() {
     }
     glfwSetFramebufferSizeCallback(pimpl->window, updateFBSize);
     glfwMakeContextCurrent(pimpl->window);
+
+    std::cerr << "GL RENDERER: " << glGetString(GL_RENDERER) << std::endl;
+    std::cerr << "GL VERSION: " << glGetString(GL_VERSION)
+              << " (GLSL: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << ")"
+              << std::endl;
 
     if (glewInit() != GLEW_OK) {
         std::cerr << "Failed to initialize GLEW" << std::endl;
@@ -617,6 +623,12 @@ void PointViz::drawLoop() {
     // since drawLoop may be called from a different thread,
     // we should set the opengl context to be current
     glfwMakeContextCurrent(pimpl->window);
+    auto initialized = gltInit();
+    glFrontFace(GL_CW);
+    if (initialized == GL_FALSE) {
+        std::cerr << "Error initializing GLT" << std::endl;
+        return;
+    }
     do {
         draw(*pimpl);
         glfwPollEvents();

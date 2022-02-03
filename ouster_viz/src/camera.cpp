@@ -165,6 +165,10 @@ void Camera::toggleOrthographic() {
 
 mat4d Camera::proj_view() const { return proj * view * offset_mat; }
 
+mat4d Camera::get_proj() const { return proj; }
+mat4d Camera::get_view() const { return view; }
+mat4d Camera::get_offset_mat() const { return offset_mat; }
+
 mat4d Camera::proj_view_target() const {
     return proj * view * offset_mat * current_target;
 }
