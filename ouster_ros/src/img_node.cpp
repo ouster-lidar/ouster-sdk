@@ -52,6 +52,8 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "img_node");
     ros::NodeHandle nh("~");
 
+    uint32_t channel_reduction_ratio = nh.param("channel_reduction_ratio", 1);
+
     ouster_ros::OSConfigSrv cfg{};
     auto client = nh.serviceClient<ouster_ros::OSConfigSrv>("os_config");
     client.waitForExistence();
@@ -61,7 +63,7 @@ int main(int argc, char** argv) {
     }
 
     auto info = sensor::parse_metadata(cfg.response.metadata);
-    size_t H = info.format.pixels_per_column;
+    size_t H = info.format.pixels_per_column / channel_reduction_ratio;
     size_t W = info.format.columns_per_frame;
 
     auto udp_profile_lidar = info.format.udp_profile_lidar;

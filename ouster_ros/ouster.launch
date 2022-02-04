@@ -34,6 +34,12 @@
     <param name="~/channel_reduction_ratio" value="$(arg channel_reduction_ratio)"/>
   </node>
 
+  <node pkg="ouster_ros" type="img_node" name="img_node" output="screen" required="false">
+    <remap from="~/os_config" to="/os_node/os_config"/>
+    <remap from="~/points" to="/os_cloud_node/points"/>
+    <param name="~/channel_reduction_ratio" value="$(arg channel_reduction_ratio)"/>
+  </node>
+
   <node if="$(arg viz)" pkg="rviz" name="rviz" type="rviz" args="$(arg rviz_config)" output="screen" required="true" />
   <node if="$(arg viz)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
     <remap from="~/os_config" to="/os_node/os_config"/>
