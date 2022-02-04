@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
     auto client = nh.serviceClient<ouster_ros::OSConfigSrv>("os_config");
     client.waitForExistence();
     if (!client.call(cfg)) {
-        ROS_ERROR("Calling os config service failed");
+        ROS_ERROR("img_node: Calling os config service failed");
         return EXIT_FAILURE;
     }
 
