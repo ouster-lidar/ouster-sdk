@@ -12,9 +12,6 @@ import numpy as np
 
 from ouster import client
 
-# TODO: (kai) someone with dual returns sensor test this please
-
-
 def configure_dual_returns(hostname: str) -> None:
     """Configure sensor to use dual returns profile given hostname
 
