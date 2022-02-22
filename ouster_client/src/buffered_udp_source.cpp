@@ -46,6 +46,8 @@ BufferedUDPSource::BufferedUDPSource(const std::string& hostname,
     : BufferedUDPSource(buf_size) {
     cli_ = init_client(hostname, lidar_port, imu_port);
     if (!cli_) throw std::runtime_error("Failed to initialize client");
+    lidar_port_ = sensor::get_lidar_port(*cli_);
+    imu_port_ = sensor::get_imu_port(*cli_);
 }
 
 BufferedUDPSource::BufferedUDPSource(const std::string& hostname,
@@ -57,12 +59,17 @@ BufferedUDPSource::BufferedUDPSource(const std::string& hostname,
     cli_ = init_client(hostname, udp_dest_host, mode, ts_mode, lidar_port,
                        imu_port, timeout_sec);
     if (!cli_) throw std::runtime_error("Failed to initialize client");
+    lidar_port_ = sensor::get_lidar_port(*cli_);
+    imu_port_ = sensor::get_imu_port(*cli_);
 }
 
 std::string BufferedUDPSource::get_metadata(int timeout_sec,
                                             bool legacy_format) {
-    std::lock_guard<std::mutex> cli_lock{cli_mtx_};
-    if (!cli_) throw std::runtime_error("Client has already been shut down");
+    std::unique_lock<std::mutex> lock(cli_mtx_, std::try_to_lock);
+    if (!lock.owns_lock())
+        throw std::invalid_argument(
+            "Another thread is already using the client");
+    if (!cli_) throw std::invalid_argument("Client has already been shut down");
     return sensor::get_metadata(*cli_, timeout_sec, legacy_format);
 }
 
@@ -178,6 +185,16 @@ void BufferedUDPSource::produce(const packet_format& pf) {
         }
         cv_.notify_one();
     }
+}
+
+int BufferedUDPSource::get_lidar_port() {
+    std::lock_guard<std::mutex> lock{cv_mtx_};
+    return stop_ ? 0 : lidar_port_;
+}
+
+int BufferedUDPSource::get_imu_port() {
+    std::lock_guard<std::mutex> lock{cv_mtx_};
+    return stop_ ? 0 : imu_port_;
 }
 
 }  // namespace impl

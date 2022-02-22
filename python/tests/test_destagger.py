@@ -1,31 +1,8 @@
-from os import path
-
 import numpy as np
 import pytest
 
 from ouster import client
 from ouster.sdk.examples import reference
-
-pytest.register_assert_rewrite('ouster.client._digest')
-import ouster.client._digest as digest  # noqa
-
-DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
-
-
-@pytest.fixture(scope="module")
-def meta():
-    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
-    with open(meta_path, 'r') as f:
-        return client.SensorInfo(f.read())
-
-
-@pytest.fixture(scope="module")
-def scan(meta) -> client.LidarScan:
-    bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
-    with open(bin_path, 'rb') as b:
-        source = digest.LidarBufStream(b, meta)
-        scans = client.Scans(source)
-        return next(iter(scans))
 
 
 @pytest.mark.parametrize("dtype", [
@@ -41,14 +18,15 @@ def test_destagger_type_good(meta, dtype) -> None:
     assert client.destagger(meta, np.zeros((h, w, 2), dtype)).dtype == dtype
 
 
-@pytest.mark.parametrize("shape", [(32, 512), (32, 512, 1), (64, 1024, 2),
-                                   (128, 2048, 10)])
-def test_destagger_shape_good(meta, shape) -> None:
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+@pytest.mark.parametrize("shape", [(32, 1024), (32, 1024, 1), (32, 1024, 10)])
+def test_destagger_shape_good(meta: client.SensorInfo, shape) -> None:
     """Check that (de)staggering preserves shape."""
     assert client.destagger(meta, np.zeros(shape)).shape == shape
     assert client.destagger(meta, np.zeros(shape), inverse=True).shape == shape
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_destagger_shape_bad(meta) -> None:
     """Check that arrays of the wrong shape are rejected."""
     h = meta.format.pixels_per_column
@@ -69,6 +47,7 @@ def test_destagger_shape_bad(meta) -> None:
         client.destagger(meta, np.zeros((h + 1, w, 2)))
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_destagger_inverse(meta) -> None:
     """Check that stagger/destagger are inverse operations."""
     h = meta.format.pixels_per_column
@@ -84,6 +63,7 @@ def test_destagger_inverse(meta) -> None:
     assert np.array_equal(a, e)
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_destagger_xyz(meta, scan) -> None:
     """Check that we can destagger the output of xyz projection."""
     h = meta.format.pixels_per_column
@@ -94,6 +74,7 @@ def test_destagger_xyz(meta, scan) -> None:
     assert destaggered.shape == (h, w, 3)
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_destagger_correct(meta, scan) -> None:
     """Compare client destagger function to reference implementation."""
 
@@ -108,6 +89,7 @@ def test_destagger_correct(meta, scan) -> None:
     assert np.array_equal(destagger_ref, destagger_client)
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_destagger_correct_multi(meta, scan) -> None:
     """Compare client destagger function to reference on stacked fields."""
 

@@ -1,13 +1,10 @@
 from copy import copy
-from os import path
 
 import json
 import numpy
 import pytest
 
 from ouster import client
-
-DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
 
 @pytest.mark.parametrize("mode, string", [
@@ -65,93 +62,86 @@ def test_lidar_mode_misc() -> None:
         client.LidarMode.MODE_1024x10.frequency = 0  # type: ignore
 
 
-@pytest.fixture(scope="module")
-def metadata():
-    meta_path = path.join(DATA_DIR, "os-992011000121_meta.json")
-    with open(meta_path, 'r') as f:
-        return client.SensorInfo(f.read())
-
-
-def test_read_info(metadata: client.SensorInfo) -> None:
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+def test_read_info(meta: client.SensorInfo) -> None:
     """Check the particular values in the test data."""
-    assert metadata.hostname == "os-992011000121"
-    assert metadata.sn == "992011000121"
-    assert metadata.fw_rev == "v1.14.0-beta.13"
-    assert metadata.mode == client.LidarMode.MODE_512x10
-    assert metadata.prod_line == "OS-1-32-U0"
-    assert metadata.format.columns_per_frame == 512
-    assert metadata.format.columns_per_packet == 16
-    assert metadata.format.column_window[0] == 0
-    assert metadata.format.column_window[
-        1] == metadata.format.columns_per_frame - 1
-    assert len(metadata.format.pixel_shift_by_row) == 32
-    assert metadata.format.pixels_per_column == 32
-    assert len(metadata.beam_azimuth_angles) == 32
-    assert len(metadata.beam_altitude_angles) == 32
-    assert metadata.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
-    assert metadata.format.udp_profile_imu == client.UDPProfileIMU.PROFILE_IMU_LEGACY
-    assert metadata.imu_to_sensor_transform.shape == (4, 4)
-    assert metadata.lidar_to_sensor_transform.shape == (4, 4)
-    assert metadata.lidar_origin_to_beam_origin_mm == 15.806
-    assert numpy.array_equal(metadata.extrinsic, numpy.identity(4))
-    assert metadata.init_id == 0
-    assert metadata.udp_port_lidar == 0
-    assert metadata.udp_port_imu == 0
+    assert meta.hostname == "os-992029000352.local"
+    assert meta.sn == "992029000352"
+    assert meta.fw_rev == "v2.0.0-rc.2"
+    assert meta.mode == client.LidarMode.MODE_1024x20
+    assert meta.prod_line == "OS-2-32-U0"
+    assert meta.format.columns_per_frame == 1024
+    assert meta.format.columns_per_packet == 16
+    assert meta.format.column_window[0] == 0
+    assert meta.format.column_window[1] == meta.format.columns_per_frame - 1
+    assert len(meta.format.pixel_shift_by_row) == 32
+    assert meta.format.pixels_per_column == 32
+    assert len(meta.beam_azimuth_angles) == 32
+    assert len(meta.beam_altitude_angles) == 32
+    assert meta.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
+    assert meta.format.udp_profile_imu == client.UDPProfileIMU.PROFILE_IMU_LEGACY
+    assert meta.imu_to_sensor_transform.shape == (4, 4)
+    assert meta.lidar_to_sensor_transform.shape == (4, 4)
+    assert meta.lidar_origin_to_beam_origin_mm == 13.762
+    assert numpy.array_equal(meta.extrinsic, numpy.identity(4))
+    assert meta.init_id == 0
+    assert meta.udp_port_lidar == 0
+    assert meta.udp_port_imu == 0
 
 
-def test_write_info(metadata: client.SensorInfo) -> None:
+def test_write_info(meta: client.SensorInfo) -> None:
     """Check modifying metadata."""
-    metadata.hostname = ""
-    metadata.sn = ""
-    metadata.fw_rev = ""
-    metadata.mode = client.LidarMode.MODE_UNSPEC
-    metadata.prod_line = ""
-    metadata.format.columns_per_frame = 0
-    metadata.format.columns_per_packet = 0
-    metadata.format.pixels_per_column = 0
-    metadata.format.column_window = (0, 0)
-    metadata.format.pixel_shift_by_row = []
-    metadata.format.udp_profile_lidar = client.UDPProfileLidar(0)
-    metadata.format.udp_profile_imu = client.UDPProfileIMU(0)
-    metadata.beam_azimuth_angles = []
-    metadata.beam_altitude_angles = []
-    metadata.imu_to_sensor_transform = numpy.zeros((4, 4))
-    metadata.lidar_to_sensor_transform = numpy.zeros((4, 4))
-    metadata.extrinsic = numpy.zeros((4, 4))
-    metadata.lidar_origin_to_beam_origin_mm = 0.0
-    metadata.init_id = 0
-    metadata.udp_port_lidar = 0
-    metadata.udp_port_imu = 0
+    meta.hostname = ""
+    meta.sn = ""
+    meta.fw_rev = ""
+    meta.mode = client.LidarMode.MODE_UNSPEC
+    meta.prod_line = ""
+    meta.format.columns_per_frame = 0
+    meta.format.columns_per_packet = 0
+    meta.format.pixels_per_column = 0
+    meta.format.column_window = (0, 0)
+    meta.format.pixel_shift_by_row = []
+    meta.format.udp_profile_lidar = client.UDPProfileLidar(0)
+    meta.format.udp_profile_imu = client.UDPProfileIMU(0)
+    meta.beam_azimuth_angles = []
+    meta.beam_altitude_angles = []
+    meta.imu_to_sensor_transform = numpy.zeros((4, 4))
+    meta.lidar_to_sensor_transform = numpy.zeros((4, 4))
+    meta.extrinsic = numpy.zeros((4, 4))
+    meta.lidar_origin_to_beam_origin_mm = 0.0
+    meta.init_id = 0
+    meta.udp_port_lidar = 0
+    meta.udp_port_imu = 0
 
-    assert metadata == client.SensorInfo()
+    assert meta == client.SensorInfo()
 
     with pytest.raises(TypeError):
-        metadata.mode = 1  # type: ignore
+        meta.mode = 1  # type: ignore
     with pytest.raises(TypeError):
-        metadata.imu_to_sensor_transform = numpy.zeros((4, 5))
+        meta.imu_to_sensor_transform = numpy.zeros((4, 5))
     with pytest.raises(TypeError):
-        metadata.lidar_to_sensor_transform = numpy.zeros((3, 4))
+        meta.lidar_to_sensor_transform = numpy.zeros((3, 4))
     with pytest.raises(TypeError):
-        metadata.extrinsic = numpy.zeros(16)
+        meta.extrinsic = numpy.zeros(16)
     with pytest.raises(TypeError):
-        metadata.beam_altitude_angles = 1  # type: ignore
+        meta.beam_altitude_angles = 1  # type: ignore
     with pytest.raises(TypeError):
-        metadata.beam_azimuth_angles = ["foo"]  # type: ignore
+        meta.beam_azimuth_angles = ["foo"]  # type: ignore
 
 
-def test_copy_info(metadata: client.SensorInfo) -> None:
+def test_copy_info(meta: client.SensorInfo) -> None:
     """Check that copy() works."""
-    meta1 = copy(metadata)
+    meta1 = copy(meta)
 
-    assert meta1 is not metadata
-    assert meta1 == metadata
+    assert meta1 is not meta
+    assert meta1 == meta
 
     meta1.format.columns_per_packet = 42
-    assert meta1 != metadata
+    assert meta1 != meta
 
-    meta2 = copy(metadata)
+    meta2 = copy(meta)
     meta2.hostname = "foo"
-    assert meta2 != metadata
+    assert meta2 != meta
 
 
 def test_parse_info() -> None:

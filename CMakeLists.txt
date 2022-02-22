@@ -9,7 +9,7 @@ set(DEPENDENCY_MODULES ${CMAKE_CURRENT_LIST_DIR}/cmake/Findjsoncpp.cmake)
 include(DefaultBuildType)
 
 # ==== Project Name ====
-project(ouster_example VERSION 20210608)
+project(ouster_example VERSION 20220107)
 
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
@@ -45,8 +45,12 @@ if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
 endif()
 
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
-  add_subdirectory(tests)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
+  target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
+  if(BUILD_TESTING)
+    add_subdirectory(tests)
+  endif()
 endif()
 
 # ==== Install ====

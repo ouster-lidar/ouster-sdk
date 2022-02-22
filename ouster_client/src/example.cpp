@@ -10,7 +10,7 @@
 
 using namespace ouster;
 
-const int N_SCANS = 5;
+const size_t N_SCANS = 5;
 const size_t UDP_BUF_SIZE = 65536;
 
 void FATAL(const char* msg) {
@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
     // buffer to store raw packet data
     std::unique_ptr<uint8_t[]> packet_buf(new uint8_t[UDP_BUF_SIZE]);
 
-    for (int i = 0; i < N_SCANS;) {
+    for (size_t i = 0; i < N_SCANS;) {
         // wait until sensor data is available
         sensor::client_state st = sensor::poll_client(*handle);
 

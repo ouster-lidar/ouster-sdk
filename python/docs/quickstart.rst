@@ -15,13 +15,9 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m pip install 'ouster-sdk[examples]'
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m pip install 'ouster-sdk[examples]'
 
     .. code-tab:: powershell Windows x64
 
@@ -35,23 +31,16 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref
    you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py -3`` and
    ``py -3 -m pip`` in the following Powershell snippets.
 
-   **Apple M1 users** should be aware that they will need to prepend all python3 commands with
-   ``arch --x86_64`` when working with ouster-sdk to force macOS to run the intel versions of python
-   as numpy support on native M1 has not arrived yet.
-
+   **Apple M1 users** should be aware that due to numpy support limitations they will need to use Python >=3.8.
 
 To check that you've successfully installed the latest version of the Ouster Python SDK, run the
 following command and make sure that the ``ouster-sdk`` package is included in the output:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m pip list
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m pip list
 
     .. code-tab:: powershell Windows x64
 
@@ -72,13 +61,9 @@ To get started, open a new console/Powershell window and start a python interpre
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3
 
     .. code-tab:: powershell Windows x64
 
@@ -89,14 +74,14 @@ Throughout this guide we will indicate console commands with ``$`` and python in
 with ``>>>``, just as we have above.
 
 If you'd like to start by working with sample data, continue to the next section. If you'd prefer to
-start capturing data from a sensor, you can skip to `Using an Ouster Sensor`_ below.
+start by capturing data from a sensor, you can skip to `Using an Ouster Sensor`_ below.
 
 
 Using Sample Data
 =================
 
 Download the `OS2 bridge sample data`_ (**80 MB**) and unzip the contents. To use subsequent code
-snippets as-is you should extract this file into the same directory from which you're running your
+snippets as-is, you should extract this file into the same directory from which you're running your
 Python interpreter. You should have two files:
 
   * ``OS2_128_bridge_sample.pcap``
@@ -112,15 +97,15 @@ the packet data.
    >>> pcap_path = 'OS2_128_bridge_sample.pcap'
    >>> metadata_path = 'OS2_2048x10_128.json'
 
-You may have do adjust these paths to the directory where the unzipped ``pcap`` and ``json`` file
+You may have to adjust these paths to the directory where the unzipped ``pcap`` and ``json`` file
 are located. Because our pcap file contains the UDP packet stream but not the sensor metadata, we
-load the metadata from ``metadata_path`` first, using the client module:
+load the sensor information from ``metadata_path`` first, using the client module:
 
 .. code:: python
 
    >>> from ouster import client
    >>> with open(metadata_path, 'r') as f:
-   ...     metadata = client.SensorInfo(f.read())
+   ...     info = client.SensorInfo(f.read())
 
 Now that we've parsed the metadata file into a :py:class:`.SensorInfo`, we can use it to read our
 captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
@@ -129,14 +114,15 @@ captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
 .. code:: python
 
     >>> from ouster import pcap
-    >>> source = pcap.Pcap(pcap_path, metadata)
+    >>> source = pcap.Pcap(pcap_path, info)
 
 To visualize data from this pcap file, proceed to `Visualizing Lidar Data`_ below.
 
+.. todo::  Update to 2.2 docs on release
 
 .. _OS2 bridge sample data: https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip
-.. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#10
-.. _IMU Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#13
+.. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.1.x.pdf#10
+.. _IMU Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.1.x.pdf#14
 
 
 Using an Ouster Sensor
@@ -151,7 +137,7 @@ If you have access to sensor hardware, you can start reading data by instantiati
    Sensor Documentation.
 
 In the following, ``<SENSOR_HOSTNAME>`` should be substituted for the actual hostname or IP of your
-sensor.
+sensor. 
 
 To make sure everything is connected, open a separate console window and try pinging the sensor. You
 should see some output like:
@@ -177,12 +163,18 @@ should see some output like:
        Reply from 192.0.2.42: bytes=32 time=101ms TTL=124
 
 
-Next, you'll need to configure the sensor with the config parameters using the client module. In
-your open python session:
+Next, you'll need to configure the sensor with the config parameters using the client module.
+
+In your open python session, set ``hostname`` as ``<SENSOR_HOSTNAME>``:
 
 .. code:: python
 
    >>> hostname = '<SENSOR_HOSTNAME>'
+
+Now configure the client:
+
+.. code:: python
+
    >>> from ouster import client
    >>> config = client.SensorConfig()
    >>> config.udp_port_lidar = 7502
@@ -195,12 +187,15 @@ Just like with the sample data, you can create a :py:class:`.PacketSource` from 
 .. code:: python
 
    >>> source = client.Sensor(hostname)
+   >>> info = source.metadata
 
 Now we have a ``source`` from our sensor! To visualize data from your sensor, proceed to
 `Visualizing Lidar Data`_ directly below.
 
 
-.. _Networking Guide: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2p0.pdf#64
+.. todo:: Replace with 2.2 docs on release
+
+.. _Networking Guide: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.1.x.pdf#74
 
 
 Visualizing Lidar Data
@@ -221,14 +216,13 @@ directly from a sensor. Let's read from ``source`` until we get to the 50th fram
     If you're using a sensor and it takes a few seconds, don't be alarmed! It has to get to the 50th
     frame of data, which would be 5.0 seconds for a sensor running in 1024x10 mode.
 
-Now that we have a frame of data available as a :py:class:`.LidarScan` datatype, we can extract the
-range measurements and turn them into a range image where each column corresponds to a single
-azimuth angle:
+We can extract the range measurements from the frame of data stored in the :py:class:`.LidarScan`
+datatype and plot a range image where each column corresponds to a single azimuth angle:
 
 .. code:: python
 
    >>> range_field = scan.field(client.ChanField.RANGE)
-   >>> range_img = client.destagger(source.metadata, range_field)
+   >>> range_img = client.destagger(info, range_field)
 
 We can plot the results using standard Python tools that work with numpy datatypes. Here, we extract
 a column segment of the range data and display the result:
@@ -259,7 +253,7 @@ produce X, Y, Z coordinates from our scan data with shape (H x W x 3):
 
 .. code:: python
 
-    >>> xyzlut = client.XYZLut(source.metadata)
+    >>> xyzlut = client.XYZLut(info)
     >>> xyz = xyzlut(scan)
 
 Now we rearrange the resulting numpy array into a shape that's suitable for plotting:
@@ -301,13 +295,7 @@ how to work with our data.
 
 Here are a few things you might be interested in:
 
-    * :ref:`ex-metadata`
+    * :ref:`ex-basic-sensor`
     * :ref:`ex-packets`
-    * :ref:`ex-streaming`
-    * :ref:`ex-pcap-record`
-    * :ref:`ex-staggered-and-destaggered`
-    * :ref:`ex-xyzlut`
-    * :ref:`ex-correlating-2d-and-3d`
-    * :ref:`ex-pcap-to-csv`
-    * :ref:`ex-open3d`
-    * :ref:`ex-imu`
+    * :ref:`ex-lidar-scans`
+    * :ref:`ex-record-stream-viz`

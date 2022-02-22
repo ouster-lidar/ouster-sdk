@@ -14,6 +14,8 @@ Building the Python SDK from source requires several dependencies:
 - `jsoncpp <https://github.com/open-source-parsers/jsoncpp>`_ >= 1.7
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
+- `libglfw3 <https://www.glfw.org/>`_ >= 3.2
+- `libglew <http://glew.sourceforge.net/>`_ >= 2.1
 - `Python <https://www.python.org/>`_ >= 3.6 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
@@ -42,6 +44,9 @@ After you have the system dependencies, you can build the SDK with:
    # first, specify the path to the ouster_example repository
    $ export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
 
+   # make sure you have an up-to-date version of pip installed
+   $ python3 -m pip install --user --upgrade pip
+
    # then, build an installable "wheel" package
    $ python3 -m pip wheel --no-deps $OUSTER_SDK_PATH/python
 
@@ -52,34 +57,35 @@ After you have the system dependencies, you can build the SDK with:
 Windows 10
 ----------
 
-On Windows 10, you'll have to install Visual Studio, Python and the `vcpkg`_ package manager and
-run:
+On Windows 10, you'll have to install the Visual Studio 2017 Build Tools, Python and the `vcpkg`_
+package manager and run:
 
 .. code:: powershell
 
    PS > vcpkg install eigen3 jsoncpp libtins pybind11 glfw3 glew
 
-The currently tested vcpkg tag is ``2020.11-1``. After that, using a developer powershell prompt:
+The currently tested vcpkg tag is ``2021.05.12``. After that, using a developer powershell prompt:
 
 .. code:: powershell
 
    # first, specify the path to the ouster_example repository
-   PS > $env:OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE>
+   PS > $env:OUSTER_SDK_PATH="<PATH TO OUSTER_EXAMPLE>"
 
-   # point cmake to the location of vcpkg
-   PS > $env:CMAKE_TOOLCHAIN_FILE=<PATH TO VCPKG REPO>/scripts/buildsystems/vcpkg.cmake
+   # point cmake to the location of vcpkg (make sure to use an absolute path)
+   PS > $env:CMAKE_TOOLCHAIN_FILE="<PATH TO VCPKG REPO>\scripts\buildsystems\vcpkg.cmake"
 
    # then, build an installable "wheel" package
-   PS > py -m pip wheel --no-deps $env:OUSTER_SDK_PATH\python
+   PS > py -m pip wheel --no-deps "$env:OUSTER_SDK_PATH\python"
 
    # or just install directly (virtualenv recommended)
-   PS > py -m pip install $env:OUSTER_SDK_PATH\python
+   PS > py -m pip install "$env:OUSTER_SDK_PATH\python"
 
 See the top-level README in the `Ouster Example repository`_ for more details on setting up a
 development environment on Windows.
 
 .. _vcpkg: https://github.com/microsoft/vcpkg/blob/master/README.md
 .. _Ouster Example repository: https://github.com/ouster-lidar/ouster_example
+
 
 Developing
 ==========
@@ -95,11 +101,11 @@ The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To ru
    # install and run flake8 linter
    $ python3 -m pip install flake8
    $ cd ${OUSTER_SDK_PATH}/python
-   $ flake8
+   $ python3 -m flake8
 
    # install and run mypy in an environment with
    $ python3 -m pip install mypy
-   $ mypy src/
+   $ python3 -m mypy src/
 
 
 Running Tests
@@ -111,14 +117,14 @@ SDK package:
 .. code:: console
 
    $ cd ${OUSTER_SDK_PATH}/python
-   $ pytest
+   $ python3 -m pytest
 
 To run tests against multiple Python versions simultaneously, use the ``tox`` package:
 
 .. code:: console
 
    $ cd ${OUSTER_SDK_PATH}/python
-   $ tox
+   $ python3 -m tox
 
 This will take longer, since it will build the package from a source distribution for each supported
 Python version available.

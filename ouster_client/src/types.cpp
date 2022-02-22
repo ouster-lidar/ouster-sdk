@@ -63,7 +63,7 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 7> chanfield_strings{{
+Table<sensor::ChanField, const char*, 9> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
@@ -71,6 +71,8 @@ Table<sensor::ChanField, const char*, 7> chanfield_strings{{
     {ChanField::REFLECTIVITY, "REFLECTIVITY"},
     {ChanField::REFLECTIVITY2, "REFLECTIVITY2"},
     {ChanField::NEAR_IR, "NEAR_IR"},
+    {ChanField::FLAGS, "FLAGS"},
+    {ChanField::FLAGS2, "FLAGS2"},
 }};
 
 Table<UDPProfileLidar, const char*, 2> udp_profile_lidar_strings{{
@@ -1023,7 +1025,7 @@ version version_of_string(const std::string& s) {
         return v;
     else
         return invalid_version;
-};
+}
 
 }  // namespace util
 }  // namespace ouster

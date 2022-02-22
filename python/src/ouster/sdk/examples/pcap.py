@@ -7,12 +7,69 @@ This module has a rudimentary command line interface. For usage, run::
 import os
 import argparse
 from contextlib import closing
-import time
 
 import numpy as np
 
 from ouster import client, pcap
 from .colormaps import normalize
+
+
+def pcap_3d_one_scan(source: client.PacketSource,
+                     metadata: client.SensorInfo,
+                     num: int = 0) -> None:
+    """Render one scan from a pcap file in the Open3D viewer.
+
+    Args:
+        source: PacketSource from pcap
+        metadata: associated SensorInfo for PacketSource
+        num: scan number in a given pcap file (satrs from *0*)
+    """
+    try:
+        import open3d as o3d  # type: ignore
+    except ModuleNotFoundError:
+        print(
+            "This example requires open3d, which may not be available on all "
+            "platforms. Try running `pip3 install open3d` first.")
+        exit(1)
+
+    from more_itertools import nth
+    # get single scan by index
+    scan = nth(client.Scans(source), num)
+
+    if not scan:
+        print(f"ERROR: Scan # {num} in not present in pcap file")
+        exit(1)
+
+    # [doc-stag-open3d-one-scan]
+    # compute point cloud using client.SensorInfo and client.LidarScan
+    xyz = client.XYZLut(metadata)(scan)
+
+    # create point cloud and coordinate axes geometries
+    cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz.reshape((-1, 3))))  # type: ignore
+    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(1.0)  # type: ignore
+
+    # [doc-etag-open3d-one-scan]
+
+    # initialize visualizer and rendering options
+    vis = o3d.visualization.Visualizer()  # type: ignore
+
+    vis.create_window()
+    vis.add_geometry(cloud)
+    vis.add_geometry(axes)
+    ropt = vis.get_render_option()
+    ropt.point_size = 1.0
+    ropt.background_color = np.asarray([0, 0, 0])
+
+    # initialize camera settings
+    ctr = vis.get_view_control()
+    ctr.set_zoom(0.1)
+    ctr.set_lookat([0, 0, 0])
+    ctr.set_up([1, 0, 0])
+
+    # run visualizer main loop
+    print("Press Q or Excape to exit")
+    vis.run()
+    vis.destroy_window()
 
 
 def pcap_display_xyz_points(source: client.PacketSource,
@@ -48,187 +105,6 @@ def pcap_display_xyz_points(source: client.PacketSource,
     ax.scatter(x, y, z, c=normalize(key.flatten()), s=0.2)
     plt.show()
     # [doc-etag-pcap-plot-xyz-points]
-
-
-def pcap_2d_viewer(source: client.PacketSource,
-                   metadata: client.SensorInfo,
-                   num: int = 0) -> None:
-    """Visualize channel fields in 2D using opencv."""
-    import cv2  # type: ignore
-
-    # [doc-stag-pcap-display-live]
-    print("press ESC from visualization to exit")
-
-    quit = False
-    paused = False
-    destagger = True
-    num = 0
-    for scan in client.Scans(source):
-        print("frame id: {}, num = {}".format(scan.frame_id, num))
-
-        fields = [scan.field(ch) for ch in scan.fields]
-        if destagger:
-            fields = [client.destagger(metadata, f) for f in fields]
-
-        combined_images = np.vstack(
-            [np.pad(normalize(f), 2, constant_values=1.0) for f in fields])
-
-        cv2.imshow("4 channels: ", combined_images)
-
-        # handle keys presses
-        while True:
-            key = cv2.waitKey(1) & 0xFF
-            # 100 is d
-            if key == 100:
-                destagger = not destagger
-            # 32 is SPACE
-            if key == 32:
-                paused = not paused
-            # 27 is ESC
-            elif key == 27:
-                quit = True
-
-            if not paused:
-                break
-            time.sleep(0.1)
-
-        if quit:
-            break
-        num += 1
-
-    cv2.destroyAllWindows()
-    # [doc-etag-pcap-display-live]
-
-
-def pcap_read_packets(
-        source: client.PacketSource,
-        metadata: client.SensorInfo,
-        num: int = 0  # not used in this examples
-) -> None:
-    """Basic read packets example from pcap file. """
-    # [doc-stag-pcap-read-packets]
-    for packet in source:
-        if isinstance(packet, client.LidarPacket):
-            # Now we can process the LidarPacket. In this case, we access
-            # the measurement ids, timestamps, and ranges
-            measurement_ids = packet.measurement_id
-            timestamps = packet.timestamp
-            ranges = packet.field(client.ChanField.RANGE)
-            print(f'  encoder counts = {measurement_ids.shape}')
-            print(f'  timestamps = {timestamps.shape}')
-            print(f'  ranges = {ranges.shape}')
-
-        elif isinstance(packet, client.ImuPacket):
-            # and access ImuPacket content
-            print(f'  acceleration = {packet.accel}')
-            print(f'  angular_velocity = {packet.angular_vel}')
-    # [doc-etag-pcap-read-packets]
-
-
-def pcap_show_one_scan(source: client.PacketSource,
-                       metadata: client.SensorInfo,
-                       num: int = 0,
-                       destagger: bool = True) -> None:
-    """Plot all channels of one scan in 2D using matplotlib."""
-    import matplotlib.pyplot as plt  # type: ignore
-
-    from more_itertools import nth
-    scan = nth(client.Scans(source), num)
-    if not scan:
-        print(f"ERROR: Scan # {num} in not present in pcap file")
-        exit(1)
-
-    # [doc-stag-pcap-show-one]
-    fig = plt.figure(constrained_layout=True)
-    axs = fig.subplots(len(list(scan.fields)), 1, sharey=True)
-
-    for ax, field in zip(axs, scan.fields):
-        img = normalize(scan.field(field))
-        if destagger:
-            img = client.destagger(metadata, img)
-
-        ax.set_title(str(field), fontdict={'fontsize': 10})
-        ax.imshow(img, cmap='gray', resample=False)
-        ax.set_yticklabels([])
-        ax.set_yticks([])
-        ax.set_xticks([0, scan.w])
-    plt.show()
-    # [doc-etag-pcap-show-one]
-
-
-def pcap_to_las(source: client.PacketSource,
-                metadata: client.SensorInfo,
-                num: int = 0,
-                las_dir: str = ".",
-                las_base: str = "las_out",
-                las_ext: str = "las") -> None:
-    "Write scans from a pcap to las files (one per lidar scan)."
-
-    from itertools import islice
-    import laspy
-
-    # precompute xyzlut to save computation in a loop
-    xyzlut = client.XYZLut(metadata)
-
-    # create an iterator of LidarScans from pcap and bound it if num is specified
-    scans = iter(client.Scans(source))
-    if num:
-        scans = islice(scans, num)
-
-    for idx, scan in enumerate(scans):
-
-        xyz = xyzlut(scan)
-
-        las = laspy.create()
-        las.x = xyz[:, :, 0].flatten()
-        las.y = xyz[:, :, 1].flatten()
-        las.z = xyz[:, :, 2].flatten()
-
-        las_path = os.path.join(las_dir, f'{las_base}_{idx:06d}.{las_ext}')
-        print(f'write frame #{idx} to file: {las_path}')
-
-        las.write(las_path)
-
-
-def pcap_to_pcd(source: client.PacketSource,
-                metadata: client.SensorInfo,
-                num: int = 0,
-                pcd_dir: str = ".",
-                pcd_base: str = "pcd_out",
-                pcd_ext: str = "pcd") -> None:
-    "Write scans from a pcap to pcd files (one per lidar scan)."
-
-    from itertools import islice
-    try:
-        import open3d as o3d  # type: ignore
-    except ModuleNotFoundError:
-        print(
-            "This example requires open3d, which may not be available on all "
-            "platforms. Try running `pip3 install open3d` first.")
-        exit(1)
-
-    if not os.path.exists(pcd_dir):
-        os.makedirs(pcd_dir)
-
-    # precompute xyzlut to save computation in a loop
-    xyzlut = client.XYZLut(metadata)
-
-    # create an iterator of LidarScans from pcap and bound it if num is specified
-    scans = iter(client.Scans(source))
-    if num:
-        scans = islice(scans, num)
-
-    for idx, scan in enumerate(scans):
-
-        xyz = xyzlut(scan)
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(xyz.reshape(-1, 3))
-
-        pcd_path = os.path.join(pcd_dir, f'{pcd_base}_{idx:06d}.{pcd_ext}')
-        print(f'write frame #{idx} to file: {pcd_path}')
-
-        o3d.io.write_point_cloud(pcd_path, pcd)
 
 
 def pcap_to_csv(source: client.PacketSource,
@@ -307,16 +183,49 @@ def pcap_to_csv(source: client.PacketSource,
     # [doc-etag-pcap-to-csv]
 
 
-def pcap_3d_one_scan(source: client.PacketSource,
-                     metadata: client.SensorInfo,
-                     num: int = 0) -> None:
-    """Render one scan from a pcap file in the Open3D viewer.
+def pcap_to_las(source: client.PacketSource,
+                metadata: client.SensorInfo,
+                num: int = 0,
+                las_dir: str = ".",
+                las_base: str = "las_out",
+                las_ext: str = "las") -> None:
+    "Write scans from a pcap to las files (one per lidar scan)."
 
-    Args:
-        source: PacketSource from pcap
-        metadata: associated SensorInfo for PacketSource
-        num: scan number in a given pcap file (satrs from *0*)
-    """
+    from itertools import islice
+    import laspy  # type: ignore
+
+    # precompute xyzlut to save computation in a loop
+    xyzlut = client.XYZLut(metadata)
+
+    # create an iterator of LidarScans from pcap and bound it if num is specified
+    scans = iter(client.Scans(source))
+    if num:
+        scans = islice(scans, num)
+
+    for idx, scan in enumerate(scans):
+
+        xyz = xyzlut(scan)
+
+        las = laspy.create()
+        las.x = xyz[:, :, 0].flatten()
+        las.y = xyz[:, :, 1].flatten()
+        las.z = xyz[:, :, 2].flatten()
+
+        las_path = os.path.join(las_dir, f'{las_base}_{idx:06d}.{las_ext}')
+        print(f'write frame #{idx} to file: {las_path}')
+
+        las.write(las_path)
+
+
+def pcap_to_pcd(source: client.PacketSource,
+                metadata: client.SensorInfo,
+                num: int = 0,
+                pcd_dir: str = ".",
+                pcd_base: str = "pcd_out",
+                pcd_ext: str = "pcd") -> None:
+    "Write scans from a pcap to pcd files (one per lidar scan)."
+
+    from itertools import islice
     try:
         import open3d as o3d  # type: ignore
     except ModuleNotFoundError:
@@ -325,59 +234,90 @@ def pcap_3d_one_scan(source: client.PacketSource,
             "platforms. Try running `pip3 install open3d` first.")
         exit(1)
 
-    from more_itertools import nth
-    # get single scan by index
-    scan = nth(client.Scans(source), num)
+    if not os.path.exists(pcd_dir):
+        os.makedirs(pcd_dir)
 
-    if not scan:
-        print(f"ERROR: Scan # {num} in not present in pcap file")
-        exit(1)
+    # precompute xyzlut to save computation in a loop
+    xyzlut = client.XYZLut(metadata)
 
-    # [doc-stag-open3d-one-scan]
-    # compute point cloud using client.SensorInfo and client.LidarScan
-    xyz = client.XYZLut(metadata)(scan)
+    # create an iterator of LidarScans from pcap and bound it if num is specified
+    scans = iter(client.Scans(source))
+    if num:
+        scans = islice(scans, num)
 
-    # create point cloud and coordinate axes geometries
-    cloud = o3d.geometry.PointCloud(
-        o3d.utility.Vector3dVector(xyz.reshape((-1, 3))))
-    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(1.0)
-    # [doc-etag-open3d-one-scan]
+    for idx, scan in enumerate(scans):
 
-    # initialize visualizer and rendering options
-    vis = o3d.visualization.Visualizer()
-    vis.create_window()
-    vis.add_geometry(cloud)
-    vis.add_geometry(axes)
-    ropt = vis.get_render_option()
-    ropt.point_size = 1.0
-    ropt.background_color = np.asarray([0, 0, 0])
+        xyz = xyzlut(scan)
 
-    # initialize camera settings
-    ctr = vis.get_view_control()
-    ctr.set_zoom(0.1)
-    ctr.set_lookat([0, 0, 0])
-    ctr.set_up([1, 0, 0])
+        pcd = o3d.geometry.PointCloud()  # type: ignore
 
-    # run visualizer main loop
-    print("Press Q or Excape to exit")
-    vis.run()
-    vis.destroy_window()
+        pcd.points = o3d.utility.Vector3dVector(xyz.reshape(-1, 3))  # type: ignore
+
+        pcd_path = os.path.join(pcd_dir, f'{pcd_base}_{idx:06d}.{pcd_ext}')
+        print(f'write frame #{idx} to file: {pcd_path}')
+
+        o3d.io.write_point_cloud(pcd_path, pcd)  # type: ignore
+
+
+def pcap_query_scan(source: client.PacketSource,
+                    metadata: client.SensorInfo,
+                    num: int = 0) -> None:
+    """
+    Example: Query available fields in LidarScan
+
+    Args:
+        source: PacketSource from pcap
+        metadata: associated SensorInfo for PacketSource
+        num: scan number in a given pcap file (satrs from *0*)
+    """
+    scans = iter(client.Scans(source))
+
+    # [doc-stag-pcap-query-scan]
+    scan = next(scans)
+    print("Available fields and corresponding dtype in LidarScan")
+    for field in scan.fields:
+        print('{0:15} {1}'.format(str(field), scan.field(field).dtype))
+    # [doc-etag-pcap-query-scan]
+
+
+def pcap_read_packets(
+        source: client.PacketSource,
+        metadata: client.SensorInfo,
+        num: int = 0  # not used in this example
+) -> None:
+    """Basic read packets example from pcap file. """
+    # [doc-stag-pcap-read-packets]
+    for packet in source:
+        if isinstance(packet, client.LidarPacket):
+            # Now we can process the LidarPacket. In this case, we access
+            # the measurement ids, timestamps, and ranges
+            measurement_ids = packet.measurement_id
+            timestamps = packet.timestamp
+            ranges = packet.field(client.ChanField.RANGE)
+            print(f'  encoder counts = {measurement_ids.shape}')
+            print(f'  timestamps = {timestamps.shape}')
+            print(f'  ranges = {ranges.shape}')
+
+        elif isinstance(packet, client.ImuPacket):
+            # and access ImuPacket content
+            print(f'  acceleration = {packet.accel}')
+            print(f'  angular_velocity = {packet.angular_vel}')
+    # [doc-etag-pcap-read-packets]
 
 
 def main():
     """Pcap examples runner."""
     examples = {
-        "plot-xyz-points": pcap_display_xyz_points,
-        "2d-viewer": pcap_2d_viewer,
-        "read-packets": pcap_read_packets,
-        "plot-one-scan": pcap_show_one_scan,
-        "pcap-to-csv": pcap_to_csv,
-        "pcap-to-pcd": pcap_to_pcd,
-        "pcap-to-las": pcap_to_las,
         "open3d-one-scan": pcap_3d_one_scan,
+        "plot-xyz-points": pcap_display_xyz_points,
+        "pcap-to-csv": pcap_to_csv,
+        "pcap-to-las": pcap_to_las,
+        "pcap-to-pcd": pcap_to_pcd,
+        "query-scan": pcap_query_scan,
+        "read-packets": pcap_read_packets,
     }
 
-    description = "Ouster Python SDK Pcap examples. The EXAMPLE must be one of:\n" + str.join(
+    description = "Ouster Python SDK Pcap examples. The EXAMPLE must be one of:\n  " + str.join(
         '\n  ', examples.keys())
 
     parser = argparse.ArgumentParser(

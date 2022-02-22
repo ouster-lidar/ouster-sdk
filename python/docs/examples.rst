@@ -6,46 +6,100 @@ A loosely connected collection of examples and concepts useful for working with 
 are just starting, please see :ref:`quickstart`.
 
 For convenience, throughout the examples and concepts we will use ``pcap_path`` and
-``metadata_path`` to refer to the path to a Ouster pcap and metadata file.  The pictures below are
-taken from the `OS1 sample data`_.
-
+``metadata_path`` to refer to the path to an Ouster pcap and metadata file.  The pictures below are
+captured from the `OS1 sample data`_ .
 
 .. _OS1 sample data: https://data.ouster.io/sdk-samples/OS1/OS1_128_sample.zip
 
 
-.. _ex-metadata:
+.. _ex-basic-sensor:
+
+
+Working with an Ouster sensor
+=============================
+
+.. contents::
+   :local:
+   :depth: 3
+
+
+Configuring your sensor
+------------------------
+To work with your sensor, you should configure the ports, the :py:class:`.OperatingMode`, and the
+:py:class:`.LidarMode`:
+
+.. literalinclude:: /../src/ouster/sdk/examples/client.py
+    :start-after: [doc-stag-configure]
+    :end-before: [doc-etag-configure]
+    :dedent:
+
+Each config parameter corresponds directly to the sensor configuration parameters available on the
+sensor.
+
+You can run the above code, captured in the `configure-sensor`_ example, as follows:
+
+.. tabs::
+
+    .. code-tab:: console Linux/macOS
+
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-sensor
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-sensor
+
+If you have a Rev6 or later sensor and are running FW 2.2+, you should be able to configure your
+sensor to use dual returns by setting the config parameter :py:class:`.UDPProfileLidar`:
+
+.. literalinclude:: /../src/ouster/sdk/examples/client.py
+    :start-after: [doc-stag-config-udp-profile]
+    :end-before: [doc-etag-config-udp-profile]
+    :dedent:
+
+
+Try the `dual returns configuration example`_ on your Rev6 or later sensor:
+
+.. tabs::
+
+    .. code-tab:: console Linux/macOS
+
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-dual-returns
+
+    .. code-tab:: powershell Windows x64
+
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-dual-returns
+
+
+.. _configure-sensor: ./_modules/ouster/sdk/examples/client.html#configure_sensor_params
+.. _dual returns configuration example: ./_modules/ouster/sdk/examples/client.html#configure_dual_returns
 
 
 Obtaining Sensor Metadata
-=========================
+-------------------------
 
 Ouster sensors require metadata to interpret the readings of the sensor. Represented by the object
-:py:class:`.SensorInfo`, its fields include configuration parameters such as ``lidar_mode`` and
+:py:class:`.SensorInfo`, metadata fields include configuration parameters such as ``lidar_mode`` and
 sensor intrinsics like ``beam_azimuth_angles``.
 
 When you work with a sensor, the client will automatically fetch the metadata. Recorded
 ``pcaps``, however, must always be accompanied by a ``json`` file containing the metadata of the
-sensor as it was running when the data was recorded.
+sensor as it was when the data was recorded.
 
 Since it's crucial to save the correct metadata file, let's see how we can get that from a sensor.
 Try running the following example:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
 
     .. code-tab:: powershell Windows x64
 
         PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
 
 
-And now let's look inside the example we just ran:
+And now let's look inside the `fetch metadata example`_ we just ran:
 
 .. literalinclude:: /../src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-fetch-metadata]
@@ -54,16 +108,19 @@ And now let's look inside the example we just ran:
 
 Seems simple enough!
 
+.. _fetch metadata example: ./_modules/ouster/sdk/examples/client.html#fetch_metadata
+
 
 .. _ex-packets:
 
 
-Working Directly with Packets
-=============================
+Lidar and IMU Packets
+=====================
 
-The :py:class:`.PacketSource` is the basic interface for packets from the sensor. It can be
-advantageous to work with packets directly when latency is a concern, or when you wish to examine
-the data packet by packet, for example, if you wish to examine timestamps of packets.
+
+The :py:class:`.PacketSource` is the basic interface for sensor packets. It can be advantageous to
+work with packets directly when latency is a concern, or when you wish to examine the data packet by
+packet, e.g., if you wish to examine timestamps of packets.
 
 Let's make a :py:class:`.PacketSource` from our sample data using :py:class:`.pcap.Pcap`:
 
@@ -81,16 +138,96 @@ Now we can read packets from ``source`` with the following code:
     :end-before: [doc-etag-pcap-read-packets]
     :dedent:
 
+You can try the above code with the `read packets example`_:
+
+.. tabs::
+
+    .. code-tab:: console Linux/macOS
+
+        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json read-packets
+
+    .. code-tab:: powershell Windows x64
+
+        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json read-packets
+
+.. _read packets example: ./_modules/ouster/sdk/examples/pcap.html#pcap_read_packets
+
+
+.. _ex-lidar-scans:
+
+
+The LidarScan Representation
+============================
+
+
+.. contents::
+   :local:
+   :depth: 3
+
+
+We provide the :py:class:`.LidarScan` class, which batches lidar packets by full rotations into
+easily accessible fields of the appropriate type. The :py:class:`.LidarScans` also allows for easy
+projection of the batched data into Cartesian coordinates, producing point clouds.
+
+A :py:class:`.LidarScan` contains the fields specified at its initialization, queryable by accessing
+``fields`` of the scan:
+
+.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+    :start-after: [doc-stag-pcap-query-scan]
+    :end-before: [doc-etag-pcap-query-scan]
+    :dedent:
+
+You can run the above code on pcap containing packets of any type of :py:class:`.UDPProfileLidar` with the `field-querying example`_:
+
+
+.. tabs::
+
+    .. code-tab:: console Linux/macOS
+
+        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json query-scan
+
+    .. code-tab:: powershell Windows x64
+
+        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json query-scan
+
+On a packet containing dual returns data, you should note that your
+dtypes will not be consistently ``uint32_t``, as you can tell from the result of running
+``query-scan`` on dual returns data::
+
+    Available fields and corresponding dtype in LidarScan
+    RANGE           uint32
+    RANGE2          uint32
+    SIGNAL          uint16
+    SIGNAL2         uint16
+    REFLECTIVITY    uint8
+    REFLECTIVITY2   uint8
+    NEAR_IR         uint16
+
+
+To change the available fields in a :py:class:`.LidarScan`, initialize the :py:class:`.LidarScan`
+using :py:class:`.UDPProfileLidar` as follows:
+
+.. code:: python
+
+    LidarScan(h, w, metadata.format.udp_profile_lidar)
+
+
+
+.. _field-querying example: ./_modules/ouster/sdk/examples/pcap.html#pcap_query_scan
+
+.. todo:: insert link to dual returns data here
+
+
 
 .. _ex-staggered-and-destaggered:
 
-
 Staggered vs Destaggered 2D Representations
-===========================================
+---------------------------------------------
 
-The default **staggered** representation of a :py:class:`.LidarScan` has columns which pertain to
-measurements taken at a single timestamp. For a more natural 2D image, we **destagger** the field
-with the :py:func:`.client.destagger` function.
+The default representation of a :py:class:`.LidarScan` stores data in **staggered** columns, meaning
+that each column contains measurements taken at a single timestamp. As the lasers flashing at each
+timestamp are arranged over several different azimuths, the resulting 2D image if directly
+visualized is not a natural image. 
 
 Let's take a look at a typical **staggered** representation:
 
@@ -100,10 +237,9 @@ Let's take a look at a typical **staggered** representation:
    LidarScan ``RANGE`` field visualized with :py:func:`matplotlib.pyplot.imshow()` and simple gray
    color mapping for better look.
 
-This **staggered** representation definitely doesn't look like a normal image, which shouldn't
-surprise us since its columns pertain to timestamps instead of azimuth angles.
-
-Let's destagger the image, changing the columns to represent the azimuth angles:
+For the natural 2D image, we **destagger** the relevant field of the :py:class:`.LidarScan` with the
+:py:func:`.client.destagger` function, changing the columns to represent azimuth intsead of
+timestamp:
 
 .. code:: python
 
@@ -125,7 +261,7 @@ Let's destagger the image, changing the columns to represent the azimuth angles:
     plt.imshow(ranges_destaggered, cmap='gray', resample=False)
 
 
-This should give the scene below, of which we have magnified two patches for better visiblity.
+The above code gives the scene below, which we have magnified two patches for better visiblity.
 
 .. figure:: images/lidar_scan_destaggered.png
     :align: center
@@ -144,17 +280,17 @@ This image now makes visual sense, and we can easily use this data in common vis
 
 .. _Web Slam: https://webslam.ouster.dev/slam/1610482355.9361048.rVdW_dgws/
 
-
 .. _ex-xyzlut:
 
 
 Projecting into Cartesian Coordinates
-=====================================
+-------------------------------------
 
-To facilitate working with 3D points, you can call :py:func:`.client.XYZLut` to create a function
-which will project a :py:class:`.LidarScan` into Cartesian coordinates using a precomputed lookup
-table. The result of calling this function will be a point cloud represented as a numpy array. See
-the API documentation for :py:func:`.client.XYZLut` for more details.
+To facilitate working with 3D points, you can call :py:func:`.client.XYZLut` on the appropriate
+metedata, creating a function which projects the ``RANGE`` and ``RANGE2`` fields into Cartesian
+coordinates using a precomputed lookup table. The result of calling this function will be a point
+cloud represented as a numpy array. See the API documentation for :py:func:`.client.XYZLut` for more
+details.
 
 .. literalinclude:: /../src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-plot-xyz-points]
@@ -163,17 +299,13 @@ the API documentation for :py:func:`.client.XYZLut` for more details.
     :linenos:
     :dedent:
 
-If you have a sensor, you can run this code with one of our examples:
+If you have a sensor, you can run the above code excerpted from the `plot-xyz-points sensor example`_ with:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-xyz-points
 
     .. code-tab:: powershell Windows x64
 
@@ -182,17 +314,13 @@ If you have a sensor, you can run this code with one of our examples:
 That should open a 3D plot of a single scan of your location taken just now by your sensor. You
 should be able to recognize the contours of the scene around you.
 
-If you don’t have a sensor, you can run this code with our pcap examples:
+If you don’t have a sensor, you can run the same code with our `plot-xyz-points pcap example`_:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
 
     .. code-tab:: powershell Windows x64
 
@@ -204,16 +332,19 @@ If you don’t have a sensor, you can run this code with our pcap examples:
 
    Point cloud from OS1 sample data (scan 84). Points colored by ``SIGNAL`` value.
 
-For details check the source code of an example :func:`.examples.pcap.pcap_display_xyz_points`
+For visualizers which will stream consecutive frames from sensors or pcaps, check out our utilities
+in `Visualization`_.
 
-Also check out a more powerful way of visualizing ``xyz`` 3d points with :ref:`ex-open3d`
+
+.. _plot-xyz-points sensor example: ./_modules/ouster/sdk/examples/client.html#plot_xyz_points
+.. _plot-xyz-points pcap example: ./_modules/ouster/sdk/examples/pcap.html#pcap_display_xyz_points
 
 
 .. _ex-correlating-2d-and-3d:
 
 
 Working with 2D and 3D Representations Simultaneously
-=====================================================
+-----------------------------------------------------
 
 The direct correlation between 2D and 3D representations in an Ouster sensor provides a powerful
 framework for working with the data. As an easy example, you might decide you want to look at only
@@ -243,36 +374,71 @@ If you have a sensor, you can run this code with an example:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
     .. code-tab:: powershell Windows x64
 
         PS > python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
 
-.. _ex-streaming:
+
+
+.. _ex-record-stream-viz:
+
+
+Recording, Streaming, and Conversion
+====================================
+
+.. contents::
+   :local:
+   :depth: 3
+
+
+Recording Sensor Data
+---------------------
+
+It's easy to record data to a pcap file from a sensor programatically. Let's try it first
+with the following example:
+
+.. tabs::
+
+    .. code-tab:: console Linux/macOS
+
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+
+    .. code-tab:: powershell Windows x64
+
+        PS >  py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
+
+
+This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for 10
+seconds and store the pcap file along with the metadata json file into the current directory.
+
+The source code of an example below:
+
+.. literalinclude:: /../src/ouster/sdk/examples/client.py
+   :start-after: [doc-stag-pcap-record]
+   :end-before: [doc-etag-pcap-record]
+   :emphasize-lines: 15
+   :linenos:
+   :dedent:
+
+Good! The resulting pcap and json files can be used with any examples in the :mod:`.examples.pcap`
+module.
 
 
 Streaming Live Data
-===================
+-------------------
 
 Instead of working with a recorded dataset or a few captured frames of data, let's see if we can get
 a live feed from the sensor:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
 
     .. code-tab:: powershell Windows x64
 
@@ -297,79 +463,11 @@ when we are finished, hence the use of :py:func:`.closing` in the highlighted li
 To exit the visualization, you can use ``ESC``.
 
 
-.. _ex-pcap-record:
-
-
-Recording Sensor Data
-=====================
-
-It's easy to record data to a pcap file from a sensor programatically. Let's try it first
-with the following example:
-
-.. tabs::
-
-    .. code-tab:: console Linux/macOS x64
-
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
-
-    .. code-tab:: powershell Windows x64
-
-        PS >  py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME record-pcap
-
-
-This will capture the :class:`.client.LidarPacket`'s and :class:`.client.ImuPacket`'s data for 10
-seconds and store the pcap file along with the metadata json file into the current directory.
-
-The source code of an example below:
-
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
-   :start-after: [doc-stag-pcap-record]
-   :end-before: [doc-etag-pcap-record]
-   :emphasize-lines: 15
-   :linenos:
-   :dedent:
-
-Good! The resulting pcap and json files can be used with any examples in the :mod:`.examples.pcap`
-module.
-
-
-.. _ex-pcap-live-preview:
-
-
-PCAP Live Data Preview
-=======================
-
-We can easily view the data that was recorded in the previous section. Based on an example from
-:ref:`ex-streaming` above we have a pcap viewer with additional *stagger*/*destagger* handler on key
-`D` and pause on `SPACE` key  (source code: :func:`.examples.pcap.pcap_2d_viewer`). To run it try
-the following command:
-
-.. tabs::
-
-    .. code-tab:: console Linux/macOS x64
-
-        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
-
-    .. code-tab:: powershell Windows x64
-
-        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json 2d-viewer
-
-Or substitute example data with pcap and json that you just recorded.
-
-
 .. _ex-pcap-to-csv:
 
 
-Converting PCAPs to CSV
-=======================
+Converting PCAPs to Other Formats
+---------------------------------
 
 Sometimes we want to get a point cloud (``XYZ`` + other fields) as a ``CSV`` file for further
 analysis with other tools.
@@ -378,13 +476,9 @@ To convert the first ``5`` scans of our sample data from a pcap file, you can tr
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
         $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
-
-    .. code-tab:: console macOS M1
-
-        $ arch --x86_64 python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
 
     .. code-tab:: powershell Windows x64
 
@@ -416,14 +510,77 @@ a ``numpy.ndarray`` and continuing to use it as a 2D image.
 We used ``128`` while restoring 2D image from a CSV file because it's the number of channels of our
 ``OS-1-128.pcap`` sample data recording.
 
-Check :func:`.examples.pcap.pcap_to_csv` documentation for further details.
+Check :func:`.examples.pcap.pcap_to_csv` documentation for further details. For your convenience, we
+have also provided :func:`examples.pcap.pcap_to_las` and :func:`examples.pcap.pcap_to_pcd`.
+
+
+Visualization
+=============
+
+The Ouster Python SDK provides two visualization utilities for user convenience. These are
+introduced breifly below.
+
+.. contents::
+   :local:
+   :depth: 3
+
+.. _ex-ouster-viz:
+
+
+Visualization with Ouster's PyViz
+---------------------------------
+
+Ouster's OpenGL-based visualizer allows for easy visualization from pcaps and sensors on all
+platforms the Ouster SDK supports.
+
+The default Ouster PyViz visualizer view includes two 2D range images atop which can be cycled
+through the available fields, and a 3D point cloud on the bottom. For dual returns sensors, both
+returns are displayed by default.
+
+.. figure:: images/pyviz.png
+    :align: center
+
+    Ouster PyViz visualization of OS1 sample data
+
+The visualizer can be controlled with mouse and keyboard:
+
+.. include:: ../../README.rst
+    :start-line: 136
+    :end-line: 169
+
+To run the visualizer with a sensor:
+
+.. tabs::
+    
+    .. code-tab:: console Linux/macOS
+        
+        $ python3 -m ouster.sdk.examples.viz  --sensor $SENSOR_HOSTNAME
+
+    .. code-tab:: powershell Window x64
+        
+        $ py -3 -m ouster.sdk.examples.viz --sensor $SENSOR_HOSTNAME
+
+This will auto-configure the udp destination of the sensor while leaving the lidar port as
+previously set on the sensor.
+
+To run the visualizer with a pcap:
+
+.. tabs::
+
+    .. code-tab:: console Linux/macOS
+        
+        $ python3 -m ouster.sdk.examples.viz --pcap OS1_128.pcap --meta OS1_2048x10_128.json
+
+    .. code-tab:: powershell Windows x64
+        
+        $ py -3 -m ouster.sdk.examples.open3d --pcap OS1_128.cap --meta OS1_2048x10_128.json
 
 
 .. _ex-open3d:
 
 
 Visualization with Open3d
-=========================
+-------------------------
 
 The `Open3d library`_ contains Python bindings for a variety of tools for working with point cloud
 data. Loading data into Open3d is just a matter of reshaping the numpy representation of a point
@@ -450,14 +607,9 @@ As an example, you can view frame ``84`` from the sample data by running the fol
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
+    .. code-tab:: console Linux/macOS
 
        $ python3 -m ouster.sdk.examples.open3d \
-           --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
-
-    .. code-tab:: console macOS M1
-
-       $ arch --x86_64 python3 -m ouster.sdk.examples.open3d \
            --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
 
     .. code-tab:: powershell Windows x64
@@ -511,37 +663,3 @@ All of the visualizer controls are listed in the table below:
 
 .. _Open3d library: http://www.open3d.org/
 .. _Open3d package: https://pypi.org/project/open3d/
-
-.. _ex-imu:
-
-
-Working with IMU data from the Ouster Sensor
-============================================
-
-IMU data from the Ouster sensor can be read as :py:class:`~.client.ImuPacket`. Let's do something
-easy, like graph the acceleration in z direction over time. Let's look at some code:
-
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
-    :start-after: [doc-stag-imu-z-accel]
-    :end-before: [doc-etag-imu-z-accel]
-    :emphasize-lines: 4-6
-    :linenos:
-
-Like other ``Packets``, we'll want to get them from a :py:class:`.PacketSource`. After getting
-``imu_packet_list``, we obtain the ``sys_ts`` and ``z`` part of ``accel`` and plot them.
-
-If you have a sensor, you can run the code above with the ``plot-imu-z-accel`` example:
-
-.. tabs::
-
-    .. code-tab:: console Linux/macOS x64
-
-       $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
-
-    .. code-tab:: console macOS M1
-
-       $ arch --x86_64 python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel
-
-    .. code-tab:: powershell Windows x64
-
-       PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME plot-imu-z-accel

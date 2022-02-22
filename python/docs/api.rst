@@ -81,6 +81,10 @@ Metadata
    :members:
    :undoc-members:
 
+.. autoclass:: UDPProfileLidar
+   :members:
+   :undoc-members:
+
 ----
 
 
@@ -120,11 +124,6 @@ Module :mod:`ouster.pcap`
 
 .. automodule:: ouster.pcap
 
-.. autofunction:: info
-
-.. autoclass:: PcapInfo
-   :members:
-
 .. autofunction:: record
 
 .. autoclass:: Pcap
@@ -150,6 +149,7 @@ Client Examples :mod:`ouster.sdk.examples.client`
 
 .. automodule:: ouster.sdk.examples.client
    :members:
+
 
 ----
 

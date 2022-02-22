@@ -116,7 +116,6 @@ std::string get_metadata(client& cli, int timeout_sec = 60,
 bool get_config(const std::string& hostname, sensor_config& config,
                 bool active = true);
 
-
 /**
  * Flags for set_config()
  */
@@ -137,5 +136,20 @@ enum config_flags : uint8_t {
  */
 bool set_config(const std::string& hostname, const sensor_config& config,
                 uint8_t config_flags = 0);
+
+/**
+ * Return the port used to listen for lidar UDP data
+ *
+ * @param cli client returned by init_client associated with the connection
+ */
+int get_lidar_port(client& cli);
+
+/**
+ * Return the port used to listen for imu UDP data
+ *
+ * @param cli client returned by init_client associated with the connection
+ */
+int get_imu_port(client& cli);
+
 }  // namespace sensor
 }  // namespace ouster

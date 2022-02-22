@@ -3,20 +3,25 @@ Changelog
 =========
 
 
-[unreleased]
+[20220107]
 ============
 
+* add support for arm64 macos and linux. Releases are now built and tested on these platforms
+* add support for Python 3.10
+* update supported vcpkg tag to 2021.05.12
 * add preliminary cpack and install support. It should be possible to use a pre-built SDK package
   instead of including the SDK in the build tree of your project
 
 ouster_client
 -------------
 * update cmake package version to 0.3.0
+* avoid unnecessary DNS lookup when using numeric addresses with ``init_client()``
+* disable collecting metadata when sensor is in STANDBY mode
 * breaking change: ``set_config()`` will now produce more informative errors by throwing
   ``std::invalid_argument`` with an error message when config parameters fail validation
-* use ``SO_REUSEPORT`` for UDP sockets on non-windows platforms.
+* use ``SO_REUSEPORT`` for UDP sockets on non-windows platforms
 * the set of fields available on ``LidarScan`` is now configurable. See the new ``LidarScan``
-  constructors for details.
+  constructors for details
 * added ``RANGE2``, ``SIGNAL2`` and ``REFLECTIVITY2`` channel fields to support handling data from
   the second return
 * ``ScanBatcher`` will now parse and populate only the channel fields configured on the
@@ -56,6 +61,9 @@ ouster_pcap
 
 ouster_ros
 ----------
+* update ROS package version to 0.3.0
+* allow setting the packet profile in ouster.launch with the ``udp_profile_lidar`` parameter
+* publish additional cloud and image topics for the second return when running in dual returns mode
 * fix ``os_node`` crash on shutdown due to Eigen alignment flag not being propogated by catkin
 * update ROS package version to 0.2.1
 * the ``udp_dest`` parameter to ouster.launch is now optional when connecting to a sensor
@@ -68,6 +76,11 @@ ouster_viz
 python
 ------
 * update ouster-sdk version to 0.3.0
+* improve heuristics for identifying sensor data in pcaps, including new packet formats
+* release builds for wheels on Windows now use the VS 2017 toolchain and runtime (previously 2019)
+* fix potential use-after-free in ``LidarScan.fields``
+* update ouster-sdk version to 0.3.0b1
+* return an error when attempting to initialize ``client.Sensor`` in STANDBY mode
 * check for errors while reading from a ``Sensor`` packet source and waiting for a timeout. This
   should make stopping a process with ``SIGINT`` more reliable
 * add PoC bindings for the ``ouster_viz`` library with a simple example driver. See the

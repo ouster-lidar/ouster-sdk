@@ -1,5 +1,7 @@
 #include "camera.h"
 
+#include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <algorithm>
 #include <chrono>
 #include <cmath>

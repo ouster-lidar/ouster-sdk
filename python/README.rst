@@ -12,7 +12,7 @@ data. The SDK includes APIs for:
 - Reading and buffering sensor UDP data streams reliably
 - Frame-based access to lidar data as numpy datatypes
 - Conversion of raw data to range/signal/near_ir/reflectivity images (de-staggering)
-- Efficiently projecting range measurements to cartesian (X, Y, Z) coordinates
+- Efficient projection of range measurements to Cartesian (X, Y, Z) coordinates
 
 .. _supported platforms:
 
@@ -20,16 +20,18 @@ data. The SDK includes APIs for:
 Supported Platforms
 -------------------
 
-Pre-built binaries are provided on `PyPI`_ for x86_64 platforms including:
+Pre-built binaries are provided on `PyPI`_ for the following platforms:
 
-- Most glibc-based Linux distributions (``manylinux2010_x86_64``)
-- macOS >= 10.13 (``macosx_10_13_x86_64``)
-- Windows 10 (``win_amd64``)
+- Most glibc-based Linux distributions on x86_64 and ARM64 platforms (``manylinux2010_x86_64``,
+  ``manylinux2014_aarch64``)
+- macOS >= 10.13 on x86_64 platforms (``macosx_10_13_x86_64``)
+- macOS >= 11.0 on Apple M1 for Python >= 3.8 (``macosx_11_0_arm64``)
+- Windows 10 on x86_64 platforms (``win_amd64``)
 
 Building from source is supported on:
 
-- Ubuntu 18.04, 20.04, and Debian 10 (x86-64)
-- macOS >= 10.13 (x86-64)
+- Ubuntu 18.04, 20.04, and Debian 10 (x86-64, aarch64)
+- macOS >= 10.13 (x86-64), >= 11.0 (arm64)
 - Windows 10 (x86-64)
 
 .. _PyPI: https://pypi.org/project/ouster-sdk/
@@ -42,7 +44,7 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, use ``
 ``ouster-sdk`` package. See the `quick start`_ section of the documentation for more details and to
 begin working with Ouster data!
 
-If you're running ARM, a non-glibc-based linux distribution, or wish to modify the Ouster Python
+If you're running a non-glibc-based linux distribution, or wish to modify the Ouster Python
 SDK, you will need to build from source. See the `build instructions`_ for requirements needed to
 build from a source distribution or from a clone of the repository.
 
