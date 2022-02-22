@@ -24,21 +24,7 @@ struct PyViz {
     std::unique_ptr<viz::LidarScanViz> scan_viz;
 
     explicit PyViz(const sensor::sensor_info& info) {
-        const auto H = info.format.pixels_per_column;
-        const auto W = info.format.columns_per_frame;
-
-        auto packet_format = sensor::get_format(info);
-        const auto xyz_lut = make_xyz_lut(info);
-
-        // two clouds to optionally display second return
-        point_viz = std::make_unique<viz::PointViz>(
-            std::vector<viz::CloudSetup>{
-                {xyz_lut.direction.data(), xyz_lut.offset.data(), H * W, W,
-                 info.extrinsic.data()},
-                {xyz_lut.direction.data(), xyz_lut.offset.data(), H * W, W,
-                 info.extrinsic.data()}},
-            "Ouster Viz (Python)", false);
-
+        point_viz = std::make_unique<viz::PointViz>("Ouster Viz (Python)");
         scan_viz = std::make_unique<viz::LidarScanViz>(info, *point_viz.get());
     }
 
@@ -50,18 +36,16 @@ struct PyViz {
         py::gil_scoped_release release;
 
         // set signal handler to exit current viz for the duration of drawLoop()
-        thread_local std::atomic_bool& quit = this->point_viz->quit;
-        auto sig = std::signal(SIGINT, [](int) { quit = true; });
+        // thread_local std::atomic_bool& quit = this->point_viz->pimpl->quit;
+        // auto sig = std::signal(SIGINT, [](int) { quit = true; });
 
-        this->point_viz->drawLoop();
+        this->point_viz->run();
 
         // restore python signal handler
-        std::signal(SIGINT, sig);
+        // std::signal(SIGINT, sig);
     }
 
-    bool is_quit() { return this->point_viz->quit; }
-
-    void quit() { this->point_viz->quit = true; }
+    void quit() { this->point_viz->quit(); }
 };
 
 PYBIND11_PLUGIN(_viz) {
@@ -87,10 +71,7 @@ PYBIND11_PLUGIN(_viz) {
              the handler for SIGINT for the duration of the method call.
         )")
         .def("quit", &PyViz::quit,
-             "Shut down the visualizer and break out of the rendering loop.")
-        .def_property_readonly(
-            "is_quit", &PyViz::is_quit,
-            "Return true if ``quit()`` has already been called.");
+             "Shut down the visualizer and break out of the rendering loop.");
 
     m.attr("__version__") = VERSION_INFO;
 

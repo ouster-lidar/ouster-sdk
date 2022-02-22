@@ -4,13 +4,10 @@
  */
 #pragma once
 
-#include <GL/glew.h>
-
-#include <atomic>
 #include <map>
+#include <mutex>
 #include <set>
 #include <vector>
-#include <mutex>
 
 #include "ouster/image_processing.h"
 #include "ouster/lidar_scan.h"
@@ -37,21 +34,33 @@ class LidarScanViz {
     std::map<sensor::ChanField, std::vector<field_proc>> field_procs;
     std::set<sensor::ChanField> active_fields;
     std::vector<sensor::ChanField> available_fields;
-    std::vector<GLfloat> imdata;
+    std::vector<float> imdata1;
+    std::vector<float> imdata2;
+    bool cloud1_enabled;
+    bool cloud2_enabled;
+    float point_size;
     int display_mode;
+    bool display_mode_changed;
     int image_ind1;
     int image_ind2;
+    int size_fraction{6};
     AutoExposure range_ae;
     AutoExposure intensity_ae;
     AutoExposure ambient_ae;
     AutoExposure reflectivity_ae;
     BeamUniformityCorrector ambient_buc;
 
+    std::shared_ptr<Cloud> cloud1;
+    std::shared_ptr<Cloud> cloud2;
+    std::shared_ptr<Image> image1;
+    std::shared_ptr<Image> image2;
+
     PointViz& point_viz;
 
+    bool key_handler(const viz::PointViz::HandlerCtx& wc, int key, int mods);
     void cycle_display_mode();
-    void cycle_field_2d_1();
-    void cycle_field_2d_2();
+    void cycle_field_2d(int& ind);
+    void change_size_fraction(int amount);
 
    public:
     /**

@@ -141,15 +141,6 @@ int main(int argc, char** argv) {
 
     auto packet_format = sensor::get_format(info);
 
-    const auto xyz_lut = ouster::make_xyz_lut(info);
-
-    viz::PointViz point_viz(
-        {viz::CloudSetup{xyz_lut.direction.data(), xyz_lut.offset.data(), H * W,
-                         W, info.extrinsic.data()},
-         viz::CloudSetup{xyz_lut.direction.data(), xyz_lut.offset.data(), H * W,
-                         W, info.extrinsic.data()}},
-        "Ouster Viz", false);
-
     /**
      * Calling lidar_scan_viz->draw() has a small overhead that blocks for
      * about 0.01 to 0.03 seconds, a fraction of a scan.
@@ -157,6 +148,7 @@ int main(int argc, char** argv) {
      * thread, and use the following condition variable to inform the main
      * thread when data is ready to be displayed.
      */
+    viz::PointViz point_viz("Ouster Viz");
     viz::LidarScanViz lidar_scan_viz(info, point_viz);
     std::condition_variable cv;
     std::mutex swap_mtx;
@@ -175,7 +167,7 @@ int main(int argc, char** argv) {
         new uint8_t[packet_format.imu_packet_size + 1]);
 
     std::thread poll([&] {
-        while (!point_viz.quit) {
+        while (point_viz.running()) {
             // Poll the client for data and add to our lidar scan
             sensor::client_state st = sensor::poll_client(*cli);
             if (st & sensor::client_state::CLIENT_ERROR) {
@@ -197,25 +189,26 @@ int main(int argc, char** argv) {
                 sensor::read_imu_packet(*cli, imu_buf.get(), packet_format);
             }
             if (st & sensor::EXIT) {
-                point_viz.quit = true;
+                point_viz.quit();
                 break;
             }
         }
     });
 
     std::thread update_draw([&]() {
-        while (!point_viz.quit) {
+        while (point_viz.running()) {
             std::unique_lock<std::mutex> lk2(swap_mtx);
-            cv.wait(lk2, [&]() { return lidar_scan_ready || point_viz.quit; });
+            cv.wait(lk2,
+                    [&]() { return lidar_scan_ready || !point_viz.running(); });
 
-            if (point_viz.quit) break;
+            if (!point_viz.running()) break;
 
             lidar_scan_ready = false;
             lidar_scan_viz.draw(*ls_read);
         }
     });
 
-    point_viz.drawLoop();
+    point_viz.run();
     cv.notify_one();  // wake up update_draw thread for exit
     poll.join();
     update_draw.join();

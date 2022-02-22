@@ -77,6 +77,11 @@ class CMakeBuild(build_ext):
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
 
+        # specify additional cmake args
+        extra_args = env.get('CMAKE_ARGS')
+        if extra_args:
+            cmake_args += [extra_args]
+
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args,
@@ -119,7 +124,7 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.3.0',
+    version='0.3.1.dev0',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
