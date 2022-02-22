@@ -31,6 +31,8 @@ class BufferedUDPSource {
     // client handle
     std::mutex cli_mtx_;
     std::shared_ptr<ouster::sensor::client> cli_;
+    uint32_t lidar_port_;
+    uint32_t imu_port_;
 
     // protect read/write_ind_ and stop_
     std::mutex cv_mtx_;
@@ -140,6 +142,20 @@ class BufferedUDPSource {
      * @param pf the packet format associated with the UDP stream
      */
     void produce(const ouster::sensor::packet_format& pf);
+
+    /**
+     * Return the port used to listen for lidar UDP data
+     *
+     * @return the lidar UDP port or 0 if shut down
+     */
+    int get_lidar_port();
+
+    /**
+     * Return the port used to listen for imu UDP data
+     *
+     * @return the lidar UDP port or 0 if shut down
+     */
+    int get_imu_port();
 };
 
 }  // namespace impl

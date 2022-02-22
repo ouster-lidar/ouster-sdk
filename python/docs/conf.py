@@ -25,7 +25,7 @@ author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
 version = '0.3'
-release = '0.3.0b1'
+release = '0.3.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -67,9 +67,9 @@ html_theme_options = {
     # 'vcs_pageview_mode': '',
     # 'style_nav_header_background': 'rgb(29, 29, 29)',
     # Toc options
-    # 'collapse_navigation': True,
+    'collapse_navigation': False,
     # 'sticky_navigation': True,
-    'navigation_depth': 2,
+    'navigation_depth': 3,
     'includehidden': True,
     # 'titles_only': False
 }
@@ -120,7 +120,7 @@ napoleon_numpy_docstring = False
 # napoleon_use_param = False
 
 # ----- Todos Configs ------
-todo_include_todos = True
+todo_include_todos = False
 todo_link_only = True
 todo_emit_warnings = True
 

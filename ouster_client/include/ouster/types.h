@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <array>
 #include <cstdint>
 #include <map>
@@ -400,6 +400,8 @@ enum ChanField {
     REFLECTIVITY2 = 6,
     AMBIENT = 7,  // deprecated
     NEAR_IR = 7,
+    FLAGS = 8,
+    FLAGS2 = 9,
     CHAN_FIELD_MAX = 64,
 };
 
@@ -498,7 +500,7 @@ class packet_format final {
      * Copy the specified channel field out of a packet measurement block.
      *
      * T should be an unsigned integer type large enough to store values of the
-     * specified field.
+     * specified field. Otherwise, data will be truncated.
      *
      * @param col_buf a measurement block pointer returned by `nth_col()`
      * @param field the channel field to copy

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1.0)
 
 # ==== Project Name ====
 project(ouster_client VERSION 0.3.0)
-set(ouster_client_VERSION_SUFFIX ".dev2")
+set(ouster_client_VERSION_SUFFIX "")
 
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)
@@ -30,7 +30,7 @@ add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lid
 target_link_libraries(ouster_client
   PUBLIC Eigen3::Eigen $<BUILD_INTERFACE:ouster_build>
   PRIVATE jsoncpp_lib)
-target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32 PRIVATE EIGEN_MPL2_ONLY)
+target_compile_definitions(ouster_client PRIVATE EIGEN_MPL2_ONLY)
 add_library(OusterSDK::ouster_client ALIAS ouster_client)
 
 if(WIN32)

@@ -69,10 +69,10 @@ for dependencies. Follow the official documentation to set up your build environ
   <https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019>`_
 * `Visual Studio CPP Support
   <https://docs.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=vs-2019>`_
-* `Vcpkg, at tag "2020.11-1" installed and integrated with Visual Studio
+* `Vcpkg, at tag "2021.05.12" installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-**Note** You'll need to run ``git checkout 2020.11-1`` in the vcpkg directory before bootstrapping
+**Note** You'll need to run ``git checkout 2021.05.12`` in the vcpkg directory before bootstrapping
 to use the correct versions of the dependencies. Building may fail unexpectedly if you skip this
 step.
 
@@ -141,13 +141,13 @@ keyboard:
 Keyboard controls:
 
     ============= ============================================
-        key       what it does
+        Key       What it does
     ============= ============================================
     ``p``         Increase point size
     ``o``         Decrease point size
     ``m``         Cycle point cloud coloring mode
-    ``v``         Toggle range cycling
-    ``n``         Toggle display near-IR image from the sensor
+    ``b``         Cycle top 2D image
+    ``n``         Cycle bottom 2D image
     ``shift + r`` Reset camera
     ``e``         Change size of displayed 2D images
     ``;``         Increase spacing in range markers
@@ -157,7 +157,8 @@ Keyboard controls:
     ``s``         Camera pitch down
     ``a``         Camera yaw left
     ``d``         Camera yaw right
-    ``1``         Toggle point cloud visibility
+    ``1``         Toggle first return point cloud visibility
+    ``2``         Toggle second return point cloud visibility
     ``0``         Toggle orthographic camera
     ``=``         Zoom in
     ``-``         Zoom out
@@ -182,8 +183,7 @@ Building
 
 The build dependencies include those of the sample code::
 
-    sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev
+    sudo apt install build-essential cmake libeigen3-dev libjsoncpp-dev
 
 Additionally, you should install the ros dependencies::
 

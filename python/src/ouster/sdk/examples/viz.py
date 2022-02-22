@@ -9,10 +9,8 @@ from ouster.sdk._viz import PyViz
 def main() -> None:
     descr = """Visualize pcap or sensor data using simple viz bindings."""
 
-    epilog = """When reading data from a sensor, this will currently not
-    configure the sensor or query it for the port to listen on. You will need to
-    set the sensor port and distination settings separately.
-    """
+    epilog = """When reading data from a sensor, this will autoconfigure the udp
+        destination unless -x is used."""
 
     parser = argparse.ArgumentParser(
         description=descr, epilog=epilog)
@@ -23,15 +21,27 @@ def main() -> None:
     group.add_argument('--pcap', metavar='PATH', help='path to pcap file')
 
     parser.add_argument('--meta', metavar='PATH', help='path to metadata json')
-    parser.add_argument('--lidar-port', type=int, default=7502)
+    parser.add_argument('--lidar-port', type=int, help='lidar port for sensor')
+    parser.add_argument('-x', '--no-auto-dest', help="""do not auto configure udp
+        destination', action='store_true""")
 
     args = parser.parse_args()
 
     if args.sensor:
+        hostname = args.sensor
+        if args.lidar_port or (not args.no_auto_dest):
+            config = client.SensorConfig()
+            if args.lidar_port:
+                config.udp_port_lidar = args.lidar_port
+            print("Configuring sensor...")
+            client.set_config(hostname, config, udp_dest_auto= (not args.no_auto_dest))
+        config = client.get_config(hostname)
+
         print("Initializing...")
-        scans = client.Scans.stream(args.sensor,
-                                    args.lidar_port,
+        scans = client.Scans.stream(hostname,
+                                    config.udp_port_lidar or 7502,
                                     complete=False)
+
     elif args.pcap:
         import ouster.pcap as pcap
 
@@ -44,8 +54,9 @@ def main() -> None:
 
         with open(metadata_path) as json:
             info = client.SensorInfo(json.read())
+
         scans = client.Scans(
-            pcap.Pcap(args.pcap, info, rate=1.0, lidar_port=args.lidar_port))
+            pcap.Pcap(args.pcap, info, rate=1.0))
 
     viz = PyViz(scans.metadata)
 
