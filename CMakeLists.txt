@@ -81,6 +81,7 @@ add_custom_command(
     COMMAND xargs rm -vf < install_manifest.txt || echo Nothing in
             install_manifest.txt to be uninstalled!
 )
+
 # ==== Packaging ====
 set(CPACK_PACKAGE_CONTACT "support@ouster.io")
 set(CPACK_PACKAGE_VENDOR "Ouster")
