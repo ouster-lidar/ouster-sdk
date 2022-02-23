@@ -18,11 +18,11 @@ namespace ouster_ros {
 struct EIGEN_ALIGN16 Point {
     PCL_ADD_POINT4D;
     float intensity;
+    uint32_t range;
     uint32_t t;
     uint16_t reflectivity;
-    uint8_t ring;
     uint16_t ambient;
-    uint32_t range;
+    uint8_t ring;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 }  // namespace ouster_ros
@@ -34,10 +34,10 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
     (float, z, z)
     (float, intensity, intensity)
     // use std::uint32_t to avoid conflicting with pcl::uint32_t
+    (std::uint32_t, range, range)
     (std::uint32_t, t, t)
     (std::uint16_t, reflectivity, reflectivity)
-    (std::uint8_t, ring, ring)
     (std::uint16_t, ambient, ambient)
-    (std::uint32_t, range, range)
+    (std::uint8_t, ring, ring)
 )
 // clang-format on
