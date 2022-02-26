@@ -33,7 +33,7 @@ add_service_files(FILES OSConfigSrv.srv)
 generate_messages(DEPENDENCIES std_msgs sensor_msgs geometry_msgs)
 
 set(_ouster_ros_INCLUDE_DIRS
-  "include;../ouster_client/include;../ouster_client/include/optional-lite")
+  "include/;../ouster_client/include/;../ouster_client/include/optional-lite/")
 
 catkin_package(
   INCLUDE_DIRS
@@ -94,6 +94,6 @@ install(
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(
   DIRECTORY ${_ouster_ros_INCLUDE_DIRS}
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
+  DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})
 install(FILES ../LICENSE ../LICENSE-bin ouster.launch viz.rviz
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
