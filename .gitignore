@@ -5,3 +5,4 @@ python/.tox/
 python/**/*.egg-info/
 python/**/*.so
 python/**/*.dll
+.vscode/**
