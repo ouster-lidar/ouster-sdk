@@ -120,19 +120,49 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
 
     auto points = ouster::cartesian(range, xyz_lut);
 
+    // for (auto u = 0; u < ls.h; u++) {
+    //     for (auto v = 0; v < ls.w; v++) {
+    //         const auto xyz = points.row(u * ls.w + v);
+    //         const auto ts = (ls.header(v).timestamp - scan_ts).count();
+    //         cloud(v, u) = ouster_ros::Point{
+    //             {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
+    //               static_cast<float>(xyz(2)), 1.0f}},
+    //             static_cast<float>(signal(u, v)),
+    //             static_cast<uint32_t>(ts),
+    //             static_cast<uint16_t>(reflectivity(u, v)),
+    //             static_cast<uint8_t>(u),
+    //             static_cast<uint16_t>(near_ir(u, v)),
+    //             static_cast<uint32_t>(range(u, v))};
+    //     }
+    // }
+    const double limit_x = 0.25;
+    const double limit_y = 0.25;
+    // const double limit_z = 0.16;
+    const double limit_z = 50.0;
+    float x, y, z;
     for (auto u = 0; u < ls.h; u++) {
         for (auto v = 0; v < ls.w; v++) {
             const auto xyz = points.row(u * ls.w + v);
             const auto ts = (ls.header(v).timestamp - scan_ts).count();
-            cloud(v, u) = ouster_ros::Point{
-                {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
-                  static_cast<float>(xyz(2)), 1.0f}},
-                static_cast<float>(signal(u, v)),
-                static_cast<uint32_t>(ts),
-                static_cast<uint16_t>(reflectivity(u, v)),
-                static_cast<uint8_t>(u),
-                static_cast<uint16_t>(near_ir(u, v)),
-                static_cast<uint32_t>(range(u, v))};
+            // filter
+            x = xyz(0);
+            y = xyz(1);
+            z = xyz(2);
+            if (((x > -limit_x) && (x < limit_x)) &&
+                ((y > -limit_y) && (y < limit_y)) &&
+                ((z > -limit_z) && (z < limit_z))) {
+                x = 99999.0;
+                y = 99999.0;
+                z = 99999.0;
+            }
+            cloud(v, u) =
+                ouster_ros::Point{{{x, y, z, 1.0f}},
+                                  static_cast<float>(signal(u, v)),
+                                  static_cast<uint32_t>(ts),
+                                  static_cast<uint16_t>(reflectivity(u, v)),
+                                  static_cast<uint8_t>(u),
+                                  static_cast<uint16_t>(near_ir(u, v)),
+                                  static_cast<uint32_t>(range(u, v))};
         }
     }
 }
@@ -143,6 +173,7 @@ sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
     pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
     msg.header.stamp.fromNSec(timestamp.count());
+    msg.header.stamp = ros::Time::now();
     return msg;
 }
 

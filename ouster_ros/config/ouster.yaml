@@ -1,0 +1,18 @@
+  # hostname or IP in dotted decimal form of the sensor
+  sensor_hostname: 192.168.3.64
+  # hostname or IP where the sensor will send data packets  
+  udp_dest: 192.168.3.65        
+  # port to which the sensor should send lidar data  
+  lidar_port: 7202
+  # port to which the sensor should send imu data
+  imu_port: 7203
+  # do not connect to a sensor; expect /os_node/{lidar,imu}_packets from replay                  
+  replay: true
+  # resolution and rate: either 512x10, 512x20, 1024x10, 1024x20, or 2048x10
+  lidar_mode: 512x10              
+  # method used to timestamp measurements: TIME_FROM_INTERNAL_OSC, TIME_FROM_SYNC_PULSE_IN, TIME_FROM_PTP_1588
+  timestamp_mode: TIME_FROM_INTERNAL_OSC
+  # override default metadata file for replays
+  metadata: /home/pol/repos/drivers_ws/src/ouster_example/ouster_ros/metadata/os0_64.json
+  # filter points close to sensor origin: NONE, BOX, ELLIPSOID    
+  filter_mode: NONE           

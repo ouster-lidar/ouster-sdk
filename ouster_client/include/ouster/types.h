@@ -46,6 +46,14 @@ extern const mat4d default_lidar_to_sensor_transform;
  * Constants used for configuration. Refer to the sensor documentation for the
  * meaning of each option.
  */
+enum filter_mode
+{
+    MODE_NONE = 0,
+    MODE_BOX,
+    MODE_ELLIPSOID
+
+};
+
 enum lidar_mode {
     MODE_UNSPEC = 0,
     MODE_512x10,
@@ -96,6 +104,7 @@ struct sensor_config {
     // lidar_mode get changed to CapsCase
     optional<timestamp_mode> ts_mode;
     optional<lidar_mode> ld_mode;
+    optional<filter_mode> ft_mode;
     optional<OperatingMode> operating_mode;
     optional<MultipurposeIOMode> multipurpose_io_mode;
 
@@ -184,6 +193,13 @@ std::string to_string(lidar_mode mode);
  * @return lidar mode corresponding to the string, or 0 on error
  */
 lidar_mode lidar_mode_of_string(const std::string& s);
+/**
+ * Get filter mode from string.
+ *
+ * @param string
+ * @return filter mode corresponding to the string, or 0 on error
+ */
+filter_mode filter_mode_of_string(const std::string& s);
 
 /**
  * Get number of columns in a scan for a lidar mode.

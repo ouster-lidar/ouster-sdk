@@ -72,6 +72,7 @@ int main(int argc, char** argv) {
 
     ouster::LidarScan ls{W, H, udp_profile_lidar};
     Cloud cloud{W, H};
+    Cloud cloud_filtered;
 
     ouster::ScanBatcher batch(W, pf);
 
@@ -86,6 +87,7 @@ int main(int argc, char** argv) {
                     scan_to_cloud(xyz_lut, h->timestamp, ls, cloud, i);
                     lidar_pubs[i].publish(ouster_ros::cloud_to_cloud_msg(
                         cloud, h->timestamp, sensor_frame));
+
                 }
             }
         }
