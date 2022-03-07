@@ -1,0 +1,43 @@
+<launch>
+
+  <arg name="use_rviz" value="false" />
+  <param name="use_sim_time" value="true" />
+
+  <node pkg="tf" type="static_transform_publisher" name="os2imu" respawn="true" args="0 0 -0.062 0 0 0 /os_sensor /base_link 10 " />
+
+  <arg name="viz"       default="false" doc="whether to run a simple visualizer" />
+  <arg name="image"     default="true"  doc="publish range/intensity/ambient image topic" />
+  <arg name="tf_prefix" default=""      doc="namespace for tf transforms" />
+
+  
+  <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" clear_params="true" required="true">
+    <rosparam command="load" file="$(find ouster_ros)/config/ouster.yaml" />
+  </node>
+  
+  <node pkg="ouster_ros" type="os_cloud_node" name="os_cloud_node" output="screen" clear_params="true" required="true">
+    <rosparam command="load" file="$(find ouster_ros)/config/ouster.yaml" />
+    <remap from="~/os_config"     to="/os_node/os_config" />
+    <remap from="~/lidar_packets" to="/os_node/lidar_packets" />
+    <remap from="~/imu_packets"   to="/os_node/imu_packets" />
+    <param name="~/tf_prefix"     value="$(arg tf_prefix)" />
+  </node>
+
+  <node if="$(arg viz)" pkg="ouster_ros" name="viz_node" type="viz_node" output="screen" clear_params="true" required="true">
+    <remap from="~/os_config"     to="/os_node/os_config" />
+    <remap from="~/lidar_packets" to="/os_node/lidar_packets" />
+  </node>
+
+  <node if="$(arg image)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" clear_params="true" required="true">
+    <remap from="~/os_config" to="/os_node/os_config" />
+    <remap from="~/points"    to="/os_cloud_node/points" />
+  </node>
+
+  <!-- for compatibility with < 1.13 rosbags -->
+  <node pkg="topic_tools" name="relay_lidar" type="relay" args="/os1_node/lidar_packets /os_node/lidar_packets" />
+  <node pkg="topic_tools" name="relay_imu" type="relay" args="/os1_node/imu_packets /os_node/imu_packets" />
+
+  <group if="$(arg use_rviz)">
+    <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find ouster_ros)/rviz/ouster.rviz" />
+  </group>
+
+</launch>
