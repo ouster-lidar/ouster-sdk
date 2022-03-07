@@ -37,11 +37,6 @@ extern const Table<lidar_mode, const char*, 6> lidar_mode_strings{
      {MODE_1024x20, "1024x20"},
      {MODE_2048x10, "2048x10"}}};
 
-extern const Table<filter_mode, const char*, 6> filter_mode_strings{
-    {{MODE_NONE, "NONE"},
-     {MODE_BOX, "BOX"},
-     {MODE_ELLIPSOID, "ELLIPSOID"}}};
-
 extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings{
     {{TIME_FROM_UNSPEC, "UNKNOWN"},
      {TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
@@ -327,10 +322,6 @@ std::string to_string(timestamp_mode mode) {
     return res ? res.value() : "UNKNOWN";
 }
 
-filter_mode filter_mode_of_string(const std::string& s) {
-    auto res = rlookup(impl::filter_mode_strings, s.c_str());
-    return res ? res.value() : filter_mode::MODE_NONE;
-}
 
 timestamp_mode timestamp_mode_of_string(const std::string& s) {
     auto res = rlookup(impl::timestamp_mode_strings, s.c_str());
@@ -417,9 +408,6 @@ static sensor_config parse_config(const Json::Value& root) {
             timestamp_mode_of_string(root["timestamp_mode"].asString());
     if (!root["lidar_mode"].empty())
         config.ld_mode = lidar_mode_of_string(root["lidar_mode"].asString());
-    
-    if (!root["filter_mode"].empty())
-        config.ft_mode = filter_mode_of_string(root["filter_mode"].asString());
 
     if (!root["azimuth_window"].empty())
         config.azimuth_window =

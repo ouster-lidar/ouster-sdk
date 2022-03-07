@@ -131,7 +131,6 @@ int main(int argc, char** argv) {
     auto replay = nh.param("replay", false);
     auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
     auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
-    auto filter_mode_arg = nh.param("filter_mode", std::string{});
 
     std::string udp_profile_lidar_arg;
     nh.param<std::string>("udp_profile_lidar", udp_profile_lidar_arg, "");
@@ -162,20 +161,6 @@ int main(int argc, char** argv) {
             return EXIT_FAILURE;
         }
     }
-
-    // // set filter mode from param
-    // sensor::filter_mode filter_mode = sensor::MODE_NONE;
-    // if (filter_mode_arg.size()) {
-    //     filter_mode = sensor::filter_mode_of_string(filter_mode_arg);
-    //     // if (filter_mode == sensor::MODE_NONE)
-    //         // ROS_WARN("Lidar filtering set to NONE.");
-    //         ROS_WARN_STREAM("FILTER MODE: " << filter_mode);
-    //         // ROS_WARN_STRAM("FILTER MODE: ", << filter_mode_arg.c_str());
-    //     // if (!filter_mode) {
-    //         // ROS_ERROR("FILTER MODE: %s", filter_mode_arg.c_str());
-    //         // return EXIT_FAILURE;
-    //     // }
-    // }
 
     // set timestamp mode from param
     sensor::timestamp_mode timestamp_mode = sensor::TIME_FROM_UNSPEC;

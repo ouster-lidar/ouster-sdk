@@ -26,6 +26,30 @@ namespace sensor = ouster::sensor;
 using Cloud = pcl::PointCloud<Point>;
 using ns = std::chrono::nanoseconds;
 
+class Filter {
+   public:
+    Filter() {
+        val_min[0] = -1000;
+        val_min[1] = -1000;
+        val_min[2] = -1000;
+        val_max[0] = 1000;
+        val_max[1] = 1000;
+        val_max[2] = 1000;
+    }
+    Filter(float min_x, float min_y, float min_z, float max_x, float max_y,
+           float max_z) {
+        val_min[0] = min_x;
+        val_min[1] = min_y;
+        val_min[2] = min_z;
+        val_max[0] = max_x;
+        val_max[1] = max_y;
+        val_max[2] = max_z;
+    }
+    bool enabled = false;
+    float val_min[3];  // x,y,z
+    float val_max[3];  // x,y,z
+};
+
 /**
  * Read an imu packet into a ROS message. Blocks for up to a second if no data
  * is available.
@@ -63,10 +87,12 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
  * @param ls input lidar data
  * @param return_index index of return desired starting at 0
  * @param cloud output pcl pointcloud to populate
+ * @param filter type of filter to use
  */
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
-                   ouster_ros::Cloud& cloud, int return_index = 0);
+                   ouster_ros::Cloud& cloud, const ouster_ros::Filter& filter,
+                   int return_index = 0);
 
 /**
  * Serialize a PCL point cloud to a ROS message

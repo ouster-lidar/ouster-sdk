@@ -52,7 +52,8 @@ AutoExposure::AutoExposure(double lo_percentile, double hi_percentile,
       hi_percentile(hi_percentile),
       ae_update_every(update_every) {}
 
-void AutoExposure::operator()(Eigen::Ref<img_t<double>> image, bool update_state) {
+void AutoExposure::operator()(Eigen::Ref<img_t<double>> image,
+                              bool update_state) {
     Eigen::Map<Eigen::ArrayXd> key_eigen(image.data(), image.size());
 
     // int a;
