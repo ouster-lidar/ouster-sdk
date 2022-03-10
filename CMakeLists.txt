@@ -91,4 +91,3 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "cmake, libjsoncpp-dev, libtclap-dev, libeigen3
   libglfw3-dev, libglew-dev")
 
 include(CPack)
-
