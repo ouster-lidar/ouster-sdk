@@ -2,14 +2,19 @@
 
 #include <Eigen/Core>
 
+#include "ouster/point_viz.h"
+
 namespace ouster {
 namespace viz {
 namespace impl {
 
+inline double window_aspect(const WindowCtx& ctx) {
+    return ctx.window_width / static_cast<double>(ctx.window_height);
+}
+
 struct CameraData {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    double aspect;
     Eigen::Matrix4d proj;
     Eigen::Matrix4d view;
     Eigen::Matrix4d target;

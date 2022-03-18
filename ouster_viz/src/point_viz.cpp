@@ -28,6 +28,8 @@ static_assert(std::is_same<GLfloat, float>::value,
 namespace ouster {
 namespace viz {
 
+namespace {
+
 /*
  * Helper for addable / removable drawable objects
  */
@@ -66,11 +68,11 @@ class Indexed {
         }
     }
 
-    void draw(const impl::CameraData& camera) {
+    void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
         for (auto& f : front) {
             if (!f.state) continue;                   // skip deleted
             if (!f.gl) f.gl.reset(new GL{*f.state});  // init GL for added
-            f.gl->draw(camera, *f.state);
+            f.gl->draw(ctx, camera, *f.state);
         }
     }
 
@@ -93,6 +95,8 @@ class Indexed {
         }
     }
 };
+
+}  // namespace
 
 /*
  * PointViz implementation
@@ -118,25 +122,26 @@ struct PointViz::Impl {
     template <typename T>
     using Handlers = std::vector<std::function<T>>;
 
-    Handlers<bool(const HandlerCtx&, int, int)> key_handlers;
-    Handlers<bool(const HandlerCtx&, int, int)> mouse_button_handlers;
-    Handlers<bool(const HandlerCtx&, double, double)> scroll_handlers;
-    Handlers<bool(const HandlerCtx&, double, double)> mouse_pos_handlers;
+    Handlers<bool(const WindowCtx&, int, int)> key_handlers;
+    Handlers<bool(const WindowCtx&, int, int)> mouse_button_handlers;
+    Handlers<bool(const WindowCtx&, double, double)> scroll_handlers;
+    Handlers<bool(const WindowCtx&, double, double)> mouse_pos_handlers;
 
-    Impl(const std::string& name) : glfw{name} {}
+    Impl(const std::string& name, bool fix_aspect, int window_width,
+         int window_height)
+        : glfw{name, fix_aspect, window_width, window_height} {}
 };
 
 /*
  * PointViz interface
  */
 
-PointViz::PointViz(const std::string& name) {
-    // TODO this is still all messed up:
-    // - impl creates opengl context via glfw
-    // - impl instantiates GLRings, which generates some buffers
-    // - vao is created afterwards
-    // - does the order between generating buffers and vao binding matter?
-    pimpl = std::unique_ptr<Impl>{new Impl{name}};
+PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
+                   int window_height) {
+    // TODO initialization (and opengl API usage) still pretty messed up due to
+    // single shared vao
+    pimpl = std::unique_ptr<Impl>{
+        new Impl{name, fix_aspect, window_width, window_height}};
 
     // top-level gl state for point viz
     glfwMakeContextCurrent(pimpl->glfw.window);
@@ -154,21 +159,21 @@ PointViz::PointViz(const std::string& name) {
     impl::GLCuboid::initialize();
 
     // add user-setable input handlers
-    pimpl->glfw.key_handler = [this](const HandlerCtx& ctx, int key, int mods) {
+    pimpl->glfw.key_handler = [this](const WindowCtx& ctx, int key, int mods) {
         for (auto& f : pimpl->key_handlers)
             if (!f(ctx, key, mods)) break;
     };
-    pimpl->glfw.mouse_button_handler = [this](const HandlerCtx& ctx, int button,
+    pimpl->glfw.mouse_button_handler = [this](const WindowCtx& ctx, int button,
                                               int mods) {
         for (auto& f : pimpl->mouse_button_handlers)
             if (!f(ctx, button, mods)) break;
     };
-    pimpl->glfw.scroll_handler = [this](const HandlerCtx& ctx, double x,
+    pimpl->glfw.scroll_handler = [this](const WindowCtx& ctx, double x,
                                         double y) {
         for (auto& f : pimpl->scroll_handlers)
             if (!f(ctx, x, y)) break;
     };
-    pimpl->glfw.mouse_pos_handler = [this](const HandlerCtx& ctx, double x,
+    pimpl->glfw.mouse_pos_handler = [this](const WindowCtx& ctx, double x,
                                            double y) {
         for (auto& f : pimpl->mouse_pos_handlers)
             if (!f(ctx, x, y)) break;
@@ -187,7 +192,10 @@ PointViz::PointViz(const std::string& name) {
 PointViz::~PointViz() { glDeleteVertexArrays(1, &pimpl->vao); }
 
 void PointViz::run() {
+    pimpl->glfw.running(true);
+    pimpl->glfw.visible(true);
     while (running()) run_once();
+    pimpl->glfw.visible(false);
 }
 
 void PointViz::run_once() {
@@ -196,9 +204,11 @@ void PointViz::run_once() {
     glfwPollEvents();
 }
 
-void PointViz::quit() { pimpl->glfw.quit(); }
-
 bool PointViz::running() { return pimpl->glfw.running(); }
+
+void PointViz::running(bool state) { pimpl->glfw.running(state); }
+
+void PointViz::visible(bool state) { pimpl->glfw.visible(state); }
 
 bool PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl->update_mx};
@@ -227,34 +237,33 @@ void PointViz::draw() {
     // draw images
     {
         std::lock_guard<std::mutex> guard{pimpl->update_mx};
+        const auto& ctx = pimpl->glfw.window_context;
 
         // calculate camera matrices
-        double aspect =
-            pimpl->glfw.window_context.window_width /
-            static_cast<double>(pimpl->glfw.window_context.window_height);
-        auto camera_data = pimpl->camera_front.matrices(aspect);
+        auto camera_data =
+            pimpl->camera_front.matrices(impl::window_aspect(ctx));
 
         // draw image
         impl::GLImage::beginDraw();
-        pimpl->images.draw(camera_data);
+        pimpl->images.draw(ctx, camera_data);
         impl::GLImage::endDraw();
 
         // draw clouds
         impl::GLCloud::beginDraw();
-        pimpl->clouds.draw(camera_data);
+        pimpl->clouds.draw(ctx, camera_data);
         impl::GLCloud::endDraw();
 
         // draw rings
-        pimpl->rings.draw(camera_data);
+        pimpl->rings.draw(ctx, camera_data);
 
         // draw cuboids
         impl::GLCuboid::beginDraw();
-        pimpl->cuboids.draw(camera_data);
+        pimpl->cuboids.draw(ctx, camera_data);
         impl::GLCuboid::endDraw();
 
         // draw labels
         impl::GLLabel3d::beginDraw();
-        pimpl->labels.draw(camera_data);
+        pimpl->labels.draw(ctx, camera_data);
         impl::GLLabel3d::endDraw();
 
         // mark front buffers no longer dirty
@@ -268,23 +277,23 @@ void PointViz::draw() {
  * Input handling
  */
 void PointViz::push_key_handler(
-    std::function<bool(const HandlerCtx&, int, int)>&& f) {
+    std::function<bool(const WindowCtx&, int, int)>&& f) {
     // TODO: not thread safe: called in glfwPollEvents()
     pimpl->key_handlers.push_back(std::move(f));
 }
 
 void PointViz::push_mouse_button_handler(
-    std::function<bool(const HandlerCtx&, int, int)>&& f) {
+    std::function<bool(const WindowCtx&, int, int)>&& f) {
     pimpl->mouse_button_handlers.push_back(std::move(f));
 }
 
 void PointViz::push_scroll_handler(
-    std::function<bool(const HandlerCtx&, double, double)>&& f) {
+    std::function<bool(const WindowCtx&, double, double)>&& f) {
     pimpl->scroll_handlers.push_back(std::move(f));
 }
 
 void PointViz::push_mouse_pos_handler(
-    std::function<bool(const HandlerCtx&, double, double)>&& f) {
+    std::function<bool(const WindowCtx&, double, double)>&& f) {
     pimpl->mouse_pos_handlers.push_back(std::move(f));
 }
 
@@ -417,7 +426,7 @@ void Cloud::set_point_size(float size) {
     point_size_changed_ = true;
 }
 
-void Cloud::set_map_pose(const mat4d& pose) {
+void Cloud::set_pose(const mat4d& pose) {
     map_pose_ = pose;
     map_pose_changed_ = true;
 }
@@ -502,13 +511,13 @@ Label3d::Label3d(const vec3d& position, const std::string& text) {
 }
 
 void Label3d::clear() {
-    pose_changed_ = false;
+    pos_changed_ = false;
     text_changed_ = false;
 }
 
 void Label3d::set_position(const vec3d& position) {
     position_ = position;
-    pose_changed_ = true;
+    pos_changed_ = true;
 }
 
 void Label3d::set_text(const std::string& text) {
@@ -516,77 +525,79 @@ void Label3d::set_text(const std::string& text) {
     text_changed_ = true;
 }
 
-void TargetDisplay::update_ring_size(int n) {
-    ring_size_ = std::max(-2, std::min(2, ring_size_ + n));
-}
+void TargetDisplay::enable_rings(bool state) { rings_enabled_ = state; }
 
-void add_default_controls(viz::PointViz& viz, std::mutex& mx) {
+void TargetDisplay::set_ring_size(int n) { ring_size_ = n; }
+
+void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
     bool orthographic = false;
 
-    viz.push_key_handler([&, orthographic](const PointViz::HandlerCtx&, int key,
-                                           int mods) mutable {
-        std::lock_guard<std::mutex> lock{mx};
-        if (mods == 0) {
-            switch (key) {
-                case GLFW_KEY_W:
-                    viz.camera().pitch(5);
-                    viz.update();
-                    break;
-                case GLFW_KEY_S:
-                    viz.camera().pitch(-5);
-                    viz.update();
-                    break;
-                case GLFW_KEY_A:
-                    viz.camera().yaw(5);
-                    viz.update();
-                    break;
-                case GLFW_KEY_D:
-                    viz.camera().yaw(-5);
-                    viz.update();
-                    break;
-                case GLFW_KEY_EQUAL:
-                    viz.camera().dolly(5);
-                    viz.update();
-                    break;
-                case GLFW_KEY_MINUS:
-                    viz.camera().dolly(-5);
-                    viz.update();
-                    break;
-                case GLFW_KEY_0:
-                    orthographic = !orthographic;
-                    viz.camera().set_orthographic(orthographic);
-                    viz.update();
-                    break;
-                case GLFW_KEY_ESCAPE:
-                    viz.quit();
-                    break;
-                default:
-                    break;
+    viz.push_key_handler(
+        [=, &viz](const WindowCtx&, int key, int mods) mutable {
+            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
+                           : std::unique_lock<std::mutex>{};
+            if (mods == 0) {
+                switch (key) {
+                    case GLFW_KEY_W:
+                        viz.camera().pitch(5);
+                        viz.update();
+                        break;
+                    case GLFW_KEY_S:
+                        viz.camera().pitch(-5);
+                        viz.update();
+                        break;
+                    case GLFW_KEY_A:
+                        viz.camera().yaw(5);
+                        viz.update();
+                        break;
+                    case GLFW_KEY_D:
+                        viz.camera().yaw(-5);
+                        viz.update();
+                        break;
+                    case GLFW_KEY_EQUAL:
+                        viz.camera().dolly(5);
+                        viz.update();
+                        break;
+                    case GLFW_KEY_MINUS:
+                        viz.camera().dolly(-5);
+                        viz.update();
+                        break;
+                    case GLFW_KEY_0:
+                        orthographic = !orthographic;
+                        viz.camera().set_orthographic(orthographic);
+                        viz.update();
+                        break;
+                    case GLFW_KEY_ESCAPE:
+                        viz.running(false);
+                        break;
+                    default:
+                        break;
+                }
+            } else if (mods == GLFW_MOD_SHIFT) {
+                switch (key) {
+                    case GLFW_KEY_R:
+                        viz.camera().reset();
+                        viz.update();
+                        break;
+                    default:
+                        break;
+                }
             }
-        } else if (mods == GLFW_MOD_SHIFT) {
-            switch (key) {
-                case GLFW_KEY_R:
-                    viz.camera().reset();
-                    viz.update();
-                    break;
-                default:
-                    break;
-            }
-        }
-        return true;
-    });
-
-    viz.push_scroll_handler(
-        [&](const PointViz::HandlerCtx&, double, double yoff) {
-            std::lock_guard<std::mutex> lock{mx};
-            viz.camera().dolly(yoff * 5);
-            viz.update();
             return true;
         });
 
+    viz.push_scroll_handler([=, &viz](const WindowCtx&, double, double yoff) {
+        auto lock = mx ? std::unique_lock<std::mutex>{*mx}
+                       : std::unique_lock<std::mutex>{};
+        viz.camera().dolly(yoff * 5);
+        viz.update();
+        return true;
+    });
+
     viz.push_mouse_pos_handler(
-        [&](const PointViz::HandlerCtx& wc, double xpos, double ypos) {
-            std::lock_guard<std::mutex> lock{mx};
+        [=, &viz](const WindowCtx& wc, double xpos, double ypos) {
+            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
+                           : std::unique_lock<std::mutex>{};
             double dx = (xpos - wc.mouse_x);
             double dy = (ypos - wc.mouse_y);
             // orbit or dolly in xy

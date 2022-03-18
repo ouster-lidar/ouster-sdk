@@ -51,7 +51,7 @@ GLImage::~GLImage() {
     glDeleteTextures(1, &mask_texture_id);
 }
 
-void GLImage::draw(const CameraData& camera, Image& image) {
+void GLImage::draw(const WindowCtx& ctx, const CameraData&, Image& image) {
     // update state
     if (image.position_changed_) {
         x0 = image.position_[0];
@@ -81,8 +81,9 @@ void GLImage::draw(const CameraData& camera, Image& image) {
     glBindTexture(GL_TEXTURE_2D, mask_texture_id);
 
     // draw
-    GLfloat x0_scaled = x0 / camera.aspect;
-    GLfloat x1_scaled = x1 / camera.aspect;
+    double aspect = impl::window_aspect(ctx);
+    GLfloat x0_scaled = x0 / aspect;
+    GLfloat x1_scaled = x1 / aspect;
 
     const GLfloat vertices[] = {x0_scaled, y0, x0_scaled, y1,
                                 x1_scaled, y1, x1_scaled, y0};

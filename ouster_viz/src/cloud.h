@@ -53,7 +53,7 @@ class GLCloud {
     /*
      * Render the point cloud with the point of view of the Camera
      */
-    void draw(const CameraData& camera, Cloud& cloud);
+    void draw(const WindowCtx& ctx, const CameraData& camera, Cloud& cloud);
 
     static void initialize();
 

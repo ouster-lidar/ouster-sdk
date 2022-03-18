@@ -49,7 +49,7 @@ class GLImage {
      * Modifies the camera to offset it so that it is centered on the region not
      * covered by image.
      */
-    void draw(const CameraData& camera, Image& image);
+    void draw(const WindowCtx& ctx, const CameraData& camera, Image& image);
 
     static void initialize();
 

@@ -16,9 +16,6 @@ namespace viz {
 
 namespace {
 
-constexpr int default_window_width = 800;
-constexpr int default_window_height = 600;
-
 /*
  * Callback for glfw errors
  */
@@ -125,7 +122,8 @@ void handle_cursor_enter(GLFWwindow* window, int entered) {
 /*
  * Initialize GLFW window
  */
-GLFWContext::GLFWContext(const std::string& name) {
+GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
+                         int window_width, int window_height) {
     glfwSetErrorCallback(error_callback);
 
     // avoid chdir to resources dir on macos
@@ -143,10 +141,11 @@ GLFWContext::GLFWContext(const std::string& name) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, 1);
+    glfwWindowHint(GLFW_VISIBLE, false);
 
     // open a window and create its OpenGL context
-    window = glfwCreateWindow(default_window_width, default_window_height,
-                              name.c_str(), NULL, NULL);
+    window =
+        glfwCreateWindow(window_width, window_height, name.c_str(), NULL, NULL);
 
     if (window == nullptr) {
         glfwTerminate();
@@ -172,6 +171,7 @@ GLFWContext::GLFWContext(const std::string& name) {
     }
 
     // set up callbacks (run by glfwPollEvents)
+
     glfwSetFramebufferSizeCallback(window, handle_window_resize);
     glfwSetKeyCallback(window, handle_key_press);
     glfwSetMouseButtonCallback(window, handle_mouse_button);
@@ -182,21 +182,35 @@ GLFWContext::GLFWContext(const std::string& name) {
     // context for glfw callbacks
     glfwSetWindowUserPointer(window, this);
 
+    // prevent window aspect from changing
+    if (fix_aspect)
+        glfwSetWindowAspectRatio(window, window_width, window_height);
+
     // TODO: some ad-hoc initialization here
-    window_context.window_width = default_window_width;
-    window_context.window_height = default_window_height;
+    window_context.window_width = window_width;
+    window_context.window_height = window_height;
 }
 
-GLFWContext::~GLFWContext() {
-    glfwDestroyWindow(window);
+GLFWContext::~GLFWContext() { glfwDestroyWindow(window); }
+
+void GLFWContext::terminate() {
     // TODO: can't terminate if we allow multiple instances
     gltTerminate();
     glfwTerminate();
 }
 
-void GLFWContext::quit() { glfwSetWindowShouldClose(window, true); }
-
 bool GLFWContext::running() { return !glfwWindowShouldClose(window); }
+
+void GLFWContext::running(bool state) {
+    glfwSetWindowShouldClose(window, !state);
+}
+
+void GLFWContext::visible(bool state) {
+    if (state)
+        glfwShowWindow(window);
+    else
+        glfwHideWindow(window);
+}
 
 }  // namespace viz
 }  // namespace ouster

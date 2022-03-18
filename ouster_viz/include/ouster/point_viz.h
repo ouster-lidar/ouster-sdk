@@ -30,12 +30,16 @@ class GLRings;
 struct CameraData;
 }  // namespace impl
 
+struct WindowCtx;
 class Camera;
 class Cloud;
 class Image;
 class Cuboid;
 class Label3d;
 class TargetDisplay;
+
+constexpr int default_window_width = 800;
+constexpr int default_window_height = 600;
 
 /**
  * @brief A basic visualizer for sensor data
@@ -53,23 +57,13 @@ class PointViz {
     struct Impl;
 
     /**
-     * Context for input callbacks
-     */
-    struct HandlerCtx {
-        bool lbutton_down{false};  ///< True if the left mouse button is held
-        bool mbutton_down{false};  ///< True of the middle mouse button is held
-        double mouse_x{0};         ///< Current mouse x position
-        double mouse_y{0};         ///< Current mouse y position
-        int window_width{0};       ///< Current window width in pixels
-        int window_height{0};      ///< Current window height in pixels
-    };
-
-    /**
      * Creates a window and initializes the rendering context
      *
      * @param name name of the visualizer, shown in the title bar
      */
-    PointViz(const std::string& name);
+    PointViz(const std::string& name, bool fix_aspect = false,
+             int window_width = default_window_width,
+             int window_height = default_window_height);
 
     /**
      * Tears down the rendering context and closes the viz window
@@ -77,7 +71,7 @@ class PointViz {
     ~PointViz();
 
     /**
-     * Main drawing loop, keeps drawing things until quit()
+     * Main drawing loop, keeps drawing things until running(false)
      *
      * Should be called from the main thread for macos compatibility
      */
@@ -91,16 +85,25 @@ class PointViz {
     void run_once();
 
     /**
-     * Signal run() to exit
-     */
-    void quit();
-
-    /**
-     * Check if the visualizer has been signaled to exit via quit()
+     * Check if the run() has been signaled to exit
      *
-     * @return false if the visualizer is shutting down
+     * @return true if the run() loop is currently executing
      */
     bool running();
+
+    /**
+     * Set the running flag. Will signal run() to exit
+     *
+     * @param state new value of the flag
+     */
+    void running(bool state);
+
+    /**
+     * Show or hide the visualizer window
+     *
+     * @param state true to show
+     */
+    void visible(bool state);
 
     /**
      * Update visualization state
@@ -119,25 +122,25 @@ class PointViz {
      * @param f the callback. The second argument is the ascii value of the key
      *        pressed. Third argument is a bitmask of the modifier keys
      */
-    void push_key_handler(std::function<bool(const HandlerCtx&, int, int)>&& f);
+    void push_key_handler(std::function<bool(const WindowCtx&, int, int)>&& f);
 
     /**
      * Add a callback for handling mouse button input
      */
     void push_mouse_button_handler(
-        std::function<bool(const HandlerCtx&, int, int)>&& f);
+        std::function<bool(const WindowCtx&, int, int)>&& f);
 
     /**
      * Add a callback for handling mouse scrolling input
      */
     void push_scroll_handler(
-        std::function<bool(const HandlerCtx&, double, double)>&& f);
+        std::function<bool(const WindowCtx&, double, double)>&& f);
 
     /**
      * Add a callback for handling mouse movement
      */
     void push_mouse_pos_handler(
-        std::function<bool(const HandlerCtx&, double, double)>&& f);
+        std::function<bool(const WindowCtx&, double, double)>&& f);
 
     /**
      * Remove the last added callback for handling keyboard input
@@ -161,21 +164,44 @@ class PointViz {
      * Add an object to the scene
      */
     void add(const std::shared_ptr<Cloud>& cloud);
+    void add(const std::shared_ptr<Image>& image);
     void add(const std::shared_ptr<Cuboid>& cuboid);
     void add(const std::shared_ptr<Label3d>& label);
-    void add(const std::shared_ptr<Image>& image);
 
     /**
      * Remove an object from the scene
      */
     bool remove(const std::shared_ptr<Cloud>& cloud);
+    bool remove(const std::shared_ptr<Image>& image);
     bool remove(const std::shared_ptr<Cuboid>& cuboid);
     bool remove(const std::shared_ptr<Label3d>& label);
-    bool remove(const std::shared_ptr<Image>& image);
 
    private:
     std::unique_ptr<Impl> pimpl;
     void draw();
+};
+
+/**
+ * Add default keyboard and mouse bindings to a visualizer instance
+ *
+ * Controls will modify the camera from the thread that calls run() or
+ * run_once(), which will require synchronization when using multiple threads.
+ *
+ * @param viz the visualizer instance
+ * @param mx mutex to lock while modifying camera
+ */
+void add_default_controls(viz::PointViz& viz, std::mutex* mx = nullptr);
+
+/**
+ * @brief Context for input callbacks
+ */
+struct WindowCtx {
+    bool lbutton_down{false};  ///< True if the left mouse button is held
+    bool mbutton_down{false};  ///< True of the middle mouse button is held
+    double mouse_x{0};         ///< Current mouse x position
+    double mouse_y{0};         ///< Current mouse y position
+    int window_width{0};       ///< Current window width in pixels
+    int window_height{0};      ///< Current window height in pixels
 };
 
 /**
@@ -249,9 +275,9 @@ class Camera {
     /**
      * Use an orthographic or perspective projection
      *
-     * @param b true for orthographic, false for perspective
+     * @param state true for orthographic, false for perspective
      */
-    void set_orthographic(bool b);
+    void set_orthographic(bool state);
 
     /**
      * Set the 2d position of camera target in the viewport
@@ -260,6 +286,31 @@ class Camera {
      * @param y vertical position in in normalized coordinates [-1, 1]
      */
     void set_proj_offset(float x, float y);
+};
+
+/**
+ * @brief Manages the state of the camera target display
+ */
+class TargetDisplay {
+    int ring_size_{1};
+    bool rings_enabled_{false};
+
+   public:
+    /**
+     * Enable or disable distance ring display
+     *
+     * @param state true to display rings
+     */
+    void enable_rings(bool state);
+
+    /**
+     * Set the distance between rings
+     *
+     * @param n space between rings will be 10^n meters
+     */
+    void set_ring_size(int n);
+
+    friend class impl::GLRings;
 };
 
 /**
@@ -322,6 +373,11 @@ class Cloud {
     void clear();
 
     /**
+     * Get the size of the point cloud
+     */
+    size_t get_size() { return n_; }
+
+    /**
      * Set the range values
      *
      * @param x pointer to array of at least as many elements as there are
@@ -366,7 +422,7 @@ class Cloud {
      *
      * @param map_pose homogeneous transformation matrix of the pose
      */
-    void set_map_pose(const mat4d& pose);
+    void set_pose(const mat4d& pose);
 
     /**
      * Set point size
@@ -501,7 +557,7 @@ class Cuboid {
  * @brief Manages the state of a text label
  */
 class Label3d {
-    bool pose_changed_{false};
+    bool pos_changed_{false};
     bool text_changed_{false};
 
     vec3d position_{};
@@ -533,35 +589,6 @@ class Label3d {
 
     friend class impl::GLLabel3d;
 };
-
-/**
- * @brief Manages the state of the camera target display
- */
-class TargetDisplay {
-    int ring_size_{1};
-    bool rings_enabled_{true};
-
-   public:
-    /**
-     * Set the distance between rings
-     *
-     * @param n space between rings will be 10^n meters
-     */
-    void update_ring_size(int n);
-
-    friend class impl::GLRings;
-};
-
-/**
- * Add default keyboard and mouse bindings to a visualizer instance
- *
- * Controls will modify the camera from the thread that calls run() or
- * run_once(), which will require synchronization when using multiple threads.
- *
- * @param viz the visualizer instance
- * @param mx mutex to lock while modifying camera
- */
-void add_default_controls(viz::PointViz& viz, std::mutex& mx);
 
 }  // namespace viz
 }  // namespace ouster

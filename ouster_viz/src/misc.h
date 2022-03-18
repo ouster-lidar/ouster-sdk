@@ -42,7 +42,7 @@ class GLRings {
      * Draws the rings from the point of view of the camera. The rings are
      * always centered on the camera's target.
      */
-    void draw(const CameraData& camera);
+    void draw(const WindowCtx& ctx, const CameraData& camera);
 
     /*
      * Initializes shader program, vertex buffers and handles after OpenGL
@@ -89,7 +89,7 @@ class GLCuboid {
     /*
      * Draws the cuboids from the point of view of the camera
      */
-    void draw(const CameraData& camera, Cuboid& cuboid);
+    void draw(const WindowCtx& ctx, const CameraData& camera, Cuboid& cuboid);
 
     /*
      * Initializes shader program and handles
@@ -121,7 +121,7 @@ class GLLabel3d {
 
     GLLabel3d& operator=(const GLLabel3d&) = delete;
 
-    void draw(const CameraData& camera, Label3d& label);
+    void draw(const WindowCtx& ctx, const CameraData& camera, Label3d& label);
 
     static void beginDraw();
 

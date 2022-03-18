@@ -47,7 +47,7 @@ void GLRings::update(const TargetDisplay& target) {
     ring_size_ = target.ring_size_;
 }
 
-void GLRings::draw(const CameraData& camera) {
+void GLRings::draw(const WindowCtx&, const CameraData& camera) {
     if (!GLRings::initialized)
         throw std::logic_error("GLRings not initialized");
 
@@ -138,7 +138,8 @@ GLCuboid::~GLCuboid() { glDeleteBuffers(1, &xyz_buffer); }
 /*
  * Draws the cuboids from the point of view of the camera.
  */
-void GLCuboid::draw(const CameraData& camera, Cuboid& cuboid) {
+void GLCuboid::draw(const WindowCtx&, const CameraData& camera,
+                    Cuboid& cuboid) {
     if (!GLCuboid::initialized)
         throw std::logic_error("GLCuboid not initialized");
 
@@ -234,16 +235,17 @@ GLLabel3d::GLLabel3d(const Label3d&) : GLLabel3d{} {}
 
 GLLabel3d::~GLLabel3d() { gltDeleteText(gltext); }
 
-void GLLabel3d::draw(const CameraData& camera, Label3d& label) {
+void GLLabel3d::draw(const WindowCtx&, const CameraData& camera,
+                     Label3d& label) {
     if (label.text_changed_) {
         gltSetText(gltext, label.text_.c_str());
         label.text_changed_ = false;
     }
 
-    if (label.pose_changed_) {
+    if (label.pos_changed_) {
         text_position =
             Eigen::Map<const Eigen::Vector3d>{label.position_.data()};
-        label.pose_changed_ = false;
+        label.pos_changed_ = false;
     }
 
     Eigen::Matrix4d model =

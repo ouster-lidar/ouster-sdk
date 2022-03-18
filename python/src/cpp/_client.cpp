@@ -707,9 +707,11 @@ PYBIND11_PLUGIN(_client) {
                 },
                 py::keep_alive<0, 1>()),
             "Return an iterator of available channel fields.")
-        .def("__eq__", [](const LidarScan& l, const LidarScan& r) { return l == r; })
+        .def("__eq__",
+             [](const LidarScan& l, const LidarScan& r) { return l == r; })
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
-        .def("__deepcopy__", [](const LidarScan& self, py::dict) { return LidarScan{self}; })
+        .def("__deepcopy__",
+             [](const LidarScan& self, py::dict) { return LidarScan{self}; })
         // for backwards compatibility: previously converted between Python
         // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })
@@ -758,13 +760,28 @@ PYBIND11_PLUGIN(_client) {
         .def(py::init<int>(), py::arg("update_every"))
         .def(py::init<double, double, int>(), py::arg("lo_percentile"),
              py::arg("hi_percentile"), py::arg("update_every"))
-        .def("__call__", [](viz::AutoExposure& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def(
+            "__call__",
+            [](viz::AutoExposure& self, py::array_t<double> image,
+               bool update_state) {
+                // TODO: need to check for strides?
+                if (image.ndim() != 2)
+                    throw std::invalid_argument("Expected a 2d array");
+                self(Eigen::Map<img_t<double>>(image.mutable_data(),
+                                               image.shape(0), image.shape(1)),
+                     update_state);
+            },
+            py::arg("image"), py::arg("update_state") = true);
 
     py::class_<viz::BeamUniformityCorrector>(m, "BeamUniformityCorrector")
         .def(py::init<>())
-        .def("__call__", [](viz::BeamUniformityCorrector& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def("__call__",
+             [](viz::BeamUniformityCorrector& self, py::array_t<double> image) {
+                 if (image.ndim() != 2)
+                     throw std::invalid_argument("Expected a 2d array");
+                 self(Eigen::Map<img_t<double>>(
+                     image.mutable_data(), image.shape(0), image.shape(1)));
+             });
 
     return m.ptr();
 }

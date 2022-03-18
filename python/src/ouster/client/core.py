@@ -33,6 +33,7 @@ class ClientOverflow(ClientError):
 
 class PacketSource(Protocol):
     """Represents a single-sensor data stream."""
+
     def __iter__(self) -> Iterator[Packet]:
         """A PacketSource supports ``Iterable[Packet]``.
 
@@ -44,6 +45,27 @@ class PacketSource(Protocol):
     @property
     def metadata(self) -> SensorInfo:
         """Metadata associated with the packet stream."""
+        ...
+
+    def close(self) -> None:
+        """Release the underlying resource, if any."""
+        ...
+
+
+class ScanSource(Protocol):
+    """Represents a single-sensor data stream."""
+
+    def __iter__(self) -> Iterator[LidarScan]:
+        """A ScanSource supports ``Iterable[LidarScan]``.
+
+        Currently defined explicitly due to:
+        https://github.com/python/typing/issues/561
+        """
+        ...
+
+    @property
+    def metadata(self) -> SensorInfo:
+        """Metadata associated with the scan stream."""
         ...
 
     def close(self) -> None:
@@ -238,6 +260,7 @@ class Sensor(PacketSource):
         Raises:
             ClientTimeout: if a lidar packet is not received within the
                 configured timeout
+            ClientError: if the client enters an unspecified error state
         """
         if full:
             self._cli.flush()
@@ -256,6 +279,11 @@ class Sensor(PacketSource):
                     if n_frames < 0:
                         break
                 last_ts = time.monotonic()
+            elif st & _client.ClientState.ERROR:
+                raise ClientError("Client returned ERROR state")
+            elif st & _client.ClientState.EXIT:
+                break
+
             # check for timeout
             if self._timeout is not None and (time.monotonic() >=
                                               last_ts + self._timeout):
@@ -297,6 +325,7 @@ class Scans:
     or only imu packets. Can also be configured to manage internal buffers for
     soft real-time applications.
     """
+
     def __init__(self,
                  source: PacketSource,
                  *,

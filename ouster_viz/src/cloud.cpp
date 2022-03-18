@@ -112,7 +112,7 @@ GLCloud::~GLCloud() {
 /*
  * Render the point cloud with the point of view of the Camera
  */
-void GLCloud::draw(const CameraData& camera, Cloud& cloud) {
+void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
     if (cloud.point_size_changed_) {
         point_size = cloud.point_size_;
         cloud.point_size_changed_ = false;

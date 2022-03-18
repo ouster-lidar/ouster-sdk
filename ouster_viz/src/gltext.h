@@ -5,8 +5,8 @@
 // Last Modified: December, 2022
 //
 // Modified from the original for use in ouster_viz:
-// - use GLSL 1.30
 // - inline api functions to avoid unused warnings
+// - hacked to always initialize on gltInit
 
 // In one C or C++ file, define GLT_IMPLEMENTATION prior to inclusion to create
 // the implementation.
@@ -755,7 +755,7 @@ GLT_API void _gltUpdateBuffers(GLTtext* text) {
 }
 
 GLT_API GLboolean gltInit(void) {
-    if (gltInitialized) return GL_TRUE;
+    /* if (gltInitialized) return GL_TRUE; */
 
     if (!_gltCreateText2DShader()) return GL_FALSE;
 
@@ -1075,7 +1075,7 @@ static const _GLT_FONT_GLYPH_DATA_TYPE
 };
 
 GLT_API GLboolean _gltCreateText2DFontTexture(void) {
-    if (gltInitialized) return GL_TRUE;
+    /* if (gltInitialized) return GL_TRUE; */
 
     memset(_gltFontGlyphs, 0, _gltFontGlyphCount * sizeof(_GLTglyph));
     memset(_gltFontGlyphs2, 0, _gltFontGlyphLength * sizeof(_GLTglyph));

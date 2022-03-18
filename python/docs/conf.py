@@ -163,5 +163,3 @@ copybutton_prompt_is_regexp = True
 
 # tabs behavior
 sphinx_tabs_disable_tab_closing = True
-
-

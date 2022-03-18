@@ -12,7 +12,8 @@ namespace ouster {
 namespace viz {
 
 struct GLFWContext {
-    explicit GLFWContext(const std::string& name);
+    explicit GLFWContext(const std::string& name, bool fix_aspect,
+                         int window_width, int window_height);
 
     // manages glfw window pointer lifetime
     GLFWContext(const GLFWContext&) = delete;
@@ -24,19 +25,24 @@ struct GLFWContext {
 
     ~GLFWContext();
 
-    void quit();
+    // tear down global glfw context
+    static void terminate();
+
+    // manipulate glfwWindowShouldClose flag
     bool running();
+    void running(bool);
+
+    void visible(bool);
 
     GLFWwindow* window;
 
     // state set by GLFW callbacks
-    PointViz::HandlerCtx window_context;
+    WindowCtx window_context;
 
-    using HandlerCtx = PointViz::HandlerCtx;
-    std::function<void(const HandlerCtx&, int, int)> key_handler;
-    std::function<void(const HandlerCtx&, int, int)> mouse_button_handler;
-    std::function<void(const HandlerCtx&, double, double)> scroll_handler;
-    std::function<void(const HandlerCtx&, double, double)> mouse_pos_handler;
+    std::function<void(const WindowCtx&, int, int)> key_handler;
+    std::function<void(const WindowCtx&, int, int)> mouse_button_handler;
+    std::function<void(const WindowCtx&, double, double)> scroll_handler;
+    std::function<void(const WindowCtx&, double, double)> mouse_pos_handler;
 
     std::function<void()> resize_handler;
 };

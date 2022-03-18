@@ -193,8 +193,7 @@ impl::CameraData Camera::matrices(double aspect) const {
         proj(3, 2) = -1;
     }
 
-    return {aspect, proj, view,
-            Eigen::Map<const Eigen::Matrix4d>{target_.data()}};
+    return {proj, view, Eigen::Map<const Eigen::Matrix4d>{target_.data()}};
 }
 
 }  // namespace viz

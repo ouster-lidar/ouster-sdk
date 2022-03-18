@@ -124,7 +124,7 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.3.1.dev0',
+    version='0.4.0.dev0',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
@@ -170,4 +170,5 @@ setup(
             'laspy',
             'PyQt5; platform_system=="Windows"',
         ],
-    })
+    },
+    entry_points={'console_scripts': ['simple-viz=ouster.sdk.simple_viz:main']})
