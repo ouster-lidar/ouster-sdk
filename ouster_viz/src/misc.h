@@ -103,25 +103,28 @@ class GLCuboid {
     static void endDraw();
 };
 
-class GLLabel3d {
+class GLLabel {
     GLTtext* gltext;
     Eigen::Vector3d text_position;
+    bool is_3d;
+    float scale;
+    int halign;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    GLLabel3d();
+    GLLabel();
 
     // for Indexed<T, U>
-    GLLabel3d(const Label3d&);
+    GLLabel(const Label&);
 
-    GLLabel3d(const GLLabel3d&) = delete;
+    GLLabel(const GLLabel&) = delete;
 
-    ~GLLabel3d();
+    ~GLLabel();
 
-    GLLabel3d& operator=(const GLLabel3d&) = delete;
+    GLLabel& operator=(const GLLabel&) = delete;
 
-    void draw(const WindowCtx& ctx, const CameraData& camera, Label3d& label);
+    void draw(const WindowCtx& ctx, const CameraData& camera, Label& label);
 
     static void beginDraw();
 

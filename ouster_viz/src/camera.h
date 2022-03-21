@@ -9,7 +9,7 @@ namespace viz {
 namespace impl {
 
 inline double window_aspect(const WindowCtx& ctx) {
-    return ctx.window_width / static_cast<double>(ctx.window_height);
+    return ctx.viewport_width / static_cast<double>(ctx.viewport_height);
 }
 
 struct CameraData {

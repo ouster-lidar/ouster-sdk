@@ -100,7 +100,7 @@ PYBIND11_PLUGIN(_viz) {
                  obj: A cloud, label, image or cuboid.)")
         .def("add", py::overload_cast<const std::shared_ptr<viz::Cuboid>&>(
                         &viz::PointViz::add))
-        .def("add", py::overload_cast<const std::shared_ptr<viz::Label3d>&>(
+        .def("add", py::overload_cast<const std::shared_ptr<viz::Label>&>(
                         &viz::PointViz::add))
         .def("add", py::overload_cast<const std::shared_ptr<viz::Image>&>(
                         &viz::PointViz::add))
@@ -117,11 +117,11 @@ PYBIND11_PLUGIN(_viz) {
                  True if the object was in the scene and was removed.
              )")
         .def("remove", py::overload_cast<const std::shared_ptr<viz::Cuboid>&>(
-                           &viz::PointViz::add))
-        .def("remove", py::overload_cast<const std::shared_ptr<viz::Label3d>&>(
-                           &viz::PointViz::add))
+                           &viz::PointViz::remove))
+        .def("remove", py::overload_cast<const std::shared_ptr<viz::Label>&>(
+                           &viz::PointViz::remove))
         .def("remove", py::overload_cast<const std::shared_ptr<viz::Image>&>(
-                           &viz::PointViz::add));
+                           &viz::PointViz::remove));
 
     m.def(
         "add_default_controls",
@@ -133,8 +133,8 @@ PYBIND11_PLUGIN(_viz) {
         .def_readonly("mbutton_down", &viz::WindowCtx::mbutton_down)
         .def_readonly("mouse_x", &viz::WindowCtx::mouse_x)
         .def_readonly("mouse_y", &viz::WindowCtx::mouse_y)
-        .def_readonly("window_width", &viz::WindowCtx::window_width)
-        .def_readonly("window_height", &viz::WindowCtx::window_height);
+        .def_readonly("viewport_width", &viz::WindowCtx::viewport_width)
+        .def_readonly("viewport_height", &viz::WindowCtx::viewport_height);
 
     py::class_<viz::Camera>(m, "Camera")
         .def("reset", &viz::Camera::reset)
@@ -237,25 +237,32 @@ PYBIND11_PLUGIN(_viz) {
             self.set_rgba(rgbaa);
         });
 
-    py::class_<viz::Label3d, std::shared_ptr<viz::Label3d>>(m, "Label3d")
+    py::class_<viz::Label, std::shared_ptr<viz::Label>>(m, "Label")
         .def("__init__",
-             [](viz::Label3d& self, py::array_t<float> pos,
-                const std::string& text) {
+             [](viz::Label& self, const std::string& text,
+                py::array_t<float> pos) {
                  if (pos.size() != 3)
                      throw std::invalid_argument("Expected a 3-element vector");
                  viz::vec3d posa;
                  std::copy(pos.data(), pos.data() + 3, posa.data());
-                 new (&self) viz::Label3d{posa, text};
+                 new (&self) viz::Label{text, posa};
              })
+        .def(py::init<const std::string&, float, float, bool>(),
+             py::arg("text"), py::arg("x"), py::arg("y"),
+             py::arg("align_right") = false)
+        .def("set_text", &viz::Label::set_text)
         .def("set_position",
-             [](viz::Label3d& self, py::array_t<float> pos) {
+             [](viz::Label& self, py::array_t<float> pos) {
                  if (pos.size() != 3)
                      throw std::invalid_argument("Expected a 3-element vector");
                  viz::vec3d posa;
                  std::copy(pos.data(), pos.data() + 3, posa.data());
                  self.set_position(posa);
              })
-        .def("set_text", &viz::Label3d::set_text);
+        .def("set_position",
+             py::overload_cast<float, float, bool>(&viz::Label::set_position),
+             py::arg("x"), py::arg("y"), py::arg("align_right") = false)
+        .def("set_scale", &viz::Label::set_scale);
 
     m.attr("spezia_palette") = py::array_t<float>{{spezia_n, 3}, &spezia[0][0]};
     m.attr("calref_palette") = py::array_t<float>{{calref_n, 3}, &calref[0][0]};

@@ -226,17 +226,17 @@ void GLCuboid::endDraw() {
 /*
  * Label3d
  */
-GLLabel3d::GLLabel3d() : gltext{gltCreateText()}, text_position{0, 0, 0} {
+GLLabel::GLLabel() : gltext{gltCreateText()}, text_position{0, 0, 0} {
     assert(gltext != GLT_NULL);
 }
 
 // for Indexed<T, U>
-GLLabel3d::GLLabel3d(const Label3d&) : GLLabel3d{} {}
+GLLabel::GLLabel(const Label&) : GLLabel{} {}
 
-GLLabel3d::~GLLabel3d() { gltDeleteText(gltext); }
+GLLabel::~GLLabel() { gltDeleteText(gltext); }
 
-void GLLabel3d::draw(const WindowCtx&, const CameraData& camera,
-                     Label3d& label) {
+void GLLabel::draw(const WindowCtx& ctx, const CameraData& camera,
+                     Label& label) {
     if (label.text_changed_) {
         gltSetText(gltext, label.text_.c_str());
         label.text_changed_ = false;
@@ -245,26 +245,44 @@ void GLLabel3d::draw(const WindowCtx&, const CameraData& camera,
     if (label.pos_changed_) {
         text_position =
             Eigen::Map<const Eigen::Vector3d>{label.position_.data()};
+        is_3d = label.is_3d_;
+        halign = label.align_right_ ? GLT_RIGHT : GLT_LEFT;
         label.pos_changed_ = false;
     }
 
-    Eigen::Matrix4d model =
-        (Eigen::Translation3d{text_position.cast<double>()} *
-         // make text face the camera
-         Eigen::Affine3d{camera.view.block<3, 3>(0, 0).inverse()} *
-         // text rendered +z direction, needs to be flipped
-         Eigen::AngleAxisd{M_PI, Eigen::Vector3d::UnitX()} *
-         // scale text, could make this configurable
-         Eigen::Scaling(0.02))
-            .matrix();
+    if (label.scale_changed_) {
+        scale = label.scale_;
+        label.scale_changed_ = false;
+    }
 
-    Eigen::Matrix4f mvp =
-        (camera.proj * camera.view * camera.target * model).cast<float>();
+    if (is_3d) {
+        Eigen::Matrix4d model =
+            (Eigen::Translation3d{text_position.cast<double>()} *
+             // make text face the camera
+             Eigen::Affine3d{camera.view.block<3, 3>(0, 0).inverse()} *
+             // text rendered +z direction, needs to be flipped
+             Eigen::AngleAxisd{M_PI, Eigen::Vector3d::UnitX()} *
+             // scale text, could make this configurable
+             Eigen::Scaling(0.02 * scale))
+                .matrix();
 
-    gltDrawText(gltext, mvp.data());
+        Eigen::Matrix4f mvp =
+            (camera.proj * camera.view * camera.target * model).cast<float>();
+
+        gltDrawText(gltext, mvp.data());
+    } else {
+        int x = text_position.x() * ctx.viewport_width;
+        int y = text_position.y() * ctx.viewport_height;
+        float scale2d = scale;
+#ifdef __APPLE__
+        // TODO: maybe try turning GLFW_COCOA_RETINA_FRAMEBUFFER off
+        scale2d *= 2.0;
+#endif
+        gltDrawText2DAligned(gltext, x, y, scale2d, halign, GLT_BOTTOM);
+    }
 }
 
-void GLLabel3d::beginDraw() {
+void GLLabel::beginDraw() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
@@ -273,7 +291,7 @@ void GLLabel3d::beginDraw() {
     gltColor(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
-void GLLabel3d::endDraw() {
+void GLLabel::endDraw() {
     gltEndDraw();
     glDisable(GL_BLEND);
 }

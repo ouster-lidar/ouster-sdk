@@ -15,7 +15,7 @@ import numpy as np
 from .. import client
 from ..client import (_utils, ChanField)
 from ..client._client import Version
-from ._viz import (PointViz, Cloud, Image, Cuboid, Label3d, WindowCtx, Camera,
+from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
                    spezia_palette)
 
@@ -124,6 +124,11 @@ class LidarScanViz:
         self._viz.target_display.set_ring_size(self._ring_size)
         self._viz.target_display.enable_rings(True)
 
+        # initialize osd
+        self._osd = Label("", 0, 1)
+        self._viz.add(self._osd)
+        self._osd_enabled = True
+
         # key bindings. will be called from rendering thread, must be synchronized
         key_bindings: Dict[Tuple[int, int], Callable[[LidarScanViz], None]] = {
             (ord('E'), 0): partial(LidarScanViz.update_image_size, amount=1),
@@ -137,6 +142,7 @@ class LidarScanViz:
             (ord('M'), 0): LidarScanViz.cycle_cloud_mode,
             (ord("'"), 0): partial(LidarScanViz.update_ring_size, amount=1),
             (ord("'"), 1): partial(LidarScanViz.update_ring_size, amount=-1),
+            (ord("O"), 0): LidarScanViz.toggle_osd,
         }
 
         # take care to avoid a reference cyce; holding onto self in the callback
@@ -148,7 +154,7 @@ class LidarScanViz:
             if self is not None and (key, mods) in key_bindings:
                 key_bindings[key, mods](self)
                 # render new frame
-                self.update()
+                self.draw()
             return True
 
         self._viz.push_key_handler(handle_keys)
@@ -160,9 +166,6 @@ class LidarScanViz:
             nfields = len(self._available_fields)
             if nfields > 0:
                 self._img_ind[i] = (self._img_ind[i] + 1) % nfields
-                print(f"Image {i}: {self._available_fields[self._img_ind[i]]}")
-            # need to re-extract and process fields
-            self._draw()
 
     def cycle_cloud_mode(self) -> None:
         """Change the channel field used to color the 3D point cloud."""
@@ -173,14 +176,10 @@ class LidarScanViz:
                 self._cloud_mode_ind]
             self._cloud_palette = (calref_palette if ChanField.REFLECTIVITY
                                    in new_fields else spezia_palette)
-            print(f"Cloud: {new_fields[0]}")
-            # need to re-extract and process fields
-            self._draw()
 
     def toggle_cloud(self, i: int) -> None:
         """Toggle whether the i'th return is displayed."""
         with self._lock:
-            print("toggle: ", i)
             if self._cloud_enabled[i]:
                 self._cloud_enabled[i] = False
                 self._viz.remove(self._clouds[i])
@@ -195,7 +194,6 @@ class LidarScanViz:
                                       max(1.0, self._cloud_pt_size + amount))
             for cloud in self._clouds:
                 cloud.set_point_size(self._cloud_pt_size)
-            print("Point size:", self._cloud_pt_size)
 
     def update_image_size(self, amount: int = 1) -> None:
         """Change the size of the 2D image."""
@@ -221,24 +219,35 @@ class LidarScanViz:
             self._ring_size = min(2, max(-2, self._ring_size + amount))
             self._viz.target_display.set_ring_size(self._ring_size)
 
+    def toggle_osd(self, state: Optional[bool] = None) -> None:
+        """Show or hide the on-screen display."""
+        with self._lock:
+            self._osd_enabled = not self._osd_enabled if state is None else state
+
     @property
     def scan(self) -> client.LidarScan:
         """The currently displayed scan."""
-        return self._scan
+        with self._lock:
+            return self._scan
 
     @scan.setter
     def scan(self, scan: client.LidarScan) -> None:
-        """Update the scan to display."""
-        self._scan = scan
+        """Set the scan to display"""
+        with self._lock:
+            self._scan = scan
+
+    def draw(self, update: bool = True) -> bool:
+        """Process and draw the latest state to the screen."""
         with self._lock:
             self._draw()
 
-    def update(self) -> None:
-        """Display the latest data on the next rendered frame."""
-        self._viz.update()
+        if update:
+            return self._viz.update()
+        else:
+            return False
 
     # i/o and processing, called from client thread
-    # usually need synchronize with key handlers, which run in render thread
+    # usually need to synchronize with key handlers, which run in render thread
     def _draw(self) -> None:
 
         # figure out what to draw based on current viz state. Need to
@@ -284,6 +293,19 @@ class LidarScanViz:
             self._images[i].set_image(
                 client.destagger(self._metadata,
                                  field_data[img_fields[i]].astype(np.float32)))
+
+        meta = self._metadata
+        enable_ind = [i + 1 for i, b in enumerate(self._cloud_enabled) if b]
+        if self._osd_enabled:
+            self._osd.set_text(
+                f"image: {img_fields[0]}/{img_fields[1]}\n"
+                f"cloud{enable_ind}: {cloud_fields[0]}\n"
+                f"frame: {scan.frame_id}\n"
+                f"sensor ts: {scan.timestamp[0] / 1e9:.3f}s\n"
+                f"profile: {str(meta.format.udp_profile_lidar)}\n"
+                f"{meta.prod_line} {meta.fw_rev} {meta.mode}")
+        else:
+            self._osd.set_text("")
 
 
 T = TypeVar('T')
@@ -372,14 +394,18 @@ class SimpleViz:
     Handles controls for playback speed, pausing and stepping."""
 
     _buflen: ClassVar[int] = 50
-    _playback_rates: ClassVar[Tuple[float, ...]] = (0.25, 0.5, 0.75, 1.0, 1.5,
-                                                    2.0, 3.0, 0.0)
 
-    def __init__(self, scans: client.ScanSource, rate: float = 1.0) -> None:
+    _playback_rates: ClassVar[Tuple[float, ...]]
+    _playback_rates = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 0.0)
+
+    def __init__(self,
+                 scans: client.ScanSource,
+                 rate: Optional[float] = 1.0) -> None:
         """
         Args:
             scans: The stream of scans to visualze.
-            rate: Playback rate. Must be one of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0.
+            rate: Playback rate. One of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0 or
+                  None for "live" playback.
 
         Raises:
             ValueError: if the specified rate isn't one of the options
@@ -390,7 +416,8 @@ class SimpleViz:
         self._lock = threading.Lock()
         self._scans = _Seekable(scans, maxlen=SimpleViz._buflen)
         self._metadata = scans.metadata
-        self._rate_ind = SimpleViz._playback_rates.index(rate)
+        self._live = (rate is None)
+        self._rate_ind = SimpleViz._playback_rates.index(rate or 0.0)
 
         # pausing and stepping
         self._cv = threading.Condition()
@@ -398,15 +425,29 @@ class SimpleViz:
         self._step = 0
         self._proc_exit = False
 
+        # playback status display
+        self._playback_osd = Label("", 1, 1, align_right=True)
+        self._viz.add(self._playback_osd)
+        self._osd_enabled = True
+        self._update_playback_osd()
+
         key_bindings: Dict[Tuple[int, int], Callable[[SimpleViz], None]] = {
-            (263, 0): partial(SimpleViz.seek_relative, n_frames=-1),
-            (263, 1): partial(SimpleViz.seek_relative, n_frames=-10),
-            (262, 0): partial(SimpleViz.seek_relative, n_frames=1),
-            (262, 1): partial(SimpleViz.seek_relative, n_frames=10),
+            (ord(','), 0): partial(SimpleViz.seek_relative, n_frames=-1),
+            (ord(','), 2): partial(SimpleViz.seek_relative, n_frames=-10),
+            (ord('.'), 0): partial(SimpleViz.seek_relative, n_frames=1),
+            (ord('.'), 2): partial(SimpleViz.seek_relative, n_frames=10),
             (ord(' '), 0): SimpleViz.toggle_pause,
-            (ord(','), 1): partial(SimpleViz.modify_rate, amount=-1),
-            (ord('.'), 1): partial(SimpleViz.modify_rate, amount=1),
+            (ord('O'), 0): SimpleViz.toggle_osd,
         }
+
+        # only allow changing rate when not in "live" mode
+        if not self._live:
+            key_bindings.update({
+                (ord(','), 1):
+                partial(SimpleViz.modify_rate, amount=-1),
+                (ord('.'), 1):
+                partial(SimpleViz.modify_rate, amount=1),
+            })
 
         weakself = weakref.ref(self)
 
@@ -414,37 +455,61 @@ class SimpleViz:
             self = weakself()
             if self is not None and (key, mods) in key_bindings:
                 key_bindings[key, mods](self)
+                # override rather than add bindings
+                return False
             return True
 
         self._viz.push_key_handler(handle_keys)
+
+    def _update_playback_osd(self) -> None:
+        if not self._osd_enabled:
+            self._playback_osd.set_text("")
+        elif self._paused:
+            self._playback_osd.set_text("playback: paused")
+        elif self._live:
+            self._playback_osd.set_text("playback: live")
+        else:
+            rate = SimpleViz._playback_rates[self._rate_ind]
+            self._playback_osd.set_text(
+                f"playback: {str(rate) + 'x' if rate else  'max'}")
 
     def toggle_pause(self) -> None:
         """Pause or unpause the visualization."""
         with self._cv:
             self._paused = not self._paused
+            self._update_playback_osd()
             if not self._paused:
                 self._cv.notify()
-        print("Toggle pause")
 
     def seek_relative(self, n_frames: int) -> None:
         """Seek forward of backwards in the stream."""
         with self._cv:
             self._paused = True
             self._step = n_frames
+            self._update_playback_osd()
             self._cv.notify()
-            print("Seek frames:", n_frames)
 
     def modify_rate(self, amount: int) -> None:
         """Switch between preset playback rates."""
         n_rates = len(SimpleViz._playback_rates)
         with self._cv:
             self._rate_ind = max(0, min(n_rates - 1, self._rate_ind + amount))
-        print("Playback rate:", SimpleViz._playback_rates[self._rate_ind]
-              or "max")
+            self._update_playback_osd()
+
+    def toggle_osd(self, state: Optional[bool] = None) -> None:
+        """Show or hide the on-screen display."""
+        with self._cv:
+            self._osd_enabled = not self._osd_enabled if state is None else state
+            self._scan_viz.toggle_osd(self._osd_enabled)
+            self._update_playback_osd()
+            self._scan_viz.draw()
 
     def _frame_period(self) -> float:
         rate = SimpleViz._playback_rates[self._rate_ind]
-        return 1.0 / (self._metadata.mode.frequency * rate) if rate else 0.0
+        if rate and not self._paused:
+            return 1.0 / (self._metadata.mode.frequency * rate)
+        else:
+            return 0.0
 
     def _process(self) -> None:
 
@@ -466,6 +531,7 @@ class SimpleViz:
 
                 # process new data
                 self._scan_viz.scan = next(self._scans)
+                self._scan_viz.draw(update=False)
 
                 # sleep for remainder of scan period
                 to_sleep = max(0.0, period - (time.monotonic() - last_ts))
@@ -473,7 +539,7 @@ class SimpleViz:
                 last_ts = time.monotonic()
 
                 # show new data
-                self._scan_viz.update()
+                self._viz.update()
 
         except StopIteration:
             pass
@@ -516,6 +582,6 @@ class SimpleViz:
 
 
 __all__ = [
-    'PointViz', 'Cloud', 'Image', 'Cuboid', 'Label3d', 'WindowCtx', 'Camera',
+    'PointViz', 'Cloud', 'Image', 'Cuboid', 'Label', 'WindowCtx', 'Camera',
     'TargetDisplay', 'add_default_controls', 'calref_palette', 'spezia_palette'
 ]

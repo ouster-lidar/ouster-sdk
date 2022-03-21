@@ -51,10 +51,14 @@ def test_point_viz_image(point_viz: 'viz.PointViz') -> None:
 def test_point_viz_labels(point_viz: 'viz.PointViz') -> None:
     """Smoke test rendering labels."""
 
-    label1 = viz.Label3d(np.array([0, 0, 1]), "Foobar")
-    label2 = viz.Label3d(np.array([0, 0, 0]), "Baz\nQux")
+    label1 = viz.Label("Foobar", np.array([0, 0, 1]))
+    label1.set_scale(0.75)
+    label2 = viz.Label("Baz\nQux", np.array([0, 0, 0]))
+    label3 = viz.Label("Quux", 1, 1, align_right=True)
+    label3.set_scale(2.5)
     point_viz.add(label1)
     point_viz.add(label2)
+    point_viz.add(label3)
     point_viz.camera.dolly(250)
     point_viz.update()
     point_viz.run()
@@ -94,7 +98,7 @@ def test_viz_multiple_instances(meta: client.SensorInfo,
     ls_viz = viz.LidarScanViz(point_viz, meta)
 
     ls_viz.scan = scan
-    ls_viz.update()
+    ls_viz.draw()
     point_viz.run()
 
 
@@ -105,7 +109,7 @@ def test_scan_viz_smoke(meta: client.SensorInfo,
     ls_viz = viz.LidarScanViz(point_viz, meta)
 
     ls_viz.scan = scan
-    ls_viz.update()
+    ls_viz.draw()
     point_viz.run()
 
 
@@ -123,7 +127,7 @@ def test_scan_viz_extras(meta: client.SensorInfo,
     pose2[3, 0] += 5
     cube2 = viz.Cuboid(pose2, np.array([0, 1, 0, 1], np.float32))
 
-    label1 = viz.Label3d(np.array([0, 0, 2]), "Baz\nQux")
+    label1 = viz.Label("Baz\nQux", np.array([0, 0, 2]))
     point_viz.add(label1)
     point_viz.add(cube1)
     point_viz.add(cube2)
@@ -131,5 +135,5 @@ def test_scan_viz_extras(meta: client.SensorInfo,
     ls_viz.scan = scan
 
     point_viz.camera.dolly(150)
-    ls_viz.update()
+    ls_viz.draw()
     point_viz.run()

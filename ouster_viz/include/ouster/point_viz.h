@@ -25,7 +25,7 @@ namespace impl {
 class GLCloud;
 class GLImage;
 class GLCuboid;
-class GLLabel3d;
+class GLLabel;
 class GLRings;
 struct CameraData;
 }  // namespace impl
@@ -35,7 +35,7 @@ class Camera;
 class Cloud;
 class Image;
 class Cuboid;
-class Label3d;
+class Label;
 class TargetDisplay;
 
 constexpr int default_window_width = 800;
@@ -166,7 +166,7 @@ class PointViz {
     void add(const std::shared_ptr<Cloud>& cloud);
     void add(const std::shared_ptr<Image>& image);
     void add(const std::shared_ptr<Cuboid>& cuboid);
-    void add(const std::shared_ptr<Label3d>& label);
+    void add(const std::shared_ptr<Label>& label);
 
     /**
      * Remove an object from the scene
@@ -174,7 +174,7 @@ class PointViz {
     bool remove(const std::shared_ptr<Cloud>& cloud);
     bool remove(const std::shared_ptr<Image>& image);
     bool remove(const std::shared_ptr<Cuboid>& cuboid);
-    bool remove(const std::shared_ptr<Label3d>& label);
+    bool remove(const std::shared_ptr<Label>& label);
 
    private:
     std::unique_ptr<Impl> pimpl;
@@ -200,8 +200,8 @@ struct WindowCtx {
     bool mbutton_down{false};  ///< True of the middle mouse button is held
     double mouse_x{0};         ///< Current mouse x position
     double mouse_y{0};         ///< Current mouse y position
-    int window_width{0};       ///< Current window width in pixels
-    int window_height{0};      ///< Current window height in pixels
+    int viewport_width{0};     ///< Current viewport width in pixels
+    int viewport_height{0};    ///< Current viewport height in pixels
 };
 
 /**
@@ -556,15 +556,20 @@ class Cuboid {
 /**
  * @brief Manages the state of a text label
  */
-class Label3d {
+class Label {
     bool pos_changed_{false};
+    bool scale_changed_{true};
     bool text_changed_{false};
+    bool is_3d_{false};
+    bool align_right_{false};
 
     vec3d position_{};
+    float scale_{1.0};
     std::string text_{};
 
    public:
-    Label3d(const vec3d& position, const std::string& text);
+    Label(const std::string& text, const vec3d& position);
+    Label(const std::string& text, float x, float y, bool align_right = false);
 
     /**
      * Clear dirty flags
@@ -574,6 +579,13 @@ class Label3d {
     void clear();
 
     /**
+     * Update label text
+     *
+     * @param text new text to display
+     */
+    void set_text(const std::string& text);
+
+    /**
      * Set label position
      *
      * @param position 3d position of the label
@@ -581,13 +593,22 @@ class Label3d {
     void set_position(const vec3d& position);
 
     /**
-     * Update label text
+     * Set position of the bottom left corner of the label
      *
-     * @param text new text to display
+     * @param x horizontal position [0, 1]
+     * @param y vertical position [0, 1]
+     * @param align_right interpret position as bottom right corner
      */
-    void set_text(const std::string& text);
+    void set_position(float x, float y, bool align_right = false);
 
-    friend class impl::GLLabel3d;
+    /**
+     * Set scaling factor of the label
+     *
+     * @param scale text scaling factor
+     */
+    void set_scale(float scale);
+
+    friend class impl::GLLabel;
 };
 
 }  // namespace viz

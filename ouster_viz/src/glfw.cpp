@@ -39,9 +39,10 @@ void handle_key_press(GLFWwindow* window, int key, int /*scancode*/, int action,
  */
 void handle_window_resize(GLFWwindow* window, int fb_width, int fb_height) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
-    ctx->window_context.window_width = fb_width;
-    ctx->window_context.window_height = fb_height;
+    ctx->window_context.viewport_width = fb_width;
+    ctx->window_context.viewport_height = fb_height;
     glViewport(0, 0, fb_width, fb_height);
+    gltViewport(fb_width, fb_height);
     if (ctx->resize_handler) ctx->resize_handler();
 }
 
@@ -171,7 +172,6 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     }
 
     // set up callbacks (run by glfwPollEvents)
-
     glfwSetFramebufferSizeCallback(window, handle_window_resize);
     glfwSetKeyCallback(window, handle_key_press);
     glfwSetMouseButtonCallback(window, handle_mouse_button);
@@ -186,9 +186,14 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     if (fix_aspect)
         glfwSetWindowAspectRatio(window, window_width, window_height);
 
-    // TODO: some ad-hoc initialization here
-    window_context.window_width = window_width;
-    window_context.window_height = window_height;
+    // initialize viewport size. Note: this is conceptually different than the
+    // window size, and actually different on retina displays. See: glfw docs
+    int viewport_width, viewport_height;
+    glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
+
+    gltViewport(viewport_width, viewport_height);
+    window_context.viewport_width = viewport_width;
+    window_context.viewport_height = viewport_height;
 }
 
 GLFWContext::~GLFWContext() { glfwDestroyWindow(window); }

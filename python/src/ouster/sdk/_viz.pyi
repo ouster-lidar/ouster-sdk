@@ -29,11 +29,11 @@ class WindowCtx:
         ...
 
     @property
-    def window_width(self) -> int:
+    def viewport_width(self) -> int:
         ...
 
     @property
-    def window_height(self) -> int:
+    def viewport_height(self) -> int:
         ...
 
 
@@ -118,15 +118,35 @@ class Cuboid:
         ...
 
 
-class Label3d:
+class Label:
 
-    def __init__(self, xyz: np.ndarray, text: str) -> None:
+    @overload
+    def __init__(self, text: str, xyz: np.ndarray) -> None:
         ...
 
-    def set_position(self, xyz: np.ndarray) -> None:
+    @overload
+    def __init__(self,
+                 text: str,
+                 x: float,
+                 y: float,
+                 align_right: bool = ...) -> None:
         ...
 
     def set_text(self, text: str) -> None:
+        ...
+
+    @overload
+    def set_position(self, xyz: np.ndarray) -> None:
+        ...
+
+    @overload
+    def set_position(self,
+                     x: float,
+                     y: float,
+                     align_right: bool = ...) -> None:
+        ...
+
+    def set_scale(self, scale: float) -> None:
         ...
 
 
@@ -178,23 +198,23 @@ class PointViz:
         ...
 
     @overload
-    def add(self, label: Label3d) -> None:
+    def add(self, label: Label) -> None:
         ...
 
     @overload
-    def remove(self, cloud: Cloud) -> None:
+    def remove(self, cloud: Cloud) -> bool:
         ...
 
     @overload
-    def remove(self, image: Image) -> None:
+    def remove(self, image: Image) -> bool:
         ...
 
     @overload
-    def remove(self, cuboid: Cuboid) -> None:
+    def remove(self, cuboid: Cuboid) -> bool:
         ...
 
     @overload
-    def remove(self, label: Label3d) -> None:
+    def remove(self, label: Label) -> bool:
         ...
 
 

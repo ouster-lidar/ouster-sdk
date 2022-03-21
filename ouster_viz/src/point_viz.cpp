@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <iostream>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -116,11 +117,11 @@ struct PointViz::Impl {
 
     Indexed<impl::GLCloud, Cloud> clouds;
     Indexed<impl::GLCuboid, Cuboid> cuboids;
-    Indexed<impl::GLLabel3d, Label3d> labels;
+    Indexed<impl::GLLabel, Label> labels;
     Indexed<impl::GLImage, Image> images;
 
     template <typename T>
-    using Handlers = std::vector<std::function<T>>;
+    using Handlers = std::list<std::function<T>>;
 
     Handlers<bool(const WindowCtx&, int, int)> key_handlers;
     Handlers<bool(const WindowCtx&, int, int)> mouse_button_handlers;
@@ -243,11 +244,6 @@ void PointViz::draw() {
         auto camera_data =
             pimpl->camera_front.matrices(impl::window_aspect(ctx));
 
-        // draw image
-        impl::GLImage::beginDraw();
-        pimpl->images.draw(ctx, camera_data);
-        impl::GLImage::endDraw();
-
         // draw clouds
         impl::GLCloud::beginDraw();
         pimpl->clouds.draw(ctx, camera_data);
@@ -261,10 +257,21 @@ void PointViz::draw() {
         pimpl->cuboids.draw(ctx, camera_data);
         impl::GLCuboid::endDraw();
 
+        // draw labels and images on top of everything
+        glClear(GL_DEPTH_BUFFER_BIT);
+
         // draw labels
-        impl::GLLabel3d::beginDraw();
+        impl::GLLabel::beginDraw();
         pimpl->labels.draw(ctx, camera_data);
-        impl::GLLabel3d::endDraw();
+        impl::GLLabel::endDraw();
+
+        // switch back to point viz vao
+        glBindVertexArray(pimpl->vao);
+
+        // draw image
+        impl::GLImage::beginDraw();
+        pimpl->images.draw(ctx, camera_data);
+        impl::GLImage::endDraw();
 
         // mark front buffers no longer dirty
         pimpl->front_changed = false;
@@ -279,32 +286,34 @@ void PointViz::draw() {
 void PointViz::push_key_handler(
     std::function<bool(const WindowCtx&, int, int)>&& f) {
     // TODO: not thread safe: called in glfwPollEvents()
-    pimpl->key_handlers.push_back(std::move(f));
+    pimpl->key_handlers.push_front(std::move(f));
 }
 
 void PointViz::push_mouse_button_handler(
     std::function<bool(const WindowCtx&, int, int)>&& f) {
-    pimpl->mouse_button_handlers.push_back(std::move(f));
+    pimpl->mouse_button_handlers.push_front(std::move(f));
 }
 
 void PointViz::push_scroll_handler(
     std::function<bool(const WindowCtx&, double, double)>&& f) {
-    pimpl->scroll_handlers.push_back(std::move(f));
+    pimpl->scroll_handlers.push_front(std::move(f));
 }
 
 void PointViz::push_mouse_pos_handler(
     std::function<bool(const WindowCtx&, double, double)>&& f) {
-    pimpl->mouse_pos_handlers.push_back(std::move(f));
+    pimpl->mouse_pos_handlers.push_front(std::move(f));
 }
 
-void PointViz::pop_key_handler() { pimpl->key_handlers.pop_back(); }
+void PointViz::pop_key_handler() { pimpl->key_handlers.pop_front(); }
 
 void PointViz::pop_mouse_button_handler() {
-    pimpl->mouse_button_handlers.pop_back();
+    pimpl->mouse_button_handlers.pop_front();
 }
-void PointViz::pop_scroll_handler() { pimpl->scroll_handlers.pop_back(); }
+void PointViz::pop_scroll_handler() { pimpl->scroll_handlers.pop_front(); }
 
-void PointViz::pop_mouse_pos_handler() { pimpl->mouse_pos_handlers.pop_back(); }
+void PointViz::pop_mouse_pos_handler() {
+    pimpl->mouse_pos_handlers.pop_front();
+}
 
 /*
  * Add / remove / access objects in the scene
@@ -321,7 +330,7 @@ void PointViz::add(const std::shared_ptr<Cuboid>& cuboid) {
     pimpl->cuboids.add(cuboid);
 }
 
-void PointViz::add(const std::shared_ptr<Label3d>& label) {
+void PointViz::add(const std::shared_ptr<Label>& label) {
     pimpl->labels.add(label);
 }
 
@@ -337,7 +346,7 @@ bool PointViz::remove(const std::shared_ptr<Cuboid>& cuboid) {
     return pimpl->cuboids.remove(cuboid);
 }
 
-bool PointViz::remove(const std::shared_ptr<Label3d>& label) {
+bool PointViz::remove(const std::shared_ptr<Label>& label) {
     return pimpl->labels.remove(label);
 }
 
@@ -505,22 +514,41 @@ void Cuboid::set_rgba(const std::array<float, 4>& rgba) {
     rgba_changed_ = true;
 }
 
-Label3d::Label3d(const vec3d& position, const std::string& text) {
-    set_position(position);
+Label::Label(const std::string& text, const vec3d& position) {
     set_text(text);
+    set_position(position);
 }
 
-void Label3d::clear() {
-    pos_changed_ = false;
+Label::Label(const std::string& text, float x, float y, bool align_right) {
+    set_text(text);
+    set_position(x, y, align_right);
+}
+
+void Label::clear() {
     text_changed_ = false;
+    pos_changed_ = false;
+    scale_changed_ = false;
 }
 
-void Label3d::set_position(const vec3d& position) {
+void Label::set_position(const vec3d& position) {
     position_ = position;
     pos_changed_ = true;
+    is_3d_ = true;
 }
 
-void Label3d::set_text(const std::string& text) {
+void Label::set_position(float x, float y, bool align_right) {
+    position_ = {x, y, 0};
+    align_right_ = align_right;
+    pos_changed_ = true;
+    is_3d_ = false;
+}
+
+void Label::set_scale(float scale) {
+    scale_ = scale;
+    scale_changed_ = true;
+}
+
+void Label::set_text(const std::string& text) {
     text_ = text;
     text_changed_ = true;
 }
@@ -609,8 +637,8 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 // convert from pixels to fractions of window size
                 // TODO: factor out conversion?
                 const double window_diagonal =
-                    std::sqrt(wc.window_width * wc.window_width +
-                              wc.window_height * wc.window_height);
+                    std::sqrt(wc.viewport_width * wc.viewport_width +
+                              wc.viewport_height * wc.viewport_height);
                 dx *= 2.0 / window_diagonal;
                 dy *= 2.0 / window_diagonal;
                 viz.camera().dolly_xy(dx, dy);

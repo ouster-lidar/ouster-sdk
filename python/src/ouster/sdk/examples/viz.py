@@ -25,12 +25,12 @@ point_viz = viz.PointViz("Example Viz")
 ls_viz = viz.LidarScanViz(point_viz, meta)
 
 ls_viz.scan = next(scans)
-ls_viz.update()
+ls_viz.draw()
 print("Showing first frame, close visuzlier window to continue")
 point_viz.run()
 
 ls_viz.scan = next(scans)
-ls_viz.update()
+ls_viz.draw()
 print("Showing second frame, close visuzlier window to continue")
 point_viz.run()
 

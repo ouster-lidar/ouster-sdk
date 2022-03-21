@@ -42,7 +42,7 @@ def main() -> None:
         scans = client.Scans.stream(hostname,
                                     config.udp_port_lidar or 7502,
                                     complete=False)
-        rate = 0.0
+        rate = None
 
     elif args.pcap:
         import ouster.pcap as pcap
