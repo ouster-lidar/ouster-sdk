@@ -228,3 +228,25 @@ def test_scans_bad_field(packets: client.PacketSource) -> None:
 
     with pytest.raises(IndexError):
         next(iter(client.Scans(packets, fields=fields)))
+
+
+@pytest.mark.parametrize('test_key', ['legacy-2.0', 'legacy-2.1'])
+def test_scans_raw(packets: client.PacketSource) -> None:
+    """Smoke test reading raw channel field data."""
+    fields = {
+        ChanField.RAW32_WORD1: np.uint32,
+        ChanField.RAW32_WORD2: np.uint32,
+        ChanField.RAW32_WORD3: np.uint32
+    }
+
+    scans = client.Scans(packets, fields=fields)
+
+    ls = list(scans)
+    assert len(ls) == 1
+    assert set(ls[0].fields) == {
+        ChanField.RAW32_WORD1, ChanField.RAW32_WORD2, ChanField.RAW32_WORD3
+    }
+
+    # just check that raw fields are populated?
+    for f in ls[0].fields:
+        assert np.count_nonzero(ls[0].field(f)) != 0
