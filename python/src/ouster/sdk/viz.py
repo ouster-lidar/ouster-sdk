@@ -145,7 +145,7 @@ class LidarScanViz:
             (ord("O"), 0): LidarScanViz.toggle_osd,
         }
 
-        # take care to avoid a reference cyce; holding onto self in the callback
+        # take care to avoid a reference cycle; holding onto self in the callback
         # passed to native code would cause a memory leak
         weakself = weakref.ref(self)
 
