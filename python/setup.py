@@ -152,7 +152,7 @@ setup(
         'typing-extensions >=3.7',
     ],
     extras_require={
-        'test': ['pytest', 'tox'],
+        'test': ['pytest >=7.0, <8'],
         'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
         'docs': [
             'Sphinx >=3.5',
