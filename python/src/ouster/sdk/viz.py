@@ -7,7 +7,7 @@ from functools import partial
 import threading
 import time
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
-                    Optional, Tuple, TypeVar)
+                    Optional, Tuple, TypeVar, Union)
 import weakref
 
 import numpy as np
@@ -18,6 +18,34 @@ from ..client._client import Version
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
                    spezia_palette)
+
+T = TypeVar('T')
+
+
+def push_point_viz_handler(
+        viz: PointViz, arg: T, handler: Callable[[T, WindowCtx, int, int],
+                                                 bool]) -> None:
+    """Add a key handler with extra context without keeping it alive.
+
+    It's often useful to add a key callback that calls a method of an object
+    that wraps a PointViz instance. In this case it's necessary to take some
+    extra care to avoid a reference cycle; holding onto self in the callback
+    passed to native code would cause a memory leak.
+
+    Args:
+        viz: The PointViz instance.
+        arg: The extra context to pass to handler; often `self`.
+        handler: Key handler callback taking an extra argument
+    """
+    weakarg = weakref.ref(arg)
+
+    def handle_keys(ctx: WindowCtx, key: int, mods: int) -> bool:
+        arg = weakarg()
+        if arg is not None:
+            return handler(arg, ctx, key, mods)
+        return True
+
+    viz.push_key_handler(handle_keys)
 
 
 class LidarScanViz:
@@ -72,8 +100,8 @@ class LidarScanViz:
             meta: sensor metadata used to interpret scans
         """
 
+        # used to synchronize key handlers and _draw()
         self._lock = threading.Lock()
-        self._available_fields = []
 
         # cloud display state
         self._cloud_mode_ind = 0  # index into _cloud_mode_channels
@@ -82,15 +110,17 @@ class LidarScanViz:
         self._cloud_palette = spezia_palette
 
         # image display state
-        self._img_ind = [0, 1]
+        self._img_ind = [0, 1]  # index of field to display
         self._img_size_fraction = 6
         self._img_aspect = (meta.beam_altitude_angles[0] -
                             meta.beam_altitude_angles[-1]) / 360.0
 
         # misc display state
+        self._available_fields = []
         self._ring_size = 1
+        self._osd_enabled = True
 
-        # TODO handle second return (sharing procs)
+        # set up post-processing for each channel field
         range_pp = _utils.AutoExposure()
         signal_pp = _utils.AutoExposure()
         refl_pp = LidarScanViz._reflectivity_pp(meta)
@@ -113,11 +143,10 @@ class LidarScanViz:
         self._viz.add(self._clouds[0])
         self._viz.add(self._clouds[1])
 
+        # initialize images
         self._images = (Image(), Image())
         self._viz.add(self._images[0])
         self._viz.add(self._images[1])
-
-        # initialize image sizes
         self.update_image_size(0)
 
         # initialize rings
@@ -127,7 +156,6 @@ class LidarScanViz:
         # initialize osd
         self._osd = Label("", 0, 1)
         self._viz.add(self._osd)
-        self._osd_enabled = True
 
         # key bindings. will be called from rendering thread, must be synchronized
         key_bindings: Dict[Tuple[int, int], Callable[[LidarScanViz], None]] = {
@@ -145,19 +173,14 @@ class LidarScanViz:
             (ord("O"), 0): LidarScanViz.toggle_osd,
         }
 
-        # take care to avoid a reference cycle; holding onto self in the callback
-        # passed to native code would cause a memory leak
-        weakself = weakref.ref(self)
-
-        def handle_keys(ctx: WindowCtx, key: int, mods: int) -> bool:
-            self = weakself()
-            if self is not None and (key, mods) in key_bindings:
+        def handle_keys(self: LidarScanViz, ctx: WindowCtx, key: int,
+                        mods: int) -> bool:
+            if (key, mods) in key_bindings:
                 key_bindings[key, mods](self)
-                # render new frame
                 self.draw()
             return True
 
-        self._viz.push_key_handler(handle_keys)
+        push_point_viz_handler(self._viz, self, handle_keys)
         add_default_controls(self._viz)
 
     def cycle_img_mode(self, i: int) -> None:
@@ -195,7 +218,7 @@ class LidarScanViz:
             for cloud in self._clouds:
                 cloud.set_point_size(self._cloud_pt_size)
 
-    def update_image_size(self, amount: int = 1) -> None:
+    def update_image_size(self, amount: int) -> None:
         """Change the size of the 2D image."""
         with self._lock:
             size_fraction_max = 20
@@ -213,7 +236,7 @@ class LidarScanViz:
             # center camera target in area not taken up by image
             self._viz.camera.set_proj_offset(0, vfrac)
 
-    def update_ring_size(self, amount: int = 1) -> None:
+    def update_ring_size(self, amount: int) -> None:
         """Change distance ring size."""
         with self._lock:
             self._ring_size = min(2, max(-2, self._ring_size + amount))
@@ -227,14 +250,12 @@ class LidarScanViz:
     @property
     def scan(self) -> client.LidarScan:
         """The currently displayed scan."""
-        with self._lock:
-            return self._scan
+        return self._scan
 
     @scan.setter
     def scan(self, scan: client.LidarScan) -> None:
         """Set the scan to display"""
-        with self._lock:
-            self._scan = scan
+        self._scan = scan
 
     def draw(self, update: bool = True) -> bool:
         """Process and draw the latest state to the screen."""
@@ -250,55 +271,52 @@ class LidarScanViz:
     # usually need to synchronize with key handlers, which run in render thread
     def _draw(self) -> None:
 
-        # figure out what to draw based on current viz state. Need to
+        # figure out what to draw based on current viz state
         scan = self._scan
         self._available_fields = list(scan.fields)
-
-        img_fields = (self._available_fields[self._img_ind[0]],
-                      self._available_fields[self._img_ind[1]])
+        image_fields = tuple(self._available_fields[i] for i in self._img_ind)
         cloud_fields = LidarScanViz._cloud_mode_channels[self._cloud_mode_ind]
 
-        # changed in handler when displaying cal ref
-        palette = self._cloud_palette
-        self._cloud_palette = None
-
-        # extract field data
+        # extract field data and apply post-processing
         field_data: Dict[ChanField, np.ndarray]
         field_data = defaultdict(lambda: np.zeros(
             (scan.h, scan.w), dtype=np.double))
 
-        for field in {*img_fields, *cloud_fields}:
+        for field in {*image_fields, *cloud_fields}:
             if field in scan.fields:
                 field_data[field] = scan.field(field).astype(np.double)
 
-        # apply post-processing
         for field, data in field_data.items():
             if field in self._field_pp:
                 self._field_pp[field](data)
 
         # update 3d display
+        palette = self._cloud_palette
+        self._cloud_palette = None
+
         for i, range_field in ((0, ChanField.RANGE), (1, ChanField.RANGE2)):
             if range_field in scan.fields:
-                self._clouds[i].set_range(scan.field(range_field))
+                range_data = scan.field(range_field)
             else:
-                self._clouds[i].set_range(
-                    np.zeros((scan.h, scan.w), dtype=np.uint32))
+                range_data = np.zeros((scan.h, scan.w), dtype=np.uint32)
 
+            self._clouds[i].set_range(range_data)
             self._clouds[i].set_key(field_data[cloud_fields[i]])
             if palette is not None:
                 self._clouds[i].set_palette(palette)
 
         # update 2d images
         for i in (0, 1):
-            self._images[i].set_image(
-                client.destagger(self._metadata,
-                                 field_data[img_fields[i]].astype(np.float32)))
+            image_data = client.destagger(
+                self._metadata, field_data[image_fields[i]].astype(np.float32))
+            self._images[i].set_image(image_data)
 
+        # update osd
         meta = self._metadata
         enable_ind = [i + 1 for i, b in enumerate(self._cloud_enabled) if b]
         if self._osd_enabled:
             self._osd.set_text(
-                f"image: {img_fields[0]}/{img_fields[1]}\n"
+                f"image: {image_fields[0]}/{image_fields[1]}\n"
                 f"cloud{enable_ind}: {cloud_fields[0]}\n"
                 f"frame: {scan.frame_id}\n"
                 f"sensor ts: {scan.timestamp[0] / 1e9:.3f}s\n"
@@ -306,9 +324,6 @@ class LidarScanViz:
                 f"{meta.prod_line} {meta.fw_rev} {meta.mode}")
         else:
             self._osd.set_text("")
-
-
-T = TypeVar('T')
 
 
 class _Seekable(Generic[T]):
@@ -393,31 +408,38 @@ class SimpleViz:
 
     Handles controls for playback speed, pausing and stepping."""
 
-    _buflen: ClassVar[int] = 50
-
     _playback_rates: ClassVar[Tuple[float, ...]]
     _playback_rates = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 0.0)
 
     def __init__(self,
-                 scans: client.ScanSource,
-                 rate: Optional[float] = 1.0) -> None:
+                 arg: Union[client.SensorInfo, LidarScanViz],
+                 rate: Optional[float] = None,
+                 _buflen: int = 50) -> None:
         """
         Args:
-            scans: The stream of scans to visualze.
+            arg: Metadata associated with the scans to be visualized or a
+                 LidarScanViz instance to use.
             rate: Playback rate. One of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0 or
-                  None for "live" playback.
+                  None for "live" playback (the default).
 
         Raises:
             ValueError: if the specified rate isn't one of the options
         """
-        self._viz = PointViz("Ouster Viz")
-        self._scan_viz = LidarScanViz(self._viz, scans.metadata)
+        if isinstance(arg, client.SensorInfo):
+            self._metadata = arg
+            self._viz = PointViz("Ouster Viz")
+            self._scan_viz = LidarScanViz(self._viz, arg)
+        elif isinstance(arg, LidarScanViz):
+            self._metadata = arg._metadata
+            self._viz = arg._viz
+            self._scan_viz = arg
+        else:
+            raise TypeError(f"Bad type for 1st constructor arg: {type(arg)}")
 
         self._lock = threading.Lock()
-        self._scans = _Seekable(scans, maxlen=SimpleViz._buflen)
-        self._metadata = scans.metadata
         self._live = (rate is None)
         self._rate_ind = SimpleViz._playback_rates.index(rate or 0.0)
+        self._buflen = _buflen
 
         # pausing and stepping
         self._cv = threading.Condition()
@@ -449,17 +471,15 @@ class SimpleViz:
                 partial(SimpleViz.modify_rate, amount=1),
             })
 
-        weakself = weakref.ref(self)
-
-        def handle_keys(ctx: WindowCtx, key: int, mods: int) -> bool:
-            self = weakself()
-            if self is not None and (key, mods) in key_bindings:
+        def handle_keys(self: SimpleViz, ctx: WindowCtx, key: int,
+                        mods: int) -> bool:
+            if (key, mods) in key_bindings:
                 key_bindings[key, mods](self)
                 # override rather than add bindings
                 return False
             return True
 
-        self._viz.push_key_handler(handle_keys)
+        push_point_viz_handler(self._viz, self, handle_keys)
 
     def _update_playback_osd(self) -> None:
         if not self._osd_enabled:
@@ -511,7 +531,7 @@ class SimpleViz:
         else:
             return 0.0
 
-    def _process(self) -> None:
+    def _process(self, seekable: _Seekable[client.LidarScan]) -> None:
 
         last_ts = time.monotonic()
         try:
@@ -523,14 +543,14 @@ class SimpleViz:
                     if self._proc_exit:
                         break
                     if self._step:
-                        seek_ind = self._scans.next_ind + self._step - 1
+                        seek_ind = seekable.next_ind + self._step - 1
                         self._step = 0
-                        if not (self._scans.seek(seek_ind)):
+                        if not seekable.seek(seek_ind):
                             continue
                     period = self._frame_period()
 
                 # process new data
-                self._scan_viz.scan = next(self._scans)
+                self._scan_viz.scan = next(seekable)
                 self._scan_viz.draw(update=False)
 
                 # sleep for remainder of scan period
@@ -548,19 +568,26 @@ class SimpleViz:
             # signal rendering (main) thread to exit
             self._viz.running(False)
 
-    def run(self) -> None:
+    def run(self, scans: Iterable[client.LidarScan]) -> None:
         """Start reading scans and visualizing the stream.
 
         Must be called from the main thread on macos. Will close the provided
         scan source before returning.
 
+        Args:
+            scans: A stream of scans to visualize.
+
         Returns:
             When the stream is consumed or the visualizer window is closed.
         """
+
+        seekable = _Seekable(scans, maxlen=self._buflen)
         try:
             print("Starting processing thread...")
             self._proc_exit = False
-            proc_thread = threading.Thread(target=self._process, name="Proc")
+            proc_thread = threading.Thread(name="Viz processing",
+                                           target=self._process,
+                                           args=(seekable, ))
             proc_thread.start()
 
             print("Starting rendering loop...")
@@ -570,7 +597,7 @@ class SimpleViz:
             pass
         finally:
             # some scan sources may be waiting on IO, blocking the processing thread
-            self._scans.close()
+            seekable.close()
 
             # processing thread will still be running if e.g. viz window was closed
             with self._cv:

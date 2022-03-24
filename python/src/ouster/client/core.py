@@ -338,6 +338,7 @@ class Scans:
             source: any source of packets
             complete: if True, only return full scans
             timeout: seconds to wait for a scan before error or None
+            fields: specify which channel fields to populate on LidarScans
             _max_latency: (experimental) approximate max number of frames to buffer
         """
         self._source = source
@@ -472,6 +473,7 @@ class Scans:
             timeout: seconds to wait for scans before signaling error
             complete: if True, only return full scans
             metadata: explicitly provide metadata for the stream
+            fields: specify which channel fields to populate on LidarScans
         """
         source = Sensor(hostname,
                         lidar_port,

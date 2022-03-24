@@ -84,6 +84,9 @@ class Cloud:
     def set_key(self, key: np.ndarray) -> None:
         ...
 
+    def set_mask(self, mask: np.ndarray) -> None:
+        ...
+
     def set_point_size(self, size: float) -> None:
         ...
 

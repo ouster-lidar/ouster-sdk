@@ -175,6 +175,14 @@ PYBIND11_PLUGIN(_viz) {
                      throw std::invalid_argument("Bad size");
                  self.set_key(key.data());
              })
+        .def("set_mask",
+             [](viz::Cloud& self, py::array_t<float> mask) {
+                 if (mask.ndim() != 3)
+                     throw std::invalid_argument("Expected a 3d array");
+                 if (static_cast<size_t>(mask.size()) < self.get_size() * 4)
+                     throw std::invalid_argument("Bad size");
+                 self.set_mask(mask.data());
+             })
         .def("set_point_size", &viz::Cloud::set_point_size)
         .def("set_palette", [](viz::Cloud& self, py::array_t<float> buf) {
             constexpr size_t palette_size = 256;

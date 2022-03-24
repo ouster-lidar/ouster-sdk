@@ -59,4 +59,4 @@ def main() -> None:
         scans = client.Scans(pcap.Pcap(args.pcap, info))
         rate = 1.0
 
-    SimpleViz(scans, rate).run()
+    SimpleViz(scans.metadata, rate).run(scans)
