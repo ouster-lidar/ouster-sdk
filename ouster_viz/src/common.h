@@ -1,12 +1,12 @@
 #pragma once
 
-#include <GL/glew.h>
-
 #include <atomic>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "glfw.h"
 
 namespace ouster {
 namespace viz {

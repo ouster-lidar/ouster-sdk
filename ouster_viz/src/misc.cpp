@@ -1,7 +1,5 @@
 #include "misc.h"
 
-#include <GL/glew.h>
-
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <cassert>
@@ -12,6 +10,7 @@
 
 #include "camera.h"
 #include "common.h"
+#include "glfw.h"
 #include "ouster/point_viz.h"
 
 namespace ouster {

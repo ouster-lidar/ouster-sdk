@@ -1,8 +1,5 @@
 #include "ouster/point_viz.h"
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-
 #include <Eigen/Core>
 #include <algorithm>
 #include <cassert>

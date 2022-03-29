@@ -1,10 +1,9 @@
 #pragma once
 
-#include <GL/glew.h>
-
 #include <array>
 
 #include "camera.h"
+#include "glfw.h"
 #include "ouster/point_viz.h"
 
 namespace ouster {

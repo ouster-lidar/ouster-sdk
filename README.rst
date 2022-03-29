@@ -69,10 +69,10 @@ for dependencies. Follow the official documentation to set up your build environ
   <https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019>`_
 * `Visual Studio CPP Support
   <https://docs.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=vs-2019>`_
-* `Vcpkg, at tag "2021.05.12" installed and integrated with Visual Studio
+* `Vcpkg, at tag "2022.02.23" installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-**Note** You'll need to run ``git checkout 2021.05.12`` in the vcpkg directory before bootstrapping
+**Note** You'll need to run ``git checkout 2022.02.23`` in the vcpkg directory before bootstrapping
 to use the correct versions of the dependencies. Building may fail unexpectedly if you skip this
 step.
 
@@ -82,7 +82,7 @@ Don't forget to integrate vcpkg with Visual Studio after bootstrapping::
 
 You should be able to install dependencies with::
 
-    .\vcpkg.exe install --triplet x64-windows glfw3 glew tclap jsoncpp eigen3
+    .\vcpkg.exe install --triplet x64-windows glfw3 glad[gl-api-33] tclap jsoncpp eigen3
 
 After these steps are complete, you should be able to open, build and run the ``ouster_example``
 project using Visual Studio:

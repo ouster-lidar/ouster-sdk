@@ -1,6 +1,11 @@
 #pragma once
 
+#ifdef OUSTER_VIZ_GLEW
 #include <GL/glew.h>
+#else
+#include <glad/glad.h>
+#endif
+
 #include <GLFW/glfw3.h>
 
 #include <functional>

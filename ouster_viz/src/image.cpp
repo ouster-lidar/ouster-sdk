@@ -1,12 +1,11 @@
 #include "image.h"
 
-#include <GL/glew.h>
-
 #include <stdexcept>
 #include <vector>
 
 #include "camera.h"
 #include "common.h"
+#include "glfw.h"
 #include "ouster/point_viz.h"
 
 namespace ouster {

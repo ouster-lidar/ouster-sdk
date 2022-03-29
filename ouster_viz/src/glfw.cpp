@@ -1,8 +1,5 @@
 #include "glfw.h"
 
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-
 #include <functional>
 #include <iostream>
 #include <stdexcept>
@@ -154,15 +151,22 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     }
     glfwMakeContextCurrent(window);
 
-    std::cerr << "GL Renderer: " << glGetString(GL_RENDERER) << std::endl;
-    std::cerr << "GL Version: " << glGetString(GL_VERSION)
-              << " (GLSL: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << ")"
-              << std::endl;
-
+#ifdef OUSTER_VIZ_GLEW
     if (glewInit() != GLEW_OK) {
         glfwTerminate();
         throw std::runtime_error("Failed to initialize GLEW");
     }
+#else
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        glfwTerminate();
+        throw std::runtime_error("Failed to initialize GLAD");
+    }
+#endif
+
+    std::cerr << "GL Renderer: " << glGetString(GL_RENDERER) << std::endl;
+    std::cerr << "GL Version: " << glGetString(GL_VERSION)
+              << " (GLSL: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << ")"
+              << std::endl;
 
     // initialize text rendering
     if (gltInit() == GL_FALSE) {
@@ -182,9 +186,13 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     // context for glfw callbacks
     glfwSetWindowUserPointer(window, this);
 
+#if GLFW_VERSION_MAJOR >= 3 && GLFW_VERSION_MINOR >= 2
     // prevent window aspect from changing
     if (fix_aspect)
         glfwSetWindowAspectRatio(window, window_width, window_height);
+#else
+    (void)fix_aspect;
+#endif
 
     // initialize viewport size. Note: this is conceptually different than the
     // window size, and actually different on retina displays. See: glfw docs

@@ -4,9 +4,20 @@ cmake_minimum_required(VERSION 3.1.0)
 project(ouster_viz)
 
 # ==== Requirements ====
-set(OpenGL_GL_PREFERENCE GLVND)
+set(OpenGL_GL_PREFERENCE LEGACY)
 find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
+
+find_package(glad CONFIG QUIET)
+if(glad_FOUND)
+  message(STATUS "Found glad ${glad_CONFIG}")
+  set(GL_LOADER glad::glad)
+else()
+  message(STATUS "glad NOT found, falling back to GLEW")
+  find_package(GLEW REQUIRED)
+  set(GL_LOADER GLEW::GLEW)
+  add_definitions("-DOUSTER_VIZ_GLEW")
+endif()
+
 find_package(glfw3 CONFIG REQUIRED)
 find_package(Eigen3 REQUIRED)
 
@@ -17,7 +28,8 @@ add_definitions(-DEIGEN_MPL2_ONLY)
 add_library(ouster_viz src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp
   src/gltext.cpp src/misc.cpp src/glfw.cpp)
 target_link_libraries(ouster_viz
-  PRIVATE Eigen3::Eigen glfw GLEW::GLEW OpenGL::GL ouster_client)
+  PRIVATE Eigen3::Eigen glfw ${GL_LOADER} OpenGL::GL ouster_client)
+
 target_include_directories(ouster_viz PUBLIC
   $<INSTALL_INTERFACE:include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)

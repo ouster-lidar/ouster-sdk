@@ -1,7 +1,5 @@
 #include "cloud.h"
 
-#include <GL/glew.h>
-
 #include <Eigen/Core>
 #include <algorithm>
 #include <cstddef>
@@ -10,6 +8,7 @@
 
 #include "camera.h"
 #include "common.h"
+#include "glfw.h"
 #include "ouster/point_viz.h"
 
 namespace ouster {
