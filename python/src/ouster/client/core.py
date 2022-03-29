@@ -240,11 +240,16 @@ class Sensor(PacketSource):
             self.flush(full=True)
 
         while True:
-            p = self._next_packet()
-            if p is not None:
-                yield p
-            else:
-                break
+            try:
+                p = self._next_packet()
+                if p is not None:
+                    yield p
+                else:
+                    break
+            except ValueError:
+                # TODO: bad packet size or init_id here: this can happen when
+                # packets are buffered by the OS, not necessarily an error
+                pass
 
     def flush(self, n_frames: int = 3, *, full=False) -> int:
         """Drop some data to clear internal buffers.
@@ -390,7 +395,7 @@ class Scans:
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write._complete(column_window):
                         yield ls_write
-                    start_ts = time.monotonic()
+                        start_ts = time.monotonic()
                     ls_write = None
 
                     # Drop data along frame boundaries to maintain _max_latency and

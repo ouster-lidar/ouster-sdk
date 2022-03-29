@@ -314,12 +314,13 @@ class LidarScanViz:
         # update osd
         meta = self._metadata
         enable_ind = [i + 1 for i, b in enumerate(self._cloud_enabled) if b]
+        first_ts = scan.timestamp[np.nonzero(scan.timestamp)][0]
         if self._osd_enabled:
             self._osd.set_text(
                 f"image: {image_fields[0]}/{image_fields[1]}\n"
                 f"cloud{enable_ind}: {cloud_fields[0]}\n"
                 f"frame: {scan.frame_id}\n"
-                f"sensor ts: {scan.timestamp[0] / 1e9:.3f}s\n"
+                f"sensor ts: {first_ts / 1e9:.3f}s\n"
                 f"profile: {str(meta.format.udp_profile_lidar)}\n"
                 f"{meta.prod_line} {meta.fw_rev} {meta.mode}")
         else:

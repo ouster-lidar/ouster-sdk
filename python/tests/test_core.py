@@ -1,4 +1,5 @@
 from contextlib import closing
+import socket
 
 import numpy as np
 import pytest
@@ -52,8 +53,41 @@ def test_sensor_port_in_use(default_meta: client.SensorInfo) -> None:
             assert s2._cli.imu_port == s1._cli.imu_port
 
 
+def test_sensor_packet(default_meta: client.SensorInfo) -> None:
+    """Check that the client will read single properly-sized LEGACY packet."""
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          metadata=default_meta,
+                          timeout=5.0,
+                          _flush_before_read=False)) as source:
+        data = np.random.randint(255,
+                                 size=source._pf.lidar_packet_size,
+                                 dtype=np.uint8)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(data.tobytes(), ("localhost", source._cli.lidar_port))
+        packet = next(iter(source))
+        assert (packet._data == data).all()
+
+
+def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
+    """Check that the client will ignore improperly-sized packets."""
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          metadata=default_meta,
+                          timeout=1.0,
+                          _flush_before_read=False)) as source:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(b"hello", ("localhost", source._cli.lidar_port))
+        with pytest.raises(client.ClientTimeout):
+            next(iter(source))
+
+
 def test_scans_simple(packets: client.PacketSource) -> None:
-    """Test that the test data contains exactly one scan."""
+    """Check that the test data contains exactly one scan."""
     scans = iter(client.Scans(packets))
     assert next(scans) is not None
 

@@ -6,7 +6,6 @@
 #pragma once
 
 #include <Eigen/Core>
-#include <vector>
 
 #include "ouster/types.h"
 
@@ -14,7 +13,8 @@ namespace ouster {
 namespace viz {
 
 /**
- * Functor that adjusts brightness to between 0 and 1 */
+ * Adjusts brightness to between 0 and 1
+ */
 class AutoExposure {
     const double lo_percentile, hi_percentile;  // percentiles used for scaling
     const int ae_update_every;
@@ -28,23 +28,28 @@ class AutoExposure {
     int counter = 0;
 
    public:
-    /* default constructor using default percentile and udpate values */
+    /**
+     * Default constructor using default percentile and udpate values
+     */
     AutoExposure();
 
-    /* constructor specifying update modulo, and using default percentiles */
+    /**
+     * Constructor specifying update modulo, and using default percentiles
+     */
     AutoExposure(int update_every);
 
-    /* constructor specifying low and high percentiles, and update modulo */
+    /**
+     * Constructor specifying low and high percentiles, and update modulo
+     */
     AutoExposure(double lo_percentile, double hi_percentile, int update_every);
 
     /**
      * Scales the image so that contrast is stretched between 0 and 1.
      *
      * The top percentile is 1 - hi_percentile and the bottom percentile is
-     * lo_percentile. Analogous to linear 'contrast-stretch', i.e.
-     * normalization.
+     * lo_percentile. Similar to linear 'contrast-stretch', i.e. normalization.
      *
-     * @param image Reference to image, modified in place
+     * @param image Reference to the image, modified in place
      */
     void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
@@ -57,15 +62,14 @@ class AutoExposure {
 class BeamUniformityCorrector {
    private:
     int counter = 0;
-    std::vector<double> dark_count;
+    Eigen::ArrayXd dark_count;
 
    public:
     /**
      * Applies dark count correction to an image, modifying it in-place to have
      * reduced horizontal line artifacts.
      *
-     * @param image Mutable reference to an image as a 2D Eigen array,
-     *              to be modified in-place
+     * @param image Rreference to the image, modified in-place
      */
     void operator()(Eigen::Ref<img_t<double>> image);
 };
