@@ -220,11 +220,10 @@ static const std::string cuboid_vertex_shader_code =
             #version 330 core
             in vec3 cuboid_xyz;
             uniform vec4 cuboid_rgba;
-            uniform mat4 pose;
             uniform mat4 proj_view;
             out vec4 rgba;
             void main(){
-                gl_Position = proj_view * pose * vec4(cuboid_xyz, 1.0);
+                gl_Position = proj_view * vec4(cuboid_xyz, 1.0);
                 rgba = cuboid_rgba;
             })SHADER";
 static const std::string cuboid_fragment_shader_code =

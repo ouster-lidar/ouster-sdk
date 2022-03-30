@@ -100,7 +100,6 @@ bool GLCuboid::initialized = false;
 GLuint GLCuboid::cuboid_program_id;
 GLuint GLCuboid::cuboid_xyz_id;
 GLuint GLCuboid::cuboid_proj_view_id;
-GLuint GLCuboid::cuboid_pose_id;
 GLuint GLCuboid::cuboid_rgba_id;
 
 GLCuboid::GLCuboid()
@@ -126,7 +125,7 @@ GLCuboid::GLCuboid()
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, edge_indices.size() * sizeof(GLubyte),
                  edge_indices.data(), GL_STATIC_DRAW);
 
-    pose = Eigen::Matrix4f::Identity();
+    transform = Eigen::Matrix4d::Identity();
 }
 
 // for Indexed<T, U>, arg ignored
@@ -142,9 +141,9 @@ void GLCuboid::draw(const WindowCtx&, const CameraData& camera,
     if (!GLCuboid::initialized)
         throw std::logic_error("GLCuboid not initialized");
 
-    if (cuboid.pose_changed_) {
-        pose = Eigen::Map<const Eigen::Matrix4f>{cuboid.pose_.data()};
-        cuboid.pose_changed_ = false;
+    if (cuboid.transform_changed_) {
+        transform = Eigen::Map<const Eigen::Matrix4d>{cuboid.transform_.data()};
+        cuboid.transform_changed_ = false;
     }
 
     if (cuboid.rgba_changed_) {
@@ -152,13 +151,12 @@ void GLCuboid::draw(const WindowCtx&, const CameraData& camera,
         cuboid.rgba_changed_ = false;
     }
 
-    glUniformMatrix4fv(GLCuboid::cuboid_pose_id, 1, GL_FALSE, pose.data());
     glUniform4fv(GLCuboid::cuboid_rgba_id, 1, rgba.data());
 
     // cuboid pose (model matrix) is separate for some reason
-    const Eigen::Matrix4f vp =
-        (camera.proj * camera.view * camera.target).cast<float>();
-    glUniformMatrix4fv(GLCuboid::cuboid_proj_view_id, 1, GL_FALSE, vp.data());
+    const Eigen::Matrix4f mvp =
+        (camera.proj * camera.view * camera.target * transform).cast<float>();
+    glUniformMatrix4fv(GLCuboid::cuboid_proj_view_id, 1, GL_FALSE, mvp.data());
     glEnableVertexAttribArray(GLCuboid::cuboid_xyz_id);
     glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
     glVertexAttribPointer(GLCuboid::cuboid_xyz_id,
@@ -194,7 +192,6 @@ void GLCuboid::initialize() {
         glGetAttribLocation(cuboid_program_id, "cuboid_xyz");
     GLCuboid::cuboid_proj_view_id =
         glGetUniformLocation(cuboid_program_id, "proj_view");
-    GLCuboid::cuboid_pose_id = glGetUniformLocation(cuboid_program_id, "pose");
     GLCuboid::cuboid_rgba_id =
         glGetUniformLocation(cuboid_program_id, "cuboid_rgba");
     GLCuboid::initialized = true;
@@ -235,7 +232,7 @@ GLLabel::GLLabel(const Label&) : GLLabel{} {}
 GLLabel::~GLLabel() { gltDeleteText(gltext); }
 
 void GLLabel::draw(const WindowCtx& ctx, const CameraData& camera,
-                     Label& label) {
+                   Label& label) {
     if (label.text_changed_) {
         gltSetText(gltext, label.text_.c_str());
         label.text_changed_ = false;
@@ -270,8 +267,8 @@ void GLLabel::draw(const WindowCtx& ctx, const CameraData& camera,
 
         gltDrawText(gltext, mvp.data());
     } else {
-        int x = text_position.x() * ctx.viewport_width;
-        int y = text_position.y() * ctx.viewport_height;
+        float x = text_position.x() * ctx.viewport_width;
+        float y = text_position.y() * ctx.viewport_height;
         float scale2d = scale;
 #ifdef __APPLE__
         // TODO: maybe try turning GLFW_COCOA_RETINA_FRAMEBUFFER off

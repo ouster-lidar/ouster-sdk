@@ -67,6 +67,19 @@ extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 }  // namespace sensor
 }  // namespace ouster
 
+// alias for non-casting row-major array arguments
+template <typename T>
+using pyimg_t = py::array_t<T, py::array::c_style>;
+
+// factor out overloaded call operator for ae/buc
+template <typename T, typename U>
+void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
+    if (image.ndim() != 2) throw std::invalid_argument("Expected a 2d array");
+    self(Eigen::Map<img_t<U>>(image.mutable_data(), image.shape(0),
+                              image.shape(1)),
+         update_state);
+}
+
 /*
  * Define an enum from a table of strings, along with some properties to make
  * the class behave more like a Python enum
@@ -760,28 +773,17 @@ PYBIND11_PLUGIN(_client) {
         .def(py::init<int>(), py::arg("update_every"))
         .def(py::init<double, double, int>(), py::arg("lo_percentile"),
              py::arg("hi_percentile"), py::arg("update_every"))
-        .def(
-            "__call__",
-            [](viz::AutoExposure& self, py::array_t<double> image,
-               bool update_state) {
-                // TODO: need to check for strides?
-                if (image.ndim() != 2)
-                    throw std::invalid_argument("Expected a 2d array");
-                self(Eigen::Map<img_t<double>>(image.mutable_data(),
-                                               image.shape(0), image.shape(1)),
-                     update_state);
-            },
-            py::arg("image"), py::arg("update_state") = true);
+        .def("__call__", &image_proc_call<viz::AutoExposure, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::AutoExposure, double>,
+             py::arg("image"), py::arg("update_state") = true);
 
     py::class_<viz::BeamUniformityCorrector>(m, "BeamUniformityCorrector")
         .def(py::init<>())
-        .def("__call__",
-             [](viz::BeamUniformityCorrector& self, py::array_t<double> image) {
-                 if (image.ndim() != 2)
-                     throw std::invalid_argument("Expected a 2d array");
-                 self(Eigen::Map<img_t<double>>(
-                     image.mutable_data(), image.shape(0), image.shape(1)));
-             });
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
+             py::arg("image"), py::arg("update_state") = true);
 
     return m.ptr();
 }

@@ -280,11 +280,11 @@ class LidarScanViz:
         # extract field data and apply post-processing
         field_data: Dict[ChanField, np.ndarray]
         field_data = defaultdict(lambda: np.zeros(
-            (scan.h, scan.w), dtype=np.double))
+            (scan.h, scan.w), dtype=np.float32))
 
         for field in {*image_fields, *cloud_fields}:
             if field in scan.fields:
-                field_data[field] = scan.field(field).astype(np.double)
+                field_data[field] = scan.field(field).astype(np.float32)
 
         for field, data in field_data.items():
             if field in self._field_pp:
@@ -301,7 +301,8 @@ class LidarScanViz:
                 range_data = np.zeros((scan.h, scan.w), dtype=np.uint32)
 
             self._clouds[i].set_range(range_data)
-            self._clouds[i].set_key(field_data[cloud_fields[i]])
+            self._clouds[i].set_key(field_data[cloud_fields[i]].astype(
+                np.float32))
             if palette is not None:
                 self._clouds[i].set_palette(palette)
 

@@ -15,10 +15,10 @@
 
 #include "camera.h"
 #include "cloud.h"
+#include "colormaps.h"
 #include "glfw.h"
 #include "image.h"
 #include "misc.h"
-#include "ouster/colormaps.h"
 
 static_assert(std::is_same<GLfloat, float>::value,
               "Platform has unexpected definition of GLfloat");
@@ -351,13 +351,10 @@ bool PointViz::remove(const std::shared_ptr<Image>& image) {
     return pimpl->images.remove(image);
 }
 
-/*
- * Drawable types exposed to the user
- */
-Cloud::Cloud(size_t w, size_t h, const double* xyz, const double* off,
-             const double* extrinsic)
+Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
     : n_{w * h},
       w_{w},
+      extrinsic_{extrinsic},
       range_data_(n_, 0),
       key_data_(n_, 0),
       mask_data_(4 * n_, 0),
@@ -365,8 +362,6 @@ Cloud::Cloud(size_t w, size_t h, const double* xyz, const double* off,
       off_data_(3 * n_, 0),
       transform_data_(12 * w, 0),
       palette_data_(3 * n_, 0) {
-    std::copy(extrinsic, extrinsic + 16, extrinsic_.data());
-
     // initialize per-column poses to identity
     for (size_t v = 0; v < w; v++) {
         transform_data_[3 * v] = 1;
@@ -375,12 +370,28 @@ Cloud::Cloud(size_t w, size_t h, const double* xyz, const double* off,
     }
     transform_changed_ = true;
 
-    Eigen::Map<Eigen::Matrix4d>{map_pose_.data()}.setIdentity();
-    map_pose_changed_ = true;
+    Eigen::Map<Eigen::Matrix4d>{pose_.data()}.setIdentity();
+    pose_changed_ = true;
 
-    set_xyz(xyz);
+    set_palette(&spezia_palette[0][0], spezia_n);
+}
+
+/*
+ * Drawable types exposed to the user
+ */
+Cloud::Cloud(size_t n, const mat4d& extrinsic) : Cloud{1, n, extrinsic} {
+    // initialize ranges to 1, set_xyz() used for data
+    Eigen::Array<uint32_t, 1, -1> ones =
+        Eigen::Array<uint32_t, 1, -1>::Ones(n * 3);
+    set_range(ones.data());
+}
+
+Cloud::Cloud(size_t w, size_t h, const float* dir, const float* off,
+             const mat4d& extrinsic)
+    : Cloud::Cloud{w, h, extrinsic} {
+    // initialize unit vectors and offsets, set_range() used for data
+    set_xyz(dir);
     set_offset(off);
-    set_palette(&spezia[0][0], spezia_n);
 }
 
 void Cloud::clear() {
@@ -391,7 +402,7 @@ void Cloud::clear() {
     offset_changed_ = false;
     transform_changed_ = false;
     palette_changed_ = false;
-    map_pose_changed_ = false;
+    pose_changed_ = false;
 }
 
 void Cloud::set_range(const uint32_t* x) {
@@ -399,7 +410,7 @@ void Cloud::set_range(const uint32_t* x) {
     range_changed_ = true;
 }
 
-void Cloud::set_key(const double* key_data) {
+void Cloud::set_key(const float* key_data) {
     std::copy(key_data, key_data + n_, key_data_.begin());
     key_changed_ = true;
 }
@@ -409,19 +420,19 @@ void Cloud::set_mask(const float* mask_data) {
     mask_changed_ = true;
 }
 
-void Cloud::set_xyz(const double* xyz) {
+void Cloud::set_xyz(const float* xyz) {
     for (size_t i = 0; i < n_; i++) {
         for (size_t k = 0; k < 3; k++) {
-            xyz_data_[3 * i + k] = static_cast<GLfloat>(xyz[i + n_ * k]);
+            xyz_data_[3 * i + k] = xyz[i + n_ * k];
         }
     }
     xyz_changed_ = true;
 }
 
-void Cloud::set_offset(const double* offset) {
+void Cloud::set_offset(const float* offset) {
     for (size_t i = 0; i < n_; i++) {
         for (size_t k = 0; k < 3; k++) {
-            off_data_[3 * i + k] = static_cast<GLfloat>(offset[i + n_ * k]);
+            off_data_[3 * i + k] = offset[i + n_ * k];
         }
     }
     offset_changed_ = true;
@@ -433,22 +444,20 @@ void Cloud::set_point_size(float size) {
 }
 
 void Cloud::set_pose(const mat4d& pose) {
-    map_pose_ = pose;
-    map_pose_changed_ = true;
+    pose_ = pose;
+    pose_changed_ = true;
 }
 
-void Cloud::set_column_poses(const double* rotation,
-                             const double* translation) {
+void Cloud::set_column_poses(const float* rotation, const float* translation) {
     for (size_t v = 0; v < w_; v++) {
         for (size_t u = 0; u < 3; u++) {
             for (size_t rgb = 0; rgb < 3; rgb++) {
                 transform_data_[(u * w_ + v) * 3 + rgb] =
-                    static_cast<GLfloat>(rotation[v + u * w_ + 3 * rgb * w_]);
+                    rotation[v + u * w_ + 3 * rgb * w_];
             }
         }
         for (size_t rgb = 0; rgb < 3; rgb++) {
-            transform_data_[9 * w_ + 3 * v + rgb] =
-                static_cast<GLfloat>(translation[v + rgb * w_]);
+            transform_data_[9 * w_ + 3 * v + rgb] = translation[v + rgb * w_];
         }
     }
     transform_changed_ = true;
@@ -486,24 +495,24 @@ void Image::set_mask(size_t width, size_t height, const float* mask_data) {
     mask_changed_ = true;
 }
 
-void Image::set_position(const std::array<float, 4>& pos) {
-    position_ = pos;
+void Image::set_position(float x_min, float x_max, float y_min, float y_max) {
+    position_ = {x_min, x_max, y_max, y_min};
     position_changed_ = true;
 }
 
-Cuboid::Cuboid(const mat4f& pose, const std::array<float, 4>& rgba) {
-    set_pose(pose);
+Cuboid::Cuboid(const mat4d& pose, const std::array<float, 4>& rgba) {
+    set_transform(pose);
     set_rgba(rgba);
 }
 
 void Cuboid::clear() {
-    pose_changed_ = false;
+    transform_changed_ = false;
     rgba_changed_ = false;
 }
 
-void Cuboid::set_pose(const mat4f& pose) {
-    pose_ = pose;
-    pose_changed_ = true;
+void Cuboid::set_transform(const mat4d& pose) {
+    transform_ = pose;
+    transform_changed_ = true;
 }
 
 void Cuboid::set_rgba(const std::array<float, 4>& rgba) {

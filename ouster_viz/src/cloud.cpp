@@ -118,16 +118,18 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
     }
     glPointSize(point_size);
 
-    if (cloud.map_pose_changed_) {
-        map_pose = Eigen::Map<const Eigen::Matrix4d>{cloud.map_pose_.data()};
-        cloud.map_pose_changed_ = false;
+    if (cloud.pose_changed_) {
+        map_pose = Eigen::Map<const Eigen::Matrix4d>{cloud.pose_.data()};
+        cloud.pose_changed_ = false;
     }
+    extrinsic = Eigen::Map<const Eigen::Matrix4d>{cloud.extrinsic_.data()}
+                    .cast<float>();
 
     const Eigen::Matrix4f mvp =
         (camera.proj * camera.view * camera.target * map_pose).cast<float>();
 
     glUniformMatrix4fv(GLCloud::cloud_ids.model_id, 1, GL_FALSE,
-                       cloud.extrinsic_.data());
+                       extrinsic.data());
     glUniformMatrix4fv(GLCloud::cloud_ids.proj_view_id, 1, GL_FALSE,
                        mvp.data());
 

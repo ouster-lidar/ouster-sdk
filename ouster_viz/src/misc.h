@@ -60,7 +60,6 @@ class GLCuboid {
     static GLuint cuboid_program_id;
     static GLuint cuboid_xyz_id;
     static GLuint cuboid_proj_view_id;
-    static GLuint cuboid_pose_id;
     static GLuint cuboid_rgba_id;
 
     const std::array<GLfloat, 24> xyz;
@@ -70,7 +69,7 @@ class GLCuboid {
     GLuint xyz_buffer{0};
     GLuint indices_buffer{0};
     GLuint edge_indices_buffer{0};
-    Eigen::Matrix4f pose;
+    Eigen::Matrix4d transform;
     std::array<float, 4> rgba;
 
    public:

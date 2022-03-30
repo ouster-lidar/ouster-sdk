@@ -54,9 +54,9 @@ AutoExposure::AutoExposure(double lo_percentile, double hi_percentile,
       hi_percentile(hi_percentile),
       ae_update_every(update_every) {}
 
-void AutoExposure::operator()(Eigen::Ref<img_t<double>> image,
-                              bool update_state) {
-    Eigen::Map<Eigen::ArrayXd> key_eigen(image.data(), image.size());
+template <typename T>
+void AutoExposure::update(Eigen::Ref<img_t<T>> image, bool update_state) {
+    Eigen::Map<Eigen::Array<T, -1, 1>> key_eigen(image.data(), image.size());
 
     // int a;
     if (counter == 0 && update_state) {
@@ -133,6 +133,17 @@ void AutoExposure::operator()(Eigen::Ref<img_t<double>> image,
     }
 }
 
+// use overloads vs templates so implicit conversion to Eigen::Ref still works
+void AutoExposure::operator()(Eigen::Ref<img_t<float>> image,
+                              bool update_state) {
+    update(image, update_state);
+}
+
+void AutoExposure::operator()(Eigen::Ref<img_t<double>> image,
+                              bool update_state) {
+    update(image, update_state);
+}
+
 namespace {
 
 /*
@@ -155,22 +166,24 @@ const int buc_update_every = 8;
  * computes the dark count, i.e. an additive offset in the brightness of the
  * image, to smoothe the difference between rows
  */
-static Eigen::ArrayXd compute_dark_count(
-    const Eigen::Ref<const img_t<double>>& image) {
+template <typename T>
+static Eigen::Array<T, -1, 1> compute_dark_count(
+    const Eigen::Ref<img_t<T>>& image) {
     const size_t image_h = image.rows();
     const size_t image_w = image.cols();
 
-    Eigen::ArrayXd tmp{image_w};
-    Eigen::ArrayXd new_dark_count{image_h};
+    Eigen::Array<T, -1, 1> tmp{image_w};
+    Eigen::Array<T, -1, 1> new_dark_count{image_h};
 
     // probably computed lazily when used below?
     auto row_diffs = image.bottomRows(image_h - 1) - image.topRows(image_h - 1);
 
     // to handle azimuth-masked data, only consider columns with nonzero values
-    Eigen::Array<bool, -1, 1> col_mask = image.cast<bool>().colwise().any();
+    Eigen::Array<bool, -1, 1> col_mask =
+        image.template cast<bool>().colwise().any();
     const size_t n_cols = col_mask.count();
 
-    img_t<double> row_diffs_nonzero{image_h - 1, n_cols};
+    img_t<T> row_diffs_nonzero{image_h - 1, n_cols};
     for (size_t i = 0, j = 0; i < image_w && j < n_cols; i++) {
         if (col_mask[i]) {
             row_diffs_nonzero.col(j) = row_diffs.col(i);
@@ -187,12 +200,12 @@ static Eigen::ArrayXd compute_dark_count(
     }
 
     // remove gradients in the entire height of image by doing linear fit
-    Eigen::Matrix<double, -1, 2> A(image_h, 2);
+    Eigen::Matrix<T, -1, 2> A(image_h, 2);
     for (size_t i = 0; i < image_h; i++) {
         A(i, 0) = 1;
         A(i, 1) = i;
     }
-    Eigen::Vector2d x = A.fullPivLu().solve(new_dark_count.matrix());
+    Eigen::Matrix<T, 2, 1> x = A.fullPivLu().solve(new_dark_count.matrix());
     new_dark_count -= (A * x).array();
 
     // subtract minimum value
@@ -200,25 +213,38 @@ static Eigen::ArrayXd compute_dark_count(
     return new_dark_count;
 }
 
-void BeamUniformityCorrector::operator()(Eigen::Ref<img_t<double>> image) {
+template <typename T>
+void BeamUniformityCorrector::update(Eigen::Ref<img_t<T>> image,
+                                     bool update_state) {
     const auto image_h = image.rows();
 
     // compute dark counts, if necessary
     if (dark_count.size() != image_h) {
-        dark_count = compute_dark_count(image);
-    } else if (counter == 0) {
+        dark_count = compute_dark_count(image).template cast<double>();
+    } else if (update_state && counter == 0) {
         // if previous state exists, update using exponential smoothing:
-        const auto new_dark_count = compute_dark_count(image);
+        const auto new_dark_count =
+            compute_dark_count(image).template cast<double>();
         dark_count *= buc_damping;
         dark_count += new_dark_count * (1.0 - buc_damping);
     }
     counter = (counter + 1) % buc_update_every;
 
     // apply the dark count correction
-    image.colwise() -= dark_count;
+    image.colwise() -= dark_count.cast<T>();
 
-    // clamp output to a reasonable range
-    image = image.cwiseMax(0.0).cwiseMin((double)UINT32_MAX);
+    // clamp any negative values
+    image = image.cwiseMax(0.0);
+}
+
+void BeamUniformityCorrector::operator()(Eigen::Ref<img_t<float>> image,
+                                         bool update_state) {
+    update(image, update_state);
+}
+
+void BeamUniformityCorrector::operator()(Eigen::Ref<img_t<double>> image,
+                                         bool update_state) {
+    update(image, update_state);
 }
 
 }  // namespace viz

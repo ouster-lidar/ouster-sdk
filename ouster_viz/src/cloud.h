@@ -38,6 +38,7 @@ class GLCloud {
     GLfloat point_size;
 
     Eigen::Matrix4d map_pose;
+    Eigen::Matrix4f extrinsic;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

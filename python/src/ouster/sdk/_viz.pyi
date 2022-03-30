@@ -1,6 +1,6 @@
 """Type annotations for viz python bindings."""
 
-from typing import Callable, overload
+from typing import Callable, overload, Tuple
 
 import numpy as np
 
@@ -75,6 +75,11 @@ class TargetDisplay:
 
 class Cloud:
 
+    @overload
+    def __init__(self, n_points: int) -> None:
+        ...
+
+    @overload
     def __init__(self, si: SensorInfo) -> None:
         ...
 
@@ -85,6 +90,12 @@ class Cloud:
         ...
 
     def set_mask(self, mask: np.ndarray) -> None:
+        ...
+
+    def set_xyz(self, xyz: np.ndarray) -> None:
+        ...
+
+    def set_pose(self, pose: np.ndarray) -> None:
         ...
 
     def set_point_size(self, size: float) -> None:
@@ -111,20 +122,20 @@ class Image:
 
 class Cuboid:
 
-    def __init__(self, pose: np.ndarray, rgba: np.ndarray) -> None:
+    def __init__(self, pose: np.ndarray, rgba: Tuple[float, ...]) -> None:
         ...
 
-    def set_pose(self, pose: np.ndarray) -> None:
+    def set_transform(self, pose: np.ndarray) -> None:
         ...
 
-    def set_rgba(self, rgba: np.ndarray) -> None:
+    def set_rgba(self, rgba: Tuple[float, ...]) -> None:
         ...
 
 
 class Label:
 
     @overload
-    def __init__(self, text: str, xyz: np.ndarray) -> None:
+    def __init__(self, text: str, x: float, y: float, z: float) -> None:
         ...
 
     @overload
@@ -139,7 +150,7 @@ class Label:
         ...
 
     @overload
-    def set_position(self, xyz: np.ndarray) -> None:
+    def set_position(self, x: float, y: float, z: float) -> None:
         ...
 
     @overload

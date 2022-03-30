@@ -15,8 +15,9 @@
 namespace ouster {
 namespace viz {
 
-using mat4f = std::array<float, 16>;
 using mat4d = std::array<double, 16>;
+constexpr mat4d identity4d = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+
 using vec4f = std::array<float, 4>;
 using vec3d = std::array<double, 3>;
 
@@ -320,15 +321,13 @@ class TargetDisplay {
  * transformed by the (i % w)th pose. For example for 2048 x 64 Ouster lidar
  * point cloud, we may have w = 2048 poses and n = 2048 * 64 = 131072 points.
  *
- * We also keep track of the map pose and the extrinsic matrix as mentioned in
- * the comment in the point_vertex_shader_code (see common.h).  The map_pose is
- * used to efficiently transform the whole point cloud without having to update
- * all ~2048 poses.
+ * We also keep track of a per-cloud pose to efficiently transform the
+ * whole point cloud without having to update all ~2048 poses.
  */
 class Cloud {
     size_t n_{0};
     size_t w_{0};
-    mat4f extrinsic_{};
+    mat4d extrinsic_{};
 
     bool range_changed_{false};
     bool key_changed_{false};
@@ -337,7 +336,7 @@ class Cloud {
     bool offset_changed_{false};
     bool transform_changed_{false};
     bool palette_changed_{false};
-    bool map_pose_changed_{false};
+    bool pose_changed_{false};
     bool point_size_changed_{false};
 
     std::vector<float> range_data_{};
@@ -347,23 +346,37 @@ class Cloud {
     std::vector<float> off_data_{};
     std::vector<float> transform_data_{};
     std::vector<float> palette_data_{};
-    mat4d map_pose_{};
+    mat4d pose_{};
     float point_size_{2};
+
+    Cloud(size_t w, size_t h, const mat4d& extrinsic);
 
    public:
     /**
-     * Point cloud for visualization
+     * Unstructured point cloud for visualization
      *
-     * TODO: extrinsic should be mat4f. Figure out xyz/off
+     * Call set_xyz() to update
+     *
+     * @param n number of points
+     * @param extrinsic sensor extrinsic calibration. 4x4 column-major
+     *        homogeneous transformation matrix
+     */
+    Cloud(size_t n, const mat4d& extrinsic = identity4d);
+
+    /**
+     * Structured point cloud for visualization
+     *
+     * Call set_range() to update
      *
      * @param w number of columns
      * @param h number of pixels per column
-     * @param xyz unit vectors for projection (compatible with make_xyz_lut)
-     * @param off offsets for xyz projection (compatible with make_xyz_lut)
-     * @param extrinsic sensor extrinsic calibration. 16-elements, row major
+     * @param dir unit vectors for projection
+     * @param off offsets for xyz projection
+     * @param extrinsic sensor extrinsic calibration. 4x4 column-major
+     *        homogeneous transformation matrix
      */
-    Cloud(size_t w, size_t h, const double* xyz, const double* off,
-          const double* extrinsic);
+    Cloud(size_t w, size_t h, const float* dir, const float* off,
+          const mat4d& extrinsic = identity4d);
 
     /**
      * Clear dirty flags
@@ -391,7 +404,7 @@ class Cloud {
      * @param key pointer to array of at least as many elements as there are
      *        points, preferably normalized between 0 and 1
      */
-    void set_key(const double* key);
+    void set_key(const float* key);
 
     /**
      * Set the RGBA mask values, used as an overlay on top of the key
@@ -407,20 +420,22 @@ class Cloud {
      * @param xyz pointer to array of exactly 3n where n is number of points, so
      *        that the xyz position of the ith point is i, i + n, i + 2n
      */
-    void set_xyz(const double* xyz);
+    void set_xyz(const float* xyz);
 
     /**
      * Set the offset values
      *
+     * TODO: no real reason to have this. Set in constructor, if at all
+     *
      * @param off pointer to array of exactly 3n where n is number of points, so
      *        that the xyz position of the ith point is i, i + n, i + 2n
      */
-    void set_offset(const double* offset);
+    void set_offset(const float* offset);
 
     /**
-     * Set the ith point cloud map pose
+     * Set the ith point cloud pose
      *
-     * @param map_pose homogeneous transformation matrix of the pose
+     * @param pose 4x4 column-major homogeneous transformation matrix
      */
     void set_pose(const mat4d& pose);
 
@@ -442,7 +457,7 @@ class Cloud {
      *        is a translation vector. That is, the vth translation is t[v],
      *        t[w + v], t[2 * w + v]
      */
-    void set_column_poses(const double* rotation, const double* translation);
+    void set_column_poses(const float* rotation, const float* translation);
 
     /**
      * Set the point cloud color palette
@@ -515,7 +530,7 @@ class Image {
      *
      * @param pos the position of the image
      */
-    void set_position(const vec4f& pos);
+    void set_position(float x_min, float x_max, float y_min, float y_max);
 
     friend class impl::GLImage;
 };
@@ -524,14 +539,14 @@ class Image {
  * @brief Manages the state of a single cuboid
  */
 class Cuboid {
-    bool pose_changed_{false};
+    bool transform_changed_{false};
     bool rgba_changed_{false};
 
-    mat4f pose_{};
+    mat4d transform_{};
     vec4f rgba_{};
 
    public:
-    Cuboid(const mat4f& pose, const vec4f& rgba);
+    Cuboid(const mat4d& transform, const vec4f& rgba);
 
     /**
      * Clear dirty flags
@@ -541,9 +556,11 @@ class Cuboid {
     void clear();
 
     /**
-     * Set the pose of the cuboid
+     * Set the transform defining the cuboid
+     *
+     * Applied to a unit cube centered at the origin
      */
-    void set_pose(const mat4f& pose);
+    void set_transform(const mat4d& pose);
 
     /**
      * Set the color of the cuboid
@@ -610,6 +627,12 @@ class Label {
 
     friend class impl::GLLabel;
 };
+
+extern const size_t spezia_n;
+extern const float spezia_palette[][3];
+
+extern const size_t calref_n;
+extern const float calref_palette[][3];
 
 }  // namespace viz
 }  // namespace ouster

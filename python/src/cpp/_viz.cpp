@@ -7,20 +7,61 @@
 #include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
 
 #include <atomic>
 #include <csignal>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
-#include "ouster/colormaps.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/point_viz.h"
 #include "ouster/types.h"
 
 namespace py = pybind11;
 using namespace ouster;
+
+template <typename T, int F>
+static void check_array(const py::array_t<T, F>& array, size_t size = 0,
+                        size_t dims = 0, char storage = 'X') {
+    if (size && static_cast<size_t>(array.size()) != size)
+        throw std::invalid_argument("Expected array of size: " +
+                                    std::to_string(size));
+
+    if (dims && static_cast<size_t>(array.ndim()) != dims)
+        throw std::invalid_argument("Expected an array of dimension: " +
+                                    std::to_string(dims));
+
+    if (storage == 'F' && !(array.flags() & py::array::f_style))
+        throw std::invalid_argument("Expected a F_CONTIGUOUS array");
+
+    if (storage == 'C' && !(array.flags() & py::array::c_style))
+        throw std::invalid_argument("Expected a C_CONTIGUOUS array");
+}
+
+template <size_t N>
+static void tuple_to_float_array(std::array<float, N>& dst,
+                                 const py::tuple& tuple) {
+    if (tuple.size() > N)
+        throw std::invalid_argument("Expected a tuple of size <= " +
+                                    std::to_string(N));
+    try {
+        for (size_t i = 0; i < tuple.size(); i++) {
+            dst[i] = tuple[i].cast<float>();
+        }
+    } catch (const py::cast_error&) {
+        throw py::type_error("Expected a tuple of floats");
+    }
+}
+
+// pybind11 size type changed since v2.0
+using pysize = decltype(py::array{}.size());
+
+// matrices passed to eigen must be converted to col-major
+using pymatrixd =
+    py::array_t<double, py::array::f_style | py::array::forcecast>;
 
 PYBIND11_PLUGIN(_viz) {
     py::module m("_viz", R"(
@@ -152,128 +193,127 @@ PYBIND11_PLUGIN(_viz) {
 
     py::class_<viz::Cloud, std::shared_ptr<viz::Cloud>>(m, "Cloud")
         .def("__init__",
+             [](viz::Cloud& self, size_t n) { new (&self) viz::Cloud{n}; })
+        .def("__init__",
              [](viz::Cloud& self, const sensor::sensor_info& info) {
                  const auto xyz_lut = make_xyz_lut(info);
-                 new (&self) viz::Cloud{
-                     info.format.columns_per_frame,
-                     info.format.pixels_per_column, xyz_lut.direction.data(),
-                     xyz_lut.offset.data(), info.extrinsic.data()};
+
+                 // make_xyz_lut still outputs doubles
+                 Eigen::Array<float, Eigen::Dynamic, 3> direction =
+                     xyz_lut.direction.cast<float>();
+                 Eigen::Array<float, Eigen::Dynamic, 3> offset =
+                     xyz_lut.direction.cast<float>();
+
+                 viz::mat4d extrinsica;
+                 std::copy(info.extrinsic.data(), info.extrinsic.data() + 16,
+                           extrinsica.data());
+
+                 new (&self)
+                     viz::Cloud{info.format.columns_per_frame,
+                                info.format.pixels_per_column, direction.data(),
+                                offset.data(), extrinsica};
              })
         .def("set_range",
              [](viz::Cloud& self, py::array_t<uint32_t> range) {
-                 if (range.ndim() != 2)
-                     throw std::invalid_argument("Expected a 2d array");
-                 if (static_cast<size_t>(range.size()) < self.get_size())
-                     throw std::invalid_argument("Bad size");
+                 check_array(range, self.get_size(), 2, 'C');
                  self.set_range(range.data());
              })
         .def("set_key",
-             [](viz::Cloud& self, py::array_t<double> key) {
-                 if (key.ndim() != 2)
-                     throw std::invalid_argument("Expected a 2d array");
-                 if (static_cast<size_t>(key.size()) < self.get_size())
-                     throw std::invalid_argument("Bad size");
+             [](viz::Cloud& self, py::array_t<float> key) {
+                 check_array(key, self.get_size(), 0, 'C');
                  self.set_key(key.data());
              })
         .def("set_mask",
              [](viz::Cloud& self, py::array_t<float> mask) {
-                 if (mask.ndim() != 3)
-                     throw std::invalid_argument("Expected a 3d array");
-                 if (static_cast<size_t>(mask.size()) < self.get_size() * 4)
-                     throw std::invalid_argument("Bad size");
+                 check_array(mask, self.get_size() * 4, 3, 'C');
                  self.set_mask(mask.data());
+             })
+        .def("set_xyz",
+             [](viz::Cloud& self, py::array_t<float> xyz) {
+                 check_array(xyz, self.get_size() * 3, 0);
+                 self.set_xyz(xyz.data());
+             })
+        .def("set_pose",
+             [](viz::Cloud& self, pymatrixd pose) {
+                 check_array(pose, 16, 2, 'F');
+                 viz::mat4d posea;
+                 std::copy(pose.data(), pose.data() + 16, posea.data());
+                 self.set_pose(posea);
              })
         .def("set_point_size", &viz::Cloud::set_point_size)
         .def("set_palette", [](viz::Cloud& self, py::array_t<float> buf) {
-            constexpr size_t palette_size = 256;
-            if (static_cast<size_t>(buf.size()) != 3 * palette_size)
-                throw std::invalid_argument("Bad size");
-            self.set_palette(buf.data(), palette_size);
+            check_array(buf, 0, 2, 'C');
+            if (buf.shape(1) != 3)
+                throw std::invalid_argument("Expected a N x 3 array");
+            self.set_palette(buf.data(), buf.shape(0));
         });
 
     py::class_<viz::Image, std::shared_ptr<viz::Image>>(m, "Image")
         .def(py::init<>())
         .def("set_image",
              [](viz::Image& self, py::array_t<float> image) {
-                 if (image.ndim() != 2)
-                     throw std::invalid_argument("Expected a 2d array");
+                 check_array(image, 0, 2, 'C');
                  self.set_image(image.shape(1), image.shape(0), image.data());
              })
         .def("set_mask",
              [](viz::Image& self, py::array_t<float> buf) {
-                 if (buf.ndim() != 3)
-                     throw std::invalid_argument("Expected a 3d array");
+                 check_array(buf, 0, 3, 'C');
                  if (buf.shape(2) != 4)
-                     throw std::invalid_argument("Third dimension must be 4");
+                     throw std::invalid_argument("Expected a M x N x 4 array");
                  self.set_mask(buf.shape(1), buf.shape(0), buf.data());
              })
-        .def("set_position",
-             [](viz::Image& self, float x0, float x1, float y0, float y1) {
-                 self.set_position({x0, x1, y1, y0});
-             });
+        .def("set_position", &viz::Image::set_position);
 
     py::class_<viz::Cuboid, std::shared_ptr<viz::Cuboid>>(m, "Cuboid")
         .def("__init__",
-             [](viz::Cuboid& self, py::array_t<float> pose,
-                py::array_t<float> rgba) {
-                 // TODO: lots of duplication. std::array may be a poor choice
-                 if (pose.size() != 16)
-                     throw std::invalid_argument("Expected a 4x4 matrix");
-                 viz::mat4f posea;
+             [](viz::Cuboid& self, pymatrixd pose, py::tuple rgba) {
+                 check_array(pose, 16, 2, 'F');
+                 viz::mat4d posea;
                  std::copy(pose.data(), pose.data() + 16, posea.data());
 
-                 if (rgba.size() != 4)
-                     throw std::invalid_argument("Expected a 4-element vector");
-                 viz::vec4f rgbaa;
-                 std::copy(rgba.data(), rgba.data() + 4, rgbaa.data());
+                 viz::vec4f ar{0.0, 0.0, 0.0, 1.0};
+                 tuple_to_float_array(ar, rgba);
 
-                 new (&self) viz::Cuboid{posea, rgbaa};
+                 new (&self) viz::Cuboid{posea, ar};
              })
-        .def("set_pose",
-             [](viz::Cuboid& self, py::array_t<float> pose) {
-                 if (pose.size() != 16)
-                     throw std::invalid_argument("Expected a 4x4 matrix");
-                 viz::mat4f posea;
+        .def("set_transform",
+             [](viz::Cuboid& self, pymatrixd pose) {
+                 check_array(pose, 16, 2, 'F');
+                 viz::mat4d posea;
                  std::copy(pose.data(), pose.data() + 16, posea.data());
-                 self.set_pose(posea);
+                 self.set_transform(posea);
              })
-        .def("set_rgba", [](viz::Cuboid& self, py::array_t<float> rgba) {
-            if (rgba.size() != 4)
-                throw std::invalid_argument("Expected a 4-element vector");
-            viz::vec4f rgbaa;
-            std::copy(rgba.data(), rgba.data() + 4, rgbaa.data());
-            self.set_rgba(rgbaa);
+        .def("set_rgba", [](viz::Cuboid& self, py::tuple rgba) {
+            viz::vec4f ar{0.0, 0.0, 0.0, 1.0};
+            tuple_to_float_array(ar, rgba);
+            self.set_rgba(ar);
         });
 
     py::class_<viz::Label, std::shared_ptr<viz::Label>>(m, "Label")
         .def("__init__",
-             [](viz::Label& self, const std::string& text,
-                py::array_t<float> pos) {
-                 if (pos.size() != 3)
-                     throw std::invalid_argument("Expected a 3-element vector");
-                 viz::vec3d posa;
-                 std::copy(pos.data(), pos.data() + 3, posa.data());
-                 new (&self) viz::Label{text, posa};
+             [](viz::Label& self, const std::string& text, double x, double y,
+                double z) {
+                 new (&self) viz::Label{text, {x, y, z}};
              })
         .def(py::init<const std::string&, float, float, bool>(),
              py::arg("text"), py::arg("x"), py::arg("y"),
              py::arg("align_right") = false)
         .def("set_text", &viz::Label::set_text)
         .def("set_position",
-             [](viz::Label& self, py::array_t<float> pos) {
-                 if (pos.size() != 3)
-                     throw std::invalid_argument("Expected a 3-element vector");
-                 viz::vec3d posa;
-                 std::copy(pos.data(), pos.data() + 3, posa.data());
-                 self.set_position(posa);
+             [](viz::Label& self, double x, double y, double z) {
+                 self.set_position({x, y, z});
              })
         .def("set_position",
              py::overload_cast<float, float, bool>(&viz::Label::set_position),
              py::arg("x"), py::arg("y"), py::arg("align_right") = false)
         .def("set_scale", &viz::Label::set_scale);
 
-    m.attr("spezia_palette") = py::array_t<float>{{spezia_n, 3}, &spezia[0][0]};
-    m.attr("calref_palette") = py::array_t<float>{{calref_n, 3}, &calref[0][0]};
+    m.attr("spezia_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::spezia_n), static_cast<pysize>(3)},
+        &viz::spezia_palette[0][0]};
+    m.attr("calref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::calref_n), static_cast<pysize>(3)},
+        &viz::calref_palette[0][0]};
 
     m.attr("__version__") = VERSION_INFO;
 

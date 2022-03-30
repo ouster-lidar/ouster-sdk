@@ -27,6 +27,9 @@ class AutoExposure {
     bool initialized = false;
     int counter = 0;
 
+    template <typename T>
+    void update(Eigen::Ref<img_t<T>> image, bool update_state);
+
    public:
     /**
      * Default constructor using default percentile and udpate values
@@ -50,7 +53,9 @@ class AutoExposure {
      * lo_percentile. Similar to linear 'contrast-stretch', i.e. normalization.
      *
      * @param image Reference to the image, modified in place
+     * @param update_state Update lo/hi percentiles if true
      */
+    void operator()(Eigen::Ref<img_t<float>> image, bool update_state = true);
     void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
 
@@ -64,14 +69,19 @@ class BeamUniformityCorrector {
     int counter = 0;
     Eigen::ArrayXd dark_count;
 
+    template <typename T>
+    void update(Eigen::Ref<img_t<T>> image, bool update_state);
+
    public:
     /**
      * Applies dark count correction to an image, modifying it in-place to have
      * reduced horizontal line artifacts.
      *
-     * @param image Rreference to the image, modified in-place
+     * @param image Reference to the image, modified in-place
+     * @param update_state Update dark counts if true
      */
-    void operator()(Eigen::Ref<img_t<double>> image);
+    void operator()(Eigen::Ref<img_t<float>> image, bool update_state = true);
+    void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
 }  // namespace viz
 }  // namespace ouster
