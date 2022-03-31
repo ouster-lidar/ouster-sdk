@@ -1,23 +1,30 @@
-.. title:: Ouster Python SDK
+.. title:: Ouster SDK
 
 .. toctree::
    :caption: Main:
    :hidden:
 
-   Overview <self>
-   Installation <installation>
-   Quick Start <quickstart>
-   Developing <devel>
-
+   Intro <self>
+   Changelog <python/changelog>
 
 .. toctree::
-   :caption: Reference:
+   :caption: Python
    :hidden:
 
-   Examples & Concepts <examples>
-   API Reference <api>
-   Changelog <changelog>
+   Overview <python/index.rst>
+   Installation <python/installation>
+   Quick Start <python/quickstart>
+   Developing <python/devel>
+   Examples & Concepts <python/examples>
+   API Reference <python/api>
 
+.. toctree::
+   :caption: C++
+   :hidden:
+
+   C++ README <cpp/index.rst>
+   C++ examples <cpp/examples.rst>
+   C++ API reference <cpp/cpp.rst>
 
 .. toctree::
    :hidden:
@@ -28,9 +35,8 @@
    Sensor Documentation <https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf>
    Sample Data <https://ouster.com/resources/lidar-sample-data/>
 
-
 ..
    FAQ <faq>
 
+.. include:: overview.rst
 
-.. include:: ../README.rst

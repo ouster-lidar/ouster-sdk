@@ -127,7 +127,7 @@ After obtaining the recorded data, you can visualize it with the following comma
        
 You should get a view similar to:
 
-.. figure:: images/pyviz.png
+.. figure:: ../images/pyviz.png
     :align: center
 
     Ouster PyViz visualization of OS1 Rev 05 sample data

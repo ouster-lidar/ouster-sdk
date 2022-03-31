@@ -191,7 +191,7 @@ a column segment of the range data and display the result:
     backend`_ such as TkAgg or Qt5Agg in order to visualize your data with matplotlib.
 
 
-.. figure:: images/brooklyn_bridge_ls_50_range_image.png
+.. figure:: ../images/brooklyn_bridge_ls_50_range_image.png
     :align: center
     :figwidth: 100%
 
@@ -228,7 +228,7 @@ You should be able to rotate the resulting scene to view it from different angle
 To learn more about manipulating lidar data, see :ref:`ex-staggered-and-destaggered`,
 :ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
 
-.. figure:: images/brooklyn_bridge_ls_50_xyz_cut.png
+.. figure:: ../images/brooklyn_bridge_ls_50_xyz_cut.png
    :align: center
 
    Point cloud from OS2 bridge data with colormap on z. Data taken at Brooklyn Bridge, NYC.
