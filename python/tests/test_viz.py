@@ -116,7 +116,7 @@ def test_point_viz_destruction() -> None:
 def test_scan_viz_destruction(meta: client.SensorInfo,
                               point_viz: viz.PointViz) -> None:
     """Check that LidarScan is destroyed deterministically."""
-    ls_viz = viz.LidarScanViz(point_viz, meta)
+    ls_viz = viz.LidarScanViz(meta, point_viz)
     ref = weakref.ref(ls_viz)
 
     del ls_viz
@@ -133,7 +133,7 @@ def test_viz_multiple_instances(meta: client.SensorInfo,
     point_viz2 = viz.PointViz("Test Viz2")
     del point_viz2
 
-    ls_viz = viz.LidarScanViz(point_viz, meta)
+    ls_viz = viz.LidarScanViz(meta, point_viz)
 
     ls_viz.scan = scan
     ls_viz.draw()
@@ -143,12 +143,11 @@ def test_viz_multiple_instances(meta: client.SensorInfo,
 def test_scan_viz_smoke(meta: client.SensorInfo,
                         scan: client.LidarScan) -> None:
     """Smoke test LidarScan visualization."""
-    point_viz = viz.PointViz("Test Viz")
-    ls_viz = viz.LidarScanViz(point_viz, meta)
+    ls_viz = viz.LidarScanViz(meta)
 
     ls_viz.scan = scan
     ls_viz.draw()
-    point_viz.run()
+    ls_viz.run()
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
@@ -156,7 +155,7 @@ def test_scan_viz_extras(meta: client.SensorInfo,
                          scan: client.LidarScan) -> None:
     """Check rendering of labels, cuboids, clouds and images together."""
     point_viz = viz.PointViz("Test Viz")
-    ls_viz = viz.LidarScanViz(point_viz, meta)
+    ls_viz = viz.LidarScanViz(meta, point_viz)
 
     cube1 = viz.Cuboid(np.identity(4), (1.0, 0, 0))
 

@@ -93,11 +93,13 @@ class LidarScanViz:
     _cloud_palette: Optional[np.ndarray]
     _field_pp: Dict[ChanField, Callable[[np.ndarray], None]]
 
-    def __init__(self, viz: PointViz, meta: client.SensorInfo) -> None:
+    def __init__(self,
+                 meta: client.SensorInfo,
+                 viz: Optional[PointViz] = None) -> None:
         """
         Args:
-            viz: the PointViz instance to use
             meta: sensor metadata used to interpret scans
+            viz: use an existing PointViz instance instead of creating one
         """
 
         # used to synchronize key handlers and _draw()
@@ -136,7 +138,7 @@ class LidarScanViz:
             ChanField.NEAR_IR: nearir_pp,
         }
 
-        self._viz = viz
+        self._viz = viz or PointViz("Ouster Viz")
 
         self._metadata = meta
         self._clouds = (Cloud(meta), Cloud(meta))
@@ -266,6 +268,13 @@ class LidarScanViz:
             return self._viz.update()
         else:
             return False
+
+    def run(self) -> None:
+        """Run the rendering loop of the visualizer.
+
+        See :py:meth:`.PointViz.run`
+        """
+        self._viz.run()
 
     # i/o and processing, called from client thread
     # usually need to synchronize with key handlers, which run in render thread
@@ -430,7 +439,7 @@ class SimpleViz:
         if isinstance(arg, client.SensorInfo):
             self._metadata = arg
             self._viz = PointViz("Ouster Viz")
-            self._scan_viz = LidarScanViz(self._viz, arg)
+            self._scan_viz = LidarScanViz(arg, self._viz)
         elif isinstance(arg, LidarScanViz):
             self._metadata = arg._metadata
             self._viz = arg._viz

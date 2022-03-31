@@ -223,7 +223,7 @@ void BeamUniformityCorrector::update(Eigen::Ref<img_t<T>> image,
         dark_count = compute_dark_count(image).template cast<double>();
     } else if (update_state && counter == 0) {
         // if previous state exists, update using exponential smoothing:
-        const auto new_dark_count =
+        Eigen::ArrayXd new_dark_count =
             compute_dark_count(image).template cast<double>();
         dark_count *= buc_damping;
         dark_count += new_dark_count * (1.0 - buc_damping);

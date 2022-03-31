@@ -22,7 +22,7 @@ packets = pcap.Pcap(pcap_path, meta)
 scans = iter(client.Scans(packets))
 
 point_viz = viz.PointViz("Example Viz")
-ls_viz = viz.LidarScanViz(point_viz, meta)
+ls_viz = viz.LidarScanViz(meta, point_viz)
 
 ls_viz.scan = next(scans)
 ls_viz.draw()

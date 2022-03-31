@@ -95,11 +95,10 @@ PYBIND11_PLUGIN(_viz) {
                 self.visible(false);
             },
             R"(
-             Display a visualizer window and run the rendering loop.
+             Run the visualizer rendering loop.
 
-             Must be called from the main thread. Will return when ``quit()`` is called from
-             another thread or when the visualizer window is closed. Note: this will replace
-             the handler for SIGINT for the duration of the method call.
+             Must be called from the main thread. Will return when ``running(False)`` is
+             called from another thread or when the visualizer window is closed.
         )")
 
         .def("running", py::overload_cast<>(&viz::PointViz::running),

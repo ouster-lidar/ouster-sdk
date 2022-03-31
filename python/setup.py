@@ -124,13 +124,14 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.4.0a0',
+    version='0.4.0a1',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
     package_data={
-        'ouster.client': ['py.typed'],
-        'ouster.pcap': ['py.typed'],
+        'ouster.client': ['py.typed', '_client.pyi'],
+        'ouster.pcap': ['py.typed', '_pcap.pyi'],
+        'ouster.sdk': ['py.typed', '_viz.pyi'],
     },
     author='Ouster SW Developers',
     description='Ouster sensor SDK',
