@@ -30,8 +30,8 @@ copyright = '2021, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-version = '0.3'
-release = '0.3.0'
+version = '0.4'
+release = '0.4.0a0'
 
 temp_dir = tempfile.mkdtemp()
 temp_doxy_file = os.path.join(temp_dir, "Doxyfile")

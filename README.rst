@@ -140,30 +140,31 @@ keyboard:
 
 Keyboard controls:
 
-    ============= ============================================
-        Key       What it does
-    ============= ============================================
-    ``p``         Increase point size
-    ``o``         Decrease point size
-    ``m``         Cycle point cloud coloring mode
-    ``b``         Cycle top 2D image
-    ``n``         Cycle bottom 2D image
-    ``shift + r`` Reset camera
-    ``e``         Change size of displayed 2D images
-    ``;``         Increase spacing in range markers
-    ``'``         Decrease spacing in range markers
-    ``r``         Toggle auto rotate
-    ``w``         Camera pitch up
-    ``s``         Camera pitch down
-    ``a``         Camera yaw left
-    ``d``         Camera yaw right
-    ``1``         Toggle first return point cloud visibility
-    ``2``         Toggle second return point cloud visibility
-    ``0``         Toggle orthographic camera
-    ``=``         Zoom in
-    ``-``         Zoom out
-    ``shift``     Camera Translation with mouse drag
-    ============= ============================================
+    =============  ===============================================
+        Key        What it does
+    =============  ===============================================
+    ``o``          Toggle on-screen display
+    ``p/P``        Increase/decrease point size
+    ``m``          Cycle point cloud coloring mode
+    ``b``          Cycle top 2D image
+    ``n``          Cycle bottom 2D image
+    ``R``          Reset camera
+    ``e/E``        Increase/decrease size of displayed 2D images
+    ``'/"``        Increase/decrease spacing in range markers
+    ``w``          Camera pitch up
+    ``s``          Camera pitch down
+    ``a``          Camera yaw left
+    ``d``          Camera yaw right
+    ``1``          Toggle first return point cloud visibility
+    ``2``          Toggle second return point cloud visibility
+    ``0``          Toggle orthographic camera
+    ``=/-``        Dolly in/out
+    ``(space)``    Toggle pause
+    ``./,``        Step one frame forward/back
+    ``ctrl + ./,`` Step 10 frames forward/back
+    ``>/<``        Increase/decrease playback rate (during replay)
+    ``shift``      Camera Translation with mouse drag
+    =============  ===============================================
 
 For usage and other options, run ``./simple_viz -h``
 
