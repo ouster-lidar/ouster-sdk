@@ -13,11 +13,16 @@ option(BUILD_PCAP "Build pcap utils." OFF)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 
-# when building as a top-level project
+# when building as a top-level project and not as conan library
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  set(CMAKE_CXX_STANDARD 11)
+  if(NOT "${CMAKE_CXX_STANDARD}")
+    set(CMAKE_CXX_STANDARD 11)
+  endif()
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CMAKE_CXX_EXTENSIONS OFF)
+
+  if(NOT "${CMAKE_CXX_EXTENSIONS}")
+    set(CMAKE_CXX_EXTENSIONS OFF)
+  endif()
 
   if(MSVC)
     add_compile_options(/W3)

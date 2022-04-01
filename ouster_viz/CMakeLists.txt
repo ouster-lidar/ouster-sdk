@@ -7,7 +7,7 @@ project(ouster_viz)
 set(OpenGL_GL_PREFERENCE LEGACY)
 find_package(OpenGL REQUIRED)
 
-find_package(glad CONFIG QUIET)
+find_package(glad QUIET)
 if(glad_FOUND)
   message(STATUS "Found glad ${glad_CONFIG}")
   set(GL_LOADER glad::glad)
@@ -18,7 +18,7 @@ else()
   add_definitions("-DOUSTER_VIZ_GLEW")
 endif()
 
-find_package(glfw3 CONFIG REQUIRED)
+find_package(glfw3 REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 # ==== Libraries ====
