@@ -157,13 +157,13 @@ setup(
         'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
         'docs': [
             'Sphinx >=3.5',
-            'sphinx-autodoc-typehints ==1.11.1',
-            'sphinx-rtd-theme ==0.5.2',
-            'sphinx-copybutton ==0.3.1',
-            'docutils <0.17',
-            'sphinx-tabs ==3.0.0',
+            'sphinx-autodoc-typehints ==1.17.0',
+            'sphinx-rtd-theme ==1.0.0',
+            'sphinx-copybutton ==0.5.0',
+            'docutils <0.18',
+            'sphinx-tabs ==3.3.1',
             'open3d',
-            'breathe'
+            'breathe ==4.33.1'
         ],
         'examples': [
             'matplotlib',

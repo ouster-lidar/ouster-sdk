@@ -24,7 +24,7 @@
 
    C++ README <cpp/index.rst>
    C++ examples <cpp/examples.rst>
-   C++ API reference <cpp/cpp.rst>
+   C++ API reference <cpp/api.rst>
 
 .. toctree::
    :hidden:
@@ -40,3 +40,10 @@
 
 .. include:: overview.rst
 
+
+All TODOs
+==========
+
+**REMOVE THIS "All TODOs" SECTION WHEN WE ARE DONE WITH DOCS!!!!**
+
+.. todolist:: 

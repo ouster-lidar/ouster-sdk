@@ -17,6 +17,7 @@ import sphinx_rtd_theme # noqa
 # sys.path.insert(0, os.path.abspath('.'))
 
 # -- Project information -----------------------------------------------------
+import argparse
 import subprocess
 import tempfile
 from string import Template
@@ -26,29 +27,53 @@ import os
 import sys
 
 project = 'Ouster Python SDK'
-copyright = '2021, Ouster, Inc.'
+copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
 version = '0.4.0a1'
 release = '0.4.0a1'
 
+# -- Doxygen configuration & XML generation-----------------------------------
+
+def resolve_sphinx_cache_dir():
+    """Resolves Doxygen output dir used for XML output based on Sphinx params.
+
+    Checks Sphinx output dir positional argument and `-d` cache param and
+    returns the appropriate Sphinx cache directory for Doxygen to use.
+
+    Because relative paths are hard (impossible?) to make absolute due to
+    already changed CWD by Sphinx we always expect OUTPUT_DIR and cache dir
+    for Sphinx calls to be absolute paths.
+    """
+    sphinx_args_parser = argparse.ArgumentParser()
+    sphinx_args_parser.add_argument('source_dir')
+    sphinx_args_parser.add_argument('output_dir')
+    sphinx_args_parser.add_argument('-d')
+    sphinx_args, _ = sphinx_args_parser.parse_known_args()
+    cache_dir = sphinx_args.d if sphinx_args.d else os.path.join(
+        sphinx_args.output_dir, ".doctrees")
+    if not os.path.isabs(cache_dir):
+        raise ValueError(
+            "Expects absolute path for Sphinx output dir and/or cache dir")
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+# Prepare output dir for doxygen generator (using the standard sphinx .doctrees)
+sphinx_cache_dir = resolve_sphinx_cache_dir()
+
 temp_dir = tempfile.mkdtemp()
 temp_doxy_file = os.path.join(temp_dir, "Doxyfile")
-output_dir = os.path.join(sys.argv[2], ".doctrees")
-os.makedirs(output_dir, exist_ok=True)
-
 
 def temp_dir_cleanup():
     shutil.rmtree(temp_dir)
-
 
 atexit.register(temp_dir_cleanup)
 
 dictionary = {
     'project': project,
     'version': release,
-    'output_dir': output_dir
+    'output_dir': sphinx_cache_dir
 }
 
 with open('Doxyfile', 'r') as template_file:
@@ -75,7 +100,11 @@ extensions = [
     'breathe'
 ]
 
-breathe_projects = {'cpp_api': os.path.join(output_dir, "xml")}
+breathe_projects = {'cpp_api': os.path.join(sphinx_cache_dir, "xml")}
+breathe_default_project = 'cpp_api'
+breathe_show_include = True
+breathe_default_members = ()
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -152,7 +181,7 @@ napoleon_numpy_docstring = False
 # napoleon_use_param = False
 
 # ----- Todos Configs ------
-todo_include_todos = False
+todo_include_todos = True
 todo_link_only = True
 todo_emit_warnings = True
 
