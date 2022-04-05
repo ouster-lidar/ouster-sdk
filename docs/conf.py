@@ -49,10 +49,22 @@ def resolve_sphinx_cache_dir():
     sphinx_args_parser = argparse.ArgumentParser()
     sphinx_args_parser.add_argument('source_dir')
     sphinx_args_parser.add_argument('output_dir')
-    sphinx_args_parser.add_argument('-d')
+
+    # to correctly extract sphinx OUTPUT_DIR we need to be aware of all possible
+    # params, so argparse is not confusing positional with named params
+    sphinx_value_args = ["-d", "-b", "-j", "-c", "-D", "-A", "-t", "-w"]
+    for f in sphinx_value_args:
+        sphinx_args_parser.add_argument(f)
+    sphinx_switch_args = [
+        "-a", "-E", "-n", "-v", "-Q", "-q", "--color", "-N", "-W", "-T", "-P"
+    ]
+    for f in sphinx_switch_args:
+        sphinx_args_parser.add_argument(f, action="store_true")
+
     sphinx_args, _ = sphinx_args_parser.parse_known_args()
     cache_dir = sphinx_args.d if sphinx_args.d else os.path.join(
         sphinx_args.output_dir, ".doctrees")
+
     if not os.path.isabs(cache_dir):
         raise ValueError(
             "Expects absolute path for Sphinx output dir and/or cache dir")

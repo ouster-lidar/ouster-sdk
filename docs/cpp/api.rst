@@ -12,7 +12,7 @@ C++ SDK Reference
 
 
 Library/Target ``ouster_client``
-===============================
+================================
 
 
 ``ouster/types.h``
