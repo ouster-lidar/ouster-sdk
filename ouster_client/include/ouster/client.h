@@ -44,24 +44,6 @@ std::shared_ptr<client> init_client(const std::string& hostname = "",
  * @param hostname hostname or ip of the sensor
  * @param udp_dest_host hostname or ip where the sensor should send data
  * or "" for automatic detection of destination
- * @param lidar_port port on which the sensor will send lidar data
- * @param imu_port port on which the sensor will send imu data
- * @param timeout_sec how long to wait for the sensor to initialize
- * @return pointer owning the resources associated with the connection
- */
-std::shared_ptr<client> init_client(const std::string& hostname,
-                                    const std::string& udp_dest_host,
-                                    lidar_mode mode = MODE_UNSPEC,
-                                    timestamp_mode ts_mode = TIME_FROM_UNSPEC,
-                                    int lidar_port = 0, int imu_port = 0,
-                                    int timeout_sec = 60);
-
-/**
- * Connect to and configure the sensor and start listening for data.
- *
- * @param hostname hostname or ip of the sensor
- * @param udp_dest_host hostname or ip where the sensor should send data
- * or "" for automatic detection of destination
  * @param azimuth_window azimuth window the sensor will send back the data
  * @param lidar_port port on which the sensor will send lidar data
  * @param imu_port port on which the sensor will send imu data
@@ -72,9 +54,9 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode mode = MODE_UNSPEC,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
-                                    AzimuthWindow azimuth_window = {0, 360000},
                                     int lidar_port = 0, int imu_port = 0,
-                                    int timeout_sec = 60);
+                                    int timeout_sec = 60, 
+                                    AzimuthWindow azimuth_window = {0, 360000});
 
 /**
  * Block for up to timeout_sec until either data is ready or an error occurs.
