@@ -456,42 +456,42 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
     return cli;
 }
 
-std::shared_ptr<client> init_client(
-  const std::string & hostname,
-  const std::string & udp_dest_host,
-  lidar_mode mode, timestamp_mode ts_mode,
-  int lidar_port, int imu_port,
-  int timeout_sec,
-  AzimuthWindow azimuth_window)
-{
+std::shared_ptr<client> init_client(const std::string& hostname,
+                                    const std::string& udp_dest_host,
+                                    lidar_mode mode, timestamp_mode ts_mode,
+                                    int lidar_port, int imu_port,
+                                    int timeout_sec,
+                                    AzimuthWindow azimuth_window) {
     auto cli = init_client(hostname, lidar_port, imu_port);
-    if (!cli) {return std::shared_ptr<client>();}
+    if (!cli) return std::shared_ptr<client>();
 
     // update requested ports to actual bound ports
     lidar_port = get_sock_port(cli->lidar_fd);
     imu_port = get_sock_port(cli->imu_fd);
-    if (!impl::socket_valid(lidar_port) || !impl::socket_valid(imu_port)) {
+    if (!impl::socket_valid(lidar_port) || !impl::socket_valid(imu_port))
         return std::shared_ptr<client>();
-    }
 
     SOCKET sock_fd = cfg_socket(hostname.c_str());
-    if (!impl::socket_valid(sock_fd)) {return std::shared_ptr<client>();}
+    if (!impl::socket_valid(sock_fd)) return std::shared_ptr<client>();
 
     std::string res;
     bool success = true;
 
-    // If udp_dest_host is empty string, use automatic addressing with set_udp_dest_auto
-    if (udp_dest_host != "")
-    {
-        success &=
-        do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
-        success &= res == "set_config_param";
+    // fail fast if we can't reach the sensor via TCP
+    success &= do_tcp_cmd(sock_fd, {"get_sensor_info"}, res);
+    if (!success) {
+        impl::socket_close(sock_fd);
+        return std::shared_ptr<client>();
     }
-    else
-    {
-        success &=
-        do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
+
+    // if dest address is not specified, have the sensor to set it automatically
+    if (udp_dest_host == "") {
+        success &= do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
         success &= res == "set_udp_dest_auto";
+    } else {
+        success &= do_tcp_cmd(
+            sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
+        success &= res == "set_config_param";
     }
 
     success &= do_tcp_cmd(
@@ -508,14 +508,14 @@ std::shared_ptr<client> init_client(
     // if specified (not UNSPEC), set the lidar and timestamp modes
     if (mode) {
         success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
+            sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
         success &= res == "set_config_param";
     }
 
     if (ts_mode) {
         success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "timestamp_mode", to_string(ts_mode)},
-        res);
+            sock_fd, {"set_config_param", "timestamp_mode", to_string(ts_mode)},
+            res);
         success &= res == "set_config_param";
     }
 
@@ -527,8 +527,8 @@ std::shared_ptr<client> init_client(
     success &= res == "set_config_param";
 
     // wake up from STANDBY, if necessary
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
+    success &=
+        do_tcp_cmd(sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
     success &= res == "set_config_param";
 
     // reinitialize to activate new settings
@@ -539,7 +539,7 @@ std::shared_ptr<client> init_client(
     success &= collect_metadata(*cli, sock_fd, chrono::seconds{timeout_sec});
 
     // check for sensor error states
-    auto status = cli->meta["status"].asString();
+    auto status = cli->meta["sensor_info"]["status"].asString();
     success &= (status != "ERROR" && status != "UNCONFIGURED");
 
     impl::socket_close(sock_fd);
