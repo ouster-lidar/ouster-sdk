@@ -539,6 +539,97 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     return success ? cli : std::shared_ptr<client>();
 }
 
+std::shared_ptr<client> init_client(
+  const std::string & hostname,
+  const std::string & udp_dest_host,
+  lidar_mode mode, timestamp_mode ts_mode,
+  AzimuthWindow azimuth_window,
+  int lidar_port, int imu_port,
+  int timeout_sec)
+{
+    auto cli = init_client(hostname, lidar_port, imu_port);
+    if (!cli) {return std::shared_ptr<client>();}
+
+    // update requested ports to actual bound ports
+    lidar_port = get_sock_port(cli->lidar_fd);
+    imu_port = get_sock_port(cli->imu_fd);
+    if (!impl::socket_valid(lidar_port) || !impl::socket_valid(imu_port)) {
+        return std::shared_ptr<client>();
+    }
+
+    SOCKET sock_fd = cfg_socket(hostname.c_str());
+    if (!impl::socket_valid(sock_fd)) {return std::shared_ptr<client>();}
+
+    std::string res;
+    bool success = true;
+
+    // If udp_dest_host is empty string, use automatic addressing with set_udp_dest_auto
+    if (udp_dest_host != "")
+    {
+        success &=
+        do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
+        success &= res == "set_config_param";
+    }
+    else
+    {
+        success &=
+        do_tcp_cmd(sock_fd, {"set_udp_dest_auto"}, res);
+        success &= res == "set_udp_dest_auto";
+    }
+
+    success &= do_tcp_cmd(
+        sock_fd,
+        {"set_config_param", "udp_port_lidar", std::to_string(lidar_port)},
+        res);
+    success &= res == "set_config_param";
+
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "udp_port_imu", std::to_string(imu_port)},
+        res);
+    success &= res == "set_config_param";
+
+    // if specified (not UNSPEC), set the lidar and timestamp modes
+    if (mode) {
+        success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "lidar_mode", to_string(mode)}, res);
+        success &= res == "set_config_param";
+    }
+
+    if (ts_mode) {
+        success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "timestamp_mode", to_string(ts_mode)},
+        res);
+        success &= res == "set_config_param";
+    }
+
+    // Setup Azimuth Window
+    success &= do_tcp_cmd(
+        sock_fd,
+        {"set_config_param", "azimuth_window", to_string(azimuth_window)},
+        res);
+    success &= res == "set_config_param";
+
+    // wake up from STANDBY, if necessary
+    success &= do_tcp_cmd(
+        sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
+    success &= res == "set_config_param";
+
+    // reinitialize to activate new settings
+    success &= do_tcp_cmd(sock_fd, {"reinitialize"}, res);
+    success &= res == "reinitialize";
+
+    // will block until no longer INITIALIZING
+    success &= collect_metadata(*cli, sock_fd, chrono::seconds{timeout_sec});
+
+    // check for sensor error states
+    auto status = cli->meta["status"].asString();
+    success &= (status != "ERROR" && status != "UNCONFIGURED");
+
+    impl::socket_close(sock_fd);
+
+    return success ? cli : std::shared_ptr<client>();
+}
+
 client_state poll_client(const client& c, const int timeout_sec) {
     fd_set rfds;
     FD_ZERO(&rfds);

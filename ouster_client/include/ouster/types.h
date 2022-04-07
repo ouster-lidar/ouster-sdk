@@ -283,6 +283,14 @@ std::string to_string(NMEABaudRate rate);
 optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
 
 /**
+ * Get azimuth window from string.
+ *
+ * @param string
+ * @return azimuth window corresponding to the string, or 0 on error
+ */
+optional<AzimuthWindow> azimuth_window_of_string(const std::string& s);
+
+/**
  * Get string representation of an Azimuth Window
  *
  * @param azimuth_window
