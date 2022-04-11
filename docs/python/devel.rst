@@ -54,6 +54,13 @@ After you have the system dependencies, you can build the SDK with:
    $ python3 -m pip install $OUSTER_SDK_PATH/python
 
 
+.. note::
+
+   We recommend to always use `Virtual Environment`_ for python development.
+
+.. _Virtual Environment: https://docs.python.org/3/library/venv.html#module-venv
+
+
 Windows 10
 ----------
 

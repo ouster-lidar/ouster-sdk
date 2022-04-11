@@ -1,6 +1,19 @@
-===================
-Ouster Example Code
-===================
+.. image:: docs/images/Ouster_Logo_TM_Horiz_Black_RGB_600px.png
+    :align: center
+
+
+==========================================================
+Ouster SDK - libraries and tools for Ouster Lidar Sensors
+==========================================================
+
+**Quick links:** `Python SDK <https://static.ouster.dev/sdk-docs/index.html>`_  |  `Python Quick
+Start <https://static.ouster.dev/sdk-docs/quickstart.html>`_  |  `Changelog
+<https://static.ouster.dev/sdk-docs/changelog.html>`_  |  `Sensor Docs
+<https://static.ouster.dev/sensor-docs>`_  | `Sample Data
+<https://static.ouster.dev/sdk-docs/quickstart.html#using-sample-data>`_  |  `Issues
+<https://github.com/ouster-lidar/ouster_example/issues>`_
+
+------------------------------------------------------
 
 :Description: Sample code provided for working with Ouster sensors
 
@@ -21,7 +34,7 @@ visualizing data, and interfacing with ROS.
 * `ouster_client <ouster_client/>`_ contains an example C++ client for ouster sensors
 * `ouster_viz <ouster_viz/>`_ contains a basic point cloud visualizer
 * `ouster_ros <ouster_ros/>`_ contains example ROS nodes for publishing point cloud messages
-* `python <python/>`_ contains the code for the ouster sensor python SDK
+* `python <python/>`_ contains the code for the ouster sensor python SDK (``ouster-sdk`` Python package)
 
 
 Sample Client and Visualizer
@@ -96,7 +109,7 @@ project using Visual Studio:
 5. In the menu bar at the top of the screen, select **Build > Build All**.
 6. To use the resulting binaries, go to **View > Terminal** and run, for example::
 
-    .\out\build\x64-Release\ouster_client\ouster_client_example.exe -h
+    .\out\build\x64-Release\ouster_client\ouster_client_example.exe
 
 .. _building in release mode: https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-debug-and-release-configurations?view=vs-2019
 
@@ -123,13 +136,23 @@ sensor data.
 Running the Sample Visualizer
 -----------------------------
 
-Navigate to ``ouster_viz`` under the build directory, which should contain an executable named
-``simple_viz`` . Run::
+Visualization is written in C++ and viz examples provided through Python bindings:
 
-    ./simple_viz [flags] <sensor hostname> [udp data destination]
+- ``ouster_viz`` C++ library provides functions to build simple point cloud visualizers and comes
+  with Python bindings.
+- ``simple-viz`` Python application can be used as an entrypoint for a more sophisticated custom
+  point cloud visualizations.
 
-where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``[udp
-data destingation]`` is an optional hostname or IP to which the sensor should send lidar data.
+After you have Python environment sourced and ``ouster-sdk`` package installed you can run::
+
+   $ simple-viz --sensor <sensor hostname> [--no-auto-dest] [--lidar-port PORT]
+
+where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor.
+
+.. todo::
+
+   Add more info about available arguments in ``simple-viz``. ``-x``, ``--lidar-port``, and pcap
+   replay.
 
 The sample visualizer does not currently include a GUI, but can be controlled with the mouse and
 keyboard:
@@ -139,7 +162,6 @@ keyboard:
 * Scroll adjusts how far away the camera is from the vehicle
 
 Keyboard controls:
-
     ==============  ===============================================
         Key         What it does
     ==============  ===============================================
