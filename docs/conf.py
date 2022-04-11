@@ -21,7 +21,6 @@ import argparse
 import subprocess
 import tempfile
 from string import Template
-import atexit
 import shutil
 import os
 import sys
@@ -33,67 +32,6 @@ author = 'Ouster SW'
 # The full version, including alpha/beta/rc tags
 version = '0.4.0a1'
 release = '0.4.0a1'
-
-# -- Doxygen configuration & XML generation-----------------------------------
-
-def resolve_sphinx_cache_dir():
-    """Resolves Doxygen output dir used for XML output based on Sphinx params.
-
-    Checks Sphinx output dir positional argument and `-d` cache param and
-    returns the appropriate Sphinx cache directory for Doxygen to use.
-
-    Because relative paths are hard (impossible?) to make absolute due to
-    already changed CWD by Sphinx we always expect OUTPUT_DIR and cache dir
-    for Sphinx calls to be absolute paths.
-    """
-    sphinx_args_parser = argparse.ArgumentParser()
-    sphinx_args_parser.add_argument('source_dir')
-    sphinx_args_parser.add_argument('output_dir')
-
-    # to correctly extract sphinx OUTPUT_DIR we need to be aware of all possible
-    # params, so argparse is not confusing positional with named params
-    sphinx_value_args = ["-d", "-b", "-j", "-c", "-D", "-A", "-t", "-w"]
-    for f in sphinx_value_args:
-        sphinx_args_parser.add_argument(f)
-    sphinx_switch_args = [
-        "-a", "-E", "-n", "-v", "-Q", "-q", "--color", "-N", "-W", "-T", "-P"
-    ]
-    for f in sphinx_switch_args:
-        sphinx_args_parser.add_argument(f, action="store_true")
-
-    sphinx_args, _ = sphinx_args_parser.parse_known_args()
-    cache_dir = sphinx_args.d if sphinx_args.d else os.path.join(
-        sphinx_args.output_dir, ".doctrees")
-
-    if not os.path.isabs(cache_dir):
-        raise ValueError(
-            "Expects absolute path for Sphinx output dir and/or cache dir")
-    os.makedirs(cache_dir, exist_ok=True)
-    return cache_dir
-
-# Prepare output dir for doxygen generator (using the standard sphinx .doctrees)
-sphinx_cache_dir = resolve_sphinx_cache_dir()
-
-temp_dir = tempfile.mkdtemp()
-temp_doxy_file = os.path.join(temp_dir, "Doxyfile")
-
-def temp_dir_cleanup():
-    shutil.rmtree(temp_dir)
-
-atexit.register(temp_dir_cleanup)
-
-dictionary = {
-    'project': project,
-    'version': release,
-    'output_dir': sphinx_cache_dir
-}
-
-with open('Doxyfile', 'r') as template_file:
-    template = Template(template_file.read())
-    with open(temp_doxy_file, 'w') as template_file_out:
-        template_file_out.write(template.substitute(dictionary))
-
-subprocess.call("doxygen " + temp_doxy_file, shell=True)
 
 # -- General configuration ---------------------------------------------------
 
@@ -112,7 +50,10 @@ extensions = [
     'breathe'
 ]
 
-breathe_projects = {'cpp_api': os.path.join(sphinx_cache_dir, "xml")}
+# Full path generated Doxygen XML dir resolved in do_doxygen_generate_xml()
+# handler below
+breathe_projects = {'cpp_api': "xml"}
+
 breathe_default_project = 'cpp_api'
 breathe_show_include = True
 breathe_default_members = ()
@@ -204,3 +145,54 @@ copybutton_prompt_is_regexp = True
 
 # tabs behavior
 sphinx_tabs_disable_tab_closing = True
+
+
+# -- Doxygen XML generation handlers -----------------------------------
+
+def do_doxygen_generate_xml(app):
+
+    # Only runs is breathe projects exists
+    if not app.config["breathe_projects"]:
+        return
+
+    if shutil.which("doxygen") is None:
+        raise SystemError(
+            "Expects 'doxygen' command on the PATH to generate C++ docs")
+
+    print("===== Generating Doxygen XML ======")
+
+    # Prepare temp Doxyfile with resolved param values
+    temp_doxy_file_dir = tempfile.mkdtemp()
+    temp_doxy_file = os.path.join(temp_doxy_file_dir, "Doxyfile")
+    doxygen_output_dir = app.doctreedir
+    dictionary = {
+        'project': app.config.project,
+        'version': app.config.release,
+        'output_dir': doxygen_output_dir
+    }
+
+    with open(os.path.join(app.confdir, 'Doxyfile'), 'r') as template_file:
+        template = Template(template_file.read())
+        with open(temp_doxy_file, 'w') as template_file_out:
+            template_file_out.write(template.substitute(dictionary))
+
+    # Store for later cleanup
+    app.config.add("temp_doxy_file_dir", temp_doxy_file_dir, "env", [])
+
+    subprocess.call(["doxygen", temp_doxy_file], cwd=app.confdir)
+
+    # Update breathe_projects paths to be relative from actual doxygen_output_dir
+    for name, path in app.config["breathe_projects"].items():
+        app.config["breathe_projects"].update(
+            {name: os.path.join(doxygen_output_dir, path)})
+
+def do_doxygen_temp_cleanup(app, exception):
+    if "temp_doxy_file_dir" in app.config:
+        shutil.rmtree(app.config["temp_doxy_file_dir"])
+
+def setup(app):
+
+    # Add a hook for generating doxygen xml and cleaning up
+    app.connect("builder-inited", do_doxygen_generate_xml)
+    app.connect("build-finished", do_doxygen_temp_cleanup)
+
