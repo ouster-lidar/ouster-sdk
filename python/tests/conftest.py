@@ -2,6 +2,7 @@ from contextlib import closing
 from os import path
 from typing import Iterator
 
+from more_itertools import partition
 import pytest
 
 from ouster import client, pcap
@@ -9,6 +10,36 @@ from ouster import client, pcap
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
 
+
+# boilerplate for selecting / deslecting interactive tests
+def pytest_addoption(parser):
+    parser.addoption("--interactive",
+                     action="store_true",
+                     required=False,
+                     default=False,
+                     help="Run interactive tests")
+
+
+def pytest_configure(config):
+    """Register custom "interactive" marker."""
+    config.addinivalue_line("markers", "interactive: run interactive tests")
+
+
+def pytest_collection_modifyitems(items, config) -> None:
+    """Deselect any items marked "full" unless the --full flag is set."""
+
+    normal, interactive = partition(
+        lambda item: bool(item.get_closest_marker("interactive")), items)
+
+    select, deselect = (interactive,
+                        normal) if config.option.interactive else (normal,
+                                                                   interactive)
+
+    config.hook.pytest_deselected(items=deselect)
+    items[:] = select
+
+
+# test data
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/pcaps")
 
 TESTS = {

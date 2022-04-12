@@ -12,12 +12,18 @@ option(BUILD_SHARED_LIBS "Build shared libraries." OFF)
 option(BUILD_PCAP "Build pcap utils." OFF)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
+option(BUILD_EXAMPLES "Build C++ examples" OFF)
 
-# when building as a top-level project
+# when building as a top-level project and not as conan library
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  set(CMAKE_CXX_STANDARD 11)
+  if(NOT "${CMAKE_CXX_STANDARD}")
+    set(CMAKE_CXX_STANDARD 11)
+  endif()
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CMAKE_CXX_EXTENSIONS OFF)
+
+  if(NOT "${CMAKE_CXX_EXTENSIONS}")
+    set(CMAKE_CXX_EXTENSIONS OFF)
+  endif()
 
   if(MSVC)
     add_compile_options(/W3)
@@ -32,12 +38,16 @@ endif()
 # === Subdirectories ===
 add_subdirectory(ouster_client)
 
-if(BUILD_PCAP)
+if(BUILD_PCAP OR BUILD_EXAMPLES)
   add_subdirectory(ouster_pcap)
 endif()
 
 if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
+endif()
+
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
 endif()
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -91,4 +101,3 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "cmake, libjsoncpp-dev, libtclap-dev, libeigen3
   libglfw3-dev, libglew-dev")
 
 include(CPack)
-

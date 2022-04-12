@@ -35,7 +35,7 @@ class ImuPacket:
         Args:
             data: Buffer containing the packet payload
             info: Metadata associated with the sensor packet stream
-            timestamp: A capture timestamp, in microseconds
+            timestamp: A capture timestamp, in seconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
@@ -130,7 +130,7 @@ class LidarPacket:
         Args:
             data: Buffer containing the packet payload
             info: Metadata associated with the sensor packet stream
-            timestamp: A capture timestamp, in microseconds
+            timestamp: A capture timestamp, in seconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
