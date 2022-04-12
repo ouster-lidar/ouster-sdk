@@ -541,6 +541,8 @@ static bool valid_response(const Json::Value& root,
     return (root.isMember(tcp_request) && root[tcp_request].isObject());
 }
 
+// TODO make robust to new formats that are incorrect instead of returning false
+// and sending to legacy
 static bool is_new_format(const std::string& metadata) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
@@ -554,7 +556,7 @@ static bool is_new_format(const std::string& metadata) {
 
     const std::vector<std::string> valid_response_required = {
         "sensor_info", "beam_intrinsics", "imu_intrinsics", "lidar_intrinsics",
-        "config_param"};
+        "config_params"};
 
     for (const auto& key : valid_response_required) {
         if (!valid_response(root, key)) {
@@ -754,10 +756,10 @@ std::string convert_to_legacy(const std::string& metadata) {
     }
     Json::Value result{};
 
-    if (root.isMember("config_param")) {
-        result["lidar_mode"] = root["config_param"]["lidar_mode"];
-        result["udp_port_lidar"] = root["config_param"]["udp_port_lidar"];
-        result["udp_port_imu"] = root["config_param"]["udp_port_imu"];
+    if (root.isMember("config_params")) {
+        result["lidar_mode"] = root["config_params"]["lidar_mode"];
+        result["udp_port_lidar"] = root["config_params"]["udp_port_lidar"];
+        result["udp_port_imu"] = root["config_params"]["udp_port_imu"];
     }
     if (root.isMember("client_version")) {
         result["client_version"] = root["client_version"];

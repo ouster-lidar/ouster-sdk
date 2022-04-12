@@ -310,7 +310,7 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
     success &= do_tcp_cmd(sock_fd, {"get_config_param", "active"}, res);
     success &=
         reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
-    cli.meta["config_param"] = root;
+    cli.meta["config_params"] = root;
 
     // merge extra info into metadata
     cli.meta["client_version"] = client_version();
