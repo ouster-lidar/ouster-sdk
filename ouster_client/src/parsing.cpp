@@ -50,15 +50,25 @@ struct ProfileEntry {
     size_t chan_data_size;
 };
 
-static const Table<ChanField, FieldInfo, 5> legacy_field_info{{
+static const Table<ChanField, FieldInfo, 8> legacy_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x000fffff, 0}},
     {ChanField::FLAGS, {UINT8, 3, 0, 4}},
     {ChanField::REFLECTIVITY, {UINT16, 4, 0, 0}},
     {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
     {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 9> dual_field_info{{
+static const Table<ChanField, FieldInfo, 4> lb_field_info{{
+    {ChanField::RANGE, {UINT16, 0, 0x7fff, -3}},
+    {ChanField::REFLECTIVITY, {UINT8, 2, 0, 0}},
+    {ChanField::NEAR_IR, {UINT8, 3, 0, -4}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+}};
+
+static const Table<ChanField, FieldInfo, 13> dual_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
     {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
     {ChanField::REFLECTIVITY, {UINT8, 3, 0, 0}},
@@ -68,6 +78,10 @@ static const Table<ChanField, FieldInfo, 9> dual_field_info{{
     {ChanField::SIGNAL, {UINT16, 8, 0, 0}},
     {ChanField::SIGNAL2, {UINT16, 10, 0, 0}},
     {ChanField::NEAR_IR, {UINT16, 12, 0, 0}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
+    {ChanField::RAW32_WORD4, {UINT32, 12, 0, 0}},
 }};
 
 Table<UDPProfileLidar, ProfileEntry, 32> profiles{{
@@ -75,6 +89,10 @@ Table<UDPProfileLidar, ProfileEntry, 32> profiles{{
      {legacy_field_info.data(), legacy_field_info.size(), 12}},
     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
      {dual_field_info.data(), dual_field_info.size(), 16}},
+    {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
+     {legacy_field_info.data(), legacy_field_info.size(), 12}},
+    {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
+     {lb_field_info.data(), lb_field_info.size(), 4}},
 }};
 
 static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {

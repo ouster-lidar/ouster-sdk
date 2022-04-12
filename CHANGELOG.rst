@@ -2,6 +2,40 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+* update supported vcpkg tag to 2022.02.23
+* update to manylinux2014 for x64 linux ``ouster-sdk`` wheels
+
+ouster_client
+-------------
+* fix the behavior of ``BeamUniformityCorrector`` on azimuth-windowed data by ignoring zeroed out
+  columns
+* add overloads in ``image_processing.h`` to work with single-precision floats
+* add support for new ``RNG19_RFL8_SIG16_NIR16`` single-return and ``RNG15_RFL8_NIR8`` low-bandwidth
+  lidar UDP profiles introduced in firmware 2.3
+
+ouster_viz
+----------
+* switch to glad for OpenGL loading. GLEW is still supported for developer builds
+* breaking change: significant API update of the ``PointViz`` library. See documentation for details
+* the ``simple_viz`` example app and ``LidarScanViz`` utility have been removed. Equivalent
+  functionality is now provided via Python
+* add basic support for drawing 2d and 3d text labels
+* update to OpenGL 3.3
+
+python
+------
+* fix a bug where incorrectly sized packets read from the network could cause the client thread to
+  silently exit, resulting in a timeout
+* fix ``client.Scans`` not raising a timeout when using the ``complete`` flag and receiving only
+  incomplete scans. This could cause readings scans to hang in rare situations
+* added bindings for the new ``PointViz`` API and a new module for higher-level visualizer utilities
+  in ``ouster.sdk.viz``. See API documentation for details
+* the ``ouster-sdk`` package now includes an example visualizer, ``simple-viz``, which will be
+  installed on that path for the Python environment
+
 
 [20220107]
 ============
@@ -72,6 +106,7 @@ ouster_viz
 ----------
 * the second CLI argument of simple_viz specifying the UDP data destination is now optional
 * fixed bug in AutoExposure causing more points to be mapped to near-zero values
+* add functionality to display text over cuboids
 
 python
 ------

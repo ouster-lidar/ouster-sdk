@@ -24,7 +24,7 @@ struct FieldSlot;
 }
 
 /**
- * Datastructure for efficient operations on aggregated lidar data.
+ * Data structure for efficient operations on aggregated lidar data.
  *
  * Stores each field (range, intensity, etc.) contiguously as a H x W block of
  * 4-byte unsigned integers, where H is the number of beams and W is the

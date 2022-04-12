@@ -212,12 +212,12 @@ int main(int argc, char** argv) {
             ROS_ERROR("Error when running in replay mode: %s", e.what());
         }
     } else {
-        ROS_INFO("Waiting for sensor %s to initialize ...", hostname.c_str());
+        ROS_INFO("Starting sensor %s initialization...", hostname.c_str());
 
         // use no-config version of init_client to allow for random ports
         auto cli = sensor::init_client(hostname, lidar_port, imu_port);
         if (!cli) {
-            ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());
+            ROS_ERROR("Failed to initialize client");
             return EXIT_FAILURE;
         }
 
@@ -232,18 +232,21 @@ int main(int argc, char** argv) {
         uint8_t config_flags = 0;
 
         if (udp_dest.size()) {
-            ROS_INFO("Sending UDP data to %s", udp_dest.c_str());
+            ROS_INFO("Will send UDP data to %s", udp_dest.c_str());
             config.udp_dest = udp_dest;
         } else {
-            ROS_INFO("Using automatic UDP destination");
+            ROS_INFO("Will use automatic UDP destination");
             config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
         }
 
         try {
-            set_config(hostname, config, config_flags);
-            ROS_INFO("Sensor configured successfully");
+            if (!set_config(hostname, config, config_flags)) {
+                ROS_ERROR("Error connecting to sensor %s", hostname.c_str());
+                return EXIT_FAILURE;
+            }
+            ROS_INFO("Sensor %s configured successfully", hostname.c_str());
         } catch (const std::runtime_error& e) {
-            ROS_ERROR("Errror setting config:  %s", e.what());
+            ROS_ERROR("Error setting config:  %s", e.what());
             return EXIT_FAILURE;
         } catch (const std::invalid_argument& ia) {
             ROS_ERROR("Error setting config: %s", ia.what());
@@ -252,8 +255,16 @@ int main(int argc, char** argv) {
 
         // fetch metadata for client after setting configs
         auto metadata = sensor::get_metadata(*cli);
+        if (metadata.empty()) {
+            ROS_ERROR("Failed to collect metadata");
+            return EXIT_FAILURE;
+        }
 
-        ROS_INFO("Sensor initialized successfully");
+        if (!cli) {
+            ROS_ERROR("Failed to initialize sensor at %s", hostname.c_str());
+            return EXIT_FAILURE;
+        }
+        ROS_INFO("Sensor %s initialized successfully", hostname.c_str());
 
         // write metadata file. If metadata_path is relative, will use cwd
         // (usually ~/.ros)

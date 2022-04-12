@@ -59,13 +59,26 @@ extern const Table<MultipurposeIOMode, const char*, 6>
     multipurpose_io_mode_strings;
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
-extern Table<ChanField, const char*, 9> chanfield_strings;
-extern Table<UDPProfileLidar, const char*, 2> udp_profile_lidar_strings;
+extern Table<ChanField, const char*, 13> chanfield_strings;
+extern Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 
 }  // namespace impl
 }  // namespace sensor
 }  // namespace ouster
+
+// alias for non-casting row-major array arguments
+template <typename T>
+using pyimg_t = py::array_t<T, py::array::c_style>;
+
+// factor out overloaded call operator for ae/buc
+template <typename T, typename U>
+void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
+    if (image.ndim() != 2) throw std::invalid_argument("Expected a 2d array");
+    self(Eigen::Map<img_t<U>>(image.mutable_data(), image.shape(0),
+                              image.shape(1)),
+         update_state);
+}
 
 /*
  * Define an enum from a table of strings, along with some properties to make
@@ -707,9 +720,11 @@ PYBIND11_PLUGIN(_client) {
                 },
                 py::keep_alive<0, 1>()),
             "Return an iterator of available channel fields.")
-        .def("__eq__", [](const LidarScan& l, const LidarScan& r) { return l == r; })
+        .def("__eq__",
+             [](const LidarScan& l, const LidarScan& r) { return l == r; })
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
-        .def("__deepcopy__", [](const LidarScan& self, py::dict) { return LidarScan{self}; })
+        .def("__deepcopy__",
+             [](const LidarScan& self, py::dict) { return LidarScan{self}; })
         // for backwards compatibility: previously converted between Python
         // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })
@@ -758,13 +773,17 @@ PYBIND11_PLUGIN(_client) {
         .def(py::init<int>(), py::arg("update_every"))
         .def(py::init<double, double, int>(), py::arg("lo_percentile"),
              py::arg("hi_percentile"), py::arg("update_every"))
-        .def("__call__", [](viz::AutoExposure& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def("__call__", &image_proc_call<viz::AutoExposure, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::AutoExposure, double>,
+             py::arg("image"), py::arg("update_state") = true);
 
     py::class_<viz::BeamUniformityCorrector>(m, "BeamUniformityCorrector")
         .def(py::init<>())
-        .def("__call__", [](viz::BeamUniformityCorrector& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
+             py::arg("image"), py::arg("update_state") = true);
 
     return m.ptr();
 }

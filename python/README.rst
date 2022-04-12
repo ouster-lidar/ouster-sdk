@@ -41,14 +41,14 @@ Installation
 ------------
 
 The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install, use ``pip`` to grab the
-``ouster-sdk`` package. See the `quick start`_ section of the documentation for more details and to
-begin working with Ouster data!
+``ouster-sdk`` package. See the `installation`_ section of the documentation for installation
+instructions.
 
 If you're running a non-glibc-based linux distribution, or wish to modify the Ouster Python
 SDK, you will need to build from source. See the `build instructions`_ for requirements needed to
 build from a source distribution or from a clone of the repository.
 
-.. _quick start: https://static.ouster.dev/sdk-docs/quickstart.html
+.. _installation: https://static.ouster.dev/sdk-docs/installation.html
 .. _build instructions: https://static.ouster.dev/sdk-docs/devel.html
 
 

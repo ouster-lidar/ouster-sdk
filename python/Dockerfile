@@ -16,11 +16,14 @@ RUN set -xe \
  libpcap-dev \
  python3-dev \
  python3-pip \
+ python3-venv \
  pybind11-dev \
 # Install any additional available cpython versions for testing
  'python3.[6-9]-dev' \
  libglfw3-dev \
  libglew-dev \
+ python3-breathe \
+ doxygen \
 && rm -rf /var/lib/apt/lists
 
 # Set up non-root build user and environment

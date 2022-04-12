@@ -1,9 +1,8 @@
 #pragma once
 
+#include <Eigen/Core>
 #include <cstdint>
 #include <stdexcept>
-
-#include <Eigen/Core>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"

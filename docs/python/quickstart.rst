@@ -1,55 +1,12 @@
 .. _quickstart:
 
-==================================
-Quick Start with Ouster Python SDK
-==================================
+======================================
+Quick Start with the Ouster Python SDK
+======================================
 
-This quickstart guide will walk you through visualizing Ouster sensor data quickly, whether from
-sample data or a sensor connected to your machine.
-
-
-Installation
-============
-
-The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. To install on :ref:`supported platforms<supported platforms>`, run:
-
-.. tabs::
-
-    .. code-tab:: console Linux/macOS
-
-        $ python3 -m pip install 'ouster-sdk[examples]'
-
-    .. code-tab:: powershell Windows x64
-
-        PS > py -3 -m pip install 'ouster-sdk[examples]'
-
-
-.. note::
-
-   **Using a virtual environment** is recommended. Users newer to Python should read the official
-   `venv instructions`_ and ensure that they have `upgraded pip`_ once their venv is activated. If
-   you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py -3`` and
-   ``py -3 -m pip`` in the following Powershell snippets.
-
-   **Apple M1 users** should be aware that due to numpy support limitations they will need to use Python >=3.8.
-
-To check that you've successfully installed the latest version of the Ouster Python SDK, run the
-following command and make sure that the ``ouster-sdk`` package is included in the output:
-
-.. tabs::
-
-    .. code-tab:: console Linux/macOS
-
-        $ python3 -m pip list
-
-    .. code-tab:: powershell Windows x64
-
-        PS > py -3 -m pip list
-
-
-.. _upgraded pip: https://pip.pypa.io/en/stable/installing/#upgrading-pip
-.. _venv instructions: https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment
-
+This quickstart guide will walk you through visualizing Ouster sensor data quickly with Python code
+you write yourself. It assumes that you have followed the steps in :ref:`Installation` to install the Ouster
+Python SDK.
 
 Using this Guide
 ================
@@ -80,26 +37,24 @@ start by capturing data from a sensor, you can skip to `Using an Ouster Sensor`_
 Using Sample Data
 =================
 
-Download the `OS2 bridge sample data`_ (**80 MB**) and unzip the contents. To use subsequent code
-snippets as-is, you should extract this file into the same directory from which you're running your
-Python interpreter. You should have two files:
-
-  * ``OS2_128_bridge_sample.pcap``
-  * ``OS2_2048x10_128.json``
+.. include:: installation.rst
+    :start-line: 86
+    :end-line: 110
 
 The downloaded pcap file contains lidar and imu packets captured from the network. You can read
 more about the `IMU Data Format`_ and `Lidar Data Format`_ in the Ouster Sensor Documentation. The
 JSON file contains metadata queried from the sensor TCP interface necessary for interpreting
 the packet data.
 
+In your open python session, save the two paths to variables:
+
 .. code:: python
 
-   >>> pcap_path = 'OS2_128_bridge_sample.pcap'
-   >>> metadata_path = 'OS2_2048x10_128.json'
+   >>> pcap_path = '<SAMPLE_DATA_PCAP_PATH>'
+   >>> metadata_path = '<SAMPLE_DATA_JSON_PATH>'
 
-You may have to adjust these paths to the directory where the unzipped ``pcap`` and ``json`` file
-are located. Because our pcap file contains the UDP packet stream but not the sensor metadata, we
-load the sensor information from ``metadata_path`` first, using the client module:
+Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the sensor
+information from ``metadata_path`` first, using the client module:
 
 .. code:: python
 
@@ -118,18 +73,17 @@ captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
 
 To visualize data from this pcap file, proceed to `Visualizing Lidar Data`_ below.
 
-.. todo::  Update to 2.2 docs on release
-
+.. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf#10
+.. _IMU Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf#14
 .. _OS2 bridge sample data: https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip
-.. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.1.x.pdf#10
-.. _IMU Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.1.x.pdf#14
 
 
 Using an Ouster Sensor
 ======================
 
-If you have access to sensor hardware, you can start reading data by instantiating a
-:py:class:`.PacketSource` that listens for a UDP data stream on a local socket.
+If you have access to sensor hardware, you can start reading data by
+instantiating a :py:class:`.PacketSource` that listens for a UDP data stream on
+a local socket.
 
 .. note::
 
@@ -193,10 +147,7 @@ Now we have a ``source`` from our sensor! To visualize data from your sensor, pr
 `Visualizing Lidar Data`_ directly below.
 
 
-.. todo:: Replace with 2.2 docs on release
-
-.. _Networking Guide: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.1.x.pdf#74
-
+.. _Networking Guide: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf#7c
 
 Visualizing Lidar Data
 ======================
@@ -240,11 +191,11 @@ a column segment of the range data and display the result:
     backend`_ such as TkAgg or Qt5Agg in order to visualize your data with matplotlib.
 
 
-.. figure:: images/brooklyn_bridge_ls_50_range_image.png
+.. figure:: ../images/brooklyn_bridge_ls_50_range_image.png
     :align: center
     :figwidth: 100%
 
-    Range image of OS2 sample data. Data taken at Brooklyn Bridge, NYC.
+    Range image of OS2 bridge data. Data taken at Brooklyn Bridge, NYC.
 
 
 In addition to viewing the data in 2D, we can also plot the results in 3D by projecting the range
@@ -277,10 +228,10 @@ You should be able to rotate the resulting scene to view it from different angle
 To learn more about manipulating lidar data, see :ref:`ex-staggered-and-destaggered`,
 :ref:`ex-xyzlut` and :ref:`ex-correlating-2d-and-3d`.
 
-.. figure:: images/brooklyn_bridge_ls_50_xyz_cut.png
+.. figure:: ../images/brooklyn_bridge_ls_50_xyz_cut.png
    :align: center
 
-   Point cloud from OS2 sample data with colormap on z. Data taken at Brooklyn Bridge, NYC.
+   Point cloud from OS2 bridge data with colormap on z. Data taken at Brooklyn Bridge, NYC.
 
 
 .. _GUI backend: https://matplotlib.org/stable/tutorials/introductory/usage.html#the-builtin-backends

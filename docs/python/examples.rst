@@ -2,15 +2,18 @@
 Examples & Concepts
 ===================
 
-A loosely connected collection of examples and concepts useful for working with Ouster SDK. If you
-are just starting, please see :ref:`quickstart`.
+A loosely connected collection of examples and concepts useful for working with the Ouster Python
+SDK. If you are just starting, please see :ref:`quickstart`.
 
-For convenience, throughout the examples and concepts we will use ``pcap_path`` and
-``metadata_path`` to refer to the path to an Ouster pcap and metadata file.  The pictures below are
-captured from the `OS1 sample data`_ .
+For convenience, and in keeping with the :ref:`installation` and :ref:`quickstart` sections, we will
+use ``$SAMPLE_DATA_PCAP_PATH`` and ``$SAMPLE_DATA_JSON_PATH`` for the locations of the sample data
+pcap and json.  For python code, ``pcap_path`` and ``json_path`` are taken to be set to those
+values, respectively.  Similarly, ``$SENSOR_HOSTNAME`` is used for your sensor's hostname.
 
-.. _OS1 sample data: https://data.ouster.io/sdk-samples/OS1/OS1_128_sample.zip
+The pictures below are captured from the `OS1 128 Rev 05 Urban Drive`_ sample data, though we
+recommend that users download one of our :ref:`Rev 06 samples<sample-data-download>` instead.
 
+.. _OS1 128 Rev 05 Urban Drive: https://data.ouster.io/sdk-samples/Rev-05/OS1-128_Rev-05_Urban-Drive/OS1-128_Rev-05_Urban-Drive.zip
 
 .. _ex-basic-sensor:
 
@@ -23,12 +26,15 @@ Working with an Ouster sensor
    :depth: 3
 
 
-Configuring your sensor
+.. _ex-configure-sensor:
+
+
+Configuring Your Sensor
 ------------------------
 To work with your sensor, you should configure the ports, the :py:class:`.OperatingMode`, and the
 :py:class:`.LidarMode`:
 
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-configure]
     :end-before: [doc-etag-configure]
     :dedent:
@@ -36,7 +42,7 @@ To work with your sensor, you should configure the ports, the :py:class:`.Operat
 Each config parameter corresponds directly to the sensor configuration parameters available on the
 sensor.
 
-You can run the above code, captured in the `configure-sensor`_ example, as follows:
+You can run the above code, captured in the `configure-sensor-params`_ example, as follows:
 
 .. tabs::
 
@@ -48,10 +54,14 @@ You can run the above code, captured in the `configure-sensor`_ example, as foll
 
         PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-sensor
 
+Once you've configured your sensor, you shouldn't have to configure it again until it shuts down or
+restarts.  You can explore the ``persist`` flag to persist ``port`` and ``udp_dest`` settings over
+sensor restarts.
+
 If you have a Rev6 or later sensor and are running FW 2.2+, you should be able to configure your
 sensor to use dual returns by setting the config parameter :py:class:`.UDPProfileLidar`:
 
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-config-udp-profile]
     :end-before: [doc-etag-config-udp-profile]
     :dedent:
@@ -70,7 +80,7 @@ Try the `dual returns configuration example`_ on your Rev6 or later sensor:
         PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-dual-returns
 
 
-.. _configure-sensor: ./_modules/ouster/sdk/examples/client.html#configure_sensor_params
+.. _configure-sensor-params: ./_modules/ouster/sdk/examples/client.html#configure_sensor_params
 .. _dual returns configuration example: ./_modules/ouster/sdk/examples/client.html#configure_dual_returns
 
 
@@ -101,7 +111,7 @@ Try running the following example:
 
 And now let's look inside the `fetch metadata example`_ we just ran:
 
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-fetch-metadata]
     :end-before: [doc-etag-fetch-metadata]
     :dedent:
@@ -133,7 +143,7 @@ Let's make a :py:class:`.PacketSource` from our sample data using :py:class:`.pc
 
 Now we can read packets from ``source`` with the following code:
 
-.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/pcap.py
     :start-after: [doc-stag-pcap-read-packets]
     :end-before: [doc-etag-pcap-read-packets]
     :dedent:
@@ -144,11 +154,11 @@ You can try the above code with the `read packets example`_:
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json read-packets
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH read-packets
 
     .. code-tab:: powershell Windows x64
 
-        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json read-packets
+        PS > python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH read-packets
 
 .. _read packets example: ./_modules/ouster/sdk/examples/pcap.html#pcap_read_packets
 
@@ -172,7 +182,7 @@ projection of the batched data into Cartesian coordinates, producing point cloud
 A :py:class:`.LidarScan` contains the fields specified at its initialization, queryable by accessing
 ``fields`` of the scan:
 
-.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/pcap.py
     :start-after: [doc-stag-pcap-query-scan]
     :end-before: [doc-etag-pcap-query-scan]
     :dedent:
@@ -184,15 +194,14 @@ You can run the above code on pcap containing packets of any type of :py:class:`
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json query-scan
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH query-scan
 
     .. code-tab:: powershell Windows x64
 
-        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json query-scan
+        PS > python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH query-scan
 
-On a packet containing dual returns data, you should note that your
-dtypes will not be consistently ``uint32_t``, as you can tell from the result of running
-``query-scan`` on dual returns data::
+On a packet containing dual returns data, you should note that your dtypes will not be consistently
+``uint32_t``, as you can tell from the result of running ``query-scan`` on dual returns data::
 
     Available fields and corresponding dtype in LidarScan
     RANGE           uint32
@@ -212,10 +221,10 @@ using :py:class:`.UDPProfileLidar` as follows:
     LidarScan(h, w, metadata.format.udp_profile_lidar)
 
 
+You can try it yourself with one of our :ref:`recorded dual returns data snippets<dual-returns-snippets>`!
+
 
 .. _field-querying example: ./_modules/ouster/sdk/examples/pcap.html#pcap_query_scan
-
-.. todo:: insert link to dual returns data here
 
 
 
@@ -231,7 +240,7 @@ visualized is not a natural image.
 
 Let's take a look at a typical **staggered** representation:
 
-.. figure:: images/lidar_scan_staggered.png
+.. figure:: ../images/lidar_scan_staggered.png
    :align: center
 
    LidarScan ``RANGE`` field visualized with :py:func:`matplotlib.pyplot.imshow()` and simple gray
@@ -263,13 +272,18 @@ timestamp:
 
 The above code gives the scene below, which we have magnified two patches for better visiblity.
 
-.. figure:: images/lidar_scan_destaggered.png
+.. figure:: ../images/lidar_scan_destaggered.png
     :align: center
 
     **destaggered** LidarScan ``RANGE`` field
 
 After destaggering, we can see the scene contains a man on a bicycle, a few cars, and many trees.
 This image now makes visual sense, and we can easily use this data in common visual task pipelines.
+
+.. todo:: 
+    (Kai) Might be nice here or somewhere else to cover how to duplicate
+    timestamps into an 'img', "destagger" it, and then use for for association
+    of XYZ points with their timestamps 
 
 .. note::
 
@@ -292,14 +306,14 @@ coordinates using a precomputed lookup table. The result of calling this functio
 cloud represented as a numpy array. See the API documentation for :py:func:`.client.XYZLut` for more
 details.
 
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-plot-xyz-points]
     :end-before: [doc-etag-plot-xyz-points]
     :emphasize-lines: 2-3
     :linenos:
     :dedent:
 
-If you have a sensor, you can run the above code excerpted from the `plot-xyz-points sensor example`_ with:
+If you have a :ref:`configured<ex-configure-sensor>` sensor, you can run the above code excerpted from the `plot-xyz-points sensor example`_ with:
 
 .. tabs::
 
@@ -320,14 +334,14 @@ If you don’t have a sensor, you can run the same code with our `plot-xyz-point
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH plot-xyz-points --scan-num 84
 
     .. code-tab:: powershell Windows x64
 
-        PS > python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json plot-xyz-points --scan-num 84
+        PS > python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH plot-xyz-points --scan-num 84
 
 
-.. figure:: images/lidar_scan_xyz_84.png
+.. figure:: ../images/lidar_scan_xyz_84.png
    :align: center
 
    Point cloud from OS1 sample data (scan 84). Points colored by ``SIGNAL`` value.
@@ -350,7 +364,7 @@ The direct correlation between 2D and 3D representations in an Ouster sensor pro
 framework for working with the data. As an easy example, you might decide you want to look at only
 the 3D points within a certain range and from certain azimuth angles.
 
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
     :start-after: [doc-stag-filter-3d]
     :end-before: [doc-etag-filter-3d]
     :emphasize-lines:  10-11, 15
@@ -362,15 +376,15 @@ that our columns in the ``HxW`` representation correspond to azimuth angle, not 
 :ref:`ex-staggered-and-destaggered` for an explanation on destaggering.)
 
 Then we filter the 3D points ``xyz_destaggered`` by comparing the range measurement to
-``min_range``, which we can do because there is a 1:1 correspondence between the columns and rows of
-the destaggered representations of ``xyz_destaggered`` and ``range_staggered``. (Similarly, there
+``range_min``, which we can do because there is a 1:1 correspondence between the columns and rows of
+the destaggered representations of ``xyz_destaggered`` and ``range_destaggered``. (Similarly, there
 would be a 1:1 correspondence between the staggered representations ``xyz`` and ``range``, where the
 columns correspond with timestamp).
 
 Finally, we select only the azimuth columns we're interested in. In this case, we've arbitrarily
 chosen the first 270 degrees of rotation.
 
-If you have a sensor, you can run this code with an example:
+If you have a :ref:`configured<ex-configure-sensor>` sensor, you can run this code with an example:
 
 .. tabs::
 
@@ -398,8 +412,8 @@ Recording, Streaming, and Conversion
 Recording Sensor Data
 ---------------------
 
-It's easy to record data to a pcap file from a sensor programatically. Let's try it first
-with the following example:
+It's easy to record data to a pcap file from a sensor programatically. Let's try it on a
+:ref:`configured<ex-configure-sensor>` sensor:
 
 .. tabs::
 
@@ -417,7 +431,7 @@ seconds and store the pcap file along with the metadata json file into the curre
 
 The source code of an example below:
 
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
    :start-after: [doc-stag-pcap-record]
    :end-before: [doc-etag-pcap-record]
    :emphasize-lines: 15
@@ -432,7 +446,7 @@ Streaming Live Data
 -------------------
 
 Instead of working with a recorded dataset or a few captured frames of data, let's see if we can get
-a live feed from the sensor:
+a live feed from your :ref:`configured<ex-configure-sensor>` sensor:
 
 .. tabs::
 
@@ -449,7 +463,7 @@ Try waving your hand or moving around to find yourself within the image!
 
 So how did we do that?
 
-.. literalinclude:: /../src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
    :start-after: [doc-stag-live-plot-signal]
    :end-before: [doc-etag-live-plot-signal]
    :emphasize-lines: 2-3
@@ -478,16 +492,16 @@ To convert the first ``5`` scans of our sample data from a pcap file, you can tr
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-csv --scan-num 5
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap OS1_128.pcap OS1_2048x10_128.json pcap-to-csv --scan-num 5
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-csv --scan-num 5
 
 
 The source code of an example below:
 
-.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/pcap.py
     :start-after: [doc-stag-pcap-to-csv]
     :end-before: [doc-etag-pcap-to-csv]
     :emphasize-lines: 33-37
@@ -518,7 +532,7 @@ Visualization
 =============
 
 The Ouster Python SDK provides two visualization utilities for user convenience. These are
-introduced breifly below.
+introduced briefly below.
 
 .. contents::
    :local:
@@ -537,16 +551,16 @@ The default Ouster PyViz visualizer view includes two 2D range images atop which
 through the available fields, and a 3D point cloud on the bottom. For dual returns sensors, both
 returns are displayed by default.
 
-.. figure:: images/pyviz.png
+.. figure:: ../images/pyviz.png
     :align: center
 
-    Ouster PyViz visualization of OS1 sample data
+    Ouster PyViz visualization of OS1 Rev 05 sample data
 
 The visualizer can be controlled with mouse and keyboard:
 
 .. include:: ../../README.rst
     :start-line: 136
-    :end-line: 169
+    :end-line: 167
 
 To run the visualizer with a sensor:
 
@@ -569,11 +583,11 @@ To run the visualizer with a pcap:
 
     .. code-tab:: console Linux/macOS
         
-        $ python3 -m ouster.sdk.examples.viz --pcap OS1_128.pcap --meta OS1_2048x10_128.json
+        $ python3 -m ouster.sdk.examples.viz --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH
 
     .. code-tab:: powershell Windows x64
         
-        $ py -3 -m ouster.sdk.examples.open3d --pcap OS1_128.cap --meta OS1_2048x10_128.json
+        $ py -3 -m ouster.sdk.examples.open3d --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH
 
 
 .. _ex-open3d:
@@ -586,7 +600,7 @@ The `Open3d library`_ contains Python bindings for a variety of tools for workin
 data. Loading data into Open3d is just a matter of reshaping the numpy representation of a point
 cloud, as demonstrated in the :func:`.examples.pcap.pcap_3d_one_scan` example:
 
-.. literalinclude:: /../src/ouster/sdk/examples/pcap.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/pcap.py
     :start-after: [doc-stag-open3d-one-scan]
     :end-before: [doc-etag-open3d-one-scan]
     :emphasize-lines: 1-6
@@ -610,12 +624,12 @@ As an example, you can view frame ``84`` from the sample data by running the fol
     .. code-tab:: console Linux/macOS
 
        $ python3 -m ouster.sdk.examples.open3d \
-           --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
+           --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH --start 84 --pause
 
     .. code-tab:: powershell Windows x64
 
        PS > py -3 -m ouster.sdk.examples.open3d ^
-           --pcap OS1_128.pcap --meta OS1_2048x10_128.json --start 84 --pause
+           --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH --start 84 --pause
 
 You may also want to try the ``--sensor`` option to display the output of a running sensor. Use the
 ``-h`` flag to see a full list of command line options and flags.
@@ -623,7 +637,7 @@ You may also want to try the ``--sensor`` option to display the output of a runn
 Running the example above should open a window displaying a scene from a city intersection,
 reproduced below:
 
-.. figure:: images/lidar_scan_xyz_84_3d.png
+.. figure:: ../images/lidar_scan_xyz_84_3d.png
    :align: center
 
    Open3D visualization of OS1 sample data (frame 84). Points colored by ``SIGNAL`` field.

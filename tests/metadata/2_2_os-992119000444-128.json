@@ -274,7 +274,7 @@
         }
     },
     "client_version": "ouster_client 0.3.0",
-    "config_param":
+    "config_params":
     {
         "auto_start_flag": 1,
         "azimuth_window":
