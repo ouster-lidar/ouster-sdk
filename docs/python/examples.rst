@@ -2,8 +2,8 @@
 Examples & Concepts
 ===================
 
-A loosely connected collection of examples and concepts useful for working with Ouster SDK. If you
-are just starting, please see :ref:`quickstart`.
+A loosely connected collection of examples and concepts useful for working with the Ouster Python
+SDK. If you are just starting, please see :ref:`quickstart`.
 
 For convenience, and in keeping with the :ref:`installation` and :ref:`quickstart` sections, we will
 use ``$SAMPLE_DATA_PCAP_PATH`` and ``$SAMPLE_DATA_JSON_PATH`` for the locations of the sample data
@@ -194,7 +194,7 @@ You can run the above code on pcap containing packets of any type of :py:class:`
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH SAMPLE_DATA_JSON_PATH query-scan
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH query-scan
 
     .. code-tab:: powershell Windows x64
 
@@ -279,6 +279,11 @@ The above code gives the scene below, which we have magnified two patches for be
 
 After destaggering, we can see the scene contains a man on a bicycle, a few cars, and many trees.
 This image now makes visual sense, and we can easily use this data in common visual task pipelines.
+
+.. todo:: 
+    (Kai) Might be nice here or somewhere else to cover how to duplicate
+    timestamps into an 'img', "destagger" it, and then use for for association
+    of XYZ points with their timestamps 
 
 .. note::
 
@@ -371,8 +376,8 @@ that our columns in the ``HxW`` representation correspond to azimuth angle, not 
 :ref:`ex-staggered-and-destaggered` for an explanation on destaggering.)
 
 Then we filter the 3D points ``xyz_destaggered`` by comparing the range measurement to
-``min_range``, which we can do because there is a 1:1 correspondence between the columns and rows of
-the destaggered representations of ``xyz_destaggered`` and ``range_staggered``. (Similarly, there
+``range_min``, which we can do because there is a 1:1 correspondence between the columns and rows of
+the destaggered representations of ``xyz_destaggered`` and ``range_destaggered``. (Similarly, there
 would be a 1:1 correspondence between the staggered representations ``xyz`` and ``range``, where the
 columns correspond with timestamp).
 

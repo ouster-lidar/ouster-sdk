@@ -12,6 +12,7 @@ option(BUILD_SHARED_LIBS "Build shared libraries." OFF)
 option(BUILD_PCAP "Build pcap utils." OFF)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
+option(BUILD_EXAMPLES "Build C++ examples" OFF)
 
 # when building as a top-level project and not as conan library
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -37,12 +38,16 @@ endif()
 # === Subdirectories ===
 add_subdirectory(ouster_client)
 
-if(BUILD_PCAP)
+if(BUILD_PCAP OR BUILD_EXAMPLES)
   add_subdirectory(ouster_pcap)
 endif()
 
 if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
+endif()
+
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
 endif()
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
