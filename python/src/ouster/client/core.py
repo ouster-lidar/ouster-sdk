@@ -33,6 +33,7 @@ class ClientOverflow(ClientError):
 
 class PacketSource(Protocol):
     """Represents a single-sensor data stream."""
+
     def __iter__(self) -> Iterator[Packet]:
         """A PacketSource supports ``Iterable[Packet]``.
 
@@ -44,6 +45,27 @@ class PacketSource(Protocol):
     @property
     def metadata(self) -> SensorInfo:
         """Metadata associated with the packet stream."""
+        ...
+
+    def close(self) -> None:
+        """Release the underlying resource, if any."""
+        ...
+
+
+class ScanSource(Protocol):
+    """Represents a single-sensor data stream."""
+
+    def __iter__(self) -> Iterator[LidarScan]:
+        """A ScanSource supports ``Iterable[LidarScan]``.
+
+        Currently defined explicitly due to:
+        https://github.com/python/typing/issues/561
+        """
+        ...
+
+    @property
+    def metadata(self) -> SensorInfo:
+        """Metadata associated with the scan stream."""
         ...
 
     def close(self) -> None:
@@ -218,11 +240,16 @@ class Sensor(PacketSource):
             self.flush(full=True)
 
         while True:
-            p = self._next_packet()
-            if p is not None:
-                yield p
-            else:
-                break
+            try:
+                p = self._next_packet()
+                if p is not None:
+                    yield p
+                else:
+                    break
+            except ValueError:
+                # TODO: bad packet size or init_id here: this can happen when
+                # packets are buffered by the OS, not necessarily an error
+                pass
 
     def flush(self, n_frames: int = 3, *, full=False) -> int:
         """Drop some data to clear internal buffers.
@@ -238,6 +265,7 @@ class Sensor(PacketSource):
         Raises:
             ClientTimeout: if a lidar packet is not received within the
                 configured timeout
+            ClientError: if the client enters an unspecified error state
         """
         if full:
             self._cli.flush()
@@ -256,6 +284,11 @@ class Sensor(PacketSource):
                     if n_frames < 0:
                         break
                 last_ts = time.monotonic()
+            elif st & _client.ClientState.ERROR:
+                raise ClientError("Client returned ERROR state")
+            elif st & _client.ClientState.EXIT:
+                break
+
             # check for timeout
             if self._timeout is not None and (time.monotonic() >=
                                               last_ts + self._timeout):
@@ -297,6 +330,7 @@ class Scans:
     or only imu packets. Can also be configured to manage internal buffers for
     soft real-time applications.
     """
+
     def __init__(self,
                  source: PacketSource,
                  *,
@@ -309,6 +343,7 @@ class Scans:
             source: any source of packets
             complete: if True, only return full scans
             timeout: seconds to wait for a scan before error or None
+            fields: specify which channel fields to populate on LidarScans
             _max_latency: (experimental) approximate max number of frames to buffer
         """
         self._source = source
@@ -360,7 +395,7 @@ class Scans:
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write._complete(column_window):
                         yield ls_write
-                    start_ts = time.monotonic()
+                        start_ts = time.monotonic()
                     ls_write = None
 
                     # Drop data along frame boundaries to maintain _max_latency and
@@ -443,6 +478,7 @@ class Scans:
             timeout: seconds to wait for scans before signaling error
             complete: if True, only return full scans
             metadata: explicitly provide metadata for the stream
+            fields: specify which channel fields to populate on LidarScans
         """
         source = Sensor(hostname,
                         lidar_port,

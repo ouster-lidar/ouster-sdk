@@ -15,7 +15,7 @@ Building the Python SDK from source requires several dependencies:
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
-- `libglew <http://glew.sourceforge.net/>`_ >= 2.1
+- `libglew <http://glew.sourceforge.net/>`_ >= 2.1 or `glad <https://github.com/Dav1dde/glad>`_
 - `Python <https://www.python.org/>`_ >= 3.6 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
@@ -54,6 +54,13 @@ After you have the system dependencies, you can build the SDK with:
    $ python3 -m pip install $OUSTER_SDK_PATH/python
 
 
+.. note::
+
+   We recommend to always use `Virtual Environment`_ for python development.
+
+.. _Virtual Environment: https://docs.python.org/3/library/venv.html#module-venv
+
+
 Windows 10
 ----------
 
@@ -62,9 +69,9 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install eigen3 jsoncpp libtins pybind11 glfw3 glew
+   PS > vcpkg install eigen3 jsoncpp libtins pybind11 glfw3 glad[gl-api-33]
 
-The currently tested vcpkg tag is ``2021.05.12``. After that, using a developer powershell prompt:
+The currently tested vcpkg tag is ``2022.02.23``. After that, using a developer powershell prompt:
 
 .. code:: powershell
 

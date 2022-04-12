@@ -1,86 +1,40 @@
-import argparse
-import os
-import threading
+"""Example of interactive visualizer use.
 
-import ouster.client as client
-from ouster.sdk._viz import PyViz
+Intended to run with `python -i -m ouster.sdk.examples.viz`
 
+TODO:
+- separate set scan / update is annoying
+- a proxy run()/quit() on ls_viz would be useful
+- maybe: ls_viz could initialize underlying viz + expose it
+- point_viz.run() twice is broken
+- ideally, run() would open/close window
+- auto camera movement example?
+"""
 
-def main() -> None:
-    descr = """Visualize pcap or sensor data using simple viz bindings."""
+from ouster import client, pcap
+from ouster.sdk import viz
 
-    epilog = """When reading data from a sensor, this will autoconfigure the udp
-        destination unless -x is used."""
+meta_path = "/mnt/aux/test_drives/OS1_128_2048x10.json"
+pcap_path = "/mnt/aux/test_drives/OS1_128_2048x10.pcap"
 
-    parser = argparse.ArgumentParser(
-        description=descr, epilog=epilog)
+meta = client.SensorInfo(open(meta_path).read())
+packets = pcap.Pcap(pcap_path, meta)
+scans = iter(client.Scans(packets))
 
-    required = parser.add_argument_group('one of the following is required')
-    group = required.add_mutually_exclusive_group(required=True)
-    group.add_argument('--sensor', metavar='HOST', help='sensor hostname')
-    group.add_argument('--pcap', metavar='PATH', help='path to pcap file')
+point_viz = viz.PointViz("Example Viz")
+ls_viz = viz.LidarScanViz(meta, point_viz)
 
-    parser.add_argument('--meta', metavar='PATH', help='path to metadata json')
-    parser.add_argument('--lidar-port', type=int, help='lidar port for sensor')
-    parser.add_argument('-x', '--no-auto-dest', help="""do not auto configure udp
-        destination', action='store_true""")
+ls_viz.scan = next(scans)
+ls_viz.draw()
+print("Showing first frame, close visuzlier window to continue")
+point_viz.run()
 
-    args = parser.parse_args()
+ls_viz.scan = next(scans)
+ls_viz.draw()
+print("Showing second frame, close visuzlier window to continue")
+point_viz.run()
 
-    if args.sensor:
-        hostname = args.sensor
-        if args.lidar_port or (not args.no_auto_dest):
-            config = client.SensorConfig()
-            if args.lidar_port:
-                config.udp_port_lidar = args.lidar_port
-            print("Configuring sensor...")
-            client.set_config(hostname, config, udp_dest_auto= (not args.no_auto_dest))
-        config = client.get_config(hostname)
-
-        print("Initializing...")
-        scans = client.Scans.stream(hostname,
-                                    config.udp_port_lidar or 7502,
-                                    complete=False)
-
-    elif args.pcap:
-        import ouster.pcap as pcap
-
-        if args.meta:
-            metadata_path = args.meta
-        else:
-            print("Deducing metadata based on pcap name. "
-                  "To provide a different metadata path, use --meta")
-            metadata_path = os.path.splitext(args.pcap)[0] + ".json"
-
-        with open(metadata_path) as json:
-            info = client.SensorInfo(json.read())
-
-        scans = client.Scans(
-            pcap.Pcap(args.pcap, info, rate=1.0))
-
-    viz = PyViz(scans.metadata)
-
-    def run() -> None:
-        try:
-            for scan in scans:
-                viz.draw(scan)
-        finally:
-            # signal main thread to exit
-            viz.quit()
-
-    try:
-        print("Starting client thread...")
-        client_thread = threading.Thread(target=run, name="Client")
-        client_thread.start()
-
-        print("Starting rendering loop...")
-        viz.loop()
-    finally:
-        scans.close()
-        client_thread.join()
-
-    print("Done")
-
-
-if __name__ == "__main__":
-    main()
+# won't work on macos, but convenient:
+# import threading
+# render_thread = threading.Thread(target=point_viz.run)
+# render_thread.start()

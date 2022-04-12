@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
     auto client = nh.serviceClient<ouster_ros::OSConfigSrv>("os_config");
     client.waitForExistence();
     if (!client.call(cfg)) {
-        ROS_ERROR("Calling os config service failed");
+        ROS_ERROR("img_node: Calling os config service failed");
         return EXIT_FAILURE;
     }
 
@@ -117,9 +117,9 @@ int main(int argc, char** argv) {
         auto reflec_image = make_image_msg(H, W, m->header.stamp);
         nearir_image = make_image_msg(H, W, m->header.stamp);
 
-        ouster::img_t<double> nearir_image_eigen(H, W);
-        ouster::img_t<double> signal_image_eigen(H, W);
-        ouster::img_t<double> reflec_image_eigen(H, W);
+        ouster::img_t<float> nearir_image_eigen(H, W);
+        ouster::img_t<float> signal_image_eigen(H, W);
+        ouster::img_t<float> reflec_image_eigen(H, W);
 
         // views into message data
         auto range_image_map = Eigen::Map<ouster::img_t<pixel_type>>(

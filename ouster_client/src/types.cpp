@@ -63,7 +63,7 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 9> chanfield_strings{{
+Table<sensor::ChanField, const char*, 13> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
@@ -73,11 +73,17 @@ Table<sensor::ChanField, const char*, 9> chanfield_strings{{
     {ChanField::NEAR_IR, "NEAR_IR"},
     {ChanField::FLAGS, "FLAGS"},
     {ChanField::FLAGS2, "FLAGS2"},
+    {ChanField::RAW32_WORD1, "RAW32_WORD1"},
+    {ChanField::RAW32_WORD2, "RAW32_WORD2"},
+    {ChanField::RAW32_WORD3, "RAW32_WORD3"},
+    {ChanField::RAW32_WORD4, "RAW32_WORD4"},
 }};
 
-Table<UDPProfileLidar, const char*, 2> udp_profile_lidar_strings{{
+Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings{{
     {PROFILE_LIDAR_LEGACY, "LEGACY"},
     {PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
+    {PROFILE_RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
+    {PROFILE_RNG15_RFL8_NIR8, "RNG15_RFL8_NIR8"},
 }};
 
 Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
@@ -535,6 +541,8 @@ static bool valid_response(const Json::Value& root,
     return (root.isMember(tcp_request) && root[tcp_request].isObject());
 }
 
+// TODO make robust to new formats that are incorrect instead of returning false
+// and sending to legacy
 static bool is_new_format(const std::string& metadata) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
@@ -548,7 +556,7 @@ static bool is_new_format(const std::string& metadata) {
 
     const std::vector<std::string> valid_response_required = {
         "sensor_info", "beam_intrinsics", "imu_intrinsics", "lidar_intrinsics",
-        "config_param"};
+        "config_params"};
 
     for (const auto& key : valid_response_required) {
         if (!valid_response(root, key)) {
@@ -748,10 +756,10 @@ std::string convert_to_legacy(const std::string& metadata) {
     }
     Json::Value result{};
 
-    if (root.isMember("config_param")) {
-        result["lidar_mode"] = root["config_param"]["lidar_mode"];
-        result["udp_port_lidar"] = root["config_param"]["udp_port_lidar"];
-        result["udp_port_imu"] = root["config_param"]["udp_port_imu"];
+    if (root.isMember("config_params")) {
+        result["lidar_mode"] = root["config_params"]["lidar_mode"];
+        result["udp_port_lidar"] = root["config_params"]["udp_port_lidar"];
+        result["udp_port_imu"] = root["config_params"]["udp_port_imu"];
     }
     if (root.isMember("client_version")) {
         result["client_version"] = root["client_version"];

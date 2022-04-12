@@ -169,11 +169,9 @@ void BufferedUDPSource::produce(const packet_format& pf) {
 
         auto& e = bufs_[write_ind_];
         if (st & LIDAR_DATA) {
-            if (!read_lidar_packet(*cli_, e.second.get(), pf))
-                st = client_state(st | client_state::CLIENT_ERROR);
+            if (!read_lidar_packet(*cli_, e.second.get(), pf)) continue;
         } else if (st & IMU_DATA) {
-            if (!read_imu_packet(*cli_, e.second.get(), pf))
-                st = client_state(st | client_state::CLIENT_ERROR);
+            if (!read_imu_packet(*cli_, e.second.get(), pf)) continue;
         }
         if (overflow) st = client_state(st | CLIENT_OVERFLOW);
         e.first = st;

@@ -394,6 +394,10 @@ class ChanField:
     FLAGS: ClassVar[ChanField]
     FLAGS2: ClassVar[ChanField]
     NEAR_IR: ClassVar[ChanField]
+    RAW32_WORD1: ClassVar[ChanField]
+    RAW32_WORD2: ClassVar[ChanField]
+    RAW32_WORD3: ClassVar[ChanField]
+    RAW32_WORD4: ClassVar[ChanField]
 
     __members__: ClassVar[Dict[str, ChanField]]
     values: ClassVar[Iterator[ChanField]]
@@ -420,6 +424,8 @@ class ChanField:
 class UDPProfileLidar:
     PROFILE_LIDAR_LEGACY: ClassVar[UDPProfileLidar]
     PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL: ClassVar[UDPProfileLidar]
+    PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16: ClassVar[UDPProfileLidar]
+    PROFILE_LIDAR_RNG15_RFL8_NIR8: ClassVar[UDPProfileLidar]
 
     __members__: ClassVar[Dict[str, UDPProfileLidar]]
     values: ClassVar[Iterator[UDPProfileLidar]]

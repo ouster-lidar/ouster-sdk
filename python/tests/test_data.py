@@ -56,7 +56,7 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
     h = pf.pixels_per_column
 
     assert len(
-        client.ChanField.__members__) == 9, "Don't forget to update tests!"
+        client.ChanField.__members__) == 13, "Don't forget to update tests!"
     assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
                           np.zeros((h, w)))
