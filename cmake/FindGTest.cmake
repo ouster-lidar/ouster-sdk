@@ -5,7 +5,7 @@ function(find_gtest)
   set(CMAKE_MODULE_PATH "")
 
   # using the cmake-provided find module succeeds, but the resulting GTest::GTest and
-  # GTest::Maintargets cause link errors with vcpkg 2021.05.12 on macos. Try CONFIG-only first
+  # GTest::Main targets cause link errors with vcpkg 2021.05.12 on macos. Try CONFIG-only first
   find_package(GTest CONFIG QUIET)
 
   if (GTest_CONFIG AND TARGET GTest::gtest AND TARGET GTest::gtest_main)

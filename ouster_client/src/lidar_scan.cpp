@@ -46,6 +46,19 @@ static const Table<ChanField, ChanFieldType, 7> dual_field_slots{{
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
+static const Table<ChanField, ChanFieldType, 4> single_field_slots{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::SIGNAL, ChanFieldType::UINT16},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+}};
+
+static const Table<ChanField, ChanFieldType, 3> lb_field_slots{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+}};
+
 struct DefaultFieldsEntry {
     const std::pair<ChanField, ChanFieldType>* fields;
     size_t n_fields;
@@ -55,7 +68,11 @@ Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
     {{UDPProfileLidar::PROFILE_LIDAR_LEGACY,
       {legacy_field_slots.data(), legacy_field_slots.size()}},
      {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
-      {dual_field_slots.data(), dual_field_slots.size()}}}};
+      {dual_field_slots.data(), dual_field_slots.size()}},
+     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
+      {single_field_slots.data(), single_field_slots.size()}},
+     {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
+      {lb_field_slots.data(), lb_field_slots.size()}}}};
 
 static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     UDPProfileLidar profile) {
@@ -87,7 +104,7 @@ LidarScan::LidarScan(
       headers{w, BlockHeader{ts_t{0}, 0, 0}} {
     // TODO: error on duplicate fields
     for (const auto& ft : field_types_) {
-        if(fields_.count(ft.first) > 0)
+        if (fields_.count(ft.first) > 0)
             throw std::invalid_argument("Duplicated fields found");
         fields_[ft.first] = impl::FieldSlot{ft.second, w, h};
     }

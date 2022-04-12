@@ -13,7 +13,6 @@ import numpy as np
 from ouster import client, pcap
 from .colormaps import normalize
 
-
 def pcap_3d_one_scan(source: client.PacketSource,
                      metadata: client.SensorInfo,
                      num: int = 0) -> None:
