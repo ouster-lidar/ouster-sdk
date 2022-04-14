@@ -2,6 +2,17 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+ouster_client
+-------------
+* add option for EIGEN_MAX_ALIGN_BYTES, ON by default
+
+ouster_ros
+----------
+* remove setting EIGEN_MAX_ALIGN_BYTES
+
 [20220608]
 ==========
 
@@ -12,6 +23,7 @@ ouster_client
 python
 ------
 * single return parsing for FW 2.3.1 reflects change from ouster_client
+
 
 [20220504]
 ==========

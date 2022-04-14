@@ -57,8 +57,7 @@ set(_SAVE_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
 set(BUILD_SHARED_LIBS OFF)
 add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
 target_compile_options(ouster_client PRIVATE -Wno-deprecated-declarations)
-message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
-target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
+
 set(BUILD_SHARED_LIBS ${_SAVE_BUILD_SHARED_LIBS})
 
 # catkin adds all include dirs to a single variable, don't try to use targets
@@ -70,7 +69,6 @@ add_definitions(-DEIGEN_MPL2_ONLY)
 add_library(ouster_ros src/ros.cpp)
 target_link_libraries(ouster_ros PUBLIC ${catkin_LIBRARIES} ouster_build pcl_common PRIVATE
   -Wl,--whole-archive ouster_client -Wl,--no-whole-archive)
-target_compile_definitions(ouster_ros PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
 add_dependencies(ouster_ros ${PROJECT_NAME}_gencpp)
 
 # ==== Executables ====
