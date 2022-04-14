@@ -13,6 +13,8 @@ option(BUILD_PCAP "Build pcap utils." OFF)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 option(BUILD_EXAMPLES "Build C++ examples" OFF)
+option(EIGEN_MAX_ALIGN_BYTES "Eigen max aligned bytes." 16)
+
 
 # when building as a top-level project and not as conan library
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -51,8 +53,8 @@ if(BUILD_EXAMPLES)
 endif()
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
-  target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
+  message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = ${EIGEN_MAX_ALIGN_BYTES}")	
+  target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=${EIGEN_MAX_ALIGN_BYTES})
   if(BUILD_TESTING)
     add_subdirectory(tests)
   endif()
