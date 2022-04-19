@@ -1,8 +1,5 @@
-=============
-API Reference
-=============
 
-
+===========================
 Module :mod:`ouster.client`
 ===========================
 
@@ -16,7 +13,7 @@ Module :mod:`ouster.client`
 ----
 
 Core
-----
+=====
 
 .. autoexception:: ClientError
 .. autoexception:: ClientTimeout
@@ -43,7 +40,7 @@ Core
 
 
 Metadata
---------
+========
 
 .. autoclass:: SensorInfo
    :members:
@@ -89,7 +86,7 @@ Metadata
 
 
 Data
-----
+=====
 
 .. autodata:: ouster.client.data.BufferT
 
@@ -115,82 +112,3 @@ Data
 .. autofunction:: XYZLut
 
 .. autofunction:: destagger
-
-
-----
-
-Module :mod:`ouster.pcap`
-=========================
-
-.. automodule:: ouster.pcap
-
-.. autofunction:: record
-
-.. autoclass:: Pcap
-   :members:
-
-
-----
-
-Module :mod:`ouster.sdk.viz`
-============================
-
-.. automodule:: ouster.sdk.viz
-
-.. autoclass:: PointViz
-   :members:
-
-.. autoclass:: LidarScanViz
-   :members:
-
-.. autoclass:: SimpleViz
-   :members:
-
-----
-
-
-Module :mod:`ouster.sdk.examples`
-=================================
-
-.. contents::
-   :local:
-   :depth: 4
-
-.. automodule:: ouster.sdk.examples
-
-----
-
-
-Client Examples :mod:`ouster.sdk.examples.client`
--------------------------------------------------
-
-.. automodule:: ouster.sdk.examples.client
-   :members:
-
-
-----
-
-
-PCAP Examples :mod:`ouster.sdk.examples.pcap`
----------------------------------------------
-
-.. automodule:: ouster.sdk.examples.pcap
-   :members:
-
-----
-
-
-Open3D Examples :mod:`ouster.sdk.examples.open3d`
--------------------------------------------------
-
-.. automodule:: ouster.sdk.examples.open3d
-   :members:
-
-----
-
-
-Reference Code :mod:`ouster.sdk.examples.reference`
----------------------------------------------------
-
-.. automodule:: ouster.sdk.examples.reference
-   :members:

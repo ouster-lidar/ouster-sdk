@@ -2,6 +2,10 @@
 Ouster Python SDK
 =================
 
+**Ouster SDK** `Project Documentation`_
+
+.. _Project Documentation: https://static.ouster.dev/sdk-docs/index.html
+
 The Ouster Python SDK provides a high-level interface for interacting with sensor hardware and
 recorded sensor data suitable for prototyping, evaluation, and other non-safety-critical
 applications. Example and reference code is provided for several common operations on sensor

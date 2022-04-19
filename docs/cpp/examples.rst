@@ -101,8 +101,8 @@ Finally, when you're working with a ``LidarScan``, you may wish to iterate throu
 do so with an iterator:
 
 .. literalinclude:: /../examples/lidar_scan_example.cpp
-    :start-after: [doc-stag-cpp-lidarscan-iter]
-    :end-before: [doc-etag-cpp-lidarscan-iter]
+    :start-after: [doc-stag-cpp-scan-iter]
+    :end-before: [doc-etag-cpp-scan-iter]
     :dedent:
 
 

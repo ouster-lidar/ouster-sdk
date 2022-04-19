@@ -17,7 +17,6 @@ import sphinx_rtd_theme # noqa
 # sys.path.insert(0, os.path.abspath('.'))
 
 # -- Project information -----------------------------------------------------
-import argparse
 import subprocess
 import tempfile
 from string import Template
@@ -81,8 +80,8 @@ html_theme_options = {
     # 'vcs_pageview_mode': '',
     # 'style_nav_header_background': 'rgb(29, 29, 29)',
     # Toc options
-    'collapse_navigation': False,
-    # 'sticky_navigation': True,
+    'collapse_navigation': True,
+    'sticky_navigation': True,
     'navigation_depth': 3,
     'includehidden': True,
     # 'titles_only': False
@@ -94,7 +93,7 @@ html_context = {
     'github_repo': 'ouster_example',
     # 'github_version': 'ouster/python-bindings',
     'github_version': 'master',
-    'conf_py_path': '/python/docs/'
+    'conf_py_path': '/docs/'
 }
 
 # show Ouster logo in sidebar header
