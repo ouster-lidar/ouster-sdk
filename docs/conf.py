@@ -30,8 +30,8 @@ copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-version = '0.4.0a1'
-release = '0.4.0a1'
+version = '0.4.0a2'
+release = '0.4.0a2'
 
 # -- General configuration ---------------------------------------------------
 
