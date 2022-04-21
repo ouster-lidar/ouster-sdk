@@ -12,31 +12,41 @@ namespace ouster {
 namespace util {
 
 struct version {
-    uint16_t major;
-    uint16_t minor;
-    uint16_t patch;
+    uint16_t major; ///< @todo fill me in
+    uint16_t minor; ///< @todo fill me in
+    uint16_t patch; ///< @todo fill me in
 };
 
 const version invalid_version = {0, 0, 0};
 
+/** \defgroup ouster_client_version_operators Ouster Client version.h Operators
+ * @{
+ */
+/** @todo document me */
 inline bool operator==(const version& u, const version& v) {
     return u.major == v.major && u.minor == v.minor && u.patch == v.patch;
 }
 
+/** @todo document me */
 inline bool operator<(const version& u, const version& v) {
     return (u.major < v.major) || (u.major == v.major && u.minor < v.minor) ||
            (u.major == v.major && u.minor == v.minor && u.patch < v.patch);
 }
 
+/** @todo document me */
 inline bool operator<=(const version& u, const version& v) {
     return u < v || u == v;
 }
 
+/** @todo document me */
 inline bool operator!=(const version& u, const version& v) { return !(u == v); }
 
+/** @todo document me */
 inline bool operator>=(const version& u, const version& v) { return !(u < v); }
 
+/** @todo document me */
 inline bool operator>(const version& u, const version& v) { return !(u <= v); }
+/** @}*/
 
 /**
  * Get string representation of a version.

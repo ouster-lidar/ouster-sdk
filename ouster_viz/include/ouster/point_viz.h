@@ -16,6 +16,8 @@ namespace ouster {
 namespace viz {
 
 using mat4d = std::array<double, 16>;
+
+/** @todo document me */
 constexpr mat4d identity4d = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 
 using vec4f = std::array<float, 4>;

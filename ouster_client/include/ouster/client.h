@@ -18,15 +18,19 @@ namespace sensor {
 struct client;
 
 enum client_state {
-    TIMEOUT = 0,
-    CLIENT_ERROR = 1,
-    LIDAR_DATA = 2,
-    IMU_DATA = 4,
-    EXIT = 8
+    TIMEOUT = 0, ///< @todo fill me in
+    CLIENT_ERROR = 1, ///< @todo fill me in
+    LIDAR_DATA = 2, ///< @todo fill me in
+    IMU_DATA = 4, ///< @todo fill me in
+    EXIT = 8 ///< @todo fill me in
 };
 
 /** Minimum supported version. */
 const util::version min_version = {1, 12, 0};
+
+/** \defgroup ouster_client_init Ouster Client Client Initialization
+ * @{
+ */
 
 /**
  * Listen for sensor data on the specified ports; do not configure the sensor.
@@ -55,6 +59,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
                                     int timeout_sec = 60);
+/** @}*/
 
 /**
  * Block for up to timeout_sec until either data is ready or an error occurs.

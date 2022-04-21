@@ -206,6 +206,10 @@ class LidarScan {
     friend bool operator==(const LidarScan& a, const LidarScan& b);
 };
 
+/** \defgroup ouster_client_lidar_scan_operators Ouster Client lidar_scan.h Operators
+ * @{
+ */
+
 /** Equality for column headers. */
 bool operator==(const LidarScan::BlockHeader& a,
                 const LidarScan::BlockHeader& b);
@@ -217,11 +221,15 @@ bool operator==(const LidarScan& a, const LidarScan& b);
 inline bool operator!=(const LidarScan& a, const LidarScan& b) {
     return !(a == b);
 }
+/** @}*/
 
+/** \defgroup ouster_client_lidar_scan_xyz_lut Ouster Client lidar_scan.h XYZLut related items
+ * @{
+ */
 /** Lookup table of beam directions and offsets. */
 struct XYZLut {
-    LidarScan::Points direction;
-    LidarScan::Points offset;
+    LidarScan::Points direction; ///< @todo add docs
+    LidarScan::Points offset; ///< @todo add docs
 };
 
 /**
@@ -265,7 +273,11 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
         sensor.lidar_to_sensor_transform, sensor.beam_azimuth_angles,
         sensor.beam_altitude_angles);
 }
-
+/** @}*/
+    
+/** \defgroup ouster_client_lidar_scan_cartesian Ouster Client lidar_scan.h XYZLut related items
+ * @{
+ */
 /**
  * Convert LidarScan to Cartesian points.
  *
@@ -286,6 +298,7 @@ LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
  */
 LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
                             const XYZLut& lut);
+/** @}*/
 
 /**
  * Generate a destaggered version of a channel field.

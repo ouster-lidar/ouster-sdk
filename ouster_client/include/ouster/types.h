@@ -22,11 +22,13 @@ namespace ouster {
 
 using nonstd::optional;
 
-/** For image operations. */
+/** For image operations. 
+ */
 template <typename T>
 using img_t = Eigen::Array<T, -1, -1, Eigen::RowMajor>;
 
-/** Used for transformations */
+/** Used for transformations
+ */
 using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
 
 namespace sensor {
@@ -47,121 +49,151 @@ extern const mat4d default_lidar_to_sensor_transform;
  * meaning of each option.
  */
 enum lidar_mode {
-    MODE_UNSPEC = 0,
-    MODE_512x10,
-    MODE_512x20,
-    MODE_1024x10,
-    MODE_1024x20,
-    MODE_2048x10
+    MODE_UNSPEC = 0, ///< @todo fill me in
+    MODE_512x10, ///< @todo fill me in
+    MODE_512x20, ///< @todo fill me in
+    MODE_1024x10, ///< @todo fill me in
+    MODE_1024x20, ///< @todo fill me in
+    MODE_2048x10 ///< @todo fill me in
 };
 
 enum timestamp_mode {
-    TIME_FROM_UNSPEC = 0,
-    TIME_FROM_INTERNAL_OSC,
-    TIME_FROM_SYNC_PULSE_IN,
-    TIME_FROM_PTP_1588
+    TIME_FROM_UNSPEC = 0, ///< @todo fill me in
+    TIME_FROM_INTERNAL_OSC, ///< @todo fill me in
+    TIME_FROM_SYNC_PULSE_IN, ///< @todo fill me in
+    TIME_FROM_PTP_1588 ///< @todo fill me in
 };
 
-enum OperatingMode { OPERATING_NORMAL = 1, OPERATING_STANDBY };
+enum OperatingMode {
+    OPERATING_NORMAL = 1, ///< @todo fill me in
+    OPERATING_STANDBY  ///< @todo fill me in
+};
 
 enum MultipurposeIOMode {
-    MULTIPURPOSE_OFF = 1,
-    MULTIPURPOSE_INPUT_NMEA_UART,
-    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC,
-    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN,
-    MULTIPURPOSE_OUTPUT_FROM_PTP_1588,
-    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE
+    MULTIPURPOSE_OFF = 1, ///< @todo fill me in
+    MULTIPURPOSE_INPUT_NMEA_UART, ///< @todo fill me in
+    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC, ///< @todo fill me in
+    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN, ///< @todo fill me in
+    MULTIPURPOSE_OUTPUT_FROM_PTP_1588, ///< @todo fill me in
+    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE ///< @todo fill me in
 };
 
-enum Polarity { POLARITY_ACTIVE_LOW = 1, POLARITY_ACTIVE_HIGH };
+enum Polarity {
+    POLARITY_ACTIVE_LOW = 1, ///< @todo fill me in
+    POLARITY_ACTIVE_HIGH ///< @todo fill me in
+};
 
-enum NMEABaudRate { BAUD_9600 = 1, BAUD_115200 };
+enum NMEABaudRate {
+    BAUD_9600 = 1, ///< @todo fill me in
+    BAUD_115200 ///< @todo fill me in
+};
 
 enum UDPProfileLidar {
-    PROFILE_LIDAR_LEGACY = 1,
-    PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
-    PROFILE_RNG19_RFL8_SIG16_NIR16,
-    PROFILE_RNG15_RFL8_NIR8,
+    PROFILE_LIDAR_LEGACY = 1, ///< @todo fill me in
+    PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, ///< @todo fill me in
+    PROFILE_RNG19_RFL8_SIG16_NIR16, ///< @todo fill me in
+    PROFILE_RNG15_RFL8_NIR8, ///< @todo fill me in
 };
 
-enum UDPProfileIMU { PROFILE_IMU_LEGACY = 1 };
+enum UDPProfileIMU {
+    PROFILE_IMU_LEGACY = 1 ///< @todo fill me in
+};
 
+/** Fill in Docs Here
+ */
 using AzimuthWindow = std::pair<int, int>;
+/** Fill in Docs Here
+ */
 using ColumnWindow = std::pair<int, int>;
 
 struct sensor_config {
-    optional<std::string> udp_dest;
-    optional<int> udp_port_lidar;
-    optional<int> udp_port_imu;
+    optional<std::string> udp_dest; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> udp_port_lidar; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> udp_port_imu; ///< @todo fill in documentation here for it to show up in sphinx
 
     // TODO: replace ts_mode and ld_mode when timestamp_mode and
     // lidar_mode get changed to CapsCase
-    optional<timestamp_mode> ts_mode;
-    optional<lidar_mode> ld_mode;
-    optional<OperatingMode> operating_mode;
-    optional<MultipurposeIOMode> multipurpose_io_mode;
+    optional<timestamp_mode> ts_mode; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<lidar_mode> ld_mode; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<OperatingMode> operating_mode; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<MultipurposeIOMode> multipurpose_io_mode; ///< @todo fill in documentation here for it to show up in sphinx
 
-    optional<AzimuthWindow> azimuth_window;
-    optional<int> signal_multiplier;
+    optional<AzimuthWindow> azimuth_window; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> signal_multiplier; ///< @todo fill in documentation here for it to show up in sphinx
 
-    optional<Polarity> nmea_in_polarity;
-    optional<bool> nmea_ignore_valid_char;
-    optional<NMEABaudRate> nmea_baud_rate;
-    optional<int> nmea_leap_seconds;
+    optional<Polarity> nmea_in_polarity; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<bool> nmea_ignore_valid_char; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<NMEABaudRate> nmea_baud_rate; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> nmea_leap_seconds; ///< @todo fill in documentation here for it to show up in sphinx
 
-    optional<Polarity> sync_pulse_in_polarity;
-    optional<Polarity> sync_pulse_out_polarity;
-    optional<int> sync_pulse_out_angle;
-    optional<int> sync_pulse_out_pulse_width;
-    optional<int> sync_pulse_out_frequency;
+    optional<Polarity> sync_pulse_in_polarity; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<Polarity> sync_pulse_out_polarity; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> sync_pulse_out_angle; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> sync_pulse_out_pulse_width; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> sync_pulse_out_frequency; ///< @todo fill in documentation here for it to show up in sphinx
 
-    optional<bool> phase_lock_enable;
-    optional<int> phase_lock_offset;
+    optional<bool> phase_lock_enable; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<int> phase_lock_offset; ///< @todo fill in documentation here for it to show up in sphinx
 
-    optional<int> columns_per_packet;
-    optional<UDPProfileLidar> udp_profile_lidar;
-    optional<UDPProfileIMU> udp_profile_imu;
+    optional<int> columns_per_packet; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<UDPProfileLidar> udp_profile_lidar; ///< @todo fill in documentation here for it to show up in sphinx
+    optional<UDPProfileIMU> udp_profile_imu; ///< @todo fill in documentation here for it to show up in sphinx
 };
 
 struct data_format {
-    uint32_t pixels_per_column;
-    uint32_t columns_per_packet;
-    uint32_t columns_per_frame;
-    std::vector<int> pixel_shift_by_row;
-    ColumnWindow column_window;
-    UDPProfileLidar udp_profile_lidar;
-    UDPProfileIMU udp_profile_imu;
+    uint32_t pixels_per_column; ///< @todo fill in documentation here for it to show up in sphinx
+    uint32_t columns_per_packet; ///< @todo fill in documentation here for it to show up in sphixn
+    uint32_t columns_per_frame; ///< @todo fill in documentation here for it to show up in sphinx
+    std::vector<int> pixel_shift_by_row; ///< @todo fill in documentation here for it to show up in sphinx
+    ColumnWindow column_window; ///< @todo fill in documentation here for it to show up in sphinx
+    UDPProfileLidar udp_profile_lidar; ///< @todo fill in documentation here for it to show up in sphinx
+    UDPProfileIMU udp_profile_imu; ///< @todo fill in documentation here for it to show up in sphinx
 };
 
 struct sensor_info {
-    [[deprecated]] std::string name;
-    std::string sn;
-    std::string fw_rev;
-    lidar_mode mode;
-    std::string prod_line;
-    data_format format;
-    std::vector<double> beam_azimuth_angles;
-    std::vector<double> beam_altitude_angles;
-    double lidar_origin_to_beam_origin_mm;
-    mat4d imu_to_sensor_transform;
-    mat4d lidar_to_sensor_transform;
-    mat4d extrinsic;
-    uint32_t init_id;
-    uint16_t udp_port_lidar;
-    uint16_t udp_port_imu;
+    [[deprecated]] std::string name; ///< @todo fill in documentation here for it to show up in sphinx
+    std::string sn; ///< @todo fill in documentation here for it to show up in sphinx
+    std::string fw_rev; ///< @todo fill in documentation here for it to show up in sphinx
+    lidar_mode mode; ///< @todo fill in documentation here for it to show up in sphinx
+    std::string prod_line; ///< @todo fill in documentation here for it to show up in sphinx
+    data_format format; ///< @todo fill in documentation here for it to show up in sphinx
+    std::vector<double> beam_azimuth_angles; ///< @todo fill in documentation here for it to show up in sphinx
+    std::vector<double> beam_altitude_angles;///< @todo fill in documentation here for it to show up in sphinx 
+    double lidar_origin_to_beam_origin_mm; ///< @todo fill in documentation here for it to show up in sphinx
+    mat4d imu_to_sensor_transform; ///< @todo fill in documentation here for it to show up in sphinx
+    mat4d lidar_to_sensor_transform; ///< @todo fill in documentation here for it to show up in sphinx
+    mat4d extrinsic; ///< @todo fill in documentation here for it to show up in sphinx
+    uint32_t init_id; ///< @todo fill in documentation here for it to show up in sphinx
+    uint16_t udp_port_lidar; ///< @todo fill in documentation here for it to show up in sphinx
+    uint16_t udp_port_imu; ///< @todo fill in documentation here for it to show up in sphinx
 };
 
-/** Equality/Not-Equality for data_format */
+/** \defgroup ouster_client_types_operators Ouster Client types.h Operators
+ * @{
+ */
+
+/** Equality for data_format */
 bool operator==(const data_format& lhs, const data_format& rhs);
+/** Not-Equality for data_format */
 bool operator!=(const data_format& lhs, const data_format& rhs);
 
-/** Equality/Not-Equality for sensor_info */
+/** Equality for sensor_info */
 bool operator==(const sensor_info& lhs, const sensor_info& rhs);
+/** Not-Equality for sensor_info */
 bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
 
-/** Equality/Not Equality for sensor config */
+/** Equality for sensor config */
 bool operator==(const sensor_config& lhs, const sensor_config& rhs);
+/** Not-Equality for sensor config */
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
+
+/** @}*/
+
+/** \defgroup ouster_sensor_types_to_string Ouster Client types.h to_string functions
+ */
+
+/** \defgroup ouster_sensor_types_of_string Ouster Client types.h of string functions
+ */
 
 /**
  * Get a default sensor_info for the given lidar mode.
@@ -174,6 +206,7 @@ sensor_info default_sensor_info(lidar_mode mode);
 /**
  * Get string representation of a lidar mode.
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param lidar_mode
  * @return string representation of the lidar mode, or "UNKNOWN"
  */
@@ -182,6 +215,7 @@ std::string to_string(lidar_mode mode);
 /**
  * Get lidar mode from string.
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return lidar mode corresponding to the string, or 0 on error
  */
@@ -206,6 +240,7 @@ int frequency_of_lidar_mode(lidar_mode mode);
 /**
  * Get string representation of a timestamp mode.
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param timestamp_mode
  * @return string representation of the timestamp mode, or "UNKNOWN"
  */
@@ -214,6 +249,7 @@ std::string to_string(timestamp_mode mode);
 /**
  * Get timestamp mode from string.
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return timestamp mode corresponding to the string, or 0 on error
  */
@@ -222,6 +258,7 @@ timestamp_mode timestamp_mode_of_string(const std::string& s);
 /**
  * Get string representation of an operating mode.
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param mode
  * @return string representation of the operating mode, or "UNKNOWN"
  */
@@ -230,6 +267,7 @@ std::string to_string(OperatingMode mode);
 /**
  * Get operating mode from string.
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return operating mode corresponding to the string, or 0 on error
  */
@@ -238,6 +276,7 @@ optional<OperatingMode> operating_mode_of_string(const std::string& s);
 /**
  * Get string representation of a multipurpose io mode.
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param mode
  * @return string representation of the multipurpose io mode, or "UNKNOWN"
  */
@@ -246,6 +285,7 @@ std::string to_string(MultipurposeIOMode mode);
 /**
  * Get multipurpose io mode from string.
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return multipurpose io mode corresponding to the string, or 0 on error
  */
@@ -255,6 +295,7 @@ optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
 /**
  * Get string representation of a polarity.
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param polarity
  * @return string representation of the polarity, or "UNKNOWN"
  */
@@ -263,6 +304,7 @@ std::string to_string(Polarity polarity);
 /**
  * Get polarity from string.
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return polarity corresponding to the string, or 0 on error
  */
@@ -271,6 +313,7 @@ optional<Polarity> polarity_of_string(const std::string& s);
 /**
  * Get string representation of a NMEA Baud Rate
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param rate
  * @return string representation of the NMEA baud rate, or "UNKNOWN"
  */
@@ -279,6 +322,7 @@ std::string to_string(NMEABaudRate rate);
 /**
  * Get nmea baud rate from string.
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return nmea baud rate corresponding to the string, or 0 on error
  */
@@ -287,6 +331,7 @@ optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
 /**
  * Get string representation of an Azimuth Window
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param azimuth_window
  * @return string representation of the azimuth window
  */
@@ -295,6 +340,7 @@ std::string to_string(AzimuthWindow azimuth_window);
 /**
  * Get string representation of a lidar profile
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param packet profile
  * @return string representation of the lidar profile
  */
@@ -303,6 +349,7 @@ std::string to_string(UDPProfileLidar profile);
 /**
  * Get lidar profile from string
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return lidar profile corresponding to the string, or nullopt on error
  */
@@ -311,6 +358,7 @@ optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s);
 /**
  * Get string representation of an IMU profile
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param packet profile
  * @return string representation of the lidar profile
  */
@@ -319,6 +367,7 @@ std::string to_string(UDPProfileIMU profile);
 /**
  * Get imu profile from string
  *
+ * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return imu profile corresponding to the string, or nullopt on error
  */
@@ -348,6 +397,7 @@ sensor_info metadata_from_json(const std::string& json_file);
 /**
  * Get a string representation of metadata. All fields included.
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param info sensor_info struct
  * @return a json metadata string
  */
@@ -369,6 +419,7 @@ sensor_config parse_config(const std::string& config);
  * Get a string representation of sensor config. Only set fields will be
  * represented.
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param config a struct of sensor config
  * @return a json sensor config string
  */
@@ -381,6 +432,7 @@ std::string to_string(const sensor_config& config);
  * @return legacy string representation of metadata
  */
 std::string convert_to_legacy(const std::string& metadata);
+/** @}*/
 
 /**
  * Get client version
@@ -393,27 +445,28 @@ std::string client_version();
  * Tag to identitify a paricular value reported in the sensor channel data block
  */
 enum ChanField {
-    RANGE = 1,
-    RANGE2 = 2,
+    RANGE = 1, ///< @todo document me
+    RANGE2 = 2, ///< @todo document me
     INTENSITY = 3,  // deprecated (gcc 5.4 doesn't support annotations here)
-    SIGNAL = 3,
-    SIGNAL2 = 4,
-    REFLECTIVITY = 5,
-    REFLECTIVITY2 = 6,
+    SIGNAL = 3, ///< @todo document me
+    SIGNAL2 = 4, ///< @todo document me
+    REFLECTIVITY = 5, ///< @todo document me
+    REFLECTIVITY2 = 6, ///< @todo document me
     AMBIENT = 7,  // deprecated
-    NEAR_IR = 7,
-    FLAGS = 8,
-    FLAGS2 = 9,
-    RAW32_WORD1 = 60,
-    RAW32_WORD2 = 61,
-    RAW32_WORD3 = 62,
-    RAW32_WORD4 = 63,
-    CHAN_FIELD_MAX = 64,
+    NEAR_IR = 7, ///< @todo document me
+    FLAGS = 8, ///< @todo document me
+    FLAGS2 = 9, ///< @todo document me
+    RAW32_WORD1 = 60, ///< @todo document me
+    RAW32_WORD2 = 61, ///< @todo document me
+    RAW32_WORD3 = 62, ///< @todo document me
+    RAW32_WORD4 = 63, ///< @todo document me
+    CHAN_FIELD_MAX = 64, ///< @todo document me
 };
 
 /**
  * Get string representation of a channel field
  *
+ * @ingroup ouster_sensor_types_to_string
  * @param field
  * @return string representation of the channel field
  */
@@ -452,11 +505,11 @@ class packet_format final {
    public:
     using FieldIter = decltype(field_types_)::const_iterator;
 
-    const UDPProfileLidar udp_profile_lidar;
-    const size_t lidar_packet_size;
-    const size_t imu_packet_size;
-    const int columns_per_packet;
-    const int pixels_per_column;
+    const UDPProfileLidar udp_profile_lidar; ///< @todo document me
+    const size_t lidar_packet_size; ///< @todo document me
+    const size_t imu_packet_size; ///< @todo document me
+    const int columns_per_packet; ///< @todo document me
+    const int pixels_per_column; ///< @todo document me
     [[deprecated]] const int encoder_ticks_per_rev;
 
     /**
@@ -495,10 +548,10 @@ class packet_format final {
     FieldIter end() const;
 
     // Measurement block accessors
-    const uint8_t* nth_col(int n, const uint8_t* lidar_buf) const;
-    uint64_t col_timestamp(const uint8_t* col_buf) const;
-    uint16_t col_measurement_id(const uint8_t* col_buf) const;
-    uint32_t col_status(const uint8_t* col_buf) const;
+    const uint8_t* nth_col(int n, const uint8_t* lidar_buf) const; ///< @todo document me
+    uint64_t col_timestamp(const uint8_t* col_buf) const; ///< @todo document me
+    uint16_t col_measurement_id(const uint8_t* col_buf) const; ///< @todo document me
+    uint32_t col_status(const uint8_t* col_buf) const; ///< @todo document me
     [[deprecated]] uint32_t col_encoder(const uint8_t* col_buf) const;
     [[deprecated]] uint16_t col_frame_id(const uint8_t* col_buf) const;
 
@@ -516,27 +569,27 @@ class packet_format final {
     template <typename T,
               typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
     void col_field(const uint8_t* col_buf, ChanField f, T* dst,
-                   int dst_stride = 1) const;
+                   int dst_stride = 1) const; ///< @todo document me
 
     // Per-pixel channel data block accessors
-    const uint8_t* nth_px(int n, const uint8_t* col_buf) const;
-    uint32_t px_range(const uint8_t* px_buf) const;
-    uint16_t px_reflectivity(const uint8_t* px_buf) const;
-    uint16_t px_signal(const uint8_t* px_buf) const;
-    uint16_t px_ambient(const uint8_t* px_buf) const;
+    const uint8_t* nth_px(int n, const uint8_t* col_buf) const; ///< @todo document me
+    uint32_t px_range(const uint8_t* px_buf) const; ///< @todo document me
+    uint16_t px_reflectivity(const uint8_t* px_buf) const; ///< @todo document me
+    uint16_t px_signal(const uint8_t* px_buf) const; ///< @todo document me
+    uint16_t px_ambient(const uint8_t* px_buf) const; ///< @todo document me
 
     // IMU packet accessors
-    uint64_t imu_sys_ts(const uint8_t* imu_buf) const;
-    uint64_t imu_accel_ts(const uint8_t* imu_buf) const;
-    uint64_t imu_gyro_ts(const uint8_t* imu_buf) const;
-    float imu_la_x(const uint8_t* imu_buf) const;
-    float imu_la_y(const uint8_t* imu_buf) const;
-    float imu_la_z(const uint8_t* imu_buf) const;
-    float imu_av_x(const uint8_t* imu_buf) const;
-    float imu_av_y(const uint8_t* imu_buf) const;
-    float imu_av_z(const uint8_t* imu_buf) const;
+    uint64_t imu_sys_ts(const uint8_t* imu_buf) const; ///< @todo document me
+    uint64_t imu_accel_ts(const uint8_t* imu_buf) const; ///< @todo document me
+    uint64_t imu_gyro_ts(const uint8_t* imu_buf) const; ///< @todo document me
+    float imu_la_x(const uint8_t* imu_buf) const; ///< @todo document me
+    float imu_la_y(const uint8_t* imu_buf) const; ///< @todo document me
+    float imu_la_z(const uint8_t* imu_buf) const; ///< @todo document me
+    float imu_av_x(const uint8_t* imu_buf) const; ///< @todo document me
+    float imu_av_y(const uint8_t* imu_buf) const; ///< @todo document me
+    float imu_av_z(const uint8_t* imu_buf) const; ///< @todo document me
 
-    friend const packet_format& get_format(const sensor_info&);
+    friend const packet_format& get_format(const sensor_info&); ///< @todo document me
 };
 
 /**

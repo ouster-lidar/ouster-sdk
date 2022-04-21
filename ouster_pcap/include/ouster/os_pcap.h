@@ -14,7 +14,7 @@ namespace ouster {
 namespace sensor_utils {
 
 struct packet_info {
-    using ts = std::chrono::microseconds;
+    using ts = std::chrono::microseconds; ///< @todo fill me in
 
     // TODO: use numerical IPs for efficient filtering
     std::string dst_ip;          ///< The destination IP
