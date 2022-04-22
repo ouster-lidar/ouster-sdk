@@ -8,9 +8,8 @@ The LidarScan Representation
    :local:
    :depth: 3
 
-
 We provide the :py:class:`.LidarScan` class, which batches lidar packets by full rotations into
-easily accessible fields of the appropriate type. The :py:class:`.LidarScans` also allows for easy
+easily accessible fields of the appropriate type. The :py:class:`.LidarScan` also allows for easy
 projection of the batched data into Cartesian coordinates, producing point clouds.
 
 A :py:class:`.LidarScan` contains the fields specified at its initialization, queryable by accessing
@@ -33,10 +32,13 @@ with the :py:func:`.pcap.pcap_query_scan` example:
 
     .. code-tab:: powershell Windows x64
 
-        PS > python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH query-scan
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH query-scan
 
-On a packet containing dual returns data, you should note that your dtypes will not be consistently
-``uint32_t``, as you can tell from the result of running ``query-scan`` on dual returns data::
+On a packet containing dual returns data, you should note that your ``dtypes`` will not be
+consistently ``uint32_t``, as you can tell from the result of running ``query-scan`` on dual returns
+data:
+
+.. code:: none
 
     Available fields and corresponding dtype in LidarScan
     RANGE           uint32
@@ -90,7 +92,7 @@ timestamp:
 
     scans = client.Scans(source)
 
-    # iterate `scans` and get the 84th LidarScan
+    # iterate `scans` and get the 84th LidarScan (it can be different with your data)
     scan = nth(scans, 84)
     ranges = scan.field(client.ChanField.RANGE)
 
@@ -118,12 +120,11 @@ This image now makes visual sense, and we can easily use this data in common vis
 
 .. note::
 
-    By the way, you can view this particular scene in both 2D and 3D at Ouster's `Web Slam`_! Use
-    your mouse to click and move the 3D scene, and the listed controls to rotate between different
-    destaggered image views. The video at the bottom shows the registered point clouds of our
-    internal SLAM algorithm.
+    UPDATE LINK!!! By the way, you can view this particular scene in both 2D and 3D at Ouster's
+    `Data App`_! Use your mouse to click and move the 3D scene, and the listed controls to rotate
+    between different destaggered image views.
 
-.. _Web Slam: https://webslam.ouster.dev/slam/1610482355.9361048.rVdW_dgws/
+.. _Data App: https://webslam.ouster.dev/slam/1610482355.9361048.rVdW_dgws/
 
 .. _ex-xyzlut:
 
@@ -171,7 +172,7 @@ If you don’t have a sensor, you can run the same code with our
 
     .. code-tab:: powershell Windows x64
 
-        PS > python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH plot-xyz-points --scan-num 84
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH plot-xyz-points --scan-num 84
 
 
 .. figure:: /images/lidar_scan_xyz_84.png
@@ -223,4 +224,4 @@ If you have a :ref:`configured<ex-configure-sensor>` sensor, you can run this co
 
     .. code-tab:: powershell Windows x64
 
-        PS > python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME filter-3d-by-range-and-azimuth

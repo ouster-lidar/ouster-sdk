@@ -1,6 +1,6 @@
-==============
-Visualizations
-==============
+=====================
+Visualizations in 3D
+=====================
 
 The Ouster Python SDK provides two visualization utilities for user convenience. These are
 introduced briefly below.
@@ -134,20 +134,24 @@ All of the visualizer controls are listed in the table below:
 .. _Open3d package: https://pypi.org/project/open3d/
 
 
-Visualizing Lidar Data with Matplotlib
-=======================================
+Visualization with Matplotlib
+==============================
 
 You should have defined ``source`` using either a pcap file or UDP data streaming directly from a
 sensor, please refer to :doc:`/python/quickstart` for introduction.
+
+.. note::
+
+    Below pictures were rendered using :doc:`OS2 128 Rev 05 Bridge </sample-data>` sample data.
 
 Let's read from ``source`` until we get to the 50th frame of data:
 
 .. code:: python
 
-   >>> from contextlib import closing
-   >>> from more_itertools import nth
-   >>> with closing(client.Scans(source)) as scans:
-   ...     scan = nth(scans, 50)
+   from contextlib import closing
+   from more_itertools import nth
+   with closing(client.Scans(source)) as scans:
+       scan = nth(scans, 50)
 
 .. note::
 
@@ -159,18 +163,18 @@ datatype and plot a range image where each column corresponds to a single azimut
 
 .. code:: python
 
-   >>> range_field = scan.field(client.ChanField.RANGE)
-   >>> range_img = client.destagger(info, range_field)
+   range_field = scan.field(client.ChanField.RANGE)
+   range_img = client.destagger(info, range_field)
 
 We can plot the results using standard Python tools that work with numpy datatypes. Here, we extract
 a column segment of the range data and display the result:
 
 .. code:: python
 
-   >>> import matplotlib.pyplot as plt
-   >>> plt.imshow(range_img[:, 640:1024], resample=False)
-   >>> plt.axis('off')
-   >>> plt.show()
+   import matplotlib.pyplot as plt
+   plt.imshow(range_img[:, 640:1024], resample=False)
+   plt.axis('off')
+   plt.show()
 
 .. note::
 
@@ -191,24 +195,24 @@ produce X, Y, Z coordinates from our scan data with shape (H x W x 3):
 
 .. code:: python
 
-    >>> xyzlut = client.XYZLut(info)
-    >>> xyz = xyzlut(scan)
+    xyzlut = client.XYZLut(info)
+    xyz = xyzlut(scan)
 
 Now we rearrange the resulting numpy array into a shape that's suitable for plotting:
 
 .. code:: python
 
-    >>> import numpy as np
-    >>> [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
-    >>> ax = plt.axes(projection='3d')
-    >>> r = 10
-    >>> ax.set_xlim3d([-r, r])
-    >>> ax.set_ylim3d([-r, r])
-    >>> ax.set_zlim3d([-r/2, r/2])
-    >>> plt.axis('off')
-    >>> z_col = np.minimum(np.absolute(z), 5)
-    >>> ax.scatter(x, y, z, c=z_col, s=0.2)
-    >>> plt.show()
+    import numpy as np
+    [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
+    ax = plt.axes(projection='3d')
+    r = 10
+    ax.set_xlim3d([-r, r])
+    ax.set_ylim3d([-r, r])
+    ax.set_zlim3d([-r/2, r/2])
+    plt.axis('off')
+    z_col = np.minimum(np.absolute(z), 5)
+    ax.scatter(x, y, z, c=z_col, s=0.2)
+    plt.show()
 
 .. figure:: /images/brooklyn_bridge_ls_50_xyz_cut.png
    :align: center

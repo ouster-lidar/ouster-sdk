@@ -5,8 +5,8 @@ Quick Start with the Ouster Python SDK
 ======================================
 
 This quickstart guide will walk you through visualizing Ouster sensor data quickly with Python code
-you write yourself. It assumes that you have followed the steps in :ref:`Installation-python` to
-install the Ouster Python SDK.
+you write yourself. It assumes that you have followed the steps in :ref:`Python Installation
+<installation-python>` to install the Ouster Python SDK.
 
 Using this Guide
 ================
@@ -73,8 +73,8 @@ captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
 
 To visualize data from this pcap file, proceed to :doc:`/python/examples/visualizations` examples.
 
-.. _Lidar Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf#10
-.. _IMU Data Format: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf#14
+.. _Lidar Data Format: https://static.ouster.dev/sensor-docs/sw_manual/sensor_data/sensor-data.html#lidar-data
+.. _IMU Data Format: https://static.ouster.dev/sensor-docs/sw_manual/sensor_data/sensor-data.html#imu-data
 .. _OS2 bridge sample data: https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip
 
 
@@ -98,13 +98,7 @@ should see some output like:
 
 .. tabs::
 
-    .. code-tab:: console Linux/macOS x64
-
-       $ ping -c1 <SENSOR_HOSTNAME>
-       PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
-       64 bytes from <SENSOR_HOSTNAME> (192.0.2.42): icmp_seq=1 ttl=64 time=0.217 ms
-
-    .. code-tab:: console macOS M1
+    .. code-tab:: console Linux/macOS
 
        $ ping -c1 <SENSOR_HOSTNAME>
        PING <SENSOR_HOSTNAME> (192.0.2.42) 56(84) bytes of data.
@@ -147,7 +141,7 @@ Now we have a ``source`` from our sensor! To visualize data from your sensor, pr
 :doc:`/python/examples/visualizations` examples.
 
 
-.. _Networking Guide: https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf#7c
+.. _Networking Guide: https://static.ouster.dev/sensor-docs/developer_common_sections/networking-guide.html
 
 
 Next Steps

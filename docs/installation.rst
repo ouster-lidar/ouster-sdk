@@ -1,16 +1,15 @@
-.. title:: Ouster SDK Installation
 
 .. _installation:
 
-======================================
-SDK Installation
-======================================
+==========================
+Ouster SDK Installation
+==========================
 
 Various ways to install and use it, depending on you platform of choice.
 
 .. contents::
    :local:
-   :depth: 1
+   :depth: 2
 
 
 .. _installation-python:
@@ -18,11 +17,22 @@ Various ways to install and use it, depending on you platform of choice.
 Python
 ========
 
+.. include:: /../python/README.rst
+    :start-after: [python-overview-start]
+    :end-before: [python-overview-end]
+
+
+.. _supported-platforms:
+
+Supported Platforms
+-------------------
+
+.. include:: /../python/README.rst
+    :start-after: [python-supported-platforms-start]
+    :end-before: [python-supported-platforms-end]
+
 Installation
 --------------
-
-.. todo::
-   Moved from ``python/instalation.rst``. Required reading/fixing.
 
 The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. 
 
@@ -31,11 +41,7 @@ read the official `venv instructions`_ and ensure that they upgrade pip *after* 
 venv. If you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py
 -3`` and ``py -3 -m pip`` in the following Powershell snippets.
 
-.. todo::
-   Supported platforms parts not here anymore. They are in `ouster-sdk/python/README`. If we need
-   them here we can include with ``include`` directive and ``start-after/end-before`` tags.
-
-To install on :ref:`supported platforms<supported platforms>`, please upgrade your pip:
+To install on :ref:`supported platforms<supported-platforms>`, please upgrade your pip:
 
 .. tabs::
 
@@ -70,8 +76,7 @@ Now that your Python environment has an up-to-date pip, you can install ouster-s
 .. note::
     
     While the optional examples component is not required for ouster-sdk, we recommend installing it
-    so you can run the various examples and Ouster's ``simple-viz`` Visualizer, which will enable you to
-    easily confirm a successful installation visually on recorded data, as outlined below.
+    so you can run the various :doc:`examples </python/examples/index>`.
  
 
 To check that you've successfully installed the latest version of the Ouster Python SDK, run the
@@ -97,25 +102,15 @@ You should see something like:
         ouster-sdk                    \ |release|\
 
 
-Sample Data Visualization
---------------------------
-
-.. todo::
-   Whole visualization pieces need to be revised and rethink in a light of new PointViz.
-
-Let's check quickly that everything in the installation is in order by visualizing :doc:`sample data
-<sample-data>` using the Ouster ``simple-viz`` Visualizer.
-
-
-Next Steps
+What's Next
 -----------
 
+To get a feel for working with the Ouster Sensor Python API, check the following sections:
 
-To get a feel for working with the Ouster Sensor Python API, click next to proceed to the
-:doc:`python/quickstart`.
+- :doc:`python/quickstart`
+- :doc:`Download and Visualize Sample Data <sample-data>`
+- :doc:`python/visualizer`
 
-For shortcuts and controls for the Ouster ``simaple-viz`` Visualizer, or to immediately visualize
-data directly from an Ouster sensor, see :doc:`python/visualizer`.
 
 
 C++

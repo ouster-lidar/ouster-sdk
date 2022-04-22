@@ -2,9 +2,8 @@
 Ouster Python SDK
 =================
 
-**Ouster SDK** `Project Documentation`_
-
-.. _Project Documentation: https://static.ouster.dev/sdk-docs/index.html
+..
+    [python-overview-start]
 
 The Ouster Python SDK provides a high-level interface for interacting with sensor hardware and
 recorded sensor data suitable for prototyping, evaluation, and other non-safety-critical
@@ -18,11 +17,15 @@ data. The SDK includes APIs for:
 - Conversion of raw data to range/signal/near_ir/reflectivity images (de-staggering)
 - Efficient projection of range measurements to Cartesian (X, Y, Z) coordinates
 
-.. _supported platforms:
+..
+    [python-overview-end]
 
 
 Supported Platforms
 -------------------
+
+..
+    [python-supported-platforms-start]
 
 Pre-built binaries are provided on `PyPI`_ for the following platforms:
 
@@ -40,6 +43,9 @@ Building from source is supported on:
 
 .. _PyPI: https://pypi.org/project/ouster-sdk/
 
+..
+    [python-supported-platforms-end]
+
 
 Installation
 ------------
@@ -53,7 +59,7 @@ SDK, you will need to build from source. See the `build instructions`_ for requi
 build from a source distribution or from a clone of the repository.
 
 .. _installation: https://static.ouster.dev/sdk-docs/installation.html
-.. _build instructions: https://static.ouster.dev/sdk-docs/devel.html
+.. _build instructions: https://static.ouster.dev/sdk-docs/python/devel.html
 
 
 Status and Contact Info

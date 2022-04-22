@@ -2,21 +2,22 @@
 Examples & Concepts
 ===================
 
+.. _examples-setup:
+
 A loosely connected collection of examples and concepts useful for working with the Ouster Python
-SDK. If you are just starting, please see :ref:`quickstart`.
+SDK. If you are just starting, please see :doc:`/python/quickstart`.
 
-For convenience, and in keeping with the :ref:`installation-python` and :ref:`quickstart` sections,
-we will use ``$SAMPLE_DATA_PCAP_PATH`` and ``$SAMPLE_DATA_JSON_PATH`` for the locations of the
-sample data pcap and json.  For python code, ``pcap_path`` and ``json_path`` are taken to be set to
-those values, respectively.  Similarly, ``$SENSOR_HOSTNAME`` is used for your sensor's hostname.
+For convenience, and in keeping it with :doc:`quickstart </python/quickstart>` section, we will use
+``$SAMPLE_DATA_PCAP_PATH`` and ``$SAMPLE_DATA_JSON_PATH`` for the locations of the sample data pcap
+and json. For Python code, ``pcap_path`` and ``json_path`` are taken to be set to those values,
+respectively:
 
-The pictures below are captured from the `OS1 128 Rev 05 Urban Drive`_ sample data, though we
-recommend that users download one of our :ref:`Rev 06 samples<sample-data-download>` instead.
+.. code:: python
 
-.. _OS1 128 Rev 05 Urban Drive: https://data.ouster.io/sdk-samples/Rev-05/OS1-128_Rev-05_Urban-Drive/OS1-128_Rev-05_Urban-Drive.zip
+   pcap_path = '<SAMPLE_DATA_PCAP_PATH>'
+   metadata_path = '<SAMPLE_DATA_JSON_PATH>'
 
-
-
+Similarly, ``$SENSOR_HOSTNAME`` is used for your sensor's hostname.
 
 .. toctree::
 
@@ -25,5 +26,6 @@ recommend that users download one of our :ref:`Rev 06 samples<sample-data-downlo
    lidar-scan
    record-stream
    visualizations
+   conversion
 
 

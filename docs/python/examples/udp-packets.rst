@@ -35,5 +35,5 @@ You can try the above code with the :py:func:`~.pcap.pcap_read_packets`:
 
     .. code-tab:: powershell Windows x64
 
-        PS > python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH read-packets
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH read-packets
 

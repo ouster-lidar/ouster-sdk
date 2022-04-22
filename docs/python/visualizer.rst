@@ -19,10 +19,18 @@ After you have Python environment sourced and ``ouster-sdk`` package installed y
 
 where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor.
 
-.. todo::
+``--no-auto-dest`` option skips the automatic sensor configuration step, which means sensor should
+be already configured in a way that UDP packets are sending to the current machine so visualizer
+will be able to read packets from a corresponding socket.
 
-   Add more info about available arguments in ``simple-viz``. ``-x``, ``--lidar-port``, and pcap
-   replay.
+To replay the existing data from ``pcap`` and ``json`` files call the visualizer as::
+
+   $ simple-viz --pcap <pcap_path> [--meta <meta_path>]
+
+.. figure:: /images/simple-viz.png
+    :align: center
+
+    Ouster ``simple-viz`` visualization of OS1 128 sample data
 
 The sample visualizer does not currently include a GUI, but can be controlled with the mouse and
 keyboard:
