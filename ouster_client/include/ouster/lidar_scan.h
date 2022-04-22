@@ -206,7 +206,8 @@ class LidarScan {
     friend bool operator==(const LidarScan& a, const LidarScan& b);
 };
 
-/** \defgroup ouster_client_lidar_scan_operators Ouster Client lidar_scan.h Operators
+/** \defgroup ouster_client_lidar_scan_operators Ouster Client lidar_scan.h
+ * Operators
  * @{
  */
 
@@ -223,13 +224,14 @@ inline bool operator!=(const LidarScan& a, const LidarScan& b) {
 }
 /** @}*/
 
-/** \defgroup ouster_client_lidar_scan_xyz_lut Ouster Client lidar_scan.h XYZLut related items
+/** \defgroup ouster_client_lidar_scan_xyz_lut Ouster Client lidar_scan.h XYZLut
+ * related items
  * @{
  */
 /** Lookup table of beam directions and offsets. */
 struct XYZLut {
-    LidarScan::Points direction; ///< @todo add docs
-    LidarScan::Points offset; ///< @todo add docs
+    LidarScan::Points direction;  ///< @todo add docs
+    LidarScan::Points offset;     ///< @todo add docs
 };
 
 /**
@@ -274,8 +276,9 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
         sensor.beam_altitude_angles);
 }
 /** @}*/
-    
-/** \defgroup ouster_client_lidar_scan_cartesian Ouster Client lidar_scan.h XYZLut related items
+
+/** \defgroup ouster_client_lidar_scan_cartesian Ouster Client lidar_scan.h
+ * XYZLut related items
  * @{
  */
 /**

@@ -8,7 +8,7 @@ The sample code include tools for publishing sensor data as standard ROS topics.
 own build system, it must be compiled separately from the rest of the sample code.
 
 The provided ROS code has been tested on ROS Kinetic, Melodic, and Noetic on Ubuntu 16.04, 18.04,
-and 20.04, respectively. Use the `installation instructions <https://www.ros.org/install/>`_ to get
+and 20.04, respectively. Use the `installation instructions <http://wiki.ros.org/ROS/Installation>`_ to get
 started with ROS on your platform.
 
 Building ROS Driver
