@@ -13,7 +13,7 @@ CPP API Documentation
       - :cpp:enum:`ouster::sensor::lidar_mode` for enums
 
 .. toctree::
-    :caption: CPP Api Documentation
+    :caption: C++ Api Documentation
 
     ouster_client <ouster_client/index.rst>
     ouster_pcap <ouster_pcap/index.rst>

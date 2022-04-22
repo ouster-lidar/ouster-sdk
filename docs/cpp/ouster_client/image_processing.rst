@@ -1,8 +1,9 @@
-===============================================
-ouster_client/include/ouster/image_processing.h
-===============================================
+==================
+image_processing.h
+==================
 
 .. contents::
+    :local:
 
 Classes
 =======

@@ -1,8 +1,9 @@
-====================================
-ouster_pcap/include/ouster/os_pcap.h
-====================================
+=========
+os_pcap.h
+=========
 
 .. contents::
+    :local:
 
 Functions
 =========

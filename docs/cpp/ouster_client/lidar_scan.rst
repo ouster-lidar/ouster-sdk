@@ -1,8 +1,9 @@
-=========================================
-ouster_client/include/ouster/lidar_scan.h
-=========================================
+============
+lidar_scan.h
+============
 
 .. contents::
+    :local:
 
 LidarScan
 =========

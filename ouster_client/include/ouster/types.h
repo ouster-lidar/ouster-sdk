@@ -168,10 +168,6 @@ struct sensor_info {
     uint16_t udp_port_imu; ///< @todo fill in documentation here for it to show up in sphinx
 };
 
-/** \defgroup ouster_client_types_operators Ouster Client types.h Operators
- * @{
- */
-
 /** Equality for data_format */
 bool operator==(const data_format& lhs, const data_format& rhs);
 /** Not-Equality for data_format */
@@ -187,14 +183,6 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs);
 /** Not-Equality for sensor config */
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
 
-/** @}*/
-
-/** \defgroup ouster_sensor_types_to_string Ouster Client types.h to_string functions
- */
-
-/** \defgroup ouster_sensor_types_of_string Ouster Client types.h of string functions
- */
-
 /**
  * Get a default sensor_info for the given lidar mode.
  *
@@ -206,7 +194,6 @@ sensor_info default_sensor_info(lidar_mode mode);
 /**
  * Get string representation of a lidar mode.
  *
- * @ingroup ouster_sensor_types_to_string
  * @param lidar_mode
  * @return string representation of the lidar mode, or "UNKNOWN"
  */
@@ -215,7 +202,6 @@ std::string to_string(lidar_mode mode);
 /**
  * Get lidar mode from string.
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return lidar mode corresponding to the string, or 0 on error
  */
@@ -240,7 +226,6 @@ int frequency_of_lidar_mode(lidar_mode mode);
 /**
  * Get string representation of a timestamp mode.
  *
- * @ingroup ouster_sensor_types_to_string
  * @param timestamp_mode
  * @return string representation of the timestamp mode, or "UNKNOWN"
  */
@@ -249,7 +234,6 @@ std::string to_string(timestamp_mode mode);
 /**
  * Get timestamp mode from string.
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return timestamp mode corresponding to the string, or 0 on error
  */
@@ -258,7 +242,6 @@ timestamp_mode timestamp_mode_of_string(const std::string& s);
 /**
  * Get string representation of an operating mode.
  *
- * @ingroup ouster_sensor_types_to_string
  * @param mode
  * @return string representation of the operating mode, or "UNKNOWN"
  */
@@ -267,7 +250,6 @@ std::string to_string(OperatingMode mode);
 /**
  * Get operating mode from string.
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return operating mode corresponding to the string, or 0 on error
  */
@@ -276,7 +258,6 @@ optional<OperatingMode> operating_mode_of_string(const std::string& s);
 /**
  * Get string representation of a multipurpose io mode.
  *
- * @ingroup ouster_sensor_types_to_string
  * @param mode
  * @return string representation of the multipurpose io mode, or "UNKNOWN"
  */
@@ -285,7 +266,6 @@ std::string to_string(MultipurposeIOMode mode);
 /**
  * Get multipurpose io mode from string.
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return multipurpose io mode corresponding to the string, or 0 on error
  */
@@ -295,7 +275,6 @@ optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
 /**
  * Get string representation of a polarity.
  *
- * @ingroup ouster_sensor_types_to_string
  * @param polarity
  * @return string representation of the polarity, or "UNKNOWN"
  */
@@ -304,7 +283,6 @@ std::string to_string(Polarity polarity);
 /**
  * Get polarity from string.
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return polarity corresponding to the string, or 0 on error
  */
@@ -313,7 +291,6 @@ optional<Polarity> polarity_of_string(const std::string& s);
 /**
  * Get string representation of a NMEA Baud Rate
  *
- * @ingroup ouster_sensor_types_to_string
  * @param rate
  * @return string representation of the NMEA baud rate, or "UNKNOWN"
  */
@@ -322,7 +299,6 @@ std::string to_string(NMEABaudRate rate);
 /**
  * Get nmea baud rate from string.
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return nmea baud rate corresponding to the string, or 0 on error
  */
@@ -331,7 +307,6 @@ optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
 /**
  * Get string representation of an Azimuth Window
  *
- * @ingroup ouster_sensor_types_to_string
  * @param azimuth_window
  * @return string representation of the azimuth window
  */
@@ -340,7 +315,6 @@ std::string to_string(AzimuthWindow azimuth_window);
 /**
  * Get string representation of a lidar profile
  *
- * @ingroup ouster_sensor_types_to_string
  * @param packet profile
  * @return string representation of the lidar profile
  */
@@ -349,7 +323,6 @@ std::string to_string(UDPProfileLidar profile);
 /**
  * Get lidar profile from string
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return lidar profile corresponding to the string, or nullopt on error
  */
@@ -358,7 +331,6 @@ optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s);
 /**
  * Get string representation of an IMU profile
  *
- * @ingroup ouster_sensor_types_to_string
  * @param packet profile
  * @return string representation of the lidar profile
  */
@@ -367,7 +339,6 @@ std::string to_string(UDPProfileIMU profile);
 /**
  * Get imu profile from string
  *
- * @ingroup ouster_sensor_types_of_string
  * @param string
  * @return imu profile corresponding to the string, or nullopt on error
  */
@@ -397,7 +368,6 @@ sensor_info metadata_from_json(const std::string& json_file);
 /**
  * Get a string representation of metadata. All fields included.
  *
- * @ingroup ouster_sensor_types_to_string
  * @param info sensor_info struct
  * @return a json metadata string
  */
@@ -419,7 +389,6 @@ sensor_config parse_config(const std::string& config);
  * Get a string representation of sensor config. Only set fields will be
  * represented.
  *
- * @ingroup ouster_sensor_types_to_string
  * @param config a struct of sensor config
  * @return a json sensor config string
  */
@@ -432,7 +401,6 @@ std::string to_string(const sensor_config& config);
  * @return legacy string representation of metadata
  */
 std::string convert_to_legacy(const std::string& metadata);
-/** @}*/
 
 /**
  * Get client version
@@ -466,7 +434,6 @@ enum ChanField {
 /**
  * Get string representation of a channel field
  *
- * @ingroup ouster_sensor_types_to_string
  * @param field
  * @return string representation of the channel field
  */

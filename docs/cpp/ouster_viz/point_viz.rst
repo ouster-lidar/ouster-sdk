@@ -1,8 +1,9 @@
-=====================================
-ouster_viz/include/ouster/point_viz.h
-=====================================
+===========
+point_viz.h
+===========
 
 .. contents::
+    :local:
 
 Functions
 =========
@@ -16,9 +17,6 @@ Classes
     :members:
 
 .. doxygenclass:: ouster::viz::Camera
-    :members:
-
-.. doxygenclass:: ouster::viz::TargetDisplay
     :members:
 
 .. doxygenclass:: ouster::viz::TargetDisplay

@@ -1,20 +1,18 @@
-=====================================
-ouster_client/include/ouster/client.h
-=====================================
+========
+client.h
+========
 
 .. contents::
+    :local:
 
-Functions
-=========
+Initialization
+==============
 
 .. doxygengroup:: ouster_client_init
     :content-only:
 
-.. doxygenfunction:: ouster::sensor::get_metadata
-
-.. doxygenfunction:: ouster::sensor::get_lidar_port
-
-.. doxygenfunction:: ouster::sensor::get_imu_port
+Data Fetching
+=============
 
 .. doxygenfunction:: ouster::sensor::poll_client
 
@@ -22,17 +20,26 @@ Functions
       
 .. doxygenfunction:: ouster::sensor::read_imu_packet
 
+Config And Metadata
+===================
+
+.. doxygenfunction:: ouster::sensor::get_metadata
+
 .. doxygenfunction:: ouster::sensor::set_config
+
+.. doxygenenum:: ouster::sensor::config_flags
 
 .. doxygenfunction:: ouster::sensor::get_config
 
-.. doxygenfunction:: ouster::sensor::parse_config(const std::string &config)
-                     
-.. doxygenfunction:: ouster::sensor::parse_metadata
 
-.. doxygenfunction:: ouster::sensor::metadata_from_json
+Network Operations
+==================
 
-Enums
-=====
+.. doxygenfunction:: ouster::sensor::poll_client
 
-.. doxygenenum:: ouster::sensor::config_flags
+.. doxygenfunction:: ouster::sensor::get_lidar_port
+
+.. doxygenfunction:: ouster::sensor::get_imu_port
+
+.. doxygenenum:: ouster::sensor::client_state
+
