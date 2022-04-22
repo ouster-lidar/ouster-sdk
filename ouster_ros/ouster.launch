@@ -11,7 +11,7 @@
   <arg name="viz" default="false" doc="whether to run a rviz"/>
   <arg name="rviz_config" default="-d $(find ouster_ros)/viz.rviz" doc="optional rviz config file"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
-  <arg name="udp_profile_lidar" default="" doc="lidar packet profile: LEGACY, RNG19_RFL8_SIG16_NIR16_DUAL"/>
+  <arg name="udp_profile_lidar" default="" doc="lidar packet profile: LEGACY, RNG19_RFL8_SIG16_NIR16_DUAL, RNG19_RFL8_SIG16_NIR16, RNG15_RFL8_NIR8"/>
 
   <node pkg="ouster_ros" name="os_node" type="os_node" output="screen" required="true">
     <param name="~/lidar_mode" type="string" value="$(arg lidar_mode)"/>

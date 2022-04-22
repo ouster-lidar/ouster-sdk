@@ -92,31 +92,36 @@ sensor::ChanField suitable_return(sensor::ChanField input_field, bool second) {
     }
 }
 
+template <typename T>
+inline ouster::img_t<T> get_or_fill_zero(sensor::ChanField f,
+                                         const ouster::LidarScan& ls) {
+    ouster::img_t<T> result{ls.h, ls.w};
+    if (ls.field_type(f)) {
+        ouster::impl::visit_field(ls, f, read_and_cast(), result);
+    } else {
+        result = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic,
+                               Eigen::RowMajor>::Zero(ls.h, ls.w);
+    }
+    return result;
+}
+
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
                    ouster_ros::Cloud& cloud, int return_index) {
     bool second = (return_index == 1);
     cloud.resize(ls.w * ls.h);
 
-    ouster::img_t<uint16_t> near_ir;
-    ouster::impl::visit_field(
-        ls, suitable_return(sensor::ChanField::NEAR_IR, second),
-        read_and_cast(), near_ir);
+    ouster::img_t<uint16_t> near_ir = get_or_fill_zero<uint16_t>(
+        suitable_return(sensor::ChanField::NEAR_IR, second), ls);
 
-    ouster::img_t<uint32_t> range;
-    ouster::impl::visit_field(ls,
-                              suitable_return(sensor::ChanField::RANGE, second),
-                              read_and_cast(), range);
+    ouster::img_t<uint32_t> range = get_or_fill_zero<uint32_t>(
+        suitable_return(sensor::ChanField::RANGE, second), ls);
 
-    ouster::img_t<uint32_t> signal;
-    ouster::impl::visit_field(
-        ls, suitable_return(sensor::ChanField::SIGNAL, second), read_and_cast(),
-        signal);
+    ouster::img_t<uint32_t> signal = get_or_fill_zero<uint32_t>(
+        suitable_return(sensor::ChanField::SIGNAL, second), ls);
 
-    ouster::img_t<uint16_t> reflectivity;
-    ouster::impl::visit_field(
-        ls, suitable_return(sensor::ChanField::REFLECTIVITY, second),
-        read_and_cast(), reflectivity);
+    ouster::img_t<uint16_t> reflectivity = get_or_fill_zero<uint16_t>(
+        suitable_return(sensor::ChanField::REFLECTIVITY, second), ls);
 
     auto points = ouster::cartesian(range, xyz_lut);
 
