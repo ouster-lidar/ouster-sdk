@@ -5,6 +5,21 @@ os_pcap.h
 .. contents::
     :local:
 
+Packet Info
+===========
+
+.. doxygenstruct:: ouster::sensor_utils::packet_info
+    :members:
+
+.. doxygenfunction:: ouster::sensor_utils::operator<<(std::ostream& stream_in, const packet_info& data)
+
+Handles
+=======
+
+.. doxygenstruct:: ouster::sensor_utils::record_handle
+
+.. doxygenstruct:: ouster::sensor_utils::playback_handle
+
 Functions
 =========
 
@@ -24,13 +39,4 @@ Functions
 
 .. doxygenfunction:: ouster::sensor_utils::record_packet
 
-Structs
-=======
 
-.. doxygenstruct:: ouster::sensor_utils::packet_info
-    :members:
-
-Operators
-=========
-
-.. doxygenfunction:: ouster::sensor_utils::operator<<(std::ostream& stream_in, const packet_info& data)

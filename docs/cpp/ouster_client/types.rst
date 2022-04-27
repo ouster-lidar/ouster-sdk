@@ -5,59 +5,16 @@ types.h
 .. contents::
     :local:
 
-Packet Format
-=============
+Type-defs
+=========
 
-.. doxygenclass:: ouster::sensor::packet_format
-    :members:
+.. doxygentypedef:: ouster::img_t
 
-.. doxygenfunction:: ouster::sensor::get_format
+.. doxygentypedef:: ouster::mat4d
 
-Sensor Info
-===========
+.. doxygentypedef:: ouster::sensor::AzimuthWindow
 
-.. doxygenstruct:: ouster::sensor::sensor_info
-    :members:
-
-.. doxygenfunction:: ouster::sensor::default_sensor_info
-
-.. doxygenfunction:: ouster::sensor::parse_config(const std::string &config)
-                     
-.. doxygenfunction:: ouster::sensor::parse_metadata
-
-.. doxygenfunction:: ouster::sensor::metadata_from_json
-
-.. doxygenfunction:: ouster::sensor::convert_to_legacy
-
-.. doxygenfunction:: ouster::sensor::operator==(const sensor_info& lhs, const sensor_info& rhs)
-
-.. doxygenfunction:: ouster::sensor::operator!=(const sensor_info& lhs, const sensor_info& rhs)
-
-.. doxygenfunction:: ouster::sensor::to_string(const sensor_info& info)
-
-Sensor Config
-=============
-
-.. doxygenstruct:: ouster::sensor::sensor_config
-    :members:
-
-.. doxygenfunction:: ouster::sensor::parse_config(const std::string& config)
-
-.. doxygenfunction:: ouster::sensor::operator==(const sensor_config& lhs, const sensor_config& rhs)
-
-.. doxygenfunction:: ouster::sensor::operator!=(const sensor_config& lhs, const sensor_config& rhs)
-
-.. doxygenfunction:: ouster::sensor::to_string(const sensor_config& config)
-
-Data Format
-===========
-
-.. doxygenstruct:: ouster::sensor::data_format
-    :members:
-
-.. doxygenfunction:: ouster::sensor::operator==(const data_format& lhs, const data_format& rhs)
-
-.. doxygenfunction:: ouster::sensor::operator!=(const data_format& lhs, const data_format& rhs)
+.. doxygentypedef:: ouster::sensor::ColumnWindow
 
 Helper Data
 ===========
@@ -150,18 +107,61 @@ Chan Field
 
 .. doxygenfunction:: ouster::sensor::to_string(ChanField field)
 
-Type-defs
-=========
+Sensor Info
+===========
 
-.. doxygentypedef:: ouster::img_t
+.. doxygenstruct:: ouster::sensor::sensor_info
+    :members:
 
-.. doxygentypedef:: ouster::mat4d
+.. doxygenfunction:: ouster::sensor::default_sensor_info
 
-.. doxygentypedef:: ouster::sensor::AzimuthWindow
+.. doxygenfunction:: ouster::sensor::parse_metadata
 
-.. doxygentypedef:: ouster::sensor::ColumnWindow
+.. doxygenfunction:: ouster::sensor::metadata_from_json
+
+.. doxygenfunction:: ouster::sensor::convert_to_legacy
+
+.. doxygenfunction:: ouster::sensor::operator==(const sensor_info& lhs, const sensor_info& rhs)
+
+.. doxygenfunction:: ouster::sensor::operator!=(const sensor_info& lhs, const sensor_info& rhs)
+
+.. doxygenfunction:: ouster::sensor::to_string(const sensor_info& info)
+
+Sensor Config
+=============
+
+.. doxygenstruct:: ouster::sensor::sensor_config
+    :members:
+
+.. doxygenfunction:: ouster::sensor::parse_config(const std::string& config)
+
+.. doxygenfunction:: ouster::sensor::operator==(const sensor_config& lhs, const sensor_config& rhs)
+
+.. doxygenfunction:: ouster::sensor::operator!=(const sensor_config& lhs, const sensor_config& rhs)
+
+.. doxygenfunction:: ouster::sensor::to_string(const sensor_config& config)
+
+Data Format
+===========
+
+.. doxygenstruct:: ouster::sensor::data_format
+    :members:
+
+.. doxygenfunction:: ouster::sensor::operator==(const data_format& lhs, const data_format& rhs)
+
+.. doxygenfunction:: ouster::sensor::operator!=(const data_format& lhs, const data_format& rhs)
+
+Packet Format
+=============
+
+.. doxygenclass:: ouster::sensor::packet_format
+    :members:
+
+.. doxygenfunction:: ouster::sensor::get_format
 
 MISC
 ====
 
 .. doxygenfunction:: ouster::sensor::client_version
+
+.. doxygenvariable:: ouster::sensor::range_unit

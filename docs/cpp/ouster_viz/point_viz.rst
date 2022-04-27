@@ -8,7 +8,7 @@ point_viz.h
 Functions
 =========
 
-.. doxygenfuncton:: ouster::viz::add_default_controls
+.. doxygenfunction:: ouster::viz::add_default_controls
 
 Classes
 =======

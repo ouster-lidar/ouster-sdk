@@ -31,6 +31,7 @@ using ns = std::chrono::nanoseconds;
  * is available.
  * @param cli the sensor client
  * @param pm the destination packet message
+ * @param pf the packet format
  * @return whether reading was successful
  */
 bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
@@ -41,6 +42,7 @@ bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
  * is available.
  * @param cli the sensor client
  * @param pm the destination packet message
+ * @param pf the packet format
  * @return whether reading was successful
  */
 bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
@@ -50,6 +52,7 @@ bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
  * Parse an imu packet message into a ROS imu message
  * @param pm packet message populated by read_imu_packet
  * @param frame the frame to set in the resulting ROS message
+ * @param pf the packet format
  * @return ROS sensor message with fields populated from the packet
  */
 sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,

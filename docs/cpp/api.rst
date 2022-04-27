@@ -17,4 +17,3 @@ CPP API Documentation
 
     ouster_client <ouster_client/index.rst>
     ouster_pcap <ouster_pcap/index.rst>
-    ouster_viz <ouster_viz/index.rst>
