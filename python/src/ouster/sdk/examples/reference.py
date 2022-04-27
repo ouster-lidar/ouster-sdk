@@ -1,4 +1,9 @@
-"""Reference implementations of common operations."""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Reference implementations of common operations.
+"""
 
 from itertools import product
 from math import cos, pi, sin

@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2020, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Point cloud and image visualizer for Ouster Lidar using OpenGL
  */

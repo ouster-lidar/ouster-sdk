@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Holds lidar data by field in row-major order
  */

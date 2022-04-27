@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Higher-level functions to read data from the ouster sensors as ROS
  * messages

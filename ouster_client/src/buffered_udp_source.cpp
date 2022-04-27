@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/buffered_udp_source.h"
 
 #include <chrono>

@@ -1,3 +1,12 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ *
+ * This file contains example code for working with 2D and 3D representations of
+ * lidar data with the C++ Ouster SDK. Please see the sdk docs at
+ * static.ouster.dev for clearer explanations.
+ */
+
 #include <fstream>
 #include <iomanip>
 #include <iostream>

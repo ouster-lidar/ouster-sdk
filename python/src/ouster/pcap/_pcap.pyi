@@ -1,4 +1,10 @@
-"""Type annotations for pcap python bindings."""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Type annotations for pcap python bindings.
+"""
+
 from ..client.data import BufferT
 
 

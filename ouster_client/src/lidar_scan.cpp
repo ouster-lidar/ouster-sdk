@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/lidar_scan.h"
 
 #include <Eigen/Core>

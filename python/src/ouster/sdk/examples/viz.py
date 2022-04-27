@@ -1,4 +1,8 @@
-"""Example of interactive visualizer use.
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Example of interactive visualizer use.
 
 Intended to run with `python -i -m ouster.sdk.examples.viz`
 

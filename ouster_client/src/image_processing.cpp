@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/image_processing.h"
 
 #include <Eigen/src/Core/util/Meta.h>

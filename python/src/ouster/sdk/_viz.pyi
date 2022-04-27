@@ -1,4 +1,9 @@
-"""Type annotations for viz python bindings."""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Type annotations for viz python bindings.
+"""
 
 from typing import Callable, overload, Tuple
 

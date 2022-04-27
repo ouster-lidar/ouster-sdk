@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ *
  * "Expected" sensor_info structs generated using dump_sensor_info
  *
  * This will need to be updated when sensor_info changes, or when new testcases

@@ -1,3 +1,8 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from collections import defaultdict
 from copy import copy
 from os import path

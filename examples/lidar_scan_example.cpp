@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ *
+ * This file contains example code for working with the LidarScan class of the
+ * C++ Ouster SDK. Please see the sdk docs at static.ouster.dev for clearer
+ * explanations.
+ */
 #include <fstream>
 #include <iomanip>
 #include <iostream>

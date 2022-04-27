@@ -1,4 +1,8 @@
-"""Executable examples for using the sensor client APIs.
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Executable examples for using the sensor client APIs.
 
 This module has a rudimentary command line interface. For usage, run::
 

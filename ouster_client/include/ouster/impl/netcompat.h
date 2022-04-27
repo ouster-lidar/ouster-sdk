@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2020, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Compatibility with windows (unsupported)
  */

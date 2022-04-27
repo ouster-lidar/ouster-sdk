@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2020, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/point_viz.h"
 
 #include <Eigen/Core>
