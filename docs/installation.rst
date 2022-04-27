@@ -1,11 +1,11 @@
 
 .. _installation:
 
-==========================
+=======================
 Ouster SDK Installation
-==========================
+=======================
 
-Various ways to install and use it, depending on you platform of choice.
+Please proceed to the instructions for your language and platform of choice. Newer users may find the Python SDK more approachable.
 
 .. contents::
    :local:
@@ -16,11 +16,6 @@ Various ways to install and use it, depending on you platform of choice.
 
 Python
 ========
-
-.. include:: /../python/README.rst
-    :start-after: [python-overview-start]
-    :end-before: [python-overview-end]
-
 
 .. _supported-platforms:
 
@@ -36,10 +31,12 @@ Installation
 
 The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. 
 
-Using a virtual environment with the Ouster Python SDK is recommended. Users newer to Python should
-read the official `venv instructions`_ and ensure that they upgrade pip *after* activating their
-venv. If you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py
--3`` and ``py -3 -m pip`` in the following Powershell snippets.
+.. note::
+
+    Using a virtual environment with the Ouster Python SDK is recommended. Users newer to Python should
+    read the official `venv instructions`_ and ensure that they upgrade pip *after* activating their
+    venv. If you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py
+    -3`` and ``py -3 -m pip`` in the following Powershell snippets.
 
 To install on :ref:`supported platforms<supported-platforms>`, please upgrade your pip:
 
@@ -60,7 +57,6 @@ To install on :ref:`supported platforms<supported-platforms>`, please upgrade yo
 
 
 Now that your Python environment has an up-to-date pip, you can install ouster-sdk:
-
 
 .. tabs::
 
@@ -102,28 +98,33 @@ You should see something like:
         ouster-sdk                    \ |release|\
 
 
+.. note::
+
+    If you're running a non-glibc-based linux distribution, or wish to modify the Ouster Python
+    SDK, you will need to build from source. See the `build instructions`_ for requirements needed to
+    build from a source distribution or from a clone of the repository.
+
+.. _installation: https://static.ouster.dev/sdk-docs/installation.html
+.. _build instructions: https://static.ouster.dev/sdk-docs/python/devel.html
+
 What's Next
 -----------
 
-To get a feel for working with the Ouster Sensor Python API, check the following sections:
+To get a feel for working with the Ouster Sensor Python API, check out the following sections:
 
 - :doc:`python/quickstart`
 - :doc:`Download and Visualize Sample Data <sample-data>`
 - :doc:`python/visualizer`
 
 
-
 C++
-========
+===
 
-.. todo::
-   Write the C++ installation piece. Or the current link is enough?
-
-Ouster C++ libraries need to be build and installed from sources. Please refer to
-:doc:`/cpp/building`.
+The Ouster C++ SDK currently must be built and installed from sources.
+Please refer to :doc:`/cpp/building`.
 
 
-ROS
-========
+ROS1
+====
 
-ROS drivers are supported and needs to be build from sources. Please refer to :doc:`/ros/index`
+A sample ROS1 driver is provided. It must be built from source. Please refer to :doc:`/ros/index`.

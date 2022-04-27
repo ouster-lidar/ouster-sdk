@@ -6,17 +6,12 @@
 Ouster SDK - libraries and tools for Ouster Lidar Sensors
 ==========================================================
 
-Cross-platform, C++/Python Ouster sensor development toolkit.
+Cross-platform C++/Python Ouster Sensor Development Toolkit
 
-Quick links:
+To get started with our sensors, client, and visualizer, please see our SDK and sensor documentation:
 
 - `Ouster SDK Documentation <https://static.ouster.dev/sdk-docs/index.html>`_
-- `Changelog <CHANGELOG.rst>`_
 - `Ouster Sensor Documentaion <https://static.ouster.dev/sensor-docs>`_ 
-- `Sample Data <https://static.ouster.dev/sdk-docs/quickstart.html#using-sample-data>`_
-- `Point Cloud Visualizer <https://static.ouster.dev/sdk-docs/index.html>`_
-
-------------------------------------------------------
 
 This repository contains Ouster SDK source code for connecting to and configuring ouster sensors,
 reading and visualizing data, and interfacing with ROS.

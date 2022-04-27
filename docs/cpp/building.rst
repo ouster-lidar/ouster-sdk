@@ -1,8 +1,8 @@
 .. _cpp-building:
 
-==========================
-C++ Building From Sources
-==========================
+===================================
+Building the C++ Client from Source
+===================================
 
 Building the example code requires a compiler supporting C++11 and CMake 3.1 or newer and the tclap,
 jsoncpp, and Eigen3 libraries with headers installed on the system. The sample visualizer also

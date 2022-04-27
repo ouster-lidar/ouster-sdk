@@ -12,22 +12,22 @@
    :hidden:
 
    Quick Start <python/quickstart>
-   Examples & Concepts <python/examples/index>
+   Examples <python/examples/index>
    Point Cloud Visualizer <python/visualizer>
-   Building From Sources <python/devel>
+   Developing <python/devel>
 
 .. toctree::
    :caption: C++ Guide
    :hidden:
 
-   Building From Sources <cpp/building.rst>
+   Build <cpp/building.rst>
    Examples <cpp/examples.rst>
 
 .. toctree::
-   :caption: ROS Platform Guide
+   :caption: ROS1 Guide
    :hidden:
 
-   Building & Using <ros/index.rst>
+   Build & Use <ros/index.rst>
 
 .. toctree::
    :caption: SDK Reference

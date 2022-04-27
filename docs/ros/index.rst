@@ -1,8 +1,8 @@
 .. title:: ROS Guide
 
-=================
+================
 Example ROS Code
-=================
+================
 
 The sample code include tools for publishing sensor data as standard ROS topics. Since ROS uses its
 own build system, it must be compiled separately from the rest of the sample code.
