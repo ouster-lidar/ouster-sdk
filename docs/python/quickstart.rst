@@ -1,8 +1,8 @@
 .. _quickstart:
 
-======================================
-Quick Start with the Ouster Python SDK
-======================================
+==================================================
+Developer's Quick Start with the Ouster Python SDK
+==================================================
 
 This quickstart guide will walk you through visualizing Ouster sensor data quickly with Python code
 you write yourself. It assumes that you have followed the steps in :ref:`Python Installation
@@ -137,8 +137,9 @@ Just like with the sample data, you can create a :py:class:`.PacketSource` from 
    >>> source = client.Sensor(hostname)
    >>> info = source.metadata
 
-Now we have a ``source`` from our sensor! To visualize data from your sensor, proceed to
-:doc:`/python/examples/visualizations` examples.
+Now we have a ``source`` from our sensor! You're ready to record, visualize to visualize data from your sensor, proceed to
+:doc:`/python/examples/visualizations` examples. Or you can check out other things you can do with a
+``source`` in the Python :doc:`/python/examples/index`.
 
 
 .. _Networking Guide: https://static.ouster.dev/sensor-docs/developer_common_sections/networking-guide.html
@@ -147,7 +148,6 @@ Now we have a ``source`` from our sensor! To visualize data from your sensor, pr
 Next Steps
 ==========
 
-You have now officially visualized Ouster lidar in both 2D and 3D data using the Ouster Python SDK!
 Now that you know the basics, you can check out our annotated examples for a more detailed look at
 how to work with our data.
 
@@ -155,5 +155,5 @@ Here are a few things you might be interested in:
 
     * :ref:`ex-basic-sensor`
     * :ref:`ex-packets`
-    * :ref:`ex-lidar-scans`
+    * :doc:`/reference/lidar-scan`
     * :ref:`ex-record-stream-viz`

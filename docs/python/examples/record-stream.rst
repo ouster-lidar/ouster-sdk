@@ -41,6 +41,7 @@ The source code of an example below:
 Good! The resulting pcap and json files can be used with any examples in the :mod:`.examples.pcap`
 module.
 
+.. _ex-stream:
 
 Streaming Live Data
 ====================
@@ -70,8 +71,8 @@ So how did we do that?
    :linenos:
    :dedent:
 
-Notice that instead of taking a ``sample`` as we did in previous example, we used
-:py:meth:`.Scans.stream`, which allows for a continuous live data stream.  We close the ``stream``
-when we are finished, hence the use of :py:func:`.closing` in the highlighted line.
+Notice that instead of taking a ``sample``, we used :py:meth:`.Scans.stream`, which allows for a
+continuous live data stream.  We close the ``stream`` when we are finished, hence the use of
+:py:func:`.closing` in the highlighted line.
 
 To exit the visualization, you can use ``ESC``.

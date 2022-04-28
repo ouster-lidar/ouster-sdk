@@ -133,6 +133,8 @@ All of the visualizer controls are listed in the table below:
 .. _Open3d library: http://www.open3d.org/
 .. _Open3d package: https://pypi.org/project/open3d/
 
+.. _ex-visualization-with-matplotlib:
+
 
 Visualization with Matplotlib
 ==============================

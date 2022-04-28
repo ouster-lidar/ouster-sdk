@@ -399,6 +399,9 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
                             const XYZLut& lut);
 /** @}*/
 
+/** \defgroup ouster_client_destagger Ouster Client lidar_scan.h
+ * @{
+ */
 /**
  * Generate a destaggered version of a channel field.
  *
@@ -438,7 +441,7 @@ inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
                         const std::vector<int>& pixel_shift_by_row) {
     return destagger(img, pixel_shift_by_row, true);
 }
-
+/** @}*/
 /**
  * Parse lidar packets into a LidarScan.
  *

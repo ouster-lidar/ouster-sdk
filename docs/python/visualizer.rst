@@ -2,22 +2,22 @@
 Point Cloud Visualizer
 =======================
 
-Visualization toolkit is written in C++ and viz examples provided through Python bindings:
+The Ouster visualization toolkit is written in C++ with Python bindings for Python functionality. It consists of the following:
 
-- ``ouster_viz`` C++ library provides functions to build simple point cloud visualizers and comes
-  with Python bindings.
-- ``simple-viz`` Python application can be used as an entrypoint for a more sophisticated custom
-  point cloud visualizations.
+- ``simple-viz``: the default Python application visualizer, which can also be used as an entrypoint
+  for more sophisticated custom point cloud visualizations
+- ``ouster_viz``: the core C++ library 
+- ``ouster.sdk.viz``: the Python module for the bindings
 
 
-Running the ``simple-viz``
-===========================
+Running the Ouster visualizer
+=============================
 
-After you have Python environment sourced and ``ouster-sdk`` package installed you can run::
+After :ref:`installing <installation>` the ``ouster-sdk`` package, you can run::
 
    $ simple-viz --sensor <sensor hostname> [--no-auto-dest] [--lidar-port PORT]
 
-where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor.
+where ``<sensor hostname>`` is the hostname (os-99xxxxxxxxxx) or IP of the sensor.
 
 ``--no-auto-dest`` option skips the automatic sensor configuration step, which means sensor should
 be already configured in a way that UDP packets are sending to the current machine so visualizer
@@ -73,3 +73,4 @@ Keyboard controls:
    [end-simple-viz-keymap]
 
 For usage and other options, run ``./simple_viz -h``
+

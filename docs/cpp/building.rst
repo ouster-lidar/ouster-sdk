@@ -34,6 +34,7 @@ CMake build script supports several optional flags::
     -DBUILD_PCAP=ON                      Build pcap tools. Requires libpcap and libtins dev packages
     -DBUILD_SHARED_LIBS                  Build shared libraries (.dylib or .so)
     -DCMAKE_POSITION_INDEPENDENT_CODE    Standard flag for position independent code
+    -DBUILD_EXAMPLES=ON                  Build C++ examples
 
 Building on Windows
 ====================

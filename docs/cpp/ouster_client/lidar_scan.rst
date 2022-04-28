@@ -17,6 +17,12 @@ LidarScan
 .. doxygengroup:: ouster_client_lidar_scan_operators
     :content-only:
 
+Destagger
+=========
+
+.. doxygengroup:: ouster_client_destagger
+    :content-only:
+
 XYZLut
 ======
 

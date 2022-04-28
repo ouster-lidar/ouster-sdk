@@ -5,13 +5,13 @@
 
    Ouster SDK Overview <self>
    Installation <installation>
-   Download Sample Data <sample-data>
+   Download and Visualize Sample Data <sample-data>
    
 .. toctree::
    :caption: Python Guide
    :hidden:
 
-   Quick Start <python/quickstart>
+   Developer Quick Start <python/quickstart>
    Examples <python/examples/index>
    Point Cloud Visualizer <python/visualizer>
    Developing <python/devel>
@@ -27,7 +27,7 @@
    :caption: ROS1 Guide
    :hidden:
 
-   Build & Use <ros/index.rst>
+   Build and Use <ros/index.rst>
 
 .. toctree::
    :caption: SDK Reference
@@ -66,7 +66,7 @@ All TODOs
    - Python ``ouster-sdk`` is ``0.4.0``
    - C++ version in main ``ouster-sdk/CMakeLists.txt`` and a tag in Github ``ouster_example`` repo is ``v2.3.0``
    - ``ouster_client`` version in ``ouster_client/CMakeLists.txt`` is ``0.4.0``
-
+   - bump ouster_ros to 0.3.1 or smthg
 
 .. note::
 
@@ -75,6 +75,7 @@ All TODOs
    - Github ``ouster_example`` repo will be renamed to ``ouster-sdk``
    - Python 3.6 support will be removed in ``ouster-sdk``
    - C++ 17 will be required for C++ and for Python bindings
+   - drop Ubuntu 16.04 / ros kinetic support
    - what else?
 
 .. todolist:: 
