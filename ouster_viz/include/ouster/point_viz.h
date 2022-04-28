@@ -276,11 +276,11 @@ class PointViz {
 void add_default_controls(viz::PointViz& viz, std::mutex* mx = nullptr);
 
 /**
- * @brief Context for input callbacks
+ * @brief Context for input callbacks.
  */
 struct WindowCtx {
     bool lbutton_down{false};  ///< True if the left mouse button is held
-    bool mbutton_down{false};  ///< True of the middle mouse button is held
+    bool mbutton_down{false};  ///< True if the middle mouse button is held
     double mouse_x{0};         ///< Current mouse x position
     double mouse_y{0};         ///< Current mouse y position
     int viewport_width{0};     ///< Current viewport width in pixels
@@ -288,7 +288,7 @@ struct WindowCtx {
 };
 
 /**
- * @brief Controls the camera view and projection
+ * @brief Controls the camera view and projection.
  */
 class Camera {
     /* view parameters */
@@ -312,42 +312,42 @@ class Camera {
     Camera();
 
     /**
-     * @todo document me
+     * Calculate camera matrices.
      *
-     * @param[in] aspect @todo document me
+     * @param[in] aspect aspect ratio of the viewport
      *
-     * @return @todo document me
+     * @return projection, view matrices and target location.
      */
     impl::CameraData matrices(double aspect) const;
 
     /**
-     * Reset the camera view and fov
+     * Reset the camera view and fov.
      */
     void reset();
 
     /**
-     * Orbit the camera left or right about the camera target
+     * Orbit the camera left or right about the camera target.
      *
      * @param[in] degrees offset to the current yaw angle
      */
     void yaw(float degrees);
 
     /**
-     * Pitch the camera up or down
+     * Pitch the camera up or down.
      *
      * @param[in] degrees offset to the current pitch angle
      */
     void pitch(float degrees);
 
     /**
-     * Move the camera towards or away from the target
+     * Move the camera towards or away from the target.
      *
      * @param[in] amount offset to the current camera distance from the target
      */
     void dolly(int amount);
 
     /**
-     * Move the camera in the XY plane of the camera view
+     * Move the camera in the XY plane of the camera view.
      *
      * Coordinates are normalized so that 1 is the length of the diagonal of the
      * view plane at the target. This is useful for implementing controls that
@@ -359,21 +359,21 @@ class Camera {
     void dolly_xy(double x, double y);
 
     /**
-     * Set the diagonal field of view
+     * Set the diagonal field of view.
      *
      * @param[in] degrees the diagonal field of view, in degrees
      */
     void set_fov(float degrees);
 
     /**
-     * Use an orthographic or perspective projection
+     * Use an orthographic or perspective projection.
      *
      * @param[in] state true for orthographic, false for perspective
      */
     void set_orthographic(bool state);
 
     /**
-     * Set the 2d position of camera target in the viewport
+     * Set the 2d position of camera target in the viewport.
      *
      * @param[in] x horizontal position in in normalized coordinates [-1, 1]
      * @param[in] y vertical position in in normalized coordinates [-1, 1]
@@ -382,7 +382,7 @@ class Camera {
 };
 
 /**
- * @brief Manages the state of the camera target display
+ * @brief Manages the state of the camera target display.
  */
 class TargetDisplay {
     int ring_size_{1};
@@ -390,14 +390,14 @@ class TargetDisplay {
 
    public:
     /**
-     * Enable or disable distance ring display
+     * Enable or disable distance ring display.
      *
      * @param[in] state true to display rings
      */
     void enable_rings(bool state);
 
     /**
-     * Set the distance between rings
+     * Set the distance between rings.
      *
      * @param[in] n space between rings will be 10^n meters
      */
@@ -407,7 +407,7 @@ class TargetDisplay {
 };
 
 /**
- * @brief Manages the state of a point cloud
+ * @brief Manages the state of a point cloud.
  *
  * Each point cloud consists of n points with w poses. The ith point will be
  * transformed by the (i % w)th pose. For example for 2048 x 64 Ouster lidar
@@ -445,7 +445,7 @@ class Cloud {
 
    public:
     /**
-     * Unstructured point cloud for visualization
+     * Unstructured point cloud for visualization.
      *
      * Call set_xyz() to update
      *
@@ -456,7 +456,7 @@ class Cloud {
     Cloud(size_t n, const mat4d& extrinsic = identity4d);
 
     /**
-     * Structured point cloud for visualization
+     * Structured point cloud for visualization.
      *
      * Call set_range() to update
      *
@@ -471,21 +471,21 @@ class Cloud {
           const mat4d& extrinsic = identity4d);
 
     /**
-     * Clear dirty flags
+     * Clear dirty flags.
      *
      * Resets any changes since the last call to PointViz::update()
      */
     void clear();
 
     /**
-     * Get the size of the point cloud
+     * Get the size of the point cloud.
      *
      * @return @todo document me
      */
     size_t get_size() { return n_; }
 
     /**
-     * Set the range values
+     * Set the range values.
      *
      * @param[in] range pointer to array of at least as many elements as there
      * are points, representing the range of the points
@@ -501,7 +501,7 @@ class Cloud {
     void set_key(const float* key);
 
     /**
-     * Set the RGBA mask values, used as an overlay on top of the key
+     * Set the RGBA mask values, used as an overlay on top of the key.
      *
      * @param[in] mask pointer to array of at least 4x as many elements as there
      * are points, preferably normalized between 0 and 1
@@ -509,7 +509,7 @@ class Cloud {
     void set_mask(const float* mask);
 
     /**
-     * Set the XYZ values
+     * Set the XYZ values.
      *
      * @param[in] xyz pointer to array of exactly 3n where n is number of
      * points, so that the xyz position of the ith point is i, i + n, i + 2n
@@ -517,7 +517,7 @@ class Cloud {
     void set_xyz(const float* xyz);
 
     /**
-     * Set the offset values
+     * Set the offset values.
      *
      * TODO: no real reason to have this. Set in constructor, if at all
      *
@@ -527,16 +527,16 @@ class Cloud {
     void set_offset(const float* offset);
 
     /**
-     * Set the ith point cloud pose
+     * Set the ith point cloud pose.
      *
      * @param[in] pose 4x4 column-major homogeneous transformation matrix
      */
     void set_pose(const mat4d& pose);
 
     /**
-     * Set point size
+     * Set point size.
      *
-     * @param[in] size @todo document me
+     * @param[in] size point size
      */
     void set_point_size(float size);
 
@@ -555,7 +555,7 @@ class Cloud {
     void set_column_poses(const float* rotation, const float* translation);
 
     /**
-     * Set the point cloud color palette
+     * Set the point cloud color palette.
      *
      * @param[in] palette the new palette to use, must have size 3*palette_size
      * @param[in] palette_size the number of colors in the new palette
@@ -566,7 +566,7 @@ class Cloud {
 };
 
 /**
- * @brief Manages the state of an image
+ * @brief Manages the state of an image.
  */
 class Image {
     bool position_changed_{false};
@@ -580,6 +580,7 @@ class Image {
     size_t mask_width_{0};
     size_t mask_height_{0};
     std::vector<float> mask_data_{};
+    float hshift_{0}; // in normalized screen coordinates [-1. 1]
 
    public:
     /**
@@ -588,14 +589,14 @@ class Image {
     Image();
 
     /**
-     * Clear dirty flags
+     * Clear dirty flags.
      *
      * Resets any changes since the last call to PointViz::update()
      */
     void clear();
 
     /**
-     * Set the image data
+     * Set the image data.
      *
      * @param[in] width width of the image data in pixels
      * @param[in] height height of the image data in pixels
@@ -605,7 +606,7 @@ class Image {
     void set_image(size_t width, size_t height, const float* image_data);
 
     /**
-     * Set the RGBA mask
+     * Set the RGBA mask.
      *
      * Not required to be the same resolution as the image data
      *
@@ -617,7 +618,7 @@ class Image {
     void set_mask(size_t width, size_t height, const float* mask_data);
 
     /**
-     * Set the display position of the image
+     * Set the display position of the image.
      *
      * TODO: this is super weird. Coordinates are {x_min, x_max, y_max, y_min}
      * in sort-of normalized screen coordinates: y is in [-1, 1], and x uses the
@@ -633,11 +634,29 @@ class Image {
      */
     void set_position(float x_min, float x_max, float y_min, float y_max);
 
+    /**
+     * Set horizontal shift in normalized viewport screen width coordinate.
+     *
+     * This may be used to "snap" images to the left/right screen edges.
+     *
+     * Some example values:
+     *    0 - default, image is centered horizontally on the screen
+     * -0.5 - image moved to the left for the 1/4 of a horizontal viewport
+     *   -1 - image moved to the left for the 1/2 of a horizontal viewport
+     *   +1 - image moved to the right for the 1/2 of a horizontal viewport
+     * +0.5 - image moved to the right for the 1/4 of a horizontal viewport
+     * 
+     * @param[in] hshift shift in normalized by width coordinates from 0 at
+     * the center [-1.0..1.0]
+     * 
+     */
+    void set_hshift(float hshift);
+
     friend class impl::GLImage;
 };
 
 /**
- * @brief Manages the state of a single cuboid
+ * @brief Manages the state of a single cuboid.
  */
 class Cuboid {
     bool transform_changed_{false};
@@ -653,23 +672,23 @@ class Cuboid {
     Cuboid(const mat4d& transform, const vec4f& rgba);
 
     /**
-     * Clear dirty flags
+     * Clear dirty flags.
      *
      * Resets any changes since the last call to PointViz::update()
      */
     void clear();
 
     /**
-     * Set the transform defining the cuboid
+     * Set the transform defining the cuboid.
      *
-     * Applied to a unit cube centered at the origin
+     * Applied to a unit cube centered at the origin.
      *
      * @param[in] pose @todo document me
      */
     void set_transform(const mat4d& pose);
 
     /**
-     * Set the color of the cuboid
+     * Set the color of the cuboid.
      *
      * @param rgba @todo document me
      */
@@ -679,7 +698,7 @@ class Cuboid {
 };
 
 /**
- * @brief Manages the state of a text label
+ * @brief Manages the state of a text label.
  */
 class Label {
     bool pos_changed_{false};
@@ -687,58 +706,71 @@ class Label {
     bool text_changed_{false};
     bool is_3d_{false};
     bool align_right_{false};
+    bool align_top_{false};
+    bool rgba_changed_{true};
 
     vec3d position_{};
     float scale_{1.0};
     std::string text_{};
+
+    vec4f rgba_{1.0, 1.0, 1.0, 1.0};
 
    public:
     /**
      * @todo document me
      */
     Label(const std::string& text, const vec3d& position);
-
     /**
      * @todo document me
      */
-    Label(const std::string& text, float x, float y, bool align_right = false);
+    Label(const std::string& text, float x, float y, bool align_right = false,
+          bool align_top = false);
 
     /**
-     * Clear dirty flags
+     * Clear dirty flags.
      *
      * Resets any changes since the last call to PointViz::update()
      */
     void clear();
 
     /**
-     * Update label text
+     * Update label text.
      *
      * @param[in] text new text to display
      */
     void set_text(const std::string& text);
 
     /**
-     * Set label position
+     * Set label position.
      *
      * @param[in] position 3d position of the label
      */
     void set_position(const vec3d& position);
 
     /**
-     * Set position of the bottom left corner of the label
+     * Set position of the 2D label.
      *
      * @param[in] x horizontal position [0, 1]
      * @param[in] y vertical position [0, 1]
-     * @param[in] align_right interpret position as bottom right corner
+     * @param[in] align_right interpret position as right of the label
+     * @param[in] align_top interpret position as top of the label
      */
-    void set_position(float x, float y, bool align_right = false);
+    void set_position(float x, float y, bool align_right = false,
+                      bool align_top = false);
 
     /**
-     * Set scaling factor of the label
+     * Set scaling factor of the label.
      *
      * @param[in] scale text scaling factor
      */
     void set_scale(float scale);
+
+    /**
+     * Set the color of the label.
+     * 
+     * @param[in] rgba color in RGBA format
+     */
+    void set_rgba(const vec4f& rgba);
 
     friend class impl::GLLabel;
 };

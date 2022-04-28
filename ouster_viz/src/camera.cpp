@@ -140,7 +140,7 @@ void Camera::set_proj_offset(float x, float y) {
 }
 
 /*
- * Calculate camera matrices
+ * Calculate camera matrices.
  *
  * View is relative to target 'look at' point. Current parametrization is:
  * - view_offset: translation to support dollying left/right

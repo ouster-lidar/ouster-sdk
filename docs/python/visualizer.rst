@@ -72,5 +72,5 @@ Keyboard controls:
 ..
    [end-simple-viz-keymap]
 
-For usage and other options, run ``./simple_viz -h``
+For usage and other options, run ``simple-viz -h``
 

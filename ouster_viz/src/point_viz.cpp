@@ -262,6 +262,11 @@ void PointViz::draw() {
         // draw labels and images on top of everything
         glClear(GL_DEPTH_BUFFER_BIT);
 
+        // draw image
+        impl::GLImage::beginDraw();
+        pimpl->images.draw(ctx, camera_data);
+        impl::GLImage::endDraw();
+
         // draw labels
         impl::GLLabel::beginDraw();
         pimpl->labels.draw(ctx, camera_data);
@@ -269,11 +274,6 @@ void PointViz::draw() {
 
         // switch back to point viz vao
         glBindVertexArray(pimpl->vao);
-
-        // draw image
-        impl::GLImage::beginDraw();
-        pimpl->images.draw(ctx, camera_data);
-        impl::GLImage::endDraw();
 
         // mark front buffers no longer dirty
         pimpl->front_changed = false;
@@ -505,6 +505,11 @@ void Image::set_position(float x_min, float x_max, float y_min, float y_max) {
     position_changed_ = true;
 }
 
+void Image::set_hshift(float hshift) {
+    hshift_ = hshift;
+    position_changed_ = true;
+}
+
 Cuboid::Cuboid(const mat4d& pose, const std::array<float, 4>& rgba) {
     set_transform(pose);
     set_rgba(rgba);
@@ -530,15 +535,17 @@ Label::Label(const std::string& text, const vec3d& position) {
     set_position(position);
 }
 
-Label::Label(const std::string& text, float x, float y, bool align_right) {
+Label::Label(const std::string& text, float x, float y, bool align_right,
+             bool align_top) {
     set_text(text);
-    set_position(x, y, align_right);
+    set_position(x, y, align_right, align_top);
 }
 
 void Label::clear() {
     text_changed_ = false;
     pos_changed_ = false;
     scale_changed_ = false;
+    rgba_changed_ = false;
 }
 
 void Label::set_position(const vec3d& position) {
@@ -547,9 +554,10 @@ void Label::set_position(const vec3d& position) {
     is_3d_ = true;
 }
 
-void Label::set_position(float x, float y, bool align_right) {
+void Label::set_position(float x, float y, bool align_right, bool align_top) {
     position_ = {x, y, 0};
     align_right_ = align_right;
+    align_top_ = align_top;
     pos_changed_ = true;
     is_3d_ = false;
 }
@@ -562,6 +570,11 @@ void Label::set_scale(float scale) {
 void Label::set_text(const std::string& text) {
     text_ = text;
     text_changed_ = true;
+}
+
+void Label::set_rgba(const std::array<float, 4>& rgba) {
+    rgba_ = rgba;
+    rgba_changed_ = true;
 }
 
 void TargetDisplay::enable_rings(bool state) { rings_enabled_ = state; }

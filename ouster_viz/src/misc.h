@@ -112,6 +112,9 @@ class GLLabel {
     bool is_3d;
     float scale;
     int halign;
+    int valign;
+
+    std::array<float, 4> rgba;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
