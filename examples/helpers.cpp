@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "helpers.h"
 
 using namespace ouster::sensor;

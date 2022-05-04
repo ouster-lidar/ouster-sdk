@@ -27,3 +27,16 @@ when needed on the page as strikethrough text
 .sphinx-tabs div[class^=highlight] {
   margin-bottom: 4px;
 }
+
+/* Tweaks for TOC distances in the lists */
+.rst-content .document .section .toctree-wrapper .toctree-l1 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l2 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l3 > ul {
+  margin-top: 4px;
+}
+
+.rst-content .document .section .toctree-wrapper .toctree-l1 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l2 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l3 > ul {
+  margin-bottom: 4px;
+}

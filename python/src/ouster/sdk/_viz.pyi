@@ -1,4 +1,9 @@
-"""Type annotations for viz python bindings."""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Type annotations for viz python bindings.
+"""
 
 from typing import Callable, overload, Tuple
 
@@ -119,6 +124,9 @@ class Image:
     def set_position(self, x0: float, x1: float, y0: float, y1: float) -> None:
         ...
 
+    def set_hshift(self, hshift: float) -> None:
+        ...
+
 
 class Cuboid:
 
@@ -143,7 +151,8 @@ class Label:
                  text: str,
                  x: float,
                  y: float,
-                 align_right: bool = ...) -> None:
+                 align_right: bool = ...,
+                 align_top: bool = ...) -> None:
         ...
 
     def set_text(self, text: str) -> None:
@@ -163,6 +172,9 @@ class Label:
     def set_scale(self, scale: float) -> None:
         ...
 
+    def set_rgba(self, rgba: Tuple[float, ...]) -> None:
+        ...
+
 
 class PointViz:
 
@@ -174,6 +186,9 @@ class PointViz:
         ...
 
     def run(self) -> None:
+        ...
+
+    def run_once(self) -> None:
         ...
 
     @overload

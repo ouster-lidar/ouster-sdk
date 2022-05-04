@@ -1,4 +1,8 @@
-"""Tests for lidar data parsing.
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Tests for lidar data parsing.
 
 Checks that the output of parsing hasn't changed unexpectedly.
 """

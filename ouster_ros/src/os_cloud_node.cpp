@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2019, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Example node to publish point clouds and imu topics
  */

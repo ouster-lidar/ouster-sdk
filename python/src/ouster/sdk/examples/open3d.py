@@ -1,4 +1,9 @@
-"""Ouster Open3D visualizer"""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Ouster Open3D visualizer
+"""
 import time
 
 from more_itertools import consume, nth

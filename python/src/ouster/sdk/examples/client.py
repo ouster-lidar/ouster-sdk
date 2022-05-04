@@ -1,4 +1,8 @@
-"""Executable examples for using the sensor client APIs.
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Executable examples for using the sensor client APIs.
 
 This module has a rudimentary command line interface. For usage, run::
 
@@ -208,13 +212,14 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     plt.title("3D Points from {}".format(hostname))
 
     # [doc-stag-plot-xyz-points]
-    # transform data to 3d points and graph
+    # transform data to 3d points
     xyzlut = client.XYZLut(metadata)
     xyz = xyzlut(scan.field(client.ChanField.RANGE))
+    # [doc-etag-plot-xyz-points]
 
+    # graph xyz
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     ax.scatter(x, y, z, c=z / max(z), s=0.2)
-    # [doc-etag-plot-xyz-points]
     plt.show()
 
 

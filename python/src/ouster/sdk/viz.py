@@ -1,7 +1,12 @@
-"""Sensor data visualization tools.
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Sensor data visualization tools.
 
 Visualize lidar data using OpenGL.
 """
+
 from collections import (defaultdict, deque)
 from functools import partial
 import threading

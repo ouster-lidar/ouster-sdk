@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>ouster_ros</name>
-  <version>0.3.0</version>
+  <version>0.3.1</version>
   <description>Ouster example ROS client</description>
   <maintainer email="oss@ouster.io">ouster developers</maintainer>
   <license>BSD</license>

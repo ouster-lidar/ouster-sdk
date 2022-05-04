@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2020, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Compatibility with windows (unsupported)
  */
@@ -47,7 +50,7 @@ namespace impl {
 
 /**
  * Close a specified socket
- * @param sock The socket file descriptor to close
+ * @param[in] sock The socket file descriptor to close
  * @return success
  */
 int socket_close(SOCKET sock);
@@ -60,7 +63,7 @@ std::string socket_get_error();
 
 /**
  * Check if a socket file descriptor is valid
- * @param sock The socket file descriptor to check
+ * @param[in] value The socket file descriptor to check
  * @return The validity of the socket file descriptor
  */
 bool socket_valid(SOCKET value);
@@ -73,21 +76,22 @@ bool socket_exit();
 
 /**
  * Set a specified socket to non-blocking
- * @param sock The socket file descriptor to set non-blocking
+ * @param[in] value The socket file descriptor to set non-blocking
  * @return success
  */
 int socket_set_non_blocking(SOCKET value);
 
 /**
  * Set a specified socket to reuse
- * @param sock The socket file descriptor to set reuse
+ * @param[in] value The socket file descriptor to set reuse
  * @return success
  */
 int socket_set_reuse(SOCKET value);
 
 /**
  * Set SO_RCVTIMEO on the specified socket
- * @param sock The socket file descriptor
+ * @param[in] sock The socket file descriptor
+ * @param[in] timeout_sec Timeout esconds
  * @return success
  */
 int socket_set_rcvtimeout(SOCKET sock, int timeout_sec);

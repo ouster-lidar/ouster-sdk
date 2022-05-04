@@ -6,7 +6,6 @@ To facilitate working with the Ouster C++ SDK, we provide these examples of comm
 examples explained below are compiled into executables which print to screen to demonstratre
 behavior. Build with ``BUILD_EXAMPLES`` and print to screen to demonstrate behavior.
 
-
 Sensor Configuration
 --------------------
 
@@ -25,6 +24,7 @@ If there are no errors, you should see a printout in five parts.
 Let's look at the first step, where we get the configuration of the sensor as it starts:
 
 .. literalinclude:: /../examples/config_example.cpp
+    :language: cpp
     :start-after: [doc-stag-cpp-get-config]
     :end-before: [doc-etag-cpp-get-config]
     :dedent:
@@ -38,6 +38,7 @@ sets the config, and false otherwise.
 In the second step, we create a new config:
 
 .. literalinclude:: /../examples/config_example.cpp
+    :language: cpp
     :start-after: [doc-stag-cpp-make-config]
     :end-before: [doc-etag-cpp-make-config]
     :dedent:
@@ -48,68 +49,71 @@ sensor. In addition, there are two config flags, for automatic udp destination s
 persistence which can be set as above. The automatic udp destination flag cannot be set when
 ``config.udp_dest`` is set, as those conflict.
 
+
+.. _ex-cpp-lidarscan:
+
+
 Working with LidarScans
 -----------------------
 
-The :cpp:class:`ouster::LidarScan` class, implemented in ``ouster_client``, is a convenience class for
-efficient operations on aggregated lidar data. In this example, we cover the
-various constructors and batching data into LidarScans.
-
-To run this example:
-
-.. code::
-    
-    lidar_scan_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
+The :cpp:class:`ouster::LidarScan` is explained in depth conceptually in the `LidarScan reference
+<reference/lidar-scan>`_. Here we cover some specifics that will be useful for C++ developers.
 
 
 LidarScan constructors
 ++++++++++++++++++++++
-The :cpp:class:`LidarScan` class has several constructors. Of foremost interest is constructing the
-``LidarScan`` which contains all data coming from your sensor. You can do this by specifying the
-``udp_proflie_lidar`` in your ``sensor_info``, or by directly specifying the profile you care about.
+
+Of foremost interest when using a :cpp:class:`LidarScan` is constructing a ``LidarScan`` which suits
+your needs.
+
+The simplest (and most common) method is to construct one to contain all data coming from your
+sensor. You can do this by specifying the ``udp_proflie_lidar`` in your ``sensor_info``, or by
+directly specifying the profile you care about.
+
+For example, see the two snippets below:
 
 .. literalinclude:: /../examples/lidar_scan_example.cpp
-    :start-after: [doc-stag-lidarscan-constructor]
-    :end-before: [doc-etag-lidarscan-constructor]
+    :language: cpp
+    :start-after: [doc-stag-lidarscan-profile-constructor]
+    :end-before: [doc-etag-lidarscan-profile-constructor]
+    :dedent:
+ 
+.. literalinclude:: /../examples/lidar_scan_example.cpp
+    :language: cpp
+    :start-after: [doc-stag-lidarscan-dual-profile-constructor]
+    :end-before: [doc-etag-lidarscan-dual-profile-constructor]
     :dedent:
 
- 
 But suppose you don't care about some of the data, such as the ambient and signal fields. You can
 also specify to your LidarScan to only batch the relevant fields like so:
 
-
 .. literalinclude:: /../examples/lidar_scan_example.cpp
+    :language: cpp
     :start-after: [doc-stag-lidarscan-reduced-slots]
     :end-before: [doc-etag-lidarscan-reduced-slots]
     :dedent:
 
+To see this in action, you can run the example executable ``lidar_scan_example``:
 
-LidarScan fields and headers
-++++++++++++++++++++++++++++
-Now let's look at how to access the relevant information from a ``LidarScan`` when it's relevant:
+.. code::
+    
+    $ lidar_scan_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
-The column header information on each measurement block is aggregated in the scan and accessible as
-a W-element vector. Note that if you use an azimuth_window, then those values in the header outside
-the azimuth window will be 0'd out accordingly.
-
-.. literalinclude:: /../examples/lidar_scan_example.cpp
-    :start-after: [doc-stag-lidarscan-fields-headers]
-    :end-before: [doc-etag-lidarscan-fields-headers]
-    :dedent:
-
-Finally, when you're working with a ``LidarScan``, you may wish to iterate through the fields. You can
-do so with an iterator:
-
-.. literalinclude:: /../examples/lidar_scan_example.cpp
-    :start-after: [doc-stag-cpp-lidarscan-iter]
-    :end-before: [doc-etag-cpp-lidarscan-iter]
-    :dedent:
+The source code of ``lidar_scan_example`` is available `here <https://github.com/ouster-lidar/ouster_example/blob/master/examples/lidar_scan_example.cpp>`_.
 
 
 2D Representations and 3D representations
-------------------
+-----------------------------------------
 
-.. todo :: Finish section
+.. todo:: 
+    better to store the 2D and 3D code here and reference it from the LidarScan reference and just
+    cover it twice
+
+The core destaggering and projection to 3D capabilities are demonstrated in the
+``representations_example`` executable.
+
+Here we will cover slightly more sophisticated ways of working with the data also demonstrated in
+that example.
 
 To run this example:
 
@@ -117,39 +121,42 @@ To run this example:
     
     representations_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
-
-Getting XYZ Coordinates
-+++++++++++++++++++++++
-Now we're reading to look more closely at getting XYZ coordinates
-
-.. literalinclude:: /../examples/lidar_scan_example.cpp
-    :start-after: [doc-stag-cpp-xyz]
-    :end-before: [doc-etag-cpp-xyz]
-    :dedent:
-
-Adjusting XYZLut With External Matrix
-+++++++++++++++++++++++++++++++++++++
-
-
-Destaggering a field
-++++++++++++++++++++
-
+The source code of ``representations_example`` is available `on the github <https://github.com/ouster-lidar/ouster_example/blob/master/examples/representations_example.cpp>`_.
 
 
 Reshaping XYZ to 2D
 +++++++++++++++++++
 
-Combining our knowledge in obtaining XYZ coordinates and destaggering example code:
+Users may find that they wish to access the ``x``, ``y``, and ``z`` coordinates of a single return
+in a similar way. As the conversiton to cartesian coordinates returns an ``Eigen::Array`` ``n x 3``,
+with ``n = w * h``, reshaping the resulting array is necessary. 
 
-ex: get_x_in_image_form
+We can combine our knowledge in projecting into cartesian coordinates and destaggering using the
+following function:
 
-LidarScan fields are w x h Eigen arrays where returns are accessible by their row and column index.
-For example, the reflectivity return from the 10th beam at the 500th column would be accessible at
-reflectivity(10, 500).
- 
-Users may find that they wish to access the x, y, and z coordinates of a single return in a similar
-way. As the conversiton to xyz returns an Eigen array of n x 3, with n = w * h, reshaping the
-resulting values is necessary. This function demonstrates that capability given a LidarScan for the
-x coordinate, with y and z easily derivable using their respective columns of the cloud.
+.. literalinclude:: /../examples/representations_example.cpp
+    :language: cpp
+    :start-after: [docs-stag-x-image-form]
+    :end-before: [docs-etag-x-image-form]
+    :dedent:
+
+This demonstrates the functionality with ``x``, but it can be easily expanded to cover ``y`` and
+``z`` as well.
+
+
+Adjusting XYZLut With External Matrix
++++++++++++++++++++++++++++++++++++++
+
+Users may find that they wish to apply an extra transform while projecting to cartesian coordinates.
+Such a transform, likely an extrinsics matrix of some sort, can be baked into the
+:cpp:struct:`ouster::XYZLut` created with :cpp:func:`ouster::make_xyz_lut`. 
+
+In the following code, ``transformation`` represents the extrinsincs transform:
+
+.. literalinclude:: /../examples/representations_example.cpp
+    :language: cpp
+    :start-after: [doc-stag-extrinsics-to-xyzlut]
+    :end-before: [doc-etag-extrinsics-to-xyzlut]
+    :dedent:
 
 

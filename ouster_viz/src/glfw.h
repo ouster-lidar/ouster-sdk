@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #pragma once
 
 #ifdef OUSTER_VIZ_GLEW

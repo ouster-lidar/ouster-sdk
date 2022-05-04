@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #pragma once
 
 #include <Eigen/Core>
@@ -107,6 +112,9 @@ class GLLabel {
     bool is_3d;
     float scale;
     int halign;
+    int valign;
+
+    std::array<float, 4> rgba;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

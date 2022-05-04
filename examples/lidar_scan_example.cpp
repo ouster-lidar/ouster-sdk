@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ *
+ * This file contains example code for working with the LidarScan class of the
+ * C++ Ouster SDK. Please see the sdk docs at static.ouster.dev for clearer
+ * explanations.
+ */
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -28,20 +36,24 @@ int main(int argc, char* argv[]) {
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
 
-    //! [doc-stag-lidarscan-constructor]
     // specifyiing only w and h for lidar scan creates one using the LEGACY udp
     // profile
+    //! [doc-stag-lidarscan-default-constructor]
     auto legacy_scan = ouster::LidarScan(w, h);
+    //! [doc-etag-lidarscan-default-constructor]
 
     // You can also create a LidarScan by providing a lidar profile, avilable
     // through the sensor_info
+    //! [doc-stag-lidarscan-profile-constructor]
     auto profile_scan = ouster::LidarScan(w, h, info.format.udp_profile_lidar);
+    //! [doc-etag-lidarscan-profile-constructor]
 
     // You might have a dual returns sensor, in which case your profile will
     // reflect that it is a dual return profile:
+    //! [doc-stag-lidarscan-dual-profile-constructor]
     auto dual_returns_scan = ouster::LidarScan(
         w, h, UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL);
-    //! [doc-etag-lidarscan-constructor]
+    //! [doc-etag-lidarscan-dual-profile-constructor]
 
     //! [doc-stag-lidarscan-reduced-slots]
     // Finally, you can construct by specifying fields directly
@@ -62,16 +74,18 @@ int main(int argc, char* argv[]) {
     ouster::sensor_utils::replay_uninitialize(*handle);
 
     // Headers
-    //! [doc-stag-lidarscan-fields-headers]
+    auto frame_id = dual_returns_scan.frame_id;
+    //! [doc-stag-lidarscan-cpp-headers]
     auto ts = dual_returns_scan.timestamp();
     auto status = dual_returns_scan.status();
     auto measurement_id = dual_returns_scan.measurement_id();
-    auto frame_id = dual_returns_scan.frame_id;
+    //! [doc-etag-lidarscan-cpp-headers]
 
     // to access a field:
+    //! [doc-stag-lidarscan-cpp-fields]
     auto range = dual_returns_scan.field(ChanField::RANGE);
     auto range2 = dual_returns_scan.field(ChanField::RANGE);
-    //! [doc-etag-lidarscan-fields-headers]
+    //! [doc-etag-lidarscan-cpp-fields]
 
     std::cerr
         << "\nPrinting first element of received scan headers\n\tframe_id : "
@@ -93,14 +107,16 @@ int main(int argc, char* argv[]) {
                   << std::endl;
     }
 
-    std::cerr << "\nLet's see what's in each of these scans" << std::endl;
-    // If you want to ierate through the available fields, you can use an
+    std::cerr << "\nLet's see what's in each of these scans!" << std::endl;
+    // If you want to iterate through the available fields, you can use an
     // iterator
     auto print_el = [](ouster::LidarScan& scan, std::string label) {
-        std::cerr << "Printing fields of " << label << "...\t";
+        std::cerr << "Available fields in " << label << "...\n";
         //! [doc-stag-cpp-scan-iter]
         for (auto it = scan.begin(); it != scan.end(); it++) {
-            std::cerr << "\n\t" << to_string(it->first) << "\t";
+            auto field = it->first;
+            // auto field_type = it->second;
+            std::cerr << "\t" << to_string(field) << "\n ";
         }
         //! [doc-etag-cpp-scan-iter]
         std::cerr << std::endl;

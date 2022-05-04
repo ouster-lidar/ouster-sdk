@@ -1,3 +1,9 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ *
+ */
+
 #include "ouster/os_pcap.h"
 
 #include <stddef.h>
