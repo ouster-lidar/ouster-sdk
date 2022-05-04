@@ -385,10 +385,17 @@ def main():
         print(f"Metadata file does not exist: {args.metadata_path}")
         exit(1)
 
-    print(f'example: {args.example}')
-
     with open(args.metadata_path, 'r') as f:
         metadata = client.SensorInfo(f.read())
+
+    if (metadata.format.udp_profile_lidar != client.UDPProfileLidar.PROFILE_LIDAR_LEGACY 
+            and metadata.format.udp_profile_lidar != 
+            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16 and args.example != 'query-scan'):
+        print(f"This pcap example is only for pcaps of sensors in LEGACY or SINGLE RETURN mode. Exiting...")
+        exit(1)
+
+    print(f'example: {args.example}')
+
     source = pcap.Pcap(args.pcap_path, metadata)
 
     with closing(source):

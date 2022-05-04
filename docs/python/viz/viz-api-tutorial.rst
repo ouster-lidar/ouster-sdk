@@ -6,8 +6,8 @@ PointViz Tutorial & API Usage
    :local:
 
 
-Environment and Gneneral Setup
-==============================
+Environment and General Setup
+=============================
 
 In this interactive tutorial we explore the Python bindings of the :class:`.viz.PointViz` and how we
 can use it programmatically to visualize various 2D and 3D scenes.
@@ -29,15 +29,16 @@ Let's start the tutorial::
 
     python3 -m ouster.sdk.examples.viz $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH
 
-Now you can proceed through each example, labeled by numbers to match the your screen output.
+Now you can proceed through each example, labeled by numbers to match your screen output.
 
 Creating an empty ``PointViz`` window
 =====================================
 
 :class:`.viz.PointViz` is the main entry point to the Ouster visualizer, and it keeps track of the
-windows state, runs the main visualizations loop, and handles mouse and keyboard events.
+window state, runs the main visualizations loop, and handles mouse and keyboard events.
 
-To create it ( and see a black screen as nothing has been added), you can try the following:
+To create the PointViz window (and see a black screen as nothing has been added), you can try the
+following:
 
 .. literalinclude:: /../python/src/ouster/sdk/examples/viz.py
     :start-after: [doc-stag-empty-pointviz]
@@ -204,8 +205,9 @@ Expected result:
 
 .. note::
 
-    Yes, we know, it's a little bit weird to have different 2D coordinate systems for
-    :class:`.viz.Image` and :class:`.viz.Label` so we may revisit these in the future.
+    Currently the :class:`.viz.Image` has a different 2D coordinate system than the
+    :class:`.viz.Label`. This is likely to change in the future.
+
 
 Point Clouds: the ``Cloud`` object
 ==================================

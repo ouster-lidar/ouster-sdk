@@ -54,28 +54,4 @@
 .. include:: overview.rst
 
 
-All TODOs
-==========
-
-**REMOVE THIS "All TODOs" SECTION WHEN WE ARE DONE WITH DOCS!!!!**
-
-.. note::
-
-   Proposed versioning for the public release:
-
-   - Python ``ouster-sdk`` is ``0.4.0``
-   - C++ version in main ``ouster-sdk/CMakeLists.txt`` and a tag in Github ``ouster_example`` repo is ``v2.3.0``
-   - ``ouster_client`` version in ``ouster_client/CMakeLists.txt`` is ``0.4.0``
-   - bump ouster_ros to 0.3.1 or smthg
-
-.. note::
-
-   Future Changes to Ouster SDK that we want to announce sooner:
-
-   - Github ``ouster_example`` repo will be renamed to ``ouster-sdk``
-   - Python 3.6 support will be removed in ``ouster-sdk``
-   - C++ 17 will be required for C++ and for Python bindings
-   - drop Ubuntu 16.04 / ros kinetic support
-   - what else?
-
 .. todolist:: 

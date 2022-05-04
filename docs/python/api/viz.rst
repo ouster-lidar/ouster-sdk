@@ -28,10 +28,10 @@ Core
 .. autoclass:: SimpleViz
    :members:
 
-.. autoattribute:: spezia_palette
+.. autoattribute:: ouster.sdk.viz.spezia_palette
    :annotation: = spezia colors
 
-.. autoattribute:: calref_palette
+.. autoattribute:: ouster.sdk.viz.calref_palette
    :annotation: = calref colors
 
 
