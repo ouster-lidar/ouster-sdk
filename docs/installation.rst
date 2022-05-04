@@ -115,7 +115,7 @@ To get a feel for working with the Ouster Sensor Python API, check out the follo
 
 - :doc:`Download and Visualize Sample Data <sample-data>`
 - :doc:`python/quickstart`
-- :doc:`python/visualizer`
+- :doc:`python/viz/viz-api-tutorial`
 
 
 C++

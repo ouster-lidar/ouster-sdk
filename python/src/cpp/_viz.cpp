@@ -104,6 +104,10 @@ PYBIND11_PLUGIN(_viz) {
              called from another thread or when the visualizer window is closed.
         )")
 
+        .def("run_once", &viz::PointViz::run_once,
+             "Run one iteration of the main loop for rendering and input "
+             "handling.")
+
         .def("running", py::overload_cast<>(&viz::PointViz::running),
              "Check if the rendering loop is running.")
 
@@ -312,7 +316,10 @@ PYBIND11_PLUGIN(_viz) {
         .def(
             "set_mask",
             [](viz::Cloud& self, py::array_t<float> mask) {
-                check_array(mask, self.get_size() * 4, 3, 'C');
+                check_array(mask, self.get_size() * 4, 0, 'C');
+                if (mask.ndim() != 2 && mask.ndim() != 3)
+                    throw std::invalid_argument(
+                        "Expected an array of dimensions: 2 or 3");
                 self.set_mask(mask.data());
             },
             py::arg("mask"),
@@ -520,7 +527,7 @@ PYBIND11_PLUGIN(_viz) {
 
                  Args:
                     text: label text
-                    x,y: label 2D location in screen coords ``[0..1]``
+                    x,y: label 2D location in screen coords ``[0..1]``, corresponding to top left corner of label
                     align_right: if ``True`` - anchor point of the label is the right side
                     align_top: if ``True`` - anchor point of the label is the top side
              )")
@@ -540,7 +547,7 @@ PYBIND11_PLUGIN(_viz) {
             R"(
                 ``def set_position(self, x: float, y: float, z: float) -> None:``
 
-                 Set label position.
+                 Set label position. Position correspnods to top left (viewer's left) of label.
 
                  Args:
                     x,y,z: label position in 3D

@@ -38,6 +38,12 @@ Open3D Examples :mod:`ouster.sdk.examples.open3d`
 
 ----
 
+``PointViz`` Examples :mod:`ouster.sdk.examples.viz`
+====================================================
+
+.. automodule:: ouster.sdk.examples.viz
+   :members:
+
 
 Reference Code :mod:`ouster.sdk.examples.reference`
 ===================================================

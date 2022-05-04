@@ -188,6 +188,9 @@ class PointViz:
     def run(self) -> None:
         ...
 
+    def run_once(self) -> None:
+        ...
+
     @overload
     def running(self) -> bool:
         ...

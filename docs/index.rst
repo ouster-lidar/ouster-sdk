@@ -13,7 +13,7 @@
 
    Developer Quick Start <python/quickstart>
    Examples <python/examples/index>
-   Point Cloud Visualizer <python/visualizer>
+   Point Cloud Visualizer <python/viz/index>
    Developing <python/devel>
 
 .. toctree::

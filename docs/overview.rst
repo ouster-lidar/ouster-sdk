@@ -26,6 +26,11 @@ Quick links
 * :doc:`cpp/building`
 * :doc:`ros/index`
 
+.. figure:: /images/simple-viz.png
+    :align: center
+
+* :doc:`python/viz/index`
+
 Status and Contact Info
 -----------------------
 

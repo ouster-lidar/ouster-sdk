@@ -58,6 +58,12 @@ You should get a view similar to:
 
     Ouster ``simple-viz`` visualization of OS1 128 Rev 6 sample data
 
+You can control your visualizer with mouse and keyboard:
+
+.. include:: /python/viz/viz-run.rst
+    :start-after: [start-simple-viz-keymap]
+    :end-before: [end-simple-viz-keymap]
+
 Congratulations! You've installed and visualized with the Ouster Python SDK!
 
-For more on ``simple-viz``, please see :doc:`python/visualizer`
+For more on ``simple-viz``, please see :doc:`python/viz/viz-run`

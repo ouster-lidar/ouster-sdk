@@ -73,7 +73,7 @@ class Indexed {
 
     void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
         for (auto& f : front) {
-            if (!f.state) continue;                   // skip deleted
+            if (!f.state) continue;  // skip deleted
             if (!f.gl) f.gl.reset(new GL{*f.state});  // init GL for added
             f.gl->draw(ctx, camera, *f.state);
         }
@@ -367,6 +367,15 @@ Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
       off_data_(3 * n_, 0),
       transform_data_(12 * w, 0),
       palette_data_(3 * n_, 0) {
+    // set everything to changed so on GLCloud object reuse we properly draw
+    // everything first time
+    range_changed_ = true;
+    key_changed_ = true;
+    mask_changed_ = true;
+    xyz_changed_ = true;
+    offset_changed_ = true;
+    point_size_changed_ = true;
+
     // initialize per-column poses to identity
     for (size_t v = 0; v < w; v++) {
         transform_data_[3 * v] = 1;

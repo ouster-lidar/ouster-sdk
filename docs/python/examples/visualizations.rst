@@ -29,7 +29,7 @@ both returns are displayed by default.
 
 The visualizer can be controlled with mouse and keyboard:
 
-.. include:: /python/visualizer.rst
+.. include:: /python/viz/viz-run.rst
     :start-after: [start-simple-viz-keymap]
     :end-before: [end-simple-viz-keymap]
 
@@ -43,6 +43,13 @@ previously set on the sensor.
 To run the visualizer with a pcap::
 
     $ simple-viz --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH
+
+
+Visualization with Ouster's :class:`.viz.PointViz`
+===================================================
+
+Please refer to :doc:`/python/viz/viz-api-tutorial` for details on extending and customizing
+:class:`.viz.PointViz`.
 
 
 .. _ex-open3d:

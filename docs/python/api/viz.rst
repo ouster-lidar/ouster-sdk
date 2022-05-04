@@ -6,7 +6,11 @@ Module :mod:`ouster.sdk.viz`
    :local:
    :depth: 4
 
-.. automodule:: ouster.sdk.viz
+.. py:currentmodule:: ouster.sdk.viz
+
+Ouster sensor data visualization tools. Implemented in C++ OpenGL and wrapped with Python bindings.
+
+For additional information please refer to :doc:`/python/viz/viz-api-tutorial`.
 
 ----
 
