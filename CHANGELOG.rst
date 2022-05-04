@@ -2,11 +2,13 @@
 Changelog
 =========
 
-[unreleased]
-============
+[20220504]
+===========
 
 * update supported vcpkg tag to 2022.02.23
 * update to manylinux2014 for x64 linux ``ouster-sdk`` wheels
+* Ouster SDK documentation overhaul with C++/Python APIs in one place
+* sample data updated to firmware 2.3
 
 ouster_client
 -------------
@@ -36,6 +38,10 @@ python
 * the ``ouster-sdk`` package now includes an example visualizer, ``simple-viz``, which will be
   installed on that path for the Python environment
 
+ouster_ros
+-----------
+* support new fw 2.3 profiles by checking for inclusion of fields when creating point cloud. Missing
+  fields are filled with zeroes
 
 [20220107]
 ============

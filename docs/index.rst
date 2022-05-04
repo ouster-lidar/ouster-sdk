@@ -1,49 +1,57 @@
 .. title:: Ouster SDK
 
 .. toctree::
-   :caption: Main:
    :hidden:
 
-   Intro <self>
-   Changelog <python/changelog>
-
+   Ouster SDK Overview <self>
+   Installation <installation>
+   Download and Visualize Sample Data <sample-data>
+   
 .. toctree::
-   :caption: Python
+   :caption: Python Guide
    :hidden:
 
-   Overview <python/index.rst>
-   Installation <python/installation>
-   Quick Start <python/quickstart>
+   Developer Quick Start <python/quickstart>
+   Examples <python/examples/index>
+   Point Cloud Visualizer <python/viz/index>
    Developing <python/devel>
-   Examples & Concepts <python/examples>
-   API Reference <python/api>
 
 .. toctree::
-   :caption: C++
+   :caption: C++ Guide
    :hidden:
 
-   C++ README <cpp/index.rst>
-   C++ examples <cpp/examples.rst>
-   C++ API reference <cpp/api.rst>
+   Build <cpp/building.rst>
+   Examples <cpp/examples.rst>
 
 .. toctree::
+   :caption: ROS1 Guide
    :hidden:
-   :caption: External Links:
 
-   Source Code <https://github.com/ouster-lidar/ouster_example>
-   Issue Tracker <https://github.com/ouster-lidar/ouster_example/issues>
-   Sensor Documentation <https://data.ouster.io/downloads/software-user-manual/software-user-manual-v2.2.x.pdf>
-   Sample Data <https://ouster.com/resources/lidar-sample-data/>
+   Build and Use <ros/index.rst>
+
+.. toctree::
+   :caption: SDK Reference
+   :hidden:
+
+   Lidar Scan API <reference/lidar-scan>
+   Python API Reference <python/api/index>
+   C++ API Reference <cpp/api>
+   Changelog <reference/changelog>
 
 ..
    FAQ <faq>
 
+.. toctree::
+   :hidden:
+   :caption: External Links
+
+   Source Code <https://github.com/ouster-lidar/ouster_example>
+   Issue Tracker <https://github.com/ouster-lidar/ouster_example/issues>
+   Sensor Documentation <https://static.ouster.dev/sensor-docs/>
+   More Sample Data <https://ouster.com/resources/lidar-sample-data/>
+
+
 .. include:: overview.rst
 
-
-All TODOs
-==========
-
-**REMOVE THIS "All TODOs" SECTION WHEN WE ARE DONE WITH DOCS!!!!**
 
 .. todolist:: 

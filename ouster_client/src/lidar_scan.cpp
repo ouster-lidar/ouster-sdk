@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/lidar_scan.h"
 
 #include <Eigen/Core>
@@ -92,9 +97,11 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
 
 }  // namespace impl
 
+// specify sensor:: namespace for doxygen matching
 LidarScan::LidarScan(
     size_t w, size_t h,
-    std::vector<std::pair<ChanField, ChanFieldType>> field_types)
+    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
+        field_types)
     : timestamp_{Header<uint64_t>::Zero(w)},
       measurement_id_{Header<uint16_t>::Zero(w)},
       status_{Header<uint32_t>::Zero(w)},
@@ -110,7 +117,7 @@ LidarScan::LidarScan(
     }
 }
 
-LidarScan::LidarScan(size_t w, size_t h, UDPProfileLidar profile)
+LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile)
     : LidarScan{w, h, impl::lookup_scan_fields(profile)} {}
 
 LidarScan::LidarScan(size_t w, size_t h)

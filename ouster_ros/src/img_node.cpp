@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2020, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Example node to visualize range, near ir and signal images
  *

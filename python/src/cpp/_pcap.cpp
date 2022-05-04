@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief ouster_pyclient_pcap python module
  */

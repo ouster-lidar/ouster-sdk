@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "misc.h"
 
 #include <Eigen/Core>
@@ -243,6 +248,7 @@ void GLLabel::draw(const WindowCtx& ctx, const CameraData& camera,
             Eigen::Map<const Eigen::Vector3d>{label.position_.data()};
         is_3d = label.is_3d_;
         halign = label.align_right_ ? GLT_RIGHT : GLT_LEFT;
+        valign = label.align_top_ ? GLT_TOP : GLT_BOTTOM;
         label.pos_changed_ = false;
     }
 
@@ -250,6 +256,13 @@ void GLLabel::draw(const WindowCtx& ctx, const CameraData& camera,
         scale = label.scale_;
         label.scale_changed_ = false;
     }
+
+    if (label.rgba_changed_) {
+        rgba = label.rgba_;
+        label.rgba_changed_ = false;
+    }
+
+    gltColor(rgba[0], rgba[1], rgba[2], rgba[3]);
 
     if (is_3d) {
         Eigen::Matrix4d model =
@@ -274,17 +287,15 @@ void GLLabel::draw(const WindowCtx& ctx, const CameraData& camera,
         // TODO: maybe try turning GLFW_COCOA_RETINA_FRAMEBUFFER off
         scale2d *= 2.0;
 #endif
-        gltDrawText2DAligned(gltext, x, y, scale2d, halign, GLT_BOTTOM);
+        gltDrawText2DAligned(gltext, x, y, scale2d, halign, valign);
     }
 }
 
 void GLLabel::beginDraw() {
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquation(GL_FUNC_ADD);
-
     gltBeginDraw();
-    gltColor(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 void GLLabel::endDraw() {

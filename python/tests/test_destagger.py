@@ -1,3 +1,8 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 import numpy as np
 import pytest
 

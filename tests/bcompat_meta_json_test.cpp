@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include <gtest/gtest.h>
 
 #include <Eigen/Core>

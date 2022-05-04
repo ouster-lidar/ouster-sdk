@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Example node to publish raw sensor output on ROS topics
  *

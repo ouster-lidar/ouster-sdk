@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #pragma once
 
 #include <atomic>
@@ -241,7 +246,7 @@ static const std::string image_vertex_shader_code =
             in vec2 vertex_uv;
             out vec2 uv;
             void main() {
-                gl_Position = vec4(vertex, -1, 1);
+                gl_Position = vec4(vertex, 0, 1);
                 uv = vertex_uv;
             })SHADER";
 static const std::string image_fragment_shader_code =

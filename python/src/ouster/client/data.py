@@ -1,3 +1,8 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from copy import deepcopy
 from enum import Enum
 from typing import Callable, Iterator, Type, List, Optional, Union

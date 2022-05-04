@@ -1,4 +1,8 @@
-"""Executable examples for using the pcap APIs.
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Executable examples for using the pcap APIs.
 
 This module has a rudimentary command line interface. For usage, run::
 
@@ -7,6 +11,7 @@ This module has a rudimentary command line interface. For usage, run::
 import os
 import argparse
 from contextlib import closing
+from typing import Tuple, List
 
 import numpy as np
 
@@ -117,7 +122,7 @@ def pcap_to_csv(source: client.PacketSource,
     The number of saved lines per csv file is always H x W, which corresponds to
     a full 2D image representation of a lidar scan.
 
-    Each line in a csv file is:
+    Each line in a csv file is (for LEGACY profile):
 
         TIMESTAMP, RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (mm), Y (mm), Z (mm)
 
@@ -138,8 +143,21 @@ def pcap_to_csv(source: client.PacketSource,
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir)
 
-    field_names = 'TIMESTAMP (ns), RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (mm), Y (mm), Z (mm)'
-    field_fmts = ['%d', '%d', '%d', '%d', '%d', '%d', '%d', '%d']
+    # construct csv header and data format
+    def get_fields_info(scan : client.LidarScan) -> Tuple[str, List[str]]:
+        field_names = 'TIMESTAMP (ns)'
+        field_fmts = ['%d']
+        for chan_field in scan.fields:
+            field_names += f', {chan_field}'
+            if chan_field in [client.ChanField.RANGE, client.ChanField.RANGE2]:
+                field_names += ' (mm)'
+            field_fmts.append('%d')
+        field_names += ', X (mm), Y (mm), Z (mm)'
+        field_fmts.extend(3 * ['%d'])
+        return field_names, field_fmts
+
+    field_names : str = ''
+    field_fmts : List[str] = []
 
     # [doc-stag-pcap-to-csv]
     from itertools import islice
@@ -152,6 +170,10 @@ def pcap_to_csv(source: client.PacketSource,
         scans = islice(scans, num)
 
     for idx, scan in enumerate(scans):
+
+        # initialize the field names for csv header
+        if not field_names or not field_fmts:
+            field_names, field_fmts = get_fields_info(scan)
 
         # copy per-column timestamps for each channel
         timestamps = np.tile(scan.timestamp, (scan.h, 1))
@@ -257,6 +279,21 @@ def pcap_to_pcd(source: client.PacketSource,
 
         o3d.io.write_point_cloud(pcd_path, pcd)  # type: ignore
 
+def pcap_to_ply(source: client.PacketSource,
+                metadata: client.SensorInfo,
+                num: int = 0,
+                ply_dir: str = ".",
+                ply_base: str = "ply_out",
+                ply_ext: str = "ply") -> None:
+    "Write scans from a pcap to ply files (one per lidar scan)."
+
+    # We are reusing the same Open3d File IO function to write the PLY file out
+    pcap_to_pcd(source,
+                metadata,
+                num=num,
+                pcd_dir=ply_dir,
+                pcd_base=ply_base,
+                pcd_ext=ply_ext)
 
 def pcap_query_scan(source: client.PacketSource,
                     metadata: client.SensorInfo,
@@ -312,6 +349,7 @@ def main():
         "pcap-to-csv": pcap_to_csv,
         "pcap-to-las": pcap_to_las,
         "pcap-to-pcd": pcap_to_pcd,
+        "pcap-to-ply": pcap_to_ply,
         "query-scan": pcap_query_scan,
         "read-packets": pcap_read_packets,
     }
@@ -347,10 +385,17 @@ def main():
         print(f"Metadata file does not exist: {args.metadata_path}")
         exit(1)
 
-    print(f'example: {args.example}')
-
     with open(args.metadata_path, 'r') as f:
         metadata = client.SensorInfo(f.read())
+
+    if (metadata.format.udp_profile_lidar != client.UDPProfileLidar.PROFILE_LIDAR_LEGACY 
+            and metadata.format.udp_profile_lidar != 
+            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16 and args.example != 'query-scan'):
+        print(f"This pcap example is only for pcaps of sensors in LEGACY or SINGLE RETURN mode. Exiting...")
+        exit(1)
+
+    print(f'example: {args.example}')
+
     source = pcap.Pcap(args.pcap_path, metadata)
 
     with closing(source):

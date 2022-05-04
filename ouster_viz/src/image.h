@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #pragma once
 
 #include <array>
@@ -33,7 +38,7 @@ class GLImage {
     GLuint mask_texture_id{0};
     GLuint image_index_id{0};
 
-    float x0{-1}, x1{0}, y0{0}, y1{-1};
+    float x0{-1}, x1{0}, y0{0}, y1{-1}, hshift{0};
 
    public:
     GLImage();

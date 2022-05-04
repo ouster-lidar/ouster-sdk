@@ -1,3 +1,12 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ *
+ * This file contains example code for working with 2D and 3D representations of
+ * lidar data with the C++ Ouster SDK. Please see the sdk docs at
+ * static.ouster.dev for clearer explanations.
+ */
+
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -56,8 +65,8 @@ int main(int argc, char* argv[]) {
     get_complete_scan(handle, scan, info);
 
     // 1. Getting XYZ
-    //! [doc-stag-cpp-xyz]
     std::cerr << "1. Calculating 3d Points... " << std::endl;
+    //! [doc-stag-cpp-xyz]
     XYZLut lut = make_xyz_lut(info);
     auto range = scan.field(sensor::ChanField::RANGE);
     auto cloud = cartesian(range, lut);
@@ -84,10 +93,11 @@ int main(int argc, char* argv[]) {
     std::cerr
         << "2. Now we will apply this transformation to the look-up table:\n"
         << transformation << std::endl;
+
     // Remember to apply the lidar_to_sensor_transform if your extrinsics
     // matrix was between sensor coordinate system and some stable point,
     // say a vehicle center
-    // TODO -- double check that this order of matrix application is correct
+    //! [doc-stag-extrinsics-to-xyzlut]
     auto lut_extrinsics = make_xyz_lut(
         w, h, sensor::range_unit, info.lidar_origin_to_beam_origin_mm,
         transformation, info.beam_azimuth_angles, info.beam_altitude_angles);
@@ -95,6 +105,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "Calculating 3d Points of with special transform provided.."
               << std::endl;
     auto cloud_adjusted = cartesian(range, lut_extrinsics);
+    //! [doc-etag-extrinsics-to-xyzlut]
 
     std::cerr << "And now the 2000th point in the transformed point cloud... ("
               << cloud_adjusted(2000, 0) << ", " << cloud_adjusted(2000, 1)
@@ -107,9 +118,12 @@ int main(int argc, char* argv[]) {
     std::cerr
         << "\n3. Getting staggered and destaggered images of Reflectivity..."
         << std::endl;
+
+    //! [doc-stag-cpp-destagger]
     auto reflectivity = scan.field(sensor::ChanField::REFLECTIVITY);
     auto reflectivity_destaggered =
         destagger<uint32_t>(reflectivity, info.format.pixel_shift_by_row);
+    //! [doc-etag-cpp-destagger]
 
     // 4. You can get XYZ in w x h arrays too
     std::cerr

@@ -4,8 +4,9 @@
 Ouster Python SDK Development
 =============================
 
-Building
-========
+Building ``ouster-sdk`` package
+================================
+
 Building the Python SDK from source requires several dependencies:
 
 - a C++14-capable compiler

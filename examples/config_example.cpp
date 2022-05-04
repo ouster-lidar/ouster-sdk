@@ -1,3 +1,14 @@
+/**
+ * Copyright (c) 2022, Ouster, Inc.
+ * All rights reserved.
+ *
+ * For more comprehensive explanation, see the Ouster SDK Docs
+ *
+ * Note: This is an example meant to demonstrate use of the CPP Sensor
+ * Configuration API. Users who merely need to set parameters without doing so
+ * programmatically may find it easier to do so using the sensor homepage at
+ * <SENSOR-NAME>.local or using our Python SDK, available as ouster-sdk on PyPi.
+ */
 #include <cassert>
 #include <iostream>
 
@@ -5,14 +16,6 @@
 #include "ouster/client.h"
 
 using namespace ouster;
-
-/* For more comprehensive explanation, see the Ouster SDK Docs
- *
- * Note: This is an example meant to demonstrate use of the CPP Sensor
- * Configuration API. Users who merely need to set parameters without doing so
- * programmatically may find it easier to do so using the sensor homepage at
- * <SENSOR-NAME>.local or using our Python SDK, available as ouster-sdk on PyPi.
- */
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {

@@ -1,4 +1,9 @@
-"""Python sensor client."""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Python sensor client
+"""
 # flake8: noqa (unused imports)
 
 from ._client import SensorInfo
