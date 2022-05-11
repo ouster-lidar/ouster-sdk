@@ -29,8 +29,8 @@ copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-version = '0.4.0'
-release = '0.4.0'
+version = '0.4.1a0'
+release = '0.4.1a0'
 
 # -- General configuration ---------------------------------------------------
 
@@ -133,9 +133,9 @@ napoleon_numpy_docstring = False
 # napoleon_use_param = False
 
 # ----- Todos Configs ------
-todo_include_todos = False
+todo_include_todos = True
 todo_link_only = True
-todo_emit_warnings = False
+todo_emit_warnings = True
 
 # copybutton configs
 # Note: last entry treats four spaces as a prompt to support "continuation lines"

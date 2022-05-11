@@ -20,6 +20,7 @@ Building the Python SDK from source requires several dependencies:
 - `Python <https://www.python.org/>`_ >= 3.6 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
+The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster_example>`_. You should clone the whole project.
 
 Linux and macos
 ---------------

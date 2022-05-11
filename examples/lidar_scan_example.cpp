@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
     // to access a field:
     //! [doc-stag-lidarscan-cpp-fields]
     auto range = dual_returns_scan.field(ChanField::RANGE);
-    auto range2 = dual_returns_scan.field(ChanField::RANGE);
+    auto range2 = dual_returns_scan.field(ChanField::RANGE2);
     //! [doc-etag-lidarscan-cpp-fields]
 
     std::cerr

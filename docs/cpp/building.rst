@@ -8,6 +8,8 @@ Building the example code requires a compiler supporting C++11 and CMake 3.1 or 
 jsoncpp, and Eigen3 libraries with headers installed on the system. The sample visualizer also
 requires the GLFW3 and GLEW libraries.
 
+The C++ example code is available `on the Ouster Github <https://github.com/ouster-lidar/ouster_example>`_. Follow the instructions for cloning the project.
+
 Building on Linux / macOS
 ==========================
 
