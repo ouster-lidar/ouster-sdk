@@ -66,8 +66,9 @@ static const Table<ChanField, FieldInfo, 8> legacy_field_info{{
     {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 4> lb_field_info{{
+static const Table<ChanField, FieldInfo, 5> lb_field_info{{
     {ChanField::RANGE, {UINT16, 0, 0x7fff, -3}},
+    {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
     {ChanField::REFLECTIVITY, {UINT8, 2, 0, 0}},
     {ChanField::NEAR_IR, {UINT8, 3, 0, -4}},
     {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
