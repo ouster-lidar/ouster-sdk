@@ -84,9 +84,18 @@ This module is generated from the C++ code and not meant to be used directly.
     // pcap writing
     py::class_<std::shared_ptr<record_handle>>(m, "record_handle");
 
-    m.def("record_initialize", &record_initialize, py::arg("file_name"),
-          py::arg("src_ip"), py::arg("dst_ip"), py::arg("frag_size"),
-          py::arg("use_sll_encapsulation") = false);
+    m.def("record_initialize",
+          py::overload_cast<const std::string&, const std::string&,
+                            const std::string&, int, bool>(&record_initialize),
+          py::arg("file_name"), py::arg("src_ip"), py::arg("dst_ip"),
+          py::arg("frag_size"), py::arg("use_sll_encapsulation") = false,
+          R"(
+                ``def record_initialize(file_name: str, src_ip: str, dst_ip: str, frag_size: int,
+                      use_sll_encapsulation: bool = ...) -> record_handle:``
+                  
+                  Initialize record handle for single sensor pcap files
+
+            )");
 
     m.def("record_uninitialize", [](std::shared_ptr<record_handle>& handle) {
         record_uninitialize(*handle);
