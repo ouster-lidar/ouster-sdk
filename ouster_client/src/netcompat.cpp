@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/impl/netcompat.h"
 
 #include <string>
@@ -18,6 +23,7 @@
 #endif
 
 namespace ouster {
+namespace sensor {
 namespace impl {
 
 #ifdef _WIN32
@@ -75,7 +81,7 @@ bool socket_exit() {
 
 int socket_set_non_blocking(SOCKET value) {
 #ifdef _WIN32
-    u_long non_blocking_mode = 0;
+    u_long non_blocking_mode = 1;
     return ioctlsocket(value, FIONBIO, &non_blocking_mode);
 #else
     return fcntl(value, F_SETFL, fcntl(value, F_GETFL, 0) | O_NONBLOCK);
@@ -83,14 +89,30 @@ int socket_set_non_blocking(SOCKET value) {
 }
 
 int socket_set_reuse(SOCKET value) {
-#ifdef _WIN32
-    u_long reuse = 1;
-    return ioctlsocket(value, SO_REUSEADDR, &reuse);
-#else
     int option = 1;
-    return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+#ifndef _WIN32
+    int res =
+        setsockopt(value, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option));
+    if (res != 0) return res;
+#endif
+    return setsockopt(value, SOL_SOCKET, SO_REUSEADDR, (char*)&option,
+                      sizeof(option));
+}
+
+int socket_set_rcvtimeout(SOCKET sock, int timeout_sec) {
+#ifdef _WIN32
+    DWORD timeout_ms = timeout_sec * 1000;
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_ms,
+                      sizeof timeout_ms);
+#else
+    struct timeval tv;
+    tv.tv_sec = timeout_sec;
+    tv.tv_usec = 0;
+    return setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,
+                      sizeof tv);
 #endif
 }
 
 }  // namespace impl
+}  // namespace sensor
 }  // namespace ouster

@@ -1,138 +1,67 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #pragma once
 
-#include <GL/glew.h>
-
 #include <array>
-#include <cstddef>
-#include <vector>
 
 #include "camera.h"
-#include "common.h"
+#include "glfw.h"
+#include "ouster/point_viz.h"
 
 namespace ouster {
 namespace viz {
 namespace impl {
 
-/**
- * Class to deal with showing an image. The image is auto-scaled to be
- * positioned either at the top (for wide images) or the left (for tall images)
+/*
+ * Manages opengl state for drawing a point cloud
+ *
+ * The image is auto-scaled to be positioned either at the top (for wide images)
+ * or the left (for tall images)
  */
-class Image {
-    size_t width;
-    size_t height;
-    GLfloat aspect_ratio;  // height divided by width of true aspect ratio
-    int size_fraction;
-    const int size_fraction_max;
-    std::vector<GLfloat> data;
-    std::vector<GLfloat> mask_data;
-    bool texture_changed;
-    bool mask_changed;
+class GLImage {
+    constexpr static int size_fraction_max = 20;
+
+    // global gl state
+    static bool initialized;
+    static GLuint program_id;
+    static GLuint vertex_id;
+    static GLuint uv_id;
+    static GLuint image_id;
+    static GLuint mask_id;
+
+    // per-image gl state
     std::array<GLuint, 2> vertexbuffers;
-    GLuint image_program_id = 0;
-    GLuint image_texture_id;
-    GLuint mask_texture_id;
+    GLuint image_texture_id{0};
+    GLuint mask_texture_id{0};
+    GLuint image_index_id{0};
+
+    float x0{-1}, x1{0}, y0{0}, y1{-1}, hshift{0};
 
    public:
-    /**
-     * Constructor: create an Image for displaying
+    GLImage();
+
+    GLImage(const Image& image);
+
+    ~GLImage();
+
+    /*
+     * Render the monochrome image.
      *
-     * @param width             pixel width of image
-     * @param height            pixel height of image
-     * @param size_fraction     fraction of screen to take up, numerator
-     * @param size_fraction_max fraction of screen to take up, denominator
+     * Modifies the camera to offset it so that it is centered on the region not
+     * covered by image.
      */
-    Image(size_t width, size_t height, int size_fraction = 3,
-          int size_fraction_max = 10)
-        : width(width),
-          height(height),
-          size_fraction(size_fraction),
-          size_fraction_max(size_fraction_max),
-          data(width * height, 0),
-          mask_data(4 * width * height, 0),
-          texture_changed(true),
-          mask_changed(true) {}
+    void draw(const WindowCtx& ctx, const CameraData& camera, Image& image);
 
-    /**
-     * initialize the image. must be called after valid OpenGL context created
-     */
-    void initialize() {
-        image_program_id =
-            load_shaders(image_vertex_shader_code, image_fragment_shader_code);
-        glGenBuffers(2, vertexbuffers.data());
-        GLuint textures[2];
-        glGenTextures(2, textures);
-        image_texture_id = textures[0];
-        mask_texture_id = textures[1];
-    }
+    static void initialize();
 
-    /**
-     * set the image
-     *
-     * @param image_data pointer to array of at least as many elements as there
-     *                   are pixels in the image, in row-major format
-     */
-    void setImage(const GLfloat* image_data) {
-        const size_t n = width * height;
-        std::copy(image_data, image_data + n, data.begin());
-        texture_changed = true;
-    }
+    static void uninitialize();
 
-    /**
-     * set the RGBA mask
-     *
-     * @param image_data pointer to array of at least 4x as many elements as
-     *                   there are pixels in the image, in row-major format
-     */
-    void setMask(const GLfloat* msk_data) {
-        const size_t n = width * height * 4;
-        std::copy(msk_data, msk_data + n, mask_data.begin());
-        mask_changed = true;
-    }
+    static void beginDraw();
 
-    /**
-     * render the monochrome image.
-     *
-     * @param cam modifies the camera to offset it so that it is centered on the
-     *            region not covered by image.
-     */
-    void draw(Camera& cam);
-
-    /**
-     * set pixel dimensions of the image
-     *
-     * @param w pixel height of image
-     * @param h pixel width of image
-     */
-    void resize(size_t w, size_t h) {
-        if (w == width && h == height) return;
-        width = w;
-        height = h;
-        data.resize(w * h);
-        mask_data.resize(w * h * 4);
-    }
-
-    /**
-     * increase or decrease size fraction. Sets member variable
-     * size_fraction to be between 0 and size_fraction_max (inclusive)
-     *
-     * @param amount amount to increase by (can be negative)
-     */
-    void changeSizeFraction(int amount) {
-        size_fraction = (size_fraction + amount + (size_fraction_max + 1)) %
-                        (size_fraction_max + 1);
-    }
-
-    /**
-     * set the display aspect ratio of the image
-     *
-     * @param a the aspect ratio, i.e. height divided by width
-     */
-    void setAspectRatio(GLfloat a) { aspect_ratio = a; }
-
-    /**
-     * destructor, delete program
-     */
-    ~Image() { glDeleteProgram(image_program_id); }
+    static void endDraw();
 };
 
 }  // namespace impl

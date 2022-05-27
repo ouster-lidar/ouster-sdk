@@ -16,9 +16,14 @@ RUN set -xe \
  libpcap-dev \
  python3-dev \
  python3-pip \
+ python3-venv \
  pybind11-dev \
 # Install any additional available cpython versions for testing
  'python3.[6-9]-dev' \
+ libglfw3-dev \
+ libglew-dev \
+ python3-breathe \
+ doxygen \
 && rm -rf /var/lib/apt/lists
 
 # Set up non-root build user and environment
@@ -55,6 +60,7 @@ COPY . ${OUSTER_SDK_PATH}
 #
 ENTRYPOINT ["sh", "-c", "set -e \
 && rm -rf ./src && cp -a ${OUSTER_SDK_PATH} ./src \
+&& export ARTIFACT_DIR=${ARTIFACT_DIR:-$BUILD_HOME/artifacts} \
 && . /etc/os-release && export ID VERSION_ID \
 && exec python3 -m tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
 ", "tox-entrypoint"]

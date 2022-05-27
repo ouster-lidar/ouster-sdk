@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Higher-level functions to read data from the ouster sensors as ROS
  * messages
@@ -32,6 +35,7 @@ using ns = std::chrono::nanoseconds;
  * is available.
  * @param cli the sensor client
  * @param pm the destination packet message
+ * @param pf the packet format
  * @return whether reading was successful
  */
 bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
@@ -42,6 +46,7 @@ bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
  * is available.
  * @param cli the sensor client
  * @param pm the destination packet message
+ * @param pf the packet format
  * @return whether reading was successful
  */
 bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
@@ -51,6 +56,7 @@ bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
  * Parse an imu packet message into a ROS imu message
  * @param pm packet message populated by read_imu_packet
  * @param frame the frame to set in the resulting ROS message
+ * @param pf the packet format
  * @return ROS sensor message with fields populated from the packet
  */
 sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
@@ -62,11 +68,12 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
  * @param xyz_lut lookup table from sensor beam angles (see lidar_scan.h)
  * @param scan_ts scan start used to caluclate relative timestamps for points
  * @param ls input lidar data
+ * @param return_index index of return desired starting at 0
  * @param cloud output pcl pointcloud to populate
  */
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
-                   ouster_ros::Cloud& cloud);
+                   ouster_ros::Cloud& cloud, int return_index = 0);
 
 /**
  * Populate a PCL point cloud from a LidarScan taking into account
@@ -85,6 +92,7 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
                    ouster_ros::Cloud& cloud,
+                   int return_index,
                    tf::TransformListener & listener,
                    const std::string & fixed_frame,
                    const std::string & sensor_frame,

@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Example node to publish raw sensor output on ROS topics
  *
@@ -24,6 +27,7 @@
 
 using PacketMsg = ouster_ros::PacketMsg;
 using OSConfigSrv = ouster_ros::OSConfigSrv;
+using nonstd::optional;
 namespace sensor = ouster::sensor;
 
 // fill in values that could not be parsed from metadata
@@ -56,17 +60,22 @@ void populate_metadata_defaults(sensor::sensor_info& info,
 }
 
 // try to write metadata file
-void write_metadata(const std::string& meta_file, const std::string& metadata) {
+bool write_metadata(const std::string& meta_file, const std::string& metadata) {
     std::ofstream ofs;
     ofs.open(meta_file);
     ofs << metadata << std::endl;
     ofs.close();
     if (ofs) {
-        ROS_INFO("Wrote metadata to $ROS_HOME/%s", meta_file.c_str());
+        ROS_INFO("Wrote metadata to %s", meta_file.c_str());
     } else {
-        ROS_WARN("Failed to write metadata to %s; check that the path is valid",
-                 meta_file.c_str());
+        ROS_WARN(
+            "Failed to write metadata to %s; check that the path is valid. If "
+            "you provided a relative path, please note that the working "
+            "directory of all ROS nodes is set by default to $ROS_HOME",
+            meta_file.c_str());
+        return false;
     }
+    return true;
 }
 
 int connection_loop(ros::NodeHandle& nh, sensor::client& cli,
@@ -126,9 +135,23 @@ int main(int argc, char** argv) {
     auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
     auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
 
-    // fall back to metadata file name based on hostname, if available
-    auto meta_file = nh.param("metadata", std::string{});
-    if (!meta_file.size() && hostname.size()) meta_file = hostname + ".json";
+    std::string udp_profile_lidar_arg;
+    nh.param<std::string>("udp_profile_lidar", udp_profile_lidar_arg, "");
+
+    optional<sensor::UDPProfileLidar> udp_profile_lidar;
+    if (udp_profile_lidar_arg.size()) {
+        if (replay)
+            ROS_WARN("UDP Profile Lidar set in replay mode. Will be ignored.");
+
+        // set lidar profile from param
+        udp_profile_lidar =
+            sensor::udp_profile_lidar_of_string(udp_profile_lidar_arg);
+        if (!udp_profile_lidar) {
+            ROS_ERROR("Invalid udp profile lidar: %s",
+                      udp_profile_lidar_arg.c_str());
+            return EXIT_FAILURE;
+        }
+    }
 
     // set lidar mode from param
     sensor::lidar_mode lidar_mode = sensor::MODE_UNSPEC;
@@ -155,8 +178,18 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (!replay && (!hostname.size() || !udp_dest.size())) {
-        ROS_ERROR("Must specify both hostname and udp destination");
+    auto meta_file = nh.param("metadata", std::string{});
+    if (!meta_file.size()) {
+        if (replay) {
+            ROS_ERROR("Must specify metadata file in replay mode");
+        } else {
+            ROS_ERROR("Must specify path for metadata output");
+        }
+        return EXIT_FAILURE;
+    }
+
+    if (!replay && !hostname.size()) {
+        ROS_ERROR("Must specify a sensor hostname");
         return EXIT_FAILURE;
     }
 
@@ -182,22 +215,66 @@ int main(int argc, char** argv) {
             ROS_ERROR("Error when running in replay mode: %s", e.what());
         }
     } else {
-        ROS_INFO("Connecting to %s; sending data to %s", hostname.c_str(),
-                 udp_dest.c_str());
-        ROS_INFO("Waiting for sensor to initialize ...");
+        ROS_INFO("Starting sensor %s initialization...", hostname.c_str());
 
-        auto cli = sensor::init_client(hostname, udp_dest, lidar_mode,
-                                       timestamp_mode, lidar_port, imu_port);
-
+        // use no-config version of init_client to allow for random ports
+        auto cli = sensor::init_client(hostname, lidar_port, imu_port);
         if (!cli) {
-            ROS_ERROR("Failed to initialize sensor at: %s", hostname.c_str());
+            ROS_ERROR("Failed to initialize client");
             return EXIT_FAILURE;
         }
-        ROS_INFO("Sensor initialized successfully");
 
-        // write metadata file to cwd (usually ~/.ros)
+        sensor::sensor_config config;
+        config.udp_port_imu = get_imu_port(*cli);
+        config.udp_port_lidar = get_lidar_port(*cli);
+        config.udp_profile_lidar = udp_profile_lidar;
+        config.operating_mode = sensor::OPERATING_NORMAL;
+        if (lidar_mode) config.ld_mode = lidar_mode;
+        if (timestamp_mode) config.ts_mode = timestamp_mode;
+
+        uint8_t config_flags = 0;
+
+        if (udp_dest.size()) {
+            ROS_INFO("Will send UDP data to %s", udp_dest.c_str());
+            config.udp_dest = udp_dest;
+        } else {
+            ROS_INFO("Will use automatic UDP destination");
+            config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
+        }
+
+        try {
+            if (!set_config(hostname, config, config_flags)) {
+                ROS_ERROR("Error connecting to sensor %s", hostname.c_str());
+                return EXIT_FAILURE;
+            }
+            ROS_INFO("Sensor %s configured successfully", hostname.c_str());
+        } catch (const std::runtime_error& e) {
+            ROS_ERROR("Error setting config:  %s", e.what());
+            return EXIT_FAILURE;
+        } catch (const std::invalid_argument& ia) {
+            ROS_ERROR("Error setting config: %s", ia.what());
+            return EXIT_FAILURE;
+        }
+
+        // fetch metadata for client after setting configs
         auto metadata = sensor::get_metadata(*cli);
-        write_metadata(meta_file, metadata);
+        if (metadata.empty()) {
+            ROS_ERROR("Failed to collect metadata");
+            return EXIT_FAILURE;
+        }
+
+        if (!cli) {
+            ROS_ERROR("Failed to initialize sensor at %s", hostname.c_str());
+            return EXIT_FAILURE;
+        }
+        ROS_INFO("Sensor %s initialized successfully", hostname.c_str());
+
+        // write metadata file. If metadata_path is relative, will use cwd
+        // (usually ~/.ros)
+        if (!write_metadata(meta_file, metadata)) {
+            ROS_ERROR("Exiting because of failure to write metadata path");
+            return EXIT_FAILURE;
+        }
 
         // populate sensor info
         auto info = sensor::parse_metadata(metadata);

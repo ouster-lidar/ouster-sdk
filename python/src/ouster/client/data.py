@@ -1,13 +1,23 @@
-from enum import Enum
-from typing import Callable, ClassVar, Dict, List, Optional, Type, Union, Tuple
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
 
-import numpy.lib.stride_tricks
+from copy import deepcopy
+from enum import Enum
+from typing import Callable, Iterator, Type, List, Optional, Union
+import warnings
+
 import numpy as np
 
-from . import SensorInfo, _client
+from . import _client
+from ._client import (ChanField, LidarScan, SensorInfo)
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
+
+FieldDType = Type[np.unsignedinteger]
+"""Numpy dtype of fields."""
 
 Packet = Union['ImuPacket', 'LidarPacket']
 """Packets emitted by a sensor."""
@@ -17,22 +27,41 @@ class ImuPacket:
     """Read IMU Packet data from a bufer."""
     _pf: _client.PacketFormat
     _data: np.ndarray
+    capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo) -> None:
+    def __init__(self,
+                 data: BufferT,
+                 info: SensorInfo,
+                 timestamp: Optional[float] = None) -> None:
         """
+        This will always alias the supplied buffer-like object. Pass in a copy
+        to avoid unintentional aliasing.
+
         Args:
             data: Buffer containing the packet payload
-            pf: Format determining how to interpret the buffer
+            info: Metadata associated with the sensor packet stream
+            timestamp: A capture timestamp, in seconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
-                packet format.
+                packet format
         """
 
         self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
                                    count=self._pf.imu_packet_size)
+
+        self.capture_timestamp = timestamp
+
+    def __deepcopy__(self, memo) -> 'ImuPacket':
+        cls = type(self)
+        cpy = cls.__new__(cls)
+        # don't copy packet format, which is intended to be shared
+        cpy._pf = self._pf
+        cpy._data = deepcopy(self._data, memo)
+        cpy.capture_timestamp = self.capture_timestamp
+        return cpy
 
     @property
     def sys_ts(self) -> int:
@@ -68,66 +97,93 @@ class ImuPacket:
         ])
 
 
-class ChanField(Enum):
-    """Channel fields available in lidar data."""
-    RANGE = (0, 0, np.uint32, 0x000FFFFF)
-    REFLECTIVITY = (3, 4, np.uint16, None)
-    SIGNAL = (1, 6, np.uint16, None)
-    NEAR_IR = (2, 8, np.uint16, None)
-
-    def __init__(self, ind: int, offset: int, dtype: type,
-                 mask: Optional[int]):
-        self.ind = ind
-        self.offset = offset
-        self.dtype = dtype
-        self.mask = mask
-
-
 class ColHeader(Enum):
-    """Column headers available in lidar data."""
-    TIMESTAMP = (0, np.uint64)
-    FRAME_ID = (10, np.uint16)
-    MEASUREMENT_ID = (8, np.uint16)
-    ENCODER_COUNT = (12, np.uint32)
-    # negative offsets are considered relative to the end of the col buffer
-    STATUS = (-4, np.uint32)
+    """Column headers available in lidar data.
 
-    def __init__(self, offset: int, dtype: type):
-        self.offset = offset
-        self.dtype = dtype
+    This definition is deprecated.
+    """
+    TIMESTAMP = 0
+    ENCODER_COUNT = 1
+    MEASUREMENT_ID = 2
+    STATUS = 3
+    FRAME_ID = 4
+
+    def __int__(self) -> int:
+        return self.value
 
 
 class LidarPacket:
-    """Read lidar packet data using numpy views."""
+    """Read lidar packet data as numpy arrays.
 
-    _PIXEL_BYTES: ClassVar[int] = 12
-    _COL_PREAMBLE_BYTES: ClassVar[int] = 16
-    _COL_FOOTER_BYTES: ClassVar[int] = 4
-
+    The dimensions of returned arrays depend on the sensor product line and
+    configuration. Measurement headers will be arrays of size matching the
+    configured ``columns_per_packet``, while measurement fields will be 2d
+    arrays of size ``pixels_per_column`` by ``columns_per_packet``.
+    """
     _pf: _client.PacketFormat
     _data: np.ndarray
-    _column_bytes: int
+    capture_timestamp: Optional[float]
 
-    def __init__(self, data: BufferT, info: SensorInfo) -> None:
+    def __init__(self,
+                 data: BufferT,
+                 info: SensorInfo,
+                 timestamp: Optional[float] = None) -> None:
         """
         This will always alias the supplied buffer-like object. Pass in a copy
         to avoid unintentional aliasing.
 
         Args:
             data: Buffer containing the packet payload
-            pf: Format determining how to interpret the buffer
+            info: Metadata associated with the sensor packet stream
+            timestamp: A capture timestamp, in seconds
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
-                packet format.
+                packet format, or if the init_id doesn't match the metadata
         """
         self._pf = _client.PacketFormat.from_info(info)
         self._data = np.frombuffer(data,
                                    dtype=np.uint8,
                                    count=self._pf.lidar_packet_size)
-        self._column_bytes = LidarPacket._COL_PREAMBLE_BYTES + \
-            (LidarPacket._PIXEL_BYTES * self._pf.pixels_per_column) + \
-            LidarPacket._COL_FOOTER_BYTES
+        self.capture_timestamp = timestamp
+
+        # check that metadata came from the same sensor initialization as data
+        if self.init_id and self.init_id != info.init_id:
+            raise ValueError("Metadata init id does not match")
+
+    def __deepcopy__(self, memo) -> 'LidarPacket':
+        cls = type(self)
+        cpy = cls.__new__(cls)
+        # don't copy packet format, which is intended to be shared
+        cpy._pf = self._pf
+        cpy._data = deepcopy(self._data, memo)
+        cpy.capture_timestamp = self.capture_timestamp
+        return cpy
+
+    @property
+    def packet_type(self) -> int:
+        """Get the type header of the packet."""
+        return self._pf.packet_type(self._data)
+
+    @property
+    def frame_id(self) -> int:
+        """Get the frame id of the packet."""
+        return self._pf.frame_id(self._data)
+
+    @property
+    def init_id(self) -> int:
+        """Get the initialization id of the packet."""
+        return self._pf.init_id(self._data)
+
+    @property
+    def prod_sn(self) -> int:
+        """Get the serial no header of the packet."""
+        return self._pf.prod_sn(self._data)
+
+    @property
+    def fields(self) -> Iterator[ChanField]:
+        """Get available fields of LidarScan as Iterator."""
+        return self._pf.fields
 
     def field(self, field: ChanField) -> np.ndarray:
         """Create a view of the specified channel field.
@@ -136,128 +192,62 @@ class LidarPacket:
             field: The channel field to view
 
         Returns:
-            A view of the specified field as a numpy array
+            A numpy array containing a copy of the specified field values
         """
-        v = np.lib.stride_tricks.as_strided(
-            self._data[LidarPacket._COL_PREAMBLE_BYTES +
-                       field.offset:].view(dtype=field.dtype),
-            shape=(self._pf.pixels_per_column, self._pf.columns_per_packet),
-            strides=(LidarPacket._PIXEL_BYTES, self._column_bytes))
-        return v if field.mask is None else v & field.mask
+        res = self._pf.packet_field(field, self._data)
+        res.flags.writeable = False
+        return res
 
     def header(self, header: ColHeader) -> np.ndarray:
         """Create a view of the specified column header.
 
+        This method is deprecated. Use the ``timestamp``, ``measurement_id`` or
+        ``status`` properties instead.
+
         Args:
-            header: The column header to view
+            header: The column header to parse
 
         Returns:
-            A view of the specified header as a numpy array
+            A numpy array containing a copy of the specified header values
         """
+        warnings.warn("LidarPacket.header is deprecated", DeprecationWarning)
 
-        start = 0 if header.offset >= 0 else self._column_bytes
-        return np.lib.stride_tricks.as_strided(
-            self._data[header.offset + start:].view(dtype=header.dtype),
-            shape=(self._pf.columns_per_packet, ),
-            strides=(self._column_bytes, ))
+        res = self._pf.packet_header(header, self._data)
+        res.flags.writeable = False
+        return res
 
+    @property
+    def timestamp(self) -> np.ndarray:
+        """Parse the measurement block timestamps out of a packet buffer.
 
-class LidarScan:
-    """Represents a single "scan" or "frame" of lidar data.
-
-    Internally, shares the same memory representation as the C++ LidarScan type
-    and should allow passing data without unnecessary copying.
-    """
-    N_FIELDS: ClassVar[int] = _client.LidarScan.N_FIELDS
-
-    w: int
-    h: int
-    frame_id: int
-    _data: np.ndarray
-    _headers: Dict[ColHeader, np.ndarray]
-
-    def __init__(self, h: int, w: int):
+        Returns:
+            An array of the timestamps of all measurement blocks in the packet.
         """
-        Args:
-            h: Vertical resolution of the scan
-            w: Horizontal resolution of the scan
+        res = self._pf.packet_header(ColHeader.TIMESTAMP, self._data)
+        res.flags.writeable = False
+        return res
+
+    @property
+    def measurement_id(self) -> np.ndarray:
+        """Parse the measurement ids out of a packet buffer.
+
+        Returns:
+            An array of the ids of all measurement blocks in the packet.
         """
-        self.w = w
-        self.h = h
-        self.frame_id = -1  # init with invalid frame_id
-        self._data = np.ndarray((LidarScan.N_FIELDS, w * h), dtype=np.uint32)
-        self._headers = {
-            h: np.zeros(w, h.dtype)
-            for h in (ColHeader.TIMESTAMP, ColHeader.ENCODER_COUNT,
-                      ColHeader.STATUS)
-        }
+        res = self._pf.packet_header(ColHeader.MEASUREMENT_ID, self._data)
+        res.flags.writeable = False
+        return res
 
-    def _complete(self,
-                  column_window: Optional[Tuple[int, int]] = None) -> bool:
-        """Whether all columns of the scan are valid within given window.
+    @property
+    def status(self) -> np.ndarray:
+        """Parse the measurement statuses of a packet buffer.
 
-        Args:
-            column_window: metadata.format.column_window if it's not default
-                to full scan
+        Returns:
+            An array of the statuses of all measurement blocks in the packet.
         """
-        if column_window:
-            win_start, win_end = column_window
-            if win_start < win_end:
-                return (self.header(ColHeader.STATUS)[win_start:win_end +
-                                                      1] == 0xFFFFFFFF).all()
-            else:
-                valid = (self.header(
-                    ColHeader.STATUS)[win_start:] == 0xFFFFFFFF).all()
-                valid = valid and (self.header(ColHeader.STATUS)[:win_end + 1]
-                                   == 0xFFFFFFFF).all()
-                return valid
-        return (self.header(ColHeader.STATUS) == 0xFFFFFFFF).all()
-
-    def field(self, field: ChanField) -> np.ndarray:
-        """Return a view of the specified channel field."""
-        return self._data[field.ind, :].reshape(self.h, self.w)
-
-    def header(self, header: ColHeader) -> np.ndarray:
-        """Return the specified column header as a numpy array.
-
-        Note that only TIMESTAMP, ENCODER_COUNT, and STATUS are currently
-        supported.
-        """
-        return self._headers[header]
-
-    def to_native(self) -> _client.LidarScan:
-        ls = _client.LidarScan(self.w, self.h)
-        ls.frame_id = self.frame_id
-        ls.headers = [
-            _client.BlockHeader(
-                self.header(ColHeader.TIMESTAMP)[i],
-                self.header(ColHeader.ENCODER_COUNT)[i],
-                self.header(ColHeader.STATUS)[i]) for i in range(self.w)
-        ]
-        ls.data[:] = self._data
-        return ls
-
-    @classmethod
-    def from_native(cls: Type['LidarScan'],
-                    scan: _client.LidarScan) -> 'LidarScan':
-        ls = cls.__new__(cls)
-        ls.w = scan.w
-        ls.h = scan.h
-        ls.frame_id = scan.frame_id
-        ls._data = scan.data
-        ls._headers = {
-            ColHeader.TIMESTAMP:
-            np.array([h.timestamp for h in scan.headers],
-                     dtype=ColHeader.TIMESTAMP.dtype),
-            ColHeader.ENCODER_COUNT:
-            np.array([h.encoder for h in scan.headers],
-                     dtype=ColHeader.ENCODER_COUNT.dtype),
-            ColHeader.STATUS:
-            np.array([h.status for h in scan.headers],
-                     dtype=ColHeader.STATUS.dtype),
-        }
-
-        return ls
+        res = self._pf.packet_header(ColHeader.STATUS, self._data)
+        res.flags.writeable = False
+        return res
 
 
 def _destagger(field: np.ndarray, shifts: List[int],
@@ -311,24 +301,39 @@ def destagger(info: SensorInfo,
     ]).reshape(shape)
 
 
-def XYZLut(info: SensorInfo) -> Callable[[LidarScan], np.ndarray]:
-    """Return a function that can project scans into cartesian coordinates.
+def XYZLut(
+        info: SensorInfo
+) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
+    """Return a function that can project scans into Cartesian coordinates.
+
+    If called with a numpy array representing a range image, the range image
+    must be in "staggered" form, where each column corresponds to a single
+    measurement block. LidarScan fields are always staggered.
 
     Internally, this will pre-compute a lookup table using the supplied
-    intrinsic parameters. XYZ points are returned as a H * W x 3 array of
+    intrinsic parameters. XYZ points are returned as a H x W x 3 array of
     doubles, where H is the number of beams and W is the horizontal resolution
     of the scan.
+
+    The coordinates are reported in meters in the *sensor frame* as
+    defined in the sensor documentation.
 
     Args:
         info: sensor metadata
 
     Returns:
-        A function that computes a numpy array of a scan's point coordinates in meters
+        A function that computes a point cloud given a range image
     """
     lut = _client.XYZLut(info)
 
-    def res(ls: LidarScan) -> np.ndarray:
-        return lut(ls.to_native()).reshape(info.format.pixels_per_column,
-                                           info.format.columns_per_frame, 3)
+    def res(ls: Union[LidarScan, np.ndarray]) -> np.ndarray:
+        if isinstance(ls, LidarScan):
+            xyz = lut(ls)
+        else:
+            # will create a temporary to cast if dtype != uint32
+            xyz = lut(ls.astype(np.uint32, copy=False))
+
+        return xyz.reshape(info.format.pixels_per_column,
+                           info.format.columns_per_frame, 3)
 
     return res
