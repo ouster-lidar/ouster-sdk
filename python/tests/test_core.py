@@ -1,7 +1,10 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from contextlib import closing
-from os import path
 import socket
-import sys
 
 import numpy as np
 import pytest
@@ -12,73 +15,98 @@ from ouster.client import ColHeader, ChanField
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
 
-DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
+
+@pytest.fixture
+def default_meta():
+    return client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
 
 
-@pytest.fixture(scope="module")
-def stream_digest():
-    digest_path = path.join(DATA_DIR, "os-992011000121_digest.json")
-    with open(digest_path, 'r') as f:
-        return digest.StreamDigest.from_json(f.read())
-
-
-@pytest.fixture(scope="module")
-def meta(stream_digest: digest.StreamDigest):
-    return stream_digest.meta
-
-
-def test_sensor_init(meta: client.SensorInfo) -> None:
+def test_sensor_init(default_meta: client.SensorInfo) -> None:
     """Initializing a data stream with metadata makes no network calls."""
-    with closing(client.Sensor("os.invalid", metadata=meta)):
-        pass
+    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as source:
+        assert source._cli.lidar_port != 0
+        assert source._cli.imu_port != 0
 
 
-def test_sensor_timeout(meta: client.SensorInfo) -> None:
+def test_sensor_timeout(default_meta: client.SensorInfo) -> None:
     """Setting a zero timeout reliably raises an exception."""
-    with closing(client.Sensor("os.invalid", metadata=meta,
+    with closing(client.Sensor("", 0, 0, metadata=default_meta,
                                timeout=0.0)) as source:
         with pytest.raises(client.ClientTimeout):
             next(iter(source))
 
 
-@pytest.mark.skipif(sys.platform == "win32",
-                    reason="winsock is OK with this; not sure why")
-def test_sensor_port_in_use(meta: client.SensorInfo) -> None:
-    """Using an unavailable port will throw."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('localhost', 0))
-    _, port = sock.getsockname()
-    with closing(sock):
-        with pytest.raises(RuntimeError):
-            with closing(client.Sensor("os.invalid", port, metadata=meta)):
-                pass
-
-        with pytest.raises(RuntimeError):
-            with closing(client.Sensor("os.invalid", 0, port, metadata=meta)):
-                pass
+def test_sensor_closed(default_meta: client.SensorInfo) -> None:
+    """Check reading from a closed source raises an exception."""
+    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as source:
+        source.close()
+        with pytest.raises(ValueError):
+            next(iter(source))
 
 
-@pytest.fixture(scope="module")
-def packet(stream_digest):
-    bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
-    with open(bin_path, 'rb') as b:
-        return next(iter(digest.LidarBufStream(b, stream_digest.meta)))
+def test_sensor_port_in_use(default_meta: client.SensorInfo) -> None:
+    """Instantiating clients listening to the same port does not fail."""
+    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as s1:
+        with closing(
+                client.Sensor("",
+                              s1._cli.lidar_port,
+                              s1._cli.imu_port,
+                              metadata=default_meta)) as s2:
+            assert s2._cli.lidar_port != 0
+            assert s2._cli.imu_port != 0
+            assert s2._cli.lidar_port == s1._cli.lidar_port
+            assert s2._cli.imu_port == s1._cli.imu_port
 
 
-@pytest.fixture
-def packets(stream_digest: digest.StreamDigest):
-    bin_path = path.join(DATA_DIR, "os-992011000121_data.bin")
-    with open(bin_path, 'rb') as b:
-        yield digest.LidarBufStream(b, stream_digest.meta)
+def test_sensor_packet(default_meta: client.SensorInfo) -> None:
+    """Check that the client will read single properly-sized LEGACY packet."""
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          metadata=default_meta,
+                          timeout=5.0,
+                          _flush_before_read=False)) as source:
+        data = np.random.randint(255,
+                                 size=source._pf.lidar_packet_size,
+                                 dtype=np.uint8)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(data.tobytes(), ("localhost", source._cli.lidar_port))
+        packet = next(iter(source))
+        assert (packet._data == data).all()
+
+
+def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
+    """Check that the client will ignore improperly-sized packets."""
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          metadata=default_meta,
+                          timeout=1.0,
+                          _flush_before_read=False)) as source:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(b"hello", ("localhost", source._cli.lidar_port))
+        with pytest.raises(client.ClientTimeout):
+            next(iter(source))
 
 
 def test_scans_simple(packets: client.PacketSource) -> None:
-    """Test that the test data contains exactly one scan."""
+    """Check that the test data contains exactly one scan."""
     scans = iter(client.Scans(packets))
     assert next(scans) is not None
 
     with pytest.raises(StopIteration):
         next(scans)
+
+
+def test_scans_closed(default_meta: client.SensorInfo) -> None:
+    """Check reading from closed scans raises an exception."""
+    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as source:
+        scans = client.Scans(source)
+        scans.close()
+        with pytest.raises(ValueError):
+            next(iter(scans))
 
 
 def test_scans_meta(packets: client.PacketSource) -> None:
@@ -89,23 +117,28 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert scan.frame_id != -1
     assert scan.h == packets.metadata.format.pixels_per_column
     assert scan.w == packets.metadata.format.columns_per_frame
-    assert len(scan.header(ColHeader.TIMESTAMP)) == scan.w
+    assert len(scan.timestamp) == scan.w
+    assert len(scan.measurement_id) == scan.w
+    assert len(scan.status) == scan.w
     assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
-    assert len(scan.header(ColHeader.STATUS)) == scan.w
 
-    assert not scan._complete(), "test data should have missing packet!"
+    assert scan._complete()
 
-    # check that the scan is missing exactly one packet's worth of columns
-    valid_columns = list(scan.header(ColHeader.STATUS)).count(0xffffffff)
-    assert valid_columns == (packets.metadata.format.columns_per_frame -
-                             packets.metadata.format.columns_per_packet)
+    # all timestamps valid
+    assert np.count_nonzero(scan.timestamp) == scan.w
 
-    missing_ts = list(scan.header(ColHeader.TIMESTAMP)).count(0)
-    assert missing_ts == packets.metadata.format.columns_per_packet
-
-    # extra zero encoder value for first column
-    zero_enc = list(scan.header(ColHeader.ENCODER_COUNT)).count(0)
-    assert zero_enc == packets.metadata.format.columns_per_packet + 1
+    if (packets.metadata.format.udp_profile_lidar ==
+            client.UDPProfileLidar.PROFILE_LIDAR_LEGACY):
+        # check that all columns are valid
+        assert (scan.status == 0xffffffff).all()
+        # only first encoder count is zero
+        assert np.count_nonzero(scan.header(
+            ColHeader.ENCODER_COUNT)) == scan.w - 1
+    else:
+        # only lowest bit indicates valid
+        assert (scan.status & 0x1).all()
+        # encoder counts zeroed
+        assert (scan.header(ColHeader.ENCODER_COUNT) == 0).all()
 
 
 def test_scans_first_packet(packet: client.LidarPacket,
@@ -123,46 +156,50 @@ def test_scans_first_packet(packet: client.LidarPacket,
     assert np.array_equal(packet.field(ChanField.REFLECTIVITY),
                           scan.field(ChanField.REFLECTIVITY)[:h, :w])
 
-    assert np.array_equal(packet.field(client.ChanField.SIGNAL),
-                          scan.field(client.ChanField.SIGNAL)[:h, :w])
+    assert np.array_equal(packet.field(ChanField.SIGNAL),
+                          scan.field(ChanField.SIGNAL)[:h, :w])
 
-    assert np.array_equal(packet.field(client.ChanField.NEAR_IR),
-                          scan.field(client.ChanField.NEAR_IR)[:h, :w])
+    assert np.array_equal(packet.field(ChanField.NEAR_IR),
+                          scan.field(ChanField.NEAR_IR)[:h, :w])
 
-    assert np.all(packet.header(ColHeader.FRAME_ID) == scan.frame_id)
+    assert packet.frame_id == scan.frame_id
 
-    assert np.array_equal(packet.header(ColHeader.TIMESTAMP),
-                          scan.header(ColHeader.TIMESTAMP)[:w])
+    assert np.array_equal(packet.timestamp, scan.timestamp[:w])
 
     assert np.array_equal(packet.header(ColHeader.ENCODER_COUNT),
                           scan.header(ColHeader.ENCODER_COUNT)[:w])
 
-    assert np.array_equal(packet.header(ColHeader.STATUS),
-                          scan.header(ColHeader.STATUS)[:w])
+    assert np.array_equal(packet.status, scan.status[:w])
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_scans_complete(packets: client.PacketSource) -> None:
-    """Test built-in filtering for complete scans.
+    """Test built-in filtering for complete scans."""
 
-    The test dataset only contains a single incomplete frame. Check that
-    specifying ``complete=True`` discards it.
-    """
-    scans = iter(client.Scans(packets, complete=True))
+    # make new packet source missing a packet
+    ps = list(packets)
+    del ps[5]
+    dropped = client.Packets(ps, packets.metadata)
+
+    scans = iter(client.Scans(dropped, complete=True))
 
     with pytest.raises(StopIteration):
         next(scans)
 
 
+@pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_scans_timeout(packets: client.PacketSource) -> None:
-    """A zero timeout should deterministically throw."""
+    """A zero timeout should deterministically throw.
+
+    TODO: should it, though?
+    """
     scans = iter(client.Scans(packets, timeout=0.0))
 
     with pytest.raises(client.ClientTimeout):
         next(scans)
 
 
-def test_parse_and_batch_packets(stream_digest,
-                                 packets: client.PacketSource) -> None:
+def test_scans_digest(stream_digest, packets: client.PacketSource) -> None:
     """Test that parsing packets produces expected results.
 
     Checks hashes of all packet and scans fields and headers against
@@ -170,3 +207,85 @@ def test_parse_and_batch_packets(stream_digest,
     """
     other = digest.StreamDigest.from_packets(packets)
     stream_digest.check(other)
+
+
+@pytest.mark.parametrize('test_key', ['dual-2.2'])
+def test_scans_dual(packets: client.PacketSource) -> None:
+    """Test scans from dual returns data."""
+    scans = client.Scans(packets, complete=True)
+
+    assert (scans.metadata.format.udp_profile_lidar ==
+            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+
+    ls = list(scans)
+
+    assert len(ls) == 1
+    assert set(ls[0].fields) == {
+        ChanField.RANGE,
+        ChanField.RANGE2,
+        ChanField.REFLECTIVITY,
+        ChanField.REFLECTIVITY2,
+        ChanField.SIGNAL,
+        ChanField.SIGNAL2,
+        ChanField.NEAR_IR,
+    }
+
+
+@pytest.mark.parametrize('test_key', ['dual-2.2'])
+def test_scans_empty_fields(packets: client.PacketSource) -> None:
+    """Test batching scans with no fields."""
+    scan = next(iter(client.Scans(packets, fields={})))
+    assert set(scan.fields) == set()
+
+
+@pytest.mark.parametrize('test_key', ['dual-2.2'])
+def test_scans_one_field(packets: client.PacketSource) -> None:
+    """Test batching scans with a single field."""
+    fields = {ChanField.FLAGS: np.uint8}
+    scan = next(iter(client.Scans(packets, fields=fields)))
+
+    assert set(scan.fields) == {ChanField.FLAGS}
+    assert scan.field(ChanField.FLAGS).dtype == np.uint8
+
+    with pytest.raises(ValueError):
+        scan.field(ChanField.RANGE)
+
+
+@pytest.mark.parametrize('test_key', ['dual-2.2'])
+def test_scans_bad_type(packets: client.PacketSource) -> None:
+    """Test batching scans with a type too small for source data."""
+    fields = {ChanField.RANGE: np.uint16}
+
+    with pytest.raises(ValueError):
+        next(iter(client.Scans(packets, fields=fields)))
+
+
+@pytest.mark.parametrize('test_key', ['legacy-2.0', 'legacy-2.1'])
+def test_scans_bad_field(packets: client.PacketSource) -> None:
+    """Test batching scans with a field not present on source packets."""
+    fields = {ChanField.RANGE2: np.uint32}
+
+    with pytest.raises(IndexError):
+        next(iter(client.Scans(packets, fields=fields)))
+
+
+@pytest.mark.parametrize('test_key', ['legacy-2.0', 'legacy-2.1'])
+def test_scans_raw(packets: client.PacketSource) -> None:
+    """Smoke test reading raw channel field data."""
+    fields = {
+        ChanField.RAW32_WORD1: np.uint32,
+        ChanField.RAW32_WORD2: np.uint32,
+        ChanField.RAW32_WORD3: np.uint32
+    }
+
+    scans = client.Scans(packets, fields=fields)
+
+    ls = list(scans)
+    assert len(ls) == 1
+    assert set(ls[0].fields) == {
+        ChanField.RAW32_WORD1, ChanField.RAW32_WORD2, ChanField.RAW32_WORD3
+    }
+
+    # just check that raw fields are populated?
+    for f in ls[0].fields:
+        assert np.count_nonzero(ls[0].field(f)) != 0

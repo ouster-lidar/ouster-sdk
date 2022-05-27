@@ -7,10 +7,11 @@
   <arg name="replay" default="false" doc="do not connect to a sensor; expect /os_node/{lidar,imu}_packets from replay"/>
   <arg name="lidar_mode" default="" doc="resolution and rate: either 512x10, 512x20, 1024x10, 1024x20, or 2048x10"/>
   <arg name="timestamp_mode" default="" doc="method used to timestamp measurements: TIME_FROM_INTERNAL_OSC, TIME_FROM_SYNC_PULSE_IN, TIME_FROM_PTP_1588"/>
-  <arg name="metadata" default="" doc="override default metadata file for replays"/>
-  <arg name="viz" default="false" doc="whether to run a simple visualizer"/>
-  <arg name="image" default="false" doc="publish range/intensity/ambient image topic"/>
+  <arg name="metadata" default="" doc="path to read or write metadata file when replaying or receiving sensor data, respectively"/>
+  <arg name="viz" default="false" doc="whether to run a rviz"/>
+  <arg name="rviz_config" default="-d $(find ouster_ros)/viz.rviz" doc="optional rviz config file"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
+  <arg name="udp_profile_lidar" default="" doc="lidar packet profile: LEGACY, RNG19_RFL8_SIG16_NIR16_DUAL, RNG19_RFL8_SIG16_NIR16, RNG15_RFL8_NIR8"/>
   <arg name="fixed_frame_id" default="" doc="lidar de-skewing based on motion relative to this fixed frame"/>
   <arg name="wait_for_transform" default="0.01" doc="maximum time to wait for TF when de-skewing lidar"/>
 
@@ -23,6 +24,7 @@
     <param name="~/lidar_port" value="$(arg lidar_port)"/>
     <param name="~/imu_port" value="$(arg imu_port)"/>
     <param name="~/metadata" value="$(arg metadata)"/>
+    <param name="~/udp_profile_lidar" value="$(arg udp_profile_lidar)"/>
   </node>
 
   <node pkg="ouster_ros" type="os_cloud_node" name="os_cloud_node" output="screen" required="true">
@@ -34,14 +36,11 @@
     <param name="~/wait_for_transform" value="$(arg wait_for_transform)"/>
   </node>
 
-  <node if="$(arg viz)" pkg="ouster_ros" name="viz_node" type="viz_node" output="screen" required="true">
-    <remap from="~/os_config" to="/os_node/os_config"/>
-    <remap from="~/lidar_packets" to="/os_node/lidar_packets"/>
-  </node>
-
-  <node if="$(arg image)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
+  <node if="$(arg viz)" pkg="rviz" name="rviz" type="rviz" args="$(arg rviz_config)" output="screen" required="true" />
+  <node if="$(arg viz)" pkg="ouster_ros" name="img_node" type="img_node" output="screen" required="true">
     <remap from="~/os_config" to="/os_node/os_config"/>
     <remap from="~/points" to="/os_cloud_node/points"/>
+    <remap from="~/points2" to="/os_cloud_node/points2"/>
   </node>
 
   <!-- for compatibility with < 1.13 rosbags -->

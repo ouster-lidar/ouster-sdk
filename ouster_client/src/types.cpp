@@ -1,50 +1,58 @@
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/types.h"
 
 #include <json/json.h>
 
-#include <Eigen/Eigen>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ouster/build.h"
-#include "ouster/impl/parsing.h"
 #include "ouster/version.h"
+
+namespace ouster {
 
 using nonstd::make_optional;
 using nonstd::nullopt;
 using nonstd::optional;
 
-namespace ouster {
-
 namespace sensor {
 
-namespace {
+namespace impl {
 
-const std::array<std::pair<lidar_mode, std::string>, 5> lidar_mode_strings = {
-    {{MODE_512x10, "512x10"},
+template <typename K, typename V, size_t N>
+using Table = std::array<std::pair<K, V>, N>;
+
+extern const Table<lidar_mode, const char*, 6> lidar_mode_strings{
+    {{MODE_UNSPEC, "UNKNOWN"},
+     {MODE_512x10, "512x10"},
      {MODE_512x20, "512x20"},
      {MODE_1024x10, "1024x10"},
      {MODE_1024x20, "1024x20"},
      {MODE_2048x10, "2048x10"}}};
 
-const std::array<std::pair<timestamp_mode, std::string>, 3>
-    timestamp_mode_strings = {
-        {{TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
-         {TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
-         {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
+extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings{
+    {{TIME_FROM_UNSPEC, "UNKNOWN"},
+     {TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"},
+     {TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"},
+     {TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"}}};
 
-const std::array<std::pair<OperatingMode, std::string>, 2>
-    operating_mode_strings = {
-        {{OPERATING_NORMAL, "NORMAL"}, {OPERATING_STANDBY, "STANDBY"}}};
+extern const Table<OperatingMode, const char*, 2> operating_mode_strings{
+    {{OPERATING_NORMAL, "NORMAL"}, {OPERATING_STANDBY, "STANDBY"}}};
 
-const std::array<std::pair<MultipurposeIOMode, std::string>, 6>
-    multipurpose_io_mode_strings = {
+extern const Table<MultipurposeIOMode, const char*, 6>
+    multipurpose_io_mode_strings{
         {{MULTIPURPOSE_OFF, "OFF"},
          {MULTIPURPOSE_INPUT_NMEA_UART, "INPUT_NMEA_UART"},
          {MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC, "OUTPUT_FROM_INTERNAL_OSC"},
@@ -53,21 +61,52 @@ const std::array<std::pair<MultipurposeIOMode, std::string>, 6>
          {MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE,
           "OUTPUT_FROM_ENCODER_ANGLE"}}};
 
-const std::array<std::pair<Polarity, std::string>, 2> polarity_strings = {
+extern const Table<Polarity, const char*, 2> polarity_strings{
     {{POLARITY_ACTIVE_LOW, "ACTIVE_LOW"},
      {POLARITY_ACTIVE_HIGH, "ACTIVE_HIGH"}}};
 
-const std::array<std::pair<NMEABaudRate, std::string>, 2>
-    nmea_baud_rate_strings = {
-        {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
-}  // namespace
+extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
+    {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
+
+Table<sensor::ChanField, const char*, 13> chanfield_strings{{
+    {ChanField::RANGE, "RANGE"},
+    {ChanField::RANGE2, "RANGE2"},
+    {ChanField::SIGNAL, "SIGNAL"},
+    {ChanField::SIGNAL2, "SIGNAL2"},
+    {ChanField::REFLECTIVITY, "REFLECTIVITY"},
+    {ChanField::REFLECTIVITY2, "REFLECTIVITY2"},
+    {ChanField::NEAR_IR, "NEAR_IR"},
+    {ChanField::FLAGS, "FLAGS"},
+    {ChanField::FLAGS2, "FLAGS2"},
+    {ChanField::RAW32_WORD1, "RAW32_WORD1"},
+    {ChanField::RAW32_WORD2, "RAW32_WORD2"},
+    {ChanField::RAW32_WORD3, "RAW32_WORD3"},
+    {ChanField::RAW32_WORD4, "RAW32_WORD4"},
+}};
+
+Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings{{
+    {PROFILE_LIDAR_LEGACY, "LEGACY"},
+    {PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
+    {PROFILE_RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
+    {PROFILE_RNG15_RFL8_NIR8, "RNG15_RFL8_NIR8"},
+}};
+
+Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
+    {PROFILE_IMU_LEGACY, "LEGACY"},
+}};
+
+}  // namespace impl
+
+/* Equality operators */
 
 bool operator==(const data_format& lhs, const data_format& rhs) {
     return (lhs.pixels_per_column == rhs.pixels_per_column &&
             lhs.columns_per_packet == rhs.columns_per_packet &&
             lhs.columns_per_frame == rhs.columns_per_frame &&
             lhs.pixel_shift_by_row == rhs.pixel_shift_by_row &&
-            lhs.column_window == rhs.column_window);
+            lhs.column_window == rhs.column_window &&
+            lhs.udp_profile_lidar == rhs.udp_profile_lidar &&
+            lhs.udp_profile_imu == rhs.udp_profile_imu);
 }
 
 bool operator!=(const data_format& lhs, const data_format& rhs) {
@@ -84,7 +123,9 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs) {
                 rhs.lidar_origin_to_beam_origin_mm &&
             lhs.imu_to_sensor_transform == rhs.imu_to_sensor_transform &&
             lhs.lidar_to_sensor_transform == rhs.lidar_to_sensor_transform &&
-            lhs.extrinsic == rhs.extrinsic);
+            lhs.extrinsic == rhs.extrinsic && lhs.init_id == rhs.init_id &&
+            lhs.udp_port_lidar == rhs.udp_port_lidar &&
+            lhs.udp_port_imu == rhs.udp_port_imu);
 }
 
 bool operator!=(const sensor_info& lhs, const sensor_info& rhs) {
@@ -98,6 +139,7 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
             lhs.ts_mode == rhs.ts_mode && lhs.ld_mode == rhs.ld_mode &&
             lhs.operating_mode == rhs.operating_mode &&
             lhs.azimuth_window == rhs.azimuth_window &&
+            lhs.signal_multiplier == rhs.signal_multiplier &&
             lhs.sync_pulse_out_angle == rhs.sync_pulse_out_angle &&
             lhs.sync_pulse_out_pulse_width == rhs.sync_pulse_out_pulse_width &&
             lhs.nmea_in_polarity == rhs.nmea_in_polarity &&
@@ -115,6 +157,8 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs) {
     return !(lhs == rhs);
 }
+
+/* Default values */
 
 static ColumnWindow default_column_window(uint32_t columns_per_frame) {
     return {0, columns_per_frame - 1};
@@ -147,8 +191,13 @@ data_format default_data_format(lidar_mode mode) {
             throw std::invalid_argument{"default_data_format"};
     }
 
-    return {pixels_per_column, columns_per_packet, columns_per_frame, offset,
-            column_window};
+    return {pixels_per_column,
+            columns_per_packet,
+            columns_per_frame,
+            offset,
+            column_window,
+            UDPProfileLidar::PROFILE_LIDAR_LEGACY,
+            UDPProfileIMU::PROFILE_IMU_LEGACY};
 }
 
 static double default_lidar_origin_to_beam_origin(std::string prod_line) {
@@ -162,8 +211,6 @@ static double default_lidar_origin_to_beam_origin(std::string prod_line) {
     return lidar_origin_to_beam_origin_mm;
 }
 
-
-
 sensor_info default_sensor_info(lidar_mode mode) {
     return sensor::sensor_info{"UNKNOWN",
                                "000000000000",
@@ -176,49 +223,43 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                default_lidar_origin_to_beam_origin("OS-1-64"),
                                default_imu_to_sensor_transform,
                                default_lidar_to_sensor_transform,
-                               mat4d::Identity()};
+                               mat4d::Identity(),
+                               0,
+                               0,
+                               0};
 }
 
-constexpr packet_format packet_1_13 = impl::packet_2_0<64>();
-constexpr packet_format packet_2_0_16 = impl::packet_2_0<16>();
-constexpr packet_format packet_2_0_32 = impl::packet_2_0<32>();
-constexpr packet_format packet_2_0_64 = impl::packet_2_0<64>();
-constexpr packet_format packet_2_0_128 = impl::packet_2_0<128>();
+extern const std::vector<double> gen1_altitude_angles = {
+    16.611,  16.084,  15.557,  15.029,  14.502,  13.975,  13.447,  12.920,
+    12.393,  11.865,  11.338,  10.811,  10.283,  9.756,   9.229,   8.701,
+    8.174,   7.646,   7.119,   6.592,   6.064,   5.537,   5.010,   4.482,
+    3.955,   3.428,   2.900,   2.373,   1.846,   1.318,   0.791,   0.264,
+    -0.264,  -0.791,  -1.318,  -1.846,  -2.373,  -2.900,  -3.428,  -3.955,
+    -4.482,  -5.010,  -5.537,  -6.064,  -6.592,  -7.119,  -7.646,  -8.174,
+    -8.701,  -9.229,  -9.756,  -10.283, -10.811, -11.338, -11.865, -12.393,
+    -12.920, -13.447, -13.975, -14.502, -15.029, -15.557, -16.084, -16.611,
+};
 
-const packet_format& get_format(const sensor_info& info) {
-    switch (info.format.pixels_per_column) {
-        case 16:
-            return packet_2_0_16;
-        case 32:
-            return packet_2_0_32;
-        case 64:
-            return packet_2_0_64;
-        case 128:
-            return packet_2_0_128;
-        default:
-            return packet_1_13;
-    }
-}
+extern const std::vector<double> gen1_azimuth_angles = {
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
+};
 
-std::string to_string(lidar_mode mode) {
-    auto end = lidar_mode_strings.end();
-    auto res = std::find_if(lidar_mode_strings.begin(), end,
-                            [&](const std::pair<lidar_mode, std::string>& p) {
-                                return p.first == mode;
-                            });
+extern const mat4d default_imu_to_sensor_transform =
+    (mat4d() << 1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1)
+        .finished();
 
-    return res == end ? "UNKNOWN" : res->second;
-}
+extern const mat4d default_lidar_to_sensor_transform =
+    (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
+        .finished();
 
-lidar_mode lidar_mode_of_string(const std::string& s) {
-    auto end = lidar_mode_strings.end();
-    auto res = std::find_if(lidar_mode_strings.begin(), end,
-                            [&](const std::pair<lidar_mode, std::string>& p) {
-                                return p.second == s;
-                            });
-
-    return res == end ? lidar_mode(0) : res->first;
-}
+/* Misc operations */
 
 uint32_t n_cols_of_lidar_mode(lidar_mode mode) {
     switch (mode) {
@@ -249,111 +290,89 @@ int frequency_of_lidar_mode(lidar_mode mode) {
     }
 }
 
-std::string to_string(timestamp_mode mode) {
-    auto end = timestamp_mode_strings.end();
-    auto res =
-        std::find_if(timestamp_mode_strings.begin(), end,
-                     [&](const std::pair<timestamp_mode, std::string>& p) {
-                         return p.first == mode;
-                     });
+std::string client_version() {
+    return std::string("ouster_client ").append(ouster::CLIENT_VERSION);
+}
 
-    return res == end ? "UNKNOWN" : res->second;
+/* String conversion */
+
+template <typename K, typename V, size_t N>
+static optional<V> lookup(const impl::Table<K, V, N> table, const K& k) {
+    auto end = table.end();
+    auto res = std::find_if(table.begin(), end, [&](const std::pair<K, V>& p) {
+        return p.first == k;
+    });
+
+    return res == end ? nullopt : make_optional<V>(res->second);
+}
+
+template <typename K, size_t N>
+static optional<K> rlookup(const impl::Table<K, const char*, N> table,
+                           const char* v) {
+    auto end = table.end();
+    auto res = std::find_if(table.begin(), end,
+                            [&](const std::pair<K, const char*>& p) {
+                                return std::strcmp(p.second, v) == 0;
+                            });
+
+    return res == end ? nullopt : make_optional<K>(res->first);
+}
+
+std::string to_string(lidar_mode mode) {
+    auto res = lookup(impl::lidar_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
+}
+
+lidar_mode lidar_mode_of_string(const std::string& s) {
+    auto res = rlookup(impl::lidar_mode_strings, s.c_str());
+    return res ? res.value() : lidar_mode::MODE_UNSPEC;
+}
+
+std::string to_string(timestamp_mode mode) {
+    auto res = lookup(impl::timestamp_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
 }
 
 timestamp_mode timestamp_mode_of_string(const std::string& s) {
-    auto end = timestamp_mode_strings.end();
-    auto res =
-        std::find_if(timestamp_mode_strings.begin(), end,
-                     [&](const std::pair<timestamp_mode, std::string>& p) {
-                         return p.second == s;
-                     });
-
-    return res == end ? timestamp_mode(0) : res->first;
+    auto res = rlookup(impl::timestamp_mode_strings, s.c_str());
+    return res ? res.value() : timestamp_mode::TIME_FROM_UNSPEC;
 }
 
 std::string to_string(OperatingMode mode) {
-    auto end = operating_mode_strings.end();
-    auto res =
-        std::find_if(operating_mode_strings.begin(), end,
-                     [&](const std::pair<OperatingMode, std::string>& p) {
-                         return p.first == mode;
-                     });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::operating_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<OperatingMode> operating_mode_of_string(const std::string& s) {
-    auto end = operating_mode_strings.end();
-    auto res =
-        std::find_if(operating_mode_strings.begin(), end,
-                     [&](const std::pair<OperatingMode, std::string>& p) {
-                         return p.second == s;
-                     });
-
-    return res == end ? nullopt : make_optional<OperatingMode>(res->first);
+    return rlookup(impl::operating_mode_strings, s.c_str());
 }
 
 std::string to_string(MultipurposeIOMode mode) {
-    auto end = multipurpose_io_mode_strings.end();
-    auto res =
-        std::find_if(multipurpose_io_mode_strings.begin(), end,
-                     [&](const std::pair<MultipurposeIOMode, std::string>& p) {
-                         return p.first == mode;
-                     });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::multipurpose_io_mode_strings, mode);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
     const std::string& s) {
-    auto end = multipurpose_io_mode_strings.end();
-    auto res =
-        std::find_if(multipurpose_io_mode_strings.begin(), end,
-                     [&](const std::pair<MultipurposeIOMode, std::string>& p) {
-                         return p.second == s;
-                     });
-
-    return res == end ? nullopt : make_optional<MultipurposeIOMode>(res->first);
+    return rlookup(impl::multipurpose_io_mode_strings, s.c_str());
 }
 
 std::string to_string(Polarity polarity) {
-    auto end = polarity_strings.end();
-    auto res = std::find_if(polarity_strings.begin(), end,
-                            [&](const std::pair<Polarity, std::string>& p) {
-                                return p.first == polarity;
-                            });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::polarity_strings, polarity);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<Polarity> polarity_of_string(const std::string& s) {
-    auto end = polarity_strings.end();
-    auto res = std::find_if(polarity_strings.begin(), end,
-                            [&](const std::pair<Polarity, std::string>& p) {
-                                return p.second == s;
-                            });
-
-    return res == end ? nullopt : make_optional<Polarity>(res->first);
+    return rlookup(impl::polarity_strings, s.c_str());
 }
 
 std::string to_string(NMEABaudRate rate) {
-    auto end = nmea_baud_rate_strings.end();
-    auto res = std::find_if(nmea_baud_rate_strings.begin(), end,
-                            [&](const std::pair<NMEABaudRate, std::string>& p) {
-                                return p.first == rate;
-                            });
-
-    return res == end ? "UNKNOWN" : res->second;
+    auto res = lookup(impl::nmea_baud_rate_strings, rate);
+    return res ? res.value() : "UNKNOWN";
 }
 
 optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s) {
-    auto end = nmea_baud_rate_strings.end();
-    auto res = std::find_if(nmea_baud_rate_strings.begin(), end,
-                            [&](const std::pair<NMEABaudRate, std::string>& p) {
-                                return p.second == s;
-                            });
-
-    return res == end ? nullopt : make_optional<NMEABaudRate>(res->first);
+    return rlookup(impl::nmea_baud_rate_strings, s.c_str());
 }
 
 std::string to_string(AzimuthWindow azimuth_window) {
@@ -362,11 +381,30 @@ std::string to_string(AzimuthWindow azimuth_window) {
     return ss.str();
 }
 
-bool operator==(const AzimuthWindow& lhs, const AzimuthWindow& rhs) {
-    return (lhs.first == rhs.first && lhs.second == rhs.second);
+std::string to_string(ChanField field) {
+    auto res = lookup(impl::chanfield_strings, field);
+    return res ? res.value() : "UNKNOWN";
 }
 
-sensor_config parse_config(const Json::Value& root) {
+std::string to_string(UDPProfileLidar profile) {
+    auto res = lookup(impl::udp_profile_lidar_strings, profile);
+    return res ? res.value() : "UNKNOWN";
+}
+
+optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s) {
+    return rlookup(impl::udp_profile_lidar_strings, s.c_str());
+}
+
+std::string to_string(UDPProfileIMU profile) {
+    auto res = lookup(impl::udp_profile_imu_strings, profile);
+    return res ? res.value() : "UNKNOWN";
+}
+
+optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s) {
+    return rlookup(impl::udp_profile_imu_strings, s.c_str());
+}
+
+static sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
     if (!root["udp_dest"].empty())
@@ -385,6 +423,9 @@ sensor_config parse_config(const Json::Value& root) {
         config.azimuth_window =
             std::make_pair(root["azimuth_window"][0].asInt(),
                            root["azimuth_window"][1].asInt());
+
+    if (!root["signal_multiplier"].empty())
+        config.signal_multiplier = root["signal_multiplier"].asInt();
 
     if (!root["operating_mode"].empty()) {
         auto operating_mode =
@@ -470,16 +511,28 @@ sensor_config parse_config(const Json::Value& root) {
                                     ? sensor::OPERATING_NORMAL
                                     : sensor::OPERATING_STANDBY;
 
+    if (!root["columns_per_packet"].empty())
+        config.columns_per_packet = root["columns_per_packet"].asInt();
+
+    // udp_profiles
+    if (!root["udp_profile_lidar"].empty())
+        config.udp_profile_lidar =
+            udp_profile_lidar_of_string(root["udp_profile_lidar"].asString());
+
+    if (!root["udp_profile_imu"].empty())
+        config.udp_profile_imu =
+            udp_profile_imu_of_string(root["udp_profile_imu"].asString());
+
     return config;
 }
 
-sensor_config parse_config(const std::string& meta) {
+sensor_config parse_config(const std::string& config) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
-    std::stringstream ss{meta};
+    std::stringstream ss{config};
 
-    if (meta.size()) {
+    if (config.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors)) {
             throw std::invalid_argument{errors.c_str()};
         }
@@ -488,7 +541,103 @@ sensor_config parse_config(const std::string& meta) {
     return parse_config(root);
 }
 
-sensor_info parse_metadata(const std::string& meta) {
+static bool valid_response(const Json::Value& root,
+                           const std::string& tcp_request) {
+    return (root.isMember(tcp_request) && root[tcp_request].isObject());
+}
+
+// TODO make robust to new formats that are incorrect instead of returning false
+// and sending to legacy
+static bool is_new_format(const std::string& metadata) {
+    Json::Value root{};
+    Json::CharReaderBuilder builder{};
+    std::string errors{};
+    std::stringstream ss{metadata};
+
+    if (metadata.size()) {
+        if (!Json::parseFromStream(builder, ss, &root, &errors))
+            throw std::invalid_argument{errors.c_str()};
+    }
+
+    const std::vector<std::string> valid_response_required = {
+        "sensor_info", "beam_intrinsics", "imu_intrinsics", "lidar_intrinsics",
+        "config_params"};
+
+    for (const auto& key : valid_response_required) {
+        if (!valid_response(root, key)) {
+            return false;
+        }
+    }
+
+    const std::vector<std::string> member_required = {"lidar_data_format",
+                                                      "calibration_status"};
+
+    for (const auto& key : member_required) {
+        if (!root.isMember(key)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static data_format parse_data_format(const Json::Value& root) {
+    data_format format;
+
+    format.pixels_per_column = root["pixels_per_column"].asInt();
+    format.columns_per_packet = root["columns_per_packet"].asInt();
+    format.columns_per_frame = root["columns_per_frame"].asInt();
+
+    if (root["pixel_shift_by_row"].size() != format.pixels_per_column) {
+        throw std::invalid_argument{"Unexpected number of pixel_shift_by_row"};
+    }
+
+    for (const auto& v : root["pixel_shift_by_row"])
+        format.pixel_shift_by_row.push_back(v.asInt());
+
+    if (root.isMember("column_window")) {
+        if (root["column_window"].size() != 2) {
+            throw std::invalid_argument{
+                "Unexpected size of column_window tuple"};
+        }
+        format.column_window.first = root["column_window"][0].asInt();
+        format.column_window.second = root["column_window"][1].asInt();
+    } else {
+        std::cerr << "WARNING: No column window found." << std::endl;
+        format.column_window = default_column_window(format.columns_per_frame);
+    }
+
+    if (root.isMember("udp_profile_lidar")) {
+        // initializing directly triggers -Wmaybe-uninitialized GCC 8.3.1
+        optional<UDPProfileLidar> profile{nullopt};
+        profile =
+            udp_profile_lidar_of_string(root["udp_profile_lidar"].asString());
+        if (profile) {
+            format.udp_profile_lidar = profile.value();
+        } else {
+            throw std::invalid_argument{"Unexpected udp lidar profile"};
+        }
+    } else {
+        std::cerr << "WARNING: No lidar profile found." << std::endl;
+        format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
+    }
+
+    if (root.isMember("udp_profile_imu")) {
+        optional<UDPProfileIMU> profile{nullopt};
+        profile = udp_profile_imu_of_string(root["udp_profile_imu"].asString());
+        if (profile) {
+            format.udp_profile_imu = profile.value();
+        } else {
+            throw std::invalid_argument{"Unexpected udp imu profile"};
+        }
+    } else {
+        format.udp_profile_imu = PROFILE_IMU_LEGACY;
+    }
+
+    return format;
+}
+
+static sensor_info parse_legacy(const std::string& meta) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
@@ -498,10 +647,11 @@ sensor_info parse_metadata(const std::string& meta) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
             throw std::invalid_argument{errors.c_str()};
     }
-
     sensor_info info{};
 
+    // info.name is deprecated, will be empty string if not present
     info.name = root["hostname"].asString();
+
     info.sn = root["prod_sn"].asString();
     info.fw_rev = root["build_rev"].asString();
     info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
@@ -509,37 +659,7 @@ sensor_info parse_metadata(const std::string& meta) {
 
     // "data_format" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("data_format")) {
-        info.format.pixels_per_column =
-            root["data_format"]["pixels_per_column"].asInt();
-        info.format.columns_per_packet =
-            root["data_format"]["columns_per_packet"].asInt();
-        info.format.columns_per_frame =
-            root["data_format"]["columns_per_frame"].asInt();
-
-        if (root["data_format"]["pixel_shift_by_row"].size() !=
-            info.format.pixels_per_column) {
-            throw std::invalid_argument{
-                "Unexpected number of pixel_shift_by_row"};
-        }
-
-        for (const auto& v : root["data_format"]["pixel_shift_by_row"])
-            info.format.pixel_shift_by_row.push_back(v.asInt());
-
-        if (root["data_format"].isMember("column_window")) {
-            if (root["data_format"]["column_window"].size() != 2) {
-                throw std::invalid_argument{
-                    "Unexpected size of column_window tuple"};
-            }
-            info.format.column_window.first =
-                root["data_format"]["column_window"][0].asInt();
-            info.format.column_window.second =
-                root["data_format"]["column_window"][1].asInt();
-        } else {
-            std::cerr << "WARNING: No column window found." << std::endl;
-            info.format.column_window =
-                default_column_window(info.format.columns_per_frame);
-        }
-
+        info.format = parse_data_format(root["data_format"]);
     } else {
         std::cerr << "WARNING: No data_format found." << std::endl;
         info.format = default_data_format(info.mode);
@@ -606,6 +726,88 @@ sensor_info parse_metadata(const std::string& meta) {
 
     info.extrinsic = mat4d::Identity();
 
+    // default to 0 if keys are not present
+    info.init_id = root["initialization_id"].asInt();
+    info.udp_port_lidar = root["udp_port_lidar"].asInt();
+    info.udp_port_imu = root["udp_port_imu"].asInt();
+
+    return info;
+}
+
+static void update_json_obj(Json::Value& dst, const Json::Value& src) {
+    const std::vector<std::string>& members = src.getMemberNames();
+    for (const auto& key : members) {
+        dst[key] = src[key];
+    }
+}
+
+/* version field required by ouster studio */
+enum configuration_version { FW_2_0 = 3, FW_2_2 = 4 };
+
+std::string convert_to_legacy(const std::string& metadata) {
+    if (!is_new_format(metadata))
+        throw std::invalid_argument(
+            "Could not convert invalid non-legacy metadata format");
+
+    Json::Value root{};
+    Json::CharReaderBuilder read_builder{};
+    std::string errors{};
+    std::stringstream ss{metadata};
+
+    if (metadata.size()) {
+        if (!Json::parseFromStream(read_builder, ss, &root, &errors)) {
+            throw std::invalid_argument{errors.c_str()};
+        }
+    }
+    Json::Value result{};
+
+    if (root.isMember("config_params")) {
+        result["lidar_mode"] = root["config_params"]["lidar_mode"];
+        result["udp_port_lidar"] = root["config_params"]["udp_port_lidar"];
+        result["udp_port_imu"] = root["config_params"]["udp_port_imu"];
+    }
+    if (root.isMember("client_version")) {
+        result["client_version"] = root["client_version"];
+    }
+    result["json_calibration_version"] = FW_2_2;
+
+    result["hostname"] = "";
+
+    update_json_obj(result, root["sensor_info"]);
+    update_json_obj(result, root["beam_intrinsics"]);
+    update_json_obj(result, root["imu_intrinsics"]);
+    update_json_obj(result, root["lidar_intrinsics"]);
+
+    if (root.isMember("lidar_data_format") &&
+        root["lidar_data_format"].isObject()) {
+        result["data_format"] = Json::Value{};
+        update_json_obj(result["data_format"], root["lidar_data_format"]);
+    }
+
+    Json::StreamWriterBuilder write_builder;
+    write_builder["enableYAMLCompatibility"] = true;
+    write_builder["precision"] = 6;
+    write_builder["indentation"] = "    ";
+    return Json::writeString(write_builder, result);
+}
+
+sensor_info parse_metadata(const std::string& metadata) {
+    Json::Value root{};
+    Json::CharReaderBuilder builder{};
+    std::string errors{};
+    std::stringstream ss{metadata};
+
+    if (metadata.size()) {
+        if (!Json::parseFromStream(builder, ss, &root, &errors))
+            throw std::invalid_argument{errors.c_str()};
+    }
+
+    sensor_info info{};
+    if (is_new_format(metadata)) {
+        info = parse_legacy(convert_to_legacy(metadata));
+    } else {
+        info = parse_legacy(metadata);
+    }
     return info;
 }
 
@@ -628,8 +830,8 @@ sensor_info metadata_from_json(const std::string& json_file) {
 std::string to_string(const sensor_info& info) {
     Json::Value root{};
 
-    root["client_version"] = ouster::CLIENT_VERSION;
-    root["hostname"] = info.name;
+    root["client_version"] = client_version();
+    root["hostname"] = "";
     root["prod_sn"] = info.sn;
     root["build_rev"] = info.fw_rev;
     root["lidar_mode"] = to_string(info.mode);
@@ -645,6 +847,11 @@ std::string to_string(const sensor_info& info) {
         info.format.column_window.first);
     root["data_format"]["column_window"].append(
         info.format.column_window.second);
+
+    root["data_format"]["udp_profile_lidar"] =
+        to_string(info.format.udp_profile_lidar);
+    root["data_format"]["udp_profile_imu"] =
+        to_string(info.format.udp_profile_imu);
 
     root["lidar_origin_to_beam_origin_mm"] =
         info.lidar_origin_to_beam_origin_mm;
@@ -667,7 +874,11 @@ std::string to_string(const sensor_info& info) {
         }
     }
 
-    root["json_calibration_version"] = FW_2_0;
+    root["initialization_id"] = info.init_id;
+    root["udp_port_lidar"] = info.udp_port_lidar;
+    root["udp_port_imu"] = info.udp_port_imu;
+
+    root["json_calibration_version"] = FW_2_2;
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
@@ -676,11 +887,13 @@ std::string to_string(const sensor_info& info) {
     return Json::writeString(builder, root);
 }
 
-std::string to_string(const sensor_config& config) {
-    Json::Value root{};
+Json::Value to_json(const sensor_config& config, bool compat) {
+    Json::Value root{Json::objectValue};
 
     if (config.udp_dest) {
-        root["udp_dest"] = config.udp_dest.value();
+        // use deprecated cofig for 1.13 compatibility
+        const char* key = compat ? "udp_ip" : "udp_dest";
+        root[key] = config.udp_dest.value();
     }
 
     if (config.udp_port_lidar) {
@@ -700,7 +913,14 @@ std::string to_string(const sensor_config& config) {
     }
 
     if (config.operating_mode) {
-        root["operating_mode"] = to_string(config.operating_mode.value());
+        // use deprecated config for 1.13 compatibility
+        auto mode = config.operating_mode.value();
+        if (compat) {
+            root["auto_start_flag"] =
+                (mode == OperatingMode::OPERATING_NORMAL) ? 1 : 0;
+        } else {
+            root["operating_mode"] = to_string(mode);
+        }
     }
 
     if (config.multipurpose_io_mode) {
@@ -713,6 +933,10 @@ std::string to_string(const sensor_config& config) {
         azimuth_window.append(config.azimuth_window.value().first);
         azimuth_window.append(config.azimuth_window.value().second);
         root["azimuth_window"] = azimuth_window;
+    }
+
+    if (config.signal_multiplier) {
+        root["signal_multiplier"] = config.signal_multiplier.value();
     }
 
     if (config.sync_pulse_out_angle) {
@@ -764,47 +988,30 @@ std::string to_string(const sensor_config& config) {
         root["phase_lock_offset"] = config.phase_lock_offset.value();
     }
 
+    if (config.columns_per_packet) {
+        root["columns_per_packet"] = config.columns_per_packet.value();
+    }
+
+    if (config.udp_profile_lidar) {
+        root["udp_profile_lidar"] = to_string(config.udp_profile_lidar.value());
+    }
+
+    if (config.udp_profile_imu) {
+        root["udp_profile_imu"] = to_string(config.udp_profile_imu.value());
+    }
+
+    return root;
+}
+
+std::string to_string(const sensor_config& config) {
+    Json::Value root = to_json(config, false);
+
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
     builder["precision"] = 6;
     builder["indentation"] = "    ";
     return Json::writeString(builder, root);
 }
-
-std::ostream& operator<<(std::ostream& os, const sensor_config& config) {
-    os << to_string(config);
-    return os;
-}
-
-extern const std::vector<double> gen1_altitude_angles = {
-    16.611,  16.084,  15.557,  15.029,  14.502,  13.975,  13.447,  12.920,
-    12.393,  11.865,  11.338,  10.811,  10.283,  9.756,   9.229,   8.701,
-    8.174,   7.646,   7.119,   6.592,   6.064,   5.537,   5.010,   4.482,
-    3.955,   3.428,   2.900,   2.373,   1.846,   1.318,   0.791,   0.264,
-    -0.264,  -0.791,  -1.318,  -1.846,  -2.373,  -2.900,  -3.428,  -3.955,
-    -4.482,  -5.010,  -5.537,  -6.064,  -6.592,  -7.119,  -7.646,  -8.174,
-    -8.701,  -9.229,  -9.756,  -10.283, -10.811, -11.338, -11.865, -12.393,
-    -12.920, -13.447, -13.975, -14.502, -15.029, -15.557, -16.084, -16.611,
-};
-
-extern const std::vector<double> gen1_azimuth_angles = {
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-    3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
-};
-
-extern const mat4d default_imu_to_sensor_transform =
-    (mat4d() << 1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1)
-        .finished();
-
-extern const mat4d default_lidar_to_sensor_transform =
-    (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
-        .finished();
 
 }  // namespace sensor
 
@@ -831,8 +1038,7 @@ version version_of_string(const std::string& s) {
         return v;
     else
         return invalid_version;
-};
+}
 
 }  // namespace util
-
 }  // namespace ouster

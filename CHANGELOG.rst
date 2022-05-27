@@ -2,27 +2,199 @@
 Changelog
 =========
 
-[unreleased]
+[20220504]
+===========
+
+* update supported vcpkg tag to 2022.02.23
+* update to manylinux2014 for x64 linux ``ouster-sdk`` wheels
+* Ouster SDK documentation overhaul with C++/Python APIs in one place
+* sample data updated to firmware 2.3
+
+ouster_client
+-------------
+* fix the behavior of ``BeamUniformityCorrector`` on azimuth-windowed data by ignoring zeroed out
+  columns
+* add overloads in ``image_processing.h`` to work with single-precision floats
+* add support for new ``RNG19_RFL8_SIG16_NIR16`` single-return and ``RNG15_RFL8_NIR8`` low-bandwidth
+  lidar UDP profiles introduced in firmware 2.3
+
+ouster_viz
+----------
+* switch to glad for OpenGL loading. GLEW is still supported for developer builds
+* breaking change: significant API update of the ``PointViz`` library. See documentation for details
+* the ``simple_viz`` example app and ``LidarScanViz`` utility have been removed. Equivalent
+  functionality is now provided via Python
+* add basic support for drawing 2d and 3d text labels
+* update to OpenGL 3.3
+
+python
+------
+* fix a bug where incorrectly sized packets read from the network could cause the client thread to
+  silently exit, resulting in a timeout
+* fix ``client.Scans`` not raising a timeout when using the ``complete`` flag and receiving only
+  incomplete scans. This could cause readings scans to hang in rare situations
+* added bindings for the new ``PointViz`` API and a new module for higher-level visualizer utilities
+  in ``ouster.sdk.viz``. See API documentation for details
+* the ``ouster-sdk`` package now includes an example visualizer, ``simple-viz``, which will be
+  installed on that path for the Python environment
+
+ouster_ros
+-----------
+* support new fw 2.3 profiles by checking for inclusion of fields when creating point cloud. Missing
+  fields are filled with zeroes
+
+[20220107]
 ============
 
-Added
------
-* first release of Python bindings for the provided C++ code. See the README under the ``python``
-  directory for details and links to documentation
-* early version of a C++ API covering the full sensor configuration interface
-* preliminary C++ API for working with pcap files containing a single sensor packet capture
+* add support for arm64 macos and linux. Releases are now built and tested on these platforms
+* add support for Python 3.10
+* update supported vcpkg tag to 2021.05.12
+* add preliminary cpack and install support. It should be possible to use a pre-built SDK package
+  instead of including the SDK in the build tree of your project
+
+ouster_client
+-------------
+* update cmake package version to 0.3.0
+* avoid unnecessary DNS lookup when using numeric addresses with ``init_client()``
+* disable collecting metadata when sensor is in STANDBY mode
+* breaking change: ``set_config()`` will now produce more informative errors by throwing
+  ``std::invalid_argument`` with an error message when config parameters fail validation
+* use ``SO_REUSEPORT`` for UDP sockets on non-windows platforms
+* the set of fields available on ``LidarScan`` is now configurable. See the new ``LidarScan``
+  constructors for details
+* added ``RANGE2``, ``SIGNAL2`` and ``REFLECTIVITY2`` channel fields to support handling data from
+  the second return
+* ``ScanBatcher`` will now parse and populate only the channel fields configured on the
+  ``LidarScan`` passed to ``operator()()``
+* add support for new configuration parameters: ``udp_profile_lidar``, ``udp_profile_imu`` and
+  ``columns_per_packet``
+* add udp ports, the new initialization id field, and udp profiles to the metadata stored in
+  the ``sensor_info`` struct
+* ``sensor_info::name`` is now deprecated and will stop being populated in the future
+* add methods to query and iterate over available ``LidarScan`` fields and field types
+* breaking change: removed ``LidarScan::block`` and ``LidarScan::data`` members. These can't be
+  supported for different packet profiles
+* the ``LidarScan::Field`` defniition has been moved to ``sensor::ChanField`` and enumerators have
+  been renamed to match the sensor user manual. The old names are still available, but deprecated
+* deprecate accessing encoder values and frame ids from measurement blocks using ``packet_format``
+  as these will not be reported by the sensor in some future configurations
+* add ``packet_frame_id`` member function to ``packet_format``
+* add ``col_field`` member function to ``packet_format`` for parsing channel field values for an
+  entire measurement block
+* add new accessors for measurement headers to ``LidarScan``, deprecating the existing ``header``
+  member function
+* represent empty sensor config with an empty object instead of null in json representation of the
+  ``sensor_config`` datatype
+* update cmake package version to 0.2.1
+* add a conservative socket read timeout so ``init_client()`` will fail with an error message when
+  another client fails to close a TCP connection (addresses #258)
+* when passed an empty string for the ``udp_dest_host`` parameter, ``init_client()`` will now
+  configure the sensor using ``set_udp_dest_auto``. Previously, this would turn off UDP output on
+  the sensor, so any attempt to read data would time out (PR #255)
+* fall back to binding ipv4 UDP sockets when ipv6 is not available (addresses #261)
+
+ouster_pcap
+-----------
+* report additional information in the ``packet_info`` struct and remove separate ``stream_info``
+  API
+* switch the default pcap encapsulation to ethernet for Ouster Studio compatibility (addresses #265)
+
+ouster_ros
+----------
+* update ROS package version to 0.3.0
+* allow setting the packet profile in ouster.launch with the ``udp_profile_lidar`` parameter
+* publish additional cloud and image topics for the second return when running in dual returns mode
+* fix ``os_node`` crash on shutdown due to Eigen alignment flag not being propogated by catkin
+* update ROS package version to 0.2.1
+* the ``udp_dest`` parameter to ouster.launch is now optional when connecting to a sensor
+
+ouster_viz
+----------
+* the second CLI argument of simple_viz specifying the UDP data destination is now optional
+* fixed bug in AutoExposure causing more points to be mapped to near-zero values
+* add functionality to display text over cuboids
+
+python
+------
+* update ouster-sdk version to 0.3.0
+* improve heuristics for identifying sensor data in pcaps, including new packet formats
+* release builds for wheels on Windows now use the VS 2017 toolchain and runtime (previously 2019)
+* fix potential use-after-free in ``LidarScan.fields``
+* update ouster-sdk version to 0.3.0b1
+* return an error when attempting to initialize ``client.Sensor`` in STANDBY mode
+* check for errors while reading from a ``Sensor`` packet source and waiting for a timeout. This
+  should make stopping a process with ``SIGINT`` more reliable
+* add PoC bindings for the ``ouster_viz`` library with a simple example driver. See the
+  ``ouster.sdk.examples.viz`` module
+* add bindings for new configuration and metadata supported by the client library
+* breaking change: the ``ChanField`` enum is now implemented as a native binding for easier interop
+  with C++. Unlike Python enums, the bound class itself is no longer sized or iterable. Use
+  ``ChanField.values`` to iterate over all ``ChanField`` values or ``LidarScan.fields`` for fields
+  available on a particular scan instance
+* breaking change: arrays returned by ``LidarPacket.field`` and ``LidarPacket.header`` are now
+  immutable. Modifying the underlying packet buffer through these views was never fully supported
+* deprecate ``ColHeader``, ``LidarPacket.header``, and ``LidarScan.header`` in favor of new
+  properties: ``timestamp``, ``measurement_id``, ``status``, and ``frame_id``
+* replace ``LidarScan`` with native bindings implementing the same API
+* ``xyzlut`` can now accept a range image as an ndarray, not just a ``LidarScan``
+* update ouster-sdk version to 0.2.2
+* fix open3d example crash on exit when replaying pcaps on macos (addresses #267)
+* change open3d normalization to use bound AutoExposure
 
 
-Changed
--------
+[20210608]
+==========
 
-* reflectivity visualization for changes in the upcoming 2.1 firmware
-* moved most of the visualizer code out of public headers and hid some implementation details
+ouster_client
+-------------
+* update cmake package version to 0.2.0
+* add support for new signal multiplier config parameter
+* add early version of a C++ API covering the full sensor configuration interface
+* increase default initialization timeout to 60 seconds to account for the worst case: waking up
+  from STANDBY mode
 
-Fixed
------
+ouster_pcap
+-----------
+* ``record_packet()`` now requires passing in a capture timestamp instead of using current time
+* work around libtins issue where capture timestamps for pcaps recorded on Windows are always zero
+* add preliminary C++ API for working with pcap files containing a single sensor packet capture
 
-* visualizer bug causing a small viewport when resizing the window on macos with a retina display
+ouster_ros
+----------
+* update ROS package version to 0.2.0
+* add Dockerfile to easily set up a build environment or run nodes
+* ``img_node`` now outputs 16-bit images, which should be more useful. Range image output is now in
+  units of 4mm instead of arbitrary scaling (addresses #249)
+* ``img_node`` now outputs reflectivity images as well on the ``reflec_image`` topic
+* change ``img_node`` topics to match terminology in sensor documentation: ``ambient_image`` is now
+  ``nearir_image`` and ``intensity_image`` is now ``signal_image``
+* update rviz config to use flat squares by default to work around `a bug on intel systems
+  <https://github.com/ros-visualization/rviz/issues/1508>`_
+* remove viz_node and all graphics stack dependencies from the package. The ``viz`` flag on the
+  launch file now runs rviz (addresses #236)
+* clean up package.xml and ensure that dependencies are installable with rosdep (PR #219)
+* the ``metadata`` argument to ouster_ros launch file is now required. No longer defaults to a name
+  based on the hostname of the sensor
+
+ouster_viz
+----------
+* update reflectivity visualization for changes in the upcoming 2.1 firmware. Add new colormap and
+  handle 8-bit reflectivity values
+* move most of the visualizer code out of public headers and hide some implementation details
+* fix visualizer bug causing a small viewport when resizing the window on macos with a retina
+  display
+
+python
+------
+* update ouster-sdk version to 0.2.1
+* fix bug in determining if a scan is complete with single-column azimuth windows
+* closed PacketSource iterators will now raise an exception on read
+* add examples for visualization using open3d (see: ``ouster.sdk.examples.open3d``)
+* add support for the new signal multiplier config parameter
+* preserve capture timestamps on packets read from pcaps
+* first release: version 0.2.0 of ouster-sdk. See the README under the ``python`` directory for
+  details and links to documentation
+
 
 [20201209]
 ==========
@@ -46,6 +218,7 @@ Changed
   fields. See ``lidar_scan.h`` for API docs
 * add client version field to metadata json, logs, and help text
 * client API renaming to better reflect the Sensor Software Manual
+
 
 [1.14.0-beta.14] - 2020-08-27
 =============================
@@ -79,15 +252,18 @@ Fixed
 * the reference frame of point cloud topics in ``ouster_ros`` is now correctly reported as the "sensor
   frame" defined in the user guide
 
+
 [1.14.0-beta.12] - 2020-07-10
 =============================
 
 *no changes*
 
+
 [1.14.0-beta.11] - 2020-06-17
 =============================
 
 *no changes*
+
 
 [1.14.0-beta.10] - 2020-05-21
 =============================
@@ -117,6 +293,7 @@ Fixed
   origin offset
 * minor regression with destaggering in img_node output in previous beta
 
+
 [1.14.0-beta.4] - 2020-03-17
 ============================
 
@@ -133,6 +310,7 @@ Changed
 -------
 
 * use random ports for lidar and imu data by default when unspecified
+
 
 [1.13.0] - 2020-03-16
 =====================
@@ -157,6 +335,7 @@ Fixed
 * use correct name for json dependency in ``package.xml`` (PR #116)
 * handle udp socket creation error gracefully in client
 
+
 [1.12.0] - 2019-05-02
 =====================
 
@@ -176,6 +355,7 @@ Fixed
 
 * visualizer issue where the point cloud would occasionally occasionally not be displayed using
   newer versions of Eigen
+
 
 [1.11.0] - 2019-03-26
 =====================
@@ -198,6 +378,7 @@ Fixed
 * bug causing ring and reflectivity to be corrupted in os1_cloud_node output
 * misplaced sine in azimuth angle calculation (addresses #42)
 * populate timestamps on image node output (addresses #39)
+
 
 [1.10.0] - 2019-01-27
 =====================
