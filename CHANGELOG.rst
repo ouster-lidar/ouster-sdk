@@ -2,8 +2,17 @@
 Changelog
 =========
 
+[Unreleased]
+============
+
+* remove Ubuntu 16.04, Python 3.6 support
+
+ouster_ros
+----------
+* remove kinetic support
+
 [20220504]
-===========
+==========
 
 * update supported vcpkg tag to 2022.02.23
 * update to manylinux2014 for x64 linux ``ouster-sdk`` wheels
@@ -44,7 +53,7 @@ ouster_ros
   fields are filled with zeroes
 
 [20220107]
-============
+==========
 
 * add support for arm64 macos and linux. Releases are now built and tested on these platforms
 * add support for Python 3.10

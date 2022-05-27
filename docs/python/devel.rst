@@ -17,7 +17,7 @@ Building the Python SDK from source requires several dependencies:
 - `libpcap <https://www.tcpdump.org/>`_
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
 - `libglew <http://glew.sourceforge.net/>`_ >= 2.1 or `glad <https://github.com/Dav1dde/glad>`_
-- `Python <https://www.python.org/>`_ >= 3.6 (with headers and development libraries)
+- `Python <https://www.python.org/>`_ >= 3.7 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
 The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster_example>`_. You should clone the whole project.

@@ -29,7 +29,7 @@ Supported Platforms
 Installation
 --------------
 
-The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. 
+The Ouster Python SDK requires Python >= 3.7 and pip >= 19.0. 
 
 .. note::
 

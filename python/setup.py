@@ -145,9 +145,8 @@ setup(
         'bdist_wheel': sdk_bdist_wheel,
     },
     zip_safe=False,
-    python_requires='>=3.6, <4',
+    python_requires='>=3.7, <4',
     install_requires=[
-        'dataclasses >=0.7; python_version >="3.6" and python_version <"3.7"',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
         'typing-extensions >=3.7',

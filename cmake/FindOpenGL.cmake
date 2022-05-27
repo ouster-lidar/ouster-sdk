@@ -1,4 +1,4 @@
-# try to define a forward-compatible imported target on old platforms (Ubunu 16.04)
+# try to define a forward-compatible imported target on old platforms (Ubuntu 16.04)
 
 function(find_opengl)
   set(CMAKE_MODULE_PATH "")

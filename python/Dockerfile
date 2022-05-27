@@ -19,7 +19,7 @@ RUN set -xe \
  python3-venv \
  pybind11-dev \
 # Install any additional available cpython versions for testing
- 'python3.[6-9]-dev' \
+ 'python3.[7-9]-dev' \
  libglfw3-dev \
  libglew-dev \
  python3-breathe \
@@ -40,13 +40,14 @@ ENV PATH="${PATH}:${BUILD_HOME}/.local/bin" \
 WORKDIR ${BUILD_HOME}
 
 RUN set -xe \
-&& python3 -m pip install --no-cache-dir --user -U pip tox
+&& python3.7 -m pip install --no-cache-dir --user -U pip tox
 
 # Populate source dir
 COPY . ${OUSTER_SDK_PATH}
 
 # Entrypoint for running tox:
 #
+# Build from OUSTER_SDK root: docker build -t ouster-sdk-tox -f python/Dockerfile
 # Usage: docker run --rm -it [-e VAR=VAL ..] ouster-sdk-tox [TOX ARGS ..]
 #
 # Without any arguments: run unit tests with all available Python versions. See
@@ -62,5 +63,5 @@ ENTRYPOINT ["sh", "-c", "set -e \
 && rm -rf ./src && cp -a ${OUSTER_SDK_PATH} ./src \
 && export ARTIFACT_DIR=${ARTIFACT_DIR:-$BUILD_HOME/artifacts} \
 && . /etc/os-release && export ID VERSION_ID \
-&& exec python3 -m tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
+&& exec python3.7 -m tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
 ", "tox-entrypoint"]

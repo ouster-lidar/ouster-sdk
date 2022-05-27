@@ -7,8 +7,8 @@ Example ROS Code
 The sample code include tools for publishing sensor data as standard ROS topics. Since ROS uses its
 own build system, it must be compiled separately from the rest of the sample code.
 
-The provided ROS code has been tested on ROS Kinetic, Melodic, and Noetic on Ubuntu 16.04, 18.04,
-and 20.04, respectively. Use the `installation instructions <http://wiki.ros.org/ROS/Installation>`_ to get
+The provided ROS code has been tested on ROS Melodic and Noetic (on Ubuntu 18.04 and 20.04
+respectively). Use the `installation instructions <http://wiki.ros.org/ROS/Installation>`_ to get
 started with ROS on your platform.
 
 Building ROS Driver
@@ -23,7 +23,7 @@ Additionally, you should install the ros dependencies::
     sudo apt install ros-<ROS-VERSION>-ros-core ros-<ROS-VERSION>-pcl-ros \
          ros-<ROS-VERSION>-tf2-geometry-msgs ros-<ROS-VERSION>-rviz
 
-where ``<ROS-VERSION>`` is ``kinetic``, ``melodic``, or ``noetic``. 
+where ``<ROS-VERSION>`` is ``melodic`` or ``noetic``.
 
 
 Alternatively, if you would like to install dependencies with `rosdep`::
