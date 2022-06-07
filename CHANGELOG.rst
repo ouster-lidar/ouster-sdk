@@ -2,6 +2,7 @@
 Changelog
 =========
 
+<<<<<<< HEAD
 [Unreleased]
 ============
 
@@ -10,6 +11,11 @@ Changelog
 ouster_ros
 ----------
 * remove kinetic support
+=======
+[20220607]
+==========
+* change single return parsing for FW 2.3.1
+>>>>>>> github/master
 
 [20220504]
 ==========
