@@ -2,8 +2,12 @@
 Changelog
 =========
 
+[20220607]
+==========
+* change single return parsing for FW 2.3.1
+
 [20220504]
-===========
+==========
 
 * update supported vcpkg tag to 2022.02.23
 * update to manylinux2014 for x64 linux ``ouster-sdk`` wheels
