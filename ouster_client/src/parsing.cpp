@@ -89,13 +89,24 @@ static const Table<ChanField, FieldInfo, 13> dual_field_info{{
     {ChanField::RAW32_WORD4, {UINT32, 12, 0, 0}},
 }};
 
+static const Table<ChanField, FieldInfo, 8> single_field_info{{
+    {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
+    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
+    {ChanField::REFLECTIVITY, {UINT8, 4, 0, 0}},
+    {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
+    {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
+}};
+
 Table<UDPProfileLidar, ProfileEntry, 32> profiles{{
     {UDPProfileLidar::PROFILE_LIDAR_LEGACY,
      {legacy_field_info.data(), legacy_field_info.size(), 12}},
     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
      {dual_field_info.data(), dual_field_info.size(), 16}},
     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
-     {legacy_field_info.data(), legacy_field_info.size(), 12}},
+     {single_field_info.data(), single_field_info.size(), 12}},
     {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
      {lb_field_info.data(), lb_field_info.size(), 4}},
 }};
