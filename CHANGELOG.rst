@@ -2,9 +2,16 @@
 Changelog
 =========
 
-[20220607]
+[20220608]
 ==========
+
+ouster_client
+-------------
 * change single return parsing for FW 2.3.1
+
+python
+------
+* single return parsing for FW 2.3.1 reflects change from ouster_client
 
 [20220504]
 ==========
