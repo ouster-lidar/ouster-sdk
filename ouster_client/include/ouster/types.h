@@ -338,11 +338,11 @@ struct data_format {
 /** Stores necessary information from sensor to parse and project sensor data.
  */
 struct sensor_info {
-    [[deprecated]] std::string
-        name;            ///< @deprecated: will be removed in the next version
-    std::string sn;      ///< sensor serial number
-    std::string fw_rev;  ///< fw revision
-    lidar_mode mode;     ///< lidar mode of sensor
+    [[deprecated("Will be removed in the next version")]] std::string
+        name;               ///< @deprecated Will be removed in the next version
+    std::string sn;         ///< sensor serial number
+    std::string fw_rev;     ///< fw revision
+    lidar_mode mode;        ///< lidar mode of sensor
     std::string prod_line;  ///< prod line
     data_format format;     ///< data format of sensor
     std::vector<double>
@@ -680,14 +680,14 @@ std::string client_version();
 /** Tag to identitify a paricular value reported in the sensor channel data
  * block. */
 enum ChanField {
-    RANGE = 1,      ///< 1st return range
-    RANGE2 = 2,     ///< 2nd return range
-    INTENSITY = 3,  ///< @deprecated (gcc 5.4 doesn't support annotations here)
-    SIGNAL = 3,     ///< 1st return signal
-    SIGNAL2 = 4,    ///< 2nd return signal
+    RANGE = 1,            ///< 1st return range
+    RANGE2 = 2,           ///< 2nd return range
+    INTENSITY = 3,        ///< @deprecated Use SIGNAL instead
+    SIGNAL = 3,           ///< 1st return signal
+    SIGNAL2 = 4,          ///< 2nd return signal
     REFLECTIVITY = 5,     ///< 1st return reflectivity
     REFLECTIVITY2 = 6,    ///< 2nd return reflectivity
-    AMBIENT = 7,          //< @deprecated, use near_ir instead
+    AMBIENT = 7,          //< @deprecated Use NEAR_IR instead
     NEAR_IR = 7,          ///< near_ir
     FLAGS = 8,            ///< 1st return flags
     FLAGS2 = 9,           ///< 2nd return flags
@@ -845,10 +845,13 @@ class packet_format final {
      */
     uint32_t col_status(const uint8_t* col_buf) const;
 
-    [[deprecated]] uint32_t col_encoder(
-        const uint8_t* col_buf) const;  ///< @deprecated
-    [[deprecated]] uint16_t col_frame_id(
-        const uint8_t* col_buf) const;  ///< @deprecated
+    [[deprecated("Use col_measurement_id instead")]] uint32_t col_encoder(
+        const uint8_t* col_buf)
+        const;  ///< @deprecated Encoder count is deprecated as it is redundant
+                ///< with measurement id, barring a multiplication factor which
+                ///< varies by lidar mode. Use col_measurement_id instead
+    [[deprecated("Use frame_id instead")]] uint16_t col_frame_id(
+        const uint8_t* col_buf) const;  ///< @deprecated Use frame_id instead
 
     /**
      * Copy the specified channel field out of a packet measurement block.

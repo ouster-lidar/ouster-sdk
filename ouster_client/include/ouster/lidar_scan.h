@@ -39,7 +39,11 @@ struct FieldSlot;
  */
 class LidarScan {
    public:
-    [[deprecated]] static constexpr int N_FIELDS = 4;  ///< @deprecated
+    [[deprecated]] static constexpr int N_FIELDS =
+        4;  ///< @deprecated Number of fields now varies by lidar profile or
+            ///< constructor provided arguments. Use N_FIELDS with caution even
+            ///< when working with legacy lidar profile data, and do not use for
+            ///< all non-legacy lidar profile formats.
 
     using raw_t [[deprecated]] = uint32_t;                 ///< @deprecated
     using ts_t [[deprecated]] = std::chrono::nanoseconds;  ///< @deprecated
@@ -64,7 +68,8 @@ class LidarScan {
     /**
      * Measurement block information, other than the channel data.
      *
-     * @deprecated
+     * @deprecated BlockHeaders are deprecated in favor of Header. See
+     * ``timestamp()``, ``measurement_id()``, and ``status()``
      */
     struct [[deprecated]] BlockHeader {
         ts_t timestamp;
@@ -104,7 +109,7 @@ class LidarScan {
     /**
      * Vector containing the header definitions.
      *
-     * @deprecated
+     * @deprecated BlockHeader is deprecated in favor of Header
      *
      * @warning Members variables: use with caution, some of these will become
      * private.
@@ -188,7 +193,7 @@ class LidarScan {
     /**
      * Access timestamps as a vector.
      *
-     * @deprecated
+     * @deprecated See `timestamp()` instead
      *
      * @returns copy of the measurement timestamps as a vector.
      */
@@ -197,7 +202,8 @@ class LidarScan {
     /**
      * Access measurement block header fields.
      *
-     * @deprecated
+     * @deprecated Please see `status()`, `measurement_id()`, and `timestamp()`
+     * instead
      *
      * @return the header values for the specified measurement id.
      */
@@ -286,7 +292,7 @@ class LidarScan {
 /**
  * Equality for column headers.
  *
- * @deprecated
+ * @deprecated BlockHeaders are deprecated
  *
  * @param[in] a The first column header to compare.
  * @param[in] b The second column header to compare.

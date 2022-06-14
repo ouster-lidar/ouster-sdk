@@ -10,6 +10,10 @@ Changelog
 ouster_ros
 ----------
 * remove kinetic support
+* switch to nodelets
+* update topic names, group under single ros namespace
+* separate launch files for play, replay, and recording
+* drop FW 1.13 compatibility for sensors and recorded bags
 
 [20220608]
 ==========

@@ -6,7 +6,7 @@ from pprint import pformat
 
 class OusterSDKConan(ConanFile):
     name = "ouster_sdk"
-    version = "0.4.1"
+    version = "0.4.2-dev0"
     license = "BSD 3-Clause License"
     author = "Ouster, Inc."
     url = "https://github.com/ouster-lidar/ouster_example"

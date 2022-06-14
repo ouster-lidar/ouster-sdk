@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1.0)
 
 # ==== Project Name ====
-project(ouster_client VERSION 0.4.1)
+project(ouster_client VERSION 0.4.1.0)
 set(ouster_client_VERSION_SUFFIX "")
 
 # ==== Requirements ====
@@ -49,7 +49,7 @@ target_link_libraries(ouster_client_example PRIVATE ouster_client ouster_build)
 add_executable(OusterSDK::ouster_client_example ALIAS ouster_client_example)
 
 # ==== Install ====
-install(TARGETS ouster_client ouster_client_example
+install(TARGETS ouster_client 
         EXPORT ouster-sdk-targets
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
