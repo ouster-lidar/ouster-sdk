@@ -113,8 +113,9 @@ int main(int argc, char* argv[]) {
 
         // check for lidar data, read a packet and add it to the current batch
         if (st & sensor::LIDAR_DATA) {
-            if (!sensor::read_lidar_packet(*handle, packet_buf.get(), pf))
+            if (!sensor::read_lidar_packet(*handle, packet_buf.get(), pf)) {
                 FATAL("Failed to read a packet of the expected size!");
+            }
 
             // batcher will return "true" when the current scan is complete
             if (batch_to_scan(packet_buf.get(), scans[i])) {
@@ -139,8 +140,8 @@ int main(int argc, char* argv[]) {
 
     /*
      * The example code includes functions for efficiently and accurately
-     * computing point clouds from range measurements. LidarScan data can also
-     * be accessed directly using the Eigen[0] linear algebra library.
+     * computing point clouds from range measurements. LidarScan data can
+     * also be accessed directly using the Eigen[0] linear algebra library.
      *
      * [0] http://eigen.tuxfamily.org
      */

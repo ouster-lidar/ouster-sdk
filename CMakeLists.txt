@@ -14,6 +14,8 @@ option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 option(BUILD_EXAMPLES "Build C++ examples" OFF)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # when building as a top-level project and not as conan library
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   if(NOT "${CMAKE_CXX_STANDARD}")

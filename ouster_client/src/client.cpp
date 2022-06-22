@@ -573,21 +573,100 @@ client_state poll_client(const client& c, const int timeout_sec) {
     return res;
 }
 
+static std::string convert_ip(const struct sockaddr* sa) {
+    char ip[INET6_ADDRSTRLEN] = {'\0'};
+    switch (sa->sa_family) {
+        case AF_INET: {
+            inet_ntop(AF_INET, &(((struct sockaddr_in*)sa)->sin_addr), ip,
+                      INET6_ADDRSTRLEN);
+            break;
+        }
+        case AF_INET6: {
+            inet_ntop(AF_INET6, &(((struct sockaddr_in6*)sa)->sin6_addr), ip,
+                      INET6_ADDRSTRLEN);
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
+    return ip;
+}
+
+static bool recv_fixed(SOCKET fd, void* buf, std::uint32_t buffer_size,
+                       std::string& src_addr) {
+    sockaddr_storage socket_addr;
+    socklen_t addr_len = sizeof(socket_addr);
+    // For UDP a single full datagram is always supplied, so as long as the
+    // buffer is bigger than the datagram it will be read correctly
+    int64_t bytes_read = recvfrom(fd, (char*)buf, buffer_size, 0,
+                                  (struct sockaddr*)&socket_addr, &addr_len);
+
+    src_addr = convert_ip((struct sockaddr*)&socket_addr);
+
+    if (src_addr.empty()) {
+        std::cerr << "Failed to resolve packet source address" << std::endl;
+        return false;
+    } else if (bytes_read == -1) {
+        std::cerr << "recvfrom: " << impl::socket_get_error() << std::endl;
+    }
+    return true;
+}
+
 static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
-    int64_t n = recv(fd, (char*)buf, len + 1, 0);
-    if (n == len) {
+    int64_t bytes_read = recv(fd, (char*)buf, len + 1, 0);
+
+    if (bytes_read == len) {
         return true;
-    } else if (n == -1) {
+    } else if (bytes_read == -1) {
         std::cerr << "recvfrom: " << impl::socket_get_error() << std::endl;
     } else {
-        std::cerr << "Unexpected udp packet length: " << n << std::endl;
+        std::cerr << "Unexpected udp packet length of: " << bytes_read
+                  << " bytes. Expected: " << len << " bytes." << std::endl;
     }
     return false;
+}
+
+/**
+ * Read lidar data from any sensor publishing to the LIDAR port. Does not check
+ * packet size so that it can receive data from multiple sensors. Will not
+ * block.
+ *
+ * @param[in] cli client returned by init_client associated with the connection.
+ * @param[out] buf buffer to which to write lidar data. Must be at least
+ * buffer_size
+ * @param[in] pf The packet format.
+ * @param[out] src_addr The source address of the incoming packet
+ *
+ * @return true if a packet was successfully read.
+ */
+extern bool read_lidar_packet(const client& cli, uint8_t* buf,
+                              std::uint32_t buffer_size,
+                              std::string& src_addr) {
+    return recv_fixed(cli.lidar_fd, buf, buffer_size, src_addr);
 }
 
 bool read_lidar_packet(const client& cli, uint8_t* buf,
                        const packet_format& pf) {
     return recv_fixed(cli.lidar_fd, buf, pf.lidar_packet_size);
+}
+
+/**
+ * Read imu data from any sensor publishing to the IMU port. Does not check
+ * packet size so that it can receive data from multiple sensors. Will not block
+ *
+ * @param[in] cli client returned by init_client associated with the connection.
+ * @param[out] buf buffer to which to write lidar data. Must be at least
+ * buffer_size
+ * @param[in] pf The packet format.
+ * @param[out] src_addr The source address of the incoming packet
+ *
+ * @return true if an packet was successfully read.
+ */
+extern bool read_imu_packet(const client& cli, uint8_t* buf,
+                            std::uint32_t buffer_size, std::string& src_addr) {
+    return recv_fixed(cli.imu_fd, buf, buffer_size, src_addr);
 }
 
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
