@@ -26,7 +26,7 @@ option(BUILD_PCAP "Enabled for Python build" ON)
 find_package(pybind11 2.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OusterSDK REQUIRED)
-
+  
 # when building as a top-level project
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
@@ -51,7 +51,6 @@ set_target_properties(_client PROPERTIES
 
 pybind11_add_module(_pcap src/cpp/_pcap.cpp)
 target_link_libraries(_pcap PRIVATE ouster_pcap)
-target_include_directories(_pcap SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_pcap PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/pcap/$<0:>)

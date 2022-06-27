@@ -55,6 +55,7 @@ class CMakeBuild(build_ext):
 
         if platform.system() == "Windows":
             cmake_args += ['-G', 'Visual Studio 15 2017 Win64']
+            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
             build_args += ['--', '/m']
         else:
             cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
@@ -124,7 +125,7 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.4.2-dev0',
+    version='0.4.1a2',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],

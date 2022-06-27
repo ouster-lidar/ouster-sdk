@@ -7,6 +7,7 @@
  */
 #include <pybind11/pybind11.h>
 
+#include <chrono>
 #include <cmath>
 #include <sstream>
 #include <string>
@@ -37,15 +38,20 @@ This module is generated from the C++ code and not meant to be used directly.
                  result << data;
                  return result.str();
              })
-        .def_readonly("dst_ip", &packet_info::dst_ip)
-        .def_readonly("src_ip", &packet_info::src_ip)
-        .def_readonly("dst_port", &packet_info::dst_port)
-        .def_readonly("src_port", &packet_info::src_port)
+        .def_readwrite("dst_ip", &packet_info::dst_ip)
+        .def_readwrite("src_ip", &packet_info::src_ip)
+        .def_readwrite("dst_port", &packet_info::dst_port)
+        .def_readwrite("src_port", &packet_info::src_port)
         .def_readonly("payload_size", &packet_info::payload_size)
-        .def_property_readonly("timestamp",
-                               [](packet_info& packet_info) -> double {
-                                   return packet_info.timestamp.count() / 1e6;
-                               })
+        .def_property(
+            "timestamp",
+            [](packet_info& packet_info) -> double {
+                return packet_info.timestamp.count() / 1e6;
+            },
+            [](packet_info& packet_info, double set) {
+                std::chrono::microseconds msec{(int)(set * 1e6)};
+                packet_info.timestamp = msec;
+            })
         .def_readonly("fragments_in_packet", &packet_info::fragments_in_packet)
         .def_readonly("ip_version", &packet_info::ip_version)
         .def_readonly("encapsulation_protocol",
@@ -85,12 +91,11 @@ This module is generated from the C++ code and not meant to be used directly.
     py::class_<std::shared_ptr<record_handle>>(m, "record_handle");
 
     m.def("record_initialize",
-          py::overload_cast<const std::string&, const std::string&,
-                            const std::string&, int, bool>(&record_initialize),
-          py::arg("file_name"), py::arg("src_ip"), py::arg("dst_ip"),
-          py::arg("frag_size"), py::arg("use_sll_encapsulation") = false,
+          py::overload_cast<const std::string&, int, bool>(&record_initialize),
+          py::arg("file_name"), py::arg("frag_size"),
+          py::arg("use_sll_encapsulation") = false,
           R"(
-                ``def record_initialize(file_name: str, src_ip: str, dst_ip: str, frag_size: int,
+                ``def record_initialize(file_name: str, frag_size: int,
                       use_sll_encapsulation: bool = ...) -> record_handle:``
                   
                   Initialize record handle for single sensor pcap files
@@ -102,17 +107,28 @@ This module is generated from the C++ code and not meant to be used directly.
     });
 
     m.def("record_packet",
-          [](std::shared_ptr<record_handle>& handle, int src_port, int dst_port,
+          [](std::shared_ptr<record_handle>& handle, const std::string& src_ip,
+             const std::string& dst_ip, int src_port, int dst_port,
              py::buffer buf, double timestamp) {
               auto info = buf.request();
               if (info.format != py::format_descriptor<uint8_t>::format()) {
                   throw std::invalid_argument(
                       "Incompatible argument: expected a bytearray");
               }
-              record_packet(*handle, src_port, dst_port,
+              record_packet(*handle, src_ip, dst_ip, src_port, dst_port,
                             static_cast<uint8_t*>(info.ptr), info.size,
                             llround(timestamp * 1e6));
           });
 
+    m.def("record_packet", [](std::shared_ptr<record_handle>& handle,
+                              const packet_info& info, py::buffer buf) {
+        auto buf_info = buf.request();
+        if (buf_info.format != py::format_descriptor<uint8_t>::format()) {
+            throw std::invalid_argument(
+                "Incompatible argument: expected a bytearray");
+        }
+        record_packet(*handle, info, static_cast<uint8_t*>(buf_info.ptr),
+                      buf_info.size);
+    });
     return m.ptr();
 }

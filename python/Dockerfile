@@ -1,8 +1,13 @@
 ARG BASE="ubuntu:18.04"
+ARG VCPKG_REF=2022.02.23
 
 FROM ${BASE}
 ENV DEBIAN_FRONTEND=noninteractive \
     BUILD_HOME=/var/lib/build
+
+# Set up non-root build user and environment
+ARG BUILD_UID=1000
+ARG BUILD_GID=${BUILD_UID}
 
 # Install build dependencies
 RUN set -xe \
@@ -24,15 +29,21 @@ RUN set -xe \
  libglew-dev \
  python3-breathe \
  doxygen \
-&& rm -rf /var/lib/apt/lists
-
-# Set up non-root build user and environment
-ARG BUILD_UID=1000
-ARG BUILD_GID=${BUILD_UID}
-
-RUN set -xe \
-&& groupadd -g ${BUILD_GID} build \
-&& useradd -u ${BUILD_UID} -d ${BUILD_HOME} -rm -s /bin/bash -g build build
+ git \
+ ninja-build zip curl unzip bison flex wget \
+&& rm -rf /var/lib/apt/lists \
+&& groupadd build -r -g ${BUILD_GID} \
+&& useradd build -rm -u ${BUILD_UID} -g build -d /opt/ws -s /bin/bash \
+&& mkdir /opt/vcpkg && chown build:build /opt/vcpkg \
+&& wget https://github.com/seladb/PcapPlusPlus/archive/refs/tags/v22.05.tar.gz \
+&& echo "8ffe33406b903fe104f7bf0cf7254028bb3a9997bb5f4b226276af3b2a310e1ed1621558b9fd96ed09c75fa05dfcbfbd7111fe4b19a9288eb214ebcf1254cf6b  v22.05.tar.gz" | sha512sum --check \ 
+&& tar -zxf v22.05.tar.gz \
+&& ls -a \
+&& rm -f v22.05.tar.gz \
+&& cd ./PcapPlusPlus-22.05/ \
+&& ./configure-linux.sh --default \
+&& make && make install \
+&& rm -rf ./PcapPlusPlus-22.05
 
 USER build:build
 ENV PATH="${PATH}:${BUILD_HOME}/.local/bin" \

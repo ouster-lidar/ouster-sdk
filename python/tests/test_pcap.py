@@ -18,7 +18,7 @@ from ouster.pcap import _pcap
 from ouster import client
 from ouster.client import _client
 
-SLL_PROTO = 42
+SLL_PROTO = 113
 ETH_PROTO = 1
 UDP_PROTO = 17
 
@@ -27,7 +27,6 @@ def fake_packets(metadata: client.SensorInfo,
                  n_lidar: int = 0,
                  n_imu: int = 0,
                  timestamped: bool = False) -> Iterator[client.Packet]:
-
     pf = _client.PacketFormat.from_info(metadata)
     current_ts = time.time()
 
@@ -327,11 +326,10 @@ def test_lidar_guess_ambiguous(fake_meta, tmpdir) -> None:
     file_path = path.join(tmpdir, "pcap_test.pcap")
 
     buf_size = 2**16
-    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1",
-                                     buf_size)
+    handle = _pcap.record_initialize(file_path, buf_size)
     try:
-        _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
-        _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7502, 7502, (next(packets))._data, 1)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7503, 7503, (next(packets))._data, 2)
     finally:
         _pcap.record_uninitialize(handle)
 
@@ -347,11 +345,10 @@ def test_imu_guess_ambiguous(fake_meta, tmpdir) -> None:
     file_path = path.join(tmpdir, "pcap_test.pcap")
 
     buf_size = 2**16
-    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1",
-                                     buf_size)
+    handle = _pcap.record_initialize(file_path, buf_size)
     try:
-        _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
-        _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7502, 7502, (next(packets))._data, 1)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7503, 7503, (next(packets))._data, 2)
     finally:
         _pcap.record_uninitialize(handle)
 
@@ -388,3 +385,43 @@ def test_pcap_guess_real(meta: client.SensorInfo, real_pcap_path: str) -> None:
 
     real_pcap = pcap.Pcap(real_pcap_path, meta_no_ports)
     assert real_pcap.ports[0] == 7502
+
+def test_record_packet_info(fake_meta, tmpdir) -> None:
+    """Test recording packets using the packet_info interface."""
+    packets = fake_packets(fake_meta, 10, 10)
+    file_path = path.join(tmpdir, "pcap_test.pcap")
+
+    buf_size = 2**16
+    handle = _pcap.record_initialize(file_path, buf_size)
+    i = 0
+    for next_packet in packets:
+        info = _pcap.packet_info()
+        
+        info.dst_ip = "127.0.0." + str(i)
+        info.src_ip = "127.0.1." + str(i)
+
+        info.dst_port = 10000 + i
+        info.src_port = 20000 + i
+
+        info.timestamp = i
+
+        _pcap.record_packet(handle, info, next_packet._data)
+        
+        i += 1
+
+    handle = _pcap.replay_initialize(file_path)
+    info = _pcap.packet_info()
+    i = 0
+    while True:
+        if not (handle
+                and _pcap.next_packet_info(handle, info)):
+            break
+        assert(info.dst_ip == "127.0.0." + str(i))
+        assert(info.src_ip == "127.0.1." + str(i))
+
+        assert(info.dst_port == 10000 + i)
+        assert(info.src_port == 20000 + i)
+
+        assert(info.timestamp == i)
+
+        i += 1

@@ -53,7 +53,8 @@ class OusterSDKConan(ConanFile):
         self.requires("jsoncpp/1.9.5")
 
         if self.options.build_pcap:
-            self.requires("libtins/4.3")
+            self.requires("pcapplusplus/22.05")
+            self.requires("libpcap/1.10.1")
 
         if self.options.build_viz:
             self.requires("glad/0.1.35")

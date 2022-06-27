@@ -13,35 +13,10 @@
 #include <memory>
 #include <string>
 
+#include "ouster/pcap.h"
+
 namespace ouster {
 namespace sensor_utils {
-
-struct packet_info {
-    using ts = std::chrono::microseconds;  ///< Microsecond timestamp
-
-    // TODO: use numerical IPs for efficient filtering
-    std::string dst_ip;          ///< The destination IP
-    std::string src_ip;          ///< The source IP
-    int dst_port;                ///< The destination port
-    int src_port;                ///< The source port
-    size_t payload_size;         ///< The size of the packet payload
-    ts timestamp;                ///< The packet capture timestamp
-    int fragments_in_packet;     ///< Number of fragments in the packet
-    int ip_version;              ///< The ip version, 4 or 6
-    int encapsulation_protocol;  ///< PCAP encapsulation type
-    // TODO: remove, library ignores non-UDP packes
-    int network_protocol;  ///< IANA protocol number. Always 17 (UDP)
-};
-
-/**
- * To string method for packet info structs.
- *
- * @param[inout] stream_in The pre-existing ostream to concat with data.
- * @param[in] data The packet_info to output.
- *
- * @return The new output stream containing concatted stream_in and data.
- */
-std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
 
 /** Struct to hide the stepwise playback details. */
 struct playback_handle;
@@ -97,21 +72,6 @@ bool next_packet_info(playback_handle& handle, packet_info& info);
 size_t read_packet(playback_handle& handle, uint8_t* buf, size_t buffer_size);
 
 /**
- * Initialize the record handle for recording single sensor pcap files. Will be
- * removed
- *
- * @param[in] file The file path to the target pcap to record to.
- * @param[in] src_ip The source address to label the packets with.
- * @param[in] dst_ip The destination address to label the packets with.
- * @param[in] frag_size The size of the fragments for packet fragmentation.
- * @param[in] use_sll_encapsulation Whether to use sll encapsulation.
- */
-[[deprecated]] std::shared_ptr<record_handle> record_initialize(
-    const std::string& file, const std::string& src_ip,
-    const std::string& dst_ip, int frag_size,
-    bool use_sll_encapsulation = false);
-
-/**
  * Initialize the record handle for recording multi sensor pcap files. Source
  * and destination IPs must be provided with each packet.
  *
@@ -128,23 +88,6 @@ std::shared_ptr<record_handle> record_initialize(
  * @param[in] handle An initialized handle for the recording state.
  */
 void record_uninitialize(record_handle& handle);
-
-/**
- * Record a buffer to a single sensor record_handle pcap file. Source
- * and destination IPs must be provided during initialization. Will be removed.
- *
- * @param[in] handle The record handle that record_initialize has initted.
- * @param[in] src_port The source port to label the packets with.
- * @param[in] dst_port The destination port to label the packets with.
- * @param[in] buf The buffer to record to the pcap file.
- * @param[in] buffer_size The size of the buffer to record to the pcap file.
- * @param[in] microsecond_timestamp The timestamp to record the packet as
- * microseconds.
- */
-[[deprecated]] void record_packet(record_handle& handle, int src_port,
-                                  int dst_port, const uint8_t* buf,
-                                  size_t buffer_size,
-                                  uint64_t microsecond_timestamp);
 
 /**
  * Record a buffer to a multi sensor record_handle pcap file.
@@ -164,5 +107,15 @@ void record_packet(record_handle& handle, const std::string& src_ip,
                    const uint8_t* buf, size_t buffer_size,
                    uint64_t microsecond_timestamp);
 
+/**
+ * Record a buffer to a multi sensor record_handle pcap file.
+ *
+ * @param[in] handle The record handle that record_initialize has initted.
+ * @param[in] info The packet_info object to use for the packet.
+ * @param[in] buf The buffer to record to the pcap file.
+ * @param[in] buffer_size The size of the buffer to record to the pcap file.
+ */
+void record_packet(record_handle& handle, const packet_info& info,
+                   const uint8_t* buf, size_t buffer_size);
 }  // namespace sensor_utils
 }  // namespace ouster
