@@ -21,7 +21,7 @@ namespace sensor_utils {
 struct record_handle {
     record_handle(const std::string& path,
                   PcapWriter::PacketEncapsulation encap, uint16_t frag_size)
-        : writer{new PcapWriter{path, encap, frag_size}} {}
+        : writer{std::make_unique<PcapWriter>(path, encap, frag_size)} {}
 
     std::unique_ptr<PcapWriter> writer;
 };
@@ -31,7 +31,7 @@ struct playback_handle {
     std::unique_ptr<PcapReader> pcap;
 
     playback_handle(const std::string& path)
-        : path{path}, pcap{new PcapReader{path}} {}
+        : path{path}, pcap{std::make_unique<PcapReader>(path)} {}
 
     playback_handle& operator=(playback_handle&& other) = default;
 

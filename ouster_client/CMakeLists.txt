@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.1.0)
 project(ouster_client VERSION 0.4.1.1)
 set(ouster_client_VERSION_SUFFIX "")
 
+# ==== Compile Options ====
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)
 find_package(jsoncpp REQUIRED)

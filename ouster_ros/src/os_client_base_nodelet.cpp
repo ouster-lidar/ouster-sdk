@@ -20,7 +20,7 @@ void OusterClientBase::onInit() {
     get_metadata_srv =
         nh.advertiseService<GetMetadata::Request, GetMetadata::Response>(
             "get_metadata",
-            [&](GetMetadata::Request&, GetMetadata::Response& res) {
+            [this](GetMetadata::Request&, GetMetadata::Response& res) {
                 res.metadata = cached_metadata;
                 return cached_metadata.size() > 0;
             });

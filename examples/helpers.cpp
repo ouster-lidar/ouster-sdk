@@ -22,7 +22,7 @@ void get_complete_scan(
     ouster::ScanBatcher batch_to_scan(info.format.columns_per_frame, pf);
 
     // Buffer to store raw packet data
-    std::unique_ptr<uint8_t[]> packet_buf(new uint8_t[BUF_SIZE]);
+    auto packet_buf = std::make_unique<uint8_t[]>(BUF_SIZE);
 
     ouster::sensor_utils::packet_info packet_info;
 

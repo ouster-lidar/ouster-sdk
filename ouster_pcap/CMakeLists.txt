@@ -3,8 +3,13 @@ cmake_minimum_required(VERSION 3.1.0)
 # ==== Project Name ====
 project(ouster_pcap)
 
+# ==== Project Packages ====
 find_package(Pcap REQUIRED)
 find_package(Pcapplusplus)
+
+# ==== Compile Options ====
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ==== Libraries ====
 add_library(ouster_pcap src/pcap.cpp src/os_pcap.cpp)

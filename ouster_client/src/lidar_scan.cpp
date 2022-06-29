@@ -84,7 +84,7 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     auto end = impl::default_scan_fields.end();
     auto it = std::find_if(
         impl::default_scan_fields.begin(), end,
-        [&](const std::pair<UDPProfileLidar, impl::DefaultFieldsEntry>& kv) {
+        [profile](const auto& kv) {
             return kv.first == profile;
         });
 

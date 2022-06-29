@@ -74,7 +74,8 @@ class Indexed {
     void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
         for (auto& f : front) {
             if (!f.state) continue;  // skip deleted
-            if (!f.gl) f.gl.reset(new GL{*f.state});  // init GL for added
+            if (!f.gl)
+                f.gl = std::make_unique<GL>(*f.state);  // init GL for added
             f.gl->draw(ctx, camera, *f.state);
         }
     }
@@ -90,7 +91,7 @@ class Indexed {
             if (back[i] && front[i].state) {
                 std::swap(*front[i].state, *back[i]);
             } else if (back[i] && !front[i].state) {
-                front[i].state.reset(new T{*back[i]});
+                front[i].state = std::make_unique<T>(*back[i]);
                 back[i]->clear();
             } else if (!back[i] && front[i].state) {
                 front[i].state.reset();
@@ -143,8 +144,8 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
                    int window_height) {
     // TODO initialization (and opengl API usage) still pretty messed up due to
     // single shared vao
-    pimpl = std::unique_ptr<Impl>{
-        new Impl{name, fix_aspect, window_width, window_height}};
+    pimpl =
+        std::make_unique<Impl>(name, fix_aspect, window_width, window_height);
 
     // top-level gl state for point viz
     glfwMakeContextCurrent(pimpl->glfw.window);

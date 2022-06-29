@@ -726,9 +726,6 @@ enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
  * direction. Use imu_av_{x,y,z} to read the angular velocity.
  */
 class packet_format final {
-    packet_format(
-        const sensor_info& info);  //< create packet_format from sensor_info
-
     template <typename T>
     T px_field(const uint8_t* px_buf, ChanField i) const;
 
@@ -739,6 +736,9 @@ class packet_format final {
         field_types_;
 
    public:
+    packet_format(
+        const sensor_info& info);  //< create packet_format from sensor_info
+
     using FieldIter =
         decltype(field_types_)::const_iterator;  ///< iterator over field types
                                                  ///< of packet

@@ -145,4 +145,3 @@ int main(int argc, char* argv[]) {
     print_el(dual_returns_scan, std::string("Dual Returns Scan"));
     print_el(reduced_fields_scan, std::string("Reduced fields Scan"));
 }
-

@@ -29,6 +29,7 @@
 namespace ouster {
 namespace sensor {
 
+using namespace std::chrono_literals;
 namespace chrono = std::chrono;
 
 struct client {
@@ -218,7 +219,7 @@ SOCKET cfg_socket(const char* addr) {
 bool do_tcp_cmd(SOCKET sock_fd, const std::vector<std::string>& cmd_tokens,
                 std::string& res) {
     const size_t max_res_len = 16 * 1024;
-    auto read_buf = std::unique_ptr<char[]>{new char[max_res_len + 1]};
+    auto read_buf = std::make_unique<char[]>(max_res_len + 1);
 
     std::stringstream ss;
     for (const auto& token : cmd_tokens) ss << token << " ";
@@ -267,7 +268,7 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
             reader->parse(res.c_str(), res.c_str() + res.size(), &root, NULL);
 
         if (chrono::steady_clock::now() >= timeout_time) return false;
-        std::this_thread::sleep_for(chrono::seconds(1));
+        std::this_thread::sleep_for(1s);
         status = root["status"].asString();
     } while (success && status == "INITIALIZING");
     cli.meta["sensor_info"] = root;

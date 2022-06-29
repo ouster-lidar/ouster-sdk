@@ -28,6 +28,7 @@
 namespace sensor = ouster::sensor;
 using ouster_ros::PacketMsg;
 using sensor::UDPProfileLidar;
+using namespace std::chrono_literals;
 
 namespace nodelets_os {
 class OusterCloud : public nodelet::Nodelet {
@@ -103,7 +104,7 @@ class OusterCloud : public nodelet::Nodelet {
         if ((*scan_batcher)(packet->buf.data(), ls)) {
             auto h = std::find_if(
                 ls.headers.begin(), ls.headers.end(), [](const auto& h) {
-                    return h.timestamp != std::chrono::nanoseconds{0};
+                    return h.timestamp != 0ns;
                 });
             if (h != ls.headers.end()) {
                 for (int i = 0; i < n_returns; i++) {

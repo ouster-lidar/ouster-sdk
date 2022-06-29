@@ -116,7 +116,7 @@ static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
     auto end = profiles.end();
     auto it =
         std::find_if(impl::profiles.begin(), end,
-                     [&](const std::pair<UDPProfileLidar, ProfileEntry>& kv) {
+                     [profile](const auto& kv) {
                          return kv.first == profile;
                      });
 
@@ -448,7 +448,7 @@ const packet_format& get_format(const sensor_info& info) {
 
     std::lock_guard<std::mutex> lk{cache_mx};
     if (!cache.count(k)) {
-        cache[k] = std::unique_ptr<packet_format>(new packet_format{info});
+        cache[k] = std::make_unique<packet_format>(info);
     }
 
     return *cache.at(k);

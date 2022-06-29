@@ -87,7 +87,7 @@ class OusterSensor : public OusterClientBase {
         get_config_srv =
             nh.advertiseService<GetConfig::Request, GetConfig::Response>(
                 "get_config",
-                [&](GetConfig::Request&, GetConfig::Response& response) {
+                [this](GetConfig::Request&, GetConfig::Response& response) {
                     response.config = cached_config;
                     return cached_config.size() > 0;
                 });
@@ -99,7 +99,7 @@ class OusterSensor : public OusterClientBase {
         auto& nh = getNodeHandle();
         set_config_srv =
             nh.advertiseService<SetConfig::Request, SetConfig::Response>(
-                "set_config", [&](SetConfig::Request& request,
+                "set_config", [this](SetConfig::Request& request,
                                   SetConfig::Response& response) {
                     sensor::sensor_config config;
                     response.config = "";

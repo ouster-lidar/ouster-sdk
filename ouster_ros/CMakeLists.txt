@@ -25,6 +25,7 @@ find_package(
 
 # ==== Options ====
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Werror -Wno-error=deprecated-declarations)
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 

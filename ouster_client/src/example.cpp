@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "Capturing points... ";
 
     // buffer to store raw packet data
-    std::unique_ptr<uint8_t[]> packet_buf(new uint8_t[UDP_BUF_SIZE]);
+    auto packet_buf = std::make_unique<uint8_t[]>(UDP_BUF_SIZE);
 
     for (size_t i = 0; i < N_SCANS;) {
         // wait until sensor data is available
