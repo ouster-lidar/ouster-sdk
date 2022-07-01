@@ -6,6 +6,8 @@ Changelog
 ============
 
 * remove Ubuntu 16.04, Python 3.6 support
+* remove libtins
+* added pcapplusplus
 
 ouster_ros
 ----------
