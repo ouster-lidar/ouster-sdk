@@ -5,6 +5,9 @@ file(TO_CMAKE_PATH "${OUSTER_SDK_PATH}" OUSTER_SDK_PATH)
 message(STATUS "Ouster SDK location: ${OUSTER_SDK_PATH}")
 list(APPEND CMAKE_MODULE_PATH ${OUSTER_SDK_PATH}/cmake)
 
+# configure vcpkg from environment variables, if present
+include(VcpkgEnv)
+
 project(python-ouster-sdk)
 
 # ==== Options ====

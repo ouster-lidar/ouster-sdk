@@ -6,8 +6,18 @@ Changelog
 ============
 
 * remove Ubuntu 16.04, Python 3.6 support
-* remove libtins
-* added pcapplusplus
+
+ouster_pcap
+-----------
+* replace libtins dependency with pcapplusplus
+
+ouster_viz
+----------
+* clean up GL context logic to avoid errors on window/intel UHD graphics
+
+python
+------
+* windows extension modules are now statically linked to avoid potential issues with vendored dlls
 
 ouster_ros
 ----------

@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.1.0)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(DefaultBuildType)
 
+# configure vcpkg from environment variables, if present
+include(VcpkgEnv)
+
 # ==== Project Name ====
 project(ouster_example VERSION 20220608)
 

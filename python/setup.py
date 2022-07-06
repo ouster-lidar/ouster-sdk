@@ -1,6 +1,7 @@
 import os
 import sys
 import platform
+import shlex
 import shutil
 import subprocess
 
@@ -51,37 +52,26 @@ class CMakeBuild(build_ext):
         # Bug in pybind11 cmake strips symbols with RelWithDebInfo
         # https://github.com/pybind/pybind11/issues/1891
         cfg = 'Debug' if self.debug else 'Release'
+
+        cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
         build_args = ['--config', cfg]
 
         if platform.system() == "Windows":
-            cmake_args += ['-G', 'Visual Studio 15 2017 Win64']
-            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
             build_args += ['--', '/m']
         else:
-            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
             build_args += ['--', '-j2']
 
         env = os.environ.copy()
         env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(
             env.get('CXXFLAGS', ''), self.distribution.get_version())
 
-        # allow specifying toolchain in env
-        toolchain = env.get('CMAKE_TOOLCHAIN_FILE')
-        if toolchain:
-            cmake_args += ['-DCMAKE_TOOLCHAIN_FILE=' + toolchain]
-
-        # specify VCPKG triplet in env
-        triplet = env.get('VCPKG_TARGET_TRIPLET')
-        if triplet:
-            cmake_args += ['-DVCPKG_TARGET_TRIPLET=' + triplet]
-
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
 
         # specify additional cmake args
-        extra_args = env.get('CMAKE_ARGS')
+        extra_args = env.get('OUSTER_SDK_CMAKE_ARGS')
         if extra_args:
-            cmake_args += [extra_args]
+            cmake_args += shlex.split(extra_args)
 
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
@@ -125,7 +115,7 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.4.2.dev2',
+    version='0.4.2.dev3',
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src'),
     namespace_packages=['ouster'],
