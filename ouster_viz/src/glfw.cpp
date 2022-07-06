@@ -207,6 +207,9 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     gltViewport(viewport_width, viewport_height);
     window_context.viewport_width = viewport_width;
     window_context.viewport_height = viewport_height;
+
+    // release context in case subsequent calls are done from another thread
+    glfwMakeContextCurrent(nullptr);
 }
 
 GLFWContext::~GLFWContext() { glfwDestroyWindow(window); }

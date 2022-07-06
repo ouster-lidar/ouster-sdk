@@ -603,7 +603,7 @@ PYBIND11_PLUGIN(_client) {
             "_complete",
             [](const LidarScan& self,
                nonstd::optional<sensor::AzimuthWindow> window) {
-                if (!window) window = {0, self.w - 1};
+                if (!window) window = {0, static_cast<int>(self.w - 1)};
 
                 const auto& status = self.status();
                 auto start = window.value().first;

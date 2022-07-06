@@ -13,13 +13,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ==== Libraries ====
 add_library(ouster_pcap src/pcap.cpp src/os_pcap.cpp)
-target_include_directories(ouster_pcap
-  PRIVATE ${PCAP_INCLUDE_DIR}
-  ${PCAPPLUSPLUS_INCLUDE_SEARCH_DIR}
-  PUBLIC $<INSTALL_INTERFACE:include>
+target_include_directories(ouster_pcap SYSTEM PRIVATE
+  ${PCAP_INCLUDE_DIR}
+  ${PCAPPLUSPLUS_INCLUDE_SEARCH_DIR})
+target_include_directories(ouster_pcap PUBLIC
+  $<INSTALL_INTERFACE:include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
 if(WIN32)
+  target_compile_options(ouster_pcap PRIVATE /wd4200)
   target_link_libraries(ouster_pcap PUBLIC ws2_32)
 endif()
 target_link_libraries(ouster_pcap

@@ -82,12 +82,14 @@ void AutoExposure::update(Eigen::Ref<img_t<T>> image, bool update_state) {
             return key_eigen(a) < key_eigen(b);
         };
 
-        const size_t lo_kth_extreme = indices.size() * lo_percentile;
+        const size_t lo_kth_extreme =
+            static_cast<size_t>(indices.size() * lo_percentile);
         std::nth_element(indices.begin(), indices.begin() + lo_kth_extreme,
                          indices.end(), cmp);
         lo = key_eigen[*(indices.begin() + lo_kth_extreme)];
 
-        const size_t hi_kth_extreme = indices.size() * hi_percentile;
+        const size_t hi_kth_extreme =
+            static_cast<size_t>(indices.size() * hi_percentile);
         std::nth_element(indices.begin() + lo_kth_extreme,
                          indices.end() - hi_kth_extreme - 1, indices.end(),
                          cmp);
@@ -208,7 +210,7 @@ static Eigen::Array<T, -1, 1> compute_dark_count(
     Eigen::Matrix<T, -1, 2> A(image_h, 2);
     for (size_t i = 0; i < image_h; i++) {
         A(i, 0) = 1;
-        A(i, 1) = i;
+        A(i, 1) = static_cast<T>(i);
     }
     Eigen::Matrix<T, 2, 1> x = A.fullPivLu().solve(new_dark_count.matrix());
     new_dark_count -= (A * x).array();

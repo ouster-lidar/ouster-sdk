@@ -25,8 +25,6 @@
 #include <pcap/dlt.h>
 #endif
 #include <pcap/pcap.h>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <EthLayer.h>
 #include <IPReassembly.h>
 #include <IPv4Layer.h>
@@ -38,13 +36,12 @@
 #include <ProtocolType.h>
 #include <SllLayer.h>
 #include <UdpLayer.h>
-#pragma GCC diagnostic pop
 #include <chrono>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
 
-#include "GeneralUtils.h"
+#include <GeneralUtils.h>
 
 using us = std::chrono::microseconds;
 using timepoint = std::chrono::system_clock::time_point;

@@ -9,15 +9,9 @@ find_path(PCAP_INCLUDE_DIR
 
 set(HINT_DIR ${PCAP_ROOT_DIR}/lib)
 
-if(WIN32)
-  find_library(PCAP_LIBRARY
-    NAMES wpcap
-    HINTS ${HINT_DIR})
-else() 
-  find_library(PCAP_LIBRARY
-    NAMES pcap
-    HINTS ${HINT_DIR})
-endif()
+find_library(PCAP_LIBRARY
+  NAMES pcap pcap_static wpcap
+  HINTS ${HINT_DIR})
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Pcap DEFAULT_MSG

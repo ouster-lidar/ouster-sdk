@@ -13,10 +13,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
-  add_compile_options(/W3 /wd4996)
+  add_compile_options(/W2 /wd4996)
   add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
 else()
-  add_compile_options(-Wall -Wextra -Werror -Wno-error=deprecated-declarations)
+  add_compile_options(-Wall -Wextra -Wno-error=deprecated-declarations)
 endif()
 
 option(BUILD_VIZ "Enabled for Python build" ON)

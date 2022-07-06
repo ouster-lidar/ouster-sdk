@@ -28,10 +28,10 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   endif()
 
   if(MSVC)
-    add_compile_options(/W3)
+    add_compile_options(/W2 /wd4996)
     add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
   else()
-    add_compile_options(-Wall -Wextra -Werror -Wno-error=deprecated-declarations)
+    add_compile_options(-Wall -Wextra -Wno-error=deprecated-declarations)
   endif()
 
   include(CTest)
