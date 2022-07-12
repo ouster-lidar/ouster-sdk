@@ -13,8 +13,9 @@ find_package(Eigen3 REQUIRED)
 find_package(jsoncpp REQUIRED)
 
 # ==== Build Metadata Target ====
-add_custom_target(generate_build_header)
-add_custom_command(TARGET generate_build_header PRE_BUILD
+add_custom_target(gen_header)
+add_custom_command(TARGET gen_header PRE_BUILD
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND} -DVERSION_GEN_OUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/include/ouster"
                            -DVERSION_GEN_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
                            -DBUILD_TYPE="${CMAKE_BUILD_TYPE}"
@@ -26,7 +27,7 @@ add_custom_command(TARGET generate_build_header PRE_BUILD
 add_library(ouster_build INTERFACE)
 target_include_directories(ouster_build INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
-add_dependencies(ouster_build generate_build_header)
+add_dependencies(ouster_build gen_header)
 
 # ==== Libraries ====
 add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp
