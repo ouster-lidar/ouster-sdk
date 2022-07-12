@@ -7,6 +7,10 @@ Changelog
 
 * remove Ubuntu 16.04, Python 3.6 support
 
+ouster_client
+--------------
+* add ```CUSTOM0-9`` ChanFields to LidarScan object
+
 ouster_pcap
 -----------
 * replace libtins dependency with pcapplusplus
