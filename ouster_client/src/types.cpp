@@ -68,7 +68,7 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 13> chanfield_strings{{
+Table<sensor::ChanField, const char*, 23> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
@@ -78,6 +78,16 @@ Table<sensor::ChanField, const char*, 13> chanfield_strings{{
     {ChanField::NEAR_IR, "NEAR_IR"},
     {ChanField::FLAGS, "FLAGS"},
     {ChanField::FLAGS2, "FLAGS2"},
+    {ChanField::CUSTOM0, "CUSTOM0"},
+    {ChanField::CUSTOM1, "CUSTOM1"},
+    {ChanField::CUSTOM2, "CUSTOM2"},
+    {ChanField::CUSTOM3, "CUSTOM3"},
+    {ChanField::CUSTOM4, "CUSTOM4"},
+    {ChanField::CUSTOM5, "CUSTOM5"},
+    {ChanField::CUSTOM6, "CUSTOM6"},
+    {ChanField::CUSTOM7, "CUSTOM7"},
+    {ChanField::CUSTOM8, "CUSTOM8"},
+    {ChanField::CUSTOM9, "CUSTOM9"},
     {ChanField::RAW32_WORD1, "RAW32_WORD1"},
     {ChanField::RAW32_WORD2, "RAW32_WORD2"},
     {ChanField::RAW32_WORD3, "RAW32_WORD3"},

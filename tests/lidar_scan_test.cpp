@@ -325,3 +325,19 @@ TEST(LidarScan, DataCheck) {
         EXPECT_TRUE(scan1 != scan3);
     }
 }
+
+TEST(LidarScan, CustomUserFields) {
+    using LidarScanFieldTypes = std::vector<
+        std::pair<ouster::sensor::ChanField, ouster::sensor::ChanFieldType>>;
+
+    LidarScanFieldTypes user_fields{
+        {ChanField::CUSTOM0, ChanFieldType::UINT8},
+        {ChanField::CUSTOM3, ChanFieldType::UINT64},
+        {ChanField::CUSTOM9, ChanFieldType::UINT16}};
+
+    ouster::LidarScan user_scan(10, 10, user_fields.begin(), user_fields.end());
+
+    EXPECT_EQ(3, std::distance(user_scan.begin(), user_scan.end()));
+
+    zero_check_fields(user_scan);
+}

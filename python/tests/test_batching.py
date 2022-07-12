@@ -120,7 +120,9 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     # create LidarScan with only 2 fields
     fields: Dict[client.ChanField, client.FieldDType] = {
         client.ChanField.RANGE: np.uint32,
-        client.ChanField.SIGNAL: np.uint16
+        client.ChanField.SIGNAL: np.uint16,
+        client.ChanField.CUSTOM0: np.uint8,
+        client.ChanField.CUSTOM8: np.uint16
     }
 
     ls = client.LidarScan(info.format.pixels_per_column,
@@ -129,6 +131,9 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     # we expect zero initialized fields
     for f in ls.fields:
         assert np.count_nonzero(ls.field(f)) == 0
+
+    # set non zero data into users' custom field
+    ls.field(client.ChanField.CUSTOM8)[:] = 8
 
     # do batching into ls with a fields subset
     for p in take(packets_per_frame, lidar_stream):
@@ -139,7 +144,12 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
 
     # and the content shouldn't be zero after batching
     for f in ls.fields:
-        assert np.count_nonzero(ls.field(f)) > 0
+        if f in [client.ChanField.RANGE, client.ChanField.SIGNAL]:
+            assert np.count_nonzero(ls.field(f)) > 0
+
+    # custom field data should be preserved after batching
+    assert np.all(ls.field(client.ChanField.CUSTOM0) == 0)
+    assert np.all(ls.field(client.ChanField.CUSTOM8) == 8)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])

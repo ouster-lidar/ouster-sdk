@@ -60,7 +60,7 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
     h = pf.pixels_per_column
 
     assert len(
-        client.ChanField.__members__) == 13, "Don't forget to update tests!"
+        client.ChanField.__members__) == 23, "Don't forget to update tests!"
     assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
                           np.zeros((h, w)))
@@ -324,11 +324,16 @@ def test_scan_custom() -> None:
     """Sanity check scan with a custom set of fields."""
     ls = client.LidarScan(32, 1024, {
         client.ChanField.SIGNAL: np.uint16,
-        client.ChanField.FLAGS: np.uint8
+        client.ChanField.FLAGS: np.uint8,
+        client.ChanField.CUSTOM0: np.uint32
     })
 
-    assert set(ls.fields) == {client.ChanField.SIGNAL, client.ChanField.FLAGS}
+    assert set(ls.fields) == {
+        client.ChanField.SIGNAL, client.ChanField.FLAGS,
+        client.ChanField.CUSTOM0
+    }
     assert ls.field(client.ChanField.SIGNAL).dtype == np.uint16
+    assert ls.field(client.ChanField.CUSTOM0).dtype == np.uint32
 
     with pytest.raises(ValueError):
         ls.field(client.ChanField.RANGE)
@@ -400,3 +405,26 @@ def test_scan_copy_eq() -> None:
 
     ls1.field(client.ChanField.RANGE)[0, 0] = 42
     assert ls0 == ls1
+
+
+def test_scan_eq_with_custom_fields() -> None:
+    """Test equality with custom fields."""
+
+    ls0 = client.LidarScan(32, 512, {
+        client.ChanField.CUSTOM0: np.uint32,
+        client.ChanField.CUSTOM4: np.uint8
+    })
+
+    ls1 = deepcopy(ls0)
+
+    ls0.field(client.ChanField.CUSTOM0)[:] = 100
+
+    ls2 = deepcopy(ls0)
+
+    assert np.count_nonzero(
+        ls2.field(client.ChanField.CUSTOM0) == 100) == ls0.h * ls0.w
+    assert np.count_nonzero(ls2.field(client.ChanField.CUSTOM4) == 100) == 0
+
+    assert ls1 is not ls0
+    assert ls1 != ls0
+    assert ls2 == ls0

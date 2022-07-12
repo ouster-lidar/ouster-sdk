@@ -315,6 +315,7 @@ struct parse_field_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, ChanField f, uint16_t m_id,
                     const sensor::packet_format& pf, const uint8_t* col_buf) {
+        if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
         pf.col_field(col_buf, f, field.col(m_id).data(), field.cols());
     }
 };

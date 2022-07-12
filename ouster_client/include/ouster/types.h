@@ -691,6 +691,16 @@ enum ChanField {
     NEAR_IR = 7,          ///< near_ir
     FLAGS = 8,            ///< 1st return flags
     FLAGS2 = 9,           ///< 2nd return flags
+    CUSTOM0 = 50,         ///< custom user field
+    CUSTOM1 = 51,         ///< custom user field
+    CUSTOM2 = 52,         ///< custom user field
+    CUSTOM3 = 53,         ///< custom user field
+    CUSTOM4 = 54,         ///< custom user field
+    CUSTOM5 = 55,         ///< custom user field
+    CUSTOM6 = 56,         ///< custom user field
+    CUSTOM7 = 57,         ///< custom user field
+    CUSTOM8 = 58,         ///< custom user field
+    CUSTOM9 = 59,         ///< custom user field
     RAW32_WORD1 = 60,     ///< raw word access to packet for dev use
     RAW32_WORD2 = 61,     ///< raw word access to packet for dev use
     RAW32_WORD3 = 62,     ///< raw word access to packet for dev use
