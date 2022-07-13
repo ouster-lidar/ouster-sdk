@@ -59,13 +59,17 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
     w = pf.columns_per_packet
     h = pf.pixels_per_column
 
+    scan_has_signal = (meta.format.udp_profile_lidar != client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+
     assert len(
         client.ChanField.__members__) == 23, "Don't forget to update tests!"
     assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
                           np.zeros((h, w)))
-    assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.NEAR_IR), np.zeros((h, w)))
+
+    if scan_has_signal:
+        assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros((h, w)))
 
     assert len(
         client.ColHeader.__members__) == 5, "Don't forget to update tests!"
@@ -84,7 +88,7 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
 
     # should not be able to modify packet data
     with pytest.raises(ValueError):
-        p.field(client.ChanField.SIGNAL)[0] = 1
+        p.field(client.ChanField.REFLECTIVITY)[0] = 1
 
     with pytest.raises(ValueError):
         p.header(client.ColHeader.MEASUREMENT_ID)[0] = 1
@@ -196,40 +200,40 @@ def test_scan_not_complete() -> None:
     ls = client.LidarScan(32, 1024)
 
     status = ls.status
-    assert not ls._complete()
+    assert not ls.complete()
 
     status[0] = 0x02
-    assert not ls._complete()
-    assert not ls._complete((0, 0))
+    assert not ls.complete()
+    assert not ls.complete((0, 0))
 
     status[1:] = 0xFFFFFFFF
-    assert not ls._complete()
+    assert not ls.complete()
 
     status[:] = 0xFFFFFFFF
     status[-1] = 0x02
-    assert not ls._complete()
+    assert not ls.complete()
 
     # windows are inclusive but python slicing is not
     status[:] = 0x00
     status[:10] = 0xFFFFFFFF
-    assert not ls._complete((0, 10))
+    assert not ls.complete((0, 10))
 
     status[:] = 0x00
     status[11:21] = 0xFFFFFFFF
-    assert not ls._complete((10, 20))
+    assert not ls.complete((10, 20))
 
     # window [i, i]
     status[:] = 0x00
     status[0] = 0xFFFFFFFF
-    assert not ls._complete()
-    assert not ls._complete((0, 1))
-    assert ls._complete((0, 0))
+    assert not ls.complete()
+    assert not ls.complete((0, 1))
+    assert ls.complete((0, 0))
 
     status[:] = 0x00
     status[128] = 0xFFFFFFFF
-    assert not ls._complete()
-    assert not ls._complete((127, 128))
-    assert ls._complete((128, 128))
+    assert not ls.complete()
+    assert not ls.complete((127, 128))
+    assert ls.complete((128, 128))
 
 
 @pytest.mark.parametrize("w, win_start, win_end", [
@@ -250,7 +254,7 @@ def test_scan_not_complete() -> None:
     (2048, 511, 511),
 ])
 def test_scan_complete(w, win_start, win_end) -> None:
-    """Set the status headers to the specified window and check _complete()."""
+    """Set the status headers to the specified window and check complete()."""
     ls = client.LidarScan(32, w)
 
     status = ls.status
@@ -261,7 +265,7 @@ def test_scan_complete(w, win_start, win_end) -> None:
         status[0:win_end + 1] = 0xFFFFFFFF
         status[win_start:] = 0xFFFFFFFF
 
-    assert ls._complete((win_start, win_end))
+    assert ls.complete((win_start, win_end))
 
 
 def test_scan_fields_ref() -> None:
@@ -308,6 +312,28 @@ def test_scan_dual_profile() -> None:
         client.ChanField.NEAR_IR,
     }
 
+def test_scan_low_data_rate() -> None:
+    """Low Data Rate scan has the expected fields."""
+    ls = client.LidarScan(
+        32, 1024,
+        client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+
+    assert set(ls.fields) == {
+        client.ChanField.RANGE,
+        client.ChanField.REFLECTIVITY,
+        client.ChanField.NEAR_IR,
+    }
+
+def test_scan_single_return() -> None:
+    """Single Return scan has the expected fields."""
+    ls = client.LidarScan(32, 1024, client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16)
+
+    assert set(ls.fields) == {
+        client.ChanField.RANGE,
+        client.ChanField.REFLECTIVITY,
+        client.ChanField.SIGNAL,
+        client.ChanField.NEAR_IR,
+    }
 
 def test_scan_empty() -> None:
     """Sanity check scan with no fields."""
@@ -381,7 +407,7 @@ def test_scan_copy_eq() -> None:
 
     ls0 = client.LidarScan(32, 512)
     ls0.status[:] = 0x1
-    ls0.field(client.ChanField.SIGNAL)[:] = 100
+    ls0.field(client.ChanField.REFLECTIVITY)[:] = 100
 
     ls1 = deepcopy(ls0)
 

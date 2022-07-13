@@ -116,9 +116,7 @@ static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
     auto end = profiles.end();
     auto it =
         std::find_if(impl::profiles.begin(), end,
-                     [profile](const auto& kv) {
-                         return kv.first == profile;
-                     });
+                     [profile](const auto& kv) { return kv.first == profile; });
 
     if (it == end || it->first == 0)
         throw std::invalid_argument("Unknown lidar udp profile");
@@ -310,7 +308,11 @@ const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
 uint32_t packet_format::col_status(const uint8_t* col_buf) const {
     uint32_t res;
     std::memcpy(&res, col_buf + impl_->status_offset, sizeof(uint32_t));
-    return res;
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        return res;  // LEGACY was 32 bits of all 1s
+    } else {
+        return res & 0xffff;  // For eUDP packets, we want the last 16 bits
+    }
 }
 
 uint64_t packet_format::col_timestamp(const uint8_t* col_buf) const {

@@ -3,6 +3,7 @@
  * All rights reserved.
  */
 
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -72,11 +73,6 @@ int main(int argc, char* argv[]) {
 
     ouster::sensor::ColumnWindow column_window = info.format.column_window;
 
-    // azimuth_window config param reduce the amount of valid columns per scan
-    // that we will receive
-    int column_window_length =
-        (column_window.second - column_window.first + w) % w + 1;
-
     std::cerr << "  Firmware version:  " << info.fw_rev
               << "\n  Serial number:     " << info.sn
               << "\n  Product line:      " << info.prod_line
@@ -119,15 +115,9 @@ int main(int argc, char* argv[]) {
 
             // batcher will return "true" when the current scan is complete
             if (batch_to_scan(packet_buf.get(), scans[i])) {
-                // LidarScan provides access to azimuth block data and headers
-                auto n_invalid = std::count_if(
-                    scans[i].headers.begin(), scans[i].headers.end(),
-                    [](const LidarScan::BlockHeader& h) {
-                        return !(h.status & 0x01);
-                    });
                 // retry until we receive a full set of valid measurements
                 // (accounting for azimuth_window settings if any)
-                if (n_invalid <= (int)w - column_window_length) i++;
+                if (scans[i].complete(info.format.column_window)) i++;
             }
         }
 
@@ -147,7 +137,8 @@ int main(int argc, char* argv[]) {
      */
     std::cerr << "Computing point clouds... " << std::endl;
 
-    // pre-compute a table for efficiently calculating point clouds from range
+    // pre-compute a table for efficiently calculating point clouds from
+    // range
     XYZLut lut = ouster::make_xyz_lut(info);
     std::vector<LidarScan::Points> clouds;
 
@@ -158,8 +149,22 @@ int main(int argc, char* argv[]) {
         // channel fields can be queried as well
         auto n_returns = (scan.field(sensor::RANGE) != 0).count();
 
-        std::cerr << "  Frame no. " << scan.frame_id << " with " << n_returns
-                  << " returns" << std::endl;
+        // LidarScan also provides access to header information such as
+        // status and timestamp
+        auto status = scan.status();
+        auto it = std::find_if(status.data(), status.data() + status.size(),
+                               [](const uint32_t s) {
+                                   return (s & 0x01);
+                               });  // find first valid status
+        if (it != status.data() + status.size()) {
+            auto ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::nanoseconds(scan.timestamp()(
+                    it - status.data())));  // get corresponding timestamp
+
+            std::cerr << "  Frame no. " << scan.frame_id << " with "
+                      << n_returns << " returns at " << ts_ms.count() << " ms"
+                      << std::endl;
+        }
     }
 
     /*

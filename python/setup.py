@@ -124,7 +124,8 @@ setup(
         'ouster.pcap': ['py.typed', '_pcap.pyi'],
         'ouster.sdk': ['py.typed', '_viz.pyi'],
     },
-    author='Ouster SW Developers',
+    author='Ouster Sensor SDK Developers',
+    author_email='oss@ouster.io',
     description='Ouster sensor SDK',
     license='BSD 3-Clause License',
     ext_modules=[

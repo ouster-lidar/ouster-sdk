@@ -1,0 +1,30 @@
+{
+    "packet_hash": {
+        "TIMESTAMP": "1f59c7327c5d01386c3055a08324a003",
+        "ENCODER_COUNT": "620f0b67a91f7f74151bc5be745b7110",
+        "MEASUREMENT_ID": "ab4e111268cce8326714d9308aafd5fe",
+        "STATUS": "24736efb524c4c76e8d5aca0c04ff392",
+        "FRAME_ID": "c99a74c555371a433d121f551d6c6398",
+        "RANGE": "1d0dc85d743a1d7846ff1e398a304fd0",
+        "SIGNAL": "cc687e735b3746a30c675816a3e75d67",
+        "REFLECTIVITY": "015c9db0f368c7c3d05d882eedb74c5a",
+        "NEAR_IR": "f34755723d2375c47b75025015cdd531",
+        "FLAGS": "0dfbe8aa4c20b52e1b8bf3cb6cbdf193",
+        "RAW32_WORD1": "f391606c041dc8322ec731f75739fd07",
+        "RAW32_WORD2": "144ae7ef89691b79c3d8182b17fc0fc3",
+        "RAW32_WORD3": "54d67e6f4548b6da42d7af7b7865bd0f"
+    },
+    "scans": [
+        {
+            "FRAME_ID": "1259",
+            "TIMESTAMP": "1f59c7327c5d01386c3055a08324a003",
+            "STATUS": "e497f5aaabed8bfebd1b713872dd3ab9",
+            "MEASUREMENT_ID": "ab4e111268cce8326714d9308aafd5fe",
+            "ENCODER_COUNT": "0829f71740aab1ab98b33eae21dee122",
+            "RANGE": "33c7da9fdc46569efda75264e95e1693",
+            "SIGNAL": "ec22cca5f78098b1d8ec35df8ced5cda",
+            "REFLECTIVITY": "d1c4e56e3ebf42a149fd6aa4966c95d5",
+            "NEAR_IR": "5d3f606712e020ab731410f908616063"
+        }
+    ]
+}

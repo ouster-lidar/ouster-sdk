@@ -281,6 +281,13 @@ class LidarScan {
     /** @copydoc status() */
     Eigen::Ref<const Header<uint32_t>> status() const;
 
+    /**
+     * Assess completeness of scan.
+     * @param[in] window The column window to use for validity assessment
+     * @return whether all columns within given column window were valid
+     */
+    bool complete(sensor::ColumnWindow window) const;
+
     friend bool operator==(const LidarScan& a, const LidarScan& b);
 };
 

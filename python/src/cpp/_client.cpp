@@ -600,29 +600,16 @@ PYBIND11_PLUGIN(_client) {
             "frame_id", &LidarScan::frame_id,
             "Corresponds to the frame id header in the packet format.")
         .def(
-            "_complete",
+            "complete",
             [](const LidarScan& self,
-               nonstd::optional<sensor::AzimuthWindow> window) {
-                if (!window) window = {0, static_cast<int>(self.w - 1)};
-
-                const auto& status = self.status();
-                auto start = window.value().first;
-                auto end = window.value().second;
-
-                if (start <= end)
-                    return status.segment(start, end - start + 1)
-                        .unaryExpr([](uint32_t s) { return s & 0x01; })
-                        .isConstant(0x01);
-                else
-                    return status.segment(0, end)
-                               .unaryExpr([](uint32_t s) { return s & 0x01; })
-                               .isConstant(0x01) &&
-                           status.segment(start, self.w - start)
-                               .unaryExpr([](uint32_t s) { return s & 0x01; })
-                               .isConstant(0x01);
+               nonstd::optional<sensor::ColumnWindow> window) {
+                if (!window) {
+                    window = {0, static_cast<int>(self.w) - 1};
+                }
+                return self.complete(window.value());
             },
             py::arg("window") =
-                static_cast<nonstd::optional<sensor::AzimuthWindow>>(
+                static_cast<nonstd::optional<sensor::ColumnWindow>>(
                     nonstd::nullopt))
         .def(
             "field",

@@ -84,7 +84,7 @@ install(FILES LICENSE LICENSE-bin
   DESTINATION share)
 
 # ==== Packaging ====
-set(CPACK_PACKAGE_CONTACT "support@ouster.io")
+set(CPACK_PACKAGE_CONTACT "oss@ouster.io")
 set(CPACK_PACKAGE_VENDOR "Ouster")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Ouster sensor SDK")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})

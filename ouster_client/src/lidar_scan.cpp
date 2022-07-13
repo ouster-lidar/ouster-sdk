@@ -82,11 +82,9 @@ Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
 static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     UDPProfileLidar profile) {
     auto end = impl::default_scan_fields.end();
-    auto it = std::find_if(
-        impl::default_scan_fields.begin(), end,
-        [profile](const auto& kv) {
-            return kv.first == profile;
-        });
+    auto it =
+        std::find_if(impl::default_scan_fields.begin(), end,
+                     [profile](const auto& kv) { return kv.first == profile; });
 
     if (it == end || it->first == 0)
         throw std::invalid_argument("Unknown lidar udp profile");
@@ -186,6 +184,25 @@ Eigen::Ref<const LidarScan::Header<uint16_t>> LidarScan::measurement_id()
 Eigen::Ref<LidarScan::Header<uint32_t>> LidarScan::status() { return status_; }
 Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
     return status_;
+}
+
+bool LidarScan::complete(sensor::ColumnWindow window) const {
+    const auto& status = this->status();
+    auto start = window.first;
+    auto end = window.second;
+
+    if (start <= end) {
+        return status.segment(start, end - start + 1)
+            .unaryExpr([](uint32_t s) { return s & 0x01; })
+            .isConstant(0x01);
+    } else {
+        return status.segment(0, end)
+                   .unaryExpr([](uint32_t s) { return s & 0x01; })
+                   .isConstant(0x01) &&
+               status.segment(start, this->w - start)
+                   .unaryExpr([](uint32_t s) { return s & 0x01; })
+                   .isConstant(0x01);
+    }
 }
 
 bool operator==(const LidarScan::BlockHeader& a,

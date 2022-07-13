@@ -10,6 +10,8 @@ Changelog
 ouster_client
 --------------
 * add ```CUSTOM0-9`` ChanFields to LidarScan object
+* add FW 2.3 test pcaps
+* fix status parsing bug on eUDP profiles
 
 ouster_pcap
 -----------

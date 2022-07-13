@@ -45,8 +45,9 @@ console.
 
 .. note::
     
-    All Ouster sample data is provided under the `CC BY-NC-SA license <https://creativecommons.org/licenses/by-nc-sa/2.0/>`_, whether obtained through the above links
-    or from the Ouster website.
+    All Ouster sample data is provided under the `CC BY-NC-SA license
+    <https://creativecommons.org/licenses/by-nc-sa/2.0/>`_, whether obtained
+    through the above links or from the Ouster website.
 
 Visualize It!
 =============
