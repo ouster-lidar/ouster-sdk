@@ -156,15 +156,15 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     }
     glfwMakeContextCurrent(window);
 
-#ifdef OUSTER_VIZ_GLEW
-    if (glewInit() != GLEW_OK) {
-        glfwTerminate();
-        throw std::runtime_error("Failed to initialize GLEW");
-    }
-#else
+#ifdef OUSTER_VIZ_USE_GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         glfwTerminate();
         throw std::runtime_error("Failed to initialize GLAD");
+    }
+#else
+    if (glewInit() != GLEW_OK) {
+        glfwTerminate();
+        throw std::runtime_error("Failed to initialize GLEW");
     }
 #endif
 

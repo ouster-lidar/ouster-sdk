@@ -5,10 +5,10 @@
 
 #pragma once
 
-#ifdef OUSTER_VIZ_GLEW
-#include <GL/glew.h>
-#else
+#ifdef OUSTER_VIZ_USE_GLAD
 #include <glad/glad.h>
+#else
+#include <GL/glew.h>
 #endif
 
 #include <GLFW/glfw3.h>

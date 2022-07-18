@@ -67,6 +67,7 @@ class OusterSDKConan(ConanFile):
     def configure_cmake(self):
         cmake = CMake(self)
         cmake.definitions["BUILD_VIZ"] = True if self.options.build_viz else False
+        cmake.definitions["OUSTER_VIZ_USE_GLAD"] = True
         cmake.definitions["BUILD_PCAP"] = True if self.options.build_pcap else False
         # alt way, but we use CMAKE_TOOLCHAIN_FILE in other pipeline so avoid overwrite
         # cmake.definitions["CMAKE_TOOLCHAIN_FILE"] = os.path.join(self.build_folder, "conan_paths.cmake")

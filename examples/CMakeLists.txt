@@ -11,7 +11,7 @@ add_executable(OusterSDK::config_example ALIAS config_example)
 
 add_executable(lidar_scan_example lidar_scan_example.cpp)
 target_link_libraries(lidar_scan_example PRIVATE ouster_client ouster_build ouster_pcap ouster_example_helpers)
-add_executable(OutserSDK::lidar_scan_example ALIAS lidar_scan_example)
+add_executable(OusterSDK::lidar_scan_example ALIAS lidar_scan_example)
 
 add_executable(representations_example representations_example.cpp)
 target_link_libraries(representations_example PRIVATE ouster_client ouster_build ouster_example_helpers)

@@ -17,7 +17,6 @@ RUN set -xe \
  cmake \
  libeigen3-dev \
  libjsoncpp-dev \
- libtins-dev \
  libpcap-dev \
  python3-dev \
  python3-pip \
