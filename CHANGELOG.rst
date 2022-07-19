@@ -12,6 +12,7 @@ ouster_client
 * add ```CUSTOM0-9`` ChanFields to LidarScan object
 * add FW 2.3 test pcaps
 * fix status parsing bug on eUDP profiles
+* add option for EIGEN_MAX_ALIGN_BYTES, ON by default
 
 ouster_pcap
 -----------
@@ -32,6 +33,8 @@ ouster_ros
 * update topic names, group under single ros namespace
 * separate launch files for play, replay, and recording
 * drop FW 1.13 compatibility for sensors and recorded bags
+* remove setting EIGEN_MAX_ALIGN_BYTES
+
 
 [20220608]
 ==========
@@ -43,6 +46,7 @@ ouster_client
 python
 ------
 * single return parsing for FW 2.3.1 reflects change from ouster_client
+
 
 [20220504]
 ==========
