@@ -153,7 +153,6 @@ setup(
             'sphinx-copybutton ==0.5.0',
             'docutils <0.18',
             'sphinx-tabs ==3.3.1',
-            'open3d',
             'breathe ==4.33.1'
         ],
         'examples': [

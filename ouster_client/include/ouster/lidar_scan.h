@@ -146,7 +146,7 @@ class LidarScan {
      * @param[in] w horizontal resoulution, i.e. the number of measurements per
      * scan.
      * @param[in] h vertical resolution, i.e. the number of channels.
-     * @param[in] profile udp profile for.
+     * @param[in] profile udp profile.
      */
     LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile);
 

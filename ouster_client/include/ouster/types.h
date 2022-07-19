@@ -677,18 +677,21 @@ std::string convert_to_legacy(const std::string& metadata);
  */
 std::string client_version();
 
+// clang-format off
 /** Tag to identitify a paricular value reported in the sensor channel data
  * block. */
 enum ChanField {
-    RANGE = 1,            ///< 1st return range
-    RANGE2 = 2,           ///< 2nd return range
+    RANGE = 1,            ///< 1st return range in mm
+    RANGE2 = 2,           ///< 2nd return range in mm
     INTENSITY = 3,        ///< @deprecated Use SIGNAL instead
-    SIGNAL = 3,           ///< 1st return signal
-    SIGNAL2 = 4,          ///< 2nd return signal
-    REFLECTIVITY = 5,     ///< 1st return reflectivity
-    REFLECTIVITY2 = 6,    ///< 2nd return reflectivity
-    AMBIENT = 7,          //< @deprecated Use NEAR_IR instead
-    NEAR_IR = 7,          ///< near_ir
+    SIGNAL = 3,           ///< 1st return signal in photons
+    SIGNAL2 = 4,          ///< 2nd return signal in photons
+    REFLECTIVITY = 5,     ///< 1st return reflectivity, calibrated by range and sensor
+                          ///< sensitivity in FW 2.1+. See sensor docs for more details
+    REFLECTIVITY2 = 6,    ///< 2nd return reflectivity, calibrated by range and sensor
+                          ///< sensitivity in FW 2.1+. See sensor docs for more details
+    AMBIENT = 7,          ///< @deprecated Use NEAR_IR instead
+    NEAR_IR = 7,          ///< near_ir in photons
     FLAGS = 8,            ///< 1st return flags
     FLAGS2 = 9,           ///< 2nd return flags
     CUSTOM0 = 50,         ///< custom user field
@@ -707,6 +710,7 @@ enum ChanField {
     RAW32_WORD4 = 63,     ///< raw word access to packet for dev use
     CHAN_FIELD_MAX = 64,  ///< max which allows us to introduce future fields
 };
+// clang-format on
 
 /**
  * Get string representation of a channel field.

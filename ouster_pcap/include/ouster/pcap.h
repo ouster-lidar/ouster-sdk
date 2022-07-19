@@ -34,7 +34,7 @@ struct packet_info {
     int ip_version;              ///< The ip version, 4 or 6
     int encapsulation_protocol;  ///< PCAP encapsulation type
     // TODO: remove, library ignores non-UDP packes
-    int network_protocol;        ///< IANA protocol number. Always 17 (UDP)
+    int network_protocol;  ///< IANA protocol number. Always 17 (UDP)
 };
 
 /**
@@ -108,7 +108,7 @@ class PcapWriter {
      * @param frag_size[in] The fragmentation size to use (Currently broken)
      */
     PcapWriter(const std::string& file, PacketEncapsulation encap,
-                 uint16_t frag_size);
+               uint16_t frag_size);
     virtual ~PcapWriter();
 
     /**
@@ -145,9 +145,9 @@ class PcapWriter {
    protected:
     std::unique_ptr<pcap_writer_impl> impl;  ///< Internal data
 
-    uint16_t id;                             ///< An incrementing id to record packets with
-    PacketEncapsulation encap;               ///< Encapsulation to record with
-    uint16_t frag_size;                      ///< Fragmentation size(not currently used)
+    uint16_t id;                ///< An incrementing id to record packets with
+    PacketEncapsulation encap;  ///< Encapsulation to record with
+    uint16_t frag_size;         ///< Fragmentation size(not currently used)
 };
 
 /**

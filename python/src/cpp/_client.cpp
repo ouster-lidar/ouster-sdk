@@ -397,7 +397,9 @@ PYBIND11_PLUGIN(_client) {
         Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.)", py::metaclass());
     def_enum(NMEABaudRate, sensor::impl::nmea_baud_rate_strings);
 
-    auto ChanField = py::enum_<sensor::ChanField>(m, "ChanField", "Channel data block fields.", py::metaclass());
+    auto ChanField = py::enum_<sensor::ChanField>(m, "ChanField", R"(
+    Channel data block fields
+    )", py::metaclass());
     def_enum(ChanField, sensor::impl::chanfield_strings);
 
     auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass());
@@ -575,23 +577,67 @@ PYBIND11_PLUGIN(_client) {
         )")
         .def_readonly_static("N_FIELDS", &LidarScan::N_FIELDS, "Deprecated.")
         // TODO: Python and C++ API differ in h/w order for some reason
-        .def("__init__", [](LidarScan& self, size_t h,
-                            size_t w) { new (&self) LidarScan(w, h); })
-        .def("__init__",
-             [](LidarScan& self, size_t h, size_t w,
-                sensor::UDPProfileLidar profile) {
-                 new (&self) LidarScan(w, h, profile);
-             })
-        .def("__init__",
-             [](LidarScan& self, size_t h, size_t w,
-                const std::map<sensor::ChanField, py::object>& field_types) {
-                 std::map<sensor::ChanField, sensor::ChanFieldType> ft;
-                 for (const auto& kv : field_types) {
-                     auto dt = py::dtype::from_args(kv.second);
-                     ft[kv.first] = field_type_of_dtype(dt);
-                 }
-                 new (&self) LidarScan(w, h, ft.begin(), ft.end());
-             })
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w) {
+                new (&self) LidarScan(w, h);
+            },
+            R"(
+
+        Default constructor creates a 0 x 0 scan
+
+        Args:
+            height: height of scan
+            width: width of scan
+
+        Returns:
+            New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+        )")
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w,
+               sensor::UDPProfileLidar profile) {
+                new (&self) LidarScan(w, h, profile);
+            },
+            R"(
+        
+        Initialize a scan with the default fields for a particular udp profile
+
+        Args:
+            height: height of LidarScan, i.e., number of channels
+            width: width of LidarScan
+            profile: udp profile
+
+        Returns:
+            New LidarScan of specified dimensions expecting fields of specified profile
+
+         )")
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w,
+               const std::map<sensor::ChanField, py::object>& field_types) {
+                std::map<sensor::ChanField, sensor::ChanFieldType> ft;
+                for (const auto& kv : field_types) {
+                    auto dt = py::dtype::from_args(kv.second);
+                    ft[kv.first] = field_type_of_dtype(dt);
+                }
+                new (&self) LidarScan(w, h, ft.begin(), ft.end());
+            },
+            R"(
+        Initialize a scan with a custom set of fields
+
+        Args:
+            height: height of LidarScan, i.e., number of channels
+            width: width of LidarScan
+            fields_dict: dict where keys are ChanFields and values are type, e.g., {client.ChanField.SIGNAL: np.uint32}
+
+        Returns:
+            New LidarScan of specified dimensions expecting fields specified by dict
+            
+
+
+         )")
         .def_readonly("w", &LidarScan::w,
                       "Width or horizontal resolution of the scan.")
         .def_readonly("h", &LidarScan::h,

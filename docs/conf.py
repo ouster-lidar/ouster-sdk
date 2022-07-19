@@ -24,7 +24,7 @@ import shutil
 import os
 import sys
 
-project = 'Ouster Python SDK'
+project = 'Ouster Sensor SDK'
 copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
 
