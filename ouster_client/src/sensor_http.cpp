@@ -41,8 +41,9 @@ std::unique_ptr<SensorHttp> SensorHttp::create(const string& hostname) {
 
     if (fw == invalid_version || fw.major < 2) {
         throw std::runtime_error(
-            "firmware version information unavailable or not supported."
-            "\nPlease upgrade to the latest Ouster firmware");
+            "SensorHttp:: firmware version information unavailable or "
+            "not fully supported version. Please upgrade your sensor to FW "
+            "2.0 or later.");
     }
 
     if (fw.major == 2) {

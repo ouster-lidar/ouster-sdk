@@ -47,7 +47,7 @@ struct client {
 };
 
 // defined in types.cpp
-Json::Value to_json(const sensor_config& config, bool compat);
+Json::Value to_json(const sensor_config& config);
 
 namespace {
 
@@ -172,8 +172,7 @@ bool collect_metadata(client& cli, SensorHttp& sensor_http, chrono::seconds time
     // not all metadata available when sensor isn't RUNNING
     if (status != "RUNNING") {
         throw std::runtime_error(
-            "Cannot initialize with sensor status: " + status +
-            ". Please ensure operating mode is set to NORMAL");
+            "Cannot initialize with sensor status: " + status + ".");
     }
 
     // merge extra info into metadata
@@ -209,7 +208,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     }
 
     // set all desired config parameters
-    Json::Value config_json = to_json(config, true);
+    Json::Value config_json = to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
         auto value = Json::FastWriter().write(config_json[key]);
         value.erase(std::remove(value.begin(), value.end(), '\n'), value.end());
@@ -272,12 +271,13 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     try {
         // fail fast if we can't reach the sensor via HTTP
         auto sensor_http = SensorHttp::create(hostname);
+
         // if dest address is not specified, have the sensor to set it
         // automatically
         if (udp_dest_host.empty()) {
             sensor_http->set_udp_dest_auto();
         } else {
-            sensor_http->set_config_param("udp_ip", udp_dest_host);
+            sensor_http->set_config_param("udp_dest", udp_dest_host);
         }
 
         sensor_http->set_config_param("udp_port_lidar",
@@ -295,7 +295,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         }
 
         // wake up from STANDBY, if necessary
-        sensor_http->set_config_param("auto_start_flag", "1");
+        sensor_http->set_config_param("operating_mode", "NORMAL");
         sensor_http->reinitialize();
         // will block until no longer INITIALIZING
         success &= collect_metadata(*cli, *sensor_http, chrono::seconds{timeout_sec});
