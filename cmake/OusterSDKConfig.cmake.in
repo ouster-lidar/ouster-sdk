@@ -5,6 +5,7 @@ include(CMakeFindDependencyMacro)
 # ouster_client dependencies
 find_dependency(Eigen3)
 find_dependency(jsoncpp)
+find_dependency(CURL)
 
 # viz dependencies
 if(@BUILD_VIZ@)

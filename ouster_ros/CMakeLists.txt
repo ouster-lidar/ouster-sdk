@@ -10,6 +10,7 @@ project(ouster_ros)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common)
 find_package(tf2_eigen REQUIRED)
+find_package(CURL REQUIRED)
 
 find_package(
   catkin REQUIRED

@@ -15,12 +15,15 @@ Building on Linux / macOS
 
 To install build dependencies on Ubuntu, run::
 
-    sudo apt install build-essential cmake libglfw3-dev libglew-dev libeigen3-dev \
-         libjsoncpp-dev libtclap-dev
+    sudo apt install build-essential cmake \
+        libglfw3-dev libglew-dev libeigen3-dev \
+        libjsoncpp-dev libtclap-dev \
+        libcurl4-openssl-dev    # you may install curl with a different ssl backend
+                                # for example libcurl4-gnutls-dev or libcurl4-nss-dev
 
 On macOS, install XCode and `homebrew <https://brew.sh>`_ and run::
 
-    brew install cmake pkg-config glfw glew eigen jsoncpp tclap
+    brew install cmake pkg-config glfw glew eigen jsoncpp tclap curl
 
 To build run the following commands::
 
@@ -62,7 +65,7 @@ Don't forget to integrate vcpkg with Visual Studio after bootstrapping::
 
 You should be able to install dependencies with::
 
-    .\vcpkg.exe install --triplet x64-windows glfw3 glad[gl-api-33] tclap jsoncpp eigen3
+    .\vcpkg.exe install --triplet x64-windows glfw3 glad[gl-api-33] tclap jsoncpp eigen3 curl
 
 After these steps are complete, you should be able to open, build and run the ``ouster_example``
 project using Visual Studio:

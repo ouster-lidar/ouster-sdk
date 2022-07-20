@@ -28,9 +28,12 @@ class OusterSensor : public OusterClientBase {
    private:
     virtual void onInit() override {
         auto& pnh = getPrivateNodeHandle();
-        sensor_client = create_client(pnh);
-        auto sensor_conf = create_sensor_config_rosparams(pnh, *sensor_client);
+        hostname = pnh.param("sensor_hostname", std::string{});
+        auto lidar_port = pnh.param("lidar_port", 0);
+        auto imu_port = pnh.param("imu_port", 0);
+        auto sensor_conf = create_sensor_config_rosparams(pnh);
         configure_sensor(hostname, sensor_conf.first, sensor_conf.second);
+        sensor_client = create_client(hostname, lidar_port, imu_port);
         update_config_and_metadata(*sensor_client);
         save_metadata(pnh);
         OusterClientBase::onInit();
@@ -51,7 +54,13 @@ class OusterSensor : public OusterClientBase {
 
         cached_config = to_string(config);
 
-        cached_metadata = sensor::get_metadata(cli);
+        try {
+            cached_metadata = sensor::get_metadata(cli);
+        } catch (const std::exception& e) {
+            NODELET_ERROR_STREAM("sensor::get_metadata exception: " << e.what());
+            cached_metadata.clear();
+        }
+
         if (cached_metadata.empty()) {
             NODELET_ERROR("Failed to collect sensor metadata");
             return false;
@@ -61,7 +70,7 @@ class OusterSensor : public OusterClientBase {
         // TODO: revist when *min_version* is changed
         populate_metadata_defaults(info, sensor::MODE_UNSPEC);
         display_lidar_info(info);
-        
+
         return cached_config.size() > 0 && cached_metadata.size() > 0;
     }
 
@@ -126,20 +135,20 @@ class OusterSensor : public OusterClientBase {
         NODELET_INFO("set_config service created");
     }
 
-    std::shared_ptr<sensor::client> create_client(ros::NodeHandle& nh) {
-        hostname = nh.param("sensor_hostname", std::string{});
-        auto lidar_port = nh.param("lidar_port", 0);
-        auto imu_port = nh.param("imu_port", 0);
-
+    std::shared_ptr<sensor::client> create_client(
+        const std::string& hostname, int lidar_port, int imu_port) {
         if (!hostname.size()) {
             NODELET_ERROR("Must specify a sensor hostname");
             throw std::runtime_error("sensor hostname not specified!");
         }
 
-        NODELET_INFO("Starting sensor %s initialization...", hostname.c_str());
+        NODELET_INFO_STREAM("Starting sensor " << hostname << " initialization...");
 
         // use no-config version of init_client to allow for random ports
-        auto cli = sensor::init_client(hostname, lidar_port, imu_port);
+        auto cli = sensor::init_client(hostname, "",
+            sensor::MODE_UNSPEC, sensor::TIME_FROM_UNSPEC,
+            lidar_port, imu_port);
+
         if (!cli) {
             NODELET_ERROR("Failed to initialize client");
             throw std::runtime_error("Failed to initialize client");
@@ -149,10 +158,12 @@ class OusterSensor : public OusterClientBase {
     }
 
     std::pair<sensor::sensor_config, int> create_sensor_config_rosparams(
-        ros::NodeHandle& nh, sensor::client& cli) {
+        ros::NodeHandle& nh) {
         auto udp_dest = nh.param("udp_dest", std::string{});
         auto lidar_mode_arg = nh.param("lidar_mode", std::string{});
         auto timestamp_mode_arg = nh.param("timestamp_mode", std::string{});
+        auto lidar_port = nh.param("lidar_port", 0);
+        auto imu_port = nh.param("imu_port", 0);
 
         std::string udp_profile_lidar_arg;
         nh.param<std::string>("udp_profile_lidar", udp_profile_lidar_arg, "");
@@ -192,8 +203,8 @@ class OusterSensor : public OusterClientBase {
         }
 
         sensor::sensor_config config;
-        config.udp_port_imu = sensor::get_imu_port(cli);
-        config.udp_port_lidar = sensor::get_lidar_port(cli);
+        config.udp_port_imu = imu_port;
+        config.udp_port_lidar = lidar_port;
         config.udp_profile_lidar = udp_profile_lidar;
         config.operating_mode = sensor::OPERATING_NORMAL;
         if (lidar_mode) config.ld_mode = lidar_mode;

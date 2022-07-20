@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.8.0)
 
 # ==== Project Name ====
 project(ouster_client VERSION 0.4.1.3)
@@ -7,10 +7,12 @@ set(ouster_client_VERSION_SUFFIX "")
 # ==== Compile Options ====
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_definitions("-DCURL_STATICLIB")
 
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)
 find_package(jsoncpp REQUIRED)
+find_package(CURL REQUIRED)
 
 # ==== Build Metadata Target ====
 add_custom_target(gen_header)
@@ -31,10 +33,16 @@ add_dependencies(ouster_build gen_header)
 
 # ==== Libraries ====
 add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp
-  src/image_processing.cpp src/buffered_udp_source.cpp src/parsing.cpp)
+  src/image_processing.cpp src/buffered_udp_source.cpp src/parsing.cpp
+  src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_tcp_imp.cpp)
 target_link_libraries(ouster_client
-  PUBLIC Eigen3::Eigen $<BUILD_INTERFACE:ouster_build>
-  PRIVATE jsoncpp_lib)
+  PUBLIC
+    Eigen3::Eigen
+    $<BUILD_INTERFACE:ouster_build>
+    # CMAKE_TODO: remove this check once Ubuntu:18.04 removed as supported platform
+    $<IF:$<VERSION_GREATER_EQUAL:${CMAKE_VERSION},3.12.0>,CURL::libcurl,${${CURL_LIBRARIES}}>
+  PRIVATE
+    jsoncpp_lib)
 target_compile_definitions(ouster_client PRIVATE EIGEN_MPL2_ONLY)
 add_library(OusterSDK::ouster_client ALIAS ouster_client)
 

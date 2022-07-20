@@ -18,6 +18,7 @@ RUN set -xe \
  libeigen3-dev \
  libjsoncpp-dev \
  libpcap-dev \
+ libcurl4-openssl-dev \
  python3-dev \
  python3-pip \
  python3-venv \

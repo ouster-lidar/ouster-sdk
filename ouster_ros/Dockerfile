@@ -16,6 +16,8 @@ RUN set -xue \
  fakeroot dpkg-dev debhelper \
  $PY-rosdep $PY-rospkg $PY-bloom
 
+RUN apt-get install -y curl libcurl4-openssl-dev
+
 # Set up non-root build user
 ARG BUILD_UID=1000
 ARG BUILD_GID=${BUILD_UID}
