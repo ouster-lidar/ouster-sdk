@@ -84,7 +84,7 @@ TEST(LidarScan, EmptyConstructorInit) {
 
     EXPECT_EQ(scan.frame_id, -1);
 
-    EXPECT_EQ(scan.headers.size(), 0);
+    EXPECT_EQ(scan.headers.size(), 0u);
 
     EXPECT_EQ(scan.end() - scan.begin(), 0);
 
@@ -99,8 +99,8 @@ TEST(LidarScan, LegacyConstructorInit) {
     EXPECT_EQ(scan.h, h);
     EXPECT_EQ(scan.frame_id, -1);
 
-    int count = 0;
-    int hit_count = 0;
+    size_t count = 0;
+    size_t hit_count = 0;
     std::vector<ChanField> field_copy;
     for (auto item : legacy_field_slots) {
         field_copy.push_back(std::get<0>(item));
@@ -114,7 +114,7 @@ TEST(LidarScan, LegacyConstructorInit) {
         }
         count++;
     }
-    EXPECT_EQ(field_copy.size(), 0);
+    EXPECT_EQ(field_copy.size(), 0u);
     EXPECT_EQ(hit_count, count);
     EXPECT_EQ(legacy_field_slots.size(), count);
 
@@ -134,8 +134,8 @@ TEST(LidarScan, DualReturnConstructorInit) {
     EXPECT_EQ(scan.h, h);
     EXPECT_EQ(scan.frame_id, -1);
 
-    int count = 0;
-    int hit_count = 0;
+    size_t count = 0;
+    size_t hit_count = 0;
     std::vector<ChanField> field_copy;
     for (auto item : dual_field_slots) {
         field_copy.push_back(std::get<0>(item));
@@ -149,7 +149,7 @@ TEST(LidarScan, DualReturnConstructorInit) {
         }
         count++;
     }
-    EXPECT_EQ(field_copy.size(), 0);
+    EXPECT_EQ(field_copy.size(), 0u);
     EXPECT_EQ(hit_count, count);
     EXPECT_EQ(dual_field_slots.size(), count);
 
@@ -169,8 +169,8 @@ TEST(LidarScan, CustomFieldConstructorInit) {
     EXPECT_EQ(scan.h, h);
     EXPECT_EQ(scan.frame_id, -1);
 
-    int count = 0;
-    int hit_count = 0;
+    size_t count = 0;
+    size_t hit_count = 0;
     std::vector<ChanField> field_copy;
     for (auto item : contrived_slots) {
         field_copy.push_back(std::get<0>(item));
@@ -185,7 +185,7 @@ TEST(LidarScan, CustomFieldConstructorInit) {
         }
         count++;
     }
-    EXPECT_EQ(field_copy.size(), 0);
+    EXPECT_EQ(field_copy.size(), 0u);
     EXPECT_EQ(hit_count, count);
     EXPECT_EQ(contrived_slots.size(), count);
 

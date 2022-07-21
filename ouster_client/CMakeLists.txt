@@ -4,11 +4,6 @@ cmake_minimum_required(VERSION 3.8.0)
 project(ouster_client VERSION 0.4.1.3)
 set(ouster_client_VERSION_SUFFIX "")
 
-# ==== Compile Options ====
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_definitions("-DCURL_STATICLIB")
-
 # ==== Requirements ====
 find_package(Eigen3 REQUIRED)
 find_package(jsoncpp REQUIRED)
@@ -39,12 +34,23 @@ target_link_libraries(ouster_client
   PUBLIC
     Eigen3::Eigen
     $<BUILD_INTERFACE:ouster_build>
-    # CMAKE_TODO: remove this check once Ubuntu:18.04 removed as supported platform
-    $<IF:$<VERSION_GREATER_EQUAL:${CMAKE_VERSION},3.12.0>,CURL::libcurl,${${CURL_LIBRARIES}}>
   PRIVATE
+    CURL::libcurl
     jsoncpp_lib)
 target_compile_definitions(ouster_client PRIVATE EIGEN_MPL2_ONLY)
 add_library(OusterSDK::ouster_client ALIAS ouster_client)
+
+# override detection of library support in nonstd optional to ensure that the
+# same options are used during build and for installed targets. This avoids
+# errors when e.g. using the SDK built as c++14 in a c++17 project
+get_target_property(OUSTER_CLIENT_CXX_STANDARD ouster_client CXX_STANDARD)
+if(OUSTER_CLIENT_CXX_STANDARD GREATER_EQUAL 17)
+  set(NONSTD_OPTIONAL_CONFIG "optional_OPTIONAL_STD")
+else()
+  set(NONSTD_OPTIONAL_CONFIG "optional_OPTIONAL_NONSTD")
+endif()
+target_compile_definitions(ouster_client
+  PUBLIC optional_CONFIG_SELECT_OPTIONAL=${NONSTD_OPTIONAL_CONFIG})
 
 if(WIN32)
   target_link_libraries(ouster_client PUBLIC ws2_32)
@@ -55,11 +61,6 @@ target_include_directories(ouster_client PUBLIC
 target_include_directories(ouster_client SYSTEM PUBLIC
   $<INSTALL_INTERFACE:include/optional-lite>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/optional-lite>)
-
-# ==== Executables ====
-add_executable(ouster_client_example src/example.cpp)
-target_link_libraries(ouster_client_example PRIVATE ouster_client ouster_build)
-add_executable(OusterSDK::ouster_client_example ALIAS ouster_client_example)
 
 # ==== Install ====
 install(TARGETS ouster_client 

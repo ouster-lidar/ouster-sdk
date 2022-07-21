@@ -1,5 +1,4 @@
 ARG BASE="ubuntu:18.04"
-ARG VCPKG_REF=2022.02.23
 
 FROM ${BASE}
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -24,17 +23,19 @@ RUN set -xe \
  python3-venv \
  pybind11-dev \
 # Install any additional available cpython versions for testing
- 'python3.[7-9]-dev' \
+ 'python3.[0-9]+-dev' \
  libglfw3-dev \
  libglew-dev \
  python3-breathe \
  doxygen \
- git \
- ninja-build zip curl unzip bison flex wget \
+ wget \
 && rm -rf /var/lib/apt/lists \
+# Add build user
 && groupadd build -r -g ${BUILD_GID} \
-&& useradd build -rm -u ${BUILD_UID} -g build -d /opt/ws -s /bin/bash \
-&& mkdir /opt/vcpkg && chown build:build /opt/vcpkg \
+&& useradd build -rm -u ${BUILD_UID} -g build -d ${BUILD_HOME} -s /bin/bash
+
+# Install pcapplusplus
+RUN set -xe \
 && wget https://github.com/seladb/PcapPlusPlus/archive/refs/tags/v22.05.tar.gz \
 && echo "8ffe33406b903fe104f7bf0cf7254028bb3a9997bb5f4b226276af3b2a310e1ed1621558b9fd96ed09c75fa05dfcbfbd7111fe4b19a9288eb214ebcf1254cf6b  v22.05.tar.gz" | sha512sum --check \ 
 && tar -zxf v22.05.tar.gz \
@@ -51,15 +52,16 @@ ENV PATH="${PATH}:${BUILD_HOME}/.local/bin" \
 WORKDIR ${BUILD_HOME}
 
 RUN set -xe \
-&& python3.7 -m pip install --no-cache-dir --user -U pip tox
+&& python3 -m pip install --no-cache-dir --user -U pip tox
 
 # Populate source dir
 COPY . ${OUSTER_SDK_PATH}
 
 # Entrypoint for running tox:
 #
-# Build from OUSTER_SDK root: docker build -t ouster-sdk-tox -f python/Dockerfile
-# Usage: docker run --rm -it [-e VAR=VAL ..] ouster-sdk-tox [TOX ARGS ..]
+# Usage: from OUSTER_SDK root, run
+#   docker build . -f python/Dockerfile -t ouster-sdk-tox
+#   docker run --rm -it [-e VAR=VAL ..] ouster-sdk-tox [TOX ARGS ..]
 #
 # Without any arguments: run unit tests with all available Python versions. See
 # the tox.ini for other commands.
@@ -68,11 +70,11 @@ COPY . ${OUSTER_SDK_PATH}
 # running with additional host bind mounts:
 # ARTIFACT_DIR: where to put test output. Defaults to ${BUILD_HOME}/artifacts
 # WHEELS_DIR: where to look for wheels for running tests against wheels
-# OUSTER_SDK_PTH: path of SDK source
+# OUSTER_SDK_PATH: path of SDK source
 #
 ENTRYPOINT ["sh", "-c", "set -e \
 && rm -rf ./src && cp -a ${OUSTER_SDK_PATH} ./src \
 && export ARTIFACT_DIR=${ARTIFACT_DIR:-$BUILD_HOME/artifacts} \
 && . /etc/os-release && export ID VERSION_ID \
-&& exec python3.7 -m tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
+&& exec python3 -m tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
 ", "tox-entrypoint"]

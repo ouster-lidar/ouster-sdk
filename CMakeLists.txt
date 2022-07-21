@@ -23,12 +23,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # when building as a top-level project and not as conan library
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  if(NOT "${CMAKE_CXX_STANDARD}")
+  if(NOT DEFINED CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 14)
   endif()
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-  if(NOT "${CMAKE_CXX_EXTENSIONS}")
+  if(NOT DEFINED CMAKE_CXX_EXTENSIONS)
     set(CMAKE_CXX_EXTENSIONS OFF)
   endif()
 
@@ -65,26 +65,6 @@ if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
-# ==== Install ====
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-  OusterSDKConfigVersion.cmake
-  VERSION ${PACKAGE_VERSION}
-  COMPATIBILITY AnyNewerVersion)
-
-install(EXPORT ouster-sdk-targets
-  FILE OusterSDKTargets.cmake
-  NAMESPACE OusterSDK::
-  DESTINATION lib/cmake/OusterSDK)
-
-configure_file(cmake/OusterSDKConfig.cmake.in OusterSDKConfig.cmake @ONLY)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
-  DESTINATION lib/cmake/OusterSDK)
-
-install(FILES LICENSE LICENSE-bin
-  DESTINATION share)
-
 # ==== Packaging ====
 set(CPACK_PACKAGE_CONTACT "oss@ouster.io")
 set(CPACK_PACKAGE_VENDOR "Ouster")
@@ -108,3 +88,24 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "cmake, libjsoncpp-dev, libtclap-dev, libeigen3
   libglfw3-dev, libglew-dev")
 
 include(CPack)
+
+# ==== Install ====
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+  OusterSDKConfigVersion.cmake
+  VERSION ${PACKAGE_VERSION}
+  COMPATIBILITY AnyNewerVersion)
+
+install(EXPORT ouster-sdk-targets
+  FILE OusterSDKTargets.cmake
+  NAMESPACE OusterSDK::
+  DESTINATION lib/cmake/OusterSDK)
+
+configure_file(cmake/OusterSDKConfig.cmake.in OusterSDKConfig.cmake @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
+  DESTINATION lib/cmake/OusterSDK)
+
+install(FILES LICENSE
+  DESTINATION share/doc/${CPACK_DEBIAN_PACKAGE_NAME}
+  RENAME copyright)

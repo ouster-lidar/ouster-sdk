@@ -17,9 +17,8 @@ endif()
 # imported target since we're guaranteed to be using a recent cmake
 # Note: newer cmake will error if one but not both targets are in scope
 if(jsoncpp_FOUND AND TARGET jsoncpp_static)
-  set_target_properties(jsoncpp_static PROPERTIES IMPORTED_GLOBAL TRUE)
-  set_target_properties(jsoncpp_object PROPERTIES IMPORTED_GLOBAL TRUE)
-  add_library(jsoncpp_lib ALIAS jsoncpp_static)
+  add_library(jsoncpp_lib INTERFACE IMPORTED)
+  set_target_properties(jsoncpp_lib PROPERTIES INTERFACE_LINK_LIBRARIES "jsoncpp_static")
   find_package_handle_standard_args(jsoncpp CONFIG_MODE)
   return()
 endif()

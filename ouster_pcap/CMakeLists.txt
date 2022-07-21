@@ -7,10 +7,6 @@ project(ouster_pcap)
 find_package(Pcap REQUIRED)
 find_package(pcapplusplus REQUIRED)
 
-# ==== Compile Options ====
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 # ==== Libraries ====
 add_library(ouster_pcap src/pcap.cpp src/os_pcap.cpp)
 target_include_directories(ouster_pcap SYSTEM PRIVATE

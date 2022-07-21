@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
     if (argc != 2 && argc != 3) {
         std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
                   << ouster::BUILD_SYSTEM << ")"
-                  << "\n\nUsage: ouster_client_example <sensor_hostname> "
+                  << "\n\nUsage: client_example <sensor_hostname> "
                      "[<data_destination_ip>]"
                      "\n\n<data_destination_ip> is optional: leave blank for "
                      "automatic destination detection"

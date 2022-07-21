@@ -117,8 +117,7 @@ setup(
     url='https://github.com/ouster-lidar/ouster_example',
     version='0.4.2.dev5',
     package_dir={'': 'src'},
-    packages=find_namespace_packages(where='src'),
-    namespace_packages=['ouster'],
+    packages=find_namespace_packages(where='src', include='ouster.*'),
     package_data={
         'ouster.client': ['py.typed', '_client.pyi'],
         'ouster.pcap': ['py.typed', '_pcap.pyi'],

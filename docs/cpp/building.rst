@@ -79,7 +79,7 @@ project using Visual Studio:
 5. In the menu bar at the top of the screen, select **Build > Build All**.
 6. To use the resulting binaries, go to **View > Terminal** and run, for example::
 
-    .\out\build\x64-Release\ouster_client\ouster_client_example.exe
+    .\out\build\x64-Release\examples\client_example.exe
 
 .. _building in release mode: https://docs.microsoft.com/en-us/visualstudio/debugger/how-to-set-debug-and-release-configurations?view=vs-2019
 
@@ -90,11 +90,11 @@ Make sure the sensor is connected to the network. See "Connecting to the Sensor"
 User Manual <https://www.ouster.com/downloads>`_ for instructions and different options for network
 configuration.
 
-Navigate to ``ouster_client`` under the build directory, which should contain an executable named
-``ouster_client_example``. This program will attempt to connect to the sensor, capture lidar data,
-and write point clouds out to CSV files::
+Navigate to ``examples`` under the build directory, which should contain an executable named
+``client_example``. This program will attempt to connect to the sensor, capture lidar data, and
+write point clouds out to CSV files::
 
-    ./ouster_client_example <sensor hostname> <udp data destination>
+    ./client_example <sensor hostname> <udp data destination>
 
 where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
 data destingation>`` is the hostname or IP to which the sensor should send lidar data. You can also
