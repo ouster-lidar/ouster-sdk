@@ -34,13 +34,14 @@ namespace impl {
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-extern const Table<lidar_mode, const char*, 6> lidar_mode_strings{
+extern const Table<lidar_mode, const char*, 7> lidar_mode_strings{
     {{MODE_UNSPEC, "UNKNOWN"},
      {MODE_512x10, "512x10"},
      {MODE_512x20, "512x20"},
      {MODE_1024x10, "1024x10"},
      {MODE_1024x20, "1024x20"},
-     {MODE_2048x10, "2048x10"}}};
+     {MODE_2048x10, "2048x10"},
+     {MODE_4096x5, "4096x5"}}};
 
 extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings{
     {{TIME_FROM_UNSPEC, "UNKNOWN"},
@@ -281,6 +282,8 @@ uint32_t n_cols_of_lidar_mode(lidar_mode mode) {
             return 1024;
         case MODE_2048x10:
             return 2048;
+        case MODE_4096x5:
+            return 4096;
         default:
             throw std::invalid_argument{"n_cols_of_lidar_mode"};
     }
@@ -288,6 +291,8 @@ uint32_t n_cols_of_lidar_mode(lidar_mode mode) {
 
 int frequency_of_lidar_mode(lidar_mode mode) {
     switch (mode) {
+        case MODE_4096x5:
+            return 5;
         case MODE_512x10:
         case MODE_1024x10:
         case MODE_2048x10:

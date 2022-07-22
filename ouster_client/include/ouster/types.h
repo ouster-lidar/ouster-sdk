@@ -62,7 +62,9 @@ enum lidar_mode {
     MODE_512x20,      ///< lidar mode: 20 scans of 512 columns per second
     MODE_1024x10,     ///< lidar mode: 10 scans of 1024 columns per second
     MODE_1024x20,     ///< lidar mode: 20 scans of 1024 columsn per second
-    MODE_2048x10      ///< lidar mode: 10 scans of 2048 columns per second
+    MODE_2048x10,     ///< lidar mode: 10 scans of 2048 columns per second
+    MODE_4096x5       ///< lidar mode: 5 scans of 4096 columns per second. Only available on select sensors
+
 };
 
 /**

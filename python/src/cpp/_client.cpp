@@ -55,7 +55,7 @@ namespace ouster {
 namespace sensor {
 namespace impl {
 
-extern const Table<lidar_mode, const char*, 6> lidar_mode_strings;
+extern const Table<lidar_mode, const char*, 7> lidar_mode_strings;
 extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings;
 extern const Table<OperatingMode, const char*, 2> operating_mode_strings;
 extern const Table<MultipurposeIOMode, const char*, 6>

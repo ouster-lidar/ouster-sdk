@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018, Ouster, Inc.
+ * Copyright(c) 2018, Ouster, Inc.
  * All rights reserved.
  */
 
@@ -22,8 +22,8 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/build.h"
 #include "netcompat.h"
+#include "ouster/build.h"
 #include "ouster/types.h"
 #include "sensor_http.h"
 
@@ -158,7 +158,8 @@ SOCKET udp_data_socket(int port) {
     return SOCKET_ERROR;
 }
 
-bool collect_metadata(client& cli, SensorHttp& sensor_http, chrono::seconds timeout) {
+bool collect_metadata(client& cli, SensorHttp& sensor_http,
+                      chrono::seconds timeout) {
     auto timeout_time = chrono::steady_clock::now() + timeout;
     std::string status;
 
@@ -212,7 +213,22 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     for (const auto& key : config_json.getMemberNames()) {
         auto value = Json::FastWriter().write(config_json[key]);
         value.erase(std::remove(value.begin(), value.end(), '\n'), value.end());
-        sensor_http->set_config_param(key, value);
+        try {
+            sensor_http->set_config_param(key, value);
+        } catch (std::runtime_error& e) {
+            auto error_string = std::string(e.what());
+            // match pre FW 2.4 or 2.4+
+            if (error_string.find("Invalid configuration value") !=
+                    std::string::npos ||
+                error_string.find("not supported") != std::string::npos) {
+                throw std::runtime_error("Error setting config parameter " +
+                                         std::string(key) +
+                                         ". Given parameter or provided value "
+                                         "is not supported by your sensor.");
+            } else {
+                throw e;
+            }
+        }
     }
 
     // reinitialize to make all staged parameters effective
@@ -228,7 +244,8 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     if (!cli.meta) {
         auto sensor_http = SensorHttp::create(cli.hostname);
-        if (!collect_metadata(cli, *sensor_http, chrono::seconds{timeout_sec})) return "";
+        if (!collect_metadata(cli, *sensor_http, chrono::seconds{timeout_sec}))
+            return "";
     }
 
     Json::StreamWriterBuilder builder;
@@ -298,7 +315,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         sensor_http->set_config_param("operating_mode", "NORMAL");
         sensor_http->reinitialize();
         // will block until no longer INITIALIZING
-        success &= collect_metadata(*cli, *sensor_http, chrono::seconds{timeout_sec});
+        success &=
+            collect_metadata(*cli, *sensor_http, chrono::seconds{timeout_sec});
         // check for sensor error states
         auto status = cli->meta["sensor_info"]["status"].asString();
         success &= (status != "ERROR" && status != "UNCONFIGURED");
@@ -396,11 +414,12 @@ static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
 }
 
 /**
- * Read lidar data from any sensor publishing to the LIDAR port. Does not check
- * packet size so that it can receive data from multiple sensors. Will not
- * block.
+ * Read lidar data from any sensor publishing to the LIDAR port. Does not
+ * check packet size so that it can receive data from multiple sensors. Will
+ * not block.
  *
- * @param[in] cli client returned by init_client associated with the connection.
+ * @param[in] cli client returned by init_client associated with the
+ * connection.
  * @param[out] buf buffer to which to write lidar data. Must be at least
  * buffer_size
  * @param[in] pf The packet format.
@@ -421,9 +440,11 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
 
 /**
  * Read imu data from any sensor publishing to the IMU port. Does not check
- * packet size so that it can receive data from multiple sensors. Will not block
+ * packet size so that it can receive data from multiple sensors. Will not
+ * block
  *
- * @param[in] cli client returned by init_client associated with the connection.
+ * @param[in] cli client returned by init_client associated with the
+ * connection.
  * @param[out] buf buffer to which to write lidar data. Must be at least
  * buffer_size
  * @param[in] pf The packet format.

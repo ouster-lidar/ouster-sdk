@@ -596,7 +596,7 @@ class LidarScan:
     def status(self) -> ndarray:
         ...
 
-    def _complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
+    def complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
         ...
 
     @property

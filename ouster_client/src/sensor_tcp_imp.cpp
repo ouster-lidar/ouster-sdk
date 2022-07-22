@@ -188,8 +188,9 @@ Json::Value SensorTcpImp::tcp_cmd_json(const std::vector<string>& cmd_tokens,
 void SensorTcpImp::tcp_cmd_with_validation(
     const std::vector<string>& cmd_tokens, const string& validation) const {
     auto result = tcp_cmd(cmd_tokens);
-    if (result != validation)
+    if (result != validation) {
         throw std::runtime_error("SensorTcp::tcp_cmd failed: " + cmd_tokens[0] +
                                  " command returned [" + result +
                                  "], expected [" + validation + "]");
+    }
 }
