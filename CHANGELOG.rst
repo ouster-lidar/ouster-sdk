@@ -16,7 +16,7 @@ ouster_client
 
 ouster_pcap
 -----------
-* replace libtins dependency with pcapplusplus
+* fix incorrect encapsulation protocol being reported in ``packet_info``
 
 ouster_viz
 ----------

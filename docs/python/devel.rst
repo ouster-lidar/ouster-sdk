@@ -13,10 +13,10 @@ Building the Python SDK from source requires several dependencies:
 - `cmake <https://cmake.org/>`_  >= 3.5
 - `eigen <https://eigen.tuxfamily.org>`_ >= 3.3
 - `jsoncpp <https://github.com/open-source-parsers/jsoncpp>`_ >= 1.7
+- `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
 - `libglew <http://glew.sourceforge.net/>`_ >= 2.1 or `glad <https://github.com/Dav1dde/glad>`_
-- `pcapplusplus <https://github.com/seladb/PcapPlusPlus>`_ >= 22.05
 - `Python <https://www.python.org/>`_ >= 3.7 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
@@ -30,16 +30,14 @@ On supported Debian-based linux systems, you can install all build dependencies 
 .. code:: console
 
    $ sudo apt install build-essential cmake \
-                      libeigen3-dev libjsoncpp-dev libpcap-dev \
+                      libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
                       python3-dev python3-pip pybind11-dev libglfw3-dev libglew-dev
-
-and install pcapplusplus manually from the link above.
 
 On macos >= 10.13, using homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen jsoncpp pcapplusplus python3 pybind11 glfw glew
+  $ brew install cmake eigen jsoncpp libtins python3 pybind11 glfw glew
 
 After you have the system dependencies, you can build the SDK with:
 
@@ -73,7 +71,7 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install eigen3 jsoncpp pcapplusplus pybind11 glfw3 glad[gl-api-33]
+   PS > vcpkg install eigen3 jsoncpp libtins pybind11 glfw3 glad[gl-api-33]
 
 The currently tested vcpkg tag is ``2022.02.23``. After that, using a developer powershell prompt:
 

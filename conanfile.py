@@ -6,7 +6,7 @@ from pprint import pformat
 
 class OusterSDKConan(ConanFile):
     name = "ouster_sdk"
-    version = "0.4.2-dev4"
+    version = "0.4.2-dev6"
     license = "BSD 3-Clause License"
     author = "Ouster, Inc."
     url = "https://github.com/ouster-lidar/ouster_example"
@@ -53,11 +53,13 @@ class OusterSDKConan(ConanFile):
     def requirements(self):
         self.requires("eigen/3.4.0")
         self.requires("jsoncpp/1.9.5")
-        self.requires("libcurl/7.84.0")
+        self.requires("libcurl/7.82.0")
 
         if self.options.build_pcap:
-            self.requires("pcapplusplus/22.05")
-            self.requires("libpcap/1.10.1")
+            self.requires("libtins/4.3")
+
+        # override due to conflict b/w libtins and libcurl
+        self.requires("openssl/1.1.1q")
 
         if self.options.build_viz:
             self.requires("glad/0.1.35")

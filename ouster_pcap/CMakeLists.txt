@@ -5,12 +5,12 @@ project(ouster_pcap)
 
 # ==== Project Packages ====
 find_package(Pcap REQUIRED)
-find_package(pcapplusplus REQUIRED)
+find_package(libtins REQUIRED)
 
 # ==== Libraries ====
-add_library(ouster_pcap src/pcap.cpp src/os_pcap.cpp)
+add_library(ouster_pcap src/os_pcap.cpp)
 target_include_directories(ouster_pcap SYSTEM PRIVATE
-  ${PCAP_INCLUDE_DIR})
+  ${PCAP_INCLUDE_DIR} ${libtins_INCLUDE_DIRS})
 target_include_directories(ouster_pcap PUBLIC
   $<INSTALL_INTERFACE:include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
@@ -20,7 +20,7 @@ if(WIN32)
   target_link_libraries(ouster_pcap PUBLIC ws2_32)
 endif()
 target_link_libraries(ouster_pcap
-  PRIVATE ${PCAP_LIBRARY} pcapplusplus::pcapplusplus)
+  PRIVATE ${PCAP_LIBRARY} ${libtins_LIBRARIES})
 add_library(OusterSDK::ouster_pcap ALIAS ouster_pcap)
 
 # ==== Install ====

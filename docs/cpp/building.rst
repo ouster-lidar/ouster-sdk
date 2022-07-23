@@ -36,7 +36,7 @@ where ``<path to ouster_example>`` is the location of the ``ouster_example`` sou
 CMake build script supports several optional flags::
 
     -DBUILD_VIZ=OFF                      Do not build the sample visualizer
-    -DBUILD_PCAP=ON                      Build pcap tools. Requires libpcap and pcapplusplus dev packages
+    -DBUILD_PCAP=ON                      Build pcap tools. Requires libpcap and libtins dev packages
     -DBUILD_SHARED_LIBS                  Build shared libraries (.dylib or .so)
     -DCMAKE_POSITION_INDEPENDENT_CODE    Standard flag for position independent code
     -DBUILD_EXAMPLES=ON                  Build C++ examples

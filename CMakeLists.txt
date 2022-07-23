@@ -84,8 +84,8 @@ set(CPACK_SOURCE_IGNORE_FILES /.git /dist)
 # deb options
 set(CPACK_DEBIAN_PACKAGE_NAME ouster-sdk)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "cmake, libjsoncpp-dev, libtclap-dev, libeigen3-dev,
-  libglfw3-dev, libglew-dev")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+  "libjsoncpp-dev, libeigen3-dev, libtins-dev, libglfw3-dev, libglew-dev")
 
 include(CPack)
 

@@ -328,7 +328,7 @@ def record(packets: Iterable[Packet],
     error = False
     buf_size = 2**16
     n = 0
-    handle = _pcap.record_initialize(pcap_path, buf_size,
+    handle = _pcap.record_initialize(pcap_path, src_ip, dst_ip, buf_size,
                                      use_sll_encapsulation)
     try:
         for packet in packets:
@@ -347,7 +347,7 @@ def record(packets: Iterable[Packet],
                 raise ValueError("Mixing timestamped/untimestamped packets")
 
             ts = packet.capture_timestamp or time.time()
-            _pcap.record_packet(handle, src_ip, dst_ip, src_port, dst_port, packet._data, ts)
+            _pcap.record_packet(handle, src_port, dst_port, packet._data, ts)
             n += 1
     except Exception:
         error = True
