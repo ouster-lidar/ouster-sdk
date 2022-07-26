@@ -40,17 +40,13 @@ target_link_libraries(ouster_client
 target_compile_definitions(ouster_client PRIVATE EIGEN_MPL2_ONLY)
 add_library(OusterSDK::ouster_client ALIAS ouster_client)
 
-# override detection of library support in nonstd optional to ensure that the
-# same options are used during build and for installed targets. This avoids
-# errors when e.g. using the SDK built as c++14 in a c++17 project
+# If ouster_client is build as >=c++17, the nonstd::optional backport
+# will just be an alias for std::optional. In that case, client code
+# must also build as c++17 to use the same implementation of optional
 get_target_property(OUSTER_CLIENT_CXX_STANDARD ouster_client CXX_STANDARD)
 if(OUSTER_CLIENT_CXX_STANDARD GREATER_EQUAL 17)
-  set(NONSTD_OPTIONAL_CONFIG "optional_OPTIONAL_STD")
-else()
-  set(NONSTD_OPTIONAL_CONFIG "optional_OPTIONAL_NONSTD")
+  target_compile_features(ouster_client INTERFACE cxx_std_17)
 endif()
-target_compile_definitions(ouster_client
-  PUBLIC optional_CONFIG_SELECT_OPTIONAL=${NONSTD_OPTIONAL_CONFIG})
 
 if(WIN32)
   target_link_libraries(ouster_client PUBLIC ws2_32)
