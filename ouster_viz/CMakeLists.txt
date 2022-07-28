@@ -1,6 +1,3 @@
-cmake_minimum_required(VERSION 3.1.0)
-
-# ==== Project Name ====
 project(ouster_viz)
 
 # ==== Requirements ====

@@ -21,4 +21,4 @@ class OusterSDKTestConan(ConanFile):
     def test(self):
         if not tools.cross_building(self):
             os.chdir("bin")
-            self.run(".%sexample_client" % os.sep)
+            self.run(".%sclient_example" % os.sep)

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.10...3.22)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(DefaultBuildType)
@@ -12,17 +12,16 @@ project(ouster_example VERSION 20220608)
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 option(BUILD_SHARED_LIBS "Build shared libraries." OFF)
-option(BUILD_PCAP "Build pcap utils." OFF)
-option(BUILD_TESTING "Build tests" OFF)
+option(BUILD_PCAP "Build pcap utils." ON)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
+option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_EXAMPLES "Build C++ examples" OFF)
 option(OUSTER_USE_EIGEN_MAX_ALIGN_BYTES_32 "Eigen max aligned bytes." ON)
 
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# when building as a top-level project and not as conan library
+# when building as a top-level project
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
   if(NOT DEFINED CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 14)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,7 +48,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND OUSTER_USE_EIGEN_MAX_ALIGN_BYTES
   target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
 endif()
 
-if(BUILD_PCAP OR BUILD_EXAMPLES)
+if(BUILD_PCAP)
   add_subdirectory(ouster_pcap)
 endif()
 
@@ -61,7 +60,7 @@ if(BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 

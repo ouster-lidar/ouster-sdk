@@ -1,6 +1,3 @@
-cmake_minimum_required(VERSION 3.8.0)
-
-# ==== Project Name ====
 project(ouster_client VERSION 0.4.1.3)
 set(ouster_client_VERSION_SUFFIX "")
 

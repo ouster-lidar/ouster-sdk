@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018, Ouster, Inc.
+ * Copyright (c) 2022, Ouster, Inc.
  * All rights reserved.
  */
 
@@ -26,15 +26,15 @@ void FATAL(const char* msg) {
 
 int main(int argc, char* argv[]) {
     if (argc != 2 && argc != 3) {
-        std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
-                  << ouster::BUILD_SYSTEM << ")"
-                  << "\n\nUsage: client_example <sensor_hostname> "
-                     "[<data_destination_ip>]"
-                     "\n\n<data_destination_ip> is optional: leave blank for "
-                     "automatic destination detection"
-                  << std::endl;
+        std::cerr
+            << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
+            << ouster::BUILD_SYSTEM << ")"
+            << "\n\nUsage: client_example <sensor_hostname> [<udp_destination>]"
+               "\n\n<udp_destination> is optional: leave blank for "
+               "automatic destination detection"
+            << std::endl;
 
-        return EXIT_FAILURE;
+        return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     std::cerr << "Ouster client example " << ouster::CLIENT_VERSION
               << std::endl;

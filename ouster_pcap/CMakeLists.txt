@@ -1,9 +1,6 @@
-cmake_minimum_required(VERSION 3.1.0)
-
-# ==== Project Name ====
 project(ouster_pcap)
 
-# ==== Project Packages ====
+# ==== Requirements ====
 find_package(Pcap REQUIRED)
 find_package(libtins REQUIRED)
 

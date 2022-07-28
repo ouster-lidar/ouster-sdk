@@ -12,6 +12,7 @@ Building the Python SDK from source requires several dependencies:
 - a C++14-capable compiler
 - `cmake <https://cmake.org/>`_  >= 3.5
 - `eigen <https://eigen.tuxfamily.org>`_ >= 3.3
+- `curl <https://curl.se/libcurl/>`_ >= 7.58
 - `jsoncpp <https://github.com/open-source-parsers/jsoncpp>`_ >= 1.7
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_

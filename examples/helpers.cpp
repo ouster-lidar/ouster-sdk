@@ -5,6 +5,10 @@
 
 #include "helpers.h"
 
+#include "ouster/lidar_scan.h"
+#include "ouster/os_pcap.h"
+#include "ouster/types.h"
+
 using namespace ouster::sensor;
 
 constexpr std::size_t BUF_SIZE = 65536;

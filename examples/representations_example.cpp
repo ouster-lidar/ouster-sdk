@@ -45,9 +45,11 @@ img_t<double> get_x_in_image_form(const LidarScan& scan, bool destaggered,
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "\n\nUsage: lidar_scan_example <pcap_file> <json_file>"
+        std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
+                  << ouster::BUILD_SYSTEM << ")"
+                  << "\n\nUsage: representation_example <pcap_file> <json_file>"
                   << std::endl;
-        return EXIT_FAILURE;
+        return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     const std::string pcap_file = argv[1];

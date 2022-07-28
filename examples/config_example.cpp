@@ -20,11 +20,12 @@ using namespace ouster;
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         std::cerr
-            << "Version: " << ouster::CLIENT_VERSION_FULL << " {"
+            << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
             << ouster::BUILD_SYSTEM << ")"
-            << "\n\nUsage: ouster_client_config_example <sensor_hostname> "
+            << "\n\nUsage: config_example <sensor_hostname> "
             << std::endl;
-        return EXIT_FAILURE;
+
+        return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     const std::string sensor_hostname = argv[1];
