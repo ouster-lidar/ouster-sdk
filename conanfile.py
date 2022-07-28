@@ -65,6 +65,9 @@ class OusterSDKConan(ConanFile):
             self.requires("glad/0.1.35")
             # glew is optional, and probably will not be needed
             # self.requires("glew/2.2.0")
+            # glfw pulls in xorg/system, the latest revision of which  (7c17659) requires updates
+            # pin to older revision which doesn't require install/update, thus overriding glfw's xorg/system
+            self.requires("xorg/system@#60bff7b91495dc0366ae6a9ae60d73a9")
             self.requires("glfw/3.3.6")
             # maybe needed for cpp examples, but not for the lib
             # self.requires("tclap/1.2.4")
