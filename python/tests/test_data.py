@@ -59,7 +59,8 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
     w = pf.columns_per_packet
     h = pf.pixels_per_column
 
-    scan_has_signal = (meta.format.udp_profile_lidar != client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+    scan_has_signal = (meta.format.udp_profile_lidar !=
+                       client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
 
     assert len(
         client.ChanField.__members__) == 23, "Don't forget to update tests!"
@@ -69,7 +70,8 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
     assert np.array_equal(p.field(client.ChanField.NEAR_IR), np.zeros((h, w)))
 
     if scan_has_signal:
-        assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros((h, w)))
+        assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros(
+            (h, w)))
 
     assert len(
         client.ColHeader.__members__) == 5, "Don't forget to update tests!"
@@ -312,11 +314,11 @@ def test_scan_dual_profile() -> None:
         client.ChanField.NEAR_IR,
     }
 
+
 def test_scan_low_data_rate() -> None:
     """Low Data Rate scan has the expected fields."""
-    ls = client.LidarScan(
-        32, 1024,
-        client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+    ls = client.LidarScan(32, 1024,
+                          client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
 
     assert set(ls.fields) == {
         client.ChanField.RANGE,
@@ -324,9 +326,11 @@ def test_scan_low_data_rate() -> None:
         client.ChanField.NEAR_IR,
     }
 
+
 def test_scan_single_return() -> None:
     """Single Return scan has the expected fields."""
-    ls = client.LidarScan(32, 1024, client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16)
+    ls = client.LidarScan(
+        32, 1024, client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16)
 
     assert set(ls.fields) == {
         client.ChanField.RANGE,
@@ -334,6 +338,7 @@ def test_scan_single_return() -> None:
         client.ChanField.SIGNAL,
         client.ChanField.NEAR_IR,
     }
+
 
 def test_scan_empty() -> None:
     """Sanity check scan with no fields."""
@@ -348,11 +353,12 @@ def test_scan_empty() -> None:
 
 def test_scan_custom() -> None:
     """Sanity check scan with a custom set of fields."""
-    ls = client.LidarScan(32, 1024, {
-        client.ChanField.SIGNAL: np.uint16,
-        client.ChanField.FLAGS: np.uint8,
-        client.ChanField.CUSTOM0: np.uint32
-    })
+    ls = client.LidarScan(
+        32, 1024, {
+            client.ChanField.SIGNAL: np.uint16,
+            client.ChanField.FLAGS: np.uint8,
+            client.ChanField.CUSTOM0: np.uint32
+        })
 
     assert set(ls.fields) == {
         client.ChanField.SIGNAL, client.ChanField.FLAGS,

@@ -203,7 +203,7 @@ def pcap_to_csv(source: client.PacketSource,
 
         if dual:
             xyz2 = (xyzlut(scan.field(client.ChanField.RANGE2)) * 1000).astype(
-                        np.int64)
+                np.int64)
 
             # get all data as one H x W x num fields int64 array for savetxt()
             frame = np.dstack((timestamps, *fields_values, xyz, xyz2))
@@ -211,7 +211,7 @@ def pcap_to_csv(source: client.PacketSource,
         else:
             # get all data as one H x W x num fields int64 array for savetxt()
             frame = np.dstack((timestamps, *fields_values, xyz))
-           
+
         # not necessary, but output points in "image" vs. staggered order
         frame = client.destagger(metadata, frame)
 
@@ -237,10 +237,10 @@ def pcap_to_las(source: client.PacketSource,
                 las_ext: str = "las") -> None:
     "Write scans from a pcap to las files (one per lidar scan)."
 
-    if metadata.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
-        print(
-                "Note: You've selected to convert a dual returns pcap to LAS. Second returns are ignored in this conversion."
-        )
+    if (metadata.format.udp_profile_lidar ==
+            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
+        print("Note: You've selected to convert a dual returns pcapp to LAS. "
+              "Second returns are ignored in this conversion.")
 
     from itertools import islice
     import laspy  # type: ignore
@@ -276,10 +276,10 @@ def pcap_to_pcd(source: client.PacketSource,
                 pcd_ext: str = "pcd") -> None:
     "Write scans from a pcap to pcd files (one per lidar scan)."
 
-    if metadata.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
-        print(
-                "Note: You've selected to convert a dual returns pcap to LAS. Second returns are ignored in this conversion."
-        )
+    if (metadata.format.udp_profile_lidar ==
+            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
+        print("Note: You've selected to convert a dual returns pcap to PCD. "
+              "Second returns are ignored in this conversion.")
 
     from itertools import islice
     try:

@@ -5,7 +5,6 @@ All rights reserved.
 Type annotations for pcap python bindings.
 """
 
-from typing import overload
 from ..client.data import BufferT
 
 
@@ -83,6 +82,8 @@ def replay_reset(handle: playback_handle) -> None:
 
 
 def record_initialize(file_name: str,
+                      src_ip: str,
+                      dst_ip: str,
                       frag_size: int,
                       use_sll_encapsulation: bool = ...) -> record_handle:
     ...
@@ -91,13 +92,7 @@ def record_initialize(file_name: str,
 def record_uninitialize(handle: record_handle) -> None:
     ...
 
-@overload
-def record_packet(handle: record_handle, src_ip: str, dst_ip: str, src_port: int, dst_port: int,
+
+def record_packet(handle: record_handle, src_port: int, dst_port: int,
                   buf: BufferT, timestamp: float) -> None:
     ...
-
-@overload
-def record_packet(handle: record_handle, info: packet_info,
-                  buf: BufferT) -> None:
-    ...
-

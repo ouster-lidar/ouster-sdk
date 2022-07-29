@@ -25,7 +25,7 @@ RUN set -xe \
  python3-venv \
  pybind11-dev \
 # Install any additional available cpython versions for testing
- 'python3.[0-9]+-dev' \
+ 'python3.(7|8|9|10)-dev' \
 && rm -rf /var/lib/apt/lists
 
 # Set up non-root build user and environment
@@ -42,7 +42,9 @@ ENV PATH="${PATH}:${BUILD_HOME}/.local/bin" \
 WORKDIR ${BUILD_HOME}
 
 RUN set -xe \
-&& python3 -m pip install --no-cache-dir --user -U pip tox
+# use oldest available, supported python as tox default
+&& PYTHON=$(which python3.7 python3.8 python3.9 python3.10 | head -1) \
+&& $PYTHON -m pip install --no-cache-dir --user -U pip tox
 
 # Populate source dir
 COPY . ${OUSTER_SDK_PATH}
@@ -66,5 +68,5 @@ ENTRYPOINT ["sh", "-c", "set -e \
 && rm -rf ./src && cp -a ${OUSTER_SDK_PATH} ./src \
 && export ARTIFACT_DIR=${ARTIFACT_DIR:-$BUILD_HOME/artifacts} \
 && . /etc/os-release && export ID VERSION_ID \
-&& exec python3 -m tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
+&& exec tox -c ./src/python --workdir ${HOME}/tox \"$@\" \
 ", "tox-entrypoint"]

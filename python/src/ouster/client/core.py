@@ -2,7 +2,7 @@
 
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
- 
+
 This module contains more idiomatic wrappers around the lower-level module
 generated using pybind11.
 """

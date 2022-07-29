@@ -216,11 +216,12 @@ class PacketFormat:
 
 class LidarMode:
     MODE_UNSPEC: ClassVar[LidarMode]
+    MODE_512x10: ClassVar[LidarMode]
+    MODE_512x20: ClassVar[LidarMode]
     MODE_1024x10: ClassVar[LidarMode]
     MODE_1024x20: ClassVar[LidarMode]
     MODE_2048x10: ClassVar[LidarMode]
-    MODE_512x10: ClassVar[LidarMode]
-    MODE_512x20: ClassVar[LidarMode]
+    MODE_4096x5: ClassVar[LidarMode]
 
     __members__: ClassVar[Dict[str, LidarMode]]
     values: ClassVar[Iterator[LidarMode]]
