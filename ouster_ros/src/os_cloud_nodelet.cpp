@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <queue>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -42,14 +43,17 @@ class OusterCloud : public nodelet::Nodelet {
         sensor_frame = tf_prefix + "os_sensor";
         imu_frame = tf_prefix + "os_imu";
         lidar_frame = tf_prefix + "os_lidar";
+        auto timestamp_mode_arg = pnh.param("timestamp_mode", std::string{});
+        use_ros_time = (timestamp_mode_arg == "TIME_FROM_ROS_TIME");
 
         auto& nh = getNodeHandle();
         ouster_ros::GetMetadata metadata{};
         auto client = nh.serviceClient<ouster_ros::GetMetadata>("get_metadata");
         client.waitForExistence();
         if (!client.call(metadata)) {
-            NODELET_ERROR("Calling get_metadata service failed");
-            throw std::runtime_error("Calling get_metadata service failed");
+            auto error_msg = "OusterCloud: Calling get_metadata service failed";
+            NODELET_ERROR_STREAM(error_msg);
+            throw std::runtime_error(error_msg);
         }
 
         NODELET_INFO("OusterCloud: retrieved sensor metadata!");
@@ -57,9 +61,8 @@ class OusterCloud : public nodelet::Nodelet {
         info = sensor::parse_metadata(metadata.response.metadata);
         uint32_t H = info.format.pixels_per_column;
         uint32_t W = info.format.columns_per_frame;
-        auto udp_profile_lidar = info.format.udp_profile_lidar;
 
-        n_returns = udp_profile_lidar ==
+        n_returns = info.format.udp_profile_lidar ==
                             UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL
                         ? 2
                         : 1;
@@ -82,13 +85,17 @@ class OusterCloud : public nodelet::Nodelet {
 
         xyz_lut = ouster::make_xyz_lut(info);
 
-        ls = ouster::LidarScan{W, H, udp_profile_lidar};
+        ls = ouster::LidarScan{W, H, info.format.udp_profile_lidar};
         cloud = ouster_ros::Cloud{W, H};
 
         scan_batcher = std::make_unique<ouster::ScanBatcher>(info);
 
-        lidar_packet_sub = nh.subscribe<PacketMsg>(
-            "lidar_packets", 2048, &OusterCloud::lidar_handler, this);
+        auto lidar_handler = use_ros_time
+                                 ? &OusterCloud::lidar_handler_ros_time
+                                 : &OusterCloud::lidar_handler_sensor_time;
+
+        lidar_packet_sub =
+            nh.subscribe<PacketMsg>("lidar_packets", 2048, lidar_handler, this);
         imu_packet_sub = nh.subscribe<PacketMsg>(
             "imu_packets", 100, &OusterCloud::imu_handler, this);
 
@@ -100,34 +107,62 @@ class OusterCloud : public nodelet::Nodelet {
             info.lidar_to_sensor_transform, sensor_frame, lidar_frame));
     }
 
-    void lidar_handler(const PacketMsg::ConstPtr& packet) {
-        if ((*scan_batcher)(packet->buf.data(), ls)) {
-            auto h = std::find_if(
-                ls.headers.begin(), ls.headers.end(), [](const auto& h) {
-                    return h.timestamp != 0ns;
-                });
-            if (h != ls.headers.end()) {
-                for (int i = 0; i < n_returns; i++) {
-                    scan_to_cloud(xyz_lut, h->timestamp, ls, cloud, i);
-                    sensor_msgs::PointCloud2 pc =
-                        ouster_ros::cloud_to_cloud_msg(cloud, h->timestamp,
-                                                       sensor_frame);
-                    sensor_msgs::PointCloud2Ptr pc_ptr =
-                        boost::make_shared<sensor_msgs::PointCloud2>(pc);
-                    lidar_pubs[i].publish(pc_ptr);
-                }
-            }
+    void convert_scan_to_pointcloud_publish(std::chrono::nanoseconds scan_ts,
+                                            const ros::Time& msg_ts) {
+        for (int i = 0; i < n_returns; ++i) {
+            scan_to_cloud(xyz_lut, scan_ts, ls, cloud, i);
+            sensor_msgs::PointCloud2 pc =
+                ouster_ros::cloud_to_cloud_msg(cloud, msg_ts, sensor_frame);
+            sensor_msgs::PointCloud2Ptr pc_ptr =
+                boost::make_shared<sensor_msgs::PointCloud2>(pc);
+            lidar_pubs[i].publish(pc_ptr);
         }
+    }
+
+    void lidar_handler_sensor_time(const PacketMsg::ConstPtr& packet) {
+        if (!(*scan_batcher)(packet->buf.data(), ls)) return;
+        auto ts_v = ls.timestamp();
+        auto idx = std::find_if(ts_v.data(), ts_v.data() + ts_v.size(),
+                                [](uint64_t h) { return h != 0; });
+        if (idx == ts_v.data() + ts_v.size()) return;
+        auto scan_ts = std::chrono::nanoseconds{ts_v(idx - ts_v.data())};
+        convert_scan_to_pointcloud_publish(scan_ts, to_ros_time(scan_ts));
+    }
+
+    void lidar_handler_ros_time(const PacketMsg::ConstPtr& packet) {
+        auto packet_receive_time = ros::Time::now();
+        static auto frame_ts = packet_receive_time;  // first point cloud time
+        if (!(*scan_batcher)(packet->buf.data(), ls)) return;
+        auto ts_v = ls.timestamp();
+        auto idx = std::find_if(ts_v.data(), ts_v.data() + ts_v.size(),
+                                [](uint64_t h) { return h != 0; });
+        if (idx == ts_v.data() + ts_v.size()) return;
+        auto scan_ts = std::chrono::nanoseconds{ts_v(idx - ts_v.data())};
+        convert_scan_to_pointcloud_publish(scan_ts, frame_ts);
+        frame_ts = packet_receive_time;  // set time for next point cloud msg
     }
 
     void imu_handler(const PacketMsg::ConstPtr& packet) {
         auto pf = sensor::get_format(info);
+        ros::Time msg_ts =
+            use_ros_time ? ros::Time::now()
+                         : to_ros_time(pf.imu_gyro_ts(packet->buf.data()));
         sensor_msgs::Imu imu_msg =
-            ouster_ros::packet_to_imu_msg(*packet, imu_frame, pf);
+            ouster_ros::packet_to_imu_msg(*packet, msg_ts, imu_frame, pf);
         sensor_msgs::ImuPtr imu_msg_ptr =
             boost::make_shared<sensor_msgs::Imu>(imu_msg);
         imu_pub.publish(imu_msg_ptr);
     };
+
+    inline ros::Time to_ros_time(uint64_t ts) {
+        ros::Time t;
+        t.fromNSec(ts);
+        return t;
+    }
+
+    inline ros::Time to_ros_time(std::chrono::nanoseconds ts) {
+        return to_ros_time(ts.count());
+    }
 
    private:
     ros::Subscriber lidar_packet_sub;
@@ -148,6 +183,8 @@ class OusterCloud : public nodelet::Nodelet {
     std::string lidar_frame;
 
     tf2_ros::StaticTransformBroadcaster tf_bcast;
+
+    bool use_ros_time;
 };
 }  // namespace nodelets_os
 

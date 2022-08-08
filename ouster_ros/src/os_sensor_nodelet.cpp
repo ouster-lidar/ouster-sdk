@@ -57,7 +57,8 @@ class OusterSensor : public OusterClientBase {
         try {
             cached_metadata = sensor::get_metadata(cli);
         } catch (const std::exception& e) {
-            NODELET_ERROR_STREAM("sensor::get_metadata exception: " << e.what());
+            NODELET_ERROR_STREAM(
+                "sensor::get_metadata exception: " << e.what());
             cached_metadata.clear();
         }
 
@@ -109,7 +110,7 @@ class OusterSensor : public OusterClientBase {
         set_config_srv =
             nh.advertiseService<SetConfig::Request, SetConfig::Response>(
                 "set_config", [this](SetConfig::Request& request,
-                                  SetConfig::Response& response) {
+                                     SetConfig::Response& response) {
                     sensor::sensor_config config;
                     response.config = "";
                     auto success =
@@ -135,23 +136,27 @@ class OusterSensor : public OusterClientBase {
         NODELET_INFO("set_config service created");
     }
 
-    std::shared_ptr<sensor::client> create_client(
-        const std::string& hostname, int lidar_port, int imu_port) {
+    std::shared_ptr<sensor::client> create_client(const std::string& hostname,
+                                                  int lidar_port,
+                                                  int imu_port) {
         if (!hostname.size()) {
-            NODELET_ERROR("Must specify a sensor hostname");
-            throw std::runtime_error("sensor hostname not specified!");
+            auto error_msg = "Must specify a sensor hostname";
+            NODELET_ERROR_STREAM(error_msg);
+            throw std::runtime_error(error_msg);
         }
 
-        NODELET_INFO_STREAM("Starting sensor " << hostname << " initialization...");
+        NODELET_INFO_STREAM("Starting sensor " << hostname
+                                               << " initialization...");
 
         // use no-config version of init_client to allow for random ports
-        auto cli = sensor::init_client(hostname, "",
-            sensor::MODE_UNSPEC, sensor::TIME_FROM_UNSPEC,
-            lidar_port, imu_port);
+        auto cli =
+            sensor::init_client(hostname, "", sensor::MODE_UNSPEC,
+                                sensor::TIME_FROM_UNSPEC, lidar_port, imu_port);
 
         if (!cli) {
-            NODELET_ERROR("Failed to initialize client");
-            throw std::runtime_error("Failed to initialize client");
+            auto error_msg = "Failed to initialize client";
+            NODELET_ERROR_STREAM(error_msg);
+            throw std::runtime_error(error_msg);
         }
 
         return cli;
@@ -169,36 +174,47 @@ class OusterSensor : public OusterClientBase {
         nh.param<std::string>("udp_profile_lidar", udp_profile_lidar_arg, "");
 
         optional<sensor::UDPProfileLidar> udp_profile_lidar;
-        if (udp_profile_lidar_arg.size()) {
+        if (!udp_profile_lidar_arg.empty()) {
             // set lidar profile from param
             udp_profile_lidar =
                 sensor::udp_profile_lidar_of_string(udp_profile_lidar_arg);
             if (!udp_profile_lidar) {
-                NODELET_ERROR("Invalid udp profile lidar: %s",
-                              udp_profile_lidar_arg.c_str());
-                throw std::runtime_error("Invalid udp profile");
+                auto error_msg =
+                    "Invalid udp profile lidar: " + udp_profile_lidar_arg;
+                NODELET_ERROR_STREAM(error_msg);
+                throw std::runtime_error(error_msg);
             }
         }
 
         // set lidar mode from param
         sensor::lidar_mode lidar_mode = sensor::MODE_UNSPEC;
-        if (lidar_mode_arg.size()) {
+        if (!lidar_mode_arg.empty()) {
             lidar_mode = sensor::lidar_mode_of_string(lidar_mode_arg);
             if (!lidar_mode) {
-                NODELET_ERROR("Invalid lidar mode %s", lidar_mode_arg.c_str());
-                throw std::runtime_error("Invalid lidar mode");
+                auto error_msg = "Invalid lidar mode: " + lidar_mode_arg;
+                NODELET_ERROR_STREAM(error_msg);
+                throw std::runtime_error(error_msg);
             }
         }
 
         // set timestamp mode from param
         sensor::timestamp_mode timestamp_mode = sensor::TIME_FROM_UNSPEC;
-        if (timestamp_mode_arg.size()) {
-            timestamp_mode =
-                sensor::timestamp_mode_of_string(timestamp_mode_arg);
-            if (!timestamp_mode) {
-                NODELET_ERROR("Invalid timestamp mode %s",
-                              timestamp_mode_arg.c_str());
-                throw std::runtime_error("Invalid timestamp mode");
+        if (!timestamp_mode_arg.empty()) {
+            // In case the option TIME_FROM_ROS_TIME is set then leave the
+            // sensor timestamp_mode unmodified
+            if (timestamp_mode_arg == "TIME_FROM_ROS_TIME") {
+                NODELET_INFO(
+                    "TIME_FROM_ROS_TIME timestamp mode specified."
+                    " IMU and pointcloud messages will use ros time");
+            } else {
+                timestamp_mode =
+                    sensor::timestamp_mode_of_string(timestamp_mode_arg);
+                if (!timestamp_mode) {
+                    auto error_msg =
+                        "Invalid timestamp mode: " + timestamp_mode_arg;
+                    NODELET_ERROR_STREAM(error_msg);
+                    throw std::runtime_error(error_msg);
+                }
             }
         }
 

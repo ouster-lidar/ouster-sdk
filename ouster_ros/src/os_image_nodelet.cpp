@@ -52,17 +52,17 @@ class OusterImage : public nodelet::Nodelet {
         auto client = nh.serviceClient<ouster_ros::GetMetadata>("get_metadata");
         client.waitForExistence();
         if (!client.call(metadata)) {
-            NODELET_ERROR("Calling get_metadata service failed");
-            throw std::runtime_error("Calling get_metadata service failed");
+            auto error_msg = "OusterImage: Calling get_metadata service failed";
+            NODELET_ERROR_STREAM(error_msg);
+            throw std::runtime_error(error_msg);
         }
 
         NODELET_INFO("OusterImage: retrieved sensor metadata!");
 
         info = sensor::parse_metadata(metadata.response.metadata);
 
-        auto udp_profile_lidar = info.format.udp_profile_lidar;
         const int n_returns =
-            udp_profile_lidar ==
+            info.format.udp_profile_lidar ==
                     UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL
                 ? 2
                 : 1;

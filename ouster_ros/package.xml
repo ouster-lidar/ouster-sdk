@@ -13,6 +13,7 @@
   <depend>geometry_msgs</depend>
   <depend>tf2_ros</depend>
 
+  <build_depend>boost</build_depend>
   <build_depend>nodelet</build_depend>
   <build_depend>libjsoncpp-dev</build_depend>
   <build_depend>eigen</build_depend>
