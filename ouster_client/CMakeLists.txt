@@ -1,4 +1,4 @@
-project(ouster_client VERSION 0.4.1.3)
+project(ouster_client VERSION 0.5.0)
 set(ouster_client_VERSION_SUFFIX "")
 
 # ==== Requirements ====

@@ -7,7 +7,7 @@ include(DefaultBuildType)
 include(VcpkgEnv)
 
 # ==== Project Name ====
-project(ouster_example VERSION 20220608)
+project(ouster_example VERSION 20220808)
 
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)

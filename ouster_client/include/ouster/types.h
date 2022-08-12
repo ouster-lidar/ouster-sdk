@@ -63,7 +63,8 @@ enum lidar_mode {
     MODE_1024x10,     ///< lidar mode: 10 scans of 1024 columns per second
     MODE_1024x20,     ///< lidar mode: 20 scans of 1024 columsn per second
     MODE_2048x10,     ///< lidar mode: 10 scans of 2048 columns per second
-    MODE_4096x5       ///< lidar mode: 5 scans of 4096 columns per second. Only available on select sensors
+    MODE_4096x5       ///< lidar mode: 5 scans of 4096 columns per second. Only
+                      ///< available on select sensors
 
 };
 
@@ -631,7 +632,8 @@ sensor_info parse_metadata(const std::string& metadata);
 sensor_info metadata_from_json(const std::string& json_file);
 
 /**
- * Get a string representation of metadata. All fields included.
+ * Get a string representation of the sensor_info. All fields included. Not
+ * equivalent or interchangeable with metadata from sensor.
  *
  * @param[in] info sensor_info struct
  *
