@@ -22,8 +22,9 @@ if(@BUILD_VIZ@)
 endif()
 
 if(@BUILD_PCAP@)
-  # libpcap/libtins deps don't use cmake targets, lib and include paths are
-  # fixed at build time. Seems like this works for deb packages.
+  # make libtins dependency optional; on debian distros, libtins doesn't include
+  # a config module and sdk targets will just include paths in that case
+  find_package(libtins QUIET)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/OusterSDKTargets.cmake")

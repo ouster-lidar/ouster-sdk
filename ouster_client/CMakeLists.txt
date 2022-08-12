@@ -56,7 +56,7 @@ target_include_directories(ouster_client SYSTEM PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/optional-lite>)
 
 # ==== Install ====
-install(TARGETS ouster_client 
+install(TARGETS ouster_client
         EXPORT ouster-sdk-targets
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib

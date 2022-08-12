@@ -13,12 +13,11 @@ if(jsoncpp_FOUND AND TARGET jsoncpp_lib)
   return()
 endif()
 
-# Target available in recent versions of vcpkg. We can make an alias of an
-# imported target since we're guaranteed to be using a recent cmake
-# Note: newer cmake will error if one but not both targets are in scope
+# With vcpkg, only a static lib is available so create a target for compatibility
 if(jsoncpp_FOUND AND TARGET jsoncpp_static)
-  add_library(jsoncpp_lib INTERFACE IMPORTED)
-  set_target_properties(jsoncpp_lib PROPERTIES INTERFACE_LINK_LIBRARIES "jsoncpp_static")
+  add_library(jsoncpp_lib INTERFACE)
+  target_link_libraries(jsoncpp_lib INTERFACE jsoncpp_static)
+  install(TARGETS jsoncpp_lib EXPORT ouster-sdk-targets)
   find_package_handle_standard_args(jsoncpp CONFIG_MODE)
   return()
 endif()

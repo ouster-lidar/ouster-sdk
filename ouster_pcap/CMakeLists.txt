@@ -1,7 +1,6 @@
 project(ouster_pcap)
 
 # ==== Requirements ====
-find_package(Pcap REQUIRED)
 find_package(libtins REQUIRED)
 
 # ==== Libraries ====
@@ -16,8 +15,7 @@ if(WIN32)
   target_compile_options(ouster_pcap PRIVATE /wd4200)
   target_link_libraries(ouster_pcap PUBLIC ws2_32)
 endif()
-target_link_libraries(ouster_pcap
-  PRIVATE ${PCAP_LIBRARY} ${libtins_LIBRARIES})
+target_link_libraries(ouster_pcap PRIVATE libtins)
 add_library(OusterSDK::ouster_pcap ALIAS ouster_pcap)
 
 # ==== Install ====
@@ -29,4 +27,3 @@ install(TARGETS ouster_pcap
   INCLUDES DESTINATION include)
 
 install(DIRECTORY include/ouster DESTINATION include)
-
