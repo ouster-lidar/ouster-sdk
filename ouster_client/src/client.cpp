@@ -8,6 +8,7 @@
 #include <json/json.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -29,7 +30,6 @@
 
 using namespace std::chrono_literals;
 namespace chrono = std::chrono;
-
 using ouster::sensor::util::SensorHttp;
 
 namespace ouster {
@@ -60,8 +60,7 @@ int32_t get_sock_port(SOCKET sock_fd) {
 
     if (!impl::socket_valid(
             getsockname(sock_fd, (struct sockaddr*)&ss, &addrlen))) {
-        std::cerr << "udp getsockname(): " << impl::socket_get_error()
-                  << std::endl;
+        std::cerr << "udp getsockname(): " << impl::socket_get_error() << std::endl;
         return SOCKET_ERROR;
     }
 
@@ -105,8 +104,7 @@ SOCKET udp_data_socket(int port) {
             SOCKET sock_fd =
                 socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
             if (!impl::socket_valid(sock_fd)) {
-                std::cerr << "udp socket(): " << impl::socket_get_error()
-                          << std::endl;
+                std::cerr << "udp socket(): " << impl::socket_get_error() << std::endl;
                 continue;
             }
 
@@ -115,27 +113,25 @@ SOCKET udp_data_socket(int port) {
                 setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off,
                            sizeof(off))) {
                 std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                          << std::endl;
+                     << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             if (impl::socket_set_reuse(sock_fd)) {
-                std::cerr << "udp socket_set_reuse(): "
-                          << impl::socket_get_error() << std::endl;
+                std::cerr << "udp socket_set_reuse(): " << impl::socket_get_error()
+                     << std::endl;
             }
 
-            if (bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
-                std::cerr << "udp bind(): " << impl::socket_get_error()
-                          << std::endl;
+            if (::bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
+                std::cerr << "udp bind(): " << impl::socket_get_error() << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             // bind() succeeded; set some options and return
             if (impl::socket_set_non_blocking(sock_fd)) {
-                std::cerr << "udp fcntl(): " << impl::socket_get_error()
-                          << std::endl;
+                std::cerr << "udp fcntl(): " << impl::socket_get_error() << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
@@ -143,7 +139,7 @@ SOCKET udp_data_socket(int port) {
             if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
                            sizeof(RCVBUF_SIZE))) {
                 std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                          << std::endl;
+                     << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
@@ -184,8 +180,7 @@ bool collect_metadata(client& cli, SensorHttp& sensor_http,
 
 }  // namespace
 
-bool get_config(const std::string& hostname, sensor_config& config,
-                bool active) {
+bool get_config(const std::string& hostname, sensor_config& config, bool active) {
     auto sensor_http = SensorHttp::create(hostname);
     auto res = sensor_http->get_config_params(active);
     config = parse_config(res);
@@ -198,6 +193,24 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 
     // reset staged config to avoid spurious errors
     auto active_params = sensor_http->get_config_params(true);
+
+    Json::CharReaderBuilder builder;
+    auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
+    Json::Value root;
+    auto parse_success = reader->parse(
+        active_params.c_str(), active_params.c_str() + active_params.size(),
+        &root, nullptr);
+
+    if (!parse_success)
+        throw std::runtime_error("Error while parsing current sensor config.");
+
+    // set all desired config parameters
+    Json::Value config_json = to_json(config);
+    for (const auto& key : config_json.getMemberNames()) {
+        root[key] = config_json[key];
+    }
+
+    active_params = Json::FastWriter().write(root);
     sensor_http->set_config_param(".", active_params);
 
     // set automatic udp dest, if flag specified
@@ -206,29 +219,6 @@ bool set_config(const std::string& hostname, const sensor_config& config,
             throw std::invalid_argument(
                 "UDP_DEST_AUTO flag set but provided config has udp_dest");
         sensor_http->set_udp_dest_auto();
-    }
-
-    // set all desired config parameters
-    Json::Value config_json = to_json(config);
-    for (const auto& key : config_json.getMemberNames()) {
-        auto value = Json::FastWriter().write(config_json[key]);
-        value.erase(std::remove(value.begin(), value.end(), '\n'), value.end());
-        try {
-            sensor_http->set_config_param(key, value);
-        } catch (std::runtime_error& e) {
-            auto error_string = std::string(e.what());
-            // match pre FW 2.4 or 2.4+
-            if (error_string.find("Invalid configuration value") !=
-                    std::string::npos ||
-                error_string.find("not supported") != std::string::npos) {
-                throw std::runtime_error("Error setting config parameter " +
-                                         std::string(key) +
-                                         ". Given parameter or provided value "
-                                         "is not supported by your sensor.");
-            } else {
-                throw e;
-            }
-        }
     }
 
     // reinitialize to make all staged parameters effective
@@ -367,7 +357,7 @@ static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
         std::cerr << "recvfrom: " << impl::socket_get_error() << std::endl;
     } else {
         std::cerr << "Unexpected udp packet length of: " << bytes_read
-                  << " bytes. Expected: " << len << " bytes." << std::endl;
+             << " bytes. Expected: " << len << " bytes." << std::endl;
     }
     return false;
 }
