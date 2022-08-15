@@ -54,6 +54,12 @@ class CurlClient : public ouster::util::HttpClient {
         curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
         buffer.clear();
         auto res = curl_easy_perform(curl_handle);
+        if (res == CURLE_SEND_ERROR) {
+            // Specific versions of curl does't play well with the sensor http
+            // server. When CURLE_SEND_ERROR happens for the first time silently
+            // re-attempting the http request resolves the problem.
+            res = curl_easy_perform(curl_handle);
+        }
         if (res != CURLE_OK) {
             throw std::runtime_error(
                 std::string(
