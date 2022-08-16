@@ -147,7 +147,7 @@ int main(int argc, char* argv[]) {
         clouds.push_back(ouster::cartesian(scan, lut));
 
         // channel fields can be queried as well
-        auto n_returns = (scan.field(sensor::RANGE) != 0).count();
+        auto n_valid_first_returns = (scan.field(sensor::RANGE) != 0).count();
 
         // LidarScan also provides access to header information such as
         // status and timestamp
@@ -162,8 +162,8 @@ int main(int argc, char* argv[]) {
                     it - status.data())));  // get corresponding timestamp
 
             std::cerr << "  Frame no. " << scan.frame_id << " with "
-                      << n_returns << " returns at " << ts_ms.count() << " ms"
-                      << std::endl;
+                      << n_valid_first_returns << " valid first returns at "
+                      << ts_ms.count() << " ms" << std::endl;
         }
     }
 

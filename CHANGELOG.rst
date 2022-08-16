@@ -6,6 +6,7 @@ Changelog
 ============
 
 * remove Ubuntu 16.04, Python 3.6 support
+* remove support for Mac 10.13, 10.14
 
 ouster_client
 --------------

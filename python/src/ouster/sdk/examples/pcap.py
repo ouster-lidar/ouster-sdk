@@ -145,12 +145,12 @@ def pcap_to_csv(source: client.PacketSource,
     dual = False
     if metadata.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
         dual = True
-        print('''
-        Note: You've selected to convert a dual returns pcap to CSV. Each row
-        represents a single pixel, so that both returns for that pixel will be
-        on a single row. If you open this CSV in a program that expects a
-        single point per row, you will not get the second returns.
-        ''')
+        print("Note: You've selected to convert a dual returns pcap to CSV. Each row "
+              "will represent a single pixel, so that both returns for that pixel will "
+              "be on a single row. As this is an example we provide for getting "
+              "started, we realize that you may have conversion needs which are not met "
+              "by this function. You can find the source code on the Python SDK "
+              "documentation website to modify it for your own needs.")
 
     # ensure that base csv_dir exists
     if not os.path.exists(csv_dir):
@@ -239,8 +239,10 @@ def pcap_to_las(source: client.PacketSource,
 
     if (metadata.format.udp_profile_lidar ==
             client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
-        print("Note: You've selected to convert a dual returns pcapp to LAS. "
-              "Second returns are ignored in this conversion.")
+        print("Note: You've selected to convert a dual returns pcap to LAS. "
+              "Second returns are ignored in this conversion by this example "
+              "for clarity reasons.  You can modify the code as needed by "
+              "accessing it through Github or the SDK documentation.")
 
     from itertools import islice
     import laspy  # type: ignore
@@ -278,8 +280,10 @@ def pcap_to_pcd(source: client.PacketSource,
 
     if (metadata.format.udp_profile_lidar ==
             client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
-        print("Note: You've selected to convert a dual returns pcap to PCD. "
-              "Second returns are ignored in this conversion.")
+        print("Note: You've selected to convert a dual returns pcap. Second "
+              "returns are ignored in this conversion by this example "
+              "for clarity reasons.  You can modify the code as needed by "
+              "accessing it through github or the SDK documentation.")
 
     from itertools import islice
     try:

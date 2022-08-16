@@ -160,7 +160,7 @@ def main():
     ranges = client.destagger(meta, ranges)
     ranges = np.divide(ranges, np.amax(ranges), dtype=np.float32)
 
-    signal = scan.field(client.ChanField.SIGNAL)
+    signal = scan.field(client.ChanField.REFLECTIVITY)
     signal = client.destagger(meta, signal)
     signal = np.divide(signal, np.amax(signal), dtype=np.float32)
 
@@ -198,7 +198,7 @@ def main():
     range_label.set_scale(1)
     point_viz.add(range_label)
 
-    signal_label = viz.Label(str(client.ChanField.SIGNAL),
+    signal_label = viz.Label(str(client.ChanField.REFLECTIVITY),
                              0.5,
                              1 - img_screen_height / 2,
                              align_top=True)
