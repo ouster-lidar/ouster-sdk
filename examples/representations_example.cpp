@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "helpers.h"
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -45,7 +45,7 @@ img_t<double> get_x_in_image_form(const LidarScan& scan, bool destaggered,
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
                   << ouster::BUILD_SYSTEM << ")"
                   << "\n\nUsage: representation_example <pcap_file> <json_file>"
                   << std::endl;

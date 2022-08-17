@@ -9,14 +9,14 @@
 #include <memory>
 #include <random>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/point_viz.h"
 
 using namespace ouster;
 
 int main(int argc, char*[]) {
     if (argc != 1) {
-        std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
                   << ouster::BUILD_SYSTEM << ")"
                   << "\n\nUsage: viz_example" << std::endl;
 

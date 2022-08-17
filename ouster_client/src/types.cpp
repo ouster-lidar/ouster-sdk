@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/version.h"
 
 namespace ouster {
@@ -306,7 +306,7 @@ int frequency_of_lidar_mode(lidar_mode mode) {
 }
 
 std::string client_version() {
-    return std::string("ouster_client ").append(ouster::CLIENT_VERSION);
+    return std::string("ouster_client ").append(ouster::SDK_VERSION);
 }
 
 /* String conversion */

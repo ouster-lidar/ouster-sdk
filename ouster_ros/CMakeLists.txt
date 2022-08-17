@@ -28,7 +28,7 @@ find_package(
 # ==== Options ====
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-add_compile_options(-Wall -Wextra -Werror -Wno-error=deprecated-declarations)
+add_compile_options(-Wall -Wextra)
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 
 # ==== Catkin ====
@@ -69,8 +69,10 @@ catkin_package(
 # libraries are the recommended way to do this, but require >=3.13 to propagate usage requirements.
 set(_SAVE_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
 set(BUILD_SHARED_LIBS OFF)
-add_subdirectory(../ouster_client ouster_client EXCLUDE_FROM_ALL)
-target_compile_options(ouster_client PRIVATE -Wno-deprecated-declarations)
+
+option(BUILD_VIZ "Enabled for Python build" OFF)
+option(BUILD_PCAP "Enabled for Python build" OFF)
+find_package(OusterSDK REQUIRED)
 
 set(BUILD_SHARED_LIBS ${_SAVE_BUILD_SHARED_LIBS})
 

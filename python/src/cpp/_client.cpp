@@ -27,6 +27,7 @@
 #include "ouster/buffered_udp_source.h"
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
+#include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -801,8 +802,6 @@ PYBIND11_PLUGIN(_client) {
             return cartesian(scan, self);
         });
 
-    m.attr("__version__") = VERSION_INFO;
-
     // Image processing
     py::class_<viz::AutoExposure>(m, "AutoExposure")
         .def(py::init<>())
@@ -820,6 +819,8 @@ PYBIND11_PLUGIN(_client) {
              py::arg("image"), py::arg("update_state") = true)
         .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
              py::arg("image"), py::arg("update_state") = true);
+
+    m.attr("__version__") = ouster::SDK_VERSION;
 
     return m.ptr();
 }

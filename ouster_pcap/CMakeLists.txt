@@ -1,5 +1,3 @@
-project(ouster_pcap)
-
 # ==== Requirements ====
 find_package(libtins REQUIRED)
 

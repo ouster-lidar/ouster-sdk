@@ -1,12 +1,11 @@
 import os
+import re
 from conans import ConanFile, CMake, tools
 
 from pprint import pformat
 
-
 class OusterSDKConan(ConanFile):
     name = "ouster_sdk"
-    version = "0.5.0-beta0"
     license = "BSD 3-Clause License"
     author = "Ouster, Inc."
     url = "https://github.com/ouster-lidar/ouster_example"
@@ -45,6 +44,12 @@ class OusterSDKConan(ConanFile):
         "LICENSE-bin",
         "README.rst"
     ]
+
+    # https://docs.conan.io/en/1.51/howtos/capture_version.html#how-to-capture-package-version-from-text-or-build-files
+    def set_version(self):
+        content = tools.load(os.path.join(self.recipe_folder, "CMakeLists.txt"))
+        version = re.search("set\(OusterSDK_VERSION_STRING (.*)\)", content).group(1)
+        self.version = version.strip()
 
     def config_options(self):
         if self.settings.os == "Windows":

@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "helpers.h"
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/os_pcap.h"
@@ -22,7 +22,7 @@ using namespace ouster::sensor;
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
                   << ouster::BUILD_SYSTEM << ")"
                   << "\n\nUsage: lidar_scan_example <pcap_file> <json_file>"
                   << std::endl;

@@ -46,20 +46,20 @@ set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 # they contain a generator expression, so we use a noop: $<0:>
 # https://cmake.org/cmake/help/latest/prop_tgt/LIBRARY_OUTPUT_DIRECTORY.html
 pybind11_add_module(_client src/cpp/_client.cpp)
-target_link_libraries(_client PRIVATE ouster_client)
+target_link_libraries(_client PRIVATE ouster_client ouster_build)
 target_include_directories(_client SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_client PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/client/$<0:>)
 
 pybind11_add_module(_pcap src/cpp/_pcap.cpp)
-target_link_libraries(_pcap PRIVATE ouster_pcap)
+target_link_libraries(_pcap PRIVATE ouster_pcap ouster_build)
 set_target_properties(_pcap PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/pcap/$<0:>)
 
 pybind11_add_module(_viz src/cpp/_viz.cpp)
-target_link_libraries(_viz PRIVATE ouster_client ouster_viz)
+target_link_libraries(_viz PRIVATE ouster_client ouster_viz ouster_build)
 target_include_directories(_viz SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_viz PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE

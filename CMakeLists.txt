@@ -9,6 +9,10 @@ include(VcpkgEnv)
 # ==== Project Name ====
 project(ouster_example VERSION 20220808)
 
+# generate version header
+set(OusterSDK_VERSION_STRING 0.5.0-b1.dev0)
+include(VersionGen)
+
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 option(BUILD_SHARED_LIBS "Build shared libraries." OFF)

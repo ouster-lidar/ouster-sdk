@@ -15,7 +15,7 @@
 #include <nodelet/nodelet.h>
 #include <ros/ros.h>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 #include "ouster/types.h"
 #include "ouster_ros/ros.h"

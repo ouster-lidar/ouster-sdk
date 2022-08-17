@@ -9,7 +9,7 @@
 #include <iostream>
 #include <vector>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -27,7 +27,7 @@ void FATAL(const char* msg) {
 int main(int argc, char* argv[]) {
     if (argc != 2 && argc != 3) {
         std::cerr
-            << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
+            << "Version: " << ouster::SDK_VERSION_FULL << " ("
             << ouster::BUILD_SYSTEM << ")"
             << "\n\nUsage: client_example <sensor_hostname> [<udp_destination>]"
                "\n\n<udp_destination> is optional: leave blank for "
@@ -36,8 +36,7 @@ int main(int argc, char* argv[]) {
 
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
-    std::cerr << "Ouster client example " << ouster::CLIENT_VERSION
-              << std::endl;
+    std::cerr << "Ouster client example " << ouster::SDK_VERSION << std::endl;
     /*
      * The sensor client consists of the network client and a library for
      * reading and working with data.

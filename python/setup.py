@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import platform
 import shlex
@@ -20,6 +21,12 @@ if not os.path.exists(OUSTER_SDK_PATH):
 if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
     raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 
+# https://packaging.python.org/en/latest/guides/single-sourcing-package-version/
+def parse_version():
+    with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
+        content = listfile.read()
+        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-]+)-(.*)\)", content)
+        return groups.group(1) + groups.group(2)
 
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=''):
@@ -61,14 +68,11 @@ class CMakeBuild(build_ext):
         else:
             build_args += ['--', '-j2']
 
-        env = os.environ.copy()
-        env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(
-            env.get('CXXFLAGS', ''), self.distribution.get_version())
-
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
 
         # specify additional cmake args
+        env = os.environ.copy()
         extra_args = env.get('OUSTER_SDK_CMAKE_ARGS')
         if extra_args:
             cmake_args += shlex.split(extra_args)
@@ -115,7 +119,8 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.5.0.b0',
+    # read from top-level sdk CMakeLists.txt
+    version=parse_version(),
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src', include='ouster.*'),
     package_data={

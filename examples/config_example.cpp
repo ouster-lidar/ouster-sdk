@@ -12,18 +12,17 @@
 #include <cassert>
 #include <iostream>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 
 using namespace ouster;
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        std::cerr
-            << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
-            << ouster::BUILD_SYSTEM << ")"
-            << "\n\nUsage: config_example <sensor_hostname> "
-            << std::endl;
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
+                  << ouster::BUILD_SYSTEM << ")"
+                  << "\n\nUsage: config_example <sensor_hostname> "
+                  << std::endl;
 
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }

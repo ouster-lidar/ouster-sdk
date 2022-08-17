@@ -24,7 +24,6 @@
 #include <vector>
 
 #include "netcompat.h"
-#include "ouster/build.h"
 #include "ouster/types.h"
 #include "sensor_http.h"
 

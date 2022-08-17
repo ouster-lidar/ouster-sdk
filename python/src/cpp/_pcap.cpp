@@ -11,6 +11,7 @@
 #include <sstream>
 #include <string>
 
+#include "ouster/impl/build.h"
 #include "ouster/os_pcap.h"
 
 using namespace ouster::sensor_utils;
@@ -113,6 +114,8 @@ This module is generated from the C++ code and not meant to be used directly.
                             static_cast<uint8_t*>(info.ptr), info.size,
                             llround(timestamp * 1e6));
           });
+
+    m.attr("__version__") = ouster::SDK_VERSION;
 
     return m.ptr();
 }
