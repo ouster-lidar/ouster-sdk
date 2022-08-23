@@ -18,6 +18,7 @@ import numpy as np
 from ouster import client, pcap
 from .colormaps import normalize
 
+
 def pcap_3d_one_scan(source: client.PacketSource,
                      metadata: client.SensorInfo,
                      num: int = 0) -> None:
@@ -49,8 +50,10 @@ def pcap_3d_one_scan(source: client.PacketSource,
     xyz = client.XYZLut(metadata)(scan)
 
     # create point cloud and coordinate axes geometries
-    cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(xyz.reshape((-1, 3))))  # type: ignore
-    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(1.0)  # type: ignore
+    cloud = o3d.geometry.PointCloud(
+        o3d.utility.Vector3dVector(xyz.reshape((-1, 3))))  # type: ignore
+    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(
+        1.0)  # type: ignore
 
     # [doc-etag-open3d-one-scan]
 
@@ -101,9 +104,9 @@ def pcap_display_xyz_points(source: client.PacketSource,
 
     # transform data to 3d points and graph
     xyzlut = client.XYZLut(metadata)
-    xyz = xyzlut(scan)
+    xyz = xyzlut(scan.field(client.ChanField.RANGE))
 
-    key = scan.field(client.ChanField.SIGNAL)
+    key = scan.field(client.ChanField.REFLECTIVITY)
 
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     ax.scatter(x, y, z, c=normalize(key.flatten()), s=0.2)
@@ -139,12 +142,22 @@ def pcap_to_csv(source: client.PacketSource,
         csv_ext: file extension to use, "csv" by default
     """
 
+    dual = False
+    if metadata.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
+        dual = True
+        print("Note: You've selected to convert a dual returns pcap to CSV. Each row "
+              "will represent a single pixel, so that both returns for that pixel will "
+              "be on a single row. As this is an example we provide for getting "
+              "started, we realize that you may have conversion needs which are not met "
+              "by this function. You can find the source code on the Python SDK "
+              "documentation website to modify it for your own needs.")
+
     # ensure that base csv_dir exists
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir)
 
     # construct csv header and data format
-    def get_fields_info(scan : client.LidarScan) -> Tuple[str, List[str]]:
+    def get_fields_info(scan: client.LidarScan) -> Tuple[str, List[str]]:
         field_names = 'TIMESTAMP (ns)'
         field_fmts = ['%d']
         for chan_field in scan.fields:
@@ -154,10 +167,13 @@ def pcap_to_csv(source: client.PacketSource,
             field_fmts.append('%d')
         field_names += ', X (mm), Y (mm), Z (mm)'
         field_fmts.extend(3 * ['%d'])
+        if dual:
+            field_names += ', X2 (mm), Y2 (mm), Z2 (mm)'
+            field_fmts.extend(3 * ['%d'])
         return field_names, field_fmts
 
-    field_names : str = ''
-    field_fmts : List[str] = []
+    field_names: str = ''
+    field_fmts: List[str] = []
 
     # [doc-stag-pcap-to-csv]
     from itertools import islice
@@ -182,10 +198,19 @@ def pcap_to_csv(source: client.PacketSource,
         fields_values = [scan.field(ch) for ch in scan.fields]
 
         # use integer mm to avoid loss of precision casting timestamps
-        xyz = (xyzlut(scan) * 1000).astype(np.int64)
+        xyz = (xyzlut(scan.field(client.ChanField.RANGE)) * 1000).astype(
+            np.int64)
 
-        # get all data as one H x W x 8 int64 array for savetxt()
-        frame = np.dstack((timestamps, *fields_values, xyz))
+        if dual:
+            xyz2 = (xyzlut(scan.field(client.ChanField.RANGE2)) * 1000).astype(
+                np.int64)
+
+            # get all data as one H x W x num fields int64 array for savetxt()
+            frame = np.dstack((timestamps, *fields_values, xyz, xyz2))
+
+        else:
+            # get all data as one H x W x num fields int64 array for savetxt()
+            frame = np.dstack((timestamps, *fields_values, xyz))
 
         # not necessary, but output points in "image" vs. staggered order
         frame = client.destagger(metadata, frame)
@@ -212,6 +237,13 @@ def pcap_to_las(source: client.PacketSource,
                 las_ext: str = "las") -> None:
     "Write scans from a pcap to las files (one per lidar scan)."
 
+    if (metadata.format.udp_profile_lidar ==
+            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
+        print("Note: You've selected to convert a dual returns pcap to LAS. "
+              "Second returns are ignored in this conversion by this example "
+              "for clarity reasons.  You can modify the code as needed by "
+              "accessing it through Github or the SDK documentation.")
+
     from itertools import islice
     import laspy  # type: ignore
 
@@ -225,7 +257,7 @@ def pcap_to_las(source: client.PacketSource,
 
     for idx, scan in enumerate(scans):
 
-        xyz = xyzlut(scan)
+        xyz = xyzlut(scan.field(client.ChanField.RANGE))
 
         las = laspy.create()
         las.x = xyz[:, :, 0].flatten()
@@ -245,6 +277,13 @@ def pcap_to_pcd(source: client.PacketSource,
                 pcd_base: str = "pcd_out",
                 pcd_ext: str = "pcd") -> None:
     "Write scans from a pcap to pcd files (one per lidar scan)."
+
+    if (metadata.format.udp_profile_lidar ==
+            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
+        print("Note: You've selected to convert a dual returns pcap. Second "
+              "returns are ignored in this conversion by this example "
+              "for clarity reasons.  You can modify the code as needed by "
+              "accessing it through github or the SDK documentation.")
 
     from itertools import islice
     try:
@@ -268,16 +307,18 @@ def pcap_to_pcd(source: client.PacketSource,
 
     for idx, scan in enumerate(scans):
 
-        xyz = xyzlut(scan)
+        xyz = xyzlut(scan.field(client.ChanField.RANGE))
 
         pcd = o3d.geometry.PointCloud()  # type: ignore
 
-        pcd.points = o3d.utility.Vector3dVector(xyz.reshape(-1, 3))  # type: ignore
+        pcd.points = o3d.utility.Vector3dVector(xyz.reshape(-1,
+                                                            3))  # type: ignore
 
         pcd_path = os.path.join(pcd_dir, f'{pcd_base}_{idx:06d}.{pcd_ext}')
         print(f'write frame #{idx} to file: {pcd_path}')
 
         o3d.io.write_point_cloud(pcd_path, pcd)  # type: ignore
+
 
 def pcap_to_ply(source: client.PacketSource,
                 metadata: client.SensorInfo,
@@ -287,6 +328,8 @@ def pcap_to_ply(source: client.PacketSource,
                 ply_ext: str = "ply") -> None:
     "Write scans from a pcap to ply files (one per lidar scan)."
 
+    # Don't need to print warning about dual returns since this leverages pcap_to_pcd
+
     # We are reusing the same Open3d File IO function to write the PLY file out
     pcap_to_pcd(source,
                 metadata,
@@ -294,6 +337,7 @@ def pcap_to_ply(source: client.PacketSource,
                 pcd_dir=ply_dir,
                 pcd_base=ply_base,
                 pcd_ext=ply_ext)
+
 
 def pcap_query_scan(source: client.PacketSource,
                     metadata: client.SensorInfo,
@@ -387,12 +431,6 @@ def main():
 
     with open(args.metadata_path, 'r') as f:
         metadata = client.SensorInfo(f.read())
-
-    if (metadata.format.udp_profile_lidar != client.UDPProfileLidar.PROFILE_LIDAR_LEGACY 
-            and metadata.format.udp_profile_lidar != 
-            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16 and args.example != 'query-scan'):
-        print(f"This pcap example is only for pcaps of sensors in LEGACY or SINGLE RETURN mode. Exiting...")
-        exit(1)
 
     print(f'example: {args.example}')
 

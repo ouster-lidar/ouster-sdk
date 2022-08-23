@@ -24,13 +24,13 @@ import shutil
 import os
 import sys
 
-project = 'Ouster Python SDK'
+project = 'Ouster Sensor SDK'
 copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-version = '0.4.0'
-release = '0.4.0'
+version = '0.5.0'
+release = '0.5.0'
 
 # -- General configuration ---------------------------------------------------
 
@@ -135,7 +135,7 @@ napoleon_numpy_docstring = False
 # ----- Todos Configs ------
 todo_include_todos = False
 todo_link_only = True
-todo_emit_warnings = False
+todo_emit_warnings = True
 
 # copybutton configs
 # Note: last entry treats four spaces as a prompt to support "continuation lines"

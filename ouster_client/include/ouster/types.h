@@ -62,7 +62,10 @@ enum lidar_mode {
     MODE_512x20,      ///< lidar mode: 20 scans of 512 columns per second
     MODE_1024x10,     ///< lidar mode: 10 scans of 1024 columns per second
     MODE_1024x20,     ///< lidar mode: 20 scans of 1024 columsn per second
-    MODE_2048x10      ///< lidar mode: 10 scans of 2048 columns per second
+    MODE_2048x10,     ///< lidar mode: 10 scans of 2048 columns per second
+    MODE_4096x5       ///< lidar mode: 5 scans of 4096 columns per second. Only
+                      ///< available on select sensors
+
 };
 
 /**
@@ -338,11 +341,11 @@ struct data_format {
 /** Stores necessary information from sensor to parse and project sensor data.
  */
 struct sensor_info {
-    [[deprecated]] std::string
-        name;            ///< @deprecated: will be removed in the next version
-    std::string sn;      ///< sensor serial number
-    std::string fw_rev;  ///< fw revision
-    lidar_mode mode;     ///< lidar mode of sensor
+    [[deprecated("Will be removed in the next version")]] std::string
+        name;               ///< @deprecated Will be removed in the next version
+    std::string sn;         ///< sensor serial number
+    std::string fw_rev;     ///< fw revision
+    lidar_mode mode;        ///< lidar mode of sensor
     std::string prod_line;  ///< prod line
     data_format format;     ///< data format of sensor
     std::vector<double>
@@ -629,7 +632,8 @@ sensor_info parse_metadata(const std::string& metadata);
 sensor_info metadata_from_json(const std::string& json_file);
 
 /**
- * Get a string representation of metadata. All fields included.
+ * Get a string representation of the sensor_info. All fields included. Not
+ * equivalent or interchangeable with metadata from sensor.
  *
  * @param[in] info sensor_info struct
  *
@@ -677,26 +681,40 @@ std::string convert_to_legacy(const std::string& metadata);
  */
 std::string client_version();
 
+// clang-format off
 /** Tag to identitify a paricular value reported in the sensor channel data
  * block. */
 enum ChanField {
-    RANGE = 1,      ///< 1st return range
-    RANGE2 = 2,     ///< 2nd return range
-    INTENSITY = 3,  ///< @deprecated (gcc 5.4 doesn't support annotations here)
-    SIGNAL = 3,     ///< 1st return signal
-    SIGNAL2 = 4,    ///< 2nd return signal
-    REFLECTIVITY = 5,     ///< 1st return reflectivity
-    REFLECTIVITY2 = 6,    ///< 2nd return reflectivity
-    AMBIENT = 7,          //< @deprecated, use near_ir instead
-    NEAR_IR = 7,          ///< near_ir
+    RANGE = 1,            ///< 1st return range in mm
+    RANGE2 = 2,           ///< 2nd return range in mm
+    INTENSITY = 3,        ///< @deprecated Use SIGNAL instead
+    SIGNAL = 3,           ///< 1st return signal in photons
+    SIGNAL2 = 4,          ///< 2nd return signal in photons
+    REFLECTIVITY = 5,     ///< 1st return reflectivity, calibrated by range and sensor
+                          ///< sensitivity in FW 2.1+. See sensor docs for more details
+    REFLECTIVITY2 = 6,    ///< 2nd return reflectivity, calibrated by range and sensor
+                          ///< sensitivity in FW 2.1+. See sensor docs for more details
+    AMBIENT = 7,          ///< @deprecated Use NEAR_IR instead
+    NEAR_IR = 7,          ///< near_ir in photons
     FLAGS = 8,            ///< 1st return flags
     FLAGS2 = 9,           ///< 2nd return flags
+    CUSTOM0 = 50,         ///< custom user field
+    CUSTOM1 = 51,         ///< custom user field
+    CUSTOM2 = 52,         ///< custom user field
+    CUSTOM3 = 53,         ///< custom user field
+    CUSTOM4 = 54,         ///< custom user field
+    CUSTOM5 = 55,         ///< custom user field
+    CUSTOM6 = 56,         ///< custom user field
+    CUSTOM7 = 57,         ///< custom user field
+    CUSTOM8 = 58,         ///< custom user field
+    CUSTOM9 = 59,         ///< custom user field
     RAW32_WORD1 = 60,     ///< raw word access to packet for dev use
     RAW32_WORD2 = 61,     ///< raw word access to packet for dev use
     RAW32_WORD3 = 62,     ///< raw word access to packet for dev use
     RAW32_WORD4 = 63,     ///< raw word access to packet for dev use
     CHAN_FIELD_MAX = 64,  ///< max which allows us to introduce future fields
 };
+// clang-format on
 
 /**
  * Get string representation of a channel field.
@@ -726,9 +744,6 @@ enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
  * direction. Use imu_av_{x,y,z} to read the angular velocity.
  */
 class packet_format final {
-    packet_format(
-        const sensor_info& info);  //< create packet_format from sensor_info
-
     template <typename T>
     T px_field(const uint8_t* px_buf, ChanField i) const;
 
@@ -739,6 +754,9 @@ class packet_format final {
         field_types_;
 
    public:
+    packet_format(
+        const sensor_info& info);  //< create packet_format from sensor_info
+
     using FieldIter =
         decltype(field_types_)::const_iterator;  ///< iterator over field types
                                                  ///< of packet
@@ -845,10 +863,13 @@ class packet_format final {
      */
     uint32_t col_status(const uint8_t* col_buf) const;
 
-    [[deprecated]] uint32_t col_encoder(
-        const uint8_t* col_buf) const;  ///< @deprecated
-    [[deprecated]] uint16_t col_frame_id(
-        const uint8_t* col_buf) const;  ///< @deprecated
+    [[deprecated("Use col_measurement_id instead")]] uint32_t col_encoder(
+        const uint8_t* col_buf)
+        const;  ///< @deprecated Encoder count is deprecated as it is redundant
+                ///< with measurement id, barring a multiplication factor which
+                ///< varies by lidar mode. Use col_measurement_id instead
+    [[deprecated("Use frame_id instead")]] uint16_t col_frame_id(
+        const uint8_t* col_buf) const;  ///< @deprecated Use frame_id instead
 
     /**
      * Copy the specified channel field out of a packet measurement block.

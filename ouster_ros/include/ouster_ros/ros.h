@@ -32,9 +32,9 @@ using ns = std::chrono::nanoseconds;
 /**
  * Read an imu packet into a ROS message. Blocks for up to a second if no data
  * is available.
- * @param cli the sensor client
- * @param pm the destination packet message
- * @param pf the packet format
+ * @param[in] cli the sensor client
+ * @param[out] pm the destination packet message
+ * @param[in] pf the packet format
  * @return whether reading was successful
  */
 bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
@@ -43,9 +43,9 @@ bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
 /**
  * Read a lidar packet into a ROS message. Blocks for up to a second if no data
  * is available.
- * @param cli the sensor client
- * @param pm the destination packet message
- * @param pf the packet format
+ * @param[in] cli the sensor client
+ * @param[out] pm the destination packet message
+ * @param[in] pf the packet format
  * @return whether reading was successful
  */
 bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
@@ -53,22 +53,36 @@ bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
 
 /**
  * Parse an imu packet message into a ROS imu message
- * @param pm packet message populated by read_imu_packet
- * @param frame the frame to set in the resulting ROS message
- * @param pf the packet format
+ * @param[in] pm packet message populated by read_imu_packet
+ * @param[in] timestamp the timestamp to give the resulting ROS message
+ * @param[in] frame the frame to set in the resulting ROS message
+ * @param[in] pf the packet format
  * @return ROS sensor message with fields populated from the packet
  */
 sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
+                                   const ros::Time& timestamp,
                                    const std::string& frame,
                                    const sensor::packet_format& pf);
 
 /**
+ * Parse an imu packet message into a ROS imu message
+ * @param[in] pm packet message populated by read_imu_packet
+ * @param[in] frame the frame to set in the resulting ROS message
+ * @param[in] pf the packet format
+ * @return ROS sensor message with fields populated from the packet
+ */
+[[deprecated]] sensor_msgs::Imu packet_to_imu_msg(
+    const PacketMsg& pm, const std::string& frame,
+    const sensor::packet_format& pf);
+
+/**
  * Populate a PCL point cloud from a LidarScan
- * @param xyz_lut lookup table from sensor beam angles (see lidar_scan.h)
- * @param scan_ts scan start used to caluclate relative timestamps for points
- * @param ls input lidar data
- * @param return_index index of return desired starting at 0
- * @param cloud output pcl pointcloud to populate
+ * @param[in] xyz_lut lookup table from sensor beam angles (see lidar_scan.h)
+ * @param[in] scan_ts scan start used to caluclate relative timestamps for
+ * points
+ * @param[in] ls input lidar data
+ * @param[out] cloud output pcl pointcloud to populate
+ * @param[in] return_index index of return desired starting at 0
  */
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
@@ -76,19 +90,30 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
 
 /**
  * Serialize a PCL point cloud to a ROS message
- * @param cloud the PCL point cloud to convert
- * @param timestamp the timestamp to give the resulting ROS message
- * @param frame the frame to set in the resulting ROS message
+ * @param[in] cloud the PCL point cloud to convert
+ * @param[in] timestamp the timestamp to apply to the resulting ROS message
+ * @param[in] frame the frame to set in the resulting ROS message
  * @return a ROS message containing the point cloud
  */
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud,
+                                            const ros::Time& timestamp,
                                             const std::string& frame);
 
 /**
+ * Serialize a PCL point cloud to a ROS message
+ * @param[in] cloud the PCL point cloud to convert
+ * @param[in] timestamp the timestamp to apply to the resulting ROS message
+ * @param[in] frame the frame to set in the resulting ROS message
+ * @return a ROS message containing the point cloud
+ */
+[[deprecated]] sensor_msgs::PointCloud2 cloud_to_cloud_msg(
+    const Cloud& cloud, ns timestamp, const std::string& frame);
+
+/**
  * Convert transformation matrix return by sensor to ROS transform
- * @param mat transformation matrix return by sensor
- * @param frame the parent frame of the published transform
- * @param child_frame the child frame of the published transform
+ * @param[in] mat transformation matrix return by sensor
+ * @param[in] frame the parent frame of the published transform
+ * @param[in] child_frame the child frame of the published transform
  * @return ROS message suitable for publishing as a transform
  */
 geometry_msgs::TransformStamped transform_to_tf_msg(

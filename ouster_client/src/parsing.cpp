@@ -66,8 +66,9 @@ static const Table<ChanField, FieldInfo, 8> legacy_field_info{{
     {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 4> lb_field_info{{
+static const Table<ChanField, FieldInfo, 5> lb_field_info{{
     {ChanField::RANGE, {UINT16, 0, 0x7fff, -3}},
+    {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
     {ChanField::REFLECTIVITY, {UINT8, 2, 0, 0}},
     {ChanField::NEAR_IR, {UINT8, 3, 0, -4}},
     {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
@@ -115,9 +116,7 @@ static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
     auto end = profiles.end();
     auto it =
         std::find_if(impl::profiles.begin(), end,
-                     [&](const std::pair<UDPProfileLidar, ProfileEntry>& kv) {
-                         return kv.first == profile;
-                     });
+                     [profile](const auto& kv) { return kv.first == profile; });
 
     if (it == end || it->first == 0)
         throw std::invalid_argument("Unknown lidar udp profile");
@@ -309,7 +308,11 @@ const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
 uint32_t packet_format::col_status(const uint8_t* col_buf) const {
     uint32_t res;
     std::memcpy(&res, col_buf + impl_->status_offset, sizeof(uint32_t));
-    return res;
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        return res;  // LEGACY was 32 bits of all 1s
+    } else {
+        return res & 0xffff;  // For eUDP packets, we want the last 16 bits
+    }
 }
 
 uint64_t packet_format::col_timestamp(const uint8_t* col_buf) const {
@@ -447,7 +450,7 @@ const packet_format& get_format(const sensor_info& info) {
 
     std::lock_guard<std::mutex> lk{cache_mx};
     if (!cache.count(k)) {
-        cache[k] = std::unique_ptr<packet_format>(new packet_format{info});
+        cache[k] = std::make_unique<packet_format>(info);
     }
 
     return *cache.at(k);

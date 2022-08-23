@@ -1,21 +1,19 @@
-cmake_minimum_required(VERSION 3.1.0)
-
-# ==== Project Name ====
-project(ouster_viz)
-
 # ==== Requirements ====
 set(OpenGL_GL_PREFERENCE LEGACY)
 find_package(OpenGL REQUIRED)
 
+# default to glad, if found. Note: this can be overridden from the command line
 find_package(glad QUIET)
-if(glad_FOUND)
-  message(STATUS "Found glad ${glad_CONFIG}")
+option(OUSTER_VIZ_USE_GLAD "Use GLAD instead of GLEW." ${glad_FOUND})
+if(OUSTER_VIZ_USE_GLAD)
+  message(STATUS "Configured GL loader: glad")
+  find_package(glad REQUIRED)
   set(GL_LOADER glad::glad)
+  add_definitions("-DOUSTER_VIZ_USE_GLAD")
 else()
-  message(STATUS "glad NOT found, falling back to GLEW")
+  message(STATUS "Configured GL loader: GLEW")
   find_package(GLEW REQUIRED)
   set(GL_LOADER GLEW::GLEW)
-  add_definitions("-DOUSTER_VIZ_GLEW")
 endif()
 
 find_package(glfw3 REQUIRED)

@@ -27,7 +27,7 @@ Download one of the following samples of recorded Ouster data and unzip the cont
 .. _OS0 128 Rev 06 Urban Drive (Dual Returns): https://data.ouster.io/sdk-samples/Rev-06-fw23/OS0-128_Rev-06_fw23_Urban-Drive_Dual-Returns.zip
 .. _OS1 128 Rev 06 Urban Drive (Dual Returns): https://data.ouster.io/sdk-samples/Rev-06-fw23/OS1-128_Rev-06_fw23_Urban-Drive_Dual-Returns.zip
 .. _OS2 128 Rev 06 Urban Drive (Dual Returns): https://data.ouster.io/sdk-samples/Rev-06-fw23/OS2-128_Rev-06_fw23_Urban-Drive_Dual-Returns.zip
-.. _OS1 128 Rev 06 Urban Drive (Low Bandwidth): https://data.ouster.io/sdk-examples/Rev-06-fs23/OS1-128_Rev-06-fw23_Urban-Drive_Low-Bandwidth.zip
+.. _OS1 128 Rev 06 Urban Drive (Low Bandwidth): https://data.ouster.io/sdk-samples/Rev-06-fw23/OS1-128_Rev-06_fw23_Urban-Drive_Low-Bandwidth.zip
 .. _OS2 128 Rev 05 Bridge: https://data.ouster.io/sdk-samples/Rev-05/OS2-128_Rev-05_Bridge/OS2-128_Rev-05_Bridge.zip 
 
 In your unzipped directory, you should have two files, one ``.pcap`` file and one ``.json`` file.
@@ -42,6 +42,12 @@ console.
 
 ..
    [end-download-instructions]
+
+.. note::
+    
+    All Ouster sample data is provided under the `CC BY-NC-SA license
+    <https://creativecommons.org/licenses/by-nc-sa/2.0/>`_, whether obtained
+    through the above links or from the Ouster website.
 
 Visualize It!
 =============

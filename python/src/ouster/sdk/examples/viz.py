@@ -9,8 +9,6 @@ Intended to run with `python -m ouster.sdk.examples.viz`
 """
 
 import argparse
-import weakref
-from typing import Iterable
 from ouster import client, pcap
 from ouster.sdk import viz
 import os
@@ -59,8 +57,9 @@ def main():
     meta_path = os.getenv("SAMPLE_DATA_JSON_PATH", args.meta_path)
 
     if not pcap_path or not meta_path:
-        print("ERROR: Please add SAMPLE_DATA_PCAP_PATH and SAMPLE_DATA_JSON_PATH to" +
-            " environment variables or pass <pcap_path> and <meta_path>")
+        print(
+            "ERROR: Please add SAMPLE_DATA_PCAP_PATH and SAMPLE_DATA_JSON_PATH to"
+            + " environment variables or pass <pcap_path> and <meta_path>")
         sys.exit()
 
     print(f"Using:\n\tjson: {meta_path}\n\tpcap: {pcap_path}")
@@ -85,9 +84,9 @@ def main():
     point_viz.run()
     # [doc-etag-empty-pointviz]
 
-
     # =========================================================================
-    print("Ex 1.0:\tImages and Labels: the Image object and 2D Image set_position() - height-normalized screen coordinates")
+    print("Ex 1.0:\tImages and Labels: the Image object and 2D Image "
+          "set_position() - height-normalized screen coordinates")
 
     label_top = viz.Label("[0, 1]", 0.5, 0.0, align_top=True)
     label_top.set_scale(2)
@@ -109,7 +108,8 @@ def main():
     point_viz.run()
 
     # =========================================================================
-    print("Ex 1.1:\tImages and Labels: Window-aligned images with 2D Image set_hshift() - width-normalized [-1, 1] horizontal shift")
+    print("Ex 1.1:\tImages and Labels: Window-aligned images with 2D Image "
+          "set_hshift() - width-normalized [-1, 1] horizontal shift")
 
     # [doc-stag-image-pos-left]
     # move img to the left
@@ -141,7 +141,6 @@ def main():
     point_viz.update()
     point_viz.run()
 
-
     # remove_objs(point_viz, [label_top, label_mid, label_bot, img])
     remove_objs(point_viz, [label_top, label_bot, img])
 
@@ -153,7 +152,7 @@ def main():
 
     img_aspect = (meta.beam_altitude_angles[0] -
                   meta.beam_altitude_angles[-1]) / 360.0
-    img_screen_height = 0.4 # [0..2]
+    img_screen_height = 0.4  # [0..2]
     img_screen_len = img_screen_height / img_aspect
 
     # prepare field data
@@ -161,7 +160,7 @@ def main():
     ranges = client.destagger(meta, ranges)
     ranges = np.divide(ranges, np.amax(ranges), dtype=np.float32)
 
-    signal = scan.field(client.ChanField.SIGNAL)
+    signal = scan.field(client.ChanField.REFLECTIVITY)
     signal = client.destagger(meta, signal)
     signal = np.divide(signal, np.amax(signal), dtype=np.float32)
 
@@ -176,8 +175,8 @@ def main():
     signal_img = viz.Image()
     signal_img.set_image(signal)
     img_aspect = (meta.beam_altitude_angles[0] -
-                meta.beam_altitude_angles[-1]) / 360.0
-    img_screen_height = 0.4 # [0..2]
+                  meta.beam_altitude_angles[-1]) / 360.0
+    img_screen_height = 0.4  # [0..2]
     img_screen_len = img_screen_height / img_aspect
     # bottom center position
     signal_img.set_position(-img_screen_len / 2, img_screen_len / 2, -1,
@@ -192,13 +191,17 @@ def main():
     print("Ex 1.3:\tImages and Labels: Adding labels")
 
     # [doc-stag-scan-fields-images-labels]
-    range_label = viz.Label(str(client.ChanField.RANGE), 0.5, 0, align_top=True)
+    range_label = viz.Label(str(client.ChanField.RANGE),
+                            0.5,
+                            0,
+                            align_top=True)
     range_label.set_scale(1)
     point_viz.add(range_label)
 
-    signal_label = viz.Label(str(client.ChanField.SIGNAL),
-                            0.5, 1 - img_screen_height / 2,
-                            align_top=True)
+    signal_label = viz.Label(str(client.ChanField.REFLECTIVITY),
+                             0.5,
+                             1 - img_screen_height / 2,
+                             align_top=True)
     signal_label.set_scale(1)
     point_viz.add(signal_label)
     # [doc-etag-scan-fields-images-labels]
@@ -259,10 +262,9 @@ def main():
     axis_points = np.hstack((x_ @ line, y_ @ line, z_ @ line)).transpose()
 
     # colors for basis vectors
-    axis_color_mask = np.vstack((
-        np.full((axis_n, 4), [1, 0.1, 0.1, 1]),
-        np.full((axis_n, 4), [0.1, 1, 0.1, 1]),
-        np.full((axis_n, 4), [0.1, 0.1, 1, 1])))
+    axis_color_mask = np.vstack((np.full(
+        (axis_n, 4), [1, 0.1, 0.1, 1]), np.full((axis_n, 4), [0.1, 1, 0.1, 1]),
+                                 np.full((axis_n, 4), [0.1, 0.1, 1, 1])))
 
     cloud_axis = viz.Cloud(axis_points.shape[0])
     cloud_axis.set_xyz(axis_points)
@@ -323,7 +325,6 @@ def main():
     point_viz.update()
     point_viz.run()
 
-
     # ===============================================
     print("Ex 4.0:\tOverlay 2D Images and 2D Labels")
 
@@ -363,7 +364,11 @@ def main():
     point_viz.add(img2)
 
     # Adding Label for image 2: positioned at top left corner
-    img_label2 = viz.Label("Second", 1.0, 0.25, align_top=True, align_right=True)
+    img_label2 = viz.Label("Second",
+                           1.0,
+                           0.25,
+                           align_top=True,
+                           align_right=True)
     img_label2.set_rgba((0.0, 1.0, 1.0, 1))
     img_label2.set_scale(1)
     point_viz.add(img_label2)
@@ -372,7 +377,6 @@ def main():
     # visualize
     point_viz.update()
     point_viz.run()
-
 
     # ===============================================================
     print("Ex 5.0:\tAdding key handlers: 'R' for random camera dolly")

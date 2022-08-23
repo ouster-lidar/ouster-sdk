@@ -21,25 +21,27 @@ namespace ouster_ros {
 
 namespace sensor = ouster::sensor;
 
-bool read_imu_packet(const sensor::client& cli, PacketMsg& m,
+bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
                      const sensor::packet_format& pf) {
-    m.buf.resize(pf.imu_packet_size + 1);
-    return read_imu_packet(cli, m.buf.data(), pf);
+    pm.buf.resize(pf.imu_packet_size + 1);
+    return read_imu_packet(cli, pm.buf.data(), pf);
 }
 
-bool read_lidar_packet(const sensor::client& cli, PacketMsg& m,
+bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
                        const sensor::packet_format& pf) {
-    m.buf.resize(pf.lidar_packet_size + 1);
-    return read_lidar_packet(cli, m.buf.data(), pf);
+    pm.buf.resize(pf.lidar_packet_size + 1);
+    return read_lidar_packet(cli, pm.buf.data(), pf);
 }
 
-sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame,
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
+                                   const ros::Time& timestamp,
+                                   const std::string& frame,
                                    const sensor::packet_format& pf) {
     const double standard_g = 9.80665;
     sensor_msgs::Imu m;
-    const uint8_t* buf = p.buf.data();
+    const uint8_t* buf = pm.buf.data();
 
-    m.header.stamp.fromNSec(pf.imu_gyro_ts(buf));
+    m.header.stamp = timestamp;
     m.header.frame_id = frame;
 
     m.orientation.x = 0;
@@ -66,6 +68,14 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame,
     }
 
     return m;
+}
+
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
+                                   const std::string& frame,
+                                   const sensor::packet_format& pf) {
+    ros::Time timestamp;
+    timestamp.fromNSec(pf.imu_gyro_ts(pm.buf.data()));
+    return packet_to_imu_msg(pm, timestamp, frame, pf);
 }
 
 struct read_and_cast {
@@ -129,11 +139,13 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
         suitable_return(sensor::ChanField::REFLECTIVITY, second), ls);
 
     auto points = ouster::cartesian(range, xyz_lut);
+    auto timestamp = ls.timestamp();
 
     for (auto u = 0; u < ls.h; u++) {
         for (auto v = 0; v < ls.w; v++) {
             const auto xyz = points.row(u * ls.w + v);
-            const auto ts = (ls.header(v).timestamp - scan_ts).count();
+            const auto ts =
+                (std::chrono::nanoseconds(timestamp[v]) - scan_ts).count();
             cloud(v, u) = ouster_ros::Point{
                 {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
                   static_cast<float>(xyz(2)), 1.0f}},
@@ -147,13 +159,21 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
     }
 }
 
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud,
+                                            const ros::Time& timestamp,
                                             const std::string& frame) {
     sensor_msgs::PointCloud2 msg{};
     pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count());
+    msg.header.stamp = timestamp;
     return msg;
+}
+
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns ts,
+                                            const std::string& frame) {
+    ros::Time timestamp;
+    timestamp.fromNSec(ts.count());
+    return cloud_to_cloud_msg(cloud, timestamp, frame);
 }
 
 geometry_msgs::TransformStamped transform_to_tf_msg(

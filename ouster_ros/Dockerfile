@@ -16,6 +16,8 @@ RUN set -xue \
  fakeroot dpkg-dev debhelper \
  $PY-rosdep $PY-rospkg $PY-bloom
 
+RUN apt-get install -y curl libcurl4-openssl-dev
+
 # Set up non-root build user
 ARG BUILD_UID=1000
 ARG BUILD_GID=${BUILD_UID}
@@ -46,6 +48,7 @@ RUN set -xe \
 
 FROM build-env
 
+ENV CXXFLAGS="-Werror -Wno-deprecated-declarations"
 RUN /opt/ros/${ROS_DISTRO}/env.sh catkin_make -DCMAKE_BUILD_TYPE=Release
 
 # Entrypoint for running Ouster ros:

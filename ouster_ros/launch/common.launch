@@ -1,0 +1,40 @@
+<launch>
+
+  <arg name="ouster_ns" default="ouster" doc="Override the default namespace of all ouster nodes"/>
+  <arg name="viz" default="false" doc="whether to run a rviz"/>
+  <arg name="rviz_config" default="$(find ouster_ros)/config/viz.rviz" doc="optional rviz config file"/>
+  <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
+  <arg name="timestamp_mode" default=""/>
+
+  <group ns="$(arg ouster_ns)">
+    <node pkg="nodelet" type="nodelet" name="os_cloud_node"
+      output="screen" required="true"
+      launch-prefix="bash -c 'sleep 4; $0 $@' "
+      args="load nodelets_os/OusterCloud os_nodelet_mgr">
+      <param name="~/tf_prefix" type="str" value="$(arg tf_prefix)"/>
+      <param name="~/timestamp_mode" type="str" value="$(arg timestamp_mode)"/>
+    </node>
+  </group>
+
+  <group ns="$(arg ouster_ns)">
+    <node pkg="nodelet" type="nodelet" name="img_node"
+      output="screen" required="true"
+      launch-prefix="bash -c 'sleep 4; $0 $@' "
+      args="load nodelets_os/OusterImage os_nodelet_mgr">
+    </node>
+  </group>
+
+  <!-- TODO: how can/should we handle the change of default ouster namespace in RVIZ? -->
+  <node if="$(arg viz)"
+    pkg="rviz" name="rviz" type="rviz"
+    output="screen" required="false"
+    launch-prefix="bash -c 'sleep 5; $0 $@' "
+    args="-d $(arg rviz_config)"/>
+
+  <!-- for compatibility with < 2.0 rosbags -->
+  <node pkg="topic_tools" name="relay_lidar" type="relay"
+    args="/os_node/lidar_packets /$(arg ouster_ns)/lidar_packets"/>
+  <node pkg="topic_tools" name="relay_imu" type="relay"
+    args="/os_node/imu_packets /$(arg ouster_ns)/imu_packets"/>
+
+</launch>

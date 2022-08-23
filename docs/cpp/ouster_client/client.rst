@@ -16,9 +16,9 @@ Data Fetching
 
 .. doxygenfunction:: ouster::sensor::poll_client
 
-.. doxygenfunction:: ouster::sensor::read_lidar_packet
-      
-.. doxygenfunction:: ouster::sensor::read_imu_packet
+.. doxygenfunction:: ouster::sensor::read_lidar_packet(const client& cli, uint8_t* buf, const packet_format& pf)
+
+.. doxygenfunction:: ouster::sensor::read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf)
 
 Config And Metadata
 ===================

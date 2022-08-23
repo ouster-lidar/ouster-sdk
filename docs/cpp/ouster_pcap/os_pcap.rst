@@ -37,6 +37,6 @@ Functions
 
 .. doxygenfunction:: ouster::sensor_utils::record_uninitialize
 
-.. doxygenfunction:: ouster::sensor_utils::record_packet
+.. doxygenfunction:: ouster::sensor_utils::record_packet(record_handle& handle, const packet_info& info, const uint8_t* buf, size_t buffer_size)
 
 

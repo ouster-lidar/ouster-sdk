@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/version.h"
 
 namespace ouster {
@@ -34,13 +34,14 @@ namespace impl {
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-extern const Table<lidar_mode, const char*, 6> lidar_mode_strings{
+extern const Table<lidar_mode, const char*, 7> lidar_mode_strings{
     {{MODE_UNSPEC, "UNKNOWN"},
      {MODE_512x10, "512x10"},
      {MODE_512x20, "512x20"},
      {MODE_1024x10, "1024x10"},
      {MODE_1024x20, "1024x20"},
-     {MODE_2048x10, "2048x10"}}};
+     {MODE_2048x10, "2048x10"},
+     {MODE_4096x5, "4096x5"}}};
 
 extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings{
     {{TIME_FROM_UNSPEC, "UNKNOWN"},
@@ -68,7 +69,7 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 13> chanfield_strings{{
+Table<sensor::ChanField, const char*, 23> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
@@ -78,6 +79,16 @@ Table<sensor::ChanField, const char*, 13> chanfield_strings{{
     {ChanField::NEAR_IR, "NEAR_IR"},
     {ChanField::FLAGS, "FLAGS"},
     {ChanField::FLAGS2, "FLAGS2"},
+    {ChanField::CUSTOM0, "CUSTOM0"},
+    {ChanField::CUSTOM1, "CUSTOM1"},
+    {ChanField::CUSTOM2, "CUSTOM2"},
+    {ChanField::CUSTOM3, "CUSTOM3"},
+    {ChanField::CUSTOM4, "CUSTOM4"},
+    {ChanField::CUSTOM5, "CUSTOM5"},
+    {ChanField::CUSTOM6, "CUSTOM6"},
+    {ChanField::CUSTOM7, "CUSTOM7"},
+    {ChanField::CUSTOM8, "CUSTOM8"},
+    {ChanField::CUSTOM9, "CUSTOM9"},
     {ChanField::RAW32_WORD1, "RAW32_WORD1"},
     {ChanField::RAW32_WORD2, "RAW32_WORD2"},
     {ChanField::RAW32_WORD3, "RAW32_WORD3"},
@@ -271,6 +282,8 @@ uint32_t n_cols_of_lidar_mode(lidar_mode mode) {
             return 1024;
         case MODE_2048x10:
             return 2048;
+        case MODE_4096x5:
+            return 4096;
         default:
             throw std::invalid_argument{"n_cols_of_lidar_mode"};
     }
@@ -278,6 +291,8 @@ uint32_t n_cols_of_lidar_mode(lidar_mode mode) {
 
 int frequency_of_lidar_mode(lidar_mode mode) {
     switch (mode) {
+        case MODE_4096x5:
+            return 5;
         case MODE_512x10:
         case MODE_1024x10:
         case MODE_2048x10:
@@ -291,7 +306,7 @@ int frequency_of_lidar_mode(lidar_mode mode) {
 }
 
 std::string client_version() {
-    return std::string("ouster_client ").append(ouster::CLIENT_VERSION);
+    return std::string("ouster_client ").append(ouster::SDK_VERSION);
 }
 
 /* String conversion */
@@ -407,8 +422,16 @@ optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s) {
 static sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
-    if (!root["udp_dest"].empty())
+    if (!root["udp_dest"].empty()) {
         config.udp_dest = root["udp_dest"].asString();
+    } else if (!root["udp_ip"].empty()) {
+        // deprecated params from FW 1.13. Set FW 2.0+ configs appropriately
+        config.udp_dest = root["udp_ip"].asString();
+        std::cerr << "Please note that udp_ip has been deprecated in favor of "
+                     "udp_dest. Will set udp_dest appropriately..."
+                  << std::endl;
+    }
+
     if (!root["udp_port_lidar"].empty())
         config.udp_port_lidar = root["udp_port_lidar"].asInt();
     if (!root["udp_port_imu"].empty())
@@ -435,7 +458,16 @@ static sensor_config parse_config(const Json::Value& root) {
         } else {
             throw std::invalid_argument("Unexpected Operating Mode");
         }
+    } else if (!root["auto_start_flag"].empty()) {
+        std::cerr
+            << "Please note that auto_start_flag has been deprecated in favor "
+               "of operating_mode. Will set operating_mode appropriately..."
+            << std::endl;
+        config.operating_mode = root["auto_start_flag"].asBool()
+                                    ? sensor::OPERATING_NORMAL
+                                    : sensor::OPERATING_STANDBY;
     }
+
     if (!root["multipurpose_io_mode"].empty()) {
         auto multipurpose_io_mode = multipurpose_io_mode_of_string(
             root["multipurpose_io_mode"].asString());
@@ -503,13 +535,6 @@ static sensor_config parse_config(const Json::Value& root) {
 
     if (!root["phase_lock_offset"].empty())
         config.phase_lock_offset = root["phase_lock_offset"].asInt();
-
-    // deprecated params from 1.13. set 2.0 configs appropriately
-    if (!root["udp_ip"].empty()) config.udp_dest = root["udp_ip"].asString();
-    if (!root["auto_start_flag"].empty())
-        config.operating_mode = root["auto_start_flag"].asBool()
-                                    ? sensor::OPERATING_NORMAL
-                                    : sensor::OPERATING_STANDBY;
 
     if (!root["columns_per_packet"].empty())
         config.columns_per_packet = root["columns_per_packet"].asInt();
@@ -887,13 +912,11 @@ std::string to_string(const sensor_info& info) {
     return Json::writeString(builder, root);
 }
 
-Json::Value to_json(const sensor_config& config, bool compat) {
+Json::Value to_json(const sensor_config& config) {
     Json::Value root{Json::objectValue};
 
     if (config.udp_dest) {
-        // use deprecated cofig for 1.13 compatibility
-        const char* key = compat ? "udp_ip" : "udp_dest";
-        root[key] = config.udp_dest.value();
+        root["udp_dest"] = config.udp_dest.value();
     }
 
     if (config.udp_port_lidar) {
@@ -913,14 +936,8 @@ Json::Value to_json(const sensor_config& config, bool compat) {
     }
 
     if (config.operating_mode) {
-        // use deprecated config for 1.13 compatibility
         auto mode = config.operating_mode.value();
-        if (compat) {
-            root["auto_start_flag"] =
-                (mode == OperatingMode::OPERATING_NORMAL) ? 1 : 0;
-        } else {
-            root["operating_mode"] = to_string(mode);
-        }
+        root["operating_mode"] = to_string(mode);
     }
 
     if (config.multipurpose_io_mode) {
@@ -1004,7 +1021,7 @@ Json::Value to_json(const sensor_config& config, bool compat) {
 }
 
 std::string to_string(const sensor_config& config) {
-    Json::Value root = to_json(config, false);
+    Json::Value root = to_json(config);
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;

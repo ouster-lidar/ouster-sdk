@@ -40,6 +40,7 @@ def test_timestamp_mode_misc() -> None:
     (client.LidarMode.MODE_1024x10, 1024, 10, "1024x10"),
     (client.LidarMode.MODE_1024x20, 1024, 20, "1024x20"),
     (client.LidarMode.MODE_2048x10, 2048, 10, "2048x10"),
+    (client.LidarMode.MODE_4096x5, 4096, 5, "4096x5"),
 ])
 def test_lidar_mode(mode, cols, frequency, string) -> None:
     """Check lidar mode (un)parsing and cols/frequency."""
@@ -53,7 +54,7 @@ def test_lidar_mode(mode, cols, frequency, string) -> None:
 def test_lidar_mode_misc() -> None:
     """Check some misc properties of lidar mode."""
     assert len(
-        client.LidarMode.__members__) == 6, "Don't forget to update tests!"
+        client.LidarMode.__members__) == 7, "Don't forget to update tests!"
     assert client.LidarMode.from_string('foo') == client.LidarMode.MODE_UNSPEC
     assert client.LidarMode(0) == client.LidarMode.MODE_UNSPEC
     assert str(client.LidarMode.MODE_UNSPEC) == "UNKNOWN"
