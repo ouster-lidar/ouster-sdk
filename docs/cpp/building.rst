@@ -19,7 +19,7 @@ To install build dependencies on Ubuntu, run:
 .. code:: console
 
    $ sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev \
-                      libtins-dev libglfw3-dev libglew-dev
+                      libtins-dev libpcap-dev libglfw3-dev libglew-dev
 
 You may also install curl with a different ssl backend, for example libcurl4-gnutls-dev or
 libcurl4-nss-dev.

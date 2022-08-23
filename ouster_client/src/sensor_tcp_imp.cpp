@@ -5,6 +5,7 @@
 
 #include "sensor_tcp_imp.h"
 
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -45,9 +46,20 @@ string SensorTcpImp::get_config_params(bool active) const {
     return tcp_cmd({"get_config_param", config_type});
 }
 
+namespace {
+std::string rtrim(const std::string& s) {
+    return s.substr(
+        0,
+        std::distance(s.begin(),
+                      std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+                          return !isspace(ch);
+                      }).base()));
+}
+}  // namespace
+
 void SensorTcpImp::set_config_param(const string& key,
                                     const string& value) const {
-    tcp_cmd_with_validation({"set_config_param", key, value},
+    tcp_cmd_with_validation({"set_config_param", key, rtrim(value)},
                             "set_config_param");
 }
 

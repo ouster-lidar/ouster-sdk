@@ -59,7 +59,8 @@ int32_t get_sock_port(SOCKET sock_fd) {
 
     if (!impl::socket_valid(
             getsockname(sock_fd, (struct sockaddr*)&ss, &addrlen))) {
-        std::cerr << "udp getsockname(): " << impl::socket_get_error() << std::endl;
+        std::cerr << "udp getsockname(): " << impl::socket_get_error()
+                  << std::endl;
         return SOCKET_ERROR;
     }
 
@@ -103,7 +104,8 @@ SOCKET udp_data_socket(int port) {
             SOCKET sock_fd =
                 socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
             if (!impl::socket_valid(sock_fd)) {
-                std::cerr << "udp socket(): " << impl::socket_get_error() << std::endl;
+                std::cerr << "udp socket(): " << impl::socket_get_error()
+                          << std::endl;
                 continue;
             }
 
@@ -112,25 +114,27 @@ SOCKET udp_data_socket(int port) {
                 setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off,
                            sizeof(off))) {
                 std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                     << std::endl;
+                          << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             if (impl::socket_set_reuse(sock_fd)) {
-                std::cerr << "udp socket_set_reuse(): " << impl::socket_get_error()
-                     << std::endl;
+                std::cerr << "udp socket_set_reuse(): "
+                          << impl::socket_get_error() << std::endl;
             }
 
             if (::bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
-                std::cerr << "udp bind(): " << impl::socket_get_error() << std::endl;
+                std::cerr << "udp bind(): " << impl::socket_get_error()
+                          << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             // bind() succeeded; set some options and return
             if (impl::socket_set_non_blocking(sock_fd)) {
-                std::cerr << "udp fcntl(): " << impl::socket_get_error() << std::endl;
+                std::cerr << "udp fcntl(): " << impl::socket_get_error()
+                          << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
@@ -138,7 +142,7 @@ SOCKET udp_data_socket(int port) {
             if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
                            sizeof(RCVBUF_SIZE))) {
                 std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                     << std::endl;
+                          << std::endl;
                 impl::socket_close(sock_fd);
                 continue;
             }
@@ -163,13 +167,16 @@ bool collect_metadata(client& cli, SensorHttp& sensor_http,
         std::this_thread::sleep_for(1s);
         status = sensor_http.sensor_info()["status"].asString();
     } while (status == "INITIALIZING");
-    cli.meta = sensor_http.metadata();
 
     // not all metadata available when sensor isn't RUNNING
     if (status != "RUNNING") {
         throw std::runtime_error(
-            "Cannot initialize with sensor status: " + status + ".");
+            "Cannot obtain full metadata with sensor status: " + status +
+            ". Please ensure that sensor is not in a STANDBY, UNCONFIGURED, "
+            "WARMUP, or ERROR state");
     }
+
+    cli.meta = sensor_http.metadata();
 
     // merge extra info into metadata
     cli.meta["client_version"] = client_version();
@@ -179,7 +186,8 @@ bool collect_metadata(client& cli, SensorHttp& sensor_http,
 
 }  // namespace
 
-bool get_config(const std::string& hostname, sensor_config& config, bool active) {
+bool get_config(const std::string& hostname, sensor_config& config,
+                bool active) {
     auto sensor_http = SensorHttp::create(hostname);
     auto res = sensor_http->get_config_params(active);
     config = parse_config(res);
@@ -356,7 +364,7 @@ static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
         std::cerr << "recvfrom: " << impl::socket_get_error() << std::endl;
     } else {
         std::cerr << "Unexpected udp packet length of: " << bytes_read
-             << " bytes. Expected: " << len << " bytes." << std::endl;
+                  << " bytes. Expected: " << len << " bytes." << std::endl;
     }
     return false;
 }

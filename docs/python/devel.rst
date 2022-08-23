@@ -32,13 +32,14 @@ On supported Debian-based linux systems, you can install all build dependencies 
 
    $ sudo apt install build-essential cmake \
                       libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
-                      python3-dev python3-pip pybind11-dev libglfw3-dev libglew-dev
+                      python3-dev python3-pip pybind11-dev libcurl4-openssl-dev \
+                      libglfw3-dev libglew-dev
 
 On macos >= 10.13, using homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen jsoncpp libtins python3 pybind11 glfw glew
+  $ brew install cmake eigen curl jsoncpp libtins python3 pybind11 glfw glew
 
 After you have the system dependencies, you can build the SDK with:
 
@@ -72,7 +73,7 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install eigen3 jsoncpp libtins pybind11 glfw3 glad[gl-api-33]
+   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins pybind11 glfw3 glad[gl-api-33]
 
 The currently tested vcpkg tag is ``2022.02.23``. After that, using a developer powershell prompt:
 
@@ -84,6 +85,13 @@ The currently tested vcpkg tag is ``2022.02.23``. After that, using a developer 
    # point cmake to the location of vcpkg (make sure to use an absolute path)
    PS > $env:CMAKE_TOOLCHAIN_FILE="<PATH TO VCPKG REPO>\scripts\buildsystems\vcpkg.cmake"
 
+   # set the correct vcpkg triplet
+   PS > $env:VCPKG_TARGET_TRIPLET="x64-windows"
+   
+   # set build options related to the compiler
+   PS > $env:CMAKE_GENERATOR_PLATFORM="x64"
+   PS > $env:CMAKE_GENERATOR="Visual Studio 15 2017"
+   
    # then, build an installable "wheel" package
    PS > py -m pip wheel --no-deps "$env:OUSTER_SDK_PATH\python"
 
@@ -129,6 +137,13 @@ SDK package:
    $ cd ${OUSTER_SDK_PATH}/python
    $ python3 -m pytest
 
+To run interactive :class:`.viz.PointViz` tests, use ``--interactive`` argument:
+
+.. code:: console
+
+   $ cd ${OUSTER_SDK_PATH}/python
+   $ python3 -m pytest --interactive
+
 To run tests against multiple Python versions simultaneously, use the ``tox`` package:
 
 .. code:: console
@@ -151,10 +166,10 @@ image, run:
 
    $ docker build ${OUSTER_SDK_PATH} -f ${OUSTER_SDK_PATH}/python/Dockerfile \
        --build-arg BASE=ubuntu:20.04 \
-       -t ouster-sdk-tox \
+       -t ouster-sdk-tox
 
 the ``BASE`` argument will default to ``ubuntu:18.04``, but can also be set to other docker tags,
-e.g. ``ubuntu:20.04`` or ``debian:10``. Then, run the container to invoke tox:
+e.g. ``ubuntu:20.04``, ``ubuntu:22.04`` or ``debian:10``. Then, run the container to invoke tox:
 
 .. code:: console
 

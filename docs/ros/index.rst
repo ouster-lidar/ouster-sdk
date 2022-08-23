@@ -20,10 +20,12 @@ The build dependencies include those of the sample code::
 
 Additionally, you should install the ros dependencies::
 
-    sudo apt install ros-<ROS-VERSION>-ros-core ros-<ROS-VERSION>-pcl-ros \
-         ros-<ROS-VERSION>-tf2-geometry-msgs ros-<ROS-VERSION>-rviz
+    sudo apt install \
+      ros-<ROS-DISTRO>-pcl-ros \
+      ros-<ROS-DISTRO>-tf2-geometry-msgs \
+      ros-<ROS-DISTRO>-rviz
 
-where ``<ROS-VERSION>`` is ``melodic`` or ``noetic``.
+where ``<ROS-DISTRO>`` is ``melodic`` or ``noetic``.
 
 Alternatively, if you would like to install dependencies with `rosdep`::
 
@@ -31,21 +33,20 @@ Alternatively, if you would like to install dependencies with `rosdep`::
 
 To build::
 
-
-
-    mkdir -p ./myworkspace/src
-    cd myworkspace
+    mkdir -p ./catkin_ws/src
+    cd catkin_ws
     ln -s <path to ouster_example> ./src/
     source /opt/ros/<ROS-VERSION>/setup.bash
     catkin_make -DCMAKE_BUILD_TYPE=Release
 
-**Warning:** Do not create your workspace directory inside the cloned ouster_example repository,
-as this will confuse the ROS build system.
+.. warning::
+    Do not create your workspace directory inside the cloned ouster_example repository,
+    as this will confuse the ROS build system.
 
 For each command in the following sections, make sure to first set up the ROS environment in each
 new terminal by running::
 
-        source myworkspace/devel/setup.bash
+        source catkin_ws/devel/setup.bash
 
 Running ROS Nodes with a Sensor
 ================================
@@ -59,10 +60,11 @@ To connect to a sensor and publish its data as ROS topics, execute the command::
     roslaunch ouster_ros sensor.launch sensor_hostname:=<sensor hostname>
 
 where:
+- ``sensor_hostname:=<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx.local) or IP of the
+  sensor
 
-- ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor
-
-- ``metadata:=<path-to-metadata>`` to specify the name where sensor metadata configuration will be
+Additionally, the launch file has following list of arguments that you can use:
+- ``metadata:=<path-to-metadata>`` to set the name where sensor metadata configuration will be
   saved to. Note that by default the working directory of all ROS nodes is set to ``${ROS_HOME}``, 
   which is generally ``$HOME/.ros``. If you provide a relative path to ``metadata``, i.e.,
   ``metadata:=meta.json`` it will write to ``${ROS_HOME}/meta.json``. If you wish the file be saved 
@@ -70,7 +72,7 @@ where:
 - ``udp_dest:=<hostname>`` to specify the hostname or IP to which the sensor should send data
 - ``lidar_mode:=<mode>`` where mode is one of ``512x10``, ``512x20``, ``1024x10``, ``1024x20``, or
   ``2048x10``, and
-- ``viz:=true`` to visualize the sensor output, if you have the rviz ROS package installed
+- ``viz:=true/false`` to visualize the sensor output, if you have the rviz ROS package installed
 
 
 Recording Data
@@ -108,6 +110,13 @@ at any time using the following command::
 For more information on rosbag functionality refer to `rosbag record`_.
 
 .. _rosbag record: https://wiki.ros.org/rosbag/Commandline#rosbag_record
+
+.. warning::
+    When recording a bag file directly via the ``rosbag record``, you need to
+    save the metadata information of the sensor you are connected to. This can be
+    achieved by supplying a path to the ``metadata`` argument of the ``sensor.launch``.
+    You will need the metadata file information to properly replay the recorded bag
+    file.
 
 Playing Back Recorded Data
 ==========================

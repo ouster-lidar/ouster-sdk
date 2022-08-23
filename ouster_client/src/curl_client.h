@@ -62,15 +62,15 @@ class CurlClient : public ouster::util::HttpClient {
         }
         if (res != CURLE_OK) {
             throw std::runtime_error(
-                std::string(
-                    "CurlClient::execute_get() failed with error message: ") +
-                curl_easy_strerror(res));
+                "CurlClient::execute_get failed for the url: [" + url +
+                "] with the error message: " + curl_easy_strerror(res));
         }
         long http_code = 0;
         curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &http_code);
         if (http_code != 200) {
             throw std::runtime_error(
-                std::string("CurlClient::execute_get failed with code: [") +
+                std::string("CurlClient::execute_get failed for url: [" + url +
+                            "] with the code: [") +
                 std::to_string(http_code) + std::string("] - and return: ") +
                 buffer);
         }

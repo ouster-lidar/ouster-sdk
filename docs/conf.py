@@ -29,8 +29,8 @@ copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
 
 # The full version, including alpha/beta/rc tags
-version = '0.5.0.b0'
-release = '0.5-b0'
+version = '0.5.0'
+release = '0.5.0'
 
 # -- General configuration ---------------------------------------------------
 
@@ -133,7 +133,7 @@ napoleon_numpy_docstring = False
 # napoleon_use_param = False
 
 # ----- Todos Configs ------
-todo_include_todos = True
+todo_include_todos = False
 todo_link_only = True
 todo_emit_warnings = True
 
