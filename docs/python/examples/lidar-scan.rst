@@ -8,7 +8,7 @@ The LidarScan Representation
    :local:
    :depth: 3
 
-The :py:class:`.LidarScan` class is explained in depth in the `LidarScan reference <reference/lidar-scan>`, which we recommend reading.
+The :py:class:`.LidarScan` class is explained in depth in the :doc:`/reference/lidar-scan`, which we recommend reading.
 
 We provide example code to aid in understanding.
 

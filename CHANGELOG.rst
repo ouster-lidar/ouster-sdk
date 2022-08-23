@@ -2,6 +2,48 @@
 Changelog
 =========
 
+[20220826]
+==========
+
+* drop support for buliding C++ libraries and Python bindings on Ubuntu 16.04
+* drop support for buliding C++ libraries and Python bindings on Mac 10.13, Mac 10.14
+* Python 3.6 wheels are no longer built and published
+* drop support for sensors running FW < 2.0
+* require C++ 14 to build
+
+ouster_client
+--------------
+* add ```CUSTOM0-9`` ChanFields to LidarScan object
+* fix parsing measurement status from packets: previously, with some UDP profiles, higher order bits
+  could be randomly set
+* add option for EIGEN_MAX_ALIGN_BYTES, ON by default
+* use of sensor http interface for comms with sensors for FW 2.1+
+* propogate C++ 17 usage requirement in cmake for C++ libraries built as C++17
+* allow vcpkg configuration via environment variables
+
+ouster_pcap
+-----------
+* fix incorrect encapsulation protocol being reported in ``packet_info``
+
+ouster_viz
+----------
+* clean up GL context logic to avoid errors on window/intel UHD graphics
+
+python
+------
+* windows extension modules are now statically linked to avoid potential issues with vendored dlls
+
+ouster_ros
+----------
+* drop ROS kinetic support
+* switch from nodes to nodelets
+* update topic names, group under single ros namespace
+* separate launch files for play, replay, and recording
+* drop FW 1.13 compatibility for sensors and recorded bags
+* remove setting of EIGEN_MAX_ALIGN_BYTES
+* add two new ros services /ouster/get_config and /ouster/set_config (experimental)
+
+
 [20220608]
 ==========
 
@@ -12,6 +54,7 @@ ouster_client
 python
 ------
 * single return parsing for FW 2.3.1 reflects change from ouster_client
+
 
 [20220504]
 ==========
@@ -55,7 +98,7 @@ ouster_ros
   fields are filled with zeroes
 
 [20220107]
-============
+==========
 
 * add support for arm64 macos and linux. Releases are now built and tested on these platforms
 * add support for Python 3.10

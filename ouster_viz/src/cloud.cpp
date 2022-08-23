@@ -46,7 +46,7 @@ struct CloudIds {
 };
 
 bool GLCloud::initialized = false;
-GLfloat GLCloud::program_id;
+GLuint GLCloud::program_id;
 CloudIds GLCloud::cloud_ids;
 
 GLCloud::GLCloud(const Cloud& cloud) : point_size{cloud.point_size_} {

@@ -216,11 +216,12 @@ class PacketFormat:
 
 class LidarMode:
     MODE_UNSPEC: ClassVar[LidarMode]
+    MODE_512x10: ClassVar[LidarMode]
+    MODE_512x20: ClassVar[LidarMode]
     MODE_1024x10: ClassVar[LidarMode]
     MODE_1024x20: ClassVar[LidarMode]
     MODE_2048x10: ClassVar[LidarMode]
-    MODE_512x10: ClassVar[LidarMode]
-    MODE_512x20: ClassVar[LidarMode]
+    MODE_4096x5: ClassVar[LidarMode]
 
     __members__: ClassVar[Dict[str, LidarMode]]
     values: ClassVar[Iterator[LidarMode]]
@@ -398,6 +399,16 @@ class ChanField:
     FLAGS: ClassVar[ChanField]
     FLAGS2: ClassVar[ChanField]
     NEAR_IR: ClassVar[ChanField]
+    CUSTOM0: ClassVar[ChanField]
+    CUSTOM1: ClassVar[ChanField]
+    CUSTOM2: ClassVar[ChanField]
+    CUSTOM3: ClassVar[ChanField]
+    CUSTOM4: ClassVar[ChanField]
+    CUSTOM5: ClassVar[ChanField]
+    CUSTOM6: ClassVar[ChanField]
+    CUSTOM7: ClassVar[ChanField]
+    CUSTOM8: ClassVar[ChanField]
+    CUSTOM9: ClassVar[ChanField]
     RAW32_WORD1: ClassVar[ChanField]
     RAW32_WORD2: ClassVar[ChanField]
     RAW32_WORD3: ClassVar[ChanField]
@@ -586,7 +597,7 @@ class LidarScan:
     def status(self) -> ndarray:
         ...
 
-    def _complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
+    def complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
         ...
 
     @property

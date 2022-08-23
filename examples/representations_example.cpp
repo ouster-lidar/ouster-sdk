@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "helpers.h"
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -45,9 +45,11 @@ img_t<double> get_x_in_image_form(const LidarScan& scan, bool destaggered,
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "\n\nUsage: lidar_scan_example <pcap_file> <json_file>"
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
+                  << ouster::BUILD_SYSTEM << ")"
+                  << "\n\nUsage: representation_example <pcap_file> <json_file>"
                   << std::endl;
-        return EXIT_FAILURE;
+        return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     const std::string pcap_file = argv[1];
@@ -59,7 +61,7 @@ int main(int argc, char* argv[]) {
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
 
-    auto scan = LidarScan(w, h);
+    auto scan = LidarScan(w, h, info.format.udp_profile_lidar);
 
     std::cerr << "Reading in scan from pcap..." << std::endl;
     get_complete_scan(handle, scan, info);
@@ -119,8 +121,21 @@ int main(int argc, char* argv[]) {
         << "\n3. Getting staggered and destaggered images of Reflectivity..."
         << std::endl;
 
+    Eigen::Array<uint32_t, -1, -1, Eigen::RowMajor> reflectivity;
+
+    if (info.format.udp_profile_lidar ==
+        sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        reflectivity = scan.field(sensor::ChanField::REFLECTIVITY);
+    } else if (info.format.udp_profile_lidar ==
+               sensor::UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL) {
+        reflectivity = scan.field<uint8_t>(sensor::ChanField::REFLECTIVITY)
+                           .cast<uint32_t>();
+    } else {  // legacy or single return profile
+        reflectivity = scan.field<uint16_t>(sensor::ChanField::REFLECTIVITY)
+                           .cast<uint32_t>();
+    }
+
     //! [doc-stag-cpp-destagger]
-    auto reflectivity = scan.field(sensor::ChanField::REFLECTIVITY);
     auto reflectivity_destaggered =
         destagger<uint32_t>(reflectivity, info.format.pixel_shift_by_row);
     //! [doc-etag-cpp-destagger]

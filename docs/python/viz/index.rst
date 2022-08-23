@@ -10,7 +10,7 @@ consists of the following:
 - ``ouster_viz``: the core C++ library 
 - :mod:`ouster.sdk.viz`: the Python module for the bindings
 
-``simaple-viz`` is a fastest way to visualize live sensor data or replaying a recorded ``pcap``:
+``simple-viz`` is a fastest way to visualize data from a connected sensor or a recorded ``pcap``:
 
 .. figure:: /images/simple-viz.png
     :align: center

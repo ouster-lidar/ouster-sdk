@@ -1,0 +1,39 @@
+<launch>
+
+  <arg name="ouster_ns" default="ouster" doc="Override the default namespace of all ouster nodes"/>
+  <arg name="metadata" default="" doc="path to read metadata file when replaying sensor data"/>
+  <arg name="viz" default="true" doc="whether to run a rviz"/>
+  <arg name="rviz_config" default="$(find ouster_ros)/config/viz.rviz" doc="optional rviz config file"/>
+  <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
+
+  <group ns="$(arg ouster_ns)">
+    <node pkg="nodelet" type="nodelet" name="os_nodelet_mgr"
+      output="screen" required="true"
+      launch-prefix="bash -c 'sleep 2; $0 $@' "
+      args="manager"/>
+  </group>
+
+  <group ns="$(arg ouster_ns)">
+    <node pkg="nodelet" type="nodelet" name="os_node"
+      output="screen" required="true"
+      launch-prefix="bash -c 'sleep 3; $0 $@' "
+      args="load nodelets_os/OusterReplay os_nodelet_mgr">
+      <param name="~/metadata" value="$(arg metadata)"/>
+    </node>
+  </group>
+
+  <include file="$(find ouster_ros)/launch/common.launch">
+    <arg name="ouster_ns" default="$(arg ouster_ns)"/>
+    <arg name="viz" default="$(arg viz)"/>
+    <arg name="rviz_config" default="$(arg rviz_config)"/>
+    <arg name="tf_prefix" default="$(arg tf_prefix)"/>
+  </include>
+
+  <arg name="_use_bag_file_name" value="$(eval not (bag_file == ''))"/>
+
+  <node if="$(arg _use_bag_file_name)" pkg="rosbag" type="play" name="rosbag_play_recording"
+    launch-prefix="bash -c 'sleep 3; $0 $@' "
+    output="screen" required="true"
+    args="--clock $(arg bag_file)"/>
+
+</launch>

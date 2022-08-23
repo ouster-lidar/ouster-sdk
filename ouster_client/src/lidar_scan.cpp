@@ -82,11 +82,9 @@ Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
 static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     UDPProfileLidar profile) {
     auto end = impl::default_scan_fields.end();
-    auto it = std::find_if(
-        impl::default_scan_fields.begin(), end,
-        [&](const std::pair<UDPProfileLidar, impl::DefaultFieldsEntry>& kv) {
-            return kv.first == profile;
-        });
+    auto it =
+        std::find_if(impl::default_scan_fields.begin(), end,
+                     [profile](const auto& kv) { return kv.first == profile; });
 
     if (it == end || it->first == 0)
         throw std::invalid_argument("Unknown lidar udp profile");
@@ -188,6 +186,25 @@ Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
     return status_;
 }
 
+bool LidarScan::complete(sensor::ColumnWindow window) const {
+    const auto& status = this->status();
+    auto start = window.first;
+    auto end = window.second;
+
+    if (start <= end) {
+        return status.segment(start, end - start + 1)
+            .unaryExpr([](uint32_t s) { return s & 0x01; })
+            .isConstant(0x01);
+    } else {
+        return status.segment(0, end)
+                   .unaryExpr([](uint32_t s) { return s & 0x01; })
+                   .isConstant(0x01) &&
+               status.segment(start, this->w - start)
+                   .unaryExpr([](uint32_t s) { return s & 0x01; })
+                   .isConstant(0x01);
+    }
+}
+
 bool operator==(const LidarScan::BlockHeader& a,
                 const LidarScan::BlockHeader& b) {
     return a.timestamp == b.timestamp && a.encoder == b.encoder &&
@@ -266,7 +283,7 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
     if (range.cols() * range.rows() != lut.direction.rows())
         throw std::invalid_argument("unexpected image dimensions");
 
-    auto reshaped = Eigen::Map<const Eigen::Array<LidarScan::raw_t, -1, 1>>(
+    auto reshaped = Eigen::Map<const Eigen::Array<uint32_t, -1, 1>>(
         range.data(), range.cols() * range.rows());
     auto nooffset = lut.direction.colwise() * reshaped.cast<double>();
     return (nooffset.array() == 0.0).select(nooffset, nooffset + lut.offset);
@@ -315,6 +332,7 @@ struct parse_field_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, ChanField f, uint16_t m_id,
                     const sensor::packet_format& pf, const uint8_t* col_buf) {
+        if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
         pf.col_field(col_buf, f, field.col(m_id).data(), field.cols());
     }
 };

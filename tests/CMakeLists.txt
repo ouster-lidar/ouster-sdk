@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.1.0)
-
 #Several deprecations since gtest 1.8
 if(MSVC)
     add_compile_options(/wd4996 /wd4189)

@@ -6,15 +6,14 @@
 
 #include "ouster/os_pcap.h"
 
-#include <stddef.h>
-#include <tins/tins.h>
-
 #include <chrono>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <memory>
 #include <thread>
+
+#include <tins/tins.h>
 
 using namespace Tins;
 
@@ -31,7 +30,6 @@ struct record_handle {
     std::unique_ptr<Tins::PacketWriter>
         pcap_file_writer;  ///< Object that holds the pcap writer
     bool use_sll_encapsulation;
-
     record_handle() {}
 
     ~record_handle() {}
@@ -47,6 +45,8 @@ struct playback_handle {
 
     Tins::IPv4Reassembler
         reassembler;  ///< The reassembler mainly for lidar packets
+
+    int encap_proto;
 
     playback_handle() {}
 
@@ -79,6 +79,7 @@ std::shared_ptr<playback_handle> replay_initialize(
 
     result->file_name = file_name;
     result->pcap_reader.reset(new FileSniffer(file_name));
+    result->encap_proto = result->pcap_reader->link_type();
 
     return result;
 }
@@ -114,7 +115,7 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                         info.fragments_in_packet = reassm_packets;
                         reassm_packets = 0;
 
-                        info.encapsulation_protocol = (int)pdu->pdu_type();
+                        info.encapsulation_protocol = handle.encap_proto;
                         result = true;
                         UDP* udp = pdu->find_pdu<UDP>();
                         auto raw = pdu->find_pdu<RawPDU>();
@@ -203,6 +204,13 @@ std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
     return result;
 }
 
+std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
+                                                 int frag_size,
+                                                 bool use_sll_encapsulation) {
+    return record_initialize(file_name, "", "", frag_size,
+                             use_sll_encapsulation);
+}
+
 void record_uninitialize(record_handle& handle) {
     if (handle.pcap_file_writer) handle.pcap_file_writer.reset();
 }
@@ -226,7 +234,9 @@ header.
 */
 
 // SLL is the linux pcap capture container
-std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
+std::vector<IP> buffer_to_frag_packets(record_handle& handle,
+                                       const std::string& src_ip,
+                                       const std::string& dst_ip, int src_port,
                                        int dst_port, const uint8_t* buf,
                                        size_t buf_size) {
     std::vector<IP> result;
@@ -240,7 +250,7 @@ std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
 
     while (i < buf_size) {
         // First create the ipv4 packet
-        IP pkt = IP(handle.src_ip, handle.dst_ip);
+        IP pkt = IP(dst_ip, src_ip);
 
         // Now figure out the size of the packet payload
         size_t size = std::min(handle.frag_size, (buf_size - i));
@@ -307,9 +317,21 @@ std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
 void record_packet(record_handle& handle, int src_port, int dst_port,
                    const uint8_t* buf, size_t buffer_size,
                    uint64_t microsecond_timestamp) {
+    record_packet(handle, handle.src_ip, handle.dst_ip, src_port, dst_port, buf,
+                  buffer_size, microsecond_timestamp);
+}
+
+void record_packet(record_handle& handle, const std::string& src_ip,
+                   const std::string& dst_ip, int src_port, int dst_port,
+                   const uint8_t* buf, size_t buffer_size,
+                   uint64_t microsecond_timestamp) {
+    // ensure IPs were provided
+    if (dst_ip.empty() || src_ip.empty()) {
+        throw std::invalid_argument("Invalid addresses provided for packet");
+    }
     // For each of the packets write it to the pcap file
-    for (auto item :
-         buffer_to_frag_packets(handle, src_port, dst_port, buf, buffer_size)) {
+    for (auto item : buffer_to_frag_packets(handle, src_ip, dst_ip, src_port,
+                                            dst_port, buf, buffer_size)) {
         Packet packet;
         PDU* pdu;
         if (handle.use_sll_encapsulation) {

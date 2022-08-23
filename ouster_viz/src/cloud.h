@@ -27,7 +27,7 @@ struct CloudIds;
 class GLCloud {
     // global gl state
     static bool initialized;
-    static GLfloat program_id;
+    static GLuint program_id;
     static CloudIds cloud_ids;
 
    private:

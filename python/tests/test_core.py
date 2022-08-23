@@ -122,7 +122,7 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert len(scan.status) == scan.w
     assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
 
-    assert scan._complete()
+    assert scan.complete()
 
     # all timestamps valid
     assert np.count_nonzero(scan.timestamp) == scan.w
@@ -150,17 +150,25 @@ def test_scans_first_packet(packet: client.LidarPacket,
     h = packet._pf.pixels_per_column
     w = packet._pf.columns_per_packet
 
-    assert np.array_equal(packet.field(ChanField.RANGE),
-                          scan.field(ChanField.RANGE)[:h, :w])
+    is_low_data_rate_profile = (packets.metadata.format.udp_profile_lidar ==
+                                client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+
+    if not is_low_data_rate_profile:  # low data rate profile RANGE is scaled up
+        assert np.array_equal(packet.field(ChanField.RANGE),
+                              scan.field(ChanField.RANGE)[:h, :w])
 
     assert np.array_equal(packet.field(ChanField.REFLECTIVITY),
                           scan.field(ChanField.REFLECTIVITY)[:h, :w])
 
-    assert np.array_equal(packet.field(ChanField.SIGNAL),
-                          scan.field(ChanField.SIGNAL)[:h, :w])
+    if is_low_data_rate_profile:  # low data rate profile has no SIGNAL
+        assert ChanField.SIGNAL not in set(scan.fields)
+    else:
+        assert np.array_equal(packet.field(ChanField.SIGNAL),
+                              scan.field(ChanField.SIGNAL)[:h, :w])
 
-    assert np.array_equal(packet.field(ChanField.NEAR_IR),
-                          scan.field(ChanField.NEAR_IR)[:h, :w])
+    if not is_low_data_rate_profile:  # low data rate profile NEAR_IR is scaled up
+        assert np.array_equal(packet.field(ChanField.NEAR_IR),
+                              scan.field(ChanField.NEAR_IR)[:h, :w])
 
     assert packet.frame_id == scan.frame_id
 

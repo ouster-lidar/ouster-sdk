@@ -1,0 +1,22 @@
+<library path="lib/libnodelets_os">
+  <class name="nodelets_os/OusterSensor" type="nodelets_os::OusterSensor" base_class_type="nodelet::Nodelet">
+    <description> 
+      A nodelet that connects to an Ouster sensor and publish incoming imu and lidar packets to other ros nodes.
+    </description>
+  </class>
+  <class name="nodelets_os/OusterReplay" type="nodelets_os::OusterReplay" base_class_type="nodelet::Nodelet">
+    <description> 
+      A nodelet that can load up existing Ouster recordings and replay them.
+    </description>
+  </class>
+  <class name="nodelets_os/OusterCloud" type="nodelets_os::OusterCloud" base_class_type="nodelet::Nodelet">
+    <description> 
+      A nodelet that process incoming Ouster lidar packets and publishes a corresponding point cloud.
+    </description>
+  </class>
+  <class name="nodelets_os/OusterImage" type="nodelets_os::OusterImage" base_class_type="nodelet::Nodelet">
+    <description> 
+      A nodelet that processes Ouster point clouds and publish them as depth images.
+    </description>
+  </class>
+</library>

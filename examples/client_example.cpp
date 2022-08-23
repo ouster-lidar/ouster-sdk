@@ -1,14 +1,15 @@
 /**
- * Copyright (c) 2018, Ouster, Inc.
+ * Copyright (c) 2022, Ouster, Inc.
  * All rights reserved.
  */
 
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <vector>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -25,18 +26,17 @@ void FATAL(const char* msg) {
 
 int main(int argc, char* argv[]) {
     if (argc != 2 && argc != 3) {
-        std::cerr << "Version: " << ouster::CLIENT_VERSION_FULL << " ("
-                  << ouster::BUILD_SYSTEM << ")"
-                  << "\n\nUsage: ouster_client_example <sensor_hostname> "
-                     "[<data_destination_ip>]"
-                     "\n\n<data_destination_ip> is optional: leave blank for "
-                     "automatic destination detection"
-                  << std::endl;
+        std::cerr
+            << "Version: " << ouster::SDK_VERSION_FULL << " ("
+            << ouster::BUILD_SYSTEM << ")"
+            << "\n\nUsage: client_example <sensor_hostname> [<udp_destination>]"
+               "\n\n<udp_destination> is optional: leave blank for "
+               "automatic destination detection"
+            << std::endl;
 
-        return EXIT_FAILURE;
+        return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
-    std::cerr << "Ouster client example " << ouster::CLIENT_VERSION
-              << std::endl;
+    std::cerr << "Ouster client example " << ouster::SDK_VERSION << std::endl;
     /*
      * The sensor client consists of the network client and a library for
      * reading and working with data.
@@ -72,11 +72,6 @@ int main(int argc, char* argv[]) {
 
     ouster::sensor::ColumnWindow column_window = info.format.column_window;
 
-    // azimuth_window config param reduce the amount of valid columns per scan
-    // that we will receive
-    int column_window_length =
-        (column_window.second - column_window.first + w) % w + 1;
-
     std::cerr << "  Firmware version:  " << info.fw_rev
               << "\n  Serial number:     " << info.sn
               << "\n  Product line:      " << info.prod_line
@@ -101,7 +96,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "Capturing points... ";
 
     // buffer to store raw packet data
-    std::unique_ptr<uint8_t[]> packet_buf(new uint8_t[UDP_BUF_SIZE]);
+    auto packet_buf = std::make_unique<uint8_t[]>(UDP_BUF_SIZE);
 
     for (size_t i = 0; i < N_SCANS;) {
         // wait until sensor data is available
@@ -113,20 +108,15 @@ int main(int argc, char* argv[]) {
 
         // check for lidar data, read a packet and add it to the current batch
         if (st & sensor::LIDAR_DATA) {
-            if (!sensor::read_lidar_packet(*handle, packet_buf.get(), pf))
+            if (!sensor::read_lidar_packet(*handle, packet_buf.get(), pf)) {
                 FATAL("Failed to read a packet of the expected size!");
+            }
 
             // batcher will return "true" when the current scan is complete
             if (batch_to_scan(packet_buf.get(), scans[i])) {
-                // LidarScan provides access to azimuth block data and headers
-                auto n_invalid = std::count_if(
-                    scans[i].headers.begin(), scans[i].headers.end(),
-                    [](const LidarScan::BlockHeader& h) {
-                        return !(h.status & 0x01);
-                    });
                 // retry until we receive a full set of valid measurements
                 // (accounting for azimuth_window settings if any)
-                if (n_invalid <= (int)w - column_window_length) i++;
+                if (scans[i].complete(info.format.column_window)) i++;
             }
         }
 
@@ -139,14 +129,15 @@ int main(int argc, char* argv[]) {
 
     /*
      * The example code includes functions for efficiently and accurately
-     * computing point clouds from range measurements. LidarScan data can also
-     * be accessed directly using the Eigen[0] linear algebra library.
+     * computing point clouds from range measurements. LidarScan data can
+     * also be accessed directly using the Eigen[0] linear algebra library.
      *
      * [0] http://eigen.tuxfamily.org
      */
     std::cerr << "Computing point clouds... " << std::endl;
 
-    // pre-compute a table for efficiently calculating point clouds from range
+    // pre-compute a table for efficiently calculating point clouds from
+    // range
     XYZLut lut = ouster::make_xyz_lut(info);
     std::vector<LidarScan::Points> clouds;
 
@@ -155,10 +146,24 @@ int main(int argc, char* argv[]) {
         clouds.push_back(ouster::cartesian(scan, lut));
 
         // channel fields can be queried as well
-        auto n_returns = (scan.field(sensor::RANGE) != 0).count();
+        auto n_valid_first_returns = (scan.field(sensor::RANGE) != 0).count();
 
-        std::cerr << "  Frame no. " << scan.frame_id << " with " << n_returns
-                  << " returns" << std::endl;
+        // LidarScan also provides access to header information such as
+        // status and timestamp
+        auto status = scan.status();
+        auto it = std::find_if(status.data(), status.data() + status.size(),
+                               [](const uint32_t s) {
+                                   return (s & 0x01);
+                               });  // find first valid status
+        if (it != status.data() + status.size()) {
+            auto ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::nanoseconds(scan.timestamp()(
+                    it - status.data())));  // get corresponding timestamp
+
+            std::cerr << "  Frame no. " << scan.frame_id << " with "
+                      << n_valid_first_returns << " valid first returns at "
+                      << ts_ms.count() << " ms" << std::endl;
+        }
     }
 
     /*
