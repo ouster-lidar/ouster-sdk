@@ -379,6 +379,11 @@ class Camera {
      * @param[in] y vertical position in in normalized coordinates [-1, 1]
      */
     void set_proj_offset(float x, float y);
+
+    /**
+     * Directly set camera target object pose
+     */
+    void set_target(const mat4d& target) { target_ = target; }
 };
 
 /**
