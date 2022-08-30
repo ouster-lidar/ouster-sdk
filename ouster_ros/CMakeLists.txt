@@ -51,16 +51,7 @@ catkin_package(
     sensor_msgs
     geometry_msgs
   DEPENDS
-    EIGEN3)
-
-catkin_package(
-  LIBRARIES nodelet_os_cloud
-  CATKIN_DEPENDS nodelet roscpp std_msgs
-)
-
-catkin_package(
-  LIBRARIES nodelet_os_image
-  CATKIN_DEPENDS nodelet roscpp std_msgs
+    EIGEN3
 )
 
 # ==== Libraries ====
@@ -104,20 +95,25 @@ install(
     nodelets_os
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
 install(
   DIRECTORY ${_ouster_ros_INCLUDE_DIRS}
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+)
+
 install(
   FILES
     ../LICENSE
     ../LICENSE-bin
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
-install(
-    DIRECTORY
-      launch/
-    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch)
+    nodelets_os.xml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
 install(
   DIRECTORY
-    config/
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config)
+    launch
+    config
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
