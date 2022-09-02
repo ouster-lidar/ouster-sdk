@@ -63,16 +63,10 @@ class OusterSDKConan(ConanFile):
         if self.options.build_pcap:
             self.requires("libtins/4.3")
 
-        # override due to conflict b/w libtins and libcurl
-        self.requires("openssl/1.1.1q")
-
         if self.options.build_viz:
-            self.requires("glad/0.1.35")
-            # glew is optional, and probably will not be needed
-            # self.requires("glew/2.2.0")
-            # glfw pulls in xorg/system, the latest revision of which  (7c17659) requires updates
-            # pin to older revision which doesn't require install/update, thus overriding glfw's xorg/system
-            self.requires("xorg/system@#60bff7b91495dc0366ae6a9ae60d73a9")
+            self.requires("glad/0.1.34")
+            if self.settings.os != "Windows":
+                self.requires("xorg/system")
             self.requires("glfw/3.3.6")
             # maybe needed for cpp examples, but not for the lib
             # self.requires("tclap/1.2.4")
@@ -89,7 +83,7 @@ class OusterSDKConan(ConanFile):
                 self.build_folder, "conan_paths.cmake")
         cmake.definitions["BUILD_SHARED_LIBS"] = True if self.options.shared else False
         cmake.definitions["CMAKE_POSITION_INDEPENDENT_CODE"] = (
-            True if self.options.fPIC else False
+            True if "fPIC" in self.options and self.options.fPIC else False
         )
 
         # we use this option until we remove nonstd::optional from SDK codebase (soon)

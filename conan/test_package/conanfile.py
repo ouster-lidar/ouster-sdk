@@ -24,4 +24,6 @@ class OusterSDKTestConan(ConanFile):
     def test(self):
         if not tools.cross_building(self):
             os.chdir("examples")
-            self.run(".%sclient_example" % os.sep)
+            # on Windows VS puts execulables under `./Release` or `./Debug` folders
+            exec_path = f"{os.sep}{self.settings.build_type}" if self.settings.os == "Windows" else ""
+            self.run(".%s%sclient_example" % (exec_path, os.sep))

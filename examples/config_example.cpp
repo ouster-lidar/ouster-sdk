@@ -94,13 +94,13 @@ int main(int argc, char* argv[]) {
                       << std::endl;
             return EXIT_FAILURE;
         }
-    } catch (std::invalid_argument& ia) {
+    } catch (const std::invalid_argument&) {
         // expected result
         std::cerr << "..success! Got expected failure to set udp_dest while "
                      "auto flag is set."
                   << std::endl;
 
-    } catch (std::runtime_error& e) {
+    } catch (const std::runtime_error& e) {
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
     }
