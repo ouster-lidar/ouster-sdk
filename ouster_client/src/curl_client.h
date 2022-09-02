@@ -22,6 +22,7 @@ class CurlClient : public ouster::util::HttpClient {
 
    public:
     std::string get(const std::string& url) const override {
+        std::cout << url << std::endl;
         auto full_url = url_combine(base_url, url);
         return execute_get(full_url);
     }
