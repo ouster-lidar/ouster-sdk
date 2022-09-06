@@ -17,7 +17,7 @@ OUSTER_SDK_PATH = os.getenv('OUSTER_SDK_PATH')
 if OUSTER_SDK_PATH is None:
     OUSTER_SDK_PATH = os.path.join(SRC_PATH, "sdk")
 if not os.path.exists(OUSTER_SDK_PATH):
-    OUSTER_SDK_PATH = os.path.join(SRC_PATH, "..")
+    OUSTER_SDK_PATH = os.path.dirname(SRC_PATH)
 if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
     raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 
@@ -25,7 +25,7 @@ if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
 def parse_version():
     with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
         content = listfile.read()
-        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-\)]+)(-(.*))?\)", content)
+        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-\)]+)(.(.*))?\)", content)
         return groups.group(1) + (groups.group(3) or "")
 
 class CMakeExtension(Extension):
