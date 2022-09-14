@@ -8,6 +8,7 @@ from copy import copy
 import json
 import numpy
 import pytest
+import inspect
 
 from ouster import client
 
@@ -188,3 +189,21 @@ def test_parse_info() -> None:
     metadata['lidar_origin_to_beam_origin_mm'] = 'foo'
     with pytest.raises(RuntimeError):
         client.SensorInfo(json.dumps(metadata))
+
+
+def test_info_length() -> None:
+    """Check length of info to ensure we've added appropriately to the == operator"""
+
+    info_attributes = inspect.getmembers(client.SensorInfo, lambda a: not inspect.isroutine(a))
+    info_properties = [a for a in info_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
+
+    assert len(info_properties) == 15, "Don't forget to update tests and the sensor_info == operator!"
+
+
+def test_equality_format() -> None:
+    """Check length of data format to ensure we've added appropriately to the == operator"""
+
+    data_format_attributes = inspect.getmembers(client.DataFormat, lambda a: not inspect.isroutine(a))
+    data_format_properties = [a for a in data_format_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
+
+    assert len(data_format_properties) == 7, "Don't forget to update tests and the data_format == operator!"
