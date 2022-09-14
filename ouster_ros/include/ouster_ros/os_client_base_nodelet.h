@@ -3,22 +3,14 @@
  * All rights reserved.
  *
  * @file
- * @brief Example node to publish raw sensor output on ROS topics
+ * @brief Base class for ouster_ros sensor and replay nodelets
  *
- * ROS Parameters
- * sensor_hostname: hostname or IP in dotted decimal form of the sensor
- * udp_dest: hostname or IP where the sensor will send data packets
- * lidar_port: port to which the sensor should send lidar data
- * imu_port: port to which the sensor should send imu data
  */
 
 #include <nodelet/nodelet.h>
 #include <ros/ros.h>
 
-#include "ouster/impl/build.h"
-#include "ouster/client.h"
 #include "ouster/types.h"
-#include "ouster_ros/ros.h"
 
 namespace nodelets_os {
 

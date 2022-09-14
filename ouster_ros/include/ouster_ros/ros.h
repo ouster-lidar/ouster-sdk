@@ -9,10 +9,14 @@
 
 #pragma once
 
-#include <geometry_msgs/TransformStamped.h>
+#define PCL_NO_PRECOMPILE
 #include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
+
+#include <geometry_msgs/TransformStamped.h>
 
 #include <chrono>
 #include <string>
