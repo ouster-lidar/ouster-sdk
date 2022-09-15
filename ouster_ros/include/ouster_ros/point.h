@@ -7,12 +7,11 @@
  */
 
 #pragma once
-#define PCL_NO_PRECOMPILE
+
 #include <pcl/point_types.h>
 
 #include <Eigen/Core>
 #include <chrono>
-#include <functional>
 
 #include "ouster/lidar_scan.h"
 

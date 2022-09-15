@@ -6,6 +6,8 @@
  * @brief A nodelet that connects to a live ouster sensor
  */
 
+#include "ouster_ros/ros.h"
+
 #include <pluginlib/class_list_macros.h>
 
 #include <fstream>

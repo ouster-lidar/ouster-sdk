@@ -250,8 +250,11 @@ class Sensor(PacketSource):
                 else:
                     break
             except ValueError:
-                # TODO: bad packet size or init_id here: this can happen when
+                # bad packet size or init_id here: this can happen when
                 # packets are buffered by the OS, not necessarily an error
+                # same pass as in data.py
+                # TODO: introduce status for PacketSource to indicate frequency
+                # of bad packet size or init_id errors
                 pass
 
     def flush(self, n_frames: int = 3, *, full=False) -> int:

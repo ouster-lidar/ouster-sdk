@@ -149,20 +149,23 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
             lhs.udp_port_imu == rhs.udp_port_imu &&
             lhs.ts_mode == rhs.ts_mode && lhs.ld_mode == rhs.ld_mode &&
             lhs.operating_mode == rhs.operating_mode &&
+            lhs.multipurpose_io_mode == rhs.multipurpose_io_mode &&
             lhs.azimuth_window == rhs.azimuth_window &&
             lhs.signal_multiplier == rhs.signal_multiplier &&
-            lhs.sync_pulse_out_angle == rhs.sync_pulse_out_angle &&
-            lhs.sync_pulse_out_pulse_width == rhs.sync_pulse_out_pulse_width &&
             lhs.nmea_in_polarity == rhs.nmea_in_polarity &&
-            lhs.nmea_baud_rate == rhs.nmea_baud_rate &&
             lhs.nmea_ignore_valid_char == rhs.nmea_ignore_valid_char &&
+            lhs.nmea_baud_rate == rhs.nmea_baud_rate &&
             lhs.nmea_leap_seconds == rhs.nmea_leap_seconds &&
-            lhs.multipurpose_io_mode == rhs.multipurpose_io_mode &&
             lhs.sync_pulse_in_polarity == rhs.sync_pulse_in_polarity &&
             lhs.sync_pulse_out_polarity == rhs.sync_pulse_out_polarity &&
+            lhs.sync_pulse_out_angle == rhs.sync_pulse_out_angle &&
+            lhs.sync_pulse_out_pulse_width == rhs.sync_pulse_out_pulse_width &&
             lhs.sync_pulse_out_frequency == rhs.sync_pulse_out_frequency &&
             lhs.phase_lock_enable == rhs.phase_lock_enable &&
-            lhs.phase_lock_offset == rhs.phase_lock_offset);
+            lhs.phase_lock_offset == rhs.phase_lock_offset &&
+            lhs.columns_per_packet == rhs.columns_per_packet &&
+            lhs.udp_profile_lidar == rhs.udp_profile_lidar &&
+            lhs.udp_profile_imu == rhs.udp_profile_imu);
 }
 
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs) {

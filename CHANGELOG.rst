@@ -20,6 +20,7 @@ ouster_client
 * use of sensor http interface for comms with sensors for FW 2.1+
 * propogate C++ 17 usage requirement in cmake for C++ libraries built as C++17
 * allow vcpkg configuration via environment variables
+* fix a bug in sensor_config struct equality comparison operator
 
 ouster_pcap
 -----------

@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
     try {
         auto signal_field = reduced_fields_scan.field(ChanField::SIGNAL);
         std::cerr << signal_field(0, 0) << std::endl;
-    } catch (const std::out_of_range& e) {
+    } catch (const std::out_of_range&) {
         std::cerr << " ..received expected out of range error. Continuing..."
                   << std::endl;
     }

@@ -24,7 +24,7 @@ if(CMAKE_SCRIPT_MODE_FILE)
     ${VERSION_GEN_OUT_DIR}/build.h @ONLY)
 elseif(NOT TARGET ouster_build)
   # in configuration stage: expects OusterSDK_VERSION_STRING to be set
-  if(OusterSDK_VERSION_STRING MATCHES "^([0-9]+\.[0-9]+\.[0-9]+)(-([.0-9A-z]+))?$")
+  if(OusterSDK_VERSION_STRING MATCHES "^([0-9]+\.[0-9]+\.[0-9]+)(.([.0-9A-z]+))?$")
     set(OusterSDK_VERSION "${CMAKE_MATCH_1}")
     set(OusterSDK_VERSION_SUFFIX "${CMAKE_MATCH_3}")
   else()

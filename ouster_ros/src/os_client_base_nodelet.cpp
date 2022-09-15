@@ -8,6 +8,7 @@
 
 #include "ouster_ros/os_client_base_nodelet.h"
 
+#include "ouster/impl/build.h"
 #include "ouster_ros/GetMetadata.h"
 
 namespace sensor = ouster::sensor;

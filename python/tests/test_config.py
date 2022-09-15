@@ -3,11 +3,13 @@ Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
 """
 
-from copy import copy
+from copy import copy, deepcopy
 
 from os import path
 
 import pytest
+import warnings
+import inspect
 
 from ouster import client
 
@@ -192,6 +194,37 @@ def complete_config_string() -> str:
     return complete_config_string
 
 
+@pytest.fixture()
+def all_different_config_string() -> str:
+    """All different from complete_config_string except for udp_profile_imu"""
+    all_different_config_string = """
+        {"azimuth_window": [180000, 360000],
+        "columns_per_packet": 16,
+        "lidar_mode": "512x10",
+        "multipurpose_io_mode": "INPUT_NMEA_UART",
+        "nmea_baud_rate": "BAUD_115200",
+        "nmea_ignore_valid_char": 1,
+        "nmea_in_polarity": "ACTIVE_LOW",
+        "nmea_leap_seconds": 10,
+        "operating_mode": "STANDBY",
+        "phase_lock_enable": true,
+        "phase_lock_offset": 180000,
+        "signal_multiplier": 3,
+        "sync_pulse_in_polarity": "ACTIVE_LOW",
+        "sync_pulse_out_angle": 180,
+        "sync_pulse_out_frequency": 10,
+        "sync_pulse_out_polarity": "ACTIVE_LOW",
+        "sync_pulse_out_pulse_width": 1,
+        "timestamp_mode": "TIME_FROM_SYNC_PULSE_IN",
+        "udp_dest": "1.1.1.1",
+        "udp_port_imu": 8503,
+        "udp_port_lidar": 8502,
+        "udp_profile_imu": "LEGACY",
+        "udp_profile_lidar": "RNG15_RFL8_NIR8"}
+    """
+    return all_different_config_string
+
+
 def test_read_config(complete_config_string: str) -> None:
     """Check reading from and writing to string."""
     config = client.SensorConfig(complete_config_string)  # read from string
@@ -218,6 +251,8 @@ def test_read_config(complete_config_string: str) -> None:
     assert config.udp_port_imu == 7503
     assert config.udp_port_lidar == 7502
     assert config.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
+    assert config.udp_profile_imu == client.UDPProfileIMU.PROFILE_IMU_LEGACY
+
     assert config.columns_per_packet == 8
 
     # check output of string
@@ -225,7 +260,7 @@ def test_read_config(complete_config_string: str) -> None:
         complete_config_string.split())
 
 
-def test_equality_config(complete_config_string: str) -> None:
+def test_equality_config(complete_config_string: str, all_different_config_string: str) -> None:
     """Check equality comparisons."""
 
     complete_config_1 = client.SensorConfig(complete_config_string)
@@ -256,6 +291,24 @@ def test_equality_config(complete_config_string: str) -> None:
     assert complete_config_1 != partial_config_2
     assert partial_config_1 != empty_config_1
     assert partial_config_2 != empty_config_1
+
+    config_attributes = inspect.getmembers(client.SensorConfig, lambda a: not inspect.isroutine(a))
+    config_properties = [a for a in config_attributes if not a[0].startswith('__')]
+
+    base_config = client.SensorConfig(complete_config_string)
+    different_config = client.SensorConfig(all_different_config_string)
+
+    for config_property in config_properties:
+        copy_config = deepcopy(base_config)  # reset to initial
+        property_name = config_property[0]  # config_property is a tuple of (property_name as string, property)
+        if property_name == "udp_profile_imu":
+            warnings.warn(UserWarning("Skipping equality check on udp profile IMU while eUDP IMU is not implemented"))
+        else:
+            property_value = getattr(different_config, property_name)
+            setattr(copy_config, property_name, property_value)
+            assert copy_config != base_config
+
+    assert len(config_properties) == 23, "Don't forget to update tests and the config == operator!"
 
 
 def test_copy_config(complete_config_string: str) -> None:

@@ -229,7 +229,11 @@ class Pcap(PacketSource):
                 elif (packet_info.dst_port == self._metadata.udp_port_imu):
                     yield ImuPacket(buf[0:n], self._metadata, timestamp)
             except ValueError:
-                # TODO: bad packet size or init_id here, use specific exceptions
+                # bad packet size or init_id here: this can happen when
+                # packets are buffered by the OS, not necessarily an error
+                # same pass as in core.py
+                # TODO: introduce status for PacketSource to indicate frequency
+                # of bad packet size or init_id errors
                 pass
 
     @property
