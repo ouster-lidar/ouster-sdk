@@ -261,6 +261,7 @@ packet_format::FieldIter packet_format::end() const {
 
 uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no packet_type - use 0 to code as 'legacy'
         return 0;
     } else {
         uint16_t res;
@@ -281,6 +282,7 @@ uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
 
 uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no init_id - use 0 to code as 'legacy'
         return 0;
     } else {
         uint32_t res;
@@ -291,6 +293,8 @@ uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
 
 uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no prod_sn (serial number) - use 0 to code as
+        // 'legacy'
         return 0;
     } else {
         uint64_t res;

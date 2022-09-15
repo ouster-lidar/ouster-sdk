@@ -11,10 +11,10 @@
  * vision applications, use higher bit depth values in /os_cloud_node/points
  */
 
+#include "ouster_ros/ros.h"
+
 #include <nodelet/nodelet.h>
 #include <pcl/conversions.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/ros.h>
@@ -26,14 +26,10 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <vector>
 
-#include "ouster/client.h"
 #include "ouster/image_processing.h"
-#include "ouster/types.h"
 #include "ouster_ros/GetMetadata.h"
-#include "ouster_ros/ros.h"
 
 namespace sensor = ouster::sensor;
 namespace viz = ouster::viz;

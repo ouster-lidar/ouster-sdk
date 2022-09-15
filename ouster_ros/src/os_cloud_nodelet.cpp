@@ -6,11 +6,12 @@
  * @brief A nodelet to publish point clouds and imu topics
  */
 
+#include "ouster_ros/ros.h"
+
 #include <nodelet/nodelet.h>
 #include <pluginlib/class_list_macros.h>
 #include <ros/console.h>
 #include <ros/ros.h>
-#include <ros/service.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf2_ros/static_transform_broadcaster.h>
@@ -18,13 +19,9 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
-#include <queue>
 
-#include "ouster/lidar_scan.h"
-#include "ouster/types.h"
 #include "ouster_ros/GetMetadata.h"
 #include "ouster_ros/PacketMsg.h"
-#include "ouster_ros/ros.h"
 
 namespace sensor = ouster::sensor;
 using ouster_ros::PacketMsg;
