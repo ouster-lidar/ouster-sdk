@@ -1,5 +1,11 @@
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -49,21 +55,50 @@ struct ProfileEntry {
     size_t chan_data_size;
 };
 
-static const Table<ChanField, FieldInfo, 4> legacy_field_info{{
+static const Table<ChanField, FieldInfo, 8> legacy_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x000fffff, 0}},
+    {ChanField::FLAGS, {UINT8, 3, 0, 4}},
     {ChanField::REFLECTIVITY, {UINT16, 4, 0, 0}},
     {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
     {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 7> dual_field_info{{
+static const Table<ChanField, FieldInfo, 5> lb_field_info{{
+    {ChanField::RANGE, {UINT16, 0, 0x7fff, -3}},
+    {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
+    {ChanField::REFLECTIVITY, {UINT8, 2, 0, 0}},
+    {ChanField::NEAR_IR, {UINT8, 3, 0, -4}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+}};
+
+static const Table<ChanField, FieldInfo, 13> dual_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
+    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
     {ChanField::REFLECTIVITY, {UINT8, 3, 0, 0}},
     {ChanField::RANGE2, {UINT32, 4, 0x0007ffff, 0}},
+    {ChanField::FLAGS2, {UINT8, 6, 0b11111000, 3}},
     {ChanField::REFLECTIVITY2, {UINT8, 7, 0, 0}},
     {ChanField::SIGNAL, {UINT16, 8, 0, 0}},
     {ChanField::SIGNAL2, {UINT16, 10, 0, 0}},
     {ChanField::NEAR_IR, {UINT16, 12, 0, 0}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
+    {ChanField::RAW32_WORD4, {UINT32, 12, 0, 0}},
+}};
+
+static const Table<ChanField, FieldInfo, 8> single_field_info{{
+    {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
+    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
+    {ChanField::REFLECTIVITY, {UINT8, 4, 0, 0}},
+    {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
+    {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
 }};
 
 Table<UDPProfileLidar, ProfileEntry, 32> profiles{{
@@ -71,15 +106,17 @@ Table<UDPProfileLidar, ProfileEntry, 32> profiles{{
      {legacy_field_info.data(), legacy_field_info.size(), 12}},
     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
      {dual_field_info.data(), dual_field_info.size(), 16}},
+    {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
+     {single_field_info.data(), single_field_info.size(), 12}},
+    {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
+     {lb_field_info.data(), lb_field_info.size(), 4}},
 }};
 
 static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
     auto end = profiles.end();
     auto it =
         std::find_if(impl::profiles.begin(), end,
-                     [&](const std::pair<UDPProfileLidar, ProfileEntry>& kv) {
-                         return kv.first == profile;
-                     });
+                     [profile](const auto& kv) { return kv.first == profile; });
 
     if (it == end || it->first == 0)
         throw std::invalid_argument("Unknown lidar udp profile");
@@ -145,19 +182,23 @@ packet_format::packet_format(const sensor_info& info)
     }
 }
 
-template <size_t SRC_SIZE, typename T>
-static void col_field_impl(const uint8_t* col_buf, T* dst, size_t offset,
+template <typename SRC, typename DST>
+static void col_field_impl(const uint8_t* col_buf, DST* dst, size_t offset,
                            uint64_t mask, int shift, int pixels_per_column,
                            int dst_stride, size_t channel_data_size,
                            size_t col_header_size) {
+    if (sizeof(DST) < sizeof(SRC))
+        throw std::invalid_argument("Dest type too small for specified field");
+
     for (int px = 0; px < pixels_per_column; px++) {
         auto px_src =
             col_buf + col_header_size + offset + (px * channel_data_size);
-        T* px_dst = dst + px * dst_stride;
+        DST* px_dst = dst + px * dst_stride;
         *px_dst = 0;
-        std::memcpy(px_dst, px_src, SRC_SIZE);
+        std::memcpy(px_dst, px_src, sizeof(SRC));
         if (mask) *px_dst &= mask;
-        if (shift) *px_dst <<= shift;
+        if (shift > 0) *px_dst >>= shift;
+        if (shift < 0) *px_dst <<= std::abs(shift);
     }
 }
 
@@ -167,27 +208,24 @@ void packet_format::col_field(const uint8_t* col_buf, ChanField i, T* dst,
                               int dst_stride) const {
     const auto& f = impl_->fields.at(i);
 
-    if (sizeof(T) < impl::field_ty_size(f.ty_tag))
-        throw std::invalid_argument("Dest type too small for specified field");
-
     switch (f.ty_tag) {
         case UINT8:
-            col_field_impl<1, T>(
+            col_field_impl<uint8_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
         case UINT16:
-            col_field_impl<2, T>(
+            col_field_impl<uint16_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
         case UINT32:
-            col_field_impl<4, T>(
+            col_field_impl<uint32_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
         case UINT64:
-            col_field_impl<8, T>(
+            col_field_impl<uint64_t, T>(
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
@@ -223,6 +261,7 @@ packet_format::FieldIter packet_format::end() const {
 
 uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no packet_type - use 0 to code as 'legacy'
         return 0;
     } else {
         uint16_t res;
@@ -243,6 +282,7 @@ uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
 
 uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no init_id - use 0 to code as 'legacy'
         return 0;
     } else {
         uint32_t res;
@@ -253,6 +293,8 @@ uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
 
 uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no prod_sn (serial number) - use 0 to code as
+        // 'legacy'
         return 0;
     } else {
         uint64_t res;
@@ -270,7 +312,11 @@ const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
 uint32_t packet_format::col_status(const uint8_t* col_buf) const {
     uint32_t res;
     std::memcpy(&res, col_buf + impl_->status_offset, sizeof(uint32_t));
-    return res;
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        return res;  // LEGACY was 32 bits of all 1s
+    } else {
+        return res & 0xffff;  // For eUDP packets, we want the last 16 bits
+    }
 }
 
 uint64_t packet_format::col_timestamp(const uint8_t* col_buf) const {
@@ -321,7 +367,8 @@ T packet_format::px_field(const uint8_t* px_buf, ChanField i) const {
     T res = 0;
     std::memcpy(&res, px_buf + f.offset, impl::field_ty_size(f.ty_tag));
     if (f.mask) res &= f.mask;
-    if (f.shift) res <<= f.shift;
+    if (f.shift > 0) res >>= f.shift;
+    if (f.shift < 0) res <<= std::abs(f.shift);
     return res;
 }
 
@@ -407,7 +454,7 @@ const packet_format& get_format(const sensor_info& info) {
 
     std::lock_guard<std::mutex> lk{cache_mx};
     if (!cache.count(k)) {
-        cache[k] = std::unique_ptr<packet_format>(new packet_format{info});
+        cache[k] = std::make_unique<packet_format>(info);
     }
 
     return *cache.at(k);

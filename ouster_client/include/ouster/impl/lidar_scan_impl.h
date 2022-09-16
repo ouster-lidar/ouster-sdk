@@ -1,5 +1,11 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #pragma once
 
+#include <Eigen/Core>
 #include <cstdint>
 #include <stdexcept>
 
@@ -52,15 +58,19 @@ struct FieldSlot {
                 break;
             case ChanFieldType::UINT8:
                 new (&f8) img_t<uint8_t>{h, w};
+                f8.setZero();
                 break;
             case ChanFieldType::UINT16:
                 new (&f16) img_t<uint16_t>{h, w};
+                f16.setZero();
                 break;
             case ChanFieldType::UINT32:
                 new (&f32) img_t<uint32_t>{h, w};
+                f32.setZero();
                 break;
             case ChanFieldType::UINT64:
                 new (&f64) img_t<uint64_t>{h, w};
+                f64.setZero();
                 break;
         }
     }
@@ -225,6 +235,16 @@ inline Eigen::Ref<const img_t<uint64_t>> FieldSlot::get_unsafe() const {
 /*
  * Call a generic operation op<T>(f, Args..) with the type parameter T having
  * the correct (dynamic) field type for the LidarScan channel field f
+ * Example code for the operation<T>:
+ * \code
+ * struct print_field_size {
+ *   template <typename T>
+ *   void operator()(Eigen::Ref<img_t<T>> field) {
+ *       std::cout << "Rows: " + field.rows() << std::endl;
+ *       std::cout << "Cols: " + field.cols() << std::endl;
+ *   }
+ * };
+ * \endcode
  */
 template <typename SCAN, typename OP, typename... Args>
 void visit_field(SCAN&& ls, sensor::ChanField f, OP&& op, Args&&... args) {

@@ -1,29 +1,26 @@
-// TODO:
-// - check that the header casting is idiomatic libpcap
-// - warn on dropped packets
-//   + when pcap contains garbage
-//   + when fragments missing, buffer reused before sending
-// - split up reading / playback
-// - improve error reporting
-// - support ipv6
-#include <stddef.h>
-#include <tins/tins.h>
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ *
+ */
+
+#include "ouster/os_pcap.h"
 
 #include <chrono>
 #include <cstring>
 #include <exception>
 #include <iostream>
 #include <memory>
-#include <sstream>
 #include <thread>
 
-using namespace Tins;
-#include "ouster/os_pcap.h"
+#include <tins/tins.h>
 
-using us = std::chrono::microseconds;
+using namespace Tins;
 
 namespace ouster {
 namespace sensor_utils {
+
+static constexpr int PROTOCOL_UDP = 17;
 
 struct record_handle {
     std::string dst_ip;     ///< The destination IP
@@ -33,15 +30,10 @@ struct record_handle {
     std::unique_ptr<Tins::PacketWriter>
         pcap_file_writer;  ///< Object that holds the pcap writer
     bool use_sll_encapsulation;
+    record_handle() {}
 
-    record_handle() { }
-
-    ~record_handle() { }
+    ~record_handle() {}
 };
-
-std::shared_ptr<record_handle> record_handle_init() {
-    return std::make_shared<record_handle>();
-}
 
 struct playback_handle {
     std::string file_name;  ///< The filename of the pcap file
@@ -53,16 +45,13 @@ struct playback_handle {
 
     Tins::IPv4Reassembler
         reassembler;  ///< The reassembler mainly for lidar packets
-    
-    playback_handle() { }
 
-    ~playback_handle() { }
+    int encap_proto;
+
+    playback_handle() {}
+
+    ~playback_handle() {}
 };
-
-std::shared_ptr<playback_handle> playback_handle_init() {
-    return std::make_shared<playback_handle>();
-}
-
 
 std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
     stream_in << "Source IP: \"" << data.src_ip << "\" ";
@@ -90,7 +79,8 @@ std::shared_ptr<playback_handle> replay_initialize(
 
     result->file_name = file_name;
     result->pcap_reader.reset(new FileSniffer(file_name));
-    
+    result->encap_proto = result->pcap_reader->link_type();
+
     return result;
 }
 
@@ -125,7 +115,7 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                         info.fragments_in_packet = reassm_packets;
                         reassm_packets = 0;
 
-                        info.encapsulation_protocol = (int)pdu->pdu_type();
+                        info.encapsulation_protocol = handle.encap_proto;
                         result = true;
                         UDP* udp = pdu->find_pdu<UDP>();
                         auto raw = pdu->find_pdu<RawPDU>();
@@ -140,7 +130,8 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                             info.ip_version = 6;
                             info.network_protocol = ipv6->next_header();
                         } else {
-                            throw "Error: No Ip Packet Found";
+                            throw std::runtime_error(
+                                "Malformed packet: no IP headers");
                         }
                         // find_pdu<UDP> will only return NULL when the ipv4
                         // reassembly succeeds on an ipv6 packet, leading to a
@@ -149,9 +140,7 @@ bool next_packet_info(playback_handle& handle, packet_info& info) {
                             info.dst_port = udp->dport();
                             info.src_port = udp->sport();
                             info.payload_size = raw->payload_size();
-                            info.timestamp =
-                                static_cast<std::chrono::microseconds>(
-                                    handle.packet_cache.timestamp());
+                            info.timestamp = handle.packet_cache.timestamp();
                             handle.have_new_packet = true;
                         } else {
                             throw std::runtime_error(
@@ -215,6 +204,13 @@ std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
     return result;
 }
 
+std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
+                                                 int frag_size,
+                                                 bool use_sll_encapsulation) {
+    return record_initialize(file_name, "", "", frag_size,
+                             use_sll_encapsulation);
+}
+
 void record_uninitialize(record_handle& handle) {
     if (handle.pcap_file_writer) handle.pcap_file_writer.reset();
 }
@@ -238,7 +234,9 @@ header.
 */
 
 // SLL is the linux pcap capture container
-std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
+std::vector<IP> buffer_to_frag_packets(record_handle& handle,
+                                       const std::string& src_ip,
+                                       const std::string& dst_ip, int src_port,
                                        int dst_port, const uint8_t* buf,
                                        size_t buf_size) {
     std::vector<IP> result;
@@ -252,7 +250,7 @@ std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
 
     while (i < buf_size) {
         // First create the ipv4 packet
-        IP pkt = IP(handle.src_ip, handle.dst_ip);
+        IP pkt = IP(dst_ip, src_ip);
 
         // Now figure out the size of the packet payload
         size_t size = std::min(handle.frag_size, (buf_size - i));
@@ -319,11 +317,21 @@ std::vector<IP> buffer_to_frag_packets(record_handle& handle, int src_port,
 void record_packet(record_handle& handle, int src_port, int dst_port,
                    const uint8_t* buf, size_t buffer_size,
                    uint64_t microsecond_timestamp) {
-    using namespace std::chrono;
+    record_packet(handle, handle.src_ip, handle.dst_ip, src_port, dst_port, buf,
+                  buffer_size, microsecond_timestamp);
+}
 
+void record_packet(record_handle& handle, const std::string& src_ip,
+                   const std::string& dst_ip, int src_port, int dst_port,
+                   const uint8_t* buf, size_t buffer_size,
+                   uint64_t microsecond_timestamp) {
+    // ensure IPs were provided
+    if (dst_ip.empty() || src_ip.empty()) {
+        throw std::invalid_argument("Invalid addresses provided for packet");
+    }
     // For each of the packets write it to the pcap file
-    for (auto item :
-         buffer_to_frag_packets(handle, src_port, dst_port, buf, buffer_size)) {
+    for (auto item : buffer_to_frag_packets(handle, src_ip, dst_ip, src_port,
+                                            dst_port, buf, buffer_size)) {
         Packet packet;
         PDU* pdu;
         if (handle.use_sll_encapsulation) {
@@ -343,8 +351,8 @@ void record_packet(record_handle& handle, int src_port, int dst_port,
         if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
             _ = pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
         }
-        packet = Packet(*pdu, Timestamp(static_cast<std::chrono::microseconds>(
-                                  microsecond_timestamp)));
+        packet = Packet(
+            *pdu, Timestamp(std::chrono::microseconds{microsecond_timestamp}));
         handle.pcap_file_writer->write(packet);
         delete pdu;
     }

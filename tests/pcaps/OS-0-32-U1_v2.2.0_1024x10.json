@@ -1,0 +1,33 @@
+{
+    "base_pn": "",
+    "base_sn": "",
+    "beam_altitude_angles": [43.88, 40.9, 37.94, 34.98, 32.06, 29.16, 26.25, 23.37, 20.51, 17.66, 14.81, 11.99, 9.17, 6.35, 3.55, 0.72, -2.09, -4.9, -7.72, -10.55, -13.38, -16.22, -19.06, -21.92, -24.79, -27.68, -30.58, -33.49, -36.43, -39.39, -42.38, -45.4],
+    "beam_azimuth_angles": [-2.9, -2.83, -2.78, -2.73, -2.7, -2.67, -2.65, -2.64, -2.65, -2.65, -2.65, -2.67, -2.69, -2.71, -2.74, -2.78, -2.81, -2.85, -2.89, -2.95, -3.01, -3.08, -3.17, -3.25, -3.35, -3.46, -3.58, -3.72, -3.87, -4.05, -4.25, -4.48],
+    "build_date": "2021-10-26T21:19:55Z",
+    "build_rev": "v2.2.0-rc.2-17-gbc0879e",
+    "client_version": "ouster_client 0.3.0.dev1",
+    "data_format": {
+        "column_window": [0, 1023],
+        "columns_per_frame": 1024,
+        "columns_per_packet": 16,
+        "pixel_shift_by_row": [26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 25, 25, 25, 25, 24, 24, 24, 23, 23, 22, 22, 21],
+        "pixels_per_column": 32,
+        "udp_profile_imu": "LEGACY",
+        "udp_profile_lidar": "RNG19_RFL8_SIG16_NIR16_DUAL"
+    },
+    "hostname": "",
+    "image_rev": "ousteros-image-prod-aries-v2.2.0-rc.2+20211026211824.staging.ci-git.ms-more-tuning.bc0879e49c.MR-1892",
+    "imu_to_sensor_transform": [1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1],
+    "initialization_id": 9599938,
+    "json_calibration_version": 4,
+    "lidar_mode": "1024x10",
+    "lidar_origin_to_beam_origin_mm": 27.67,
+    "lidar_to_sensor_transform": [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1],
+    "prod_line": "OS-0-32-U1",
+    "prod_pn": "840-103574-06",
+    "prod_sn": "992137000142",
+    "proto_rev": "",
+    "status": "RUNNING",
+    "udp_port_imu": 7503,
+    "udp_port_lidar": 7502
+}

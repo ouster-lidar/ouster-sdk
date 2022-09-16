@@ -1,5 +1,4 @@
 include README.rst CMakeLists.txt mypy.ini tox.ini
-graft docs
 graft src
 graft tests
 

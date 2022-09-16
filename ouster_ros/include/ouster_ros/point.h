@@ -1,15 +1,17 @@
 /**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief PCL point datatype for use with ouster sensors
  */
 
 #pragma once
-#define PCL_NO_PRECOMPILE
+
 #include <pcl/point_types.h>
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
 #include <chrono>
-#include <functional>
 
 #include "ouster/lidar_scan.h"
 

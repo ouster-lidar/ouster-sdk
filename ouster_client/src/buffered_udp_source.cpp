@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/buffered_udp_source.h"
 
 #include <chrono>
@@ -36,7 +41,7 @@ BufferedUDPSource::BufferedUDPSource(size_t buf_size)
     std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
         return std::make_pair(
             client_state::CLIENT_ERROR,
-            std::unique_ptr<uint8_t[]>{new uint8_t[packet_size]});
+            std::make_unique<uint8_t[]>(packet_size));
     });
 }
 
@@ -46,6 +51,8 @@ BufferedUDPSource::BufferedUDPSource(const std::string& hostname,
     : BufferedUDPSource(buf_size) {
     cli_ = init_client(hostname, lidar_port, imu_port);
     if (!cli_) throw std::runtime_error("Failed to initialize client");
+    lidar_port_ = sensor::get_lidar_port(*cli_);
+    imu_port_ = sensor::get_imu_port(*cli_);
 }
 
 BufferedUDPSource::BufferedUDPSource(const std::string& hostname,
@@ -57,12 +64,17 @@ BufferedUDPSource::BufferedUDPSource(const std::string& hostname,
     cli_ = init_client(hostname, udp_dest_host, mode, ts_mode, lidar_port,
                        imu_port, timeout_sec);
     if (!cli_) throw std::runtime_error("Failed to initialize client");
+    lidar_port_ = sensor::get_lidar_port(*cli_);
+    imu_port_ = sensor::get_imu_port(*cli_);
 }
 
 std::string BufferedUDPSource::get_metadata(int timeout_sec,
                                             bool legacy_format) {
-    std::lock_guard<std::mutex> cli_lock{cli_mtx_};
-    if (!cli_) throw std::runtime_error("Client has already been shut down");
+    std::unique_lock<std::mutex> lock(cli_mtx_, std::try_to_lock);
+    if (!lock.owns_lock())
+        throw std::invalid_argument(
+            "Another thread is already using the client");
+    if (!cli_) throw std::invalid_argument("Client has already been shut down");
     return sensor::get_metadata(*cli_, timeout_sec, legacy_format);
 }
 
@@ -162,11 +174,9 @@ void BufferedUDPSource::produce(const packet_format& pf) {
 
         auto& e = bufs_[write_ind_];
         if (st & LIDAR_DATA) {
-            if (!read_lidar_packet(*cli_, e.second.get(), pf))
-                st = client_state(st | client_state::CLIENT_ERROR);
+            if (!read_lidar_packet(*cli_, e.second.get(), pf)) continue;
         } else if (st & IMU_DATA) {
-            if (!read_imu_packet(*cli_, e.second.get(), pf))
-                st = client_state(st | client_state::CLIENT_ERROR);
+            if (!read_imu_packet(*cli_, e.second.get(), pf)) continue;
         }
         if (overflow) st = client_state(st | CLIENT_OVERFLOW);
         e.first = st;
@@ -178,6 +188,16 @@ void BufferedUDPSource::produce(const packet_format& pf) {
         }
         cv_.notify_one();
     }
+}
+
+int BufferedUDPSource::get_lidar_port() {
+    std::lock_guard<std::mutex> lock{cv_mtx_};
+    return stop_ ? 0 : lidar_port_;
+}
+
+int BufferedUDPSource::get_imu_port() {
+    std::lock_guard<std::mutex> lock{cv_mtx_};
+    return stop_ ? 0 : imu_port_;
 }
 
 }  // namespace impl

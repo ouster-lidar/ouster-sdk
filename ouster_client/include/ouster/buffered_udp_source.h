@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief Wrapper around sensor::client to provide buffering
  *
@@ -31,6 +34,8 @@ class BufferedUDPSource {
     // client handle
     std::mutex cli_mtx_;
     std::shared_ptr<ouster::sensor::client> cli_;
+    uint32_t lidar_port_;
+    uint32_t imu_port_;
 
     // protect read/write_ind_ and stop_
     std::mutex cv_mtx_;
@@ -55,10 +60,10 @@ class BufferedUDPSource {
      * Listen for sensor data on the specified ports; do not configure the
      * sensor.
      *
-     * @param hostname hostname or IP of the sensor
-     * @param lidar_port port on which the sensor will send lidar data
-     * @param imu_port port on which the sensor will send imu data
-     * @param buf_size size of internal buffer, in no. packets
+     * @param[in] hostname hostname or IP of the sensor.
+     * @param[in] lidar_port port on which the sensor will send lidar data.
+     * @param[in] imu_port port on which the sensor will send imu data.
+     * @param[in] buf_size size of internal buffer, in no. packets.
      */
     BufferedUDPSource(const std::string& hostname, int lidar_port, int imu_port,
                       size_t buf_size);
@@ -77,9 +82,9 @@ class BufferedUDPSource {
     /**
      * Fetch metadata from the sensor.
      *
-     * @param timeout_sec maximum time to wait until sensor is initialized
-     * @param legacy format
-     * @return a json string of the sensor metadata
+     * @param[in] timeout_sec maximum time to wait until sensor is initialized.
+     * @param[in] legacy_format whether to use legacy format for metadata.
+     * @return a json string of the sensor metadata.
      */
     std::string get_metadata(int timeout_sec = 60, bool legacy_format = true);
 
@@ -98,21 +103,21 @@ class BufferedUDPSource {
      * Drop all internally buffered data when n_packets = 0. Should only be
      * called by the consumer thread.
      *
-     * @param n_packets number of packets to drop
+     * @param n_packets number of packets to drop.
      */
     void flush(size_t n_packets);
 
     /**
      * Get current buffer size.
      *
-     * @return number of packets currently buffered
+     * @return number of packets currently buffered.
      */
     size_t size();
 
     /**
-     * Get the maximum buffer size
+     * Get the maximum buffer size.
      *
-     * @return maximum number of packets that can be buffered
+     * @return maximum number of packets that can be buffered.
      */
     size_t capacity();
 
@@ -124,10 +129,10 @@ class BufferedUDPSource {
      * the network was blocked because the buffer was full, the the
      * CLIENT_OVERFLOW flag will be set on the next returned status.
      *
-     * @param buf the buffer to read into
-     * @param buf_sz maximum number of bytes to read into the buffer
-     * @param timeout_sec maximum time to wait for data
-     * @return client status, see sensor::poll_client()
+     * @param[in] buf the buffer to read into.
+     * @param[in] buf_sz maximum number of bytes to read into the buffer.
+     * @param[in] timeout_sec maximum time to wait for data.
+     * @return client status, see sensor::poll_client().
      */
     client_state consume(uint8_t* buf, size_t buf_sz, float timeout_sec);
 
@@ -137,9 +142,23 @@ class BufferedUDPSource {
      * Returns when shutdown() is signaled by the reader. Should be called from
      * a separate thread from the consumer.
      *
-     * @param pf the packet format associated with the UDP stream
+     * @param[in] pf the packet format associated with the UDP stream.
      */
     void produce(const ouster::sensor::packet_format& pf);
+
+    /**
+     * Return the port used to listen for lidar UDP data.
+     *
+     * @return the lidar UDP port or 0 if shut down.
+     */
+    int get_lidar_port();
+
+    /**
+     * Return the port used to listen for imu UDP data.
+     *
+     * @return the lidar UDP port or 0 if shut down.
+     */
+    int get_imu_port();
 };
 
 }  // namespace impl
