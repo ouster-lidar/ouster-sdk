@@ -43,7 +43,8 @@ ouster_ros
 * drop FW 1.13 compatibility for sensors and recorded bags
 * remove setting of EIGEN_MAX_ALIGN_BYTES
 * add two new ros services /ouster/get_config and /ouster/set_config (experimental)
-* Add new timestamp_mode TIME_FROM_ROS_TIME
+* add new timestamp_mode TIME_FROM_ROS_TIME
+* declare PCL_NO_PRECOMPILE ahead of all PCL library includes
 
 
 [20220608]
