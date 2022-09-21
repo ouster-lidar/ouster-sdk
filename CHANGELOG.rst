@@ -5,6 +5,11 @@ Changelog
 [unreleased]
 ============
 
+ouster_client
+--------------
+* breaking change: signal multiplier type changed to double to support new FW values of signal
+  multiplier
+
 ouster_viz
 ----------
 * add ``SimpleViz.screenshot()`` function and a key handler ``SHIFT-Z`` to

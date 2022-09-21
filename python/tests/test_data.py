@@ -238,6 +238,7 @@ def test_scan_not_complete() -> None:
     assert ls.complete((128, 128))
 
 
+# TODO: Add 4096 to this test
 @pytest.mark.parametrize("w, win_start, win_end", [
     (512, 0, 511),
     (512, 1, 0),

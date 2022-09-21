@@ -238,7 +238,7 @@ struct sensor_config {
      * Multiplier for signal strength of sensor. See the sensor docs for more
      * details on usage.
      */
-    optional<int> signal_multiplier;
+    optional<double> signal_multiplier;
 
     /**
      * The nmea polarity for the sensor to use.

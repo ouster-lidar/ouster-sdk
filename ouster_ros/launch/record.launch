@@ -16,7 +16,8 @@
     512x20,
     1024x10,
     1024x20,
-    2048x10
+    2048x10,
+    4096x5
     }"/>
   <arg name="timestamp_mode" default="" doc="method used to timestamp measurements; possible values: {
     TIME_FROM_INTERNAL_OSC,

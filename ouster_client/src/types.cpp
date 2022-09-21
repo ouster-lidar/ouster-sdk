@@ -451,7 +451,7 @@ static sensor_config parse_config(const Json::Value& root) {
                            root["azimuth_window"][1].asInt());
 
     if (!root["signal_multiplier"].empty())
-        config.signal_multiplier = root["signal_multiplier"].asInt();
+        config.signal_multiplier = root["signal_multiplier"].asDouble();
 
     if (!root["operating_mode"].empty()) {
         auto operating_mode =
@@ -956,7 +956,16 @@ Json::Value to_json(const sensor_config& config) {
     }
 
     if (config.signal_multiplier) {
-        root["signal_multiplier"] = config.signal_multiplier.value();
+        if (config.signal_multiplier < 1) {
+            root["signal_multiplier"] = config.signal_multiplier.value();
+        } else {
+            // jsoncpp < 1.7.7 strips 0s off of exact representation so 2.0
+            // becomes 2
+            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3
+            // Fix was: https://github.com/open-source-parsers/jsoncpp/pull/547
+            // Work around by always casting to int before writing out to json
+            root["signal_multiplier"] = int(config.signal_multiplier.value());
+        }
     }
 
     if (config.sync_pulse_out_angle) {

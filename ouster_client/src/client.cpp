@@ -162,6 +162,7 @@ bool collect_metadata(client& cli, SensorHttp& sensor_http,
     auto timeout_time = chrono::steady_clock::now() + timeout;
     std::string status;
 
+    // TODO: can remove this loop when we drop support for FW 2.4
     do {
         if (chrono::steady_clock::now() >= timeout_time) return false;
         std::this_thread::sleep_for(1s);
@@ -215,6 +216,15 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     Json::Value config_json = to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
         root[key] = config_json[key];
+    }
+
+    // Signal multiplier changed from int to double for FW 3.0/2.5+, with
+    // corresponding change to config.signal_multiplier.
+    // Change values 1, 2, 3 back to ints to support older FWs
+    if (root["signal_multiplier"].asDouble() != 0.25 &&
+        root["signal_multiplier"].asDouble() != 0.5) {
+        int signal_multiplier = root["signal_multiplier"].asInt();
+        root["signal_multiplier"] = signal_multiplier;
     }
 
     active_params = Json::FastWriter().write(root);
@@ -300,11 +310,13 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
         // if specified (not UNSPEC), set the lidar and timestamp modes
         if (mode) {
-            sensor_http->set_config_param("lidar_mode", to_string(mode));
+            sensor_http->set_config_param("lidar_mode",
+                                          sensor::to_string(mode));
         }
 
         if (ts_mode) {
-            sensor_http->set_config_param("timestamp_mode", to_string(ts_mode));
+            sensor_http->set_config_param("timestamp_mode",
+                                          sensor::to_string(ts_mode));
         }
 
         // wake up from STANDBY, if necessary
@@ -355,6 +367,8 @@ client_state poll_client(const client& c, const int timeout_sec) {
 }
 
 static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
+    // Have to read longer than len because you need to know if the packet is
+    // too large
     int64_t bytes_read = recv(fd, (char*)buf, len + 1, 0);
 
     if (bytes_read == len) {
