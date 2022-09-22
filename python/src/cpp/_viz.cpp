@@ -11,6 +11,8 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
+#include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
 
 #include <atomic>
 #include <csignal>
@@ -129,6 +131,22 @@ PYBIND11_PLUGIN(_viz) {
             },
             "Add a callback for handling keyboard input.")
 
+        .def(
+            "push_frame_buffer_handler",
+            [](viz::PointViz& self,
+               std::function<bool(const std::vector<uint8_t>&, int, int)> f) {
+                // pybind11 doesn't seem to deal with the rvalue ref arg
+                // pybind11 already handles acquiring the GIL in the callback
+                self.push_frame_buffer_handler(std::move(f));
+            },
+            "Add a callback for handling every frame buffer draw (super "
+            "expensive).")
+
+        .def(
+            "pop_frame_buffer_handler",
+            [](viz::PointViz& self) { self.pop_frame_buffer_handler(); },
+            "Remove the last added callback for handling frame buffers data.")
+
         // control scene
         .def_property_readonly("camera", &viz::PointViz::camera,
                                py::return_value_policy::reference_internal,
@@ -137,6 +155,13 @@ PYBIND11_PLUGIN(_viz) {
         .def_property_readonly("target_display", &viz::PointViz::target_display,
                                py::return_value_policy::reference_internal,
                                "Get a reference to the target display.")
+
+        .def_property_readonly("viewport_width", &viz::PointViz::viewport_width,
+                               "Current viewport width in pixels")
+
+        .def_property_readonly("viewport_height",
+                               &viz::PointViz::viewport_height,
+                               "Current viewport height in pixels")
 
         .def("add",
              py::overload_cast<const std::shared_ptr<viz::Cloud>&>(
@@ -219,6 +244,21 @@ PYBIND11_PLUGIN(_viz) {
              Args:
                  x: horizontal position in in normalized coordinates [-1, 1]
                  y: vertical position in in normalized coordinates [-1, 1]
+             )")
+        .def(
+            "set_target",
+            [](viz::Camera& self, pymatrixd pose) {
+                check_array(pose, 16, 2, 'F');
+                viz::mat4d posea;
+                std::copy(pose.data(), pose.data() + 16, posea.data());
+                self.set_target(posea);
+            },
+            py::arg("pose"),
+            R"(
+                 Set the camera target pose (inverted pose).
+
+                 Args:
+                    pose: 4x4 column-major homogeneous transformation matrix
              )");
 
     py::class_<viz::TargetDisplay>(

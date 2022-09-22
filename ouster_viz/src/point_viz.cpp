@@ -131,6 +131,13 @@ struct PointViz::Impl {
     Handlers<bool(const WindowCtx&, double, double)> scroll_handlers;
     Handlers<bool(const WindowCtx&, double, double)> mouse_pos_handlers;
 
+    Handlers<bool(const std::vector<uint8_t>& fb_data, int viewport_width,
+                  int viewport_height)>
+        frame_buffer_handlers;
+
+    // temp storage for frame_buffer_handlers
+    std::vector<uint8_t> frame_buffer_data_{};
+
     Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
 };
 
@@ -238,6 +245,14 @@ bool PointViz::update() {
     return true;
 }
 
+int PointViz::viewport_width() {
+    return pimpl->glfw->window_context.viewport_width;
+}
+
+int PointViz::viewport_height() {
+    return pimpl->glfw->window_context.viewport_height;
+}
+
 void PointViz::draw() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glBindVertexArray(pimpl->vao);
@@ -284,6 +299,18 @@ void PointViz::draw() {
         pimpl->front_changed = false;
     }
 
+    if (!pimpl->frame_buffer_handlers.empty()) {
+        int width = viewport_width();
+        int height = viewport_height();
+        pimpl->frame_buffer_data_.resize(width * height * 3);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadBuffer(GL_BACK);
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE,
+                     pimpl->frame_buffer_data_.data());
+        for (auto& f : pimpl->frame_buffer_handlers)
+            if (!f(pimpl->frame_buffer_data_, width, height)) break;
+    }
+
     glfwSwapBuffers(pimpl->glfw->window);
 }
 
@@ -311,6 +338,11 @@ void PointViz::push_mouse_pos_handler(
     pimpl->mouse_pos_handlers.push_front(std::move(f));
 }
 
+void PointViz::push_frame_buffer_handler(
+    std::function<bool(const std::vector<uint8_t>&, int, int)>&& f) {
+    pimpl->frame_buffer_handlers.push_front(std::move(f));
+}
+
 void PointViz::pop_key_handler() { pimpl->key_handlers.pop_front(); }
 
 void PointViz::pop_mouse_button_handler() {
@@ -320,6 +352,10 @@ void PointViz::pop_scroll_handler() { pimpl->scroll_handlers.pop_front(); }
 
 void PointViz::pop_mouse_pos_handler() {
     pimpl->mouse_pos_handlers.pop_front();
+}
+
+void PointViz::pop_frame_buffer_handler() {
+    pimpl->frame_buffer_handlers.pop_front();
 }
 
 /*

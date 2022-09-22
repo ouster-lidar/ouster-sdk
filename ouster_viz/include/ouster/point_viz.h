@@ -170,6 +170,18 @@ class PointViz {
         std::function<bool(const WindowCtx&, double, double)>&& f);
 
     /**
+     * Add a callback for processing every new draw frame buffer.
+     *
+     * NOTE: Any processing in the callback slows the renderer update loop
+     *       dramatically. Primary use to store frame buffer images to disk
+     *       for further processing.
+     *
+     * @param[in] f function callback of a form f(fb_data, fb_width, fb_height)
+     */
+    void push_frame_buffer_handler(
+        std::function<bool(const std::vector<uint8_t>&, int, int)>&& f);
+
+    /**
      * Remove the last added callback for handling keyboard input
      */
     void pop_key_handler();
@@ -188,6 +200,11 @@ class PointViz {
      * @copydoc pop_key_handler()
      */
     void pop_mouse_pos_handler();
+
+    /**
+     * @copydoc pop_key_handler()
+     */
+    void pop_frame_buffer_handler();
 
     /**
      * Get a reference to the camera controls
@@ -258,6 +275,20 @@ class PointViz {
      * @param[in] label @todo document me
      */
     bool remove(const std::shared_ptr<Label>& label);
+
+    /**
+     * Get a viewport width in pixels.
+     *
+     * @return viewport width reported by glfw
+     */
+    int viewport_width();
+
+    /**
+     * Get a viewport height in pixels.
+     *
+     * @return viewport height reported by glfw
+     */
+    int viewport_height();
 
    private:
     std::unique_ptr<Impl> pimpl;

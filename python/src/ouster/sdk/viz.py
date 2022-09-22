@@ -9,13 +9,16 @@ Visualize lidar data using OpenGL.
 
 from collections import (defaultdict, deque)
 from functools import partial
+import os
 import threading
 import time
+from datetime import datetime
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
                     Optional, Tuple, TypeVar, Union)
 import weakref
 
 import numpy as np
+from PIL import Image as PILImage
 
 from .. import client
 from ..client import (_utils, ChanField)
@@ -51,6 +54,29 @@ def push_point_viz_handler(
         return True
 
     viz.push_key_handler(handle_keys)
+
+
+def push_point_viz_fb_handler(
+        viz: PointViz, arg: T, handler: Callable[[T, List, int, int],
+                                                 bool]) -> None:
+    """Add a frame buffer handler with extra context without keeping it alive.
+
+    See docs for `push_point_viz_handler()` method above for details.
+
+    Args:
+        viz: The PointViz instance.
+        arg: The extra context to pass to handler; often `self`.
+        handler: Frame buffer handler callback taking an extra argument
+    """
+    weakarg = weakref.ref(arg)
+
+    def handle_fb_data(fb_data: List, fb_width: int, fb_height: int) -> bool:
+        arg = weakarg()
+        if arg is not None:
+            return handler(arg, fb_data, fb_width, fb_height)
+        return True
+
+    viz.push_frame_buffer_handler(handle_fb_data)
 
 
 class LidarScanViz:
@@ -419,6 +445,21 @@ class _Seekable(Generic[T]):
             self._iterable.close()  # type: ignore
 
 
+def _save_fb_to_png(fb_data: List,
+                   fb_width: int,
+                   fb_height: int,
+                   action_name: Optional[str] = "screenshot",
+                   file_path: Optional[str] = None):
+    img_arr = np.array(fb_data,
+                       dtype=np.uint8).reshape([fb_height, fb_width, 3])
+    img_fname = datetime.now().strftime(
+        f"viz_{action_name}_%Y%m%d_%H%M%S.%f")[:-3] + ".png"
+    if file_path:
+        img_fname = os.path.join(file_path, img_fname)
+    PILImage.fromarray(np.flip(img_arr, axis=0)).convert("RGB").save(img_fname)
+    return img_fname
+
+
 class SimpleViz:
     """Visualize a stream of LidarScans.
 
@@ -469,6 +510,9 @@ class SimpleViz:
         self._osd_enabled = True
         self._update_playback_osd()
 
+        # continuous screenshots recording
+        self._viz_img_recording = False
+
         key_bindings: Dict[Tuple[int, int], Callable[[SimpleViz], None]] = {
             (ord(','), 0): partial(SimpleViz.seek_relative, n_frames=-1),
             (ord(','), 2): partial(SimpleViz.seek_relative, n_frames=-10),
@@ -476,6 +520,8 @@ class SimpleViz:
             (ord('.'), 2): partial(SimpleViz.seek_relative, n_frames=10),
             (ord(' '), 0): SimpleViz.toggle_pause,
             (ord('O'), 0): SimpleViz.toggle_osd,
+            (ord('X'), 1): SimpleViz.toggle_img_recording,
+            (ord('Z'), 1): SimpleViz.screenshot,
         }
 
         # only allow changing rate when not in "live" mode
@@ -539,6 +585,36 @@ class SimpleViz:
             self._scan_viz.toggle_osd(self._osd_enabled)
             self._update_playback_osd()
             self._scan_viz.draw()
+
+    def toggle_img_recording(self) -> None:
+        if self._viz_img_recording:
+            self._viz_img_recording = False
+            self._viz.pop_frame_buffer_handler()
+            print("Key SHIFT-X: Img Recording STOPED")
+        else:
+            self._viz_img_recording = True
+
+            def record_fb_imgs(fb_data: List, fb_width: int, fb_height: int):
+                saved_img_path = _save_fb_to_png(fb_data,
+                                                 fb_width,
+                                                 fb_height,
+                                                 action_name="recording")
+                print(f"Saving recordings to: {saved_img_path}")
+                # continue to other fb_handlers
+                return True
+            self._viz.push_frame_buffer_handler(record_fb_imgs)
+            print("Key SHIFT-X: Img Recording STARTED")
+
+    def screenshot(self, file_path: Optional[str] = None) -> None:
+        def handle_fb_once(viz: PointViz, fb_data: List, fb_width: int,
+                           fb_height: int):
+            saved_img_path = _save_fb_to_png(fb_data,
+                                             fb_width,
+                                             fb_height,
+                                             file_path=file_path)
+            viz.pop_frame_buffer_handler()
+            print(f"Saved screenshot to: {saved_img_path}")
+        push_point_viz_fb_handler(self._viz, self._viz, handle_fb_once)
 
     def _frame_period(self) -> float:
         rate = SimpleViz._playback_rates[self._rate_ind]

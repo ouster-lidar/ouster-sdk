@@ -2,6 +2,23 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+ouster_viz
+----------
+* add ``SimpleViz.screenshot()`` function and a key handler ``SHIFT-Z`` to
+  save a screenshot. Can be called from a client thread, and executes
+  asyncronously (i.e. returns immediately and pushes a one off callback
+  to frame buffer handlers)
+* add ``PointViz.viewport_width()`` and ``PointViz.viewport_height()`` functions
+* add ``PointViz.push/pop_frame_buffer_handler()`` to attach a callbacks on
+  every frame draw update that calls from the main rendering loop.
+* add ``SHIFT-X`` key to SimeplViz to start continuous saving of screenshots
+  on every draw operation. (good for making videos)
+* expose ``Camera.set_target`` function through pybind
+
+
 [20220826]
 ==========
 

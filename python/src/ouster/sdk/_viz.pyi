@@ -5,7 +5,7 @@ All rights reserved.
 Type annotations for viz python bindings.
 """
 
-from typing import Callable, overload, Tuple
+from typing import Callable, overload, Tuple, Callable, List
 
 import numpy as np
 
@@ -66,6 +66,9 @@ class Camera:
         ...
 
     def set_proj_offset(self, x: float, y: float) -> None:
+        ...
+
+    def set_target(self, pose: np.ndarray) -> None:
         ...
 
 
@@ -206,12 +209,27 @@ class PointViz:
                                            bool]) -> None:
         ...
 
+    def push_frame_buffer_handler(self, f: Callable[[List, int, int],
+                                                    bool]) -> None:
+        ...
+
+    def pop_frame_buffer_handler(self) -> None:
+        ...
+
     @property
     def camera(self) -> Camera:
         ...
 
     @property
     def target_display(self) -> TargetDisplay:
+        ...
+
+    @property
+    def viewport_width(self) -> int:
+        ...
+
+    @property
+    def viewport_height(self) -> int:
         ...
 
     @overload
