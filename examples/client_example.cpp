@@ -9,8 +9,8 @@
 #include <iostream>
 #include <vector>
 
-#include "ouster/impl/build.h"
 #include "ouster/client.h"
+#include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 

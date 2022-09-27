@@ -19,6 +19,14 @@ ouster_viz
 * expose ``Camera.set_target`` function through pybind
 
 
+[20220927]
+==========
+
+ouster_client
+--------------
+* fix a bug in longform init_client which was not setting timestamp_mode and lidar_mode correctly
+  
+
 [20220826]
 ==========
 
