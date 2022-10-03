@@ -3,6 +3,14 @@ Changelog
 =========
 
 
+[202210xx]
+==========
+
+ouster-sdk
+----------
+* Moved ouster_ros to its own repo
+
+
 [20220927]
 ==========
 
