@@ -119,9 +119,3 @@ C++
 
 The Ouster C++ SDK currently must be built and installed from sources.
 Please refer to :doc:`/cpp/building`.
-
-
-ROS1
-====
-
-A sample ROS1 driver is provided. It must be built from source. Please refer to :doc:`/ros/index`.
