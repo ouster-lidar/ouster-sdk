@@ -300,12 +300,11 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 
         // if specified (not UNSPEC), set the lidar and timestamp modes
         if (mode) {
-            sensor_http->set_config_param("lidar_mode", std::to_string(mode));
+            sensor_http->set_config_param("lidar_mode", to_string(mode));
         }
 
         if (ts_mode) {
-            sensor_http->set_config_param("timestamp_mode",
-                                          std::to_string(ts_mode));
+            sensor_http->set_config_param("timestamp_mode", to_string(ts_mode));
         }
 
         // wake up from STANDBY, if necessary
