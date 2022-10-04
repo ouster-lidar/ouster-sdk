@@ -3,8 +3,8 @@ Changelog
 =========
 
 
-[202210xx]
-==========
+[Unreleased]
+============
 
 ouster-sdk
 ----------
