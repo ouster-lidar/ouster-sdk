@@ -272,7 +272,7 @@ class LidarScanViz:
     def update_ring_size(self, amount: int) -> None:
         """Change distance ring size."""
         with self._lock:
-            self._ring_size = min(2, max(-2, self._ring_size + amount))
+            self._ring_size = min(3, max(-2, self._ring_size + amount))
             self._viz.target_display.set_ring_size(self._ring_size)
 
     def toggle_osd(self, state: Optional[bool] = None) -> None:

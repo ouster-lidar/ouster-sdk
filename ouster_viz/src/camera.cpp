@@ -100,6 +100,14 @@ void Camera::reset() {
     fov_ = 90_deg;
 }
 
+void Camera::birds_eye_view() {
+    view_offset_ = {0, 0, 0};
+    yaw_ = 0;
+    pitch_ = 0_deg;
+    log_distance_ = 200;
+    fov_ = 90_deg;
+}
+
 // left positive, right negative
 void Camera::yaw(float degrees) {
     yaw_ = (yaw_ + 360_deg + dd(degrees)) % 360_deg;
@@ -171,7 +179,7 @@ impl::CameraData Camera::matrices(double aspect) const {
     // calculate projection matrix
     const double scale = std::tan(M_PI / 3600.0 * fov_);
     const double view_dist = view_distance();
-    const double far_dist = std::min(1000.0, 100 * view_dist);
+    const double far_dist = std::min(10000.0, 100 * view_dist);
     const double near_dist = 0.1;
 
     // for diagonal fov, use ratio of each dimension to diagonal

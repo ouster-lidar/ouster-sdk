@@ -357,6 +357,11 @@ class Camera {
     void reset();
 
     /**
+     * Set camera view as looking from the top as a bird (Birds Eye View).
+     */
+    void birds_eye_view();
+
+    /**
      * Orbit the camera left or right about the camera target.
      *
      * @param[in] degrees offset to the current yaw angle
@@ -512,13 +517,27 @@ class Cloud {
      * Resets any changes since the last call to PointViz::update()
      */
     void clear();
-
+    
+    /**
+     * Set all dirty flags.
+     *
+     * Re-sets everything so the object is always redrawn.
+     */
+    void dirty();
+    
     /**
      * Get the size of the point cloud.
      *
      * @return @todo document me
      */
-    size_t get_size() { return n_; }
+    size_t get_size() const { return n_; }
+
+    /**
+     * Get the columns of the point cloud.
+     * 
+     * @return number of columns in point cloud. (1 - for unstructured)
+     */
+    size_t get_cols() const { return w_; }
 
     /**
      * Set the range values.
