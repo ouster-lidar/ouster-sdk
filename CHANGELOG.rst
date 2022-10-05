@@ -24,6 +24,14 @@ ouster_viz
 * expose ``Camera.set_target`` function through pybind
 
 
+[Unreleased]
+============
+
+ouster-sdk
+----------
+* Moved ouster_ros to its own repo
+
+
 [20220927]
 ==========
 
