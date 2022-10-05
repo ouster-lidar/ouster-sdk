@@ -9,6 +9,8 @@ ouster_client
 --------------
 * breaking change: signal multiplier type changed to double to support new FW values of signal
   multiplier
+* address an issue that could cause the processed frame being dropped in favor or the previous
+  frame when the frame_id wraps-around.
 
 ouster_viz
 ----------
