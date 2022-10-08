@@ -2,6 +2,23 @@
 Changelog
 =========
 
+
+[Unreleased]
+============
+
+ouster-sdk
+----------
+* Moved ouster_ros to its own repo
+
+
+[20220927]
+==========
+
+ouster_client
+--------------
+* fix a bug in longform init_client which was not setting timestamp_mode and lidar_mode correctly
+  
+
 [20220826]
 ==========
 
@@ -43,7 +60,8 @@ ouster_ros
 * drop FW 1.13 compatibility for sensors and recorded bags
 * remove setting of EIGEN_MAX_ALIGN_BYTES
 * add two new ros services /ouster/get_config and /ouster/set_config (experimental)
-* Add new timestamp_mode TIME_FROM_ROS_TIME
+* add new timestamp_mode TIME_FROM_ROS_TIME
+* declare PCL_NO_PRECOMPILE ahead of all PCL library includes
 
 
 [20220608]
