@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include <gtest/gtest.h>
 
 #include <Eigen/Core>
@@ -45,7 +50,12 @@ testing::Values(
   "2_1_2_os1-991913000010-64",
   "ouster-studio-reduced-config-v1",
   "2_2_os-992119000444-128_legacy",
-  "2_2_os-992119000444-128"
+  "2_2_os-992119000444-128",
+  "2_3_os-992146000760-128_legacy",
+  "2_3_os-992146000760-128",
+  "2_3_1_os-992146000760-128_legacy",
+  "2_3_1_os-992146000760-128"
+
 ));
 // clang-format on
 

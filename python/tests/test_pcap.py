@@ -1,3 +1,8 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from collections import defaultdict
 from copy import copy
 from os import path
@@ -13,7 +18,7 @@ from ouster.pcap import _pcap
 from ouster import client
 from ouster.client import _client
 
-SLL_PROTO = 42
+SLL_PROTO = 113
 ETH_PROTO = 1
 UDP_PROTO = 17
 
@@ -22,7 +27,6 @@ def fake_packets(metadata: client.SensorInfo,
                  n_lidar: int = 0,
                  n_imu: int = 0,
                  timestamped: bool = False) -> Iterator[client.Packet]:
-
     pf = _client.PacketFormat.from_info(metadata)
     current_ts = time.time()
 

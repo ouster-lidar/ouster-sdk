@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief ouster_pyclient python module
  *
@@ -24,6 +27,7 @@
 #include "ouster/buffered_udp_source.h"
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
+#include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -52,20 +56,33 @@ namespace ouster {
 namespace sensor {
 namespace impl {
 
-extern const Table<lidar_mode, const char*, 6> lidar_mode_strings;
+extern const Table<lidar_mode, const char*, 7> lidar_mode_strings;
 extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings;
 extern const Table<OperatingMode, const char*, 2> operating_mode_strings;
 extern const Table<MultipurposeIOMode, const char*, 6>
     multipurpose_io_mode_strings;
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
-extern Table<ChanField, const char*, 9> chanfield_strings;
-extern Table<UDPProfileLidar, const char*, 2> udp_profile_lidar_strings;
+extern Table<ChanField, const char*, 23> chanfield_strings;
+extern Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 
 }  // namespace impl
 }  // namespace sensor
 }  // namespace ouster
+
+// alias for non-casting row-major array arguments
+template <typename T>
+using pyimg_t = py::array_t<T, py::array::c_style>;
+
+// factor out overloaded call operator for ae/buc
+template <typename T, typename U>
+void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
+    if (image.ndim() != 2) throw std::invalid_argument("Expected a 2d array");
+    self(Eigen::Map<img_t<U>>(image.mutable_data(), image.shape(0),
+                              image.shape(1)),
+         update_state);
+}
 
 /*
  * Define an enum from a table of strings, along with some properties to make
@@ -381,7 +398,9 @@ PYBIND11_PLUGIN(_client) {
         Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.)", py::metaclass());
     def_enum(NMEABaudRate, sensor::impl::nmea_baud_rate_strings);
 
-    auto ChanField = py::enum_<sensor::ChanField>(m, "ChanField", "Channel data block fields.", py::metaclass());
+    auto ChanField = py::enum_<sensor::ChanField>(m, "ChanField", R"(
+    Channel data block fields
+    )", py::metaclass());
     def_enum(ChanField, sensor::impl::chanfield_strings);
 
     auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass());
@@ -559,23 +578,67 @@ PYBIND11_PLUGIN(_client) {
         )")
         .def_readonly_static("N_FIELDS", &LidarScan::N_FIELDS, "Deprecated.")
         // TODO: Python and C++ API differ in h/w order for some reason
-        .def("__init__", [](LidarScan& self, size_t h,
-                            size_t w) { new (&self) LidarScan(w, h); })
-        .def("__init__",
-             [](LidarScan& self, size_t h, size_t w,
-                sensor::UDPProfileLidar profile) {
-                 new (&self) LidarScan(w, h, profile);
-             })
-        .def("__init__",
-             [](LidarScan& self, size_t h, size_t w,
-                const std::map<sensor::ChanField, py::object>& field_types) {
-                 std::map<sensor::ChanField, sensor::ChanFieldType> ft;
-                 for (const auto& kv : field_types) {
-                     auto dt = py::dtype::from_args(kv.second);
-                     ft[kv.first] = field_type_of_dtype(dt);
-                 }
-                 new (&self) LidarScan(w, h, ft.begin(), ft.end());
-             })
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w) {
+                new (&self) LidarScan(w, h);
+            },
+            R"(
+
+        Default constructor creates a 0 x 0 scan
+
+        Args:
+            height: height of scan
+            width: width of scan
+
+        Returns:
+            New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+        )")
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w,
+               sensor::UDPProfileLidar profile) {
+                new (&self) LidarScan(w, h, profile);
+            },
+            R"(
+        
+        Initialize a scan with the default fields for a particular udp profile
+
+        Args:
+            height: height of LidarScan, i.e., number of channels
+            width: width of LidarScan
+            profile: udp profile
+
+        Returns:
+            New LidarScan of specified dimensions expecting fields of specified profile
+
+         )")
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w,
+               const std::map<sensor::ChanField, py::object>& field_types) {
+                std::map<sensor::ChanField, sensor::ChanFieldType> ft;
+                for (const auto& kv : field_types) {
+                    auto dt = py::dtype::from_args(kv.second);
+                    ft[kv.first] = field_type_of_dtype(dt);
+                }
+                new (&self) LidarScan(w, h, ft.begin(), ft.end());
+            },
+            R"(
+        Initialize a scan with a custom set of fields
+
+        Args:
+            height: height of LidarScan, i.e., number of channels
+            width: width of LidarScan
+            fields_dict: dict where keys are ChanFields and values are type, e.g., {client.ChanField.SIGNAL: np.uint32}
+
+        Returns:
+            New LidarScan of specified dimensions expecting fields specified by dict
+            
+
+
+         )")
         .def_readonly("w", &LidarScan::w,
                       "Width or horizontal resolution of the scan.")
         .def_readonly("h", &LidarScan::h,
@@ -584,29 +647,16 @@ PYBIND11_PLUGIN(_client) {
             "frame_id", &LidarScan::frame_id,
             "Corresponds to the frame id header in the packet format.")
         .def(
-            "_complete",
+            "complete",
             [](const LidarScan& self,
-               nonstd::optional<sensor::AzimuthWindow> window) {
-                if (!window) window = {0, self.w - 1};
-
-                const auto& status = self.status();
-                auto start = window.value().first;
-                auto end = window.value().second;
-
-                if (start <= end)
-                    return status.segment(start, end - start + 1)
-                        .unaryExpr([](uint32_t s) { return s & 0x01; })
-                        .isConstant(0x01);
-                else
-                    return status.segment(0, end)
-                               .unaryExpr([](uint32_t s) { return s & 0x01; })
-                               .isConstant(0x01) &&
-                           status.segment(start, self.w - start)
-                               .unaryExpr([](uint32_t s) { return s & 0x01; })
-                               .isConstant(0x01);
+               nonstd::optional<sensor::ColumnWindow> window) {
+                if (!window) {
+                    window = {0, static_cast<int>(self.w) - 1};
+                }
+                return self.complete(window.value());
             },
             py::arg("window") =
-                static_cast<nonstd::optional<sensor::AzimuthWindow>>(
+                static_cast<nonstd::optional<sensor::ColumnWindow>>(
                     nonstd::nullopt))
         .def(
             "field",
@@ -707,9 +757,11 @@ PYBIND11_PLUGIN(_client) {
                 },
                 py::keep_alive<0, 1>()),
             "Return an iterator of available channel fields.")
-        .def("__eq__", [](const LidarScan& l, const LidarScan& r) { return l == r; })
+        .def("__eq__",
+             [](const LidarScan& l, const LidarScan& r) { return l == r; })
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
-        .def("__deepcopy__", [](const LidarScan& self, py::dict) { return LidarScan{self}; })
+        .def("__deepcopy__",
+             [](const LidarScan& self, py::dict) { return LidarScan{self}; })
         // for backwards compatibility: previously converted between Python
         // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })
@@ -750,21 +802,25 @@ PYBIND11_PLUGIN(_client) {
             return cartesian(scan, self);
         });
 
-    m.attr("__version__") = VERSION_INFO;
-
     // Image processing
     py::class_<viz::AutoExposure>(m, "AutoExposure")
         .def(py::init<>())
         .def(py::init<int>(), py::arg("update_every"))
         .def(py::init<double, double, int>(), py::arg("lo_percentile"),
              py::arg("hi_percentile"), py::arg("update_every"))
-        .def("__call__", [](viz::AutoExposure& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def("__call__", &image_proc_call<viz::AutoExposure, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::AutoExposure, double>,
+             py::arg("image"), py::arg("update_state") = true);
 
     py::class_<viz::BeamUniformityCorrector>(m, "BeamUniformityCorrector")
         .def(py::init<>())
-        .def("__call__", [](viz::BeamUniformityCorrector& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
+             py::arg("image"), py::arg("update_state") = true);
+
+    m.attr("__version__") = ouster::SDK_VERSION;
 
     return m.ptr();
 }

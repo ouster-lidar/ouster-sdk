@@ -1,4 +1,8 @@
-"""Executable examples for using the sensor client APIs.
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Executable examples for using the sensor client APIs.
 
 This module has a rudimentary command line interface. For usage, run::
 
@@ -12,8 +16,6 @@ import numpy as np
 
 from ouster import client
 
-# TODO: (kai) someone with dual returns sensor test this please
-
 
 def configure_dual_returns(hostname: str) -> None:
     """Configure sensor to use dual returns profile given hostname
@@ -22,10 +24,11 @@ def configure_dual_returns(hostname: str) -> None:
         hostname: hostname of the sensor
     """
     config = client.get_config(hostname)
-    if (config.lidar_mode == client.LidarMode.MODE_2048x10) or (config.lidar_mode
-            == client.LidarMode.MODE_1024x20):
-        print(f"Changing lidar_mode from {str(config.lidar_mode)} to 1024x10 to"
-              "  enable to dual returns. Will not persist change.")
+    if (config.lidar_mode == client.LidarMode.MODE_2048x10) or (
+            config.lidar_mode == client.LidarMode.MODE_1024x20):
+        print(
+            f"Changing lidar_mode from {str(config.lidar_mode)} to 1024x10 to"
+            "  enable to dual returns. Will not persist change.")
         config.lidar_mode = client.LidarMode.MODE_1024x10
 
     # [doc-stag-config-udp-profile]
@@ -43,7 +46,9 @@ def configure_dual_returns(hostname: str) -> None:
     print("Retrieving sensor metadata..")
     with closing(client.Sensor(hostname)) as source:
         # print some useful info from
-        print(f"udp profile lidar: {str(source.metadata.format.udp_profile_lidar)}")
+        print(
+            f"udp profile lidar: {str(source.metadata.format.udp_profile_lidar)}"
+        )
 
 
 def configure_sensor_params(hostname: str) -> None:
@@ -110,7 +115,12 @@ def filter_3d_by_range_and_azimuth(hostname: str,
         lidar_port: UDP port to listen on for lidar data
         range_min: range minimum in meters
     """
-    import matplotlib.pyplot as plt  # type: ignore
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+    except ModuleNotFoundError:
+        print("This example requires matplotlib and an appropriate Matplotlib "
+            "GUI backend such as TkAgg or Qt5Agg.")
+        exit(1)
     import math
 
     # set up figure
@@ -149,8 +159,8 @@ def filter_3d_by_range_and_azimuth(hostname: str,
     plt.show()
 
 
-def live_plot_signal(hostname: str, lidar_port: int = 7502) -> None:
-    """Display signal from live sensor
+def live_plot_reflectivity(hostname: str, lidar_port: int = 7502) -> None:
+    """Display reflectivity from live sensor
 
     Args:
         hostname: hostname of the sensor
@@ -161,7 +171,7 @@ def live_plot_signal(hostname: str, lidar_port: int = 7502) -> None:
 
     print("press ESC from visualization to exit")
 
-    # [doc-stag-live-plot-signal]
+    # [doc-stag-live-plot-reflectivity]
     # establish sensor connection
     with closing(client.Scans.stream(hostname, lidar_port,
                                      complete=False)) as stream:
@@ -170,12 +180,12 @@ def live_plot_signal(hostname: str, lidar_port: int = 7502) -> None:
             for scan in stream:
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(scan.frame_id))
-                signal = client.destagger(stream.metadata,
-                                          scan.field(client.ChanField.SIGNAL))
-                signal = (signal / np.max(signal) * 255).astype(np.uint8)
-                cv2.imshow("scaled signal", signal)
+                reflectivity = client.destagger(stream.metadata,
+                                          scan.field(client.ChanField.REFLECTIVITY))
+                reflectivity = (reflectivity / np.max(reflectivity) * 255).astype(np.uint8)
+                cv2.imshow("scaled reflectivity", reflectivity)
                 key = cv2.waitKey(1) & 0xFF
-                # [doc-etag-live-plot-signal]
+                # [doc-etag-live-plot-reflectivity]
                 # 27 is esc
                 if key == 27:
                     show = False
@@ -207,13 +217,14 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     plt.title("3D Points from {}".format(hostname))
 
     # [doc-stag-plot-xyz-points]
-    # transform data to 3d points and graph
+    # transform data to 3d points
     xyzlut = client.XYZLut(metadata)
     xyz = xyzlut(scan.field(client.ChanField.RANGE))
+    # [doc-etag-plot-xyz-points]
 
+    # graph xyz
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     ax.scatter(x, y, z, c=z / max(z), s=0.2)
-    # [doc-etag-plot-xyz-points]
     plt.show()
 
 
@@ -268,7 +279,7 @@ def main() -> None:
         "configure-sensor": configure_sensor_params,
         "fetch-metadata": fetch_metadata,
         "filter-3d-by-range-and-azimuth": filter_3d_by_range_and_azimuth,
-        "live-plot-signal": live_plot_signal,
+        "live-plot-reflectivity": live_plot_reflectivity,
         "plot-xyz-points": plot_xyz_points,
         "record-pcap": record_pcap,
     }

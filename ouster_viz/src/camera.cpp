@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2020, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "camera.h"
 
 #include <Eigen/Core>
@@ -5,246 +10,196 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <mutex>
+#include <cstdint>
+#include <iostream>
 
-#include "common.h"
 #include "ouster/point_viz.h"
 
 namespace ouster {
 namespace viz {
-namespace impl {
 
+using Eigen::Vector3d;
+using Translation3d = Eigen::Translation<double, 3>;
+
+namespace {
+
+/* initial distance 50 m */
+constexpr double log_distance_0 = 50.0;
+
+/*
+ * Note that most rotations are done in terms of integral decidegrees
+ * (tenths of a degree). This is so that the camera will be able to
+ * deterministically return to its original orientation if needed, without
+ * accumulating floating point error, but at the same time having fine
+ * enough subdivisions to have smooth user experience.
+ *
+ * For your convenience the user-defined literal _deg is defined so that
+ * you can convert from degree literals to decidegree easily.
+ */
+using decidegree = int;
+
+/*
+ * Convert integral degrees to decidegrees
+ */
+constexpr decidegree operator""_deg(unsigned long long int angle) {
+    return angle * 10;
+}
+
+/*
+ * Convert and round floating point degrees to decidegrees
+ */
+constexpr decidegree operator""_deg(long double angle) {
+    return static_cast<decidegree>(angle * 10);
+}
+
+/*
+ * Convert decidegrees to radians
+ */
+template <class T>
+double decidegree2radian(T angle) {
+    return static_cast<double>(M_PI * angle / 180.0_deg);
+}
+
+int dd(float degrees) { return std::lround(degrees * 10); }
+
+}  // namespace
+
+/*
+ * The camera class computes the folowing matrices:
+ *
+ * - Projection matrix proj, determined by view angle
+ * - View matrix, relative to the target matrix, controlled by the user
+ * - Target matrix, usually close to car pose (identity if not using SLAM viz)
+ *
+ * The final camera matrix is proj * view * target.
+ *
+ * The camera class performs computations in double because for the SLAM viz,
+ * the camera's position may have moved very far from the origin, so extra
+ * precision is needed to prevent floating point error.
+ */
 Camera::Camera()
-    : last_updated_time(viz_clock::now()),
-      rotation_start_time(viz_clock::now()),
-      auto_rotate(false),
-      orthographic(false),
-      target_initialized(false),
-      x_offset(0),
-      y_offset(0),
-      offset_3d{0, 0, 0},
-      view(mat4d::Identity()),
-      proj(mat4d::Identity()),
-      offset_mat(mat4d::Identity()),
-      current_target(mat4d::Identity()),
-      desired_target(mat4d::Identity()) {
-    vp.yaw = 0;
-    vp.auto_rotate_yaw = 0;
-    vp.pitch = -45_deg;
-    vp.log_focal_length = 0;
-    vp.log_distance = 0;
-    update();
+    : target_{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+      view_offset_{0, 0, 0},
+      yaw_{0},
+      pitch_{-45_deg},
+      log_distance_{0},
+      orthographic_{false},
+      fov_{90_deg},
+      proj_offset_x_{0},
+      proj_offset_y_{0} {}
+
+double Camera::view_distance() const {
+    return log_distance_0 * std::exp(log_distance_ * 0.01);
 }
 
 void Camera::reset() {
-    offset_3d = {0, 0, 0};
-    vp.yaw = 0;
-    vp.auto_rotate_yaw = 0;
-    vp.pitch = -45_deg;
-    vp.log_focal_length = 0;
-    vp.log_distance = 0;
-    update();
+    view_offset_ = {0, 0, 0};
+    yaw_ = 0;
+    pitch_ = -45_deg;
+    log_distance_ = 0;
+    fov_ = 90_deg;
 }
 
-void Camera::setFov(double diagonal_angle_rad) {
-    diagonal_angle_rad = std::min(diagonal_angle_rad, M_PI);
-    diagonal_angle_rad = std::max(diagonal_angle_rad, 0.0);
-    vp.log_focal_length =
-        std::log(std::round(std::tan(diagonal_angle_rad / 2.0)));
-    update();
+// left positive, right negative
+void Camera::yaw(float degrees) {
+    yaw_ = (yaw_ + 360_deg + dd(degrees)) % 360_deg;
 }
 
-void Camera::setTarget(const mat4d& mat) {
-    std::lock_guard<std::mutex> guard(desired_target_mutex);
-    const mat4d mat_inv = mat.inverse();
-    desired_target = mat_inv;
-    if (!target_initialized) {
-        current_target = mat_inv;
-        target_initialized = true;
-    }
+// down positive, up negative
+void Camera::pitch(float degrees) {
+    pitch_ = std::max(-180_deg, std::min(0, pitch_ + dd(degrees)));
 }
 
-void Camera::left(decidegree amount) {
-    vp.yaw = (vp.yaw + amount) % 360_deg;
-    update();
+// in is positive, out is negative
+void Camera::dolly(int amount) {
+    log_distance_ = std::max(-500, std::min(500, log_distance_ - amount));
 }
 
-void Camera::right(decidegree amount) {
-    vp.yaw = (vp.yaw + 360_deg - amount) % 360_deg;
-    update();
-}
-
-void Camera::up(decidegree amount) {
-    vp.pitch = std::min(0, vp.pitch + amount);
-    update();
-}
-void Camera::down(decidegree amount) {
-    vp.pitch = std::max(-180_deg, vp.pitch - amount);
-    update();
-}
-void Camera::zoomIn(int amount) {
-    vp.log_focal_length = std::min(500, vp.log_focal_length + amount);
-    update();
-}
-void Camera::zoomOut(int amount) {
-    vp.log_focal_length = std::max(-500, vp.log_focal_length - amount);
-    update();
-}
-void Camera::dollyIn(int amount) {
-    vp.log_distance = std::max(-500, vp.log_distance - amount);
-    update();
-}
-void Camera::dollyOut(int amount) {
-    vp.log_distance = std::min(500, vp.log_distance + amount);
-    update();
-}
-
-void Camera::setOffset(GLfloat x, GLfloat y) {
-    x_offset = x;
-    y_offset = y;
-}
-
-void Camera::changeOffset3d(double x, double y) {
-    Eigen::Matrix<double, 2, 1, Eigen::DontAlign> v;
-    v(0) = x;
-    v(1) = -y;  // OpenGL y goes from top to bottom
-
-    // convert from pixels to fractions of window size
-    const double window_diagonal =
-        std::sqrt(window_width * window_width + window_height * window_height);
-    v *= 2.0 / window_diagonal;
-
+void Camera::dolly_xy(double x, double y) {
+    // OpenGL y goes from top to bottom
+    Vector3d v{x, -y, 0};
     // convert from window coordinates to actual size
-    const double view_distance =
-        ViewParameters::log_distance_0 * std::exp(vp.log_distance * 0.01);
-    const double focal_length = std::exp(vp.log_focal_length * 0.01);
-    v *= view_distance * focal_length;
-
-    // calculate 3d offset in the direction of the camera view
-    Eigen::Map<Eigen::Matrix<double, 3, 1, Eigen::DontAlign>>(
-        offset_3d.data()) += view.block<2, 3>(0, 0).transpose() * v;
+    double scale = std::tan(M_PI / 3600.0 * fov_);
+    v *= view_distance() * scale;
+    // apply 3d offset in the direction of the camera view
+    auto rot =
+        (Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
+         Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()})
+            .matrix();
+    Eigen::Map<Eigen::Vector3d>{view_offset_.data()} += rot.transpose() * v;
 }
 
-void Camera::update() {
-    offset_mat(0, 3) = offset_3d[0];
-    offset_mat(1, 3) = offset_3d[1];
-    offset_mat(2, 3) = offset_3d[2];
-
-    simulate();
-    setView();
-    setProj();
+void Camera::set_fov(float degrees) {
+    fov_ = std::max(0.0_deg, std::min(360.0_deg, dd(degrees)));
 }
 
-void Camera::setAutoRotateOn() {
-    auto_rotate = true;
-    rotation_start_time = viz_clock::now();
+void Camera::set_orthographic(bool b) { orthographic_ = b; }
+
+void Camera::set_proj_offset(float x, float y) {
+    proj_offset_x_ = x, proj_offset_y_ = y;
 }
 
-void Camera::setAutoRotateOff() {
-    auto_rotate = false;
-    vp.auto_rotate_yaw = 0;
-}
+/*
+ * Calculate camera matrices.
+ *
+ * View is relative to target 'look at' point. Current parametrization is:
+ * - view_offset: translation to support dollying left/right
+ * - yaw/pitch: camera rotation
+ * - view_distance: z offset for dollying in/out
+ *
+ * view_offset is separate from target so we can dolly the camera while still
+ * drawing some things (like distance rings) relative to target. It's applied
+ * before yaw/pitch so that the camera orbits around view_offset * target.
+ *
+ * Unlike the usual opengl projection matrix function, this uses a diagonal fov.
+ * For the orthographic projection, the fov and camera distance are used to
+ * scale the viewing volume to make zoom and dolly work more or less
+ * intuitively.
+ *
+ * reference:
+ * https://www.scratchapixel.com/lessons/3d-basic-rendering/perspective-and-orthographic-projection-matrix
+ */
+impl::CameraData Camera::matrices(double aspect) const {
+    // calculate view matrix
+    Eigen::Matrix4d view =
+        (Translation3d{Vector3d::UnitZ() * -view_distance()} *
+         Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
+         Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()} *
+         Translation3d{Eigen::Map<const Eigen::Vector3d>{view_offset_.data()}})
+            .matrix();
 
-void Camera::toggleAutoRotate() {
-    if (!auto_rotate)
-        setAutoRotateOn();
-    else
-        setAutoRotateOff();
-}
+    // calculate projection matrix
+    const double scale = std::tan(M_PI / 3600.0 * fov_);
+    const double view_dist = view_distance();
+    const double far_dist = std::min(1000.0, 100 * view_dist);
+    const double near_dist = 0.1;
 
-void Camera::setOrthographicOn() { orthographic = true; }
+    // for diagonal fov, use ratio of each dimension to diagonal
+    double a = std::atan(aspect);
+    double aspect_w = std::sin(a);
+    double aspect_h = std::cos(a);
 
-void Camera::setOrthographicOff() { orthographic = false; }
-
-void Camera::toggleOrthographic() {
-    if (!orthographic)
-        setOrthographicOn();
-    else
-        setOrthographicOff();
-}
-
-mat4d Camera::proj_view() const { return proj * view * offset_mat; }
-
-mat4d Camera::proj_view_target() const {
-    return proj * view * offset_mat * current_target;
-}
-
-void Camera::setView() {
-    view.block<3, 3>(0, 0) =
-        (Eigen::AngleAxis<double>(
-             decidegree2radian(vp.pitch),
-             Eigen::Matrix<double, 3, 1, Eigen::DontAlign>::UnitX()) *
-         Eigen::AngleAxis<double>(
-             decidegree2radian(vp.auto_rotate_yaw + vp.yaw),
-             Eigen::Matrix<double, 3, 1, Eigen::DontAlign>::UnitZ()))
-            .toRotationMatrix();
-    view(2, 3) =
-        -ViewParameters::log_distance_0 * std::exp(vp.log_distance * 0.01);
-}
-
-void Camera::setProj() {
-    const double window_diagonal =
-        std::sqrt(window_width * window_width + window_height * window_height);
-    const double view_distance =
-        100 * ViewParameters::log_distance_0 * std::exp(vp.log_distance * 0.01);
-    const double focal_length = std::exp(vp.log_focal_length * 0.01);
-    const double focal_length_multiplier = focal_length * window_diagonal;
-    if (!orthographic) {
-        // from http://www.songho.ca/opengl/gl_projectionmatrix.html
-        // please note that Windows has defined far and near to be nothing
-        // hence I had to append dist to these variables.
-        const double far_dist = std::min(1000.0, view_distance);
-        const double near_dist = 0.1;
-        proj.setZero();
-        proj(0, 0) = focal_length_multiplier / window_width;
-        proj(0, 2) = x_offset;
-        proj(1, 1) = focal_length_multiplier / window_height;
-        proj(1, 2) = y_offset;
+    Eigen::Matrix4d proj = Eigen::Matrix4d::Zero();
+    if (orthographic_) {
+        proj(0, 0) = 1 / (aspect_w * scale * view_dist);
+        proj(0, 3) = -proj_offset_x_;
+        proj(1, 1) = 1 / (aspect_h * scale * view_dist);
+        proj(1, 3) = -proj_offset_y_;
+        proj(2, 2) = -2 / (far_dist - near_dist);
+        proj(2, 3) = -(far_dist + near_dist) / (far_dist - near_dist);
+        proj(3, 3) = 1;
+    } else {
+        proj(0, 0) = 1 / (aspect_w * scale);
+        proj(0, 2) = proj_offset_x_;
+        proj(1, 1) = 1 / (aspect_h * scale);
+        proj(1, 2) = proj_offset_y_;
         proj(2, 2) = -(far_dist + near_dist) / (far_dist - near_dist);
         proj(2, 3) = -2 * far_dist * near_dist / (far_dist - near_dist);
         proj(3, 2) = -1;
-    } else {
-        proj.setZero();
-        proj(0, 0) =
-            focal_length_multiplier / window_width / (view_distance / 100);
-        proj(1, 1) =
-            focal_length_multiplier / window_height / (view_distance / 100);
-        proj(0, 3) = -x_offset;
-        proj(1, 3) = -y_offset;
-        proj(2, 2) = -1e-3;
-        proj(3, 3) = 1;
-    }
-}
-
-void Camera::tick() {
-    /*
-     * current_target * pow(delta, -10) = desired_target;
-     */
-    if (!target_initialized) return;
-    mat4d delta = current_target.inverse() * desired_target;
-    Eigen::AngleAxis<double> aa;
-    aa.fromRotationMatrix(delta.block<3, 3>(0, 0));
-    aa.angle() *= camera_smoothing;
-    delta.block<3, 3>(0, 0) = aa.toRotationMatrix();
-    delta.block<3, 1>(0, 3) *= camera_smoothing;
-    current_target = current_target * delta;
-}
-
-void Camera::simulate() {
-    std::lock_guard<std::mutex> guard(desired_target_mutex);
-    const viz_time_point curr_time = viz_clock::now();
-    if (auto_rotate) {
-        const viz_duration time_yaw = std::chrono::duration_cast<viz_duration>(
-            curr_time - rotation_start_time);
-        vp.auto_rotate_yaw = (time_yaw.count() % auto_rotate_period.count()) *
-                             360.0_deg / auto_rotate_period.count();
     }
 
-    while (last_updated_time + simulation_period < curr_time) {
-        tick();
-        last_updated_time += simulation_period;
-    }
+    return {proj, view, Eigen::Map<const Eigen::Matrix4d>{target_.data()}};
 }
-}  // namespace impl
+
 }  // namespace viz
 }  // namespace ouster

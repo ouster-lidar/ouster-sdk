@@ -1,0 +1,42 @@
+/*
+  Custom styles for Ouster SDK Docs.
+  (on top of sphinx_rtd_theme)
+*/
+
+/* Tweak logo with no width when we use .svg in sphinx_rtd_theme. */
+.wy-side-nav-search .wy-dropdown>a img.logo, .wy-side-nav-search>a img.logo {
+    width: 200px;
+}
+
+/*
+Used for custom role:
+.. role:: strike
+   :class: strike
+when needed on the page as strikethrough text
+*/
+.strike {
+    text-decoration: line-through;
+}
+
+/* remove default browser outline (in some browsers,  ...) */
+.sphinx-tabs :focus {
+  outline: none;
+}
+
+/* remove extraspace on highlight ... */
+.sphinx-tabs div[class^=highlight] {
+  margin-bottom: 4px;
+}
+
+/* Tweaks for TOC distances in the lists */
+.rst-content .document .section .toctree-wrapper .toctree-l1 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l2 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l3 > ul {
+  margin-top: 4px;
+}
+
+.rst-content .document .section .toctree-wrapper .toctree-l1 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l2 > ul,
+.rst-content .document .section .toctree-wrapper .toctree-l3 > ul {
+  margin-bottom: 4px;
+}

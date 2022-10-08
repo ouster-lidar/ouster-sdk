@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/lidar_scan.h"
 
 #include <Eigen/Core>
@@ -46,6 +51,19 @@ static const Table<ChanField, ChanFieldType, 7> dual_field_slots{{
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
+static const Table<ChanField, ChanFieldType, 4> single_field_slots{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::SIGNAL, ChanFieldType::UINT16},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+}};
+
+static const Table<ChanField, ChanFieldType, 3> lb_field_slots{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+}};
+
 struct DefaultFieldsEntry {
     const std::pair<ChanField, ChanFieldType>* fields;
     size_t n_fields;
@@ -55,16 +73,18 @@ Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
     {{UDPProfileLidar::PROFILE_LIDAR_LEGACY,
       {legacy_field_slots.data(), legacy_field_slots.size()}},
      {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
-      {dual_field_slots.data(), dual_field_slots.size()}}}};
+      {dual_field_slots.data(), dual_field_slots.size()}},
+     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
+      {single_field_slots.data(), single_field_slots.size()}},
+     {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
+      {lb_field_slots.data(), lb_field_slots.size()}}}};
 
 static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     UDPProfileLidar profile) {
     auto end = impl::default_scan_fields.end();
-    auto it = std::find_if(
-        impl::default_scan_fields.begin(), end,
-        [&](const std::pair<UDPProfileLidar, impl::DefaultFieldsEntry>& kv) {
-            return kv.first == profile;
-        });
+    auto it =
+        std::find_if(impl::default_scan_fields.begin(), end,
+                     [profile](const auto& kv) { return kv.first == profile; });
 
     if (it == end || it->first == 0)
         throw std::invalid_argument("Unknown lidar udp profile");
@@ -75,9 +95,11 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
 
 }  // namespace impl
 
+// specify sensor:: namespace for doxygen matching
 LidarScan::LidarScan(
     size_t w, size_t h,
-    std::vector<std::pair<ChanField, ChanFieldType>> field_types)
+    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
+        field_types)
     : timestamp_{Header<uint64_t>::Zero(w)},
       measurement_id_{Header<uint16_t>::Zero(w)},
       status_{Header<uint32_t>::Zero(w)},
@@ -87,13 +109,13 @@ LidarScan::LidarScan(
       headers{w, BlockHeader{ts_t{0}, 0, 0}} {
     // TODO: error on duplicate fields
     for (const auto& ft : field_types_) {
-        if(fields_.count(ft.first) > 0)
+        if (fields_.count(ft.first) > 0)
             throw std::invalid_argument("Duplicated fields found");
         fields_[ft.first] = impl::FieldSlot{ft.second, w, h};
     }
 }
 
-LidarScan::LidarScan(size_t w, size_t h, UDPProfileLidar profile)
+LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile)
     : LidarScan{w, h, impl::lookup_scan_fields(profile)} {}
 
 LidarScan::LidarScan(size_t w, size_t h)
@@ -162,6 +184,25 @@ Eigen::Ref<const LidarScan::Header<uint16_t>> LidarScan::measurement_id()
 Eigen::Ref<LidarScan::Header<uint32_t>> LidarScan::status() { return status_; }
 Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
     return status_;
+}
+
+bool LidarScan::complete(sensor::ColumnWindow window) const {
+    const auto& status = this->status();
+    auto start = window.first;
+    auto end = window.second;
+
+    if (start <= end) {
+        return status.segment(start, end - start + 1)
+            .unaryExpr([](uint32_t s) { return s & 0x01; })
+            .isConstant(0x01);
+    } else {
+        return status.segment(0, end)
+                   .unaryExpr([](uint32_t s) { return s & 0x01; })
+                   .isConstant(0x01) &&
+               status.segment(start, this->w - start)
+                   .unaryExpr([](uint32_t s) { return s & 0x01; })
+                   .isConstant(0x01);
+    }
 }
 
 bool operator==(const LidarScan::BlockHeader& a,
@@ -242,7 +283,7 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
     if (range.cols() * range.rows() != lut.direction.rows())
         throw std::invalid_argument("unexpected image dimensions");
 
-    auto reshaped = Eigen::Map<const Eigen::Array<LidarScan::raw_t, -1, 1>>(
+    auto reshaped = Eigen::Map<const Eigen::Array<uint32_t, -1, 1>>(
         range.data(), range.cols() * range.rows());
     auto nooffset = lut.direction.colwise() * reshaped.cast<double>();
     return (nooffset.array() == 0.0).select(nooffset, nooffset + lut.offset);
@@ -291,6 +332,7 @@ struct parse_field_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, ChanField f, uint16_t m_id,
                     const sensor::packet_format& pf, const uint8_t* col_buf) {
+        if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
         pf.col_field(col_buf, f, field.col(m_id).data(), field.cols());
     }
 };

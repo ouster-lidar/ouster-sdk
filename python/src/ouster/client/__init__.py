@@ -1,4 +1,9 @@
-"""Python sensor client."""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Python sensor client
+"""
 # flake8: noqa (unused imports)
 
 from ._client import SensorInfo
@@ -30,6 +35,7 @@ from .core import ClientError
 from .core import ClientTimeout
 from .core import ClientOverflow
 from .core import PacketSource
+from .core import ScanSource
 from .core import Packets
 from .core import Sensor
 from .core import Scans
