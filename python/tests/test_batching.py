@@ -187,3 +187,32 @@ def test_incompatible_profile(lidar_stream: client.PacketSource) -> None:
     with pytest.raises(ValueError):
         for p in take(packets_per_frame, lidar_stream):
             batch(p._data, ls)
+
+
+@pytest.fixture
+def lidar_stream_with_lagging_frame_ids(packets: client.PacketSource) -> client.PacketSource:
+    """A stream of lidar packets with spoofed out of order frame ids in proximity
+    to the sensor frame_id wrap-around values."""
+    def gen_packets():
+        s = np.iinfo(np.ushort).max
+        ids = [s, s, 0, s, s, s, 0, 0, s, s, 0, 1, 1]
+        idx = 0
+        frame_id = ids[idx]
+        while True:
+            plist = deepcopy(list(packets))
+            for p in plist:
+                if isinstance(p, client.LidarPacket):
+                    _patch_frame_id(p, frame_id)
+                    yield p
+            frame_id = ids[idx % len(ids)]
+            idx += 1
+
+    return client.Packets(gen_packets(), packets.metadata)
+
+
+@pytest.mark.parametrize('test_key', ['dual-2.2'])
+def test_scans_multi_wraparound(lidar_stream_with_lagging_frame_ids: client.PacketSource) -> None:
+    """Test ScanBatcher with some packets coming out of order (only lagging case)
+    by no more than a single id."""
+    scans = take(3, client.Scans(lidar_stream_with_lagging_frame_ids))
+    assert list(map(lambda s: s.frame_id, scans)) == [65535, 0, 1]
