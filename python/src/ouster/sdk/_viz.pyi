@@ -112,6 +112,17 @@ class Cloud:
     def set_palette(self, palette: np.ndarray) -> None:
         ...
 
+    def set_column_poses(self, column_poses: np.ndarray) -> None:
+        ...
+
+    @property
+    def size(self) -> int:
+        ...
+
+    @property
+    def cols(self) -> int:
+        ...
+
 
 class Image:
 

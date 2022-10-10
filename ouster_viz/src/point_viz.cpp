@@ -87,9 +87,9 @@ class Indexed {
         if (front.size() < back.size()) front.resize(back.size());
 
         // send updated, added or deleted state to the front
-        for (size_t i = 0; i < back.size(); i++) {
+        for (size_t i = 0; i < front.size(); i++) {
             if (back[i] && front[i].state) {
-                std::swap(*front[i].state, *back[i]);
+                *front[i].state = *back[i];
             } else if (back[i] && !front[i].state) {
                 front[i].state = std::make_unique<T>(*back[i]);
                 back[i]->clear();
@@ -366,6 +366,7 @@ Camera& PointViz::camera() { return pimpl->camera_back; }
 TargetDisplay& PointViz::target_display() { return pimpl->target; }
 
 void PointViz::add(const std::shared_ptr<Cloud>& cloud) {
+    cloud->dirty();
     pimpl->clouds.add(cloud);
 }
 
@@ -458,6 +459,19 @@ void Cloud::clear() {
     transform_changed_ = false;
     palette_changed_ = false;
     pose_changed_ = false;
+    point_size_changed_ = false;
+}
+
+void Cloud::dirty() {
+    range_changed_ = true;
+    key_changed_ = true;
+    mask_changed_ = true;
+    xyz_changed_ = true;
+    offset_changed_ = true;
+    transform_changed_ = true;
+    palette_changed_ = true;
+    pose_changed_ = true;
+    point_size_changed_ = true;
 }
 
 void Cloud::set_range(const uint32_t* x) {
@@ -680,6 +694,15 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 switch (key) {
                     case GLFW_KEY_R:
                         viz.camera().reset();
+                        viz.update();
+                        break;
+                    default:
+                        break;
+                }
+            } else if (mods == GLFW_MOD_CONTROL) {
+                switch (key) {
+                    case GLFW_KEY_R:
+                        viz.camera().birds_eye_view();
                         viz.update();
                         break;
                     default:

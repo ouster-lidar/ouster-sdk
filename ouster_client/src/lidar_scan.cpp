@@ -356,7 +356,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         // expecting to start batching a new scan
         next_m_id = 0;
         ls.frame_id = f_id;
-    } else if (ls.frame_id == f_id + 1) {
+    } else if (ls.frame_id == static_cast<uint16_t>(f_id + 1)) {
         // drop reordered packets from the previous frame
         return false;
     } else if (ls.frame_id != f_id) {

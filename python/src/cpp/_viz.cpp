@@ -387,6 +387,31 @@ PYBIND11_PLUGIN(_viz) {
                          ``i + n``, ``i + 2n``
              )")
         .def(
+            "set_column_poses",
+            [](viz::Cloud& self,
+               py::array_t<float, py::array::f_style | py::array::forcecast>
+                   rotation,
+               py::array_t<float, py::array::f_style | py::array::forcecast>
+                   translation) {
+                check_array(rotation, self.get_cols() * 9, 0, 'F');
+                check_array(translation, self.get_cols() * 3, 0, 'F');
+                self.set_column_poses(rotation.data(), translation.data());
+            },
+            py::arg("rotation"), py::arg("translation"),
+            R"(
+                 Set the rotation and translation values per column.
+
+                 Args:
+                    rotation: array of exactly 9n where n is number of columns,
+                         so that the rotation of the ith column is ``i``,
+                         ``i + 3n``, ``i + 6n``, ``i + n``, ``i + n + 3n``,
+                         ``i + n + 6n``, ``i + 2n``, ``i + 2n + 3n``,
+                         ``i + 2n + 6n``
+                    translation: array of exactly 3n where n is number of
+                         columns, so that the translation of the ith column is
+                         ``i``, ``i + n``, ``i + 2n``
+             )")
+        .def(
             "set_pose",
             [](viz::Cloud& self, pymatrixd pose) {
                 check_array(pose, 16, 2, 'F');
@@ -422,7 +447,26 @@ PYBIND11_PLUGIN(_viz) {
 
             Args:
                 palette: the new palette to use, must have size 3*palette_size
-        )");
+        )")
+        .def_property_readonly("size", &viz::Cloud::get_size,
+                               "Number of points in a cloud")
+        .def_property_readonly(
+            "cols", &viz::Cloud::get_cols,
+            "Number of columns in a cloud (1 if point cloud is unstructured")
+        .def("__copy__",
+             [](const viz::Cloud& self) { return viz::Cloud{self}; })
+        .def("__deepcopy__",
+             [](viz::Cloud& self, py::dict) {
+                 return viz::Cloud{self};
+             })
+        .def("__repr__",
+             [](const viz::Cloud& self) {
+                 std::stringstream ss;
+                 ss << "<ouster.viz.Cloud " << &self
+                    << ", pts = " << self.get_size()
+                    << ", cols = " << self.get_cols() << ">";
+                 return ss.str();
+             });
 
     py::class_<viz::Image, std::shared_ptr<viz::Image>>(
         m, "Image", "Manages the state of an image.")
