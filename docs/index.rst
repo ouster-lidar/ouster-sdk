@@ -27,8 +27,7 @@
    :caption: ROS1 Guide
    :hidden:
 
-   Build and Use
-   .. include:: https://raw.githubusercontent.com/ouster-lidar/ouster-ros/master/docs/index.rst
+   Build and Use <https://github.com/ouster-lidar/ouster-ros/wiki/index>
 
 .. toctree::
    :caption: SDK Reference
