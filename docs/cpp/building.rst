@@ -4,7 +4,7 @@
 Building the C++ Client from Source
 ===================================
 
-Building the example code requires a compiler supporting C++11 and CMake 3.1 or newer and the
+Building the example code requires a compiler supporting C++14 and CMake 3.1 or newer and the
 jsoncpp, Eigen3, and tins libraries with headers installed on the system. The sample visualizer also
 requires the GLFW3 and GLEW libraries.
 
