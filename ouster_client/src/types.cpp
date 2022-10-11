@@ -132,6 +132,7 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs) {
             lhs.beam_altitude_angles == rhs.beam_altitude_angles &&
             lhs.lidar_origin_to_beam_origin_mm ==
                 rhs.lidar_origin_to_beam_origin_mm &&
+            lhs.beam_to_lidar_transform == rhs.beam_to_lidar_transform &&
             lhs.imu_to_sensor_transform == rhs.imu_to_sensor_transform &&
             lhs.lidar_to_sensor_transform == rhs.lidar_to_sensor_transform &&
             lhs.extrinsic == rhs.extrinsic && lhs.init_id == rhs.init_id &&
@@ -225,6 +226,13 @@ static double default_lidar_origin_to_beam_origin(std::string prod_line) {
     return lidar_origin_to_beam_origin_mm;
 }
 
+mat4d default_beam_to_lidar_transform(std::string prod_line) {
+    mat4d beam_to_lidar_transform = mat4d::Identity();
+    beam_to_lidar_transform(0, 3) =
+        default_lidar_origin_to_beam_origin(prod_line);
+    return beam_to_lidar_transform;
+}
+
 sensor_info default_sensor_info(lidar_mode mode) {
     return sensor::sensor_info{"UNKNOWN",
                                "000000000000",
@@ -235,6 +243,7 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                gen1_azimuth_angles,
                                gen1_altitude_angles,
                                default_lidar_origin_to_beam_origin("OS-1-64"),
+                               default_beam_to_lidar_transform("OS-1-64"),
                                default_imu_to_sensor_transform,
                                default_lidar_to_sensor_transform,
                                mat4d::Identity(),
@@ -463,7 +472,8 @@ static sensor_config parse_config(const Json::Value& root) {
         }
     } else if (!root["auto_start_flag"].empty()) {
         std::cerr
-            << "Please note that auto_start_flag has been deprecated in favor "
+            << "Please note that auto_start_flag has been deprecated in "
+               "favor "
                "of operating_mode. Will set operating_mode appropriately..."
             << std::endl;
         config.operating_mode = root["auto_start_flag"].asBool()
@@ -574,8 +584,8 @@ static bool valid_response(const Json::Value& root,
     return (root.isMember(tcp_request) && root[tcp_request].isObject());
 }
 
-// TODO make robust to new formats that are incorrect instead of returning false
-// and sending to legacy
+// TODO make robust to new formats that are incorrect instead of returning
+// false and sending to legacy
 static bool is_new_format(const std::string& metadata) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
@@ -693,16 +703,38 @@ static sensor_info parse_legacy(const std::string& meta) {
         info.format = default_data_format(info.mode);
     }
 
-    // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0. Fall back
-    // to 1.13
+    // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0 BUT missing
+    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0 according to
+    // prod-line
     if (root.isMember("lidar_origin_to_beam_origin_mm")) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();
     } else {
-        std::cerr << "WARNING: No lidar_origin_to_beam_origin_mm found."
-                  << std::endl;
-        info.lidar_origin_to_beam_origin_mm =
-            default_lidar_origin_to_beam_origin(info.prod_line);
+        if (info.prod_line.find("OS-DOME-") ==
+            0) {  // is an OS-DOME - fill with 0
+            info.lidar_origin_to_beam_origin_mm = 0;
+        } else {  // not an OS-DOME
+            std::cerr << "WARNING: No lidar_origin_to_beam_origin_mm found."
+                      << std::endl;
+            info.lidar_origin_to_beam_origin_mm =
+                default_lidar_origin_to_beam_origin(info.prod_line);
+        }
+    }
+
+    // beam_to_lidar_transform" introduced in fw 2.5/fw 3.0
+    if (root.isMember("beam_to_lidar_transform")) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                const Json::Value::ArrayIndex ind = i * 4 + j;
+                info.beam_to_lidar_transform(i, j) =
+                    root["beam_to_lidar_transform"][ind].asDouble();
+            }
+        }
+    } else {
+        // fw is < 2.5/3.0 and we need to manually fill it in
+        info.beam_to_lidar_transform = mat4d::Identity();
+        info.beam_to_lidar_transform(0, 3) =
+            info.lidar_origin_to_beam_origin_mm;
     }
 
     if (root["beam_altitude_angles"].size() != info.format.pixels_per_column) {
@@ -760,7 +792,7 @@ static sensor_info parse_legacy(const std::string& meta) {
     info.udp_port_imu = root["udp_port_imu"].asInt();
 
     return info;
-}
+}  // namespace ouster
 
 static void update_json_obj(Json::Value& dst, const Json::Value& src) {
     const std::vector<std::string>& members = src.getMemberNames();
@@ -884,6 +916,13 @@ std::string to_string(const sensor_info& info) {
     root["lidar_origin_to_beam_origin_mm"] =
         info.lidar_origin_to_beam_origin_mm;
 
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            root["beam_to_lidar_transform"].append(
+                info.beam_to_lidar_transform(i, j));
+        }
+    }
+
     for (auto i : info.beam_azimuth_angles)
         root["beam_azimuth_angles"].append(i);
     for (auto i : info.beam_altitude_angles)
@@ -962,8 +1001,9 @@ Json::Value to_json(const sensor_config& config) {
             // jsoncpp < 1.7.7 strips 0s off of exact representation so 2.0
             // becomes 2
             // On ubuntu 18.04, the default jsoncpp is 1.7.4-3
-            // Fix was: https://github.com/open-source-parsers/jsoncpp/pull/547
-            // Work around by always casting to int before writing out to json
+            // Fix was:
+            // https://github.com/open-source-parsers/jsoncpp/pull/547 Work
+            // around by always casting to int before writing out to json
             root["signal_multiplier"] = int(config.signal_multiplier.value());
         }
     }

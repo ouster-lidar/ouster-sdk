@@ -354,8 +354,8 @@ struct XYZLut {
  * @param[in] h number of rows in the lidar scan.
  * @param[in] range_unit the unit, in meters, of the range,  e.g.
  * sensor::range_unit.
- * @param[in] lidar_origin_to_beam_origin_mm the radius to the beam origin point
- * of the unit, in millimeters.
+ * @param[in] beam_to_lidar_transform, signifying transform between beams and
+ * lidar origin. Translation portion is in millimeters.
  * @param[in] transform additional transformation to apply to resulting points.
  * @param[in] azimuth_angles_deg azimuth offsets in degrees for each of h beams.
  * @param[in] altitude_angles_deg altitude in degrees for each of h beams.
@@ -363,7 +363,7 @@ struct XYZLut {
  * @return xyz direction and offset vectors for each point in the lidar scan.
  */
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
-                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& beam_to_lidar_transform,
                     const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg);
@@ -378,7 +378,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
     return make_xyz_lut(
         sensor.format.columns_per_frame, sensor.format.pixels_per_column,
-        sensor::range_unit, sensor.lidar_origin_to_beam_origin_mm,
+        sensor::range_unit, sensor.beam_to_lidar_transform,
         sensor.lidar_to_sensor_transform, sensor.beam_azimuth_angles,
         sensor.beam_altitude_angles);
 }

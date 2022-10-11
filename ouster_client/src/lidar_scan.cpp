@@ -220,7 +220,7 @@ bool operator==(const LidarScan& a, const LidarScan& b) {
 }
 
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
-                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& beam_to_lidar_transform,
                     const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg) {
@@ -228,6 +228,13 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
         throw std::invalid_argument("lut dimensions must be greater than zero");
     if (azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h)
         throw std::invalid_argument("unexpected scan dimensions");
+
+    double beam_to_lidar_euclidean_distance_mm = beam_to_lidar_transform(0, 3);
+    if (beam_to_lidar_transform(2, 3) != 0) {
+        beam_to_lidar_euclidean_distance_mm =
+            std::sqrt(std::pow(beam_to_lidar_transform(0, 3), 2) +
+                      std::pow(beam_to_lidar_transform(2, 3), 2));
+    }
 
     Eigen::ArrayXd encoder(w * h);   // theta_e
     Eigen::ArrayXd azimuth(w * h);   // theta_a
@@ -255,10 +262,15 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 
     // offsets due to beam origin
     lut.offset = LidarScan::Points{w * h, 3};
-    lut.offset.col(0) = encoder.cos() - lut.direction.col(0);
-    lut.offset.col(1) = encoder.sin() - lut.direction.col(1);
-    lut.offset.col(2) = -lut.direction.col(2);
-    lut.offset *= lidar_origin_to_beam_origin_mm;
+    lut.offset.col(0) =
+        encoder.cos() * beam_to_lidar_transform(0, 3) -
+        lut.direction.col(0) * beam_to_lidar_euclidean_distance_mm;
+    lut.offset.col(1) =
+        encoder.sin() * beam_to_lidar_transform(0, 3) -
+        lut.direction.col(1) * beam_to_lidar_euclidean_distance_mm;
+    lut.offset.col(2) =
+        -lut.direction.col(2) * beam_to_lidar_euclidean_distance_mm +
+        beam_to_lidar_transform(2, 3);
 
     // apply the supplied transform
     auto rot = transform.topLeftCorner(3, 3).transpose();

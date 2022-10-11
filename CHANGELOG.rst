@@ -9,6 +9,7 @@ ouster_client
 --------------
 * breaking change: signal multiplier type changed to double to support new FW values of signal
   multiplier
+* breaking change: make_xyz_lut takes mat4d beam_to_lidar_transform instead of lidar_origin_to_beam_origin_mm double to accomodate new FWs. Old reference Python implementation was kept, but new reference was also added
 * address an issue that could cause the processed frame being dropped in favor or the previous
   frame when the frame_id wraps-around.
 
@@ -21,7 +22,7 @@ ouster_viz
 * add ``PointViz.viewport_width()`` and ``PointViz.viewport_height()`` functions
 * add ``PointViz.push/pop_frame_buffer_handler()`` to attach a callbacks on
   every frame draw update that calls from the main rendering loop.
-* add ``SHIFT-X`` key to SimeplViz to start continuous saving of screenshots
+* add ``SHIFT-X`` key to SimpleViz to start continuous saving of screenshots
   on every draw operation. (good for making videos)
 * expose ``Camera.set_target`` function through pybind
 

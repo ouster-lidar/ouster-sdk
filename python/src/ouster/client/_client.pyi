@@ -115,6 +115,7 @@ class SensorInfo:
     imu_to_sensor_transform: ndarray
     lidar_to_sensor_transform: ndarray
     lidar_origin_to_beam_origin_mm: float
+    beam_to_lidar_transform: ndarray
     extrinsic: ndarray
     init_id: int
     udp_port_lidar: int
