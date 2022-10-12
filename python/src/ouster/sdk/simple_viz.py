@@ -5,6 +5,7 @@ All rights reserved.
 
 import argparse
 import os
+import numpy as np
 
 from ouster import client
 from .viz import SimpleViz
@@ -28,6 +29,12 @@ def main() -> None:
                         '--no-auto-dest',
                         action='store_true',
                         help='do not auto configure udp destination')
+    parser.add_argument('--extrinsics',
+                        metavar="F",
+                        type=float,
+                        required=False,
+                        nargs=16,
+                        help='lidar sensor extrinsics to use in viz')
 
     args = parser.parse_args()
 
@@ -63,5 +70,9 @@ def main() -> None:
             info = client.SensorInfo(json.read())
         scans = client.Scans(pcap.Pcap(args.pcap, info))
         rate = 1.0
+
+    if args.extrinsics:
+        scans.metadata.extrinsic = np.array(args.extrinsics).reshape((4, 4))
+        print(f"Using sensor extrinsics:\n{scans.metadata.extrinsic}")
 
     SimpleViz(scans.metadata, rate).run(scans)
