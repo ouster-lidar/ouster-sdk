@@ -413,6 +413,24 @@ std::string to_string(ChanField field) {
     return res ? res.value() : "UNKNOWN";
 }
 
+std::string to_string(ChanFieldType ft) {
+    switch (ft) {
+        case sensor::ChanFieldType::VOID:
+            return "VOID";
+        case sensor::ChanFieldType::UINT8:
+            return "UINT8";
+        case sensor::ChanFieldType::UINT16:
+            return "UINT16";
+        case sensor::ChanFieldType::UINT32:
+            return "UINT32";
+        case sensor::ChanFieldType::UINT64:
+            return "UINT64";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+
 std::string to_string(UDPProfileLidar profile) {
     auto res = lookup(impl::udp_profile_lidar_strings, profile);
     return res ? res.value() : "UNKNOWN";

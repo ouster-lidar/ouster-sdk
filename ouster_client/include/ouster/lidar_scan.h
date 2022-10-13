@@ -27,6 +27,12 @@ struct FieldSlot;
 }
 
 /**
+ * Alias for the lidar scan field types
+ */
+using LidarScanFieldTypes =
+    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>;
+
+/**
  * Data structure for efficient operations on aggregated lidar data.
  *
  * Stores each field (range, intensity, etc.) contiguously as a H x W block of
@@ -82,12 +88,10 @@ class LidarScan {
     Header<uint16_t> measurement_id_;
     Header<uint32_t> status_;
     std::map<sensor::ChanField, impl::FieldSlot> fields_;
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-        field_types_;
+    LidarScanFieldTypes field_types_;
 
     LidarScan(size_t w, size_t h,
-              std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-                  field_types);
+              LidarScanFieldTypes field_types);
 
    public:
     /**
@@ -290,6 +294,42 @@ class LidarScan {
 
     friend bool operator==(const LidarScan& a, const LidarScan& b);
 };
+
+/**
+ * Get string representation of lidar scan field types.
+ *
+ * @param[in] field_types The field types to get the string representation of.
+ *
+ * @return string representation of the lidar scan field types.
+ */
+std::string to_string(const LidarScanFieldTypes& field_types);
+
+/**
+ * Get the lidar scan field types from a lidar scan
+ *
+ * @param[in] ls The lidar scan to get the lidar scan field types from.
+ *
+ * @return The lidar scan field types
+ */
+LidarScanFieldTypes get_field_types(const LidarScan& ls);
+
+/**
+ * Get the lidar scan field types from sensor info
+ *
+ * @param[in] info The sensor info to get the lidar scan field types from.
+ *
+ * @return The lidar scan field types
+ */
+LidarScanFieldTypes get_field_types(const sensor::sensor_info& info);
+
+/**
+ * Get string representation of a lidar scan.
+ *
+ * @param[in] ls The lidar scan to get the string representation of.
+ *
+ * @return string representation of the lidar scan.
+ */
+std::string to_string(const LidarScan& ls);
 
 /** \defgroup ouster_client_lidar_scan_operators Ouster Client lidar_scan.h
  * Operators
@@ -497,7 +537,7 @@ class ScanBatcher {
      */
     bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 };
-
+    
 }  // namespace ouster
 
 #include "ouster/impl/lidar_scan_impl.h"

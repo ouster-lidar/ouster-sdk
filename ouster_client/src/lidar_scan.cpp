@@ -219,6 +219,62 @@ bool operator==(const LidarScan& a, const LidarScan& b) {
            (a.status() == b.status()).all();
 }
 
+LidarScanFieldTypes get_field_types(const LidarScan& ls) {
+    return {ls.begin(), ls.end()};
+}
+
+LidarScanFieldTypes get_field_types(const sensor::sensor_info& info) {
+    // Get typical LidarScan to obtain field types
+    return impl::lookup_scan_fields(info.format.udp_profile_lidar);
+}
+
+std::string to_string(const LidarScanFieldTypes& field_types) {
+    std::stringstream ss;
+    ss << "(";
+    for (size_t i = 0; i < field_types.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << sensor::to_string(field_types[i].first) << ":"
+           << sensor::to_string(field_types[i].second);
+    }
+    ss << ")";
+    return ss.str();
+}
+
+std::string to_string(const LidarScan& ls) {
+    std::stringstream ss;
+    LidarScanFieldTypes field_types(ls.begin(), ls.end());
+    ss << "LidarScan: {h = " << ls.h << ", w = " << ls.w
+       << ", fid = " << ls.frame_id << std::endl
+       << "  field_types = " << to_string(field_types) << std::endl;
+
+    if (!field_types.empty()) {
+        ss << "  fields = [" << std::endl;
+        img_t<uint64_t> key{ls.h, ls.w};
+        for (const auto& ft : ls) {
+            impl::visit_field(ls, ft.first, impl::read_and_cast(), key);
+            ss << "    " << to_string(ft.first) << ":"
+               << to_string(ft.second) << " = (";
+            ss << key.minCoeff() << "; " << key.mean() << "; "
+               << key.maxCoeff();
+            ss << ")" << std::endl;
+        }
+        ss << "  ]," << std::endl;
+    }
+
+    ss << "  timestamp = (" << ls.timestamp().minCoeff() << "; "
+       << ls.timestamp().mean() << "; " << ls.timestamp().maxCoeff() << ")"
+       << std::endl;
+    ss << "  measurement_id = (" << ls.measurement_id().minCoeff() << "; "
+       << ls.measurement_id().mean() << "; " << ls.measurement_id().maxCoeff()
+       << ")" << std::endl;
+    ss << "  status = (" << ls.status().minCoeff() << "; " << ls.status().mean()
+       << "; " << ls.status().maxCoeff() << ")" << std::endl;
+
+    ss << "}";
+    return ss.str();
+}
+
+
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     const mat4d& beam_to_lidar_transform,
                     const mat4d& transform,

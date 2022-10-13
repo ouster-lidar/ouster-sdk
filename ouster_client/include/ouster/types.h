@@ -732,6 +732,15 @@ std::string to_string(ChanField field);
 enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
 
 /**
+ * Get string representation of a channel field.
+ *
+ * @param[in] ft The field type to get the string representation of.
+ *
+ * @return string representation of the channel field type.
+ */
+std::string to_string(ChanFieldType ft);
+
+/**
  * Table of accessors for extracting data from imu and lidar packets.
  *
  * In the user guide, refer to section 9 for the lidar packet format and section
