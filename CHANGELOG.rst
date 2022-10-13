@@ -10,6 +10,7 @@ ouster_client
 * breaking change: signal multiplier type changed to double to support new FW values of signal
   multiplier
 * breaking change: make_xyz_lut takes mat4d beam_to_lidar_transform instead of lidar_origin_to_beam_origin_mm double to accomodate new FWs. Old reference Python implementation was kept, but new reference was also added
+* breaking change: the default metadata format from ``get_metadata`` has been updated to the non-legacy format. Users who wish to continue using the legacy format can do so by using the ``legacy_format`` parameter in ``get_metadata``
 * address an issue that could cause the processed frame being dropped in favor or the previous
   frame when the frame_id wraps-around.
 
