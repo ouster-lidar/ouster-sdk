@@ -27,6 +27,12 @@ struct FieldSlot;
 }
 
 /**
+ * Alias for the lidar scan field types
+ */
+using LidarScanFieldTypes =
+    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>;
+
+/**
  * Data structure for efficient operations on aggregated lidar data.
  *
  * Stores each field (range, intensity, etc.) contiguously as a H x W block of
@@ -82,12 +88,10 @@ class LidarScan {
     Header<uint16_t> measurement_id_;
     Header<uint32_t> status_;
     std::map<sensor::ChanField, impl::FieldSlot> fields_;
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-        field_types_;
+    LidarScanFieldTypes field_types_;
 
     LidarScan(size_t w, size_t h,
-              std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-                  field_types);
+              LidarScanFieldTypes field_types);
 
    public:
     /**
@@ -291,6 +295,42 @@ class LidarScan {
     friend bool operator==(const LidarScan& a, const LidarScan& b);
 };
 
+/**
+ * Get string representation of lidar scan field types.
+ *
+ * @param[in] field_types The field types to get the string representation of.
+ *
+ * @return string representation of the lidar scan field types.
+ */
+std::string to_string(const LidarScanFieldTypes& field_types);
+
+/**
+ * Get the lidar scan field types from a lidar scan
+ *
+ * @param[in] ls The lidar scan to get the lidar scan field types from.
+ *
+ * @return The lidar scan field types
+ */
+LidarScanFieldTypes get_field_types(const LidarScan& ls);
+
+/**
+ * Get the lidar scan field types from sensor info
+ *
+ * @param[in] info The sensor info to get the lidar scan field types from.
+ *
+ * @return The lidar scan field types
+ */
+LidarScanFieldTypes get_field_types(const sensor::sensor_info& info);
+
+/**
+ * Get string representation of a lidar scan.
+ *
+ * @param[in] ls The lidar scan to get the string representation of.
+ *
+ * @return string representation of the lidar scan.
+ */
+std::string to_string(const LidarScan& ls);
+
 /** \defgroup ouster_client_lidar_scan_operators Ouster Client lidar_scan.h
  * Operators
  * @{
@@ -354,8 +394,8 @@ struct XYZLut {
  * @param[in] h number of rows in the lidar scan.
  * @param[in] range_unit the unit, in meters, of the range,  e.g.
  * sensor::range_unit.
- * @param[in] lidar_origin_to_beam_origin_mm the radius to the beam origin point
- * of the unit, in millimeters.
+ * @param[in] beam_to_lidar_transform, signifying transform between beams and
+ * lidar origin. Translation portion is in millimeters.
  * @param[in] transform additional transformation to apply to resulting points.
  * @param[in] azimuth_angles_deg azimuth offsets in degrees for each of h beams.
  * @param[in] altitude_angles_deg altitude in degrees for each of h beams.
@@ -363,7 +403,7 @@ struct XYZLut {
  * @return xyz direction and offset vectors for each point in the lidar scan.
  */
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
-                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& beam_to_lidar_transform,
                     const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg);
@@ -378,7 +418,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
     return make_xyz_lut(
         sensor.format.columns_per_frame, sensor.format.pixels_per_column,
-        sensor::range_unit, sensor.lidar_origin_to_beam_origin_mm,
+        sensor::range_unit, sensor.beam_to_lidar_transform,
         sensor.lidar_to_sensor_transform, sensor.beam_azimuth_angles,
         sensor.beam_altitude_angles);
 }
@@ -497,7 +537,7 @@ class ScanBatcher {
      */
     bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 };
-
+    
 }  // namespace ouster
 
 #include "ouster/impl/lidar_scan_impl.h"

@@ -219,8 +219,64 @@ bool operator==(const LidarScan& a, const LidarScan& b) {
            (a.status() == b.status()).all();
 }
 
+LidarScanFieldTypes get_field_types(const LidarScan& ls) {
+    return {ls.begin(), ls.end()};
+}
+
+LidarScanFieldTypes get_field_types(const sensor::sensor_info& info) {
+    // Get typical LidarScan to obtain field types
+    return impl::lookup_scan_fields(info.format.udp_profile_lidar);
+}
+
+std::string to_string(const LidarScanFieldTypes& field_types) {
+    std::stringstream ss;
+    ss << "(";
+    for (size_t i = 0; i < field_types.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << sensor::to_string(field_types[i].first) << ":"
+           << sensor::to_string(field_types[i].second);
+    }
+    ss << ")";
+    return ss.str();
+}
+
+std::string to_string(const LidarScan& ls) {
+    std::stringstream ss;
+    LidarScanFieldTypes field_types(ls.begin(), ls.end());
+    ss << "LidarScan: {h = " << ls.h << ", w = " << ls.w
+       << ", fid = " << ls.frame_id << std::endl
+       << "  field_types = " << to_string(field_types) << std::endl;
+
+    if (!field_types.empty()) {
+        ss << "  fields = [" << std::endl;
+        img_t<uint64_t> key{ls.h, ls.w};
+        for (const auto& ft : ls) {
+            impl::visit_field(ls, ft.first, impl::read_and_cast(), key);
+            ss << "    " << to_string(ft.first) << ":"
+               << to_string(ft.second) << " = (";
+            ss << key.minCoeff() << "; " << key.mean() << "; "
+               << key.maxCoeff();
+            ss << ")" << std::endl;
+        }
+        ss << "  ]," << std::endl;
+    }
+
+    ss << "  timestamp = (" << ls.timestamp().minCoeff() << "; "
+       << ls.timestamp().mean() << "; " << ls.timestamp().maxCoeff() << ")"
+       << std::endl;
+    ss << "  measurement_id = (" << ls.measurement_id().minCoeff() << "; "
+       << ls.measurement_id().mean() << "; " << ls.measurement_id().maxCoeff()
+       << ")" << std::endl;
+    ss << "  status = (" << ls.status().minCoeff() << "; " << ls.status().mean()
+       << "; " << ls.status().maxCoeff() << ")" << std::endl;
+
+    ss << "}";
+    return ss.str();
+}
+
+
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
-                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& beam_to_lidar_transform,
                     const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg) {
@@ -228,6 +284,13 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
         throw std::invalid_argument("lut dimensions must be greater than zero");
     if (azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h)
         throw std::invalid_argument("unexpected scan dimensions");
+
+    double beam_to_lidar_euclidean_distance_mm = beam_to_lidar_transform(0, 3);
+    if (beam_to_lidar_transform(2, 3) != 0) {
+        beam_to_lidar_euclidean_distance_mm =
+            std::sqrt(std::pow(beam_to_lidar_transform(0, 3), 2) +
+                      std::pow(beam_to_lidar_transform(2, 3), 2));
+    }
 
     Eigen::ArrayXd encoder(w * h);   // theta_e
     Eigen::ArrayXd azimuth(w * h);   // theta_a
@@ -255,10 +318,15 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 
     // offsets due to beam origin
     lut.offset = LidarScan::Points{w * h, 3};
-    lut.offset.col(0) = encoder.cos() - lut.direction.col(0);
-    lut.offset.col(1) = encoder.sin() - lut.direction.col(1);
-    lut.offset.col(2) = -lut.direction.col(2);
-    lut.offset *= lidar_origin_to_beam_origin_mm;
+    lut.offset.col(0) =
+        encoder.cos() * beam_to_lidar_transform(0, 3) -
+        lut.direction.col(0) * beam_to_lidar_euclidean_distance_mm;
+    lut.offset.col(1) =
+        encoder.sin() * beam_to_lidar_transform(0, 3) -
+        lut.direction.col(1) * beam_to_lidar_euclidean_distance_mm;
+    lut.offset.col(2) =
+        -lut.direction.col(2) * beam_to_lidar_euclidean_distance_mm +
+        beam_to_lidar_transform(2, 3);
 
     // apply the supplied transform
     auto rot = transform.topLeftCorner(3, 3).transpose();

@@ -354,8 +354,9 @@ struct sensor_info {
         beam_altitude_angles;  ///< beam altitude angles for 3D projection
     double lidar_origin_to_beam_origin_mm;  ///< distance between lidar origin
                                             ///< and beam origin in mm
-    mat4d imu_to_sensor_transform;    ///< transform between sensor coordinate
-                                      ///< frame and imu
+    mat4d beam_to_lidar_transform;  ///< transform between beam and lidar frame
+    mat4d imu_to_sensor_transform;  ///< transform between sensor coordinate
+                                    ///< frame and imu
     mat4d lidar_to_sensor_transform;  ///< transform between lidar and sensor
                                       ///< coordinate frames
     mat4d extrinsic;                  ///< extrinsic matrix
@@ -729,6 +730,15 @@ std::string to_string(ChanField field);
  * Types of channel fields.
  */
 enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
+
+/**
+ * Get string representation of a channel field.
+ *
+ * @param[in] ft The field type to get the string representation of.
+ *
+ * @return string representation of the channel field type.
+ */
+std::string to_string(ChanFieldType ft);
 
 /**
  * Table of accessors for extracting data from imu and lidar packets.
