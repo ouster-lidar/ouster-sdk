@@ -119,3 +119,9 @@ C++
 
 The Ouster C++ SDK currently must be built and installed from sources.
 Please refer to :doc:`/cpp/building`.
+
+
+ROS
+===
+Ouster ROS driver code has been moved out to a separate GitHub repository. To get started using the
+driver follow the instructions provided on the repository's main page: https://github.com/ouster-lidar/ouster-ros
