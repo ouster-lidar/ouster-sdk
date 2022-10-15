@@ -157,16 +157,19 @@ SOCKET udp_data_socket(int port) {
     return SOCKET_ERROR;
 }
 
-bool collect_metadata(client& cli, SensorHttp& sensor_http,
-                      chrono::seconds timeout) {
-    auto timeout_time = chrono::steady_clock::now() + timeout;
+Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
+    auto timeout_time = chrono::steady_clock::now() + chrono::seconds{timeout_sec};
+
+    // fail fast if we can't reach the sensor via HTTP
+    auto sensor_http = SensorHttp::create(hostname);
+
     std::string status;
 
     // TODO: can remove this loop when we drop support for FW 2.4
     do {
         if (chrono::steady_clock::now() >= timeout_time) return false;
         std::this_thread::sleep_for(1s);
-        status = sensor_http.sensor_info()["status"].asString();
+        status = sensor_http->sensor_info()["status"].asString();
     } while (status == "INITIALIZING");
 
     // not all metadata available when sensor isn't RUNNING
@@ -177,12 +180,10 @@ bool collect_metadata(client& cli, SensorHttp& sensor_http,
             "WARMUP, or ERROR state");
     }
 
-    cli.meta = sensor_http.metadata();
-
+    auto metadata = sensor_http->metadata();
     // merge extra info into metadata
-    cli.meta["client_version"] = client_version();
-
-    return true;
+    metadata["client_version"] = client_version();
+    return metadata;
 }
 
 }  // namespace
@@ -223,8 +224,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     // Change values 1, 2, 3 back to ints to support older FWs
     if (root["signal_multiplier"].asDouble() != 0.25 &&
         root["signal_multiplier"].asDouble() != 0.5) {
-        int signal_multiplier = root["signal_multiplier"].asInt();
-        root["signal_multiplier"] = signal_multiplier;
+        root["signal_multiplier"] = root["signal_multiplier"].asInt();
     }
 
     active_params = Json::FastWriter().write(root);
@@ -249,10 +249,10 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 }
 
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
-    if (!cli.meta) {
-        auto sensor_http = SensorHttp::create(cli.hostname);
-        if (!collect_metadata(cli, *sensor_http, chrono::seconds{timeout_sec}))
-            return "";
+    try {
+        cli.meta = collect_metadata(cli.hostname, timeout_sec);
+    } catch (const std::exception&) {
+        return "";
     }
 
     Json::StreamWriterBuilder builder;
@@ -278,7 +278,7 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
 
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    lidar_mode mode, timestamp_mode ts_mode,
+                                    lidar_mode ld_mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
                                     int timeout_sec) {
     auto cli = init_client(hostname, lidar_port, imu_port);
@@ -290,51 +290,34 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     if (!impl::socket_valid(lidar_port) || !impl::socket_valid(imu_port))
         return std::shared_ptr<client>();
 
-    bool success = true;
 
     try {
-        // fail fast if we can't reach the sensor via HTTP
-        auto sensor_http = SensorHttp::create(hostname);
+        sensor::sensor_config config;
+        uint8_t config_flags = 0;
+        if (udp_dest_host.empty())
+            config_flags |= CONFIG_UDP_DEST_AUTO;
+        else
+            config.udp_dest = udp_dest_host;
+        if (ld_mode) config.ld_mode = ld_mode;
+        if (ts_mode) config.ts_mode = ts_mode;
+        if (lidar_port) config.udp_port_lidar = lidar_port;
+        if (imu_port) config.udp_port_imu = imu_port;
+        config.operating_mode = OPERATING_NORMAL;
+        set_config(hostname, config, config_flags);
 
-        // if dest address is not specified, have the sensor to set it
-        // automatically
-        if (udp_dest_host.empty()) {
-            sensor_http->set_udp_dest_auto();
-        } else {
-            sensor_http->set_config_param("udp_dest", udp_dest_host);
-        }
-
-        sensor_http->set_config_param("udp_port_lidar",
-                                      std::to_string(lidar_port));
-        sensor_http->set_config_param("udp_port_imu", std::to_string(imu_port));
-
-        // if specified (not UNSPEC), set the lidar and timestamp modes
-        if (mode) {
-            sensor_http->set_config_param("lidar_mode",
-                                          sensor::to_string(mode));
-        }
-
-        if (ts_mode) {
-            sensor_http->set_config_param("timestamp_mode",
-                                          sensor::to_string(ts_mode));
-        }
-
-        // wake up from STANDBY, if necessary
-        sensor_http->set_config_param("operating_mode", "NORMAL");
-        sensor_http->reinitialize();
         // will block until no longer INITIALIZING
-        success &=
-            collect_metadata(*cli, *sensor_http, chrono::seconds{timeout_sec});
+        cli->meta = collect_metadata(hostname, timeout_sec);
         // check for sensor error states
         auto status = cli->meta["sensor_info"]["status"].asString();
-        success &= (status != "ERROR" && status != "UNCONFIGURED");
+        if (status == "ERROR" || status == "UNCONFIGURED")
+            return std::shared_ptr<client>();
     } catch (const std::runtime_error& e) {
         // log error message
         std::cerr << "init_client error: " << e.what() << std::endl;
         return std::shared_ptr<client>();
     }
 
-    return success ? cli : std::shared_ptr<client>();
+    return cli;
 }
 
 client_state poll_client(const client& c, const int timeout_sec) {
