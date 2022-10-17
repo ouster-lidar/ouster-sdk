@@ -158,11 +158,9 @@ SOCKET udp_data_socket(int port) {
 }
 
 Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
-    auto timeout_time = chrono::steady_clock::now() + chrono::seconds{timeout_sec};
-
-    // fail fast if we can't reach the sensor via HTTP
     auto sensor_http = SensorHttp::create(hostname);
-
+    auto timeout_time =
+        chrono::steady_clock::now() + chrono::seconds{timeout_sec};
     std::string status;
 
     // TODO: can remove this loop when we drop support for FW 2.4
@@ -201,45 +199,40 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     auto sensor_http = SensorHttp::create(hostname);
 
     // reset staged config to avoid spurious errors
-    auto active_params = sensor_http->get_config_params(true);
-
-    Json::CharReaderBuilder builder;
-    auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
-    Json::Value root;
-    auto parse_success = reader->parse(
-        active_params.c_str(), active_params.c_str() + active_params.size(),
-        &root, nullptr);
-
-    if (!parse_success)
-        throw std::runtime_error("Error while parsing current sensor config.");
+    auto active_params = sensor_http->active_config_params();
+    Json::Value active_params_clone = active_params;
 
     // set all desired config parameters
     Json::Value config_json = to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
-        root[key] = config_json[key];
+        active_params[key] = config_json[key];
     }
 
     // Signal multiplier changed from int to double for FW 3.0/2.5+, with
     // corresponding change to config.signal_multiplier.
     // Change values 1, 2, 3 back to ints to support older FWs
-    if (root["signal_multiplier"].asDouble() != 0.25 &&
-        root["signal_multiplier"].asDouble() != 0.5) {
-        root["signal_multiplier"] = root["signal_multiplier"].asInt();
+    if (active_params["signal_multiplier"].asDouble() != 0.25 &&
+        active_params["signal_multiplier"].asDouble() != 0.5) {
+        active_params["signal_multiplier"] = active_params["signal_multiplier"].asInt();
     }
 
-    active_params = Json::FastWriter().write(root);
-    sensor_http->set_config_param(".", active_params);
+    // if configuration didn't change then skip applying the params
+    if (active_params_clone != active_params) {
+        auto active_params_str = Json::FastWriter().write(active_params);
+        sensor_http->set_config_param(".", active_params_str);
 
-    // set automatic udp dest, if flag specified
-    if (config_flags & CONFIG_UDP_DEST_AUTO) {
-        if (config.udp_dest)
-            throw std::invalid_argument(
-                "UDP_DEST_AUTO flag set but provided config has udp_dest");
-        sensor_http->set_udp_dest_auto();
+        // set automatic udp dest, if flag specified
+        if (config_flags & CONFIG_UDP_DEST_AUTO) {
+            if (config.udp_dest)
+                throw std::invalid_argument(
+                    "UDP_DEST_AUTO flag set but provided config has udp_dest");
+            sensor_http->set_udp_dest_auto();
+        }
+
+        // reinitialize to make all staged parameters effective
+        sensor_http->reinitialize();
     }
 
-    // reinitialize to make all staged parameters effective
-    sensor_http->reinitialize();
     // save if indicated
     if (config_flags & CONFIG_PERSIST) {
         sensor_http->save_config_params();
@@ -289,7 +282,6 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     imu_port = get_sock_port(cli->imu_fd);
     if (!impl::socket_valid(lidar_port) || !impl::socket_valid(imu_port))
         return std::shared_ptr<client>();
-
 
     try {
         sensor::sensor_config config;

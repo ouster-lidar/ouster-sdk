@@ -67,6 +67,16 @@ class SensorHttpImp : public util::SensorHttp {
                           const std::string& value) const override;
 
     /**
+     * Retrieves the active configuration on the sensor
+     */
+    Json::Value active_config_params() const override;
+
+    /**
+     * Retrieves the stable configuration on the sensor
+     */
+    Json::Value stable_config_params() const override;
+
+    /**
      * Enables automatic assignment of udp destination ports.
      */
     void set_udp_dest_auto() const override;

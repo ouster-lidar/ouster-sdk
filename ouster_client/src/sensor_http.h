@@ -70,6 +70,16 @@ class SensorHttp {
                                   const std::string& value) const = 0;
 
     /**
+     * Retrieves the active configuration on the sensor
+     */
+    virtual Json::Value active_config_params() const = 0;
+
+    /**
+     * Retrieves the stable configuration on the sensor
+     */
+    virtual Json::Value stable_config_params() const = 0;
+
+    /**
      * Enables automatic assignment of udp destination ports.
      */
     virtual void set_udp_dest_auto() const = 0;
