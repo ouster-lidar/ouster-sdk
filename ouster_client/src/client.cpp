@@ -217,19 +217,18 @@ bool set_config(const std::string& hostname, const sensor_config& config,
             active_params["signal_multiplier"].asInt();
     }
 
+    // set automatic udp dest, if flag specified
+    if (config_flags & CONFIG_UDP_DEST_AUTO) {
+        if (config.udp_dest)
+            throw std::invalid_argument(
+                "UDP_DEST_AUTO flag set but provided config has udp_dest");
+        sensor_http->set_udp_dest_auto();
+    }
+
     // if configuration didn't change then skip applying the params
     if (active_params_clone != active_params) {
         auto active_params_str = Json::FastWriter().write(active_params);
         sensor_http->set_config_param(".", active_params_str);
-
-        // set automatic udp dest, if flag specified
-        if (config_flags & CONFIG_UDP_DEST_AUTO) {
-            if (config.udp_dest)
-                throw std::invalid_argument(
-                    "UDP_DEST_AUTO flag set but provided config has udp_dest");
-            sensor_http->set_udp_dest_auto();
-        }
-
         // reinitialize to make all staged parameters effective
         sensor_http->reinitialize();
     }
