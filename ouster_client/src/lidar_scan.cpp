@@ -252,8 +252,8 @@ std::string to_string(const LidarScan& ls) {
         img_t<uint64_t> key{ls.h, ls.w};
         for (const auto& ft : ls) {
             impl::visit_field(ls, ft.first, impl::read_and_cast(), key);
-            ss << "    " << to_string(ft.first) << ":"
-               << to_string(ft.second) << " = (";
+            ss << "    " << to_string(ft.first) << ":" << to_string(ft.second)
+               << " = (";
             ss << key.minCoeff() << "; " << key.mean() << "; "
                << key.maxCoeff();
             ss << ")" << std::endl;
@@ -273,7 +273,6 @@ std::string to_string(const LidarScan& ls) {
     ss << "}";
     return ss.str();
 }
-
 
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     const mat4d& beam_to_lidar_transform,

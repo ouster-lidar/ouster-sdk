@@ -430,7 +430,6 @@ std::string to_string(ChanFieldType ft) {
     }
 }
 
-
 std::string to_string(UDPProfileLidar profile) {
     auto res = lookup(impl::udp_profile_lidar_strings, profile);
     return res ? res.value() : "UNKNOWN";

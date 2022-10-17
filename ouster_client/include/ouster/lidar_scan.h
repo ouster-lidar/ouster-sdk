@@ -90,8 +90,7 @@ class LidarScan {
     std::map<sensor::ChanField, impl::FieldSlot> fields_;
     LidarScanFieldTypes field_types_;
 
-    LidarScan(size_t w, size_t h,
-              LidarScanFieldTypes field_types);
+    LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types);
 
    public:
     /**
@@ -537,7 +536,7 @@ class ScanBatcher {
      */
     bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 };
-    
+
 }  // namespace ouster
 
 #include "ouster/impl/lidar_scan_impl.h"

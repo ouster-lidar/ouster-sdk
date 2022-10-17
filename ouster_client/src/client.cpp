@@ -213,7 +213,8 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     // Change values 1, 2, 3 back to ints to support older FWs
     if (active_params["signal_multiplier"].asDouble() != 0.25 &&
         active_params["signal_multiplier"].asDouble() != 0.5) {
-        active_params["signal_multiplier"] = active_params["signal_multiplier"].asInt();
+        active_params["signal_multiplier"] =
+            active_params["signal_multiplier"].asInt();
     }
 
     // if configuration didn't change then skip applying the params
