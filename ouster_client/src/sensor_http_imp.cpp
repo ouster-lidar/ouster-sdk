@@ -36,8 +36,8 @@ Json::Value SensorHttpImp::active_config_params() const {
     return get_json("api/v1/sensor/cmd/get_config_param?args=active");
 }
 
-Json::Value SensorHttpImp::stable_config_params() const {
-    return get_json("api/v1/sensor/cmd/get_config_param?args=stable");
+Json::Value SensorHttpImp::staged_config_params() const {
+    return get_json("api/v1/sensor/cmd/get_config_param?args=staged");
 }
 
 void SensorHttpImp::set_udp_dest_auto() const {

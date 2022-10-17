@@ -75,9 +75,9 @@ class SensorHttp {
     virtual Json::Value active_config_params() const = 0;
 
     /**
-     * Retrieves the stable configuration on the sensor
+     * Retrieves the staged configuration on the sensor
      */
-    virtual Json::Value stable_config_params() const = 0;
+    virtual Json::Value staged_config_params() const = 0;
 
     /**
      * Enables automatic assignment of udp destination ports.

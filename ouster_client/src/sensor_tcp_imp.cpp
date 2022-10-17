@@ -67,8 +67,8 @@ Json::Value SensorTcpImp::active_config_params() const {
     return tcp_cmd_json({"get_config_param", "active"});
 }
 
-Json::Value SensorTcpImp::stable_config_params() const {
-    return tcp_cmd_json({"get_config_param", "stable"});
+Json::Value SensorTcpImp::staged_config_params() const {
+    return tcp_cmd_json({"get_config_param", "staged"});
 }
 
 void SensorTcpImp::set_udp_dest_auto() const {

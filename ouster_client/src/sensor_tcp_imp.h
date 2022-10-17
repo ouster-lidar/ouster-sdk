@@ -77,9 +77,9 @@ class SensorTcpImp : public util::SensorHttp {
     Json::Value active_config_params() const override;
 
     /**
-     * Retrieves the stable configuration on the sensor
+     * Retrieves the staged configuration on the sensor
      */
-    Json::Value stable_config_params() const override;
+    Json::Value staged_config_params() const override;
 
     /**
      * Enables automatic assignment of udp destination ports.
