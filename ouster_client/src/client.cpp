@@ -272,22 +272,6 @@ bool collect_metadata(client& cli, SOCKET sock_fd, chrono::seconds timeout) {
     return success;
 }
 
-// conversion for operating_mode (introduced in fw 2.0) to auto_start
-// (deprecated in 1.13)
-const std::array<std::pair<OperatingMode, std::string>, 2> auto_start_strings =
-    {{{OPERATING_NORMAL, "1"}, {OPERATING_STANDBY, "0"}}};
-
-static std::string auto_start_string(OperatingMode mode) {
-    auto end = auto_start_strings.end();
-    auto res =
-        std::find_if(auto_start_strings.begin(), end,
-                     [&](const std::pair<OperatingMode, std::string>& p) {
-                         return p.first == mode;
-                     });
-
-    return res == end ? "UNKNOWN" : res->second;
-}
-
 bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
                        uint8_t config_flags) {
     std::string res;
@@ -303,7 +287,7 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
     };
 
     // set params
-    if (config.udp_dest && !set_param("udp_ip", config.udp_dest.value()))
+    if (config.udp_dest && !set_param("udp_dest", config.udp_dest.value()))
         return false;
 
     if (config.udp_port_lidar &&
@@ -323,11 +307,8 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
         !set_param("lidar_mode", to_string(config.ld_mode.value())))
         return false;
 
-    // "operating_mode" introduced in fw 2.0. use deprecated 'auto_start_flag'
-    // to support 1.13
     if (config.operating_mode &&
-        !set_param("auto_start_flag",
-                   auto_start_string(config.operating_mode.value())))
+        !set_param("operating_mode", to_string(config.operating_mode.value())))
         return false;
 
     if (config.multipurpose_io_mode &&
@@ -524,8 +505,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     std::string res;
     bool success = true;
 
-    success &=
-        do_tcp_cmd(sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
+    success &= do_tcp_cmd(sock_fd,
+                          {"set_config_param", "udp_dest", udp_dest_host}, res);
     success &= res == "set_config_param";
 
     success &= do_tcp_cmd(
@@ -554,8 +535,10 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     }
 
     // wake up from STANDBY, if necessary
-    success &= do_tcp_cmd(
-        sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
+    success &= do_tcp_cmd(sock_fd,
+                          {"set_config_param", "operating_mode",
+                           to_string(OperatingMode::OPERATING_NORMAL)},
+                          res);
     success &= res == "set_config_param";
 
     // reinitialize to activate new settings
