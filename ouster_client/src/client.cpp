@@ -199,22 +199,22 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     auto sensor_http = SensorHttp::create(hostname);
 
     // reset staged config to avoid spurious errors
-    auto active_params = sensor_http->active_config_params();
-    Json::Value active_params_clone = active_params;
+    auto config_params = sensor_http->active_config_params();
+    Json::Value config_params_copy = config_params;
 
     // set all desired config parameters
     Json::Value config_json = to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
-        active_params[key] = config_json[key];
+        config_params[key] = config_json[key];
     }
 
     // Signal multiplier changed from int to double for FW 3.0/2.5+, with
     // corresponding change to config.signal_multiplier.
     // Change values 1, 2, 3 back to ints to support older FWs
-    if (active_params["signal_multiplier"].asDouble() != 0.25 &&
-        active_params["signal_multiplier"].asDouble() != 0.5) {
-        active_params["signal_multiplier"] =
-            active_params["signal_multiplier"].asInt();
+    if (config_params["signal_multiplier"].asDouble() != 0.25 &&
+        config_params["signal_multiplier"].asDouble() != 0.5) {
+        config_params["signal_multiplier"] =
+            config_params["signal_multiplier"].asInt();
     }
 
     // set automatic udp dest, if flag specified
@@ -226,9 +226,11 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     }
 
     // if configuration didn't change then skip applying the params
-    if (active_params_clone != active_params) {
-        auto active_params_str = Json::FastWriter().write(active_params);
-        sensor_http->set_config_param(".", active_params_str);
+    if (config_params_copy != config_params) {
+        Json::StreamWriterBuilder builder;
+        builder["indentation"] = "";
+        auto config_params_str = Json::writeString(builder, config_params);
+        sensor_http->set_config_param(".", config_params_str);
         // reinitialize to make all staged parameters effective
         sensor_http->reinitialize();
     }

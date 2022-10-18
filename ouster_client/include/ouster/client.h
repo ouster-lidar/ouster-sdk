@@ -64,7 +64,7 @@ std::shared_ptr<client> init_client(const std::string& hostname = "",
  */
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    lidar_mode mode = MODE_UNSPEC,
+                                    lidar_mode ld_mode = MODE_UNSPEC,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
                                     int timeout_sec = 60);
