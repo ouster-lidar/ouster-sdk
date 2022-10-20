@@ -226,7 +226,8 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     }
 
     // if configuration didn't change then skip applying the params
-    if (config_params_copy != config_params) {
+    if (config_flags & CONFIG_FORCE_REINIT ||
+        config_params_copy != config_params) {
         Json::StreamWriterBuilder builder;
         builder["indentation"] = "";
         auto config_params_str = Json::writeString(builder, config_params);

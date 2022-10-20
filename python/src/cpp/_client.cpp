@@ -450,10 +450,11 @@ PYBIND11_PLUGIN(_client) {
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; })
         .def("__deepcopy__", [](const sensor_config& self, py::dict) { return sensor_config{self}; });
 
-    m.def("set_config", [] (const std::string& hostname, const sensor_config& config, bool persist,  bool udp_dest_auto) {
+    m.def("set_config", [] (const std::string& hostname, const sensor_config& config, bool persist,  bool udp_dest_auto, bool force_reinit) {
         uint8_t config_flags = 0;
         if (persist) config_flags |= ouster::sensor::CONFIG_PERSIST;
         if (udp_dest_auto) config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
+        if (force_reinit) config_flags |= ouster::sensor::CONFIG_FORCE_REINIT;
         if (!sensor::set_config(hostname, config, config_flags)) {
             throw std::runtime_error("Error setting sensor config.");
         }
@@ -464,10 +465,13 @@ PYBIND11_PLUGIN(_client) {
             hostname (str): hostname of the sensor
             config (SensorConfig): config to set sensor parameters to
             persist (bool): persist parameters after sensor disconnection (default = False)
-            udp_dest_auto: automatically determine sender's IP at the time command was sent
+            udp_dest_auto (bool): automatically determine sender's IP at the time command was sent
                 and set it as destination of UDP traffic. Function will error out if config has
                 udp_dest member. (default = False)
-        )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
+            force_reinit (bool): forces the sensor to re-init during set_config even when config
+                params have not changed. (default = False)
+        )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false,
+            py::arg("force_reinit") = false);
 
     m.def("get_config", [](const std::string& hostname, bool active) {
         sensor::sensor_config config;
