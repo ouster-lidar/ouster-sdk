@@ -645,6 +645,7 @@ void Label::set_rgba(const std::array<float, 4>& rgba) {
 void TargetDisplay::enable_rings(bool state) { rings_enabled_ = state; }
 
 void TargetDisplay::set_ring_size(int n) { ring_size_ = n; }
+void TargetDisplay::set_ring_line_width(int line_width) { ring_line_width_ = line_width; }
 
 void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
     bool orthographic = false;

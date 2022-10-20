@@ -30,6 +30,7 @@ constexpr mat4d identity4d = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 
 using vec4f = std::array<float, 4>;
 using vec3d = std::array<double, 3>;
+using vec2d = std::array<double, 2>;
 
 // TODO: messes up lidar_scan_viz
 namespace impl {
@@ -327,7 +328,7 @@ class Camera {
     vec3d view_offset_;
     int yaw_;  // decidegrees
     int pitch_;
-    int log_distance_;  // 0 means 50m
+    double log_distance_;  // 0 means 50m
 
     /* projection parameters */
     bool orthographic_;
@@ -369,6 +370,20 @@ class Camera {
     void yaw(float degrees);
 
     /**
+     * Set yaw in degrees.
+     *
+     * @param[in] degrees yaw angle
+     */
+    void set_yaw(float degrees);
+
+    /**
+     * Get the yaw in degrees.
+     *
+     * @return yaw in degrees
+     */
+    float get_yaw() const;
+
+    /**
      * Pitch the camera up or down.
      *
      * @param[in] degrees offset to the current pitch angle
@@ -376,11 +391,39 @@ class Camera {
     void pitch(float degrees);
 
     /**
+     * Set pitch in degrees.
+     *
+     * @param[in] degrees pitch angle
+     */
+    void set_pitch(float degrees);
+
+    /**
+     * Get the camera pitch in degrees.
+     *
+     * @return pitch in degrees
+     */
+    float get_pitch() const;
+
+    /**
      * Move the camera towards or away from the target.
      *
      * @param[in] amount offset to the current camera distance from the target
      */
-    void dolly(int amount);
+    void dolly(double amount);
+
+    /**
+     * Set dolly (i.e. log distance) from the target to the camera.
+     *
+     * @param[in] log_distance log of the distance from the target
+     */
+    void set_dolly(double log_distance);
+
+    /**
+     * Get the log distance from the target to the camera.
+     *
+     * @return log_distance
+     */
+    double get_dolly() const;
 
     /**
      * Move the camera in the XY plane of the camera view.
@@ -395,6 +438,20 @@ class Camera {
     void dolly_xy(double x, double y);
 
     /**
+     * Set view offset.
+     *
+     * @param[in] view_offset view offset of the camera
+     */
+    void set_view_offset(const vec3d& view_offset);
+
+    /**
+     * Get view offset.
+     *
+     * @preturn view offset of the camera
+     */
+    vec3d get_view_offset() const;
+
+    /**
      * Set the diagonal field of view.
      *
      * @param[in] degrees the diagonal field of view, in degrees
@@ -402,11 +459,25 @@ class Camera {
     void set_fov(float degrees);
 
     /**
+     * Get field of fiew of a camera in degrees
+     *
+     * @return fov in degrees
+     */
+    float get_fov() const;
+
+    /**
      * Use an orthographic or perspective projection.
      *
      * @param[in] state true for orthographic, false for perspective
      */
     void set_orthographic(bool state);
+
+    /**
+     * Get orthographic state. 
+     *
+     * @return true if orthographic, false if perspective
+     */
+    bool is_orthographic() const;
 
     /**
      * Set the 2d position of camera target in the viewport.
@@ -417,9 +488,25 @@ class Camera {
     void set_proj_offset(float x, float y);
 
     /**
-     * Directly set camera target object pose
+     * Get the 2d position of camera target in the viewport.
+     *
+     * @return (x, y) position of a camera target in the viewport
      */
-    void set_target(const mat4d& target) { target_ = target; }
+    vec2d get_proj_offset() const;
+
+    /**
+     * Directly set camera target object pose
+     * 
+     * @param[in] target target where camera is looking at
+     */
+    void set_target(const mat4d& target);
+
+    /**
+     * Get the pose of a camera target.
+     * 
+     * @return target camera pose
+     */
+    mat4d get_target() const;
 };
 
 /**
@@ -428,6 +515,7 @@ class Camera {
 class TargetDisplay {
     int ring_size_{1};
     bool rings_enabled_{false};
+    int ring_line_width_{1};
 
    public:
     /**
@@ -443,6 +531,13 @@ class TargetDisplay {
      * @param[in] n space between rings will be 10^n meters
      */
     void set_ring_size(int n);
+
+    /**
+     * Set the line width of the rings.
+     *
+     * @param[in] line_width of the rings line
+     */
+    void set_ring_line_width(int line_width);
 
     friend class impl::GLRings;
 };

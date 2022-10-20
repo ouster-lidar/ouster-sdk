@@ -151,6 +151,7 @@ class LidarScanViz:
         # misc display state
         self._available_fields = []
         self._ring_size = 1
+        self._ring_line_width = 1
         self._osd_enabled = True
 
         # set up post-processing for each channel field
@@ -203,6 +204,7 @@ class LidarScanViz:
             (ord('M'), 0): LidarScanViz.cycle_cloud_mode,
             (ord("'"), 0): partial(LidarScanViz.update_ring_size, amount=1),
             (ord("'"), 1): partial(LidarScanViz.update_ring_size, amount=-1),
+            (ord("'"), 2): LidarScanViz.cicle_ring_line_width,
             (ord("O"), 0): LidarScanViz.toggle_osd,
         }
 
@@ -274,6 +276,12 @@ class LidarScanViz:
         with self._lock:
             self._ring_size = min(3, max(-2, self._ring_size + amount))
             self._viz.target_display.set_ring_size(self._ring_size)
+
+    def cicle_ring_line_width(self) -> None:
+        """Change rings line width."""
+        with self._lock:
+            self._ring_line_width = max(1, (self._ring_line_width + 1) % 10)
+            self._viz.target_display.set_ring_line_width(self._ring_line_width)
 
     def toggle_osd(self, state: Optional[bool] = None) -> None:
         """Show or hide the on-screen display."""

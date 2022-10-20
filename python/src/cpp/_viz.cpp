@@ -218,12 +218,28 @@ PYBIND11_PLUGIN(_viz) {
     py::class_<viz::Camera>(m, "Camera",
                             "Controls the camera view and projection.")
         .def("reset", &viz::Camera::reset, "Reset the camera view and fov.")
+
         .def("yaw", &viz::Camera::yaw, py::arg("degrees"),
              "Orbit the camera left or right about the camera target.")
+        .def("set_yaw", &viz::Camera::set_yaw, py::arg("degrees"),
+             "Set yaw in degrees.")
+        .def("get_yaw", &viz::Camera::get_yaw, "Get yaw in degrees.")
+
         .def("pitch", &viz::Camera::pitch, py::arg("degrees"),
              "Pitch the camera up or down.")
+        .def("set_pitch", &viz::Camera::set_pitch, py::arg("degrees"),
+             "Set pitch in degrees.")
+        .def("get_pitch", &viz::Camera::get_pitch, "Get pitch in degrees.")
+
         .def("dolly", &viz::Camera::dolly, py::arg("amount"),
              "Move the camera towards or away from the target.")
+
+        .def("set_dolly", &viz::Camera::set_dolly,
+             py::arg("log_distance"),
+             "Set the dolly (i.e. log distance) of the camera from the target.")
+        .def("get_dolly", &viz::Camera::get_dolly,
+             "Get the dolly (i.e. log distance) of the camera from the target.")
+
         .def("dolly_xy", &viz::Camera::dolly_xy, py::arg("x"), py::arg("y"),
              R"(
              Move the camera in the XY plane of the camera view.
@@ -232,10 +248,19 @@ PYBIND11_PLUGIN(_viz) {
                  x: horizontal offset
                  y: vertical offset
              )")
+        .def("set_view_offset", &viz::Camera::set_view_offset,
+             py::arg("view_offset"), "Set view offset of a camera")
+        .def("get_view_offset", &viz::Camera::get_view_offset,
+             "Get view offset of a camera")
+
         .def("set_fov", &viz::Camera::set_fov, py::arg("degrees"),
              "Set the diagonal field of view.")
+        .def("get_fov", &viz::Camera::get_fov,
+             "Get the diagonal field of view in degrees.")
         .def("set_orthographic", &viz::Camera::set_orthographic,
              py::arg("state"), "Use an orthographic or perspective projection.")
+        .def("is_orthographic", &viz::Camera::is_orthographic,
+             "Get the orthographic state.")
         .def("set_proj_offset", &viz::Camera::set_proj_offset, py::arg("x"),
              py::arg("y"),
              R"(
@@ -245,6 +270,8 @@ PYBIND11_PLUGIN(_viz) {
                  x: horizontal position in in normalized coordinates [-1, 1]
                  y: vertical position in in normalized coordinates [-1, 1]
              )")
+        .def("get_proj_offset", &viz::Camera::get_proj_offset,
+             "Get the 2d position of a camera target in the viewport.")
         .def(
             "set_target",
             [](viz::Camera& self, pymatrixd pose) {
@@ -259,14 +286,18 @@ PYBIND11_PLUGIN(_viz) {
 
                  Args:
                     pose: 4x4 column-major homogeneous transformation matrix
-             )");
+             )")
+        .def("get_target", &viz::Camera::get_target,
+             "Get a pose of the camera target.");
 
     py::class_<viz::TargetDisplay>(
         m, "TargetDisplay", "Manages the state of the camera target display.")
         .def("enable_rings", &viz::TargetDisplay::enable_rings,
              py::arg("state"), "Enable or disable distance ring display.")
         .def("set_ring_size", &viz::TargetDisplay::set_ring_size, py::arg("n"),
-             "Set the distance between rings.");
+             "Set the distance between rings.")
+        .def("set_ring_line_width", &viz::TargetDisplay::set_ring_line_width,
+             py::arg("line_width"), "Set the line width of the rings.");
 
     py::class_<viz::Cloud, std::shared_ptr<viz::Cloud>>(m, "Cloud",
                                                         R"(

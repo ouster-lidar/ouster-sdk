@@ -31,6 +31,7 @@ class GLRings {
     const size_t points_per_ring;
     GLuint xyz_buffer;
     int ring_size_;
+    int ring_line_width_;
     bool rings_enabled;
 
    public:

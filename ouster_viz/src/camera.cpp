@@ -26,6 +26,10 @@ namespace {
 /* initial distance 50 m */
 constexpr double log_distance_0 = 50.0;
 
+/* distance min/max bounds */
+constexpr double log_distance_min = -500.0;
+constexpr double log_distance_max = 500.0;
+
 /*
  * Note that most rotations are done in terms of integral decidegrees
  * (tenths of a degree). This is so that the camera will be able to
@@ -104,7 +108,7 @@ void Camera::birds_eye_view() {
     view_offset_ = {0, 0, 0};
     yaw_ = 0;
     pitch_ = 0_deg;
-    log_distance_ = 200;
+    log_distance_ = 200.0;
     fov_ = 90_deg;
 }
 
@@ -113,14 +117,40 @@ void Camera::yaw(float degrees) {
     yaw_ = (yaw_ + 360_deg + dd(degrees)) % 360_deg;
 }
 
+void Camera::set_yaw(float degrees) {
+    yaw_ = (360_deg + dd(degrees)) % 360_deg;
+}
+
+float Camera::get_yaw() const {
+    return static_cast<float>(yaw_) / 10.0;
+}
+
 // down positive, up negative
 void Camera::pitch(float degrees) {
     pitch_ = std::max(-180_deg, std::min(0, pitch_ + dd(degrees)));
 }
 
+void Camera::set_pitch(float degrees) {
+    pitch_ = std::max(-180_deg, std::min(0, dd(degrees)));
+}
+
+float Camera::get_pitch() const {
+    return static_cast<float>(pitch_) / 10.0;
+}
+
 // in is positive, out is negative
-void Camera::dolly(int amount) {
-    log_distance_ = std::max(-500, std::min(500, log_distance_ - amount));
+void Camera::dolly(double amount) {
+    log_distance_ = std::max(
+        log_distance_min, std::min(log_distance_max, log_distance_ - amount));
+}
+
+void Camera::set_dolly(double log_distance) {
+    log_distance_ =
+        std::max(log_distance_min, std::min(log_distance_max, log_distance));
+}
+
+double Camera::get_dolly() const {
+    return log_distance_;
 }
 
 void Camera::dolly_xy(double x, double y) {
@@ -137,15 +167,33 @@ void Camera::dolly_xy(double x, double y) {
     Eigen::Map<Eigen::Vector3d>{view_offset_.data()} += rot.transpose() * v;
 }
 
+void Camera::set_view_offset(const vec3d& view_offset) {
+    view_offset_ = view_offset;
+}
+
+vec3d Camera::get_view_offset() const {
+    return view_offset_;
+}
+
 void Camera::set_fov(float degrees) {
     fov_ = std::max(0.0_deg, std::min(360.0_deg, dd(degrees)));
 }
 
+float Camera::get_fov() const { return static_cast<float>(fov_ / 10.0); }
+
 void Camera::set_orthographic(bool b) { orthographic_ = b; }
+bool Camera::is_orthographic() const { return orthographic_; }
 
 void Camera::set_proj_offset(float x, float y) {
     proj_offset_x_ = x, proj_offset_y_ = y;
 }
+
+vec2d Camera::get_proj_offset() const {
+    return {proj_offset_x_, proj_offset_y_};
+}
+
+void Camera::set_target(const mat4d& target) { target_ = target; }
+mat4d Camera::get_target() const { return target_; }
 
 /*
  * Calculate camera matrices.
