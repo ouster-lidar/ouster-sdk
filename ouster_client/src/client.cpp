@@ -43,7 +43,7 @@ struct client {
 };
 
 // defined in types.cpp
-Json::Value to_json(const sensor_config& config, bool compat);
+Json::Value to_json(const sensor_config& config);
 
 namespace {
 
@@ -350,7 +350,7 @@ bool set_config_helper(SOCKET sock_fd, const sensor_config& config,
     }
 
     // set all desired config parameters
-    Json::Value config_json = to_json(config, true);
+    Json::Value config_json = to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
         auto value = Json::FastWriter().write(config_json[key]);
         value.erase(std::remove(value.begin(), value.end(), '\n'), value.end());
@@ -494,7 +494,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         success &= res == "set_udp_dest_auto";
     } else {
         success &= do_tcp_cmd(
-            sock_fd, {"set_config_param", "udp_ip", udp_dest_host}, res);
+            sock_fd, {"set_config_param", "udp_dest", udp_dest_host}, res);
         success &= res == "set_config_param";
     }
 
@@ -524,8 +524,10 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     }
 
     // wake up from STANDBY, if necessary
-    success &=
-        do_tcp_cmd(sock_fd, {"set_config_param", "auto_start_flag", "1"}, res);
+    success &= do_tcp_cmd(sock_fd,
+                          {"set_config_param", "operating_mode",
+                           to_string(OperatingMode::OPERATING_NORMAL)},
+                          res);
     success &= res == "set_config_param";
 
     // reinitialize to activate new settings

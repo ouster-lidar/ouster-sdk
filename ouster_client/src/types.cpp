@@ -887,13 +887,11 @@ std::string to_string(const sensor_info& info) {
     return Json::writeString(builder, root);
 }
 
-Json::Value to_json(const sensor_config& config, bool compat) {
+Json::Value to_json(const sensor_config& config) {
     Json::Value root{Json::objectValue};
 
     if (config.udp_dest) {
-        // use deprecated cofig for 1.13 compatibility
-        const char* key = compat ? "udp_ip" : "udp_dest";
-        root[key] = config.udp_dest.value();
+        root["udp_dest"] = config.udp_dest.value();
     }
 
     if (config.udp_port_lidar) {
@@ -913,14 +911,7 @@ Json::Value to_json(const sensor_config& config, bool compat) {
     }
 
     if (config.operating_mode) {
-        // use deprecated config for 1.13 compatibility
-        auto mode = config.operating_mode.value();
-        if (compat) {
-            root["auto_start_flag"] =
-                (mode == OperatingMode::OPERATING_NORMAL) ? 1 : 0;
-        } else {
-            root["operating_mode"] = to_string(mode);
-        }
+        root["operating_mode"] = to_string(config.operating_mode.value());
     }
 
     if (config.multipurpose_io_mode) {
@@ -1004,7 +995,7 @@ Json::Value to_json(const sensor_config& config, bool compat) {
 }
 
 std::string to_string(const sensor_config& config) {
-    Json::Value root = to_json(config, false);
+    Json::Value root = to_json(config);
 
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
