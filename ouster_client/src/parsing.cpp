@@ -263,32 +263,29 @@ uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
         // LEGACY profile has no packet_type - use 0 to code as 'legacy'
         return 0;
-    } else {
-        uint16_t res;
-        std::memcpy(&res, lidar_buf + 0, sizeof(uint16_t));
-        return res;
     }
+    uint16_t res;
+    std::memcpy(&res, lidar_buf + 0, sizeof(uint16_t));
+    return res;
 }
 
 uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
         return col_frame_id(nth_col(0, lidar_buf));
-    } else {
-        uint16_t res;
-        std::memcpy(&res, lidar_buf + 2, sizeof(uint16_t));
-        return res;
     }
+    uint16_t res;
+    std::memcpy(&res, lidar_buf + 2, sizeof(uint16_t));
+    return res;
 }
 
 uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
         // LEGACY profile has no init_id - use 0 to code as 'legacy'
         return 0;
-    } else {
-        uint32_t res;
-        std::memcpy(&res, lidar_buf + 4, sizeof(uint32_t));
-        return res & 0x00ffffff;
     }
+    uint32_t res;
+    std::memcpy(&res, lidar_buf + 4, sizeof(uint32_t));
+    return res & 0x00ffffff;
 }
 
 uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
@@ -296,11 +293,56 @@ uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
         // LEGACY profile has no prod_sn (serial number) - use 0 to code as
         // 'legacy'
         return 0;
-    } else {
-        uint64_t res;
-        std::memcpy(&res, lidar_buf + 7, sizeof(uint64_t));
-        return res & 0x000000ffffffffff;
     }
+    uint64_t res;
+    std::memcpy(&res, lidar_buf + 7, sizeof(uint64_t));
+    return res & 0x000000ffffffffff;
+}
+
+uint16_t packet_format::countdown_thermal_shutdown(
+    const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no shutdown counter in packet header - use 0 for
+        // 'normal operation'
+        return 0;
+    }
+    uint16_t res;
+    std::memcpy(&res, lidar_buf + 16, sizeof(uint8_t));
+    return res;
+}
+
+uint16_t packet_format::countdown_shot_limiting(
+    const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no shot limiting countdown in packet header - use
+        // 0 for 'normal operation'
+        return 0;
+    }
+    uint16_t res;
+    std::memcpy(&res, lidar_buf + 17, sizeof(uint8_t));
+    return res;
+}
+
+uint8_t packet_format::thermal_shutdown(const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no shutdown status in packet header - use 0 for
+        // 'normal operation'
+        return 0;
+    }
+    uint8_t res;
+    std::memcpy(&res, lidar_buf + 18, sizeof(uint8_t));
+    return res & 0x0f;
+}
+
+uint8_t packet_format::shot_limiting(const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no shot limiting in packet header - use 0 for
+        // 'normal operation'
+        return 0;
+    }
+    uint8_t res;
+    std::memcpy(&res, lidar_buf + 19, sizeof(uint8_t));
+    return res & 0x0f;
 }
 
 /* Measurement block access */

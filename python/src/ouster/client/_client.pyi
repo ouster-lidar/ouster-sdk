@@ -173,6 +173,18 @@ class PacketFormat:
     def init_id(self, buf: BufferT) -> int:
         ...
 
+    def countdown_thermal_shutdown(self, buf: BufferT) -> int:
+        ...
+
+    def countdown_shot_limiting(self, buf: BufferT) -> int:
+        ...
+
+    def thermal_shutdown(self, buf: BufferT) -> int:
+        ...
+
+    def shot_limiting(self, buf: BufferT) -> int:
+        ...
+
     @property
     def fields(self) -> Iterator[ChanField]:
         ...
@@ -566,6 +578,7 @@ class LidarScan:
     N_FIELDS: ClassVar[int]
 
     frame_id: int
+    frame_status: int
 
     @overload
     def __init__(self, w: int, h: int) -> None:
@@ -586,6 +599,13 @@ class LidarScan:
 
     @property
     def h(self) -> int:
+        ...
+
+
+    def thermal_shutdown(self) -> int:
+        ...
+
+    def shot_limiting(self) -> int:
         ...
 
     def header(self, header: ColHeader) -> ndarray:

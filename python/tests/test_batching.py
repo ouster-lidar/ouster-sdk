@@ -138,6 +138,9 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     # do batching into ls with a fields subset
     for p in take(packets_per_frame, lidar_stream):
         batch(p._data, ls)
+        if isinstance(p, client.LidarPacket):
+            assert p.shot_limiting == ls.shot_limiting()
+            assert p.thermal_shutdown == ls.thermal_shutdown()
 
     # it should contain the same num fields as we've added
     assert len(list(ls.fields)) == len(fields)

@@ -106,6 +106,27 @@ Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
     {PROFILE_IMU_LEGACY, "LEGACY"},
 }};
 
+// TODO: should we name them something better? feel like the most important is
+// SHOT_LIMITING_NORMAL
+Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings{{
+    {SHOT_LIMITING_NORMAL, "SHOT_LIMITING_NORMAL"},
+    {SHOT_LIMITING_IMMINENT, "SHOT_LIMITING_IMMINENT"},
+    {SHOT_LIMITING_REDUCTION_0_10, "SHOT_LIMITING_REDUCTION_0_10"},
+    {SHOT_LIMITING_REDUCTION_10_20, "SHOT_LIMITING_REDUCTION_10_20"},
+    {SHOT_LIMITING_REDUCTION_20_30, "SHOT_LIMITING_REDUCTION_20_30"},
+    {SHOT_LIMITING_REDUCTION_30_40, "SHOT_LIMITING_REDUCTION_30_40"},
+    {SHOT_LIMITING_REDUCTION_40_50, "SHOT_LIMITING_REDUCTION_40_50"},
+    {SHOT_LIMITING_REDUCTION_50_60, "SHOT_LIMITING_REDUCTION_50_60"},
+    {SHOT_LIMITING_REDUCTION_60_70, "SHOT_LIMITING_REDUCTION_60_70"},
+    {SHOT_LIMITING_REDUCTION_70_75, "SHOT_LIMITING_REDUCTION_70_75"},
+}};
+
+// TODO: do we want these? do we like the names?
+Table<ThermalShutdownStatus, const char*, 2> thermal_shutdown_status_strings{{
+    {THERMAL_SHUTDOWN_NORMAL, "THERMAL_SHUTDOWN_NORMAL"},
+    {THERMAL_SHUTDOWN_IMMINENT, "THERMAL_SHUTDOWN_IMMINENT"},
+}};
+
 }  // namespace impl
 
 /* Equality operators */
@@ -448,6 +469,17 @@ optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s) {
     return rlookup(impl::udp_profile_imu_strings, s.c_str());
 }
 
+std::string to_string(ShotLimitingStatus shot_limiting_status) {
+    auto res = lookup(impl::shot_limiting_status_strings, shot_limiting_status);
+    return res ? res.value() : "UNKNOWN";
+}
+
+std::string to_string(ThermalShutdownStatus thermal_shutdown_status) {
+    auto res =
+        lookup(impl::thermal_shutdown_status_strings, thermal_shutdown_status);
+    return res ? res.value() : "UNKNOWN";
+}
+
 static sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
@@ -719,8 +751,8 @@ static sensor_info parse_legacy(const std::string& meta) {
     }
 
     // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0 BUT missing
-    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0 according to
-    // prod-line
+    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0 according
+    // to prod-line
     if (root.isMember("lidar_origin_to_beam_origin_mm")) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();

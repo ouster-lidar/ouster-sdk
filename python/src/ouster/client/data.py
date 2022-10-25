@@ -181,6 +181,26 @@ class LidarPacket:
         return self._pf.prod_sn(self._data)
 
     @property
+    def countdown_thermal_shutdown(self) -> int:
+        """Get the thermal shutdown countdown of the packet."""
+        return self._pf.countdown_thermal_shutdown(self._data)
+
+    @property
+    def countdown_shot_limiting(self) -> int:
+        """Get the shot limiting countdown of the packet."""
+        return self._pf.countdown_shot_limiting(self._data)
+
+    @property
+    def thermal_shutdown(self) -> int:
+        """Get the thermal shutdown status of the packet."""
+        return self._pf.thermal_shutdown(self._data)
+
+    @property
+    def shot_limiting(self) -> int:
+        """Get the shot limiting status of the packet."""
+        return self._pf.shot_limiting(self._data)
+
+    @property
     def fields(self) -> Iterator[ChanField]:
         """Get available fields of LidarScan as Iterator."""
         return self._pf.fields

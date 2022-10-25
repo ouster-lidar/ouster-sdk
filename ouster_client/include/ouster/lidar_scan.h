@@ -1,8 +1,5 @@
 /**
- * Copyright (c) 2018, Ouster, Inc.
- * All rights reserved.
- *
- * @file
+ * Copyright (c) 2018, Ouster, Inc.  All rights reserved.  @file
  * @brief Holds lidar data by field in row-major order
  */
 
@@ -120,6 +117,15 @@ class LidarScan {
     [[deprecated]] std::vector<BlockHeader> headers{};
 
     /**
+     * Frame status - information from the packet header which corresponds to a
+     * frame
+     *
+     * @warning Member variables: use with caution, some of these will become
+     * private.
+     */
+    uint64_t frame_status{0};
+
+    /**
      * The current frame ID.
      *
      * @warning Members variables: use with caution, some of these will become
@@ -192,6 +198,16 @@ class LidarScan {
      * Lidar scan destructor.
      */
     ~LidarScan();
+
+    /**
+     * Get frame shot limiting status
+     */
+    sensor::ShotLimitingStatus shot_limiting() const;
+
+    /**
+     * Get frame thermal shutdown status
+     */
+    sensor::ThermalShutdownStatus thermal_shutdown() const;
 
     /**
      * Access timestamps as a vector.

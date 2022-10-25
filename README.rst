@@ -26,6 +26,16 @@ reading and visualizing data.
     driver follow the instructions provided on the repository's main page: https://github.com/ouster-lidar/ouster-ros
 
 
+Contact
+=======
+
+For support of the Ouster SDK, please use `Github Issues <https://github.com/ouster-lidar/ouster_example/issues>`_ in this repo.
+
+For support of Ouster products outside of the SDK, please use `Ouster customer support <https://ouster.atlassian.net/servicedesk/customer/portal/8/group/22/create/86>`_.
+
+For suspected security problems, please contact us at security@ouster.io.
+
+
 License
 =======
 

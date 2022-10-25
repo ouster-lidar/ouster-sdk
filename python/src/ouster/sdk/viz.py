@@ -21,9 +21,8 @@ import logging
 import numpy as np
 from PIL import Image as PILImage
 
-from .. import client
-from ..client import (_utils, ChanField)
-from ..client._client import Version
+from ouster import client
+from ouster.client import _utils
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
                    spezia_palette)
@@ -32,7 +31,7 @@ logger = logging.getLogger("viz-logger")
 
 # limit ouster_client log statements to "debug" and direct the output to log file
 # rather than the console (default).
-client.init_logger("debug", "ouster-python.log")
+client.init_logger("info", "ouster-python.log")
 
 T = TypeVar('T')
 
@@ -98,7 +97,7 @@ class LidarScanViz:
     def _reflectivity_pp(
             info: client.SensorInfo) -> Callable[[np.ndarray], None]:
 
-        if Version.from_string(info.fw_rev) >= Version.from_string("v2.1.0"):
+        if client._client.Version.from_string(info.fw_rev) >= client._client.Version.from_string("v2.1.0"):
 
             def proc_cal(refl, update_state: bool = True) -> None:
                 refl /= 255.0
@@ -120,16 +119,16 @@ class LidarScanViz:
 
         return proc
 
-    _cloud_mode_channels: ClassVar[List[Tuple[ChanField, ChanField]]] = [
-        (ChanField.RANGE, ChanField.RANGE2),
-        (ChanField.SIGNAL, ChanField.SIGNAL2),
-        (ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2),
-        (ChanField.NEAR_IR, ChanField.NEAR_IR),
+    _cloud_mode_channels: ClassVar[List[Tuple[client.ChanField, client.ChanField]]] = [
+        (client.ChanField.RANGE, client.ChanField.RANGE2),
+        (client.ChanField.SIGNAL, client.ChanField.SIGNAL2),
+        (client.ChanField.REFLECTIVITY, client.ChanField.REFLECTIVITY2),
+        (client.ChanField.NEAR_IR, client.ChanField.NEAR_IR),
     ]
 
-    _available_fields: List[ChanField]
+    _available_fields: List[client.ChanField]
     _cloud_palette: Optional[np.ndarray]
-    _field_pp: Dict[ChanField, Callable[[np.ndarray], None]]
+    _field_pp: Dict[client.ChanField, Callable[[np.ndarray], None]]
 
     def __init__(self,
                  meta: client.SensorInfo,
@@ -168,13 +167,13 @@ class LidarScanViz:
         nearir_pp = LidarScanViz._near_ir_pp(meta)
 
         self._field_pp = {
-            ChanField.RANGE: range_pp,
-            ChanField.RANGE2: partial(range_pp, update_state=False),
-            ChanField.SIGNAL: signal_pp,
-            ChanField.SIGNAL2: partial(signal_pp, update_state=False),
-            ChanField.REFLECTIVITY: refl_pp,
-            ChanField.REFLECTIVITY2: partial(refl_pp, update_state=False),
-            ChanField.NEAR_IR: nearir_pp,
+            client.ChanField.RANGE: range_pp,
+            client.ChanField.RANGE2: partial(range_pp, update_state=False),
+            client.ChanField.SIGNAL: signal_pp,
+            client.ChanField.SIGNAL2: partial(signal_pp, update_state=False),
+            client.ChanField.REFLECTIVITY: refl_pp,
+            client.ChanField.REFLECTIVITY2: partial(refl_pp, update_state=False),
+            client.ChanField.NEAR_IR: nearir_pp,
         }
 
         self._viz = viz or PointViz("Ouster Viz")
@@ -239,7 +238,7 @@ class LidarScanViz:
             self._cloud_mode_ind = (self._cloud_mode_ind + 1) % nfields
             new_fields = LidarScanViz._cloud_mode_channels[
                 self._cloud_mode_ind]
-            self._cloud_palette = (calref_palette if ChanField.REFLECTIVITY
+            self._cloud_palette = (calref_palette if client.ChanField.REFLECTIVITY
                                    in new_fields else spezia_palette)
 
     def toggle_cloud(self, i: int) -> None:
@@ -333,7 +332,7 @@ class LidarScanViz:
         cloud_fields = LidarScanViz._cloud_mode_channels[self._cloud_mode_ind]
 
         # extract field data and apply post-processing
-        field_data: Dict[ChanField, np.ndarray]
+        field_data: Dict[client.ChanField, np.ndarray]
         field_data = defaultdict(lambda: np.zeros(
             (scan.h, scan.w), dtype=np.float32))
 
@@ -349,7 +348,7 @@ class LidarScanViz:
         palette = self._cloud_palette
         self._cloud_palette = None
 
-        for i, range_field in ((0, ChanField.RANGE), (1, ChanField.RANGE2)):
+        for i, range_field in ((0, client.ChanField.RANGE), (1, client.ChanField.RANGE2)):
             if range_field in scan.fields:
                 range_data = scan.field(range_field)
             else:
@@ -378,7 +377,10 @@ class LidarScanViz:
                 f"frame: {scan.frame_id}\n"
                 f"sensor ts: {first_ts / 1e9:.3f}s\n"
                 f"profile: {str(meta.format.udp_profile_lidar)}\n"
-                f"{meta.prod_line} {meta.fw_rev} {meta.mode}")
+                f"{meta.prod_line} {meta.fw_rev} {meta.mode}\n"
+                f"shot limiting status: {str(scan.shot_limiting())}\n"
+                f"thermal shutdown status: {str(scan.thermal_shutdown())}"
+            )
         else:
             self._osd.set_text("")
 

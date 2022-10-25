@@ -118,9 +118,35 @@ def test_read_legacy_packet(packet: client.LidarPacket) -> None:
     assert packet.frame_id == 5424
     assert packet.init_id == 0
     assert packet.prod_sn == 0
+    assert packet.shot_limiting == 0
+    assert packet.thermal_shutdown == 0
     # in 1024xN mode, the angle between measurements is exactly 88 encoder ticks
     assert np.all(np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 88)
     assert np.all(packet.status == 0xffffffff)
+
+
+@pytest.mark.parametrize('test_key', ['single-2.3'])
+def test_read_single_return_packet(packet: client.LidarPacket) -> None:
+    """Read some arbitrary values from packet and check header invariants."""
+    assert packet.field(client.ChanField.RANGE)[-1, 0] == 11610
+    assert packet.field(client.ChanField.REFLECTIVITY)[-1, 0] == 11
+    assert packet.field(client.ChanField.SIGNAL)[-1, 0] == 34
+    assert packet.field(client.ChanField.NEAR_IR)[-1, 0] == 393
+
+    assert np.all(np.diff(packet.header(client.ColHeader.FRAME_ID)) == 0)
+    assert np.all(np.diff(packet.header(client.ColHeader.MEASUREMENT_ID)) == 1)
+    assert np.all(np.diff(packet.timestamp) > 0)
+    assert np.all(np.diff(packet.measurement_id) == 1)
+    assert packet.packet_type == 1
+    assert packet.frame_id == 1259
+    assert packet.init_id == 5431293
+    assert packet.prod_sn == 992210000957
+    assert packet.shot_limiting == 0
+    assert packet.thermal_shutdown == 0
+
+    # Changes from LEGACY
+    assert np.all(np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 0)
+    assert np.all(packet.status == 0x01)
 
 
 def test_scan_writeable() -> None:
@@ -400,6 +426,7 @@ def test_scan_zero_init() -> None:
         client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
 
     assert ls.frame_id == -1
+    assert ls.frame_status == 0
 
     assert np.count_nonzero(ls.timestamp) == 0
     assert np.count_nonzero(ls.measurement_id) == 0
@@ -425,6 +452,12 @@ def test_scan_copy_eq() -> None:
     assert ls0 != ls1
 
     ls1.frame_id = 9
+    assert ls0 == ls1
+
+    ls0.frame_status = 1
+    assert ls0 != ls1
+
+    ls1.frame_status = 1
     assert ls0 == ls1
 
     ls0.measurement_id[0] = 1

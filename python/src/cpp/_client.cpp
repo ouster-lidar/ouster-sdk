@@ -86,6 +86,9 @@ extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
 extern Table<ChanField, const char*, 23> chanfield_strings;
 extern Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
+extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
+extern Table<ThermalShutdownStatus, const char*, 2>
+    thermal_shutdown_status_strings;
 
 }  // namespace impl
 }  // namespace sensor
@@ -312,6 +315,22 @@ PYBIND11_PLUGIN(_client) {
             return pf.init_id(getptr(pf.lidar_packet_size, buf));
         })
 
+        .def("countdown_thermal_shutdown", [](packet_format& pf, py::buffer buf) {
+            return pf.countdown_thermal_shutdown(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("countdown_shot_limiting", [](packet_format& pf, py::buffer buf) {
+            return pf.countdown_shot_limiting(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("thermal_shutdown", [](packet_format& pf, py::buffer buf) {
+            return pf.thermal_shutdown(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("shot_limiting", [](packet_format& pf, py::buffer buf) {
+            return pf.shot_limiting(getptr(pf.lidar_packet_size, buf));
+        })
+
         // NOTE: keep_alive seems to be ignored without cpp_function wrapper
         .def_property_readonly("fields", py::cpp_function([](const packet_format& self) {
                 return py::make_key_iterator(self.begin(), self.end());
@@ -506,6 +525,12 @@ PYBIND11_PLUGIN(_client) {
 
     auto UDPProfileIMU = py::enum_<sensor::UDPProfileIMU>(m, "UDPProfileIMU", "UDP imu profile.", py::metaclass());
     def_enum(UDPProfileIMU, sensor::impl::udp_profile_imu_strings, "PROFILE_IMU_");
+
+    auto ShotLimitingStatus = py::enum_<sensor::ShotLimitingStatus>(m, "ShotLimitingStatus", "Shot Limiting Status.", py::metaclass());
+    def_enum(ShotLimitingStatus, sensor::impl::shot_limiting_status_strings);
+
+    auto ThermalShutdownStatus = py::enum_<sensor::ThermalShutdownStatus>(m, "ThermalShutdownStatus", "Thermal Shutdown Status.", py::metaclass());
+    def_enum(ThermalShutdownStatus, sensor::impl::thermal_shutdown_status_strings);
 
     // Sensor Config
     py::class_<sensor_config>(m, "SensorConfig", R"(
@@ -782,6 +807,9 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite(
             "frame_id", &LidarScan::frame_id,
             "Corresponds to the frame id header in the packet format.")
+        .def_readwrite(
+            "frame_status", &LidarScan::frame_status,
+            "Information from the packet header which corresponds to a frame.")
         .def(
             "complete",
             [](const LidarScan& self,
@@ -816,6 +844,10 @@ PYBIND11_PLUGIN(_client) {
         Returns:
             The specified field as a numpy array
         )")
+        .def("shot_limiting", &LidarScan::shot_limiting,
+             "The frame shot limiting status.")
+        .def("thermal_shutdown", &LidarScan::thermal_shutdown,
+             "The frame thermal shutdown status.")
         .def(
             "header",
             [](LidarScan& self, py::object& o) {
@@ -898,14 +930,14 @@ PYBIND11_PLUGIN(_client) {
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
         .def("__deepcopy__",
              [](const LidarScan& self, py::dict) { return LidarScan{self}; })
-        .def("__repr__", [](const LidarScan& self) {
-            std::stringstream ss;
-            ss << "<ouster.client._client.LidarScan @" << (void*)&self << ">";
-            return ss.str();
-        })
-        .def("__str__", [](const LidarScan& self) {
-            return to_string(self);
-        })
+        .def("__repr__",
+             [](const LidarScan& self) {
+                 std::stringstream ss;
+                 ss << "<ouster.client._client.LidarScan @" << (void*)&self
+                    << ">";
+                 return ss.str();
+             })
+        .def("__str__", [](const LidarScan& self) { return to_string(self); })
         // for backwards compatibility: previously converted between Python
         // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })
