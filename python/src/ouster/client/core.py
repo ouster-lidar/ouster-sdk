@@ -122,9 +122,9 @@ class Sensor(PacketSource):
     _cache: Optional[Tuple[_client.ClientState, bytearray]]
 
     def __init__(self,
-                 hostname: str = "localhost",
-                 lidar_port: int = 7502,
-                 imu_port: int = 7503,
+                 hostname: str,
+                 lidar_port: int,
+                 imu_port: int,
                  *,
                  metadata: Optional[SensorInfo] = None,
                  buf_size: int = 128,

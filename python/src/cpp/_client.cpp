@@ -518,8 +518,8 @@ PYBIND11_PLUGIN(_client) {
 
     py::class_<BufferedUDPSource>(m, "Client")
         .def(py::init<std::string, int, int, size_t>(),
-             py::arg("hostname") = "", py::arg("lidar_port") = 7502,
-             py::arg("imu_port") = 7503, py::arg("capacity") = 128)
+             py::arg("hostname"), py::arg("lidar_port"),
+             py::arg("imu_port"), py::arg("capacity") = 128)
         .def(py::init<std::string, std::string, sensor::lidar_mode,
                       sensor::timestamp_mode, int, int, int, size_t>(),
              py::arg("hostname"), py::arg("udp_dest_host"),

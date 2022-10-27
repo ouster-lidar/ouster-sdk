@@ -17,8 +17,13 @@ ouster_client
   ``legacy_format`` parameter in ``get_metadata``.
 * address an issue that could cause the processed frame being dropped in favor or the previous
   frame when the frame_id wraps-around.
-* added a new flag ``CONFIG_FORCE_REINIT`` for ``set_config`` method, to force the sensor to reinit
+* added a new flag ``CONFIG_FORCE_REINIT`` for ``set_config()`` method, to force the sensor to reinit
   even when config params have not changed.
+* breaking change: drop defaults parameters from the shortform ``init_client()`` method.
+
+python
+------
+* breaking change: drop defaults parameters of ``client.Sensor`` constructor.
 
 ouster_viz
 ----------
@@ -33,10 +38,6 @@ ouster_viz
   on every draw operation. (good for making videos)
 * expose ``Camera.set_target`` function through pybind
 
-
-[Unreleased]
-============
-
 ouster-sdk
 ----------
 * Moved ouster_ros to its own repo
@@ -47,7 +48,7 @@ ouster-sdk
 
 ouster_client
 --------------
-* fix a bug in longform init_client which was not setting timestamp_mode and lidar_mode correctly
+* fix a bug in longform ``init_client()`` which was not setting timestamp_mode and lidar_mode correctly
   
 
 [20220826]
