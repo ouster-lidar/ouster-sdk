@@ -8,7 +8,9 @@ from collections import defaultdict
 from dataclasses import dataclass
 import hashlib
 import json
+import logging
 from typing import (Dict, List, Iterable)
+from itertools import tee
 
 import numpy as np
 
@@ -39,7 +41,7 @@ class FieldDigest:
         return False
 
     def check(self, other: 'FieldDigest'):
-        for k, v in self.hashes.items():
+        for k, v in sorted(self.hashes.items()):
             assert other.hashes.get(k) == v, f"Match failure key: {k}"
 
     @classmethod
@@ -51,7 +53,7 @@ class FieldDigest:
         # hashlib._Hash doesn't exist at runtime
         hashes: Dict[str, 'hashlib._Hash'] = defaultdict(hashlib.md5)
 
-        for packet in packets:
+        for idx, packet in enumerate(packets):
             # TODO: add packet headers
             for h in ColHeader:
                 hashes[h.name].update(packet.header(h).tobytes())
@@ -103,8 +105,10 @@ class StreamDigest:
         """
 
         assert len(self.scans) == len(other.scans)
+        logging.debug("Checking packet hash..")
         self.packet_hash.check(other.packet_hash)
 
+        logging.debug("Checking scan hash..")
         for s, t in zip(self.scans, other.scans):
             s.check(t)
 
@@ -120,11 +124,20 @@ class StreamDigest:
     @classmethod
     def from_packets(cls, source: PacketSource) -> 'StreamDigest':
         """Generate a digest from a packet stream."""
+        
+        source1, source2, = tee(source)
 
-        plist = [p for p in source if isinstance(p, LidarPacket)]
+        allpackets = [p for p in source2]
+        plist = [p for p in source1 if isinstance(p, LidarPacket)]
+        logging.debug(f"Creating digest with {len(plist)} Lidar packets out of total {len(allpackets)}")
         packets = Packets(plist, source.metadata)
 
-        scan_digests = list(map(FieldDigest.from_scan, Scans(packets)))
+        scans_list1, scans_list2 = tee(Scans(packets))
+        for scan in scans_list1:
+            logging.debug(f"Packets for StreamDigest created a scan with complete status {scan.complete()}")
+
+        #scan_digests = list(map(FieldDigest.from_scan, Scans(packets)))
+        scan_digests = list(map(FieldDigest.from_scan, scans_list2))
         packet_digest = FieldDigest.from_packets(plist)
 
         return cls(packet_hash=packet_digest, scans=scan_digests)
