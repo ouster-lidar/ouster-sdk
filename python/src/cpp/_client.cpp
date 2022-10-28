@@ -795,10 +795,27 @@ PYBIND11_PLUGIN(_client) {
     // XYZ Projection
     py::class_<XYZLut>(m, "XYZLut")
         .def("__init__",
-             [](XYZLut& self, const sensor_info& sensor) {
+             [](XYZLut& self, const sensor_info& sensor, bool use_extrinsics) {
                  new (&self) XYZLut{};
-                 self = make_xyz_lut(sensor);
-             })
+                 if (use_extrinsics) {
+                    // apply extrinsics after lidar_to_sensor_transform so the
+                    // resulting LUT will produce the coordinates in
+                    // "extrinsics frame" instead of "sensor frame"
+                    mat4d ext_transform = sensor.extrinsic;
+                    ext_transform(0, 3) /= sensor::range_unit;
+                    ext_transform(1, 3) /= sensor::range_unit;
+                    ext_transform(2, 3) /= sensor::range_unit;
+                    ext_transform = ext_transform * sensor.lidar_to_sensor_transform;
+                    self = make_xyz_lut(
+                        sensor.format.columns_per_frame,
+                        sensor.format.pixels_per_column, sensor::range_unit,
+                        sensor.beam_to_lidar_transform, ext_transform,
+                        sensor.beam_azimuth_angles,
+                        sensor.beam_altitude_angles);
+                 } else {
+                    self = make_xyz_lut(sensor);
+                 }
+             }, py::arg("info"), py::arg("use_extrinsics") = false)
         .def("__call__",
              [](const XYZLut& self, Eigen::Ref<img_t<uint32_t>>& range) {
                  return cartesian(range, self);

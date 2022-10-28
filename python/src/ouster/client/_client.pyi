@@ -677,7 +677,7 @@ class ScanBatcher:
 
 
 class XYZLut:
-    def __init__(self, info: SensorInfo) -> None:
+    def __init__(self, info: SensorInfo, use_extrinsics: bool) -> None:
         ...
 
     @overload

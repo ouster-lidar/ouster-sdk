@@ -56,6 +56,8 @@ class OusterSDKConan(ConanFile):
             del self.options.fPIC
 
     def requirements(self):
+        # not required directly here but because libtins and libcurl pulling
+        # slightly different versions of zlib we need to set it here explicitly
         self.requires("zlib/1.2.13")
         self.requires("eigen/3.4.0")
         self.requires("jsoncpp/1.9.5")
