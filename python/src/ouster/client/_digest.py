@@ -124,7 +124,7 @@ class StreamDigest:
     @classmethod
     def from_packets(cls, source: PacketSource) -> 'StreamDigest':
         """Generate a digest from a packet stream."""
-        
+
         source1, source2, = tee(source)
 
         allpackets = [p for p in source2]
@@ -136,7 +136,7 @@ class StreamDigest:
         for scan in scans_list1:
             logging.debug(f"Packets for StreamDigest created a scan with complete status {scan.complete()}")
 
-        #scan_digests = list(map(FieldDigest.from_scan, Scans(packets)))
+        # scan_digests = list(map(FieldDigest.from_scan, Scans(packets)))
         scan_digests = list(map(FieldDigest.from_scan, scans_list2))
         packet_digest = FieldDigest.from_packets(plist)
 

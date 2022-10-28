@@ -44,7 +44,7 @@ def configure_dual_returns(hostname: str) -> None:
         return
 
     print("Retrieving sensor metadata..")
-    with closing(client.Sensor(hostname)) as source:
+    with closing(client.Sensor(hostname, 7502, 7503)) as source:
         # print some useful info from
         print(
             f"udp profile lidar: {str(source.metadata.format.udp_profile_lidar)}"
@@ -91,7 +91,7 @@ def fetch_metadata(hostname: str) -> None:
         hostname: hostname of the sensor
     """
     # [doc-stag-fetch-metadata]
-    with closing(client.Sensor(hostname)) as source:
+    with closing(client.Sensor(hostname, 7502, 7503)) as source:
         # print some useful info from
         print("Retrieved metadata:")
         print(f"  serial no:        {source.metadata.sn}")

@@ -446,13 +446,17 @@ class Scans:
             A tuple of metadata queried from the sensor and an iterator that
             samples n consecutive scans
         """
-        with closing(Sensor(hostname, metadata=metadata)) as sensor:
+        with closing(Sensor(hostname,
+                            lidar_port,
+                            7503,
+                            metadata=metadata)) as sensor:
             metadata = sensor.metadata
 
         def next_batch() -> List[LidarScan]:
             with closing(
                     Sensor(hostname,
                            lidar_port,
+                           7503,
                            metadata=metadata,
                            buf_size=n * 128,
                            _flush_before_read=False)) as source:
@@ -488,6 +492,7 @@ class Scans:
         """
         source = Sensor(hostname,
                         lidar_port,
+                        7503,
                         metadata=metadata,
                         buf_size=buf_size,
                         timeout=timeout,
