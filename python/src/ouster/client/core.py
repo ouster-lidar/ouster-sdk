@@ -300,6 +300,7 @@ class Sensor(PacketSource):
                                               last_ts + self._timeout):
                 raise ClientTimeout(
                     f"No packets received within {self._timeout}s")
+
             # drop cached packet
             self._cache = None
             n_dropped += 1
@@ -341,7 +342,7 @@ class Scans:
                  source: PacketSource,
                  *,
                  complete: bool = False,
-                 timeout: Optional[float] = None,
+                 timeout: Optional[float] = 1.0,
                  fields: Optional[Dict[ChanField, FieldDType]] = None,
                  _max_latency: int = 0) -> None:
         """

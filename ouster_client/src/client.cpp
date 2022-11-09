@@ -208,6 +208,14 @@ bool set_config(const std::string& hostname, const sensor_config& config,
         config_params[key] = config_json[key];
     }
 
+    if (config_json.isMember("operating_mode") &&
+        config_params.isMember("auto_start_flag")) {
+        // we're setting operating mode and this sensor has a FW with
+        // auto_start_flag
+        config_params["auto_start_flag"] =
+            config_json["operating_mode"] == "NORMAL" ? 1 : 0;
+    }
+
     // Signal multiplier changed from int to double for FW 3.0/2.5+, with
     // corresponding change to config.signal_multiplier.
     // Change values 1, 2, 3 back to ints to support older FWs
@@ -215,6 +223,10 @@ bool set_config(const std::string& hostname, const sensor_config& config,
         config_params["signal_multiplier"].asDouble() != 0.5) {
         config_params["signal_multiplier"] =
             config_params["signal_multiplier"].asInt();
+        // TODO: figure out what to do when people enter invalid signal
+        // multiplier values between 1 and 3.99. Invalid decimal values <1 and
+        // >4 will be invalid in any case and the error message won't say so
+        // those are fine
     }
 
     // set automatic udp dest, if flag specified
@@ -223,13 +235,28 @@ bool set_config(const std::string& hostname, const sensor_config& config,
             throw std::invalid_argument(
                 "UDP_DEST_AUTO flag set but provided config has udp_dest");
         sensor_http->set_udp_dest_auto();
+
+        auto staged = sensor_http->staged_config_params();
+
+        // now we set config_params according to the staged udp_dest from the
+        // sensor
+        if (staged.isMember("udp_ip")) {  // means the FW version carries udp_ip
+            config_params["udp_ip"] = staged["udp_ip"];
+            config_params["udp_dest"] = staged["udp_ip"];
+        } else {  // don't need to worry about udp_ip
+            config_params["udp_dest"] = staged["udp_dest"];
+        }
     }
 
     // if configuration didn't change then skip applying the params
+    // note: comparison will fail if config_params contains newer config params
+    // introduced after the verison of FW the sensor is on
     if (config_flags & CONFIG_FORCE_REINIT ||
         config_params_copy != config_params) {
         Json::StreamWriterBuilder builder;
         builder["indentation"] = "";
+        // send full string -- depends on older FWs not rejecting a blob even
+        // when it contains unknown keys
         auto config_params_str = Json::writeString(builder, config_params);
         sensor_http->set_config_param(".", config_params_str);
         // reinitialize to make all staged parameters effective

@@ -20,10 +20,13 @@ ouster_client
 * added a new flag ``CONFIG_FORCE_REINIT`` for ``set_config()`` method, to force the sensor to reinit
   even when config params have not changed.
 * breaking change: drop defaults parameters from the shortform ``init_client()`` method.
+* bugfix: fix bug in set_config for config_flag auto
 
 python
 ------
 * breaking change: drop defaults parameters of ``client.Sensor`` constructor.
+* breaking change: change Scans interface Timeout to default to 1 second instead of None
+* bugfix: fix bug in set_config for auto udp destination configuration parameter
 
 ouster_viz
 ----------
