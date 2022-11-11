@@ -261,14 +261,15 @@ std::string to_string(const LidarScan& ls) {
         ss << "  ]," << std::endl;
     }
 
-    ss << "  timestamp = (" << ls.timestamp().minCoeff() << "; "
-       << ls.timestamp().mean() << "; " << ls.timestamp().maxCoeff() << ")"
-       << std::endl;
-    ss << "  measurement_id = (" << ls.measurement_id().minCoeff() << "; "
-       << ls.measurement_id().mean() << "; " << ls.measurement_id().maxCoeff()
-       << ")" << std::endl;
-    ss << "  status = (" << ls.status().minCoeff() << "; " << ls.status().mean()
-       << "; " << ls.status().maxCoeff() << ")" << std::endl;
+    auto ts = ls.timestamp().cast<uint64_t>();
+    ss << "  timestamp = (" << ts.minCoeff() << "; " << ts.mean() << "; "
+       << ts.maxCoeff() << ")" << std::endl;
+    auto mid = ls.measurement_id().cast<uint64_t>();
+    ss << "  measurement_id = (" << mid.minCoeff() << "; " << mid.mean() << "; "
+       << mid.maxCoeff() << ")" << std::endl;
+    auto st = ls.status().cast<uint64_t>();
+    ss << "  status = (" << st.minCoeff() << "; " << st.mean() << "; "
+       << st.maxCoeff() << ")" << std::endl;
 
     ss << "}";
     return ss.str();

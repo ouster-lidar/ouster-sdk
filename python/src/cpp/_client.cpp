@@ -898,6 +898,14 @@ PYBIND11_PLUGIN(_client) {
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
         .def("__deepcopy__",
              [](const LidarScan& self, py::dict) { return LidarScan{self}; })
+        .def("__repr__", [](const LidarScan& self) {
+            std::stringstream ss;
+            ss << "<ouster.client._client.LidarScan @" << (void*)&self << ">";
+            return ss.str();
+        })
+        .def("__str__", [](const LidarScan& self) {
+            return to_string(self);
+        })
         // for backwards compatibility: previously converted between Python
         // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })

@@ -29,6 +29,7 @@ python
 * breaking change: change Scans interface Timeout to default to 1 second instead of None
 * bugfix: fix bug in set_config for auto udp destination configuration parameter
 * added a new method ``init_logger()`` to provide control over the logs emitted by ``client.Sensor``.
+* add ``client.LidarScan`` methods ``__repr__()`` and ``__str__()``.
 
 ouster_viz
 ----------
@@ -46,6 +47,8 @@ ouster_viz
 ouster-sdk
 ----------
 * Moved ouster_ros to its own repo
+* pin ``openssl`` Conan package dependency to ``openssl/1.1.1s`` due to
+  ``libtins`` and ``libcurl`` conflicting ``openssl`` versions
 
 
 [20220927]
