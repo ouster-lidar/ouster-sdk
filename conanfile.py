@@ -61,6 +61,7 @@ class OusterSDKConan(ConanFile):
         self.requires("zlib/1.2.13")
         self.requires("eigen/3.4.0")
         self.requires("jsoncpp/1.9.5")
+        self.requires("spdlog/1.10.0")
         self.requires("libcurl/7.82.0")
 
         if self.options.build_pcap:

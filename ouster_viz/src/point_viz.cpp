@@ -8,7 +8,6 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 #include <list>
 #include <memory>
 #include <mutex>

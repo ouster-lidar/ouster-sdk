@@ -524,6 +524,14 @@ class SensorConfig:
         ...
 
 
+def init_logger(log_level: str,
+                log_file_path: str = ...,
+                rotating: bool = ...,
+                max_size_in_bytes: int = ...,
+                max_files: int = ...) -> bool:
+    ...
+
+
 def set_config(hostname: str,
                config: SensorConfig,
                persist: bool = ...,

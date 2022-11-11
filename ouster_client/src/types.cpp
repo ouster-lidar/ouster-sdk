@@ -11,13 +11,13 @@
 #include <array>
 #include <cmath>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "logging.h"
 #include "ouster/impl/build.h"
 #include "ouster/version.h"
 
@@ -456,9 +456,9 @@ static sensor_config parse_config(const Json::Value& root) {
     } else if (!root["udp_ip"].empty()) {
         // deprecated params from FW 1.13. Set FW 2.0+ configs appropriately
         config.udp_dest = root["udp_ip"].asString();
-        std::cerr << "Please note that udp_ip has been deprecated in favor of "
-                     "udp_dest. Will set udp_dest appropriately..."
-                  << std::endl;
+        logger().warn(
+            "Please note that udp_ip has been deprecated in favor "
+            "of udp_dest. Will set udp_dest appropriately...");
     }
 
     if (!root["udp_port_lidar"].empty())
@@ -488,11 +488,9 @@ static sensor_config parse_config(const Json::Value& root) {
             throw std::invalid_argument("Unexpected Operating Mode");
         }
     } else if (!root["auto_start_flag"].empty()) {
-        std::cerr
-            << "Please note that auto_start_flag has been deprecated in "
-               "favor "
-               "of operating_mode. Will set operating_mode appropriately..."
-            << std::endl;
+        logger().warn(
+            "Please note that auto_start_flag has been deprecated in favor "
+            "of operating_mode. Will set operating_mode appropriately...");
         config.operating_mode = root["auto_start_flag"].asBool()
                                     ? sensor::OPERATING_NORMAL
                                     : sensor::OPERATING_STANDBY;
@@ -658,7 +656,7 @@ static data_format parse_data_format(const Json::Value& root) {
         format.column_window.first = root["column_window"][0].asInt();
         format.column_window.second = root["column_window"][1].asInt();
     } else {
-        std::cerr << "WARNING: No column window found." << std::endl;
+        logger().warn("No column window found.");
         format.column_window = default_column_window(format.columns_per_frame);
     }
 
@@ -673,7 +671,7 @@ static data_format parse_data_format(const Json::Value& root) {
             throw std::invalid_argument{"Unexpected udp lidar profile"};
         }
     } else {
-        std::cerr << "WARNING: No lidar profile found." << std::endl;
+        logger().warn("No lidar profile found.");
         format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
     }
 
@@ -716,7 +714,7 @@ static sensor_info parse_legacy(const std::string& meta) {
     if (root.isMember("data_format")) {
         info.format = parse_data_format(root["data_format"]);
     } else {
-        std::cerr << "WARNING: No data_format found." << std::endl;
+        logger().warn("No data_format found.");
         info.format = default_data_format(info.mode);
     }
 
@@ -731,8 +729,7 @@ static sensor_info parse_legacy(const std::string& meta) {
             0) {  // is an OS-DOME - fill with 0
             info.lidar_origin_to_beam_origin_mm = 0;
         } else {  // not an OS-DOME
-            std::cerr << "WARNING: No lidar_origin_to_beam_origin_mm found."
-                      << std::endl;
+            logger().warn("No lidar_origin_to_beam_origin_mm found.");
             info.lidar_origin_to_beam_origin_mm =
                 default_lidar_origin_to_beam_origin(info.prod_line);
         }
@@ -780,8 +777,7 @@ static sensor_info parse_legacy(const std::string& meta) {
             }
         }
     } else {
-        std::cerr << "WARNING: No valid imu_to_sensor_transform found."
-                  << std::endl;
+        logger().warn("No valid imu_to_sensor_transform found.");
         info.imu_to_sensor_transform = default_imu_to_sensor_transform;
     }
 
@@ -796,8 +792,7 @@ static sensor_info parse_legacy(const std::string& meta) {
             }
         }
     } else {
-        std::cerr << "WARNING: No valid lidar_to_sensor_transform found."
-                  << std::endl;
+        logger().warn("No valid lidar_to_sensor_transform found.");
         info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
     }
 
@@ -881,8 +876,10 @@ sensor_info parse_metadata(const std::string& metadata) {
 
     sensor_info info{};
     if (is_new_format(metadata)) {
+        logger().debug("parsing new metadata format");
         info = parse_legacy(convert_to_legacy(metadata));
     } else {
+        logger().debug("parsing legacy metadata format");
         info = parse_legacy(metadata);
     }
     return info;

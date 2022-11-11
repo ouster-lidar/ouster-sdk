@@ -88,7 +88,7 @@ set(CPACK_SOURCE_IGNORE_FILES /.git /dist)
 set(CPACK_DEBIAN_PACKAGE_NAME ouster-sdk)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS
-  "libjsoncpp-dev, libeigen3-dev, libtins-dev, libglfw3-dev, libglew-dev")
+  "libjsoncpp-dev, libeigen3-dev, libtins-dev, libglfw3-dev, libglew-dev, libspdlog-dev")
 
 include(CPack)
 
@@ -109,6 +109,5 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
   DESTINATION lib/cmake/OusterSDK)
 
-install(FILES LICENSE
-  DESTINATION share/doc/${CPACK_DEBIAN_PACKAGE_NAME}
-  RENAME copyright)
+install(FILES LICENSE LICENSE-bin
+  DESTINATION share)

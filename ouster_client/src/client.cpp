@@ -14,7 +14,6 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -23,12 +22,14 @@
 #include <utility>
 #include <vector>
 
+#include "logging.h"
 #include "netcompat.h"
 #include "ouster/types.h"
 #include "sensor_http.h"
 
 using namespace std::chrono_literals;
 namespace chrono = std::chrono;
+using ouster::sensor::impl::Logger;
 using ouster::sensor::util::SensorHttp;
 
 namespace ouster {
@@ -59,8 +60,7 @@ int32_t get_sock_port(SOCKET sock_fd) {
 
     if (!impl::socket_valid(
             getsockname(sock_fd, (struct sockaddr*)&ss, &addrlen))) {
-        std::cerr << "udp getsockname(): " << impl::socket_get_error()
-                  << std::endl;
+        logger().error("udp getsockname(): {}", impl::socket_get_error());
         return SOCKET_ERROR;
     }
 
@@ -84,11 +84,11 @@ SOCKET udp_data_socket(int port) {
 
     int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "udp getaddrinfo(): " << gai_strerror(ret) << std::endl;
+        logger().error("udp getaddrinfo(): {}", gai_strerror(ret));
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "udp getaddrinfo(): empty result" << std::endl;
+        logger().error("udp getaddrinfo(): empty result");
         return SOCKET_ERROR;
     }
 
@@ -104,8 +104,7 @@ SOCKET udp_data_socket(int port) {
             SOCKET sock_fd =
                 socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
             if (!impl::socket_valid(sock_fd)) {
-                std::cerr << "udp socket(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp socket(): {}", impl::socket_get_error());
                 continue;
             }
 
@@ -113,36 +112,32 @@ SOCKET udp_data_socket(int port) {
             if (ai->ai_family == AF_INET6 &&
                 setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off,
                            sizeof(off))) {
-                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp setsockopt(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             if (impl::socket_set_reuse(sock_fd)) {
-                std::cerr << "udp socket_set_reuse(): "
-                          << impl::socket_get_error() << std::endl;
+                logger().warn("udp socket_set_reuse(): {}",
+                              impl::socket_get_error());
             }
 
             if (::bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
-                std::cerr << "udp bind(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp bind(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             // bind() succeeded; set some options and return
             if (impl::socket_set_non_blocking(sock_fd)) {
-                std::cerr << "udp fcntl(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp fcntl(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
                            sizeof(RCVBUF_SIZE))) {
-                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp setsockopt(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
@@ -154,6 +149,7 @@ SOCKET udp_data_socket(int port) {
 
     // could not bind() a UDP server socket
     freeaddrinfo(info_start);
+    logger().error("failed to bind udp socket");
     return SOCKET_ERROR;
 }
 
@@ -286,10 +282,24 @@ std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     return legacy_format ? convert_to_legacy(metadata_string) : metadata_string;
 }
 
+bool init_logger(const std::string& log_level, const std::string& log_file_path,
+                 bool rotating, int max_size_in_bytes, int max_files) {
+    if (log_file_path.empty()) {
+        return Logger::instance().configure_stdout_sink(log_level);
+    } else {
+        return Logger::instance().configure_file_sink(
+            log_level, log_file_path, rotating, max_size_in_bytes, max_files);
+    }
+}
+
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
+    logger().info("initializing sensor: {} with ports: {}/{}", hostname,
+                  lidar_port, imu_port);
+
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
+
     cli->lidar_fd = udp_data_socket(lidar_port);
     cli->imu_fd = udp_data_socket(imu_port);
 
@@ -335,7 +345,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
             return std::shared_ptr<client>();
     } catch (const std::runtime_error& e) {
         // log error message
-        std::cerr << "init_client error: " << e.what() << std::endl;
+        logger().error("init_client(): {}", e.what());
         return std::shared_ptr<client>();
     }
 
@@ -361,7 +371,7 @@ client_state poll_client(const client& c, const int timeout_sec) {
     if (!impl::socket_valid(retval) && impl::socket_exit()) {
         res = EXIT;
     } else if (!impl::socket_valid(retval)) {
-        std::cerr << "select: " << impl::socket_get_error() << std::endl;
+        logger().error("select: {}", impl::socket_get_error());
         res = client_state(res | CLIENT_ERROR);
     } else if (retval) {
         if (FD_ISSET(c.lidar_fd, &rfds)) res = client_state(res | LIDAR_DATA);
@@ -379,10 +389,9 @@ static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
     if (bytes_read == len) {
         return true;
     } else if (bytes_read == -1) {
-        std::cerr << "recvfrom: " << impl::socket_get_error() << std::endl;
+        logger().error("recvfrom: {}", impl::socket_get_error());
     } else {
-        std::cerr << "Unexpected udp packet length of: " << bytes_read
-                  << " bytes. Expected: " << len << " bytes." << std::endl;
+        logger().warn("Unexpected udp packet length: {}", bytes_read);
     }
     return false;
 }

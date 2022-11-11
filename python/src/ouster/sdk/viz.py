@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
                     Optional, Tuple, TypeVar, Union)
 import weakref
+import logging
 
 import numpy as np
 from PIL import Image as PILImage
@@ -26,6 +27,12 @@ from ..client._client import Version
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
                    spezia_palette)
+
+logger = logging.getLogger("viz-logger")
+
+# limit ouster_client log statements to "debug" and direct the output to log file
+# rather than the console (default).
+client.init_logger("debug", "ouster-python.log")
 
 T = TypeVar('T')
 
@@ -683,16 +690,16 @@ class SimpleViz:
 
         seekable = _Seekable(scans, maxlen=self._buflen)
         try:
-            print("Starting processing thread...")
+            logger.warn("Starting processing thread...")
             self._proc_exit = False
             proc_thread = threading.Thread(name="Viz processing",
                                            target=self._process,
                                            args=(seekable, ))
             proc_thread.start()
 
-            print("Starting rendering loop...")
+            logger.warn("Starting rendering loop...")
             self._viz.run()
-            print("Done rendering loop")
+            logger.info("Done rendering loop")
         except KeyboardInterrupt:
             pass
         finally:
@@ -704,7 +711,7 @@ class SimpleViz:
                 self._proc_exit = True
                 self._cv.notify()
 
-            print("Joining processing thread")
+            logger.info("Joining processing thread")
             proc_thread.join()
 
 

@@ -32,6 +32,33 @@ enum client_state {
 /** Minimum supported version. */
 const util::version min_version = {1, 12, 0};
 
+/**
+ * Initializes and configures ouster_client logs. This method should be invoked
+ * only once before calling any other method from the library if the user wants
+ * to direct the library log statements to a different medium (other than
+ * console which is the default).
+ *
+ * @param[in] log_level Control the level of log messages outputed by the
+ * client. Valid options are (case-sensitive): "trace", "debug", "info",
+ * "warning", "error", "critical" and "off".
+ * @param[in] log_file_path Path to location where log files are stored. The
+ * path must be in a location that the process has write access to. If an empty
+ * string is provided then the logs will be directed to the console. When an
+ * empty string is passed then the rest of parameters are ignored.
+ * @param[in] rotating Configure the log file with rotation, rotation rules are
+ * specified through the two following parameters max_size_in_bytes and
+ * max_files. If rotating is set to false the following parameters are ignored.
+ * @param[in] max_size_in_bytes Maximum number of bytes to write to a rotating
+ * log file before starting a new file. ignored if rotating is set to false.
+ * @param[in] max_files Maximum number of rotating files to accumlate before
+ * re-using the first file. ignored if rotating is set to false.
+ *
+ * @return true on success, otherwise false.
+ */
+bool init_logger(const std::string& log_level,
+                 const std::string& log_file_path = "", bool rotating = false,
+                 int max_size_in_bytes = 0, int max_files = 0);
+
 /** \defgroup ouster_client_init Ouster Client Client Initialization
  * @{
  */

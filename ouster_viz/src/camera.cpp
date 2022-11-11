@@ -11,7 +11,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <iostream>
 
 #include "ouster/point_viz.h"
 
