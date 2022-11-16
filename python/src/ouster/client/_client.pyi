@@ -115,6 +115,7 @@ class SensorInfo:
     imu_to_sensor_transform: ndarray
     lidar_to_sensor_transform: ndarray
     lidar_origin_to_beam_origin_mm: float
+    beam_to_lidar_transform: ndarray
     extrinsic: ndarray
     init_id: int
     udp_port_lidar: int
@@ -170,6 +171,18 @@ class PacketFormat:
         ...
 
     def init_id(self, buf: BufferT) -> int:
+        ...
+
+    def countdown_thermal_shutdown(self, buf: BufferT) -> int:
+        ...
+
+    def countdown_shot_limiting(self, buf: BufferT) -> int:
+        ...
+
+    def thermal_shutdown(self, buf: BufferT) -> int:
+        ...
+
+    def shot_limiting(self, buf: BufferT) -> int:
         ...
 
     @property
@@ -498,7 +511,7 @@ class SensorConfig:
     operating_mode: Optional[OperatingMode]
     multipurpose_io_mode: Optional[MultipurposeIOMode]
     azimuth_window: Optional[tuple]
-    signal_multiplier: Optional[int]
+    signal_multiplier: Optional[float]
     sync_pulse_out_angle: Optional[int]
     sync_pulse_out_pulse_width: Optional[int]
     nmea_in_polarity: Optional[Polarity]
@@ -521,6 +534,14 @@ class SensorConfig:
     @overload
     def __init__(self, config_string: str) -> None:
         ...
+
+
+def init_logger(log_level: str,
+                log_file_path: str = ...,
+                rotating: bool = ...,
+                max_size_in_bytes: int = ...,
+                max_files: int = ...) -> bool:
+    ...
 
 
 def set_config(hostname: str,
@@ -557,6 +578,7 @@ class LidarScan:
     N_FIELDS: ClassVar[int]
 
     frame_id: int
+    frame_status: int
 
     @overload
     def __init__(self, w: int, h: int) -> None:
@@ -577,6 +599,13 @@ class LidarScan:
 
     @property
     def h(self) -> int:
+        ...
+
+
+    def thermal_shutdown(self) -> int:
+        ...
+
+    def shot_limiting(self) -> int:
         ...
 
     def header(self, header: ColHeader) -> ndarray:
@@ -676,7 +705,7 @@ class ScanBatcher:
 
 
 class XYZLut:
-    def __init__(self, info: SensorInfo) -> None:
+    def __init__(self, info: SensorInfo, use_extrinsics: bool) -> None:
         ...
 
     @overload

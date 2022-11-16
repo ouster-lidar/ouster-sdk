@@ -15,6 +15,7 @@ from contextlib import closing
 import numpy as np
 
 from ouster import client
+from ouster.client import LidarMode
 
 
 def configure_dual_returns(hostname: str) -> None:
@@ -24,11 +25,10 @@ def configure_dual_returns(hostname: str) -> None:
         hostname: hostname of the sensor
     """
     config = client.get_config(hostname)
-    if (config.lidar_mode == client.LidarMode.MODE_2048x10) or (
-            config.lidar_mode == client.LidarMode.MODE_1024x20):
+    if (config.lidar_mode in {LidarMode.MODE_2048x10, client.LidarMode.MODE_1024x20, client.LidarMode.MODE_4096x5}):
         print(
             f"Changing lidar_mode from {str(config.lidar_mode)} to 1024x10 to"
-            "  enable to dual returns. Will not persist change.")
+            " enable to dual returns on FW < 2.5. Will not persist change.")
         config.lidar_mode = client.LidarMode.MODE_1024x10
 
     # [doc-stag-config-udp-profile]
@@ -44,7 +44,7 @@ def configure_dual_returns(hostname: str) -> None:
         return
 
     print("Retrieving sensor metadata..")
-    with closing(client.Sensor(hostname)) as source:
+    with closing(client.Sensor(hostname, 7502, 7503)) as source:
         # print some useful info from
         print(
             f"udp profile lidar: {str(source.metadata.format.udp_profile_lidar)}"
@@ -91,7 +91,7 @@ def fetch_metadata(hostname: str) -> None:
         hostname: hostname of the sensor
     """
     # [doc-stag-fetch-metadata]
-    with closing(client.Sensor(hostname)) as source:
+    with closing(client.Sensor(hostname, 7502, 7503)) as source:
         # print some useful info from
         print("Retrieved metadata:")
         print(f"  serial no:        {source.metadata.sn}")

@@ -9,9 +9,9 @@
 #include <chrono>
 #include <cstring>
 #include <exception>
-#include <iostream>
 #include <memory>
 #include <thread>
+#include <ostream>
 
 #include <tins/tins.h>
 

@@ -45,6 +45,7 @@ def pytest_collection_modifyitems(items, config) -> None:
 
 
 # test data
+# TODO: add OS-DOME-32/64 in 1024x10 mode pcap with digest
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/pcaps")
 
 TESTS = {

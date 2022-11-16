@@ -21,6 +21,20 @@ reading and visualizing data.
 * `ouster_viz <ouster_viz/>`_ contains a customizable point cloud visualizer
 * `python <python/>`_ contains the code for the ouster sensor python SDK (``ouster-sdk`` Python package)
 
+.. note::
+    Ouster ROS driver code has been moved out to a separate GitHub repository. To get started using the
+    driver follow the instructions provided on the repository's main page: https://github.com/ouster-lidar/ouster-ros
+
+
+Contact
+=======
+
+For support of the Ouster SDK, please use `Github Issues <https://github.com/ouster-lidar/ouster_example/issues>`_ in this repo.
+
+For support of Ouster products outside of the SDK, please use `Ouster customer support <https://ouster.atlassian.net/servicedesk/customer/portal/8/group/22/create/86>`_.
+
+For suspected security problems, please contact us at security@ouster.io.
+
 
 License
 =======

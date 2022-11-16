@@ -29,7 +29,8 @@ option(BUILD_PCAP "Enabled for Python build" ON)
 find_package(pybind11 2.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OusterSDK REQUIRED)
-  
+find_package(spdlog REQUIRED)
+
 # when building as a top-level project
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
@@ -46,7 +47,12 @@ set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 # they contain a generator expression, so we use a noop: $<0:>
 # https://cmake.org/cmake/help/latest/prop_tgt/LIBRARY_OUTPUT_DIRECTORY.html
 pybind11_add_module(_client src/cpp/_client.cpp)
-target_link_libraries(_client PRIVATE ouster_client ouster_build)
+target_link_libraries(_client
+  PRIVATE
+    ouster_client
+    ouster_build
+    spdlog::spdlog)
+
 target_include_directories(_client SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_client PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE

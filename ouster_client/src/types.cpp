@@ -11,13 +11,13 @@
 #include <array>
 #include <cmath>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "logging.h"
 #include "ouster/impl/build.h"
 #include "ouster/version.h"
 
@@ -106,6 +106,27 @@ Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
     {PROFILE_IMU_LEGACY, "LEGACY"},
 }};
 
+// TODO: should we name them something better? feel like the most important is
+// SHOT_LIMITING_NORMAL
+Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings{{
+    {SHOT_LIMITING_NORMAL, "SHOT_LIMITING_NORMAL"},
+    {SHOT_LIMITING_IMMINENT, "SHOT_LIMITING_IMMINENT"},
+    {SHOT_LIMITING_REDUCTION_0_10, "SHOT_LIMITING_REDUCTION_0_10"},
+    {SHOT_LIMITING_REDUCTION_10_20, "SHOT_LIMITING_REDUCTION_10_20"},
+    {SHOT_LIMITING_REDUCTION_20_30, "SHOT_LIMITING_REDUCTION_20_30"},
+    {SHOT_LIMITING_REDUCTION_30_40, "SHOT_LIMITING_REDUCTION_30_40"},
+    {SHOT_LIMITING_REDUCTION_40_50, "SHOT_LIMITING_REDUCTION_40_50"},
+    {SHOT_LIMITING_REDUCTION_50_60, "SHOT_LIMITING_REDUCTION_50_60"},
+    {SHOT_LIMITING_REDUCTION_60_70, "SHOT_LIMITING_REDUCTION_60_70"},
+    {SHOT_LIMITING_REDUCTION_70_75, "SHOT_LIMITING_REDUCTION_70_75"},
+}};
+
+// TODO: do we want these? do we like the names?
+Table<ThermalShutdownStatus, const char*, 2> thermal_shutdown_status_strings{{
+    {THERMAL_SHUTDOWN_NORMAL, "THERMAL_SHUTDOWN_NORMAL"},
+    {THERMAL_SHUTDOWN_IMMINENT, "THERMAL_SHUTDOWN_IMMINENT"},
+}};
+
 }  // namespace impl
 
 /* Equality operators */
@@ -132,6 +153,7 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs) {
             lhs.beam_altitude_angles == rhs.beam_altitude_angles &&
             lhs.lidar_origin_to_beam_origin_mm ==
                 rhs.lidar_origin_to_beam_origin_mm &&
+            lhs.beam_to_lidar_transform == rhs.beam_to_lidar_transform &&
             lhs.imu_to_sensor_transform == rhs.imu_to_sensor_transform &&
             lhs.lidar_to_sensor_transform == rhs.lidar_to_sensor_transform &&
             lhs.extrinsic == rhs.extrinsic && lhs.init_id == rhs.init_id &&
@@ -225,6 +247,13 @@ static double default_lidar_origin_to_beam_origin(std::string prod_line) {
     return lidar_origin_to_beam_origin_mm;
 }
 
+mat4d default_beam_to_lidar_transform(std::string prod_line) {
+    mat4d beam_to_lidar_transform = mat4d::Identity();
+    beam_to_lidar_transform(0, 3) =
+        default_lidar_origin_to_beam_origin(prod_line);
+    return beam_to_lidar_transform;
+}
+
 sensor_info default_sensor_info(lidar_mode mode) {
     return sensor::sensor_info{"UNKNOWN",
                                "000000000000",
@@ -235,6 +264,7 @@ sensor_info default_sensor_info(lidar_mode mode) {
                                gen1_azimuth_angles,
                                gen1_altitude_angles,
                                default_lidar_origin_to_beam_origin("OS-1-64"),
+                               default_beam_to_lidar_transform("OS-1-64"),
                                default_imu_to_sensor_transform,
                                default_lidar_to_sensor_transform,
                                mat4d::Identity(),
@@ -404,6 +434,23 @@ std::string to_string(ChanField field) {
     return res ? res.value() : "UNKNOWN";
 }
 
+std::string to_string(ChanFieldType ft) {
+    switch (ft) {
+        case sensor::ChanFieldType::VOID:
+            return "VOID";
+        case sensor::ChanFieldType::UINT8:
+            return "UINT8";
+        case sensor::ChanFieldType::UINT16:
+            return "UINT16";
+        case sensor::ChanFieldType::UINT32:
+            return "UINT32";
+        case sensor::ChanFieldType::UINT64:
+            return "UINT64";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 std::string to_string(UDPProfileLidar profile) {
     auto res = lookup(impl::udp_profile_lidar_strings, profile);
     return res ? res.value() : "UNKNOWN";
@@ -422,6 +469,17 @@ optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s) {
     return rlookup(impl::udp_profile_imu_strings, s.c_str());
 }
 
+std::string to_string(ShotLimitingStatus shot_limiting_status) {
+    auto res = lookup(impl::shot_limiting_status_strings, shot_limiting_status);
+    return res ? res.value() : "UNKNOWN";
+}
+
+std::string to_string(ThermalShutdownStatus thermal_shutdown_status) {
+    auto res =
+        lookup(impl::thermal_shutdown_status_strings, thermal_shutdown_status);
+    return res ? res.value() : "UNKNOWN";
+}
+
 static sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
@@ -430,9 +488,9 @@ static sensor_config parse_config(const Json::Value& root) {
     } else if (!root["udp_ip"].empty()) {
         // deprecated params from FW 1.13. Set FW 2.0+ configs appropriately
         config.udp_dest = root["udp_ip"].asString();
-        std::cerr << "Please note that udp_ip has been deprecated in favor of "
-                     "udp_dest. Will set udp_dest appropriately..."
-                  << std::endl;
+        logger().warn(
+            "Please note that udp_ip has been deprecated in favor "
+            "of udp_dest. Will set udp_dest appropriately...");
     }
 
     if (!root["udp_port_lidar"].empty())
@@ -451,7 +509,7 @@ static sensor_config parse_config(const Json::Value& root) {
                            root["azimuth_window"][1].asInt());
 
     if (!root["signal_multiplier"].empty())
-        config.signal_multiplier = root["signal_multiplier"].asInt();
+        config.signal_multiplier = root["signal_multiplier"].asDouble();
 
     if (!root["operating_mode"].empty()) {
         auto operating_mode =
@@ -462,10 +520,9 @@ static sensor_config parse_config(const Json::Value& root) {
             throw std::invalid_argument("Unexpected Operating Mode");
         }
     } else if (!root["auto_start_flag"].empty()) {
-        std::cerr
-            << "Please note that auto_start_flag has been deprecated in favor "
-               "of operating_mode. Will set operating_mode appropriately..."
-            << std::endl;
+        logger().warn(
+            "Please note that auto_start_flag has been deprecated in favor "
+            "of operating_mode. Will set operating_mode appropriately...");
         config.operating_mode = root["auto_start_flag"].asBool()
                                     ? sensor::OPERATING_NORMAL
                                     : sensor::OPERATING_STANDBY;
@@ -574,8 +631,8 @@ static bool valid_response(const Json::Value& root,
     return (root.isMember(tcp_request) && root[tcp_request].isObject());
 }
 
-// TODO make robust to new formats that are incorrect instead of returning false
-// and sending to legacy
+// TODO make robust to new formats that are incorrect instead of returning
+// false and sending to legacy
 static bool is_new_format(const std::string& metadata) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
@@ -631,7 +688,7 @@ static data_format parse_data_format(const Json::Value& root) {
         format.column_window.first = root["column_window"][0].asInt();
         format.column_window.second = root["column_window"][1].asInt();
     } else {
-        std::cerr << "WARNING: No column window found." << std::endl;
+        logger().warn("No column window found.");
         format.column_window = default_column_window(format.columns_per_frame);
     }
 
@@ -646,7 +703,7 @@ static data_format parse_data_format(const Json::Value& root) {
             throw std::invalid_argument{"Unexpected udp lidar profile"};
         }
     } else {
-        std::cerr << "WARNING: No lidar profile found." << std::endl;
+        logger().warn("No lidar profile found.");
         format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
     }
 
@@ -689,20 +746,41 @@ static sensor_info parse_legacy(const std::string& meta) {
     if (root.isMember("data_format")) {
         info.format = parse_data_format(root["data_format"]);
     } else {
-        std::cerr << "WARNING: No data_format found." << std::endl;
+        logger().warn("No data_format found.");
         info.format = default_data_format(info.mode);
     }
 
-    // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0. Fall back
-    // to 1.13
+    // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0 BUT missing
+    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0 according
+    // to prod-line
     if (root.isMember("lidar_origin_to_beam_origin_mm")) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();
     } else {
-        std::cerr << "WARNING: No lidar_origin_to_beam_origin_mm found."
-                  << std::endl;
-        info.lidar_origin_to_beam_origin_mm =
-            default_lidar_origin_to_beam_origin(info.prod_line);
+        if (info.prod_line.find("OS-DOME-") ==
+            0) {  // is an OS-DOME - fill with 0
+            info.lidar_origin_to_beam_origin_mm = 0;
+        } else {  // not an OS-DOME
+            logger().warn("No lidar_origin_to_beam_origin_mm found.");
+            info.lidar_origin_to_beam_origin_mm =
+                default_lidar_origin_to_beam_origin(info.prod_line);
+        }
+    }
+
+    // beam_to_lidar_transform" introduced in fw 2.5/fw 3.0
+    if (root.isMember("beam_to_lidar_transform")) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                const Json::Value::ArrayIndex ind = i * 4 + j;
+                info.beam_to_lidar_transform(i, j) =
+                    root["beam_to_lidar_transform"][ind].asDouble();
+            }
+        }
+    } else {
+        // fw is < 2.5/3.0 and we need to manually fill it in
+        info.beam_to_lidar_transform = mat4d::Identity();
+        info.beam_to_lidar_transform(0, 3) =
+            info.lidar_origin_to_beam_origin_mm;
     }
 
     if (root["beam_altitude_angles"].size() != info.format.pixels_per_column) {
@@ -731,8 +809,7 @@ static sensor_info parse_legacy(const std::string& meta) {
             }
         }
     } else {
-        std::cerr << "WARNING: No valid imu_to_sensor_transform found."
-                  << std::endl;
+        logger().warn("No valid imu_to_sensor_transform found.");
         info.imu_to_sensor_transform = default_imu_to_sensor_transform;
     }
 
@@ -747,8 +824,7 @@ static sensor_info parse_legacy(const std::string& meta) {
             }
         }
     } else {
-        std::cerr << "WARNING: No valid lidar_to_sensor_transform found."
-                  << std::endl;
+        logger().warn("No valid lidar_to_sensor_transform found.");
         info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
     }
 
@@ -760,7 +836,7 @@ static sensor_info parse_legacy(const std::string& meta) {
     info.udp_port_imu = root["udp_port_imu"].asInt();
 
     return info;
-}
+}  // namespace ouster
 
 static void update_json_obj(Json::Value& dst, const Json::Value& src) {
     const std::vector<std::string>& members = src.getMemberNames();
@@ -832,8 +908,10 @@ sensor_info parse_metadata(const std::string& metadata) {
 
     sensor_info info{};
     if (is_new_format(metadata)) {
+        logger().debug("parsing new metadata format");
         info = parse_legacy(convert_to_legacy(metadata));
     } else {
+        logger().debug("parsing legacy metadata format");
         info = parse_legacy(metadata);
     }
     return info;
@@ -883,6 +961,13 @@ std::string to_string(const sensor_info& info) {
 
     root["lidar_origin_to_beam_origin_mm"] =
         info.lidar_origin_to_beam_origin_mm;
+
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            root["beam_to_lidar_transform"].append(
+                info.beam_to_lidar_transform(i, j));
+        }
+    }
 
     for (auto i : info.beam_azimuth_angles)
         root["beam_azimuth_angles"].append(i);
@@ -956,7 +1041,17 @@ Json::Value to_json(const sensor_config& config) {
     }
 
     if (config.signal_multiplier) {
-        root["signal_multiplier"] = config.signal_multiplier.value();
+        if (config.signal_multiplier < 1) {
+            root["signal_multiplier"] = config.signal_multiplier.value();
+        } else {
+            // jsoncpp < 1.7.7 strips 0s off of exact representation so 2.0
+            // becomes 2
+            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3
+            // Fix was:
+            // https://github.com/open-source-parsers/jsoncpp/pull/547 Work
+            // around by always casting to int before writing out to json
+            root["signal_multiplier"] = int(config.signal_multiplier.value());
+        }
     }
 
     if (config.sync_pulse_out_angle) {
