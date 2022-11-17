@@ -14,7 +14,6 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <iostream>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -23,12 +22,14 @@
 #include <utility>
 #include <vector>
 
+#include "logging.h"
 #include "netcompat.h"
 #include "ouster/types.h"
 #include "sensor_http.h"
 
 using namespace std::chrono_literals;
 namespace chrono = std::chrono;
+using ouster::sensor::impl::Logger;
 using ouster::sensor::util::SensorHttp;
 
 namespace ouster {
@@ -59,8 +60,7 @@ int32_t get_sock_port(SOCKET sock_fd) {
 
     if (!impl::socket_valid(
             getsockname(sock_fd, (struct sockaddr*)&ss, &addrlen))) {
-        std::cerr << "udp getsockname(): " << impl::socket_get_error()
-                  << std::endl;
+        logger().error("udp getsockname(): {}", impl::socket_get_error());
         return SOCKET_ERROR;
     }
 
@@ -84,11 +84,11 @@ SOCKET udp_data_socket(int port) {
 
     int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "udp getaddrinfo(): " << gai_strerror(ret) << std::endl;
+        logger().error("udp getaddrinfo(): {}", gai_strerror(ret));
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "udp getaddrinfo(): empty result" << std::endl;
+        logger().error("udp getaddrinfo(): empty result");
         return SOCKET_ERROR;
     }
 
@@ -104,8 +104,7 @@ SOCKET udp_data_socket(int port) {
             SOCKET sock_fd =
                 socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
             if (!impl::socket_valid(sock_fd)) {
-                std::cerr << "udp socket(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp socket(): {}", impl::socket_get_error());
                 continue;
             }
 
@@ -113,36 +112,32 @@ SOCKET udp_data_socket(int port) {
             if (ai->ai_family == AF_INET6 &&
                 setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off,
                            sizeof(off))) {
-                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp setsockopt(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             if (impl::socket_set_reuse(sock_fd)) {
-                std::cerr << "udp socket_set_reuse(): "
-                          << impl::socket_get_error() << std::endl;
+                logger().warn("udp socket_set_reuse(): {}",
+                              impl::socket_get_error());
             }
 
             if (::bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
-                std::cerr << "udp bind(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp bind(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             // bind() succeeded; set some options and return
             if (impl::socket_set_non_blocking(sock_fd)) {
-                std::cerr << "udp fcntl(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp fcntl(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
 
             if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
                            sizeof(RCVBUF_SIZE))) {
-                std::cerr << "udp setsockopt(): " << impl::socket_get_error()
-                          << std::endl;
+                logger().warn("udp setsockopt(): {}", impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
@@ -154,18 +149,21 @@ SOCKET udp_data_socket(int port) {
 
     // could not bind() a UDP server socket
     freeaddrinfo(info_start);
+    logger().error("failed to bind udp socket");
     return SOCKET_ERROR;
 }
 
-bool collect_metadata(client& cli, SensorHttp& sensor_http,
-                      chrono::seconds timeout) {
-    auto timeout_time = chrono::steady_clock::now() + timeout;
+Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
+    auto sensor_http = SensorHttp::create(hostname);
+    auto timeout_time =
+        chrono::steady_clock::now() + chrono::seconds{timeout_sec};
     std::string status;
 
+    // TODO: can remove this loop when we drop support for FW 2.4
     do {
         if (chrono::steady_clock::now() >= timeout_time) return false;
         std::this_thread::sleep_for(1s);
-        status = sensor_http.sensor_info()["status"].asString();
+        status = sensor_http->sensor_info()["status"].asString();
     } while (status == "INITIALIZING");
 
     // not all metadata available when sensor isn't RUNNING
@@ -176,12 +174,10 @@ bool collect_metadata(client& cli, SensorHttp& sensor_http,
             "WARMUP, or ERROR state");
     }
 
-    cli.meta = sensor_http.metadata();
-
+    auto metadata = sensor_http->metadata();
     // merge extra info into metadata
-    cli.meta["client_version"] = client_version();
-
-    return true;
+    metadata["client_version"] = client_version();
+    return metadata;
 }
 
 }  // namespace
@@ -199,26 +195,35 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     auto sensor_http = SensorHttp::create(hostname);
 
     // reset staged config to avoid spurious errors
-    auto active_params = sensor_http->get_config_params(true);
-
-    Json::CharReaderBuilder builder;
-    auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
-    Json::Value root;
-    auto parse_success = reader->parse(
-        active_params.c_str(), active_params.c_str() + active_params.size(),
-        &root, nullptr);
-
-    if (!parse_success)
-        throw std::runtime_error("Error while parsing current sensor config.");
+    auto config_params = sensor_http->active_config_params();
+    Json::Value config_params_copy = config_params;
 
     // set all desired config parameters
     Json::Value config_json = to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
-        root[key] = config_json[key];
+        config_params[key] = config_json[key];
     }
 
-    active_params = Json::FastWriter().write(root);
-    sensor_http->set_config_param(".", active_params);
+    if (config_json.isMember("operating_mode") &&
+        config_params.isMember("auto_start_flag")) {
+        // we're setting operating mode and this sensor has a FW with
+        // auto_start_flag
+        config_params["auto_start_flag"] =
+            config_json["operating_mode"] == "NORMAL" ? 1 : 0;
+    }
+
+    // Signal multiplier changed from int to double for FW 3.0/2.5+, with
+    // corresponding change to config.signal_multiplier.
+    // Change values 1, 2, 3 back to ints to support older FWs
+    if (config_params["signal_multiplier"].asDouble() != 0.25 &&
+        config_params["signal_multiplier"].asDouble() != 0.5) {
+        config_params["signal_multiplier"] =
+            config_params["signal_multiplier"].asInt();
+        // TODO: figure out what to do when people enter invalid signal
+        // multiplier values between 1 and 3.99. Invalid decimal values <1 and
+        // >4 will be invalid in any case and the error message won't say so
+        // those are fine
+    }
 
     // set automatic udp dest, if flag specified
     if (config_flags & CONFIG_UDP_DEST_AUTO) {
@@ -226,10 +231,34 @@ bool set_config(const std::string& hostname, const sensor_config& config,
             throw std::invalid_argument(
                 "UDP_DEST_AUTO flag set but provided config has udp_dest");
         sensor_http->set_udp_dest_auto();
+
+        auto staged = sensor_http->staged_config_params();
+
+        // now we set config_params according to the staged udp_dest from the
+        // sensor
+        if (staged.isMember("udp_ip")) {  // means the FW version carries udp_ip
+            config_params["udp_ip"] = staged["udp_ip"];
+            config_params["udp_dest"] = staged["udp_ip"];
+        } else {  // don't need to worry about udp_ip
+            config_params["udp_dest"] = staged["udp_dest"];
+        }
     }
 
-    // reinitialize to make all staged parameters effective
-    sensor_http->reinitialize();
+    // if configuration didn't change then skip applying the params
+    // note: comparison will fail if config_params contains newer config params
+    // introduced after the verison of FW the sensor is on
+    if (config_flags & CONFIG_FORCE_REINIT ||
+        config_params_copy != config_params) {
+        Json::StreamWriterBuilder builder;
+        builder["indentation"] = "";
+        // send full string -- depends on older FWs not rejecting a blob even
+        // when it contains unknown keys
+        auto config_params_str = Json::writeString(builder, config_params);
+        sensor_http->set_config_param(".", config_params_str);
+        // reinitialize to make all staged parameters effective
+        sensor_http->reinitialize();
+    }
+
     // save if indicated
     if (config_flags & CONFIG_PERSIST) {
         sensor_http->save_config_params();
@@ -239,10 +268,10 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 }
 
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
-    if (!cli.meta) {
-        auto sensor_http = SensorHttp::create(cli.hostname);
-        if (!collect_metadata(cli, *sensor_http, chrono::seconds{timeout_sec}))
-            return "";
+    try {
+        cli.meta = collect_metadata(cli.hostname, timeout_sec);
+    } catch (const std::exception&) {
+        return "";
     }
 
     Json::StreamWriterBuilder builder;
@@ -253,10 +282,24 @@ std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     return legacy_format ? convert_to_legacy(metadata_string) : metadata_string;
 }
 
+bool init_logger(const std::string& log_level, const std::string& log_file_path,
+                 bool rotating, int max_size_in_bytes, int max_files) {
+    if (log_file_path.empty()) {
+        return Logger::instance().configure_stdout_sink(log_level);
+    } else {
+        return Logger::instance().configure_file_sink(
+            log_level, log_file_path, rotating, max_size_in_bytes, max_files);
+    }
+}
+
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
+    logger().info("initializing sensor: {} with ports: {}/{}", hostname,
+                  lidar_port, imu_port);
+
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
+
     cli->lidar_fd = udp_data_socket(lidar_port);
     cli->imu_fd = udp_data_socket(imu_port);
 
@@ -268,7 +311,7 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
 
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
-                                    lidar_mode mode, timestamp_mode ts_mode,
+                                    lidar_mode ld_mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
                                     int timeout_sec) {
     auto cli = init_client(hostname, lidar_port, imu_port);
@@ -280,50 +323,33 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     if (!impl::socket_valid(lidar_port) || !impl::socket_valid(imu_port))
         return std::shared_ptr<client>();
 
-    bool success = true;
-
     try {
-        // fail fast if we can't reach the sensor via HTTP
-        auto sensor_http = SensorHttp::create(hostname);
+        sensor::sensor_config config;
+        uint8_t config_flags = 0;
+        if (udp_dest_host.empty())
+            config_flags |= CONFIG_UDP_DEST_AUTO;
+        else
+            config.udp_dest = udp_dest_host;
+        if (ld_mode) config.ld_mode = ld_mode;
+        if (ts_mode) config.ts_mode = ts_mode;
+        if (lidar_port) config.udp_port_lidar = lidar_port;
+        if (imu_port) config.udp_port_imu = imu_port;
+        config.operating_mode = OPERATING_NORMAL;
+        set_config(hostname, config, config_flags);
 
-        // if dest address is not specified, have the sensor to set it
-        // automatically
-        if (udp_dest_host.empty()) {
-            sensor_http->set_udp_dest_auto();
-        } else {
-            sensor_http->set_config_param("udp_dest", udp_dest_host);
-        }
-
-        sensor_http->set_config_param("udp_port_lidar",
-                                      std::to_string(lidar_port));
-        sensor_http->set_config_param("udp_port_imu", std::to_string(imu_port));
-
-        // if specified (not UNSPEC), set the lidar and timestamp modes
-        if (mode) {
-            sensor_http->set_config_param("lidar_mode", sensor::to_string(mode));
-        }
-
-        if (ts_mode) {
-            sensor_http->set_config_param("timestamp_mode",
-                                          sensor::to_string(ts_mode));
-        }
-
-        // wake up from STANDBY, if necessary
-        sensor_http->set_config_param("operating_mode", "NORMAL");
-        sensor_http->reinitialize();
         // will block until no longer INITIALIZING
-        success &=
-            collect_metadata(*cli, *sensor_http, chrono::seconds{timeout_sec});
+        cli->meta = collect_metadata(hostname, timeout_sec);
         // check for sensor error states
         auto status = cli->meta["sensor_info"]["status"].asString();
-        success &= (status != "ERROR" && status != "UNCONFIGURED");
+        if (status == "ERROR" || status == "UNCONFIGURED")
+            return std::shared_ptr<client>();
     } catch (const std::runtime_error& e) {
         // log error message
-        std::cerr << "init_client error: " << e.what() << std::endl;
+        logger().error("init_client(): {}", e.what());
         return std::shared_ptr<client>();
     }
 
-    return success ? cli : std::shared_ptr<client>();
+    return cli;
 }
 
 client_state poll_client(const client& c, const int timeout_sec) {
@@ -345,7 +371,7 @@ client_state poll_client(const client& c, const int timeout_sec) {
     if (!impl::socket_valid(retval) && impl::socket_exit()) {
         res = EXIT;
     } else if (!impl::socket_valid(retval)) {
-        std::cerr << "select: " << impl::socket_get_error() << std::endl;
+        logger().error("select: {}", impl::socket_get_error());
         res = client_state(res | CLIENT_ERROR);
     } else if (retval) {
         if (FD_ISSET(c.lidar_fd, &rfds)) res = client_state(res | LIDAR_DATA);
@@ -356,15 +382,16 @@ client_state poll_client(const client& c, const int timeout_sec) {
 }
 
 static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
+    // Have to read longer than len because you need to know if the packet is
+    // too large
     int64_t bytes_read = recv(fd, (char*)buf, len + 1, 0);
 
     if (bytes_read == len) {
         return true;
     } else if (bytes_read == -1) {
-        std::cerr << "recvfrom: " << impl::socket_get_error() << std::endl;
+        logger().error("recvfrom: {}", impl::socket_get_error());
     } else {
-        std::cerr << "Unexpected udp packet length of: " << bytes_read
-                  << " bytes. Expected: " << len << " bytes." << std::endl;
+        logger().warn("Unexpected udp packet length: {}", bytes_read);
     }
     return false;
 }

@@ -14,7 +14,7 @@ sensor data in both languages. The SDK includes APIs for:
 * Recording and reading data in pcap format
 * Reading and buffering sensor UDP data streams reliably
 * Conversion of raw data to range/signal/near_ir/reflectivity images (destaggering)
-* Efficient projection of range measurements to Cartesian (x, y, z) corrdinates
+* Efficient projection of range measurements to Cartesian (x, y, z) coordinates
 * Visualization of multi-beam flash lidar data
 
 Additionally, in Python, the SDK also provides: 

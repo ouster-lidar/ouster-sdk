@@ -180,14 +180,42 @@ enum UDPProfileIMU {
     PROFILE_IMU_LEGACY = 1  ///< Legacy IMU data
 };
 
+/** Thermal Shutdown status. */
+enum ThermalShutdownStatus {
+    THERMAL_SHUTDOWN_NORMAL = 0x00,    ///< Normal operation
+    THERMAL_SHUTDOWN_IMMINENT = 0x01,  ///< Thermal Shutdown imminent
+};
+
+/** Shot Limiting status. */
+enum ShotLimitingStatus {
+    SHOT_LIMITING_NORMAL = 0x00,    ///< Normal operation
+    SHOT_LIMITING_IMMINENT = 0x01,  ///< Shot limiting imminent
+    SHOT_LIMITING_REDUCTION_0_10 =
+        0x02,  //< Shot limiting reduction by 0 to 10%
+    SHOT_LIMITING_REDUCTION_10_20 =
+        0x03,  ///< Shot limiting reduction by 10 to 20%
+    SHOT_LIMITING_REDUCTION_20_30 =
+        0x04,  ///< Shot limiting reduction by 20 to 30%
+    SHOT_LIMITING_REDUCTION_30_40 =
+        0x05,  ///< Shot limiting reduction by 30 to 40%
+    SHOT_LIMITING_REDUCTION_40_50 =
+        0x06,  ///< Shot limiting reduction by 40 to 50%
+    SHOT_LIMITING_REDUCTION_50_60 =
+        0x07,  ///< Shot limiting reduction by 50 to 60%
+    SHOT_LIMITING_REDUCTION_60_70 =
+        0x08,  ///< Shot limiting reduction by 60 to 70%
+    SHOT_LIMITING_REDUCTION_70_75 =
+        0x09,  ///< Shot limiting reduction by 70 to 80%
+};
+
 /**
- * Convenience type alias for azimuth windows, the window over which the sensor
- * fires in millidegrees.
+ * Convenience type alias for azimuth windows, the window over which the
+ * sensor fires in millidegrees.
  */
 using AzimuthWindow = std::pair<int, int>;
 /**
- * Convenience type alias for column windows, the window over which the sensor
- * fires in columns.
+ * Convenience type alias for column windows, the window over which the
+ * sensor fires in columns.
  */
 using ColumnWindow = std::pair<int, int>;
 
@@ -197,10 +225,10 @@ using ColumnWindow = std::pair<int, int>;
 struct sensor_config {
     optional<std::string> udp_dest;  ///< The destination address for the
                                      ///< lidar/imu data to be sent to
-    optional<int> udp_port_lidar;  ///< The destination port for the lidar data
-                                   ///< to be sent to
-    optional<int>
-        udp_port_imu;  ///< The destination port for the imu data to be sent to
+    optional<int> udp_port_lidar;    ///< The destination port for the lidar
+                                     ///< data to be sent to
+    optional<int> udp_port_imu;      ///< The destination port for the imu data
+                                     ///< to be sent to
 
     // TODO: replace ts_mode and ld_mode when timestamp_mode and
     // lidar_mode get changed to CapsCase
@@ -235,10 +263,10 @@ struct sensor_config {
     optional<AzimuthWindow> azimuth_window;
 
     /**
-     * Multiplier for signal strength of sensor. See the sensor docs for more
-     * details on usage.
+     * Multiplier for signal strength of sensor. See the sensor docs for
+     * more details on usage.
      */
-    optional<int> signal_multiplier;
+    optional<double> signal_multiplier;
 
     /**
      * The nmea polarity for the sensor to use.
@@ -277,8 +305,8 @@ struct sensor_config {
     optional<Polarity> sync_pulse_out_polarity;
 
     /**
-     * Angle in degrees that sensor traverses between each SYNC_PULSE_OUT pulse.
-     * See senor docs for more details.
+     * Angle in degrees that sensor traverses between each SYNC_PULSE_OUT
+     * pulse. See senor docs for more details.
      */
     optional<int> sync_pulse_out_angle;
 
@@ -354,8 +382,9 @@ struct sensor_info {
         beam_altitude_angles;  ///< beam altitude angles for 3D projection
     double lidar_origin_to_beam_origin_mm;  ///< distance between lidar origin
                                             ///< and beam origin in mm
-    mat4d imu_to_sensor_transform;    ///< transform between sensor coordinate
-                                      ///< frame and imu
+    mat4d beam_to_lidar_transform;  ///< transform between beam and lidar frame
+    mat4d imu_to_sensor_transform;  ///< transform between sensor coordinate
+                                    ///< frame and imu
     mat4d lidar_to_sensor_transform;  ///< transform between lidar and sensor
                                       ///< coordinate frames
     mat4d extrinsic;                  ///< extrinsic matrix
@@ -607,6 +636,26 @@ std::string to_string(UDPProfileIMU profile);
 optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
 
 /**
+ * Get string representation of a Shot Limiting Status.
+ *
+ * @param[in] shot_limiting_status The shot limiting status to get the string
+ * representation of.
+ *
+ * @return string representation of the shot limiting status.
+ */
+std::string to_string(ShotLimitingStatus shot_limiting_status);
+
+/**
+ * Get string representation of Thermal Shutdown Status.
+ *
+ * @param[in] thermal_shutdown_status The thermal shutdown status to get the
+ * string representation of.
+ *
+ * @return string representation of thermal shutdown status.
+ */
+std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
+
+/**
  * Parse metadata text blob from the sensor into a sensor_info struct.
  *
  * String and vector fields will have size 0 if the parameter cannot
@@ -731,6 +780,15 @@ std::string to_string(ChanField field);
 enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
 
 /**
+ * Get string representation of a channel field.
+ *
+ * @param[in] ft The field type to get the string representation of.
+ *
+ * @return string representation of the channel field type.
+ */
+std::string to_string(ChanFieldType ft);
+
+/**
  * Table of accessors for extracting data from imu and lidar packets.
  *
  * In the user guide, refer to section 9 for the lidar packet format and section
@@ -804,6 +862,42 @@ class packet_format final {
      * @return the serial number.
      */
     uint64_t prod_sn(const uint8_t* lidar_buf) const;
+
+    /**
+     * Read the packet thermal shutdown countdown
+     *
+     * @param[in] lidar_buf the lidar buf.
+     *
+     * @return the thermal shutdown countdown.
+     */
+    uint16_t countdown_thermal_shutdown(const uint8_t* lidar_buf) const;
+
+    /**
+     * Read the packet shot limiting countdown
+     *
+     * @param[in] liar_buf the lidar buf.
+     *
+     * @return the shot limiting countdown.
+     */
+    uint16_t countdown_shot_limiting(const uint8_t* lidar_buf) const;
+
+    /**
+     * Read the packet thermal shutdown header.
+     *
+     * @param[in] lidar_buf the lidar buf.
+     *
+     * @return the thermal shutdown status
+     */
+    uint8_t thermal_shutdown(const uint8_t* lidar_buf) const;
+
+    /**
+     * Read the packet shot limiting header.
+     *
+     * @param[in] lidar_buf the lidar buf.
+     *
+     * @return the shot limiting status
+     */
+    uint8_t shot_limiting(const uint8_t* lidar_buf) const;
 
     /**
      * Get the bit width of the specified channel field.

@@ -146,6 +146,7 @@ setup(
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
         'typing-extensions >=3.7',
+        'Pillow >=9.2'
     ],
     extras_require={
         'test': ['pytest >=7.0, <8'],

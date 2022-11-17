@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <iostream>
 #include <type_traits>
 #include <vector>
 
@@ -17,6 +18,21 @@
 
 namespace ouster {
 
+// clang-format off
+/**
+ * Flags for frame_status
+ */
+enum frame_status_masks : uint64_t {
+    FRAME_STATUS_THERMAL_SHUTDOWN_MASK = 0x0f,  ///< Mask to get thermal shutdown status
+    FRAME_STATUS_SHOT_LIMITING_MASK = 0xf0      ///< Mask to get shot limting status
+};
+
+enum frame_status_shifts: uint64_t {
+    FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT = 0,    ///< No shift for thermal shutdown 
+    FRAME_STATUS_SHOT_LIMITING_SHIFT = 4        /// shift 4 for shot limiting
+};
+
+// clang-format on
 using sensor::ChanField;
 using sensor::ChanFieldType;
 using sensor::UDPProfileLidar;
@@ -121,6 +137,19 @@ LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile)
 LidarScan::LidarScan(size_t w, size_t h)
     : LidarScan{w, h, UDPProfileLidar::PROFILE_LIDAR_LEGACY} {}
 
+sensor::ShotLimitingStatus LidarScan::shot_limiting() const {
+    return static_cast<sensor::ShotLimitingStatus>(
+        (frame_status & frame_status_masks::FRAME_STATUS_SHOT_LIMITING_MASK) >>
+        frame_status_shifts::FRAME_STATUS_SHOT_LIMITING_SHIFT);
+}
+
+sensor::ThermalShutdownStatus LidarScan::thermal_shutdown() const {
+    return static_cast<sensor::ThermalShutdownStatus>(
+        (frame_status &
+         frame_status_masks::FRAME_STATUS_THERMAL_SHUTDOWN_MASK) >>
+        frame_status_shifts::FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT);
+}
+
 std::vector<LidarScan::ts_t> LidarScan::timestamps() const {
     std::vector<LidarScan::ts_t> res;
     res.reserve(headers.size());
@@ -213,14 +242,75 @@ bool operator==(const LidarScan::BlockHeader& a,
 
 bool operator==(const LidarScan& a, const LidarScan& b) {
     return a.frame_id == b.frame_id && a.w == b.w && a.h == b.h &&
-           a.fields_ == b.fields_ && a.field_types_ == b.field_types_ &&
+           a.frame_status == b.frame_status && a.fields_ == b.fields_ &&
+           a.field_types_ == b.field_types_ &&
            (a.timestamp() == b.timestamp()).all() &&
            (a.measurement_id() == b.measurement_id()).all() &&
            (a.status() == b.status()).all();
 }
 
+LidarScanFieldTypes get_field_types(const LidarScan& ls) {
+    return {ls.begin(), ls.end()};
+}
+
+LidarScanFieldTypes get_field_types(const sensor::sensor_info& info) {
+    // Get typical LidarScan to obtain field types
+    return impl::lookup_scan_fields(info.format.udp_profile_lidar);
+}
+
+std::string to_string(const LidarScanFieldTypes& field_types) {
+    std::stringstream ss;
+    ss << "(";
+    for (size_t i = 0; i < field_types.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << sensor::to_string(field_types[i].first) << ":"
+           << sensor::to_string(field_types[i].second);
+    }
+    ss << ")";
+    return ss.str();
+}
+
+std::string to_string(const LidarScan& ls) {
+    std::stringstream ss;
+    LidarScanFieldTypes field_types(ls.begin(), ls.end());
+    ss << "LidarScan: {h = " << ls.h << ", w = " << ls.w
+       << ", fid = " << ls.frame_id << "," << std::endl
+       << " frame status =  " << std::hex << ls.frame_status << std::dec
+       << ", thermal_shutdown status = " << to_string(ls.thermal_shutdown())
+       << ", shot_limiting status = " << to_string(ls.shot_limiting()) << ","
+       << std::endl
+       << "  field_types = " << to_string(field_types) << "," << std::endl;
+
+    if (!field_types.empty()) {
+        ss << "  fields = [" << std::endl;
+        img_t<uint64_t> key{ls.h, ls.w};
+        for (const auto& ft : ls) {
+            impl::visit_field(ls, ft.first, impl::read_and_cast(), key);
+            ss << "    " << to_string(ft.first) << ":" << to_string(ft.second)
+               << " = (";
+            ss << key.minCoeff() << "; " << key.mean() << "; "
+               << key.maxCoeff();
+            ss << ")," << std::endl;
+        }
+        ss << "  ]," << std::endl;
+    }
+
+    auto ts = ls.timestamp().cast<uint64_t>();
+    ss << "  timestamp = (" << ts.minCoeff() << "; " << ts.mean() << "; "
+       << ts.maxCoeff() << ")," << std::endl;
+    auto mid = ls.measurement_id().cast<uint64_t>();
+    ss << "  measurement_id = (" << mid.minCoeff() << "; " << mid.mean() << "; "
+       << mid.maxCoeff() << ")," << std::endl;
+    auto st = ls.status().cast<uint64_t>();
+    ss << "  status = (" << st.minCoeff() << "; " << st.mean() << "; "
+       << st.maxCoeff() << ")" << std::endl;
+
+    ss << "}";
+    return ss.str();
+}
+
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
-                    double lidar_origin_to_beam_origin_mm,
+                    const mat4d& beam_to_lidar_transform,
                     const mat4d& transform,
                     const std::vector<double>& azimuth_angles_deg,
                     const std::vector<double>& altitude_angles_deg) {
@@ -228,6 +318,13 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
         throw std::invalid_argument("lut dimensions must be greater than zero");
     if (azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h)
         throw std::invalid_argument("unexpected scan dimensions");
+
+    double beam_to_lidar_euclidean_distance_mm = beam_to_lidar_transform(0, 3);
+    if (beam_to_lidar_transform(2, 3) != 0) {
+        beam_to_lidar_euclidean_distance_mm =
+            std::sqrt(std::pow(beam_to_lidar_transform(0, 3), 2) +
+                      std::pow(beam_to_lidar_transform(2, 3), 2));
+    }
 
     Eigen::ArrayXd encoder(w * h);   // theta_e
     Eigen::ArrayXd azimuth(w * h);   // theta_a
@@ -255,10 +352,15 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 
     // offsets due to beam origin
     lut.offset = LidarScan::Points{w * h, 3};
-    lut.offset.col(0) = encoder.cos() - lut.direction.col(0);
-    lut.offset.col(1) = encoder.sin() - lut.direction.col(1);
-    lut.offset.col(2) = -lut.direction.col(2);
-    lut.offset *= lidar_origin_to_beam_origin_mm;
+    lut.offset.col(0) =
+        encoder.cos() * beam_to_lidar_transform(0, 3) -
+        lut.direction.col(0) * beam_to_lidar_euclidean_distance_mm;
+    lut.offset.col(1) =
+        encoder.sin() * beam_to_lidar_transform(0, 3) -
+        lut.direction.col(1) * beam_to_lidar_euclidean_distance_mm;
+    lut.offset.col(2) =
+        -lut.direction.col(2) * beam_to_lidar_euclidean_distance_mm +
+        beam_to_lidar_transform(2, 3);
 
     // apply the supplied transform
     auto rot = transform.topLeftCorner(3, 3).transpose();
@@ -337,6 +439,19 @@ struct parse_field_col {
     }
 };
 
+uint64_t frame_status(const uint8_t thermal_shutdown,
+                      const uint8_t shot_limiting) {
+    uint64_t res = 0;
+    res |= (thermal_shutdown & 0x0f)
+           << FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT;  // right nibble is thermal
+                                                    // shutdown status, apply mask for
+                                                    // safety, then shift
+    res |= (shot_limiting & 0x0f)
+           << FRAME_STATUS_SHOT_LIMITING_SHIFT;  // right nibble is shot limiting, apply mask for
+                                                 // safety, then shift
+    return res;
+}
+
 }  // namespace
 
 bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
@@ -356,7 +471,12 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         // expecting to start batching a new scan
         next_m_id = 0;
         ls.frame_id = f_id;
-    } else if (ls.frame_id == f_id + 1) {
+
+        const uint8_t f_thermal_shutdown = pf.thermal_shutdown(packet_buf);
+        const uint8_t f_shot_limiting = pf.shot_limiting(packet_buf);
+        ls.frame_status = frame_status(f_thermal_shutdown, f_shot_limiting);
+
+    } else if (ls.frame_id == static_cast<uint16_t>(f_id + 1)) {
         // drop reordered packets from the previous frame
         return false;
     } else if (ls.frame_id != f_id) {
@@ -365,6 +485,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         zero_header_cols(ls, next_m_id, w);
         std::memcpy(cache.data(), packet_buf, cache.size());
         cached_packet = true;
+
         return true;
     }
 
@@ -398,6 +519,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         impl::foreach_field(ls, parse_field_col(), m_id, pf, col_buf);
     }
     return false;
-}
+}  // namespace ouster
 
 }  // namespace ouster

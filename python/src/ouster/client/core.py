@@ -122,9 +122,9 @@ class Sensor(PacketSource):
     _cache: Optional[Tuple[_client.ClientState, bytearray]]
 
     def __init__(self,
-                 hostname: str = "localhost",
-                 lidar_port: int = 7502,
-                 imu_port: int = 7503,
+                 hostname: str,
+                 lidar_port: int,
+                 imu_port: int,
                  *,
                  metadata: Optional[SensorInfo] = None,
                  buf_size: int = 128,
@@ -300,6 +300,7 @@ class Sensor(PacketSource):
                                               last_ts + self._timeout):
                 raise ClientTimeout(
                     f"No packets received within {self._timeout}s")
+
             # drop cached packet
             self._cache = None
             n_dropped += 1
@@ -341,7 +342,7 @@ class Scans:
                  source: PacketSource,
                  *,
                  complete: bool = False,
-                 timeout: Optional[float] = None,
+                 timeout: Optional[float] = 1.0,
                  fields: Optional[Dict[ChanField, FieldDType]] = None,
                  _max_latency: int = 0) -> None:
         """
@@ -446,13 +447,17 @@ class Scans:
             A tuple of metadata queried from the sensor and an iterator that
             samples n consecutive scans
         """
-        with closing(Sensor(hostname, metadata=metadata)) as sensor:
+        with closing(Sensor(hostname,
+                            lidar_port,
+                            7503,
+                            metadata=metadata)) as sensor:
             metadata = sensor.metadata
 
         def next_batch() -> List[LidarScan]:
             with closing(
                     Sensor(hostname,
                            lidar_port,
+                           7503,
                            metadata=metadata,
                            buf_size=n * 128,
                            _flush_before_read=False)) as source:
@@ -488,6 +493,7 @@ class Scans:
         """
         source = Sensor(hostname,
                         lidar_port,
+                        7503,
                         metadata=metadata,
                         buf_size=buf_size,
                         timeout=timeout,

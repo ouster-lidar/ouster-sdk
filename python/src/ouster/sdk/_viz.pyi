@@ -5,7 +5,7 @@ All rights reserved.
 Type annotations for viz python bindings.
 """
 
-from typing import Callable, overload, Tuple
+from typing import Callable, overload, Tuple, Callable, List
 
 import numpy as np
 
@@ -50,22 +50,61 @@ class Camera:
     def yaw(self, degrees: float) -> None:
         ...
 
+    def set_yaw(self, degrees: float) -> None:
+        ...
+
+    def get_yaw(self) -> float:
+        ...
+
     def pitch(self, degrees: float) -> None:
+        ...
+
+    def set_pitch(self, degrees: float) -> None:
+        ...
+
+    def get_pitch(self) -> float:
         ...
 
     def dolly(self, amount: int) -> None:
         ...
 
+    def set_dolly(self, log_distance: float) -> None:
+        ...
+
+    def get_dolly(self) -> float:
+        ...
+
     def dolly_xy(self, x: float, y: float) -> None:
+        ...
+
+    def set_view_offset(self, view_offset: np.ndarray) -> None:
+        ...
+
+    def get_view_offset(self) -> np.ndarray:
         ...
 
     def set_fov(self, degrees: float) -> None:
         ...
 
+    def get_fov(self) -> float:
+        ...
+
     def set_orthographic(self, state: bool) -> None:
         ...
 
+    def is_orthographic(self) -> bool:
+        ...
+
     def set_proj_offset(self, x: float, y: float) -> None:
+        ...
+
+    def get_proj_offset(self) -> np.ndarray:
+        ...
+
+    def set_target(self, pose: np.ndarray) -> None:
+        ...
+
+    def get_target(self) -> np.ndarray:
         ...
 
 
@@ -75,6 +114,9 @@ class TargetDisplay:
         ...
 
     def set_ring_size(self, n: int) -> None:
+        ...
+
+    def set_ring_line_width(self, line_width: int) -> None:
         ...
 
 
@@ -107,6 +149,17 @@ class Cloud:
         ...
 
     def set_palette(self, palette: np.ndarray) -> None:
+        ...
+
+    def set_column_poses(self, column_poses: np.ndarray) -> None:
+        ...
+
+    @property
+    def size(self) -> int:
+        ...
+
+    @property
+    def cols(self) -> int:
         ...
 
 
@@ -206,12 +259,27 @@ class PointViz:
                                            bool]) -> None:
         ...
 
+    def push_frame_buffer_handler(self, f: Callable[[List, int, int],
+                                                    bool]) -> None:
+        ...
+
+    def pop_frame_buffer_handler(self) -> None:
+        ...
+
     @property
     def camera(self) -> Camera:
         ...
 
     @property
     def target_display(self) -> TargetDisplay:
+        ...
+
+    @property
+    def viewport_width(self) -> int:
+        ...
+
+    @property
+    def viewport_height(self) -> int:
         ...
 
     @overload

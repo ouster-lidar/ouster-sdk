@@ -36,6 +36,11 @@ int main(int argc, char* argv[]) {
 
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
+
+    // Limit ouster_client log statements to "info" and direct the output to log
+    // file rather than the console (default).
+    sensor::init_logger("info", "ouster.log");
+
     std::cerr << "Ouster client example " << ouster::SDK_VERSION << std::endl;
     /*
      * The sensor client consists of the network client and a library for
@@ -50,11 +55,11 @@ int main(int argc, char* argv[]) {
     const std::string sensor_hostname = argv[1];
     const std::string data_destination = (argc == 3) ? argv[2] : "";
 
-    std::cerr << "Connecting to \"" << sensor_hostname << "\"... ";
+    std::cerr << "Connecting to \"" << sensor_hostname << "\"...\n";
 
     auto handle = sensor::init_client(sensor_hostname, data_destination);
     if (!handle) FATAL("Failed to connect");
-    std::cerr << "ok" << std::endl;
+    std::cerr << "Connection to sensor succeeded" << std::endl;
 
     /*
      * Configuration and calibration parameters can be queried directly from the
