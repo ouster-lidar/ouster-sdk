@@ -7,8 +7,9 @@
 
 #include <algorithm>
 #include <cstring>
-#include <iostream>
 #include <sstream>
+
+#include "logging.h"
 
 using std::string;
 using namespace ouster::sensor::impl;
@@ -63,6 +64,14 @@ void SensorTcpImp::set_config_param(const string& key,
                             "set_config_param");
 }
 
+Json::Value SensorTcpImp::active_config_params() const {
+    return tcp_cmd_json({"get_config_param", "active"});
+}
+
+Json::Value SensorTcpImp::staged_config_params() const {
+    return tcp_cmd_json({"get_config_param", "staged"});
+}
+
 void SensorTcpImp::set_udp_dest_auto() const {
     tcp_cmd_with_validation({"set_udp_dest_auto"}, "set_udp_dest_auto");
 }
@@ -111,14 +120,13 @@ SOCKET SensorTcpImp::cfg_socket(const char* addr) {
         hints.ai_flags = 0;
         ret = getaddrinfo(addr, "7501", &hints, &info_start);
         if (ret != 0) {
-            std::cerr << "cfg getaddrinfo(): " << gai_strerror(ret)
-                      << std::endl;
+            logger().error("cfg getaddrinfo(): {}", gai_strerror(ret));
             return SOCKET_ERROR;
         }
     }
 
     if (info_start == nullptr) {
-        std::cerr << "cfg getaddrinfo(): empty result" << std::endl;
+        logger().error("cfg getaddrinfo(): empty result");
         return SOCKET_ERROR;
     }
 
@@ -126,7 +134,7 @@ SOCKET SensorTcpImp::cfg_socket(const char* addr) {
     for (ai = info_start; ai != nullptr; ai = ai->ai_next) {
         sock_fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
         if (!socket_valid(sock_fd)) {
-            std::cerr << "cfg socket(): " << socket_get_error() << std::endl;
+            logger().error("cfg socket(): {}", socket_get_error());
             continue;
         }
 
@@ -136,8 +144,7 @@ SOCKET SensorTcpImp::cfg_socket(const char* addr) {
         }
 
         if (socket_set_rcvtimeout(sock_fd, RCVTIMEOUT_SEC)) {
-            std::cerr << "cfg set_rcvtimeout(): " << socket_get_error()
-                      << std::endl;
+            logger().error("cfg set_rcvtimeout(): {}", socket_get_error());
             socket_close(sock_fd);
             continue;
         }

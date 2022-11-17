@@ -19,6 +19,7 @@ RUN set -xe \
  libcurl4-openssl-dev \
  libglfw3-dev \
  libglew-dev \
+ libspdlog-dev \
 # Python deps
  python3-dev \
  python3-pip \

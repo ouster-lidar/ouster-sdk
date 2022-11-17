@@ -108,13 +108,18 @@ def test_xyz_calcs(stream_digest: digest.StreamDigest,
     """Compare the optimized xyz projection to a reference implementation."""
 
     # compute 3d points using reference implementation
-    xyz_from_docs = reference.xyz_proj(meta, scan)
+    xyz_beam_to_sensor_docs = reference.xyz_proj_beam_to_sensor_transform(meta, scan)
 
     # transform data to 3d points using optimized implementation
     xyzlut = client.XYZLut(meta)
     xyz_from_lut = xyzlut(scan)
 
-    assert np.allclose(xyz_from_docs, xyz_from_lut)
+    assert np.allclose(xyz_beam_to_sensor_docs, xyz_from_lut)
+
+    if "OS-DOME" not in meta.prod_line:
+        # for non-os-dome the old reference implementation should be correct as well
+        xyz_origin_to_origin_mm_docs = reference.xyz_proj_origin_to_origin_mm(meta, scan)
+        assert np.allclose(xyz_from_lut, xyz_origin_to_origin_mm_docs)
 
 
 def test_xyz_range(stream_digest: digest.StreamDigest, scan: client.LidarScan,

@@ -2,13 +2,50 @@
 Changelog
 =========
 
-
-[Unreleased]
+[unreleased]
 ============
+
+ouster_client
+--------------
+* breaking change: signal multiplier type changed to double to support new FW values of signal
+  multiplier.
+* breaking change: make_xyz_lut takes mat4d beam_to_lidar_transform instead of
+  lidar_origin_to_beam_origin_mm double to accomodate new FWs. Old reference Python implementation
+  was kept, but new reference was also added.
+* address an issue that could cause the processed frame being dropped in favor or the previous
+  frame when the frame_id wraps-around.
+* added a new flag ``CONFIG_FORCE_REINIT`` for ``set_config()`` method, to force the sensor to reinit
+  even when config params have not changed.
+* breaking change: drop defaults parameters from the shortform ``init_client()`` method.
+* added a new method ``init_logger()`` to provide control over the logs emitted by ``ouster_client``.
+* add parsing for new FW 3.0 thermal features shot_limiting and thermal_shutdown statuses and countdowns
+* add frame_status to LidarScan
+
+python
+------
+* breaking change: drop defaults parameters of ``client.Sensor`` constructor.
+* breaking change: change Scans interface Timeout to default to 1 second instead of None
+* added a new method ``init_logger()`` to provide control over the logs emitted by ``client.Sensor``.
+* add ``client.LidarScan`` methods ``__repr__()`` and ``__str__()``.
+
+ouster_viz
+----------
+* add ``SimpleViz.screenshot()`` function and a key handler ``SHIFT-Z`` to
+  save a screenshot. Can be called from a client thread, and executes
+  asyncronously (i.e. returns immediately and pushes a one off callback
+  to frame buffer handlers)
+* add ``PointViz.viewport_width()`` and ``PointViz.viewport_height()`` functions
+* add ``PointViz.push/pop_frame_buffer_handler()`` to attach a callbacks on
+  every frame draw update that calls from the main rendering loop.
+* add ``SHIFT-X`` key to SimpleViz to start continuous saving of screenshots
+  on every draw operation. (good for making videos)
+* expose ``Camera.set_target`` function through pybind
 
 ouster-sdk
 ----------
 * Moved ouster_ros to its own repo
+* pin ``openssl`` Conan package dependency to ``openssl/1.1.1s`` due to
+  ``libtins`` and ``libcurl`` conflicting ``openssl`` versions
 
 
 [20220927]
@@ -16,7 +53,7 @@ ouster-sdk
 
 ouster_client
 --------------
-* fix a bug in longform init_client which was not setting timestamp_mode and lidar_mode correctly
+* fix a bug in longform ``init_client()`` which was not setting timestamp_mode and lidar_mode correctly
   
 
 [20220826]

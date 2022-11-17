@@ -4,7 +4,7 @@
 Building the C++ Client from Source
 ===================================
 
-Building the example code requires a compiler supporting C++11 and CMake 3.1 or newer and the
+Building the example code requires a compiler supporting C++14 and CMake 3.1 or newer and the
 jsoncpp, Eigen3, and tins libraries with headers installed on the system. The sample visualizer also
 requires the GLFW3 and GLEW libraries.
 
@@ -19,7 +19,7 @@ To install build dependencies on Ubuntu, run:
 .. code:: console
 
    $ sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev \
-                      libtins-dev libpcap-dev libglfw3-dev libglew-dev
+                      libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev
 
 You may also install curl with a different ssl backend, for example libcurl4-gnutls-dev or
 libcurl4-nss-dev.

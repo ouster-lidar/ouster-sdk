@@ -39,9 +39,8 @@ constexpr size_t packet_size = 65536;
 BufferedUDPSource::BufferedUDPSource(size_t buf_size)
     : capacity_{buf_size + 1} {
     std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
-        return std::make_pair(
-            client_state::CLIENT_ERROR,
-            std::make_unique<uint8_t[]>(packet_size));
+        return std::make_pair(client_state::CLIENT_ERROR,
+                              std::make_unique<uint8_t[]>(packet_size));
     });
 }
 

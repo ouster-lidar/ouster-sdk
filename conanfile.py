@@ -56,8 +56,15 @@ class OusterSDKConan(ConanFile):
             del self.options.fPIC
 
     def requirements(self):
+        # not required directly here but because libtins and libcurl pulling
+        # slightly different versions of zlib and openssl we need to set it
+        # here explicitly
+        self.requires("zlib/1.2.13")
+        self.requires("openssl/1.1.1s")
+
         self.requires("eigen/3.4.0")
         self.requires("jsoncpp/1.9.5")
+        self.requires("spdlog/1.10.0")
         self.requires("libcurl/7.82.0")
 
         if self.options.build_pcap:

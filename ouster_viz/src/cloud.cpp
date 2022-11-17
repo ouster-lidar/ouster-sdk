@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
+#include <unordered_map>
 
 #include "camera.h"
 #include "common.h"
@@ -62,44 +63,6 @@ GLCloud::GLCloud(const Cloud& cloud) : point_size{cloud.point_size_} {
     glGenBuffers(1, &trans_index_buffer);
     glGenTextures(1, &transform_texture);
     glGenTextures(1, &palette_texture);
-
-    // initialize trans_index_buffer
-    std::vector<GLfloat> trans_index_buffer_data(cloud.n_);
-    for (size_t i = 0; i < cloud.n_; i++) {
-        trans_index_buffer_data[i] = ((i % cloud.w_) + 0.5) / (GLfloat)cloud.w_;
-    }
-
-    // initialize GL state
-    glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.xyz_data_.size(),
-                 cloud.xyz_data_.data(), GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, off_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.off_data_.size(),
-                 cloud.off_data_.data(), GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, range_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.range_data_.size(),
-                 cloud.range_data_.data(), GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, key_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.key_data_.size(),
-                 cloud.key_data_.data(), GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, mask_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.mask_data_.size(),
-                 cloud.mask_data_.data(), GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ARRAY_BUFFER, trans_index_buffer);
-    glBufferData(GL_ARRAY_BUFFER,
-                 sizeof(GLfloat) * cloud.transform_data_.size(),
-                 trans_index_buffer_data.data(), GL_STATIC_DRAW);
-
-    load_texture(cloud.transform_data_.data(), cloud.w_, 4, transform_texture,
-                 GL_RGB32F);
-
-    load_texture(cloud.palette_data_.data(), cloud.palette_data_.size() / 3, 1,
-                 palette_texture);
 }
 
 GLCloud::~GLCloud() {
@@ -113,10 +76,44 @@ GLCloud::~GLCloud() {
     glDeleteTextures(1, &palette_texture);
 }
 
+/**
+ * @brief Makes a key from the pair of (n, w) for use in maps.
+ * 
+ * @param n total cloud size
+ * @param w columns number
+ * @return size_t hash of the pair (n, w) to use as a map key
+ */
+static inline size_t ti_key(size_t n, size_t w) {
+    return w + (n << sizeof(size_t) * 8 / 2);
+}
+
 /*
  * Render the point cloud with the point of view of the Camera
  */
 void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
+    // transformation indices buffers cache
+    static std::unordered_map<size_t, std::vector<GLfloat>> trans_indexes;
+
+    // check do we have a transformation indices in cache and if not generate
+    auto trans_index_key = ti_key(cloud.n_, cloud.w_);
+    auto it = trans_indexes.find(trans_index_key);
+    if (it == trans_indexes.end()) {
+        std::vector<GLfloat> trans_index_buffer_data(cloud.n_);
+        for (size_t i = 0; i < cloud.n_; i++) {
+            trans_index_buffer_data[i] =
+                ((i % cloud.w_) + 0.5) / (GLfloat)cloud.w_;
+        }
+        trans_indexes.emplace(trans_index_key,
+                              std::move(trans_index_buffer_data));
+    }
+
+    // re-set trans_index_buffer always because GLClouds can be reused for
+    // different point cloud (n, w) structures.
+    glBindBuffer(GL_ARRAY_BUFFER, trans_index_buffer);
+    glBufferData(GL_ARRAY_BUFFER,
+                 sizeof(GLfloat) * trans_indexes[trans_index_key].size(),
+                 trans_indexes[trans_index_key].data(), GL_STATIC_DRAW);
+
     if (cloud.point_size_changed_) {
         point_size = cloud.point_size_;
         cloud.point_size_changed_ = false;

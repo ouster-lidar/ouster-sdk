@@ -181,6 +181,26 @@ class LidarPacket:
         return self._pf.prod_sn(self._data)
 
     @property
+    def countdown_thermal_shutdown(self) -> int:
+        """Get the thermal shutdown countdown of the packet."""
+        return self._pf.countdown_thermal_shutdown(self._data)
+
+    @property
+    def countdown_shot_limiting(self) -> int:
+        """Get the shot limiting countdown of the packet."""
+        return self._pf.countdown_shot_limiting(self._data)
+
+    @property
+    def thermal_shutdown(self) -> int:
+        """Get the thermal shutdown status of the packet."""
+        return self._pf.thermal_shutdown(self._data)
+
+    @property
+    def shot_limiting(self) -> int:
+        """Get the shot limiting status of the packet."""
+        return self._pf.shot_limiting(self._data)
+
+    @property
     def fields(self) -> Iterator[ChanField]:
         """Get available fields of LidarScan as Iterator."""
         return self._pf.fields
@@ -302,7 +322,8 @@ def destagger(info: SensorInfo,
 
 
 def XYZLut(
-        info: SensorInfo
+        info: SensorInfo,
+        use_extrinsics: bool = False
 ) -> Callable[[Union[LidarScan, np.ndarray]], np.ndarray]:
     """Return a function that can project scans into Cartesian coordinates.
 
@@ -315,16 +336,24 @@ def XYZLut(
     doubles, where H is the number of beams and W is the horizontal resolution
     of the scan.
 
-    The coordinates are reported in meters in the *sensor frame* as
-    defined in the sensor documentation.
+    The coordinates are reported in meters in the *sensor frame* (when
+    ``use_extrinsics`` is False, default) as defined in the sensor documentation.
+
+    However, the result is returned in the "extrinsics frame" if
+    ``use_extrinsics`` is True, which makes additional transform from
+    "sensor frame" to "extrinsics frame" using the homogeneous 4x4 transform
+    matrix from ``info.extrinsic`` property.
 
     Args:
         info: sensor metadata
+        use_extrinsics: if True, applies the ``info.extrinsic`` transform to the
+                        resulting "sensor frame" coordinates and returns the
+                        result in "extrinsics frame".
 
     Returns:
         A function that computes a point cloud given a range image
     """
-    lut = _client.XYZLut(info)
+    lut = _client.XYZLut(info, use_extrinsics)
 
     def res(ls: Union[LidarScan, np.ndarray]) -> np.ndarray:
         if isinstance(ls, LidarScan):

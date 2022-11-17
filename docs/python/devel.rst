@@ -18,6 +18,7 @@ Building the Python SDK from source requires several dependencies:
 - `libpcap <https://www.tcpdump.org/>`_
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
 - `libglew <http://glew.sourceforge.net/>`_ >= 2.1 or `glad <https://github.com/Dav1dde/glad>`_
+- `spdlog <https://github.com/gabime/spdlog>`_ >= 1.9
 - `Python <https://www.python.org/>`_ >= 3.7 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
@@ -33,7 +34,7 @@ On supported Debian-based linux systems, you can install all build dependencies 
    $ sudo apt install build-essential cmake \
                       libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
                       python3-dev python3-pip pybind11-dev libcurl4-openssl-dev \
-                      libglfw3-dev libglew-dev
+                      libglfw3-dev libglew-dev libspdlog-dev
 
 On macos >= 10.13, using homebrew, you should be able to run:
 
