@@ -12,22 +12,19 @@ ouster_client
 * breaking change: make_xyz_lut takes mat4d beam_to_lidar_transform instead of
   lidar_origin_to_beam_origin_mm double to accomodate new FWs. Old reference Python implementation
   was kept, but new reference was also added.
-* breaking change: the default metadata format from ``get_metadata`` has been updated to the
-  non-legacy format. Users who wish to continue using the legacy format can do so by using the
-  ``legacy_format`` parameter in ``get_metadata``.
 * address an issue that could cause the processed frame being dropped in favor or the previous
   frame when the frame_id wraps-around.
 * added a new flag ``CONFIG_FORCE_REINIT`` for ``set_config()`` method, to force the sensor to reinit
   even when config params have not changed.
 * breaking change: drop defaults parameters from the shortform ``init_client()`` method.
-* bugfix: fix bug in set_config for config_flag auto
 * added a new method ``init_logger()`` to provide control over the logs emitted by ``ouster_client``.
+* add parsing for new FW 3.0 thermal features shot_limiting and thermal_shutdown statuses and countdowns
+* add frame_status to LidarScan
 
 python
 ------
 * breaking change: drop defaults parameters of ``client.Sensor`` constructor.
 * breaking change: change Scans interface Timeout to default to 1 second instead of None
-* bugfix: fix bug in set_config for auto udp destination configuration parameter
 * added a new method ``init_logger()`` to provide control over the logs emitted by ``client.Sensor``.
 * add ``client.LidarScan`` methods ``__repr__()`` and ``__str__()``.
 

@@ -72,8 +72,8 @@ bool init_logger(const std::string& log_level,
  *
  * @return pointer owning the resources associated with the connection.
  */
-std::shared_ptr<client> init_client(const std::string& hostname,
-                                    int lidar_port, int imu_port);
+std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
+                                    int imu_port);
 
 /**
  * Connect to and configure the sensor and start listening for data.
@@ -151,7 +151,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  * @return a text blob of metadata parseable into a sensor_info struct.
  */
 std::string get_metadata(client& cli, int timeout_sec = 60,
-                         bool legacy_format = false);
+                         bool legacy_format = true);
 
 /**
  * Get sensor config from the sensor.
