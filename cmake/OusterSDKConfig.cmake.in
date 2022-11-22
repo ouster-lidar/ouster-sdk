@@ -8,12 +8,12 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/Modules/")
 find_dependency(Eigen3)
 find_dependency(jsoncpp)
 find_dependency(CURL)
+find_dependency(spdlog)
 
 # viz dependencies
 if(@BUILD_VIZ@)
   set(OpenGL_GL_PREFERENCE GLVND)
   find_dependency(OpenGL)
-  find_dependency(Threads)
   find_dependency(glfw3)
 
   if(@OUSTER_VIZ_USE_GLAD@)

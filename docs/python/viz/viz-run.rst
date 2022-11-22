@@ -56,6 +56,8 @@ Keyboard controls:
     ``ctrl + ./,``  Step 10 frames forward/back
     ``>/<``         Increase/decrease playback rate (during replay)
     ``shift``       Camera Translation with mouse drag
+    ``shift-z``     Save a screenshot of the current view
+    ``shift-x``     Toggle a continuous saving of screenshots
     ==============  ===============================================
 
 ..

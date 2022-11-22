@@ -371,6 +371,7 @@ def test_pcap_read_real(real_pcap: pcap.Pcap) -> None:
     packets = list(real_pcap)
     lidar_packets = [p for p in packets if isinstance(p, client.LidarPacket)]
 
+    # TODO - update test to expect based on mode
     # test data should contain one frame of 1024-mode data
     assert len(lidar_packets) == 64
 

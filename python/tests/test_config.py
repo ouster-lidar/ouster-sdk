@@ -5,15 +5,11 @@ All rights reserved.
 
 from copy import copy, deepcopy
 
-from os import path
-
 import pytest
 import warnings
 import inspect
 
 from ouster import client
-
-DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "data")
 
 
 @pytest.mark.parametrize("mode, string", [
@@ -144,7 +140,7 @@ def test_write_config() -> None:
     config.operating_mode = client.OperatingMode.OPERATING_STANDBY
     config.phase_lock_enable = True
     config.phase_lock_offset = 180000
-    config.signal_multiplier = 2
+    config.signal_multiplier = 2.0
     config.sync_pulse_out_pulse_width = 5
     config.sync_pulse_out_frequency = 2
     config.sync_pulse_in_polarity = client.Polarity.POLARITY_ACTIVE_HIGH
@@ -209,7 +205,7 @@ def all_different_config_string() -> str:
         "operating_mode": "STANDBY",
         "phase_lock_enable": true,
         "phase_lock_offset": 180000,
-        "signal_multiplier": 3,
+        "signal_multiplier": 0.5,
         "sync_pulse_in_polarity": "ACTIVE_LOW",
         "sync_pulse_out_angle": 180,
         "sync_pulse_out_frequency": 10,
@@ -327,6 +323,14 @@ def test_parse_config() -> None:
         client.SensorConfig('/')
     with pytest.raises(ValueError):
         client.SensorConfig('{ ')
+
+
+@pytest.mark.parametrize("signal_multiplier", [0.25, 0.5, 1, 2, 3])
+def test_signal_multiplier(signal_multiplier) -> None:
+    """Check that signal multiplier supports all FW values"""
+
+    config = client.SensorConfig()
+    config.signal_multiplier = signal_multiplier
 
 
 @pytest.fixture()

@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "helpers.h"
-#include "ouster/impl/build.h"
 #include "ouster/client.h"
+#include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -101,8 +101,8 @@ int main(int argc, char* argv[]) {
     // say a vehicle center
     //! [doc-stag-extrinsics-to-xyzlut]
     auto lut_extrinsics = make_xyz_lut(
-        w, h, sensor::range_unit, info.lidar_origin_to_beam_origin_mm,
-        transformation, info.beam_azimuth_angles, info.beam_altitude_angles);
+        w, h, sensor::range_unit, info.beam_to_lidar_transform, transformation,
+        info.beam_azimuth_angles, info.beam_altitude_angles);
 
     std::cerr << "Calculating 3d Points of with special transform provided.."
               << std::endl;

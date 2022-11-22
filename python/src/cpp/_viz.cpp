@@ -11,6 +11,8 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
+#include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
 
 #include <atomic>
 #include <csignal>
@@ -129,6 +131,22 @@ PYBIND11_PLUGIN(_viz) {
             },
             "Add a callback for handling keyboard input.")
 
+        .def(
+            "push_frame_buffer_handler",
+            [](viz::PointViz& self,
+               std::function<bool(const std::vector<uint8_t>&, int, int)> f) {
+                // pybind11 doesn't seem to deal with the rvalue ref arg
+                // pybind11 already handles acquiring the GIL in the callback
+                self.push_frame_buffer_handler(std::move(f));
+            },
+            "Add a callback for handling every frame buffer draw (super "
+            "expensive).")
+
+        .def(
+            "pop_frame_buffer_handler",
+            [](viz::PointViz& self) { self.pop_frame_buffer_handler(); },
+            "Remove the last added callback for handling frame buffers data.")
+
         // control scene
         .def_property_readonly("camera", &viz::PointViz::camera,
                                py::return_value_policy::reference_internal,
@@ -137,6 +155,13 @@ PYBIND11_PLUGIN(_viz) {
         .def_property_readonly("target_display", &viz::PointViz::target_display,
                                py::return_value_policy::reference_internal,
                                "Get a reference to the target display.")
+
+        .def_property_readonly("viewport_width", &viz::PointViz::viewport_width,
+                               "Current viewport width in pixels")
+
+        .def_property_readonly("viewport_height",
+                               &viz::PointViz::viewport_height,
+                               "Current viewport height in pixels")
 
         .def("add",
              py::overload_cast<const std::shared_ptr<viz::Cloud>&>(
@@ -193,12 +218,28 @@ PYBIND11_PLUGIN(_viz) {
     py::class_<viz::Camera>(m, "Camera",
                             "Controls the camera view and projection.")
         .def("reset", &viz::Camera::reset, "Reset the camera view and fov.")
+
         .def("yaw", &viz::Camera::yaw, py::arg("degrees"),
              "Orbit the camera left or right about the camera target.")
+        .def("set_yaw", &viz::Camera::set_yaw, py::arg("degrees"),
+             "Set yaw in degrees.")
+        .def("get_yaw", &viz::Camera::get_yaw, "Get yaw in degrees.")
+
         .def("pitch", &viz::Camera::pitch, py::arg("degrees"),
              "Pitch the camera up or down.")
+        .def("set_pitch", &viz::Camera::set_pitch, py::arg("degrees"),
+             "Set pitch in degrees.")
+        .def("get_pitch", &viz::Camera::get_pitch, "Get pitch in degrees.")
+
         .def("dolly", &viz::Camera::dolly, py::arg("amount"),
              "Move the camera towards or away from the target.")
+
+        .def("set_dolly", &viz::Camera::set_dolly,
+             py::arg("log_distance"),
+             "Set the dolly (i.e. log distance) of the camera from the target.")
+        .def("get_dolly", &viz::Camera::get_dolly,
+             "Get the dolly (i.e. log distance) of the camera from the target.")
+
         .def("dolly_xy", &viz::Camera::dolly_xy, py::arg("x"), py::arg("y"),
              R"(
              Move the camera in the XY plane of the camera view.
@@ -207,10 +248,19 @@ PYBIND11_PLUGIN(_viz) {
                  x: horizontal offset
                  y: vertical offset
              )")
+        .def("set_view_offset", &viz::Camera::set_view_offset,
+             py::arg("view_offset"), "Set view offset of a camera")
+        .def("get_view_offset", &viz::Camera::get_view_offset,
+             "Get view offset of a camera")
+
         .def("set_fov", &viz::Camera::set_fov, py::arg("degrees"),
              "Set the diagonal field of view.")
+        .def("get_fov", &viz::Camera::get_fov,
+             "Get the diagonal field of view in degrees.")
         .def("set_orthographic", &viz::Camera::set_orthographic,
              py::arg("state"), "Use an orthographic or perspective projection.")
+        .def("is_orthographic", &viz::Camera::is_orthographic,
+             "Get the orthographic state.")
         .def("set_proj_offset", &viz::Camera::set_proj_offset, py::arg("x"),
              py::arg("y"),
              R"(
@@ -219,14 +269,35 @@ PYBIND11_PLUGIN(_viz) {
              Args:
                  x: horizontal position in in normalized coordinates [-1, 1]
                  y: vertical position in in normalized coordinates [-1, 1]
-             )");
+             )")
+        .def("get_proj_offset", &viz::Camera::get_proj_offset,
+             "Get the 2d position of a camera target in the viewport.")
+        .def(
+            "set_target",
+            [](viz::Camera& self, pymatrixd pose) {
+                check_array(pose, 16, 2, 'F');
+                viz::mat4d posea;
+                std::copy(pose.data(), pose.data() + 16, posea.data());
+                self.set_target(posea);
+            },
+            py::arg("pose"),
+            R"(
+                 Set the camera target pose (inverted pose).
+
+                 Args:
+                    pose: 4x4 column-major homogeneous transformation matrix
+             )")
+        .def("get_target", &viz::Camera::get_target,
+             "Get a pose of the camera target.");
 
     py::class_<viz::TargetDisplay>(
         m, "TargetDisplay", "Manages the state of the camera target display.")
         .def("enable_rings", &viz::TargetDisplay::enable_rings,
              py::arg("state"), "Enable or disable distance ring display.")
         .def("set_ring_size", &viz::TargetDisplay::set_ring_size, py::arg("n"),
-             "Set the distance between rings.");
+             "Set the distance between rings.")
+        .def("set_ring_line_width", &viz::TargetDisplay::set_ring_line_width,
+             py::arg("line_width"), "Set the line width of the rings.");
 
     py::class_<viz::Cloud, std::shared_ptr<viz::Cloud>>(m, "Cloud",
                                                         R"(
@@ -347,6 +418,31 @@ PYBIND11_PLUGIN(_viz) {
                          ``i + n``, ``i + 2n``
              )")
         .def(
+            "set_column_poses",
+            [](viz::Cloud& self,
+               py::array_t<float, py::array::f_style | py::array::forcecast>
+                   rotation,
+               py::array_t<float, py::array::f_style | py::array::forcecast>
+                   translation) {
+                check_array(rotation, self.get_cols() * 9, 0, 'F');
+                check_array(translation, self.get_cols() * 3, 0, 'F');
+                self.set_column_poses(rotation.data(), translation.data());
+            },
+            py::arg("rotation"), py::arg("translation"),
+            R"(
+                 Set the rotation and translation values per column.
+
+                 Args:
+                    rotation: array of exactly 9n where n is number of columns,
+                         so that the rotation of the ith column is ``i``,
+                         ``i + 3n``, ``i + 6n``, ``i + n``, ``i + n + 3n``,
+                         ``i + n + 6n``, ``i + 2n``, ``i + 2n + 3n``,
+                         ``i + 2n + 6n``
+                    translation: array of exactly 3n where n is number of
+                         columns, so that the translation of the ith column is
+                         ``i``, ``i + n``, ``i + 2n``
+             )")
+        .def(
             "set_pose",
             [](viz::Cloud& self, pymatrixd pose) {
                 check_array(pose, 16, 2, 'F');
@@ -382,7 +478,26 @@ PYBIND11_PLUGIN(_viz) {
 
             Args:
                 palette: the new palette to use, must have size 3*palette_size
-        )");
+        )")
+        .def_property_readonly("size", &viz::Cloud::get_size,
+                               "Number of points in a cloud")
+        .def_property_readonly(
+            "cols", &viz::Cloud::get_cols,
+            "Number of columns in a cloud (1 if point cloud is unstructured")
+        .def("__copy__",
+             [](const viz::Cloud& self) { return viz::Cloud{self}; })
+        .def("__deepcopy__",
+             [](viz::Cloud& self, py::dict) {
+                 return viz::Cloud{self};
+             })
+        .def("__repr__",
+             [](const viz::Cloud& self) {
+                 std::stringstream ss;
+                 ss << "<ouster.viz.Cloud " << &self
+                    << ", pts = " << self.get_size()
+                    << ", cols = " << self.get_cols() << ">";
+                 return ss.str();
+             });
 
     py::class_<viz::Image, std::shared_ptr<viz::Image>>(
         m, "Image", "Manages the state of an image.")

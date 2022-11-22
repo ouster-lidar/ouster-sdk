@@ -90,6 +90,11 @@ def test_read_info(meta: client.SensorInfo) -> None:
     assert meta.imu_to_sensor_transform.shape == (4, 4)
     assert meta.lidar_to_sensor_transform.shape == (4, 4)
     assert meta.lidar_origin_to_beam_origin_mm == 13.762
+
+    beam_to_lidar_transform = numpy.identity(4)
+    beam_to_lidar_transform[0, 3] = meta.lidar_origin_to_beam_origin_mm
+    assert numpy.array_equal(meta.beam_to_lidar_transform, beam_to_lidar_transform)
+
     assert numpy.array_equal(meta.extrinsic, numpy.identity(4))
     assert meta.init_id == 0
     assert meta.udp_port_lidar == 0
@@ -116,6 +121,7 @@ def test_write_info(meta: client.SensorInfo) -> None:
     meta.lidar_to_sensor_transform = numpy.zeros((4, 4))
     meta.extrinsic = numpy.zeros((4, 4))
     meta.lidar_origin_to_beam_origin_mm = 0.0
+    meta.beam_to_lidar_transform = numpy.zeros((4, 4))
     meta.init_id = 0
     meta.udp_port_lidar = 0
     meta.udp_port_imu = 0
@@ -197,7 +203,7 @@ def test_info_length() -> None:
     info_attributes = inspect.getmembers(client.SensorInfo, lambda a: not inspect.isroutine(a))
     info_properties = [a for a in info_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(info_properties) == 15, "Don't forget to update tests and the sensor_info == operator!"
+    assert len(info_properties) == 16, "Don't forget to update tests and the sensor_info == operator!"
 
 
 def test_equality_format() -> None:

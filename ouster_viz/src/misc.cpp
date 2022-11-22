@@ -32,7 +32,10 @@ GLuint GLRings::ring_proj_view_id;
 GLuint GLRings::ring_range_id;
 
 GLRings::GLRings(const size_t points_per_ring_)
-    : points_per_ring(points_per_ring_), ring_size_(1), rings_enabled(true) {
+    : points_per_ring(points_per_ring_),
+      ring_size_(1),
+      ring_line_width_(1),
+      rings_enabled(true) {
     std::vector<GLfloat> xyz(points_per_ring_ * 3, 0);
     for (size_t i = 0; i < points_per_ring; i++) {
         const GLfloat theta = i * 2.0 * M_PI / points_per_ring;
@@ -49,6 +52,7 @@ GLRings::GLRings(const size_t points_per_ring_)
 void GLRings::update(const TargetDisplay& target) {
     rings_enabled = target.rings_enabled_;
     ring_size_ = target.ring_size_;
+    ring_line_width_ = target.ring_line_width_;
 }
 
 void GLRings::draw(const WindowCtx&, const CameraData& camera) {
@@ -78,6 +82,15 @@ void GLRings::draw(const WindowCtx&, const CameraData& camera) {
          r += radius, rr += 1) {
         glUniform1f(GLRings::ring_range_id, r);
         glDrawArrays(GL_LINE_LOOP, 0, points_per_ring);
+        // Making more paths to thicken the line
+        // TODO[pb]: Need to find a better way to draw a thick lines, this
+        //           method is too gross (slow and rugged) :(
+        for (int lw = 1; lw < ring_line_width_; ++lw) {
+            glUniform1f(GLRings::ring_range_id, r + lw * 0.02);
+            glDrawArrays(GL_LINE_LOOP, 0, points_per_ring);
+            glUniform1f(GLRings::ring_range_id, r - lw * 0.02);
+            glDrawArrays(GL_LINE_LOOP, 0, points_per_ring);
+        }
     }
     glDisableVertexAttribArray(GLRings::ring_xyz_id);
 }
