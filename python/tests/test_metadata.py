@@ -1,8 +1,14 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from copy import copy
 
 import json
 import numpy
 import pytest
+import inspect
 
 from ouster import client
 
@@ -35,6 +41,7 @@ def test_timestamp_mode_misc() -> None:
     (client.LidarMode.MODE_1024x10, 1024, 10, "1024x10"),
     (client.LidarMode.MODE_1024x20, 1024, 20, "1024x20"),
     (client.LidarMode.MODE_2048x10, 2048, 10, "2048x10"),
+    (client.LidarMode.MODE_4096x5, 4096, 5, "4096x5"),
 ])
 def test_lidar_mode(mode, cols, frequency, string) -> None:
     """Check lidar mode (un)parsing and cols/frequency."""
@@ -48,7 +55,7 @@ def test_lidar_mode(mode, cols, frequency, string) -> None:
 def test_lidar_mode_misc() -> None:
     """Check some misc properties of lidar mode."""
     assert len(
-        client.LidarMode.__members__) == 6, "Don't forget to update tests!"
+        client.LidarMode.__members__) == 7, "Don't forget to update tests!"
     assert client.LidarMode.from_string('foo') == client.LidarMode.MODE_UNSPEC
     assert client.LidarMode(0) == client.LidarMode.MODE_UNSPEC
     assert str(client.LidarMode.MODE_UNSPEC) == "UNKNOWN"
@@ -83,6 +90,11 @@ def test_read_info(meta: client.SensorInfo) -> None:
     assert meta.imu_to_sensor_transform.shape == (4, 4)
     assert meta.lidar_to_sensor_transform.shape == (4, 4)
     assert meta.lidar_origin_to_beam_origin_mm == 13.762
+
+    beam_to_lidar_transform = numpy.identity(4)
+    beam_to_lidar_transform[0, 3] = meta.lidar_origin_to_beam_origin_mm
+    assert numpy.array_equal(meta.beam_to_lidar_transform, beam_to_lidar_transform)
+
     assert numpy.array_equal(meta.extrinsic, numpy.identity(4))
     assert meta.init_id == 0
     assert meta.udp_port_lidar == 0
@@ -109,6 +121,7 @@ def test_write_info(meta: client.SensorInfo) -> None:
     meta.lidar_to_sensor_transform = numpy.zeros((4, 4))
     meta.extrinsic = numpy.zeros((4, 4))
     meta.lidar_origin_to_beam_origin_mm = 0.0
+    meta.beam_to_lidar_transform = numpy.zeros((4, 4))
     meta.init_id = 0
     meta.udp_port_lidar = 0
     meta.udp_port_imu = 0
@@ -182,3 +195,21 @@ def test_parse_info() -> None:
     metadata['lidar_origin_to_beam_origin_mm'] = 'foo'
     with pytest.raises(RuntimeError):
         client.SensorInfo(json.dumps(metadata))
+
+
+def test_info_length() -> None:
+    """Check length of info to ensure we've added appropriately to the == operator"""
+
+    info_attributes = inspect.getmembers(client.SensorInfo, lambda a: not inspect.isroutine(a))
+    info_properties = [a for a in info_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
+
+    assert len(info_properties) == 16, "Don't forget to update tests and the sensor_info == operator!"
+
+
+def test_equality_format() -> None:
+    """Check length of data format to ensure we've added appropriately to the == operator"""
+
+    data_format_attributes = inspect.getmembers(client.DataFormat, lambda a: not inspect.isroutine(a))
+    data_format_properties = [a for a in data_format_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
+
+    assert len(data_format_properties) == 7, "Don't forget to update tests and the data_format == operator!"

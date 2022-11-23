@@ -1,3 +1,8 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from copy import deepcopy
 from typing import Dict, Iterator
 
@@ -115,7 +120,9 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     # create LidarScan with only 2 fields
     fields: Dict[client.ChanField, client.FieldDType] = {
         client.ChanField.RANGE: np.uint32,
-        client.ChanField.SIGNAL: np.uint16
+        client.ChanField.SIGNAL: np.uint16,
+        client.ChanField.CUSTOM0: np.uint8,
+        client.ChanField.CUSTOM8: np.uint16
     }
 
     ls = client.LidarScan(info.format.pixels_per_column,
@@ -125,16 +132,27 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
     for f in ls.fields:
         assert np.count_nonzero(ls.field(f)) == 0
 
+    # set non zero data into users' custom field
+    ls.field(client.ChanField.CUSTOM8)[:] = 8
+
     # do batching into ls with a fields subset
     for p in take(packets_per_frame, lidar_stream):
         batch(p._data, ls)
+        if isinstance(p, client.LidarPacket):
+            assert p.shot_limiting == ls.shot_limiting()
+            assert p.thermal_shutdown == ls.thermal_shutdown()
 
     # it should contain the same num fields as we've added
     assert len(list(ls.fields)) == len(fields)
 
     # and the content shouldn't be zero after batching
     for f in ls.fields:
-        assert np.count_nonzero(ls.field(f)) > 0
+        if f in [client.ChanField.RANGE, client.ChanField.SIGNAL]:
+            assert np.count_nonzero(ls.field(f)) > 0
+
+    # custom field data should be preserved after batching
+    assert np.all(ls.field(client.ChanField.CUSTOM0) == 0)
+    assert np.all(ls.field(client.ChanField.CUSTOM8) == 8)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
@@ -172,3 +190,32 @@ def test_incompatible_profile(lidar_stream: client.PacketSource) -> None:
     with pytest.raises(ValueError):
         for p in take(packets_per_frame, lidar_stream):
             batch(p._data, ls)
+
+
+@pytest.fixture
+def lidar_stream_with_lagging_frame_ids(packets: client.PacketSource) -> client.PacketSource:
+    """A stream of lidar packets with spoofed out of order frame ids in proximity
+    to the sensor frame_id wrap-around values."""
+    def gen_packets():
+        s = np.iinfo(np.ushort).max
+        ids = [s, s, 0, s, s, s, 0, 0, s, s, 0, 1, 1]
+        idx = 0
+        frame_id = ids[idx]
+        while True:
+            plist = deepcopy(list(packets))
+            for p in plist:
+                if isinstance(p, client.LidarPacket):
+                    _patch_frame_id(p, frame_id)
+                    yield p
+            frame_id = ids[idx % len(ids)]
+            idx += 1
+
+    return client.Packets(gen_packets(), packets.metadata)
+
+
+@pytest.mark.parametrize('test_key', ['dual-2.2'])
+def test_scans_multi_wraparound(lidar_stream_with_lagging_frame_ids: client.PacketSource) -> None:
+    """Test ScanBatcher with some packets coming out of order (only lagging case)
+    by no more than a single id."""
+    scans = take(3, client.Scans(lidar_stream_with_lagging_frame_ids))
+    assert list(map(lambda s: s.frame_id, scans)) == [65535, 0, 1]

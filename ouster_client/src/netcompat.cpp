@@ -1,4 +1,9 @@
-#include "ouster/impl/netcompat.h"
+/**
+ * Copyright (c) 2018, Ouster, Inc.
+ * All rights reserved.
+ */
+
+#include "netcompat.h"
 
 #include <string>
 

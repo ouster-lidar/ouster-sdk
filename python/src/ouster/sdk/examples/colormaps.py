@@ -1,4 +1,9 @@
-"""Ouster ``spezia`` colormap."""
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+
+Ouster ``spezia`` colormap
+"""
 
 import numpy as np
 

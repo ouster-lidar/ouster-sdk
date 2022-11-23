@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/buffered_udp_source.h"
 
 #include <chrono>
@@ -34,9 +39,8 @@ constexpr size_t packet_size = 65536;
 BufferedUDPSource::BufferedUDPSource(size_t buf_size)
     : capacity_{buf_size + 1} {
     std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
-        return std::make_pair(
-            client_state::CLIENT_ERROR,
-            std::unique_ptr<uint8_t[]>{new uint8_t[packet_size]});
+        return std::make_pair(client_state::CLIENT_ERROR,
+                              std::make_unique<uint8_t[]>(packet_size));
     });
 }
 
@@ -169,11 +173,9 @@ void BufferedUDPSource::produce(const packet_format& pf) {
 
         auto& e = bufs_[write_ind_];
         if (st & LIDAR_DATA) {
-            if (!read_lidar_packet(*cli_, e.second.get(), pf))
-                st = client_state(st | client_state::CLIENT_ERROR);
+            if (!read_lidar_packet(*cli_, e.second.get(), pf)) continue;
         } else if (st & IMU_DATA) {
-            if (!read_imu_packet(*cli_, e.second.get(), pf))
-                st = client_state(st | client_state::CLIENT_ERROR);
+            if (!read_imu_packet(*cli_, e.second.get(), pf)) continue;
         }
         if (overflow) st = client_state(st | CLIENT_OVERFLOW);
         e.first = st;

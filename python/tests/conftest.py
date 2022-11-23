@@ -1,7 +1,13 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from contextlib import closing
 from os import path
 from typing import Iterator
 
+from more_itertools import partition
 import pytest
 
 from ouster import client, pcap
@@ -9,12 +15,45 @@ from ouster import client, pcap
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
 
+
+# boilerplate for selecting / deslecting interactive tests
+def pytest_addoption(parser):
+    parser.addoption("--interactive",
+                     action="store_true",
+                     required=False,
+                     default=False,
+                     help="Run interactive tests")
+
+
+def pytest_configure(config):
+    """Register custom "interactive" marker."""
+    config.addinivalue_line("markers", "interactive: run interactive tests")
+
+
+def pytest_collection_modifyitems(items, config) -> None:
+    """Deselect any items marked "full" unless the --full flag is set."""
+
+    normal, interactive = partition(
+        lambda item: bool(item.get_closest_marker("interactive")), items)
+
+    select, deselect = (interactive,
+                        normal) if config.option.interactive else (normal,
+                                                                   interactive)
+
+    config.hook.pytest_deselected(items=deselect)
+    items[:] = select
+
+
+# test data
+# TODO: add OS-DOME-32/64 in 1024x10 mode pcap with digest
 DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/pcaps")
 
 TESTS = {
     'legacy-2.0': 'OS-2-32-U0_v2.0.0_1024x10',
     'legacy-2.1': 'OS-1-32-G_v2.1.1_1024x10',
     'dual-2.2': 'OS-0-32-U1_v2.2.0_1024x10',
+    'single-2.3': 'OS-2-128-U1_v2.3.0_1024x10',
+    'low-data-rate-2.3': 'OS-0-128-U1_v2.3.0_1024x10',
 }
 
 

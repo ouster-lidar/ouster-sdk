@@ -138,7 +138,7 @@
     },
     "calibration_status": "error: Command not recognized.",
     "client_version": "ouster_client 0.2.2dev0",
-    "config_param": 
+    "config_params": 
     {
         "auto_start_flag": 1,
         "azimuth_window": 

@@ -1,24 +1,21 @@
-#pragma once
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
 
-#include <GL/glew.h>
+#pragma once
 
 #include <atomic>
 #include <iostream>
 #include <memory>
-#include <mutex>
 #include <string>
+#include <vector>
+
+#include "glfw.h"
 
 namespace ouster {
 namespace viz {
 namespace impl {
-
-extern int window_width;
-extern int window_height;
-
-inline void error_callback(int error, const char* description) {
-    std::cerr << "error " << error << std::endl;
-    std::cerr << description << std::endl;
-}
 
 /**
  * load and compile GLSL shaders
@@ -27,8 +24,72 @@ inline void error_callback(int error, const char* description) {
  * @param fragment_shader_code code of fragment shader
  * @return handle to program_id
  */
-GLuint load_shaders(const std::string& vertex_shader_code,
-                    const std::string& fragment_shader_code);
+inline GLuint load_shaders(const std::string& vertex_shader_code,
+                           const std::string& fragment_shader_code) {
+    // Adapted from WTFPL-licensed code:
+    // https://github.com/opengl-tutorials/ogl/blob/2.1_branch/common/shader.cpp
+
+    // Create the shaders
+    GLuint vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
+    GLuint fragment_shader_id = glCreateShader(GL_FRAGMENT_SHADER);
+
+    GLint result = GL_FALSE;
+    int info_log_length;
+
+    // Compile Vertex Shader
+    char const* vertex_source_pointer = vertex_shader_code.c_str();
+    glShaderSource(vertex_shader_id, 1, &vertex_source_pointer, NULL);
+    glCompileShader(vertex_shader_id);
+
+    // Check Vertex Shader
+    glGetShaderiv(vertex_shader_id, GL_COMPILE_STATUS, &result);
+    glGetShaderiv(vertex_shader_id, GL_INFO_LOG_LENGTH, &info_log_length);
+    if (info_log_length > 0) {
+        std::vector<char> vertex_shader_error_message(info_log_length + 1);
+        glGetShaderInfoLog(vertex_shader_id, info_log_length, NULL,
+                           &vertex_shader_error_message[0]);
+        printf("%s\n", &vertex_shader_error_message[0]);
+    }
+
+    // Compile Fragment Shader
+    char const* fragment_source_pointer = fragment_shader_code.c_str();
+    glShaderSource(fragment_shader_id, 1, &fragment_source_pointer, NULL);
+    glCompileShader(fragment_shader_id);
+
+    // Check Fragment Shader
+    glGetShaderiv(fragment_shader_id, GL_COMPILE_STATUS, &result);
+    glGetShaderiv(fragment_shader_id, GL_INFO_LOG_LENGTH, &info_log_length);
+    if (info_log_length > 0) {
+        std::vector<char> fragment_shader_error_message(info_log_length + 1);
+        glGetShaderInfoLog(fragment_shader_id, info_log_length, NULL,
+                           &fragment_shader_error_message[0]);
+        printf("%s\n", &fragment_shader_error_message[0]);
+    }
+
+    // Link the program
+    GLuint program_id = glCreateProgram();
+    glAttachShader(program_id, vertex_shader_id);
+    glAttachShader(program_id, fragment_shader_id);
+    glLinkProgram(program_id);
+
+    // Check the program
+    glGetProgramiv(program_id, GL_LINK_STATUS, &result);
+    glGetProgramiv(program_id, GL_INFO_LOG_LENGTH, &info_log_length);
+    if (info_log_length > 0) {
+        std::vector<char> program_error_message(info_log_length + 1);
+        glGetProgramInfoLog(program_id, info_log_length, NULL,
+                            &program_error_message[0]);
+        printf("%s\n", &program_error_message[0]);
+    }
+
+    glDetachShader(program_id, vertex_shader_id);
+    glDetachShader(program_id, fragment_shader_id);
+
+    glDeleteShader(vertex_shader_id);
+    glDeleteShader(fragment_shader_id);
+
+    return program_id;
+}
 
 /**
  * load a texture from an array of GLfloat or equivalent
@@ -91,21 +152,21 @@ void load_texture(const F& texture, const size_t width, const size_t height,
  */
 static const std::string point_vertex_shader_code =
     R"SHADER(
-            #version 120
+            #version 330 core
 
-            attribute vec3 xyz;
-            attribute vec3 offset;
-            attribute float range;
-            attribute float key;
-            attribute vec4 mask;
-            attribute float trans_index;
+            in vec3 xyz;
+            in vec3 offset;
+            in float range;
+            in float key;
+            in vec4 mask;
+            in float trans_index;
 
             uniform sampler2D transformation;
             uniform mat4 model;
             uniform mat4 proj_view;
 
-            varying float vcolor;
-            varying vec4 overlay_rgba;
+            out float vcolor;
+            out vec4 overlay_rgba;
             void main(){
                 vec4 local_point = range > 0
                                    ? model * vec4(xyz * range + offset, 1.0)
@@ -116,10 +177,10 @@ static const std::string point_vertex_shader_code =
                 // the middle of each pixel.
                 // |     r0     |     r1     |     r2     |     t     |
                 // 0   0.125  0.25  0.375   0.5  0.625  0.75  0.875   1
-                vec4 r0 = texture2D(transformation, vec2(trans_index, 0.125));
-                vec4 r1 = texture2D(transformation, vec2(trans_index, 0.375));
-                vec4 r2 = texture2D(transformation, vec2(trans_index, 0.625));
-                vec4 t = texture2D(transformation, vec2(trans_index, 0.875));
+                vec4 r0 = texture(transformation, vec2(trans_index, 0.125));
+                vec4 r1 = texture(transformation, vec2(trans_index, 0.375));
+                vec4 r2 = texture(transformation, vec2(trans_index, 0.625));
+                vec4 t = texture(transformation, vec2(trans_index, 0.875));
                 mat4 car_pose = mat4(
                     r0.x, r0.y, r0.z, 0,
                     r1.x, r1.y, r1.z, 0,
@@ -133,18 +194,19 @@ static const std::string point_vertex_shader_code =
             })SHADER";
 static const std::string point_fragment_shader_code =
     R"SHADER(
-            #version 120
-            varying float vcolor;
-            varying vec4 overlay_rgba;
+            #version 330 core
+            in float vcolor;
+            in vec4 overlay_rgba;
             uniform sampler2D palette;
+            out vec4 color;
             void main() {
-                gl_FragColor = vec4(texture2D(palette, vec2(vcolor, 1)).xyz * (1.0 - overlay_rgba.w)
-                              + overlay_rgba.xyz * overlay_rgba.w, 1);
+                color = vec4(texture(palette, vec2(vcolor, 1)).xyz * (1.0 - overlay_rgba.w)
+                             + overlay_rgba.xyz * overlay_rgba.w, 1);
             })SHADER";
 static const std::string ring_vertex_shader_code =
     R"SHADER(
-            #version 120
-            attribute vec3 ring_xyz;
+            #version 330 core
+            in vec3 ring_xyz;
             uniform float ring_range;
             uniform mat4 proj_view;
             void main(){
@@ -153,125 +215,53 @@ static const std::string ring_vertex_shader_code =
             })SHADER";
 static const std::string ring_fragment_shader_code =
     R"SHADER(
-            #version 120
+            #version 330 core
+            out vec4 color;
             void main() {
-                gl_FragColor = vec4(0.15, 0.15, 0.15, 1);
+                color = vec4(0.15, 0.15, 0.15, 1);
             })SHADER";
 static const std::string cuboid_vertex_shader_code =
     R"SHADER(
-            #version 120
-            attribute vec3 cuboid_xyz;
+            #version 330 core
+            in vec3 cuboid_xyz;
             uniform vec4 cuboid_rgba;
-            uniform mat4 pose;
             uniform mat4 proj_view;
-            varying vec4 rgba;
+            out vec4 rgba;
             void main(){
-                gl_Position = proj_view * pose * vec4(cuboid_xyz, 1.0);
+                gl_Position = proj_view * vec4(cuboid_xyz, 1.0);
                 rgba = cuboid_rgba;
             })SHADER";
 static const std::string cuboid_fragment_shader_code =
     R"SHADER(
-            #version 120
-            varying vec4 rgba;
+            #version 330 core
+            in vec4 rgba;
+            out vec4 color;
             void main() {
-                gl_FragColor = rgba;
+                color = rgba;
             })SHADER";
 static const std::string image_vertex_shader_code =
     R"SHADER(
-            #version 120
-            attribute vec2 vertex;
-            attribute vec2 vertex_uv;
-            varying vec2 uv;
+            #version 330 core
+            in vec2 vertex;
+            in vec2 vertex_uv;
+            out vec2 uv;
             void main() {
+                gl_Position = vec4(vertex, 0, 1);
                 uv = vertex_uv;
-                gl_Position = vec4(vertex, -1, 1);
             })SHADER";
 static const std::string image_fragment_shader_code =
     R"SHADER(
-            #version 120
-            varying vec2 uv;
+            #version 330 core
+            in vec2 uv;
             uniform sampler2D image;
             uniform sampler2D mask;
+            out vec4 color;
             void main() {
-                vec4 m = texture2D(mask, uv);
+                vec4 m = texture(mask, uv);
                 float a = m.a;
-                float r = sqrt(texture2D(image, uv).r) * (1.0 - a);
-                gl_FragColor = vec4(vec3(r, r, r) + m.rgb * a, 1.0);
+                float r = sqrt(texture(image, uv).r) * (1.0 - a);
+                color = vec4(vec3(r, r, r) + m.rgb * a, 1.0);
             })SHADER";
-
-/**
- * struct containing handles to variables in GLSL shader program compiled from
- * point_vertex_shader_code and point_fragment_shader_code
- */
-struct CloudIds {
-    GLuint xyz_id, off_id, range_id, key_id, mask_id, model_id, proj_view_id,
-        palette_id, transformation_id, trans_index_id;
-    CloudIds() {}
-
-    /**
-     * constructor
-     * @param point_program_id handle to GLSL shader program compiled from
-     * point_vertex_shader_code and point_fragment_shader_code
-     */
-    explicit CloudIds(GLuint point_program_id)
-        : xyz_id(glGetAttribLocation(point_program_id, "xyz")),
-          off_id(glGetAttribLocation(point_program_id, "offset")),
-          range_id(glGetAttribLocation(point_program_id, "range")),
-          key_id(glGetAttribLocation(point_program_id, "key")),
-          mask_id(glGetAttribLocation(point_program_id, "mask")),
-          model_id(glGetUniformLocation(point_program_id, "model")),
-          proj_view_id(glGetUniformLocation(point_program_id, "proj_view")),
-          palette_id(glGetUniformLocation(point_program_id, "palette")),
-          transformation_id(
-              glGetUniformLocation(point_program_id, "transformation")),
-          trans_index_id(glGetAttribLocation(point_program_id, "trans_index")) {
-    }
-};
-
-/**
- * Class to maintain a double buffer, so that you can keep writing data
- * without affecting what is being drawn.
- */
-template <class T>
-class DoubleBuffer {
-    std::mutex buffer_mutex;
-
-   public:
-    std::unique_ptr<T> write;
-    std::unique_ptr<T> read;
-    std::atomic_bool enabled;
-
-    /**
-     * Constructor
-     *
-     * @param args arguments for the T::T() constructor
-     */
-    template <typename... Args>
-    explicit DoubleBuffer(Args&&... args)
-        : write(new T(std::forward<Args>(args)...)),
-          read(new T(*write)),
-          enabled(true) {}
-
-    /**
-     * calls draw on the readable element in the double buffer
-     *
-     * @param args arguments for T::draw
-     */
-    template <typename... Args>
-    void draw(Args&&... args) {
-        std::lock_guard<std::mutex> guard(buffer_mutex);
-        read->draw(std::forward<Args>(args)...);
-    }
-
-    /**
-     * swaps the readable and writable part of the double buffer, i.e.
-     * after all relevant data have been written
-     */
-    void swap() {
-        std::lock_guard<std::mutex> guard(buffer_mutex);
-        std::swap(read, write);
-    }
-};
 
 }  // namespace impl
 }  // namespace viz

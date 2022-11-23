@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include "ouster/lidar_scan.h"
 
 #include <gtest/gtest.h>
@@ -79,7 +84,7 @@ TEST(LidarScan, EmptyConstructorInit) {
 
     EXPECT_EQ(scan.frame_id, -1);
 
-    EXPECT_EQ(scan.headers.size(), 0);
+    EXPECT_EQ(scan.headers.size(), 0u);
 
     EXPECT_EQ(scan.end() - scan.begin(), 0);
 
@@ -94,8 +99,8 @@ TEST(LidarScan, LegacyConstructorInit) {
     EXPECT_EQ(scan.h, h);
     EXPECT_EQ(scan.frame_id, -1);
 
-    int count = 0;
-    int hit_count = 0;
+    size_t count = 0;
+    size_t hit_count = 0;
     std::vector<ChanField> field_copy;
     for (auto item : legacy_field_slots) {
         field_copy.push_back(std::get<0>(item));
@@ -109,7 +114,7 @@ TEST(LidarScan, LegacyConstructorInit) {
         }
         count++;
     }
-    EXPECT_EQ(field_copy.size(), 0);
+    EXPECT_EQ(field_copy.size(), 0u);
     EXPECT_EQ(hit_count, count);
     EXPECT_EQ(legacy_field_slots.size(), count);
 
@@ -129,8 +134,8 @@ TEST(LidarScan, DualReturnConstructorInit) {
     EXPECT_EQ(scan.h, h);
     EXPECT_EQ(scan.frame_id, -1);
 
-    int count = 0;
-    int hit_count = 0;
+    size_t count = 0;
+    size_t hit_count = 0;
     std::vector<ChanField> field_copy;
     for (auto item : dual_field_slots) {
         field_copy.push_back(std::get<0>(item));
@@ -144,7 +149,7 @@ TEST(LidarScan, DualReturnConstructorInit) {
         }
         count++;
     }
-    EXPECT_EQ(field_copy.size(), 0);
+    EXPECT_EQ(field_copy.size(), 0u);
     EXPECT_EQ(hit_count, count);
     EXPECT_EQ(dual_field_slots.size(), count);
 
@@ -164,8 +169,8 @@ TEST(LidarScan, CustomFieldConstructorInit) {
     EXPECT_EQ(scan.h, h);
     EXPECT_EQ(scan.frame_id, -1);
 
-    int count = 0;
-    int hit_count = 0;
+    size_t count = 0;
+    size_t hit_count = 0;
     std::vector<ChanField> field_copy;
     for (auto item : contrived_slots) {
         field_copy.push_back(std::get<0>(item));
@@ -180,7 +185,7 @@ TEST(LidarScan, CustomFieldConstructorInit) {
         }
         count++;
     }
-    EXPECT_EQ(field_copy.size(), 0);
+    EXPECT_EQ(field_copy.size(), 0u);
     EXPECT_EQ(hit_count, count);
     EXPECT_EQ(contrived_slots.size(), count);
 
@@ -319,4 +324,20 @@ TEST(LidarScan, DataCheck) {
         EXPECT_TRUE(scan1 == scan2);
         EXPECT_TRUE(scan1 != scan3);
     }
+}
+
+TEST(LidarScan, CustomUserFields) {
+    using LidarScanFieldTypes = std::vector<
+        std::pair<ouster::sensor::ChanField, ouster::sensor::ChanFieldType>>;
+
+    LidarScanFieldTypes user_fields{
+        {ChanField::CUSTOM0, ChanFieldType::UINT8},
+        {ChanField::CUSTOM3, ChanFieldType::UINT64},
+        {ChanField::CUSTOM9, ChanFieldType::UINT16}};
+
+    ouster::LidarScan user_scan(10, 10, user_fields.begin(), user_fields.end());
+
+    EXPECT_EQ(3, std::distance(user_scan.begin(), user_scan.end()));
+
+    zero_check_fields(user_scan);
 }

@@ -1,4 +1,7 @@
 /**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ *
  * @file
  * @brief ouster_pyclient python module
  *
@@ -12,11 +15,27 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+// spdlog includes
+// TODO: revise once ubuntu 18.04 is deprecated to drop dependence on
+// spdlog with version < 1
+#include <spdlog/common.h>
+#include <spdlog/sinks/base_sink.h>
+#include <spdlog/spdlog.h>
+#if (SPDLOG_VER_MAJOR < 1)
+#include <spdlog/formatter.h>
+#elif ((SPDLOG_VER_MAJOR == 1) && (SPDLOG_VER_MINOR <= 5))
+#include <spdlog/details/pattern_formatter.h>
+#else
+#include <spdlog/pattern_formatter.h>
+#endif
+
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <deque>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -24,11 +43,13 @@
 #include "ouster/buffered_udp_source.h"
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
+#include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
 namespace py = pybind11;
 namespace chrono = std::chrono;
+using spdlog::sinks::base_sink;
 
 using ouster::sensor::data_format;
 using ouster::sensor::packet_format;
@@ -50,22 +71,41 @@ using Table = std::array<std::pair<K, V>, N>;
 
 namespace ouster {
 namespace sensor {
+
+extern spdlog::logger& logger();
+
 namespace impl {
 
-extern const Table<lidar_mode, const char*, 6> lidar_mode_strings;
+extern const Table<lidar_mode, const char*, 7> lidar_mode_strings;
 extern const Table<timestamp_mode, const char*, 4> timestamp_mode_strings;
 extern const Table<OperatingMode, const char*, 2> operating_mode_strings;
 extern const Table<MultipurposeIOMode, const char*, 6>
     multipurpose_io_mode_strings;
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
-extern Table<ChanField, const char*, 9> chanfield_strings;
-extern Table<UDPProfileLidar, const char*, 2> udp_profile_lidar_strings;
+extern Table<ChanField, const char*, 23> chanfield_strings;
+extern Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
+extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
+extern Table<ThermalShutdownStatus, const char*, 2>
+    thermal_shutdown_status_strings;
 
 }  // namespace impl
 }  // namespace sensor
 }  // namespace ouster
+
+// alias for non-casting row-major array arguments
+template <typename T>
+using pyimg_t = py::array_t<T, py::array::c_style>;
+
+// factor out overloaded call operator for ae/buc
+template <typename T, typename U>
+void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
+    if (image.ndim() != 2) throw std::invalid_argument("Expected a 2d array");
+    self(Eigen::Map<img_t<U>>(image.mutable_data(), image.shape(0),
+                              image.shape(1)),
+         update_state);
+}
 
 /*
  * Define an enum from a table of strings, along with some properties to make
@@ -158,6 +198,57 @@ static sensor::ChanFieldType field_type_of_dtype(const py::dtype& dt) {
         throw std::invalid_argument("Invalid dtype for a channel field");
 }
 
+#if (SPDLOG_VER_MAJOR >= 1)  // don't include for spdlog < 1.x.x
+
+/*
+ * Forward spdlog to python logging module
+ */
+class PySink : public base_sink<std::mutex> {
+   protected:
+    void sink_it_(const spdlog::details::log_msg& msg) override {
+        // https://spdlog.docsforge.com/v1.x/4.sinks/#implementing-your-own-sink
+        // Probably need #if here for spdlog 0.x on Ubuntu 18.04
+        // fmt::memory_buffer formatted;
+        spdlog::memory_buf_t formatted;
+        base_sink<std::mutex>::formatter_->format(msg, formatted);
+
+        py::gil_scoped_acquire acquire;
+        // map spdlog levels to python logging levels
+        int py_level = logger_.attr("NOTSET").cast<int>();
+        switch (msg.level) {
+            case spdlog::level::trace:
+            case spdlog::level::debug:
+                py_level = logger_.attr("DEBUG").cast<int>();
+                break;
+            case spdlog::level::info:
+                py_level = logger_.attr("INFO").cast<int>();
+                break;
+            case spdlog::level::warn:
+                py_level = logger_.attr("WARNING").cast<int>();
+                break;
+            case spdlog::level::err:
+                py_level = logger_.attr("ERROR").cast<int>();
+                break;
+            case spdlog::level::critical:
+                py_level = logger_.attr("CRITICAL").cast<int>();
+                break;
+            default:
+                break;
+        }
+        logger_.attr("log")(py_level, fmt::to_string(formatted));
+    }
+
+    // noop for python logger
+    void flush_() override {}
+
+    py::object logger_;
+
+   public:
+    PySink(py::object logger) : logger_{logger} {}
+};
+
+#endif  // (SPDLOG_VER_MAJOR >= 1)
+
 PYBIND11_PLUGIN(_client) {
     py::module m("_client", R"(
     Sensor client bindings generated by pybind11.
@@ -169,6 +260,32 @@ PYBIND11_PLUGIN(_client) {
     // turn off signatures in docstrings: mypy stubs provide better types
     py::options options;
     options.disable_function_signatures();
+
+    // TODO (1/4): Enable automatically directing ouster sensor logs to the
+    // python::logging in the future. This is disabled for now so the user will
+    // have to use init_logger API to practice any control over the logs
+    // ouster::sensor::logger().sinks() = {
+    //     std::make_shared<PySink>(py::module::import("logging"))
+    // };
+
+    // TODO (2/4): parse python::logging level and set spdlog logger to the same
+    // level rather than forwarding everything to Python as set here:
+    // ouster::sensor::logger().set_level(spdlog::level::trace);
+
+    // TODO (3/4): configure the formatter.
+    // spdlog adds newline by default, not needed when forwarding to python. Use
+    // a custom formatter to avoid this (check the "") argument
+    // https://github.com/gabime/spdlog/issues/579
+    // ouster::sensor::logger().set_formatter(
+    //     std::make_unique<spdlog::pattern_formatter>(
+    //         "%v", spdlog::pattern_time_type::local, ""));
+
+    // TODO (4/4): Remove the PySink.
+    // since the static logger sink keeps a reference to Python objects, they
+    // must be cleaned up before the Python runtime exits
+    // m.add_object("_cleanup", py::capsule([]() {
+    //                  ouster::sensor::logger().sinks().clear();
+    //              }));
 
     // clang-format off
 
@@ -196,6 +313,22 @@ PYBIND11_PLUGIN(_client) {
 
         .def("init_id", [](packet_format& pf, py::buffer buf) {
             return pf.init_id(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("countdown_thermal_shutdown", [](packet_format& pf, py::buffer buf) {
+            return pf.countdown_thermal_shutdown(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("countdown_shot_limiting", [](packet_format& pf, py::buffer buf) {
+            return pf.countdown_shot_limiting(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("thermal_shutdown", [](packet_format& pf, py::buffer buf) {
+            return pf.thermal_shutdown(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("shot_limiting", [](packet_format& pf, py::buffer buf) {
+            return pf.shot_limiting(getptr(pf.lidar_packet_size, buf));
         })
 
         // NOTE: keep_alive seems to be ignored without cpp_function wrapper
@@ -316,6 +449,7 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("imu_to_sensor_transform", &sensor_info::imu_to_sensor_transform, "Homogenous transformation matrix representing IMU offset to Sensor Coordinate Frame.")
         .def_readwrite("lidar_to_sensor_transform", &sensor_info::lidar_to_sensor_transform, "Homogeneous transformation matrix from Lidar Coordinate Frame to Sensor Coordinate Frame.")
         .def_readwrite("lidar_origin_to_beam_origin_mm", &sensor_info::lidar_origin_to_beam_origin_mm, "Distance between lidar origin and beam origin in millimeters.")
+        .def_readwrite("beam_to_lidar_transform", &sensor_info::beam_to_lidar_transform, "Homogenous transformation matrix reprsenting Beam to Lidar Transform")
         .def_readwrite("extrinsic", &sensor_info::extrinsic, "Extrinsic Matrix.")
         .def_readwrite("init_id", &sensor_info::init_id, "Initialization id.")
         .def_readwrite("udp_port_lidar", &sensor_info::udp_port_lidar, "Configured port for lidar data.")
@@ -381,7 +515,9 @@ PYBIND11_PLUGIN(_client) {
         Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.)", py::metaclass());
     def_enum(NMEABaudRate, sensor::impl::nmea_baud_rate_strings);
 
-    auto ChanField = py::enum_<sensor::ChanField>(m, "ChanField", "Channel data block fields.", py::metaclass());
+    auto ChanField = py::enum_<sensor::ChanField>(m, "ChanField", R"(
+    Channel data block fields
+    )", py::metaclass());
     def_enum(ChanField, sensor::impl::chanfield_strings);
 
     auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass());
@@ -389,6 +525,12 @@ PYBIND11_PLUGIN(_client) {
 
     auto UDPProfileIMU = py::enum_<sensor::UDPProfileIMU>(m, "UDPProfileIMU", "UDP imu profile.", py::metaclass());
     def_enum(UDPProfileIMU, sensor::impl::udp_profile_imu_strings, "PROFILE_IMU_");
+
+    auto ShotLimitingStatus = py::enum_<sensor::ShotLimitingStatus>(m, "ShotLimitingStatus", "Shot Limiting Status.", py::metaclass());
+    def_enum(ShotLimitingStatus, sensor::impl::shot_limiting_status_strings);
+
+    auto ThermalShutdownStatus = py::enum_<sensor::ThermalShutdownStatus>(m, "ThermalShutdownStatus", "Thermal Shutdown Status.", py::metaclass());
+    def_enum(ThermalShutdownStatus, sensor::impl::thermal_shutdown_status_strings);
 
     // Sensor Config
     py::class_<sensor_config>(m, "SensorConfig", R"(
@@ -430,10 +572,45 @@ PYBIND11_PLUGIN(_client) {
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; })
         .def("__deepcopy__", [](const sensor_config& self, py::dict) { return sensor_config{self}; });
 
-    m.def("set_config", [] (const std::string& hostname, const sensor_config& config, bool persist,  bool udp_dest_auto) {
+    m.def("init_logger",
+        [](const std::string& log_level, const std::string& log_file_path,
+           bool rotating, int max_size_in_bytes, int max_files) {
+            return sensor::init_logger(log_level, log_file_path, rotating, max_size_in_bytes,
+                                max_files);
+        },
+        R"(
+        Initializes and configures ouster_client logs. This method should be invoked
+        only once before calling any other method from the library if the user wants
+        to direct the library log statements to a different medium (other than
+        console which is the default).
+
+        Args:
+            log_level Control the level of log messages outputed by the client.
+                Valid options are (case-sensitive): "trace", "debug", "info", "warning",
+                "error", "critical" and "off".
+            log_file_path (str): Path to location where log files are stored. The
+                path must be in a location that the process has write access to. If an empty
+                string is provided then the logs will be directed to the console. When
+                an empty string is passed then the rest of parameters are ignored.
+            rotating (bool): Configure the log file with rotation, rotation rules are
+                specified through the two following parameters max_size_in_bytes and
+                max_files. If rotating is set to false the following parameters are ignored
+            max_size_in_bytes (int): Maximum number of bytes to write to a rotating log
+                file before starting a new file. ignored if rotating is set to False.
+            max_files (int): Maximum number of rotating files to accumlate before
+                re-using the first file. ignored if rotating is set to False.
+
+        Returns:
+            returns True on success, False otherwise.
+        )",
+        py::arg("log_level"), py::arg("log_file_path") = "",
+        py::arg("rotating") = false, py::arg("max_size_in_bytes") = 0, py::arg("max_files") = 0);
+
+    m.def("set_config", [] (const std::string& hostname, const sensor_config& config, bool persist,  bool udp_dest_auto, bool force_reinit) {
         uint8_t config_flags = 0;
         if (persist) config_flags |= ouster::sensor::CONFIG_PERSIST;
         if (udp_dest_auto) config_flags |= ouster::sensor::CONFIG_UDP_DEST_AUTO;
+        if (force_reinit) config_flags |= ouster::sensor::CONFIG_FORCE_REINIT;
         if (!sensor::set_config(hostname, config, config_flags)) {
             throw std::runtime_error("Error setting sensor config.");
         }
@@ -444,10 +621,13 @@ PYBIND11_PLUGIN(_client) {
             hostname (str): hostname of the sensor
             config (SensorConfig): config to set sensor parameters to
             persist (bool): persist parameters after sensor disconnection (default = False)
-            udp_dest_auto: automatically determine sender's IP at the time command was sent
+            udp_dest_auto (bool): automatically determine sender's IP at the time command was sent
                 and set it as destination of UDP traffic. Function will error out if config has
                 udp_dest member. (default = False)
-        )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false);
+            force_reinit (bool): forces the sensor to re-init during set_config even when config
+                params have not changed. (default = False)
+        )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false,
+            py::arg("force_reinit") = false);
 
     m.def("get_config", [](const std::string& hostname, bool active) {
         sensor::sensor_config config;
@@ -493,9 +673,9 @@ PYBIND11_PLUGIN(_client) {
                sensor::client_state(BufferedUDPSource::CLIENT_OVERFLOW));
 
     py::class_<BufferedUDPSource>(m, "Client")
-        .def(py::init<std::string, int, int, size_t>(),
-             py::arg("hostname") = "", py::arg("lidar_port") = 7502,
-             py::arg("imu_port") = 7503, py::arg("capacity") = 128)
+        .def(py::init<std::string, int, int, size_t>(), py::arg("hostname"),
+             py::arg("lidar_port"), py::arg("imu_port"),
+             py::arg("capacity") = 128)
         .def(py::init<std::string, std::string, sensor::lidar_mode,
                       sensor::timestamp_mode, int, int, int, size_t>(),
              py::arg("hostname"), py::arg("udp_dest_host"),
@@ -559,23 +739,67 @@ PYBIND11_PLUGIN(_client) {
         )")
         .def_readonly_static("N_FIELDS", &LidarScan::N_FIELDS, "Deprecated.")
         // TODO: Python and C++ API differ in h/w order for some reason
-        .def("__init__", [](LidarScan& self, size_t h,
-                            size_t w) { new (&self) LidarScan(w, h); })
-        .def("__init__",
-             [](LidarScan& self, size_t h, size_t w,
-                sensor::UDPProfileLidar profile) {
-                 new (&self) LidarScan(w, h, profile);
-             })
-        .def("__init__",
-             [](LidarScan& self, size_t h, size_t w,
-                const std::map<sensor::ChanField, py::object>& field_types) {
-                 std::map<sensor::ChanField, sensor::ChanFieldType> ft;
-                 for (const auto& kv : field_types) {
-                     auto dt = py::dtype::from_args(kv.second);
-                     ft[kv.first] = field_type_of_dtype(dt);
-                 }
-                 new (&self) LidarScan(w, h, ft.begin(), ft.end());
-             })
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w) {
+                new (&self) LidarScan(w, h);
+            },
+            R"(
+
+        Default constructor creates a 0 x 0 scan
+
+        Args:
+            height: height of scan
+            width: width of scan
+
+        Returns:
+            New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+        )")
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w,
+               sensor::UDPProfileLidar profile) {
+                new (&self) LidarScan(w, h, profile);
+            },
+            R"(
+        
+        Initialize a scan with the default fields for a particular udp profile
+
+        Args:
+            height: height of LidarScan, i.e., number of channels
+            width: width of LidarScan
+            profile: udp profile
+
+        Returns:
+            New LidarScan of specified dimensions expecting fields of specified profile
+
+         )")
+        .def(
+            "__init__",
+            [](LidarScan& self, size_t h, size_t w,
+               const std::map<sensor::ChanField, py::object>& field_types) {
+                std::map<sensor::ChanField, sensor::ChanFieldType> ft;
+                for (const auto& kv : field_types) {
+                    auto dt = py::dtype::from_args(kv.second);
+                    ft[kv.first] = field_type_of_dtype(dt);
+                }
+                new (&self) LidarScan(w, h, ft.begin(), ft.end());
+            },
+            R"(
+        Initialize a scan with a custom set of fields
+
+        Args:
+            height: height of LidarScan, i.e., number of channels
+            width: width of LidarScan
+            fields_dict: dict where keys are ChanFields and values are type, e.g., {client.ChanField.SIGNAL: np.uint32}
+
+        Returns:
+            New LidarScan of specified dimensions expecting fields specified by dict
+            
+
+
+         )")
         .def_readonly("w", &LidarScan::w,
                       "Width or horizontal resolution of the scan.")
         .def_readonly("h", &LidarScan::h,
@@ -583,30 +807,20 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite(
             "frame_id", &LidarScan::frame_id,
             "Corresponds to the frame id header in the packet format.")
+        .def_readwrite(
+            "frame_status", &LidarScan::frame_status,
+            "Information from the packet header which corresponds to a frame.")
         .def(
-            "_complete",
+            "complete",
             [](const LidarScan& self,
-               nonstd::optional<sensor::AzimuthWindow> window) {
-                if (!window) window = {0, self.w - 1};
-
-                const auto& status = self.status();
-                auto start = window.value().first;
-                auto end = window.value().second;
-
-                if (start <= end)
-                    return status.segment(start, end - start + 1)
-                        .unaryExpr([](uint32_t s) { return s & 0x01; })
-                        .isConstant(0x01);
-                else
-                    return status.segment(0, end)
-                               .unaryExpr([](uint32_t s) { return s & 0x01; })
-                               .isConstant(0x01) &&
-                           status.segment(start, self.w - start)
-                               .unaryExpr([](uint32_t s) { return s & 0x01; })
-                               .isConstant(0x01);
+               nonstd::optional<sensor::ColumnWindow> window) {
+                if (!window) {
+                    window = {0, static_cast<int>(self.w) - 1};
+                }
+                return self.complete(window.value());
             },
             py::arg("window") =
-                static_cast<nonstd::optional<sensor::AzimuthWindow>>(
+                static_cast<nonstd::optional<sensor::ColumnWindow>>(
                     nonstd::nullopt))
         .def(
             "field",
@@ -630,6 +844,10 @@ PYBIND11_PLUGIN(_client) {
         Returns:
             The specified field as a numpy array
         )")
+        .def("shot_limiting", &LidarScan::shot_limiting,
+             "The frame shot limiting status.")
+        .def("thermal_shutdown", &LidarScan::thermal_shutdown,
+             "The frame thermal shutdown status.")
         .def(
             "header",
             [](LidarScan& self, py::object& o) {
@@ -707,9 +925,19 @@ PYBIND11_PLUGIN(_client) {
                 },
                 py::keep_alive<0, 1>()),
             "Return an iterator of available channel fields.")
-        .def("__eq__", [](const LidarScan& l, const LidarScan& r) { return l == r; })
+        .def("__eq__",
+             [](const LidarScan& l, const LidarScan& r) { return l == r; })
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
-        .def("__deepcopy__", [](const LidarScan& self, py::dict) { return LidarScan{self}; })
+        .def("__deepcopy__",
+             [](const LidarScan& self, py::dict) { return LidarScan{self}; })
+        .def("__repr__",
+             [](const LidarScan& self) {
+                 std::stringstream ss;
+                 ss << "<ouster.client._client.LidarScan @" << (void*)&self
+                    << ">";
+                 return ss.str();
+             })
+        .def("__str__", [](const LidarScan& self) { return to_string(self); })
         // for backwards compatibility: previously converted between Python
         // / native representations, now a noop
         .def("to_native", [](py::object& self) { return self; })
@@ -737,11 +965,31 @@ PYBIND11_PLUGIN(_client) {
 
     // XYZ Projection
     py::class_<XYZLut>(m, "XYZLut")
-        .def("__init__",
-             [](XYZLut& self, const sensor_info& sensor) {
-                 new (&self) XYZLut{};
-                 self = make_xyz_lut(sensor);
-             })
+        .def(
+            "__init__",
+            [](XYZLut& self, const sensor_info& sensor, bool use_extrinsics) {
+                new (&self) XYZLut{};
+                if (use_extrinsics) {
+                    // apply extrinsics after lidar_to_sensor_transform so the
+                    // resulting LUT will produce the coordinates in
+                    // "extrinsics frame" instead of "sensor frame"
+                    mat4d ext_transform = sensor.extrinsic;
+                    ext_transform(0, 3) /= sensor::range_unit;
+                    ext_transform(1, 3) /= sensor::range_unit;
+                    ext_transform(2, 3) /= sensor::range_unit;
+                    ext_transform =
+                        ext_transform * sensor.lidar_to_sensor_transform;
+                    self = make_xyz_lut(
+                        sensor.format.columns_per_frame,
+                        sensor.format.pixels_per_column, sensor::range_unit,
+                        sensor.beam_to_lidar_transform, ext_transform,
+                        sensor.beam_azimuth_angles,
+                        sensor.beam_altitude_angles);
+                } else {
+                    self = make_xyz_lut(sensor);
+                }
+            },
+            py::arg("info"), py::arg("use_extrinsics") = false)
         .def("__call__",
              [](const XYZLut& self, Eigen::Ref<img_t<uint32_t>>& range) {
                  return cartesian(range, self);
@@ -750,21 +998,25 @@ PYBIND11_PLUGIN(_client) {
             return cartesian(scan, self);
         });
 
-    m.attr("__version__") = VERSION_INFO;
-
     // Image processing
     py::class_<viz::AutoExposure>(m, "AutoExposure")
         .def(py::init<>())
         .def(py::init<int>(), py::arg("update_every"))
         .def(py::init<double, double, int>(), py::arg("lo_percentile"),
              py::arg("hi_percentile"), py::arg("update_every"))
-        .def("__call__", [](viz::AutoExposure& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def("__call__", &image_proc_call<viz::AutoExposure, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::AutoExposure, double>,
+             py::arg("image"), py::arg("update_state") = true);
 
     py::class_<viz::BeamUniformityCorrector>(m, "BeamUniformityCorrector")
         .def(py::init<>())
-        .def("__call__", [](viz::BeamUniformityCorrector& self,
-                            Eigen::Ref<img_t<double>>& image) { self(image); });
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, float>,
+             py::arg("image"), py::arg("update_state") = true)
+        .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
+             py::arg("image"), py::arg("update_state") = true);
+
+    m.attr("__version__") = ouster::SDK_VERSION;
 
     return m.ptr();
 }

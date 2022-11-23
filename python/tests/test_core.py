@@ -1,4 +1,10 @@
+"""
+Copyright (c) 2021, Ouster, Inc.
+All rights reserved.
+"""
+
 from contextlib import closing
+import socket
 
 import numpy as np
 import pytest
@@ -52,8 +58,41 @@ def test_sensor_port_in_use(default_meta: client.SensorInfo) -> None:
             assert s2._cli.imu_port == s1._cli.imu_port
 
 
+def test_sensor_packet(default_meta: client.SensorInfo) -> None:
+    """Check that the client will read single properly-sized LEGACY packet."""
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          metadata=default_meta,
+                          timeout=5.0,
+                          _flush_before_read=False)) as source:
+        data = np.random.randint(255,
+                                 size=source._pf.lidar_packet_size,
+                                 dtype=np.uint8)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(data.tobytes(), ("localhost", source._cli.lidar_port))
+        packet = next(iter(source))
+        assert (packet._data == data).all()
+
+
+def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
+    """Check that the client will ignore improperly-sized packets."""
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          metadata=default_meta,
+                          timeout=1.0,
+                          _flush_before_read=False)) as source:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto(b"hello", ("localhost", source._cli.lidar_port))
+        with pytest.raises(client.ClientTimeout):
+            next(iter(source))
+
+
 def test_scans_simple(packets: client.PacketSource) -> None:
-    """Test that the test data contains exactly one scan."""
+    """Check that the test data contains exactly one scan."""
     scans = iter(client.Scans(packets))
     assert next(scans) is not None
 
@@ -83,7 +122,7 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert len(scan.status) == scan.w
     assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
 
-    assert scan._complete()
+    assert scan.complete()
 
     # all timestamps valid
     assert np.count_nonzero(scan.timestamp) == scan.w
@@ -111,17 +150,25 @@ def test_scans_first_packet(packet: client.LidarPacket,
     h = packet._pf.pixels_per_column
     w = packet._pf.columns_per_packet
 
-    assert np.array_equal(packet.field(ChanField.RANGE),
-                          scan.field(ChanField.RANGE)[:h, :w])
+    is_low_data_rate_profile = (packets.metadata.format.udp_profile_lidar ==
+                                client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
+
+    if not is_low_data_rate_profile:  # low data rate profile RANGE is scaled up
+        assert np.array_equal(packet.field(ChanField.RANGE),
+                              scan.field(ChanField.RANGE)[:h, :w])
 
     assert np.array_equal(packet.field(ChanField.REFLECTIVITY),
                           scan.field(ChanField.REFLECTIVITY)[:h, :w])
 
-    assert np.array_equal(packet.field(ChanField.SIGNAL),
-                          scan.field(ChanField.SIGNAL)[:h, :w])
+    if is_low_data_rate_profile:  # low data rate profile has no SIGNAL
+        assert ChanField.SIGNAL not in set(scan.fields)
+    else:
+        assert np.array_equal(packet.field(ChanField.SIGNAL),
+                              scan.field(ChanField.SIGNAL)[:h, :w])
 
-    assert np.array_equal(packet.field(ChanField.NEAR_IR),
-                          scan.field(ChanField.NEAR_IR)[:h, :w])
+    if not is_low_data_rate_profile:  # low data rate profile NEAR_IR is scaled up
+        assert np.array_equal(packet.field(ChanField.NEAR_IR),
+                              scan.field(ChanField.NEAR_IR)[:h, :w])
 
     assert packet.frame_id == scan.frame_id
 
@@ -228,3 +275,25 @@ def test_scans_bad_field(packets: client.PacketSource) -> None:
 
     with pytest.raises(IndexError):
         next(iter(client.Scans(packets, fields=fields)))
+
+
+@pytest.mark.parametrize('test_key', ['legacy-2.0', 'legacy-2.1'])
+def test_scans_raw(packets: client.PacketSource) -> None:
+    """Smoke test reading raw channel field data."""
+    fields = {
+        ChanField.RAW32_WORD1: np.uint32,
+        ChanField.RAW32_WORD2: np.uint32,
+        ChanField.RAW32_WORD3: np.uint32
+    }
+
+    scans = client.Scans(packets, fields=fields)
+
+    ls = list(scans)
+    assert len(ls) == 1
+    assert set(ls[0].fields) == {
+        ChanField.RAW32_WORD1, ChanField.RAW32_WORD2, ChanField.RAW32_WORD3
+    }
+
+    # just check that raw fields are populated?
+    for f in ls[0].fields:
+        assert np.count_nonzero(ls[0].field(f)) != 0

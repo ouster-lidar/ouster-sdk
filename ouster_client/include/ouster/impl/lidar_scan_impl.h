@@ -1,9 +1,13 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #pragma once
 
+#include <Eigen/Core>
 #include <cstdint>
 #include <stdexcept>
-
-#include <Eigen/Core>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -277,6 +281,36 @@ void foreach_field(SCAN&& ls, OP&& op, Args&&... args) {
                     ft.first, std::forward<Args>(args)...);
 }
 
+// Read LidarScan field and cast to the destination
+struct read_and_cast {
+    template <typename T, typename U>
+    void operator()(Eigen::Ref<const img_t<T>> src, Eigen::Ref<img_t<U>> dest) {
+        dest = src.template cast<U>();
+    }
+    template <typename T, typename U>
+    void operator()(Eigen::Ref<img_t<T>> src, Eigen::Ref<img_t<U>> dest) {
+        dest = src.template cast<U>();
+    }
+    template <typename T, typename U>
+    void operator()(Eigen::Ref<img_t<T>> src, img_t<U>& dest) {
+        dest = src.template cast<U>();
+    }
+    template <typename T, typename U>
+    void operator()(Eigen::Ref<const img_t<T>> src, img_t<U>& dest) {
+        dest = src.template cast<U>();
+    }
+};
+    
+// Copy fields from `ls_source` LidarScan to `field_dest` img with casting
+// to the img_t<T> type of `field_dest`.
+struct copy_and_cast {
+    template <typename T>
+    void operator()(Eigen::Ref<img_t<T>> field_dest, const LidarScan& ls_source,
+                    sensor::ChanField ls_source_field) {
+        visit_field(ls_source, ls_source_field, read_and_cast(),
+                                  field_dest);
+    }
+};
 }  // namespace impl
 
 template <typename T>

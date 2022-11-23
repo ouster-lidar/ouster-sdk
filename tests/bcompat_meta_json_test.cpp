@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2021, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include <gtest/gtest.h>
 
 #include <Eigen/Core>
@@ -45,7 +50,14 @@ testing::Values(
   "2_1_2_os1-991913000010-64",
   "ouster-studio-reduced-config-v1",
   "2_2_os-992119000444-128_legacy",
-  "2_2_os-992119000444-128"
+  "2_2_os-992119000444-128",
+  "2_3_os-992146000760-128_legacy",
+  "2_3_os-992146000760-128",
+  "2_3_1_os-992146000760-128_legacy",
+  "2_3_1_os-992146000760-128",
+  "2_4_0_os-992146000760-128_legacy",
+  "2_4_0_os-992146000760-128"
+
 ));
 // clang-format on
 
@@ -84,6 +96,7 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     EXPECT_EQ(si.beam_altitude_angles, si_expected.beam_altitude_angles);
     EXPECT_EQ(si.lidar_origin_to_beam_origin_mm,
               si_expected.lidar_origin_to_beam_origin_mm);
+    EXPECT_EQ(si.beam_to_lidar_transform, si_expected.beam_to_lidar_transform);
 
     EXPECT_EQ(si.imu_to_sensor_transform, si_expected.imu_to_sensor_transform);
     EXPECT_EQ(si.lidar_to_sensor_transform,

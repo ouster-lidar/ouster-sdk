@@ -2,9 +2,160 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+ouster_client
+--------------
+* breaking change: signal multiplier type changed to double to support new FW values of signal
+  multiplier.
+* breaking change: make_xyz_lut takes mat4d beam_to_lidar_transform instead of
+  lidar_origin_to_beam_origin_mm double to accomodate new FWs. Old reference Python implementation
+  was kept, but new reference was also added.
+* address an issue that could cause the processed frame being dropped in favor or the previous
+  frame when the frame_id wraps-around.
+* added a new flag ``CONFIG_FORCE_REINIT`` for ``set_config()`` method, to force the sensor to reinit
+  even when config params have not changed.
+* breaking change: drop defaults parameters from the shortform ``init_client()`` method.
+* added a new method ``init_logger()`` to provide control over the logs emitted by ``ouster_client``.
+* add parsing for new FW 3.0 thermal features shot_limiting and thermal_shutdown statuses and countdowns
+* add frame_status to LidarScan
+
+python
+------
+* breaking change: drop defaults parameters of ``client.Sensor`` constructor.
+* breaking change: change Scans interface Timeout to default to 1 second instead of None
+* added a new method ``init_logger()`` to provide control over the logs emitted by ``client.Sensor``.
+* add ``client.LidarScan`` methods ``__repr__()`` and ``__str__()``.
+
+ouster_viz
+----------
+* add ``SimpleViz.screenshot()`` function and a key handler ``SHIFT-Z`` to
+  save a screenshot. Can be called from a client thread, and executes
+  asyncronously (i.e. returns immediately and pushes a one off callback
+  to frame buffer handlers)
+* add ``PointViz.viewport_width()`` and ``PointViz.viewport_height()`` functions
+* add ``PointViz.push/pop_frame_buffer_handler()`` to attach a callbacks on
+  every frame draw update that calls from the main rendering loop.
+* add ``SHIFT-X`` key to SimpleViz to start continuous saving of screenshots
+  on every draw operation. (good for making videos)
+* expose ``Camera.set_target`` function through pybind
+
+ouster-sdk
+----------
+* Moved ouster_ros to its own repo
+* pin ``openssl`` Conan package dependency to ``openssl/1.1.1s`` due to
+  ``libtins`` and ``libcurl`` conflicting ``openssl`` versions
+
+
+[20220927]
+==========
+
+ouster_client
+--------------
+* fix a bug in longform ``init_client()`` which was not setting timestamp_mode and lidar_mode correctly
+  
+
+[20220826]
+==========
+
+* drop support for buliding C++ libraries and Python bindings on Ubuntu 16.04
+* drop support for buliding C++ libraries and Python bindings on Mac 10.13, Mac 10.14
+* Python 3.6 wheels are no longer built and published
+* drop support for sensors running FW < 2.0
+* require C++ 14 to build
+
+ouster_client
+--------------
+* add ```CUSTOM0-9`` ChanFields to LidarScan object
+* fix parsing measurement status from packets: previously, with some UDP profiles, higher order bits
+  could be randomly set
+* add option for EIGEN_MAX_ALIGN_BYTES, ON by default
+* use of sensor http interface for comms with sensors for FW 2.1+
+* propogate C++ 17 usage requirement in cmake for C++ libraries built as C++17
+* allow vcpkg configuration via environment variables
+* fix a bug in sensor_config struct equality comparison operator
+
+ouster_pcap
+-----------
+* fix incorrect encapsulation protocol being reported in ``packet_info``
+
+ouster_viz
+----------
+* clean up GL context logic to avoid errors on window/intel UHD graphics
+
+python
+------
+* windows extension modules are now statically linked to avoid potential issues with vendored dlls
+
+ouster_ros
+----------
+* drop ROS kinetic support
+* switch from nodes to nodelets
+* update topic names, group under single ros namespace
+* separate launch files for play, replay, and recording
+* drop FW 1.13 compatibility for sensors and recorded bags
+* remove setting of EIGEN_MAX_ALIGN_BYTES
+* add two new ros services /ouster/get_config and /ouster/set_config (experimental)
+* add new timestamp_mode TIME_FROM_ROS_TIME
+* declare PCL_NO_PRECOMPILE ahead of all PCL library includes
+
+
+[20220608]
+==========
+
+ouster_client
+-------------
+* change single return parsing for FW 2.3.1
+
+python
+------
+* single return parsing for FW 2.3.1 reflects change from ouster_client
+
+
+[20220504]
+==========
+
+* update supported vcpkg tag to 2022.02.23
+* update to manylinux2014 for x64 linux ``ouster-sdk`` wheels
+* Ouster SDK documentation overhaul with C++/Python APIs in one place
+* sample data updated to firmware 2.3
+
+ouster_client
+-------------
+* fix the behavior of ``BeamUniformityCorrector`` on azimuth-windowed data by ignoring zeroed out
+  columns
+* add overloads in ``image_processing.h`` to work with single-precision floats
+* add support for new ``RNG19_RFL8_SIG16_NIR16`` single-return and ``RNG15_RFL8_NIR8`` low-bandwidth
+  lidar UDP profiles introduced in firmware 2.3
+
+ouster_viz
+----------
+* switch to glad for OpenGL loading. GLEW is still supported for developer builds
+* breaking change: significant API update of the ``PointViz`` library. See documentation for details
+* the ``simple_viz`` example app and ``LidarScanViz`` utility have been removed. Equivalent
+  functionality is now provided via Python
+* add basic support for drawing 2d and 3d text labels
+* update to OpenGL 3.3
+
+python
+------
+* fix a bug where incorrectly sized packets read from the network could cause the client thread to
+  silently exit, resulting in a timeout
+* fix ``client.Scans`` not raising a timeout when using the ``complete`` flag and receiving only
+  incomplete scans. This could cause readings scans to hang in rare situations
+* added bindings for the new ``PointViz`` API and a new module for higher-level visualizer utilities
+  in ``ouster.sdk.viz``. See API documentation for details
+* the ``ouster-sdk`` package now includes an example visualizer, ``simple-viz``, which will be
+  installed on that path for the Python environment
+
+ouster_ros
+-----------
+* support new fw 2.3 profiles by checking for inclusion of fields when creating point cloud. Missing
+  fields are filled with zeroes
 
 [20220107]
-============
+==========
 
 * add support for arm64 macos and linux. Releases are now built and tested on these platforms
 * add support for Python 3.10
@@ -72,6 +223,7 @@ ouster_viz
 ----------
 * the second CLI argument of simple_viz specifying the UDP data destination is now optional
 * fixed bug in AutoExposure causing more points to be mapped to near-zero values
+* add functionality to display text over cuboids
 
 python
 ------
