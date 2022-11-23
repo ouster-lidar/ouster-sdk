@@ -114,8 +114,13 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
   DESTINATION lib/cmake/OusterSDK)
 
+# we install any custom dependency modules here
+install(FILES ${DEPENDENCY_MODULES}
+    DESTINATION lib/cmake/OusterSDK/Modules)
 install(FILES LICENSE LICENSE-bin
   DESTINATION share)
+
+# make uninstall
 add_custom_target("uninstall" COMMENT "Uninstall installed files")
 add_custom_command(
     TARGET "uninstall"
