@@ -63,7 +63,7 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
                        client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
 
     assert len(
-        client.ChanField.__members__) == 23, "Don't forget to update tests!"
+        client.ChanField.__members__) == 24, "Don't forget to update tests!"
     assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
                           np.zeros((h, w)))

@@ -83,7 +83,7 @@ extern const Table<MultipurposeIOMode, const char*, 6>
     multipurpose_io_mode_strings;
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
-extern Table<ChanField, const char*, 23> chanfield_strings;
+extern Table<ChanField, const char*, 24> chanfield_strings;
 extern Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
@@ -298,6 +298,11 @@ PYBIND11_PLUGIN(_client) {
         .def_readonly("imu_packet_size", &packet_format::imu_packet_size)
         .def_readonly("columns_per_packet", &packet_format::columns_per_packet)
         .def_readonly("pixels_per_column", &packet_format::pixels_per_column)
+        .def_readonly("packet_header_size", &packet_format::packet_header_size)
+        .def_readonly("col_header_size", &packet_format::col_header_size)
+        .def_readonly("col_footer_size", &packet_format::col_footer_size)
+        .def_readonly("col_size", &packet_format::col_size)
+        .def_readonly("packet_footer_size", &packet_format::packet_footer_size)
 
         .def("packet_type", [](packet_format& pf, py::buffer buf) {
             return pf.packet_type(getptr(pf.lidar_packet_size, buf));

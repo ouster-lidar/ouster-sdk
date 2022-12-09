@@ -69,7 +69,7 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 23> chanfield_strings{{
+Table<sensor::ChanField, const char*, 24> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
@@ -79,6 +79,7 @@ Table<sensor::ChanField, const char*, 23> chanfield_strings{{
     {ChanField::NEAR_IR, "NEAR_IR"},
     {ChanField::FLAGS, "FLAGS"},
     {ChanField::FLAGS2, "FLAGS2"},
+    {ChanField::RAW_HEADERS, "RAW_HEADERS"},
     {ChanField::CUSTOM0, "CUSTOM0"},
     {ChanField::CUSTOM1, "CUSTOM1"},
     {ChanField::CUSTOM2, "CUSTOM2"},
@@ -448,6 +449,21 @@ std::string to_string(ChanFieldType ft) {
             return "UINT64";
         default:
             return "UNKNOWN";
+    }
+}
+
+size_t field_type_size(ChanFieldType ft) {
+    switch (ft) {
+        case sensor::ChanFieldType::UINT8:
+            return 1;
+        case sensor::ChanFieldType::UINT16:
+            return 2;
+        case sensor::ChanFieldType::UINT32:
+            return 4;
+        case sensor::ChanFieldType::UINT64:
+            return 8;
+        default:
+            return 0;
     }
 }
 
