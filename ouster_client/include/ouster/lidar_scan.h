@@ -556,4 +556,5 @@ class ScanBatcher {
 
 }  // namespace ouster
 
+#include "ouster/impl/cartesian.h"
 #include "ouster/impl/lidar_scan_impl.h"
