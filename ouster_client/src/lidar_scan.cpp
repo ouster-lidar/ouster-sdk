@@ -384,7 +384,6 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
                             const XYZLut& lut) {
     if (range.cols() * range.rows() != lut.direction.rows())
         throw std::invalid_argument("unexpected image dimensions");
-
     auto reshaped = Eigen::Map<const Eigen::Array<uint32_t, -1, 1>>(
         range.data(), range.cols() * range.rows());
     auto nooffset = lut.direction.colwise() * reshaped.cast<double>();

@@ -32,3 +32,15 @@ set_tests_properties(
         ENVIRONMENT 
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
+
+add_executable(cartesian_test cartesian_test.cpp)
+
+target_link_libraries(cartesian_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
+
+add_test(NAME cartesian_test COMMAND cartesian_test --gtest_output=xml:cartesian_test.xml)
+set_tests_properties(
+  cartesian_test
+        PROPERTIES 
+        ENVIRONMENT 
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
+)
