@@ -319,9 +319,9 @@ def test_copy_config(complete_config_string: str) -> None:
 def test_parse_config() -> None:
     """Sanity check parsing from json string."""
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorConfig('/')
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorConfig('{ ')
 
 
