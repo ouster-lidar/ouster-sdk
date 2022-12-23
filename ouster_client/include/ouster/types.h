@@ -656,6 +656,13 @@ std::string to_string(ShotLimitingStatus shot_limiting_status);
 std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
 
 /**
+ * Determine validity of provided signal multiplier value
+ *
+ * @param[in] signal_multiplier Signal multiplier value.
+ */
+void check_signal_multiplier(const double signal_multiplier);
+
+/**
  * Parse metadata text blob from the sensor into a sensor_info struct.
  *
  * String and vector fields will have size 0 if the parameter cannot

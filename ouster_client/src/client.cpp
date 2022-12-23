@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -215,14 +216,11 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     // Signal multiplier changed from int to double for FW 3.0/2.5+, with
     // corresponding change to config.signal_multiplier.
     // Change values 1, 2, 3 back to ints to support older FWs
+    check_signal_multiplier(config_params["signal_multiplier"].asDouble());
     if (config_params["signal_multiplier"].asDouble() != 0.25 &&
         config_params["signal_multiplier"].asDouble() != 0.5) {
         config_params["signal_multiplier"] =
             config_params["signal_multiplier"].asInt();
-        // TODO: figure out what to do when people enter invalid signal
-        // multiplier values between 1 and 3.99. Invalid decimal values <1 and
-        // >4 will be invalid in any case and the error message won't say so
-        // those are fine
     }
 
     // set automatic udp dest, if flag specified

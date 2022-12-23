@@ -9,14 +9,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
-#include <iostream>
 #include <type_traits>
 #include <vector>
 
+#include "logging.h"
 #include "ouster/impl/lidar_scan_impl.h"
 #include "ouster/types.h"
-
-#include "logging.h"
 
 namespace ouster {
 
@@ -451,12 +449,16 @@ struct parse_field_col {
 uint64_t frame_status(const uint8_t thermal_shutdown,
                       const uint8_t shot_limiting) {
     uint64_t res = 0;
+
+    // clang-format off
     res |= (thermal_shutdown & 0x0f)
-           << FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT;  // right nibble is thermal
-                                                    // shutdown status, apply mask for
-                                                    // safety, then shift
+        << FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT;  // right nibble is thermal
+                                                 // shutdown status, apply mask
+                                                 // for safety, then shift
+    //clang-format on
     res |= (shot_limiting & 0x0f)
-           << FRAME_STATUS_SHOT_LIMITING_SHIFT;  // right nibble is shot limiting, apply mask for
+           << FRAME_STATUS_SHOT_LIMITING_SHIFT;  // right nibble is shot
+                                                 // limiting, apply mask for
                                                  // safety, then shift
     return res;
 }
@@ -603,7 +605,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
             impl::visit_field(ls, ChanField::RAW_HEADERS,
                               pack_raw_headers_col(), ChanField::RAW_HEADERS,
                               pf, icol, packet_buf);
-
         }
 
         // drop invalid
@@ -629,7 +630,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         ls.status()[m_id] = status;
 
         impl::foreach_field(ls, parse_field_col(), m_id, pf, col_buf);
-
     }
 
     return false;

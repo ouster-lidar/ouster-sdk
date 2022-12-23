@@ -495,6 +495,28 @@ std::string to_string(ThermalShutdownStatus thermal_shutdown_status) {
     return res ? res.value() : "UNKNOWN";
 }
 
+void check_signal_multiplier(const double signal_multiplier) {
+    int signal_multiplier_int = int(signal_multiplier);
+    std::string signal_multiplier_error =
+        "Provided signal multiplier is invalid: " +
+        std::to_string(signal_multiplier) +
+        " cannot be converted to one of [0.25, 0.5, 1, 2, 3]";
+
+    // get the doubles out of the way
+    if (signal_multiplier == 0.25 || signal_multiplier == 0.5) return;
+
+    // everything else has to be essentially an int
+    if (std::fabs(signal_multiplier - double(signal_multiplier_int)) >
+        signal_multiplier_int * std::numeric_limits<double>::epsilon()) {
+        throw std::runtime_error(signal_multiplier_error);
+    }
+
+    // the int has to 1, 2, or 3
+    if (signal_multiplier_int < 1 || signal_multiplier_int > 3) {
+        throw std::runtime_error(signal_multiplier_error);
+    }
+}
+
 static sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
@@ -523,8 +545,11 @@ static sensor_config parse_config(const Json::Value& root) {
             std::make_pair(root["azimuth_window"][0].asInt(),
                            root["azimuth_window"][1].asInt());
 
-    if (!root["signal_multiplier"].empty())
-        config.signal_multiplier = root["signal_multiplier"].asDouble();
+    if (!root["signal_multiplier"].empty()) {
+        double signal_multiplier = root["signal_multiplier"].asDouble();
+        check_signal_multiplier(signal_multiplier);
+        config.signal_multiplier = signal_multiplier;
+    }
 
     if (!root["operating_mode"].empty()) {
         auto operating_mode =
@@ -724,7 +749,8 @@ static data_format parse_data_format(const Json::Value& root) {
     }
 
     if (root.isMember("udp_profile_lidar")) {
-        // initializing directly triggers -Wmaybe-uninitialized GCC 8.3.1
+        // initializing directly triggers -Wmaybe-uninitialized
+        // GCC 8.3.1
         optional<UDPProfileLidar> profile{nullopt};
         profile =
             udp_profile_lidar_of_string(root["udp_profile_lidar"].asString());
@@ -825,8 +851,8 @@ static sensor_info parse_legacy(const std::string& meta) {
     }
 
     // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0 BUT missing
-    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0 according
-    // to prod-line
+    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0
+    // according to prod-line
     if (root.isMember("lidar_origin_to_beam_origin_mm")) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();
@@ -1136,16 +1162,18 @@ Json::Value to_json(const sensor_config& config) {
     }
 
     if (config.signal_multiplier) {
-        if (config.signal_multiplier < 1) {
+        check_signal_multiplier(config.signal_multiplier.value());
+        if ((config.signal_multiplier == 0.25) ||
+            (config.signal_multiplier == 0.5)) {
             root["signal_multiplier"] = config.signal_multiplier.value();
         } else {
-            // jsoncpp < 1.7.7 strips 0s off of exact representation so 2.0
-            // becomes 2
-            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3
-            // Fix was:
-            // https://github.com/open-source-parsers/jsoncpp/pull/547 Work
-            // around by always casting to int before writing out to json
-            root["signal_multiplier"] = int(config.signal_multiplier.value());
+            // jsoncpp < 1.7.7 strips 0s off of exact representation
+            // so 2.0 becomes 2
+            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3 Fix was:
+            // https://github.com/open-source-parsers/jsoncpp/pull/547
+            // Work around by always casting to int before writing out to json
+            int signal_multiplier_int = int(config.signal_multiplier.value());
+            root["signal_multiplier"] = signal_multiplier_int;
         }
     }
 
