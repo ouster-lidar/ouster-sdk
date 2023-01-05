@@ -29,6 +29,7 @@ python
 * breaking change: change Scans interface Timeout to default to 1 second instead of None
 * added a new method ``init_logger()`` to provide control over the logs emitted by ``client.Sensor``.
 * add ``client.LidarScan`` methods ``__repr__()`` and ``__str__()``.
+* changed default timeout from 1 seconds to 2 seconds
 
 ouster_viz
 ----------
