@@ -23,6 +23,8 @@ ouster_client
 * introduce a new method ``cartesianT()`` which speeds up the computation of point projecion from range
   image, the method also can process the cartesian product with single float precision. A new unit test
   ``cartesian_test`` which shows achieved speed up gains by the number of valid returns in lidar scan.
+* add ``RAW_HEADERS`` ChanField to LidarScan for packing headers and footer (alpha version, may be
+  changed/removed without notice in the future)
 
 python
 ------
@@ -30,6 +32,7 @@ python
 * breaking change: change Scans interface Timeout to default to 1 second instead of None
 * added a new method ``init_logger()`` to provide control over the logs emitted by ``client.Sensor``.
 * add ``client.LidarScan`` methods ``__repr__()`` and ``__str__()``.
+* changed default timeout from 1 seconds to 2 seconds
 
 ouster_viz
 ----------

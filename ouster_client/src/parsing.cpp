@@ -24,21 +24,6 @@ namespace impl {
 constexpr int imu_packet_size = 48;
 constexpr int64_t encoder_ticks_per_rev = 90112;
 
-static size_t field_ty_size(ChanFieldType t) {
-    switch (t) {
-        case UINT8:
-            return 1;
-        case UINT16:
-            return 2;
-        case UINT32:
-            return 4;
-        case UINT64:
-            return 8;
-        default:
-            return 0;
-    }
-}
-
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
@@ -176,7 +161,12 @@ packet_format::packet_format(const sensor_info& info)
       imu_packet_size{impl::imu_packet_size},
       columns_per_packet(info.format.columns_per_packet),
       pixels_per_column(info.format.pixels_per_column),
-      encoder_ticks_per_rev{impl::encoder_ticks_per_rev} {
+      encoder_ticks_per_rev{impl::encoder_ticks_per_rev},
+      packet_header_size{impl_->packet_header_size},
+      col_header_size{impl_->col_header_size},
+      col_footer_size{impl_->col_footer_size},
+      col_size{impl_->col_size},
+      packet_footer_size{impl_->packet_footer_size} {
     for (const auto& kv : impl_->fields) {
         field_types_.push_back({kv.first, kv.second.ty_tag});
     }
@@ -345,6 +335,12 @@ uint8_t packet_format::shot_limiting(const uint8_t* lidar_buf) const {
     return res & 0x0f;
 }
 
+const uint8_t* packet_format::footer(const uint8_t* lidar_buf) const {
+    if (impl_->packet_footer_size == 0) return nullptr;
+    return lidar_buf + impl_->packet_header_size +
+           (columns_per_packet * impl_->col_size);
+}
+
 /* Measurement block access */
 
 const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
@@ -403,11 +399,11 @@ template <typename T>
 T packet_format::px_field(const uint8_t* px_buf, ChanField i) const {
     const auto& f = impl_->fields.at(i);
 
-    if (sizeof(T) < impl::field_ty_size(f.ty_tag))
+    if (sizeof(T) < field_type_size(f.ty_tag))
         throw std::invalid_argument("Dest type too small for specified field");
 
     T res = 0;
-    std::memcpy(&res, px_buf + f.offset, impl::field_ty_size(f.ty_tag));
+    std::memcpy(&res, px_buf + f.offset, field_type_size(f.ty_tag));
     if (f.mask) res &= f.mask;
     if (f.shift > 0) res >>= f.shift;
     if (f.shift < 0) res <<= std::abs(f.shift);

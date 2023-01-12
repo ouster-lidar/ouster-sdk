@@ -519,7 +519,8 @@ inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
 class ScanBatcher {
     std::ptrdiff_t w;
     std::ptrdiff_t h;
-    uint16_t next_m_id;
+    uint16_t next_valid_m_id;
+    uint16_t next_headers_m_id;
     std::vector<uint8_t> cache;
     bool cached_packet = false;
 

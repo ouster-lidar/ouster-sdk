@@ -9,10 +9,10 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
-#include <iostream>
 #include <type_traits>
 #include <vector>
 
+#include "logging.h"
 #include "ouster/impl/lidar_scan_impl.h"
 #include "ouster/types.h"
 
@@ -393,7 +393,8 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
 ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
     : w(w),
       h(pf.pixels_per_column),
-      next_m_id(0),
+      next_valid_m_id(0),
+      next_headers_m_id(0),
       cache(pf.lidar_packet_size),
       pf(pf) {}
 
@@ -433,7 +434,14 @@ struct parse_field_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, ChanField f, uint16_t m_id,
                     const sensor::packet_format& pf, const uint8_t* col_buf) {
+        // user defined fields that we shouldn't change
         if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
+
+        // RAW_HEADERS field is populated separately because it has
+        // a different processing scheme and doesn't fit into existing field
+        // model (i.e. data packed per column rather than per pixel)
+        if (f == ChanField::RAW_HEADERS) return;
+
         pf.col_field(col_buf, f, field.col(m_id).data(), field.cols());
     }
 };
@@ -441,15 +449,89 @@ struct parse_field_col {
 uint64_t frame_status(const uint8_t thermal_shutdown,
                       const uint8_t shot_limiting) {
     uint64_t res = 0;
+
+    // clang-format off
     res |= (thermal_shutdown & 0x0f)
-           << FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT;  // right nibble is thermal
-                                                    // shutdown status, apply mask for
-                                                    // safety, then shift
+        << FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT;  // right nibble is thermal
+                                                 // shutdown status, apply mask
+                                                 // for safety, then shift
+    //clang-format on
     res |= (shot_limiting & 0x0f)
-           << FRAME_STATUS_SHOT_LIMITING_SHIFT;  // right nibble is shot limiting, apply mask for
+           << FRAME_STATUS_SHOT_LIMITING_SHIFT;  // right nibble is shot
+                                                 // limiting, apply mask for
                                                  // safety, then shift
     return res;
 }
+
+/**
+ * Checks whether RAW_HEADERS field is present and can be used to store headers.
+ *
+ * @param[in] pf packet format
+ * @param[in] ls lidar scan to check for RAW_HEADERS field presence.
+ */
+bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls) {
+    using ouster::sensor::logger;
+    ChanFieldType raw_headers_ft = ls.field_type(ChanField::RAW_HEADERS);
+    if (!raw_headers_ft) {
+        return false;
+    }
+    // ensure that we can pack headers into the size of a single RAW_HEADERS
+    // column
+    if (pf.pixels_per_column * sensor::field_type_size(raw_headers_ft) <
+        (pf.packet_header_size + pf.col_header_size + pf.col_footer_size +
+         pf.packet_footer_size)) {
+        logger().debug(
+            "WARNING: Can't fit RAW_HEADERS into a column of {} {} "
+            "values",
+            pf.pixels_per_column, to_string(raw_headers_ft));
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Pack the lidar packet and column headers and footer into a RAW_HEADERS field.
+ */
+struct pack_raw_headers_col {
+    template <typename T>
+    void operator()(Eigen::Ref<img_t<T>> rh_field, ChanField,
+                    const sensor::packet_format& pf, uint16_t col_idx,
+                    const uint8_t* packet_buf) {
+        const uint8_t* col_buf = pf.nth_col(col_idx, packet_buf);
+        const uint16_t m_id = pf.col_measurement_id(col_buf);
+
+        using ColMajorView =
+            Eigen::Map<const Eigen::Array<T, -1, 1, Eigen::ColMajor>>;
+
+        const ColMajorView col_header_vec(reinterpret_cast<const T*>(col_buf),
+                                          pf.col_header_size / sizeof(T));
+
+        rh_field.block(0, m_id, col_header_vec.size(), 1) = col_header_vec;
+
+        const ColMajorView col_footer_vec(
+            reinterpret_cast<const T*>(col_buf + pf.col_size -
+                                       pf.col_footer_size),
+            pf.col_footer_size / sizeof(T));
+
+        rh_field.block(col_header_vec.size(), m_id, col_footer_vec.size(), 1) =
+            col_footer_vec;
+
+        const ColMajorView packet_header_vec(
+            reinterpret_cast<const T*>(packet_buf),
+            pf.packet_header_size / sizeof(T));
+
+        rh_field.block(col_header_vec.size() + col_footer_vec.size(), m_id,
+                       packet_header_vec.size(), 1) = packet_header_vec;
+
+        const ColMajorView packet_footer_vec(
+            reinterpret_cast<const T*>(pf.footer(packet_buf)),
+            pf.packet_footer_size / sizeof(T));
+
+        rh_field.block(col_header_vec.size() + col_footer_vec.size() +
+                           packet_header_vec.size(),
+                       m_id, packet_footer_vec.size(), 1) = packet_footer_vec;
+    }
+};
 
 }  // namespace
 
@@ -466,9 +548,12 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
 
     const uint16_t f_id = pf.frame_id(packet_buf);
 
+    const bool raw_headers = raw_headers_enabled(pf, ls);
+
     if (ls.frame_id == -1) {
         // expecting to start batching a new scan
-        next_m_id = 0;
+        next_valid_m_id = 0;
+        next_headers_m_id = 0;
         ls.frame_id = f_id;
 
         const uint8_t f_thermal_shutdown = pf.thermal_shutdown(packet_buf);
@@ -480,8 +565,16 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         return false;
     } else if (ls.frame_id != f_id) {
         // got a packet from a new frame
-        impl::foreach_field(ls, zero_field_cols(), next_m_id, w);
-        zero_header_cols(ls, next_m_id, w);
+        for (const auto& field_type : ls) {
+            auto end_m_id = next_valid_m_id;
+            if (raw_headers && field_type.first == ChanField::RAW_HEADERS) {
+                end_m_id = next_headers_m_id;
+            }
+            impl::visit_field(ls, field_type.first, zero_field_cols(),
+                              field_type.first, end_m_id, w);
+        }
+
+        zero_header_cols(ls, next_valid_m_id, w);
         std::memcpy(cache.data(), packet_buf, cache.size());
         cached_packet = true;
 
@@ -497,14 +590,35 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         const uint32_t status = pf.col_status(col_buf);
         const bool valid = (status & 0x01);
 
-        // drop invalid / out-of-bounds data in case of misconfiguration
-        if (!valid || m_id >= w) continue;
+        // drop out-of-bounds data in case of misconfiguration
+        if (m_id >= w) continue;
+
+        if (raw_headers) {
+            // zero out missing columns if we jumped forward
+            if (m_id >= next_headers_m_id) {
+                impl::visit_field(ls, ChanField::RAW_HEADERS, zero_field_cols(),
+                                  ChanField::RAW_HEADERS, next_headers_m_id,
+                                  m_id);
+                next_headers_m_id = m_id + 1;
+            }
+
+            impl::visit_field(ls, ChanField::RAW_HEADERS,
+                              pack_raw_headers_col(), ChanField::RAW_HEADERS,
+                              pf, icol, packet_buf);
+        }
+
+        // drop invalid
+        if (!valid) continue;
 
         // zero out missing columns if we jumped forward
-        if (m_id >= next_m_id) {
-            impl::foreach_field(ls, zero_field_cols(), next_m_id, m_id);
-            zero_header_cols(ls, next_m_id, m_id);
-            next_m_id = m_id + 1;
+        if (m_id >= next_valid_m_id) {
+            for (const auto& field_type : ls) {
+                if (field_type.first == ChanField::RAW_HEADERS) continue;
+                impl::visit_field(ls, field_type.first, zero_field_cols(),
+                                  field_type.first, next_valid_m_id, m_id);
+            }
+            zero_header_cols(ls, next_valid_m_id, m_id);
+            next_valid_m_id = m_id + 1;
         }
 
         // old header API; will be removed in a future release
@@ -517,6 +631,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
 
         impl::foreach_field(ls, parse_field_col(), m_id, pf, col_buf);
     }
+
     return false;
 }  // namespace ouster
 

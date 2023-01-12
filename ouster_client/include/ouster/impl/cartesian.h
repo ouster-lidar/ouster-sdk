@@ -7,11 +7,11 @@ namespace ouster {
 // Users can enable OpenMP within ouster_client by first enabling omp through
 // the compiler and then adding '-DOUSTER_OMP' option to the DCMAKE_CXX_FLAGS
 #if defined(OUSTER_OMP)
-    #if defined(_OPENMP)
-        #define __OUSTER_UTILIZE_OPENMP__
-    #else
-        #pragma message("OUSTER_OMP was defined but openmp is not detected!")
-    #endif
+#if defined(_OPENMP)
+#define __OUSTER_UTILIZE_OPENMP__
+#else
+#pragma message("OUSTER_OMP was defined but openmp is not detected!")
+#endif
 #endif
 
 template <typename T>
@@ -43,15 +43,15 @@ void cartesianT(PointsT<T>& points,
     assert(points.rows() == range.size() &&
            "points and range image size mismatch");
 
-    const auto        pts = points.data();
+    const auto pts = points.data();
     const auto* const rng = range.data();
     const auto* const dir = direction.data();
     const auto* const ofs = offset.data();
 
     const auto N = range.size();
-    const auto col_x = 0 * N;    // 1st column of points (x)
-    const auto col_y = 1 * N;    // 2nd column of points (y)
-    const auto col_z = 2 * N;    // 3rd column of points (z)
+    const auto col_x = 0 * N;  // 1st column of points (x)
+    const auto col_y = 1 * N;  // 2nd column of points (y)
+    const auto col_z = 2 * N;  // 3rd column of points (z)
 
 #ifdef __OUSTER_UTILIZE_OPENMP__
 #pragma omp parallel for schedule(static)
