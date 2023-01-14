@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -215,14 +216,13 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     // Signal multiplier changed from int to double for FW 3.0/2.5+, with
     // corresponding change to config.signal_multiplier.
     // Change values 1, 2, 3 back to ints to support older FWs
-    if (config_params["signal_multiplier"].asDouble() != 0.25 &&
-        config_params["signal_multiplier"].asDouble() != 0.5) {
-        config_params["signal_multiplier"] =
-            config_params["signal_multiplier"].asInt();
-        // TODO: figure out what to do when people enter invalid signal
-        // multiplier values between 1 and 3.99. Invalid decimal values <1 and
-        // >4 will be invalid in any case and the error message won't say so
-        // those are fine
+    if (config_json.isMember("signal_multiplier")) {
+        check_signal_multiplier(config_params["signal_multiplier"].asDouble());
+        if (config_params["signal_multiplier"].asDouble() != 0.25 &&
+            config_params["signal_multiplier"].asDouble() != 0.5) {
+            config_params["signal_multiplier"] =
+                config_params["signal_multiplier"].asInt();
+        }
     }
 
     // set automatic udp dest, if flag specified
@@ -279,6 +279,34 @@ std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     builder["precision"] = 6;
     builder["indentation"] = "    ";
     auto metadata_string = Json::writeString(builder, cli.meta);
+    if (legacy_format) {
+        logger().warn(
+            "The SDK will soon output the non-legacy metadata format by "
+            "default.  If you parse the metadata directly instead of using the "
+            "SDK (which will continue to read both legacy and non-legacy "
+            "formats), please be advised that on the next release you will "
+            "either have to update your parsing or specify legacy_format = "
+            "true to the get_metadata function.");
+    }
+
+    // We can't insert this logic into the light init_client since its advantage
+    // is that it doesn't make netowrk calls but we need it to run every time
+    // there is a valid connection to the sensor So we insert it here
+    // TODO: remove after release of FW 3.2/3.3 (sufficient warning)
+    sensor_config config;
+    get_config(cli.hostname, config);
+    auto fw_version = SensorHttp::firmware_version(cli.hostname);
+    // only warn for people on the latest FW, as people on older FWs may not
+    // care
+    if (fw_version.major >= 3 &&
+        config.udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        logger().warn(
+            "Please note that the Legacy Lidar Profile will be deprecated "
+            "in the sensor FW soon. If you plan to upgrade your FW, we "
+            "recommend using the Single Return Profile instead. For users "
+            "sticking with older FWs, the Ouster SDK will continue to parse "
+            "the legacy lidar profile.");
+    }
     return legacy_format ? convert_to_legacy(metadata_string) : metadata_string;
 }
 

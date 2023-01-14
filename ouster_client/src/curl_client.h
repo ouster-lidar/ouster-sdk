@@ -1,7 +1,6 @@
 #include <curl/curl.h>
 
 #include <cstring>
-#include <iostream>
 
 #include "http_client.h"
 

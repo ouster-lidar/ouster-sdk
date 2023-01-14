@@ -11,6 +11,13 @@ import inspect
 
 from ouster import client
 
+# all valid values
+valid_signal_multiplier_values = [0.25, 0.5, 1, 2, 3]
+# make sure to hit different types of invalid values:
+# 0, one double below 1, one double between 1 and 3,
+# one int above 3, one double above 3
+invalid_signal_multiplier_values = [0, 0.3, 1.3, 5, 5.5]
+
 
 @pytest.mark.parametrize("mode, string", [
     (client.OperatingMode.OPERATING_NORMAL, "NORMAL"),
@@ -319,18 +326,60 @@ def test_copy_config(complete_config_string: str) -> None:
 def test_parse_config() -> None:
     """Sanity check parsing from json string."""
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorConfig('/')
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorConfig('{ ')
 
 
-@pytest.mark.parametrize("signal_multiplier", [0.25, 0.5, 1, 2, 3])
+# Note that config.signal_multiplier will also accept values
+# that aren't these (but will throw parsing from json or set_config)
+# so we don't test the invalid_signal_multiplier_values
+@pytest.mark.parametrize("signal_multiplier", valid_signal_multiplier_values)
 def test_signal_multiplier(signal_multiplier) -> None:
     """Check that signal multiplier supports all FW values"""
 
     config = client.SensorConfig()
     config.signal_multiplier = signal_multiplier
+
+
+def signal_multiplier_config_json(signal_multiplier):
+    return '{"signal_multiplier": ' + str(signal_multiplier) + '}'
+
+
+@pytest.mark.parametrize("signal_multiplier", valid_signal_multiplier_values)
+def test_config_valid_signal_multiplier_parse(signal_multiplier) -> None:
+    """Check parsing valid signal multiplier from json"""
+
+    client.SensorConfig(signal_multiplier_config_json(signal_multiplier))
+
+
+@pytest.mark.parametrize("signal_multiplier", invalid_signal_multiplier_values)
+def test_config_invalid_signal_multiplier_parse(signal_multiplier) -> None:
+    """Check parsing invalid signal multiplier from json"""
+
+    with pytest.raises(RuntimeError):
+        client.SensorConfig(signal_multiplier_config_json(signal_multiplier))
+
+
+@pytest.mark.parametrize("signal_multiplier", valid_signal_multiplier_values)
+def test_config_valid_signal_multiplier_to_str(signal_multiplier) -> None:
+    """Check writing valid signal multiplier to string"""
+
+    config = client.SensorConfig()
+    config.signal_multiplier = signal_multiplier
+    str(config)
+
+
+@pytest.mark.parametrize("signal_multiplier", invalid_signal_multiplier_values)
+def test_config_invalid_signal_multiplier_to_str(signal_multiplier) -> None:
+    """Check writing invalid signal multiplier to string"""
+
+    config = client.SensorConfig()
+    # note: won't error out here bc it's just a double
+    config.signal_multiplier = signal_multiplier
+    with pytest.raises(RuntimeError):
+        str(config)
 
 
 @pytest.fixture()

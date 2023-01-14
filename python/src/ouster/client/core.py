@@ -128,9 +128,10 @@ class Sensor(PacketSource):
                  *,
                  metadata: Optional[SensorInfo] = None,
                  buf_size: int = 128,
-                 timeout: Optional[float] = 1.0,
+                 timeout: Optional[float] = 2.0,
                  _overflow_err: bool = False,
                  _flush_before_read: bool = True,
+                 _flush_frames: int = 5,
                  _legacy_format: bool = True) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
@@ -157,6 +158,7 @@ class Sensor(PacketSource):
         self._flush_before_read = _flush_before_read
         self._cache = None
         self._fetched_meta = ""
+        self._flush_frames = _flush_frames
         self._legacy_format = _legacy_format
 
         # Fetch from sensor if not explicitly provided
@@ -240,7 +242,7 @@ class Sensor(PacketSource):
 
         # Attempt to flush any old data before producing packets
         if self._flush_before_read:
-            self.flush(full=True)
+            self.flush(n_frames = self._flush_frames, full=True)
 
         while True:
             try:
@@ -342,7 +344,7 @@ class Scans:
                  source: PacketSource,
                  *,
                  complete: bool = False,
-                 timeout: Optional[float] = 1.0,
+                 timeout: Optional[float] = 2.0,
                  fields: Optional[Dict[ChanField, FieldDType]] = None,
                  _max_latency: int = 0) -> None:
         """
@@ -462,7 +464,7 @@ class Scans:
                            buf_size=n * 128,
                            _flush_before_read=False)) as source:
                 source.flush(full=True)
-                scans = cls(source, timeout=1.0, complete=True, _max_latency=0)
+                scans = cls(source, timeout=2.0, complete=True, _max_latency=0)
                 return take(n, scans)
 
         return metadata, iter(next_batch, [])
@@ -474,7 +476,7 @@ class Scans:
             lidar_port: int = 7502,
             *,
             buf_size: int = 640,
-            timeout: Optional[float] = 1.0,
+            timeout: Optional[float] = 2.0,
             complete: bool = True,
             metadata: Optional[SensorInfo] = None,
             fields: Optional[Dict[ChanField, FieldDType]] = None) -> 'Scans':

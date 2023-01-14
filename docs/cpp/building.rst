@@ -28,7 +28,7 @@ On macOS, install XCode and `homebrew <https://brew.sh>`_ and run:
 
 .. code:: console
 
-   $ brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew
+   $ brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog
 
 To build run the following commands:
 
@@ -79,7 +79,7 @@ You should be able to install dependencies with
 
 .. code:: powershell
 
-   PS > .\vcpkg.exe install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew
+   PS > .\vcpkg.exe install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog
 
 After these steps are complete, you should be able to open, build and run the ``ouster_example``
 project using Visual Studio:

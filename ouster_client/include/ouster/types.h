@@ -656,6 +656,13 @@ std::string to_string(ShotLimitingStatus shot_limiting_status);
 std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
 
 /**
+ * Determine validity of provided signal multiplier value
+ *
+ * @param[in] signal_multiplier Signal multiplier value.
+ */
+void check_signal_multiplier(const double signal_multiplier);
+
+/**
  * Parse metadata text blob from the sensor into a sensor_info struct.
  *
  * String and vector fields will have size 0 if the parameter cannot
@@ -747,6 +754,7 @@ enum ChanField {
     NEAR_IR = 7,          ///< near_ir in photons
     FLAGS = 8,            ///< 1st return flags
     FLAGS2 = 9,           ///< 2nd return flags
+    RAW_HEADERS = 40,     ///< raw headers for packet/footer/column for dev use
     CUSTOM0 = 50,         ///< custom user field
     CUSTOM1 = 51,         ///< custom user field
     CUSTOM2 = 52,         ///< custom user field
@@ -778,6 +786,15 @@ std::string to_string(ChanField field);
  * Types of channel fields.
  */
 enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
+
+/**
+ * Get the size of the ChanFieldType in bytes.
+ *
+ * @param[in] ft the field type
+ *
+ * @return size of the field type in bytes
+ */
+size_t field_type_size(ChanFieldType ft);
 
 /**
  * Get string representation of a channel field.
@@ -826,6 +843,12 @@ class packet_format final {
     const int columns_per_packet;    ///< columns per lidar packet
     const int pixels_per_column;     ///< pixels per column for lidar
     [[deprecated]] const int encoder_ticks_per_rev;  ///< @deprecated
+
+    const size_t packet_header_size;
+    const size_t col_header_size;
+    const size_t col_footer_size;
+    const size_t col_size;
+    const size_t packet_footer_size;
 
     /**
      * Read the packet type packet header.
@@ -918,6 +941,16 @@ class packet_format final {
      * A const forward iterator over field / type pairs.
      */
     FieldIter end() const;
+
+    /**
+     * Get pointer to the packet footer of a lidar buffer.
+     *
+     * @param[in] lidar_buf the lidar buffer.
+     *
+     * @return pointer to packet footer of lidar buffer, can be nullptr if
+     * packet format doesn't have packet footer.
+     */
+    const uint8_t* footer(const uint8_t* lidar_buf) const;
 
     // Measurement block accessors
     /**
