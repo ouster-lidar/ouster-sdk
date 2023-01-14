@@ -40,7 +40,7 @@ On macos >= 10.13, using homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen curl jsoncpp libtins python3 pybind11 glfw glew
+  $ brew install cmake eigen curl jsoncpp libtins python3 pybind11 glfw glew spdlog
 
 After you have the system dependencies, you can build the SDK with:
 
@@ -74,7 +74,7 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins pybind11 glfw3 glad[gl-api-33]
+   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins pybind11 glfw3 glad[gl-api-33] spdlog
 
 The currently tested vcpkg tag is ``2022.02.23``. After that, using a developer powershell prompt:
 

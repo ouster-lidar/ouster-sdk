@@ -31,7 +31,8 @@ logger = logging.getLogger("viz-logger")
 
 # limit ouster_client log statements to "debug" and direct the output to log file
 # rather than the console (default).
-client.init_logger("info", "ouster-python.log")
+# TODO uncomment when we figure out where we want to write it everywhere, have more useful logs
+# client.init_logger("info", "ouster-python.log")
 
 T = TypeVar('T')
 

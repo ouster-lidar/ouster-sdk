@@ -20,7 +20,6 @@
 #include "logging.h"
 #include "ouster/impl/build.h"
 #include "ouster/version.h"
-
 namespace ouster {
 
 using nonstd::make_optional;
@@ -69,7 +68,7 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 23> chanfield_strings{{
+Table<sensor::ChanField, const char*, 24> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
@@ -79,6 +78,7 @@ Table<sensor::ChanField, const char*, 23> chanfield_strings{{
     {ChanField::NEAR_IR, "NEAR_IR"},
     {ChanField::FLAGS, "FLAGS"},
     {ChanField::FLAGS2, "FLAGS2"},
+    {ChanField::RAW_HEADERS, "RAW_HEADERS"},
     {ChanField::CUSTOM0, "CUSTOM0"},
     {ChanField::CUSTOM1, "CUSTOM1"},
     {ChanField::CUSTOM2, "CUSTOM2"},
@@ -451,6 +451,21 @@ std::string to_string(ChanFieldType ft) {
     }
 }
 
+size_t field_type_size(ChanFieldType ft) {
+    switch (ft) {
+        case sensor::ChanFieldType::UINT8:
+            return 1;
+        case sensor::ChanFieldType::UINT16:
+            return 2;
+        case sensor::ChanFieldType::UINT32:
+            return 4;
+        case sensor::ChanFieldType::UINT64:
+            return 8;
+        default:
+            return 0;
+    }
+}
+
 std::string to_string(UDPProfileLidar profile) {
     auto res = lookup(impl::udp_profile_lidar_strings, profile);
     return res ? res.value() : "UNKNOWN";
@@ -478,6 +493,28 @@ std::string to_string(ThermalShutdownStatus thermal_shutdown_status) {
     auto res =
         lookup(impl::thermal_shutdown_status_strings, thermal_shutdown_status);
     return res ? res.value() : "UNKNOWN";
+}
+
+void check_signal_multiplier(const double signal_multiplier) {
+    int signal_multiplier_int = int(signal_multiplier);
+    std::string signal_multiplier_error =
+        "Provided signal multiplier is invalid: " +
+        std::to_string(signal_multiplier) +
+        " cannot be converted to one of [0.25, 0.5, 1, 2, 3]";
+
+    // get the doubles out of the way
+    if (signal_multiplier == 0.25 || signal_multiplier == 0.5) return;
+
+    // everything else has to be essentially an int
+    if (std::fabs(signal_multiplier - double(signal_multiplier_int)) >
+        signal_multiplier_int * std::numeric_limits<double>::epsilon()) {
+        throw std::runtime_error(signal_multiplier_error);
+    }
+
+    // the int has to 1, 2, or 3
+    if (signal_multiplier_int < 1 || signal_multiplier_int > 3) {
+        throw std::runtime_error(signal_multiplier_error);
+    }
 }
 
 static sensor_config parse_config(const Json::Value& root) {
@@ -508,8 +545,11 @@ static sensor_config parse_config(const Json::Value& root) {
             std::make_pair(root["azimuth_window"][0].asInt(),
                            root["azimuth_window"][1].asInt());
 
-    if (!root["signal_multiplier"].empty())
-        config.signal_multiplier = root["signal_multiplier"].asDouble();
+    if (!root["signal_multiplier"].empty()) {
+        double signal_multiplier = root["signal_multiplier"].asDouble();
+        check_signal_multiplier(signal_multiplier);
+        config.signal_multiplier = signal_multiplier;
+    }
 
     if (!root["operating_mode"].empty()) {
         auto operating_mode =
@@ -517,7 +557,7 @@ static sensor_config parse_config(const Json::Value& root) {
         if (operating_mode) {
             config.operating_mode = operating_mode;
         } else {
-            throw std::invalid_argument("Unexpected Operating Mode");
+            throw std::runtime_error{"Unexpected Operating Mode"};
         }
     } else if (!root["auto_start_flag"].empty()) {
         logger().warn(
@@ -534,7 +574,7 @@ static sensor_config parse_config(const Json::Value& root) {
         if (multipurpose_io_mode) {
             config.multipurpose_io_mode = multipurpose_io_mode;
         } else {
-            throw std::invalid_argument("Unexpected Multipurpose IO Mode");
+            throw std::runtime_error{"Unexpected Multipurpose IO Mode"};
         }
     }
     if (!root["sync_pulse_out_angle"].empty())
@@ -549,7 +589,7 @@ static sensor_config parse_config(const Json::Value& root) {
         if (nmea_in_polarity) {
             config.nmea_in_polarity = nmea_in_polarity;
         } else {
-            throw std::invalid_argument("Unexpected NMEA Input Polarity");
+            throw std::runtime_error{"Unexpected NMEA Input Polarity"};
         }
     }
     if (!root["nmea_baud_rate"].empty()) {
@@ -558,7 +598,7 @@ static sensor_config parse_config(const Json::Value& root) {
         if (nmea_baud_rate) {
             config.nmea_baud_rate = nmea_baud_rate;
         } else {
-            throw std::invalid_argument("Unexpected NMEA Baud Rate");
+            throw std::runtime_error{"Unexpected NMEA Baud Rate"};
         }
     }
     if (!root["nmea_ignore_valid_char"].empty())
@@ -572,7 +612,7 @@ static sensor_config parse_config(const Json::Value& root) {
         if (sync_pulse_in_polarity) {
             config.sync_pulse_in_polarity = sync_pulse_in_polarity;
         } else {
-            throw std::invalid_argument("Unexpected Sync Pulse Input Polarity");
+            throw std::runtime_error{"Unexpected Sync Pulse Input Polarity"};
         }
     }
     if (!root["sync_pulse_out_polarity"].empty()) {
@@ -581,8 +621,7 @@ static sensor_config parse_config(const Json::Value& root) {
         if (sync_pulse_out_polarity) {
             config.sync_pulse_out_polarity = sync_pulse_out_polarity;
         } else {
-            throw std::invalid_argument(
-                "Unexpected Sync Pulse Output Polarity");
+            throw std::runtime_error{"Unexpected Sync Pulse Output Polarity"};
         }
     }
     if (!root["sync_pulse_out_frequency"].empty())
@@ -619,20 +658,24 @@ sensor_config parse_config(const std::string& config) {
 
     if (config.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors)) {
-            throw std::invalid_argument{errors.c_str()};
+            throw std::runtime_error{errors};
         }
     }
 
     return parse_config(root);
 }
 
-static bool valid_response(const Json::Value& root,
-                           const std::string& tcp_request) {
-    return (root.isMember(tcp_request) && root[tcp_request].isObject());
-}
+// bool represents whether it is an object (true) or just a member (false)
+// NOTE: lidar_data_format and calibration_status should be objects but as they
+// were introduced earlier, non-legacy formats for FW version do not include
+// them
+// TODO parse metadata by FW version specified ?
+const std::map<std::string, bool> nonlegacy_metadata_fields = {
+    {"sensor_info", true},        {"beam_intrinsics", true},
+    {"imu_intrinsics", true},     {"lidar_intrinsics", true},
+    {"config_params", true},      {"lidar_data_format", false},
+    {"calibration_status", false}};
 
-// TODO make robust to new formats that are incorrect instead of returning
-// false and sending to legacy
 static bool is_new_format(const std::string& metadata) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
@@ -641,32 +684,45 @@ static bool is_new_format(const std::string& metadata) {
 
     if (metadata.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::invalid_argument{errors.c_str()};
+            throw std::runtime_error{errors};
     }
 
-    const std::vector<std::string> valid_response_required = {
-        "sensor_info", "beam_intrinsics", "imu_intrinsics", "lidar_intrinsics",
-        "config_params"};
-
-    for (const auto& key : valid_response_required) {
-        if (!valid_response(root, key)) {
-            return false;
+    size_t nonlegacy_fields_present = 0;
+    std::string missing_fields = "";
+    for (const auto& field_pair : nonlegacy_metadata_fields) {
+        auto field = field_pair.first;
+        auto is_obj = field_pair.second;
+        if (root.isMember(field)) {
+            nonlegacy_fields_present++;
+            if (is_obj && !root[field].isObject()) {
+                throw std::runtime_error{"Non-legacy metadata field " + field +
+                                         " must have child fields"};
+            }
+        } else {
+            missing_fields += field + " ";
         }
     }
 
-    const std::vector<std::string> member_required = {"lidar_data_format",
-                                                      "calibration_status"};
-
-    for (const auto& key : member_required) {
-        if (!root.isMember(key)) {
-            return false;
-        }
+    if (nonlegacy_fields_present > 0 &&
+        nonlegacy_fields_present < nonlegacy_metadata_fields.size()) {
+        throw std::runtime_error{"Non-legacy metadata must include fields: " +
+                                 missing_fields};
     }
 
-    return true;
+    return nonlegacy_fields_present == nonlegacy_metadata_fields.size();
 }
 
 static data_format parse_data_format(const Json::Value& root) {
+    const std::vector<std::string> data_format_required_fields{
+        "pixels_per_column", "columns_per_packet", "columns_per_frame",
+        "pixel_shift_by_row"};
+
+    for (const auto& field : data_format_required_fields) {
+        if (!root.isMember(field)) {
+            throw std::runtime_error{
+                "Metadata field data_format must include field: " + field};
+        }
+    }
     data_format format;
 
     format.pixels_per_column = root["pixels_per_column"].asInt();
@@ -674,7 +730,7 @@ static data_format parse_data_format(const Json::Value& root) {
     format.columns_per_frame = root["columns_per_frame"].asInt();
 
     if (root["pixel_shift_by_row"].size() != format.pixels_per_column) {
-        throw std::invalid_argument{"Unexpected number of pixel_shift_by_row"};
+        throw std::runtime_error{"Unexpected number of pixel_shift_by_row"};
     }
 
     for (const auto& v : root["pixel_shift_by_row"])
@@ -682,28 +738,29 @@ static data_format parse_data_format(const Json::Value& root) {
 
     if (root.isMember("column_window")) {
         if (root["column_window"].size() != 2) {
-            throw std::invalid_argument{
-                "Unexpected size of column_window tuple"};
+            throw std::runtime_error{"Unexpected size of column_window tuple"};
         }
         format.column_window.first = root["column_window"][0].asInt();
         format.column_window.second = root["column_window"][1].asInt();
     } else {
-        logger().warn("No column window found.");
+        logger().warn(
+            "No column window found. Using default column window (full)");
         format.column_window = default_column_window(format.columns_per_frame);
     }
 
     if (root.isMember("udp_profile_lidar")) {
-        // initializing directly triggers -Wmaybe-uninitialized GCC 8.3.1
+        // initializing directly triggers -Wmaybe-uninitialized
+        // GCC 8.3.1
         optional<UDPProfileLidar> profile{nullopt};
         profile =
             udp_profile_lidar_of_string(root["udp_profile_lidar"].asString());
         if (profile) {
             format.udp_profile_lidar = profile.value();
         } else {
-            throw std::invalid_argument{"Unexpected udp lidar profile"};
+            throw std::runtime_error{"Unexpected udp lidar profile"};
         }
     } else {
-        logger().warn("No lidar profile found.");
+        logger().warn("No lidar profile found. Using LEGACY lidar profile");
         format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
     }
 
@@ -713,14 +770,15 @@ static data_format parse_data_format(const Json::Value& root) {
         if (profile) {
             format.udp_profile_imu = profile.value();
         } else {
-            throw std::invalid_argument{"Unexpected udp imu profile"};
+            throw std::runtime_error{"Unexpected udp imu profile"};
         }
     } else {
+        logger().warn("No imu profile found. Using LEGACY imu profile");
         format.udp_profile_imu = PROFILE_IMU_LEGACY;
     }
 
     return format;
-}
+}  // namespace sensor
 
 static sensor_info parse_legacy(const std::string& meta) {
     Json::Value root{};
@@ -730,29 +788,71 @@ static sensor_info parse_legacy(const std::string& meta) {
 
     if (meta.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::invalid_argument{errors.c_str()};
+            throw std::runtime_error{errors};
     }
+
+    const std::vector<std::string> minimum_legacy_metadata_fields{
+        "beam_altitude_angles", "beam_azimuth_angles", "lidar_mode"};
+
+    for (auto field : minimum_legacy_metadata_fields) {
+        if (!root.isMember(field)) {
+            throw std::runtime_error{"Metadata must contain: " + field};
+        }
+    }
+
+    // nice to have fields which we will use defaults for if they don't
+    // exist
+    const std::vector<std::string> desired_legacy_metadata_fields{
+        "imu_to_sensor_transform", "lidar_to_sensor_transform", "prod_line",
+        "prod_sn", "build_rev"};
+    for (auto field : desired_legacy_metadata_fields) {
+        if (!root.isMember(field)) {
+            logger().warn("No " + field +
+                          " found in metadata. Will be left blank or filled in "
+                          "with default legacy values");
+        }
+    }
+
+    // fields that don't survive round trip through to_string
+    const std::vector<std::string> not_parsed_metadata_fields{
+        "build_date", "image_rev", "prod_pn", "status"};
+    for (auto field : not_parsed_metadata_fields) {
+        if (!root.isMember(field)) {
+            logger().warn(
+                "No " + field +
+                " found in metadata. Your metadata may be the result "
+                "of calling to_string() on the sensor_info object OR "
+                "you recorded this data with a very old version of "
+                "Ouster Studio. We advise you to record the metadata "
+                "directly "
+                "with get_metadata and to update your Ouster Studio.");
+        }
+    }
+
     sensor_info info{};
 
     // info.name is deprecated, will be empty string if not present
     info.name = root["hostname"].asString();
 
+    // if these are not present they are also empty strings
     info.sn = root["prod_sn"].asString();
-    info.fw_rev = root["build_rev"].asString();
-    info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
     info.prod_line = root["prod_line"].asString();
+    info.fw_rev = root["build_rev"].asString();
+
+    // checked that lidar_mode is present already - never empty string
+    info.mode = lidar_mode_of_string(root["lidar_mode"].asString());
 
     // "data_format" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("data_format")) {
         info.format = parse_data_format(root["data_format"]);
     } else {
-        logger().warn("No data_format found.");
+        logger().warn("No data_format found. Using default legacy data format");
         info.format = default_data_format(info.mode);
     }
 
     // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0 BUT missing
-    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0 according
-    // to prod-line
+    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0
+    // according to prod-line
     if (root.isMember("lidar_origin_to_beam_origin_mm")) {
         info.lidar_origin_to_beam_origin_mm =
             root["lidar_origin_to_beam_origin_mm"].asDouble();
@@ -761,9 +861,14 @@ static sensor_info parse_legacy(const std::string& meta) {
             0) {  // is an OS-DOME - fill with 0
             info.lidar_origin_to_beam_origin_mm = 0;
         } else {  // not an OS-DOME
-            logger().warn("No lidar_origin_to_beam_origin_mm found.");
+            logger().warn(
+                "No lidar_origin_to_beam_origin_mm found. Using default "
+                "value for the specified prod_line or default gen 1 values"
+                "if prod_line is missing");
             info.lidar_origin_to_beam_origin_mm =
-                default_lidar_origin_to_beam_origin(info.prod_line);
+                default_lidar_origin_to_beam_origin(
+                    info.prod_line);  // note it is possible that
+                                      // info.prod_line is ""
         }
     }
 
@@ -784,12 +889,11 @@ static sensor_info parse_legacy(const std::string& meta) {
     }
 
     if (root["beam_altitude_angles"].size() != info.format.pixels_per_column) {
-        throw std::invalid_argument{
-            "Unexpected number of beam_altitude_angles"};
+        throw std::runtime_error{"Unexpected number of beam_altitude_angles"};
     }
 
     if (root["beam_azimuth_angles"].size() != info.format.pixels_per_column) {
-        throw std::invalid_argument{"Unexpected number of beam_azimuth_angles"};
+        throw std::runtime_error{"Unexpected number of beam_azimuth_angles"};
     }
 
     for (const auto& v : root["beam_altitude_angles"])
@@ -809,7 +913,9 @@ static sensor_info parse_legacy(const std::string& meta) {
             }
         }
     } else {
-        logger().warn("No valid imu_to_sensor_transform found.");
+        logger().warn(
+            "No valid imu_to_sensor_transform found. Using default for gen "
+            "1");
         info.imu_to_sensor_transform = default_imu_to_sensor_transform;
     }
 
@@ -824,9 +930,24 @@ static sensor_info parse_legacy(const std::string& meta) {
             }
         }
     } else {
-        logger().warn("No valid lidar_to_sensor_transform found.");
+        logger().warn(
+            "No valid lidar_to_sensor_transform found. Using default for "
+            "gen "
+            "1");
         info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
     }
+
+    auto zero_check = [](auto el, std::string name) {
+        bool all_zeros = std::all_of(el.cbegin(), el.cend(),
+                                     [](double k) { return k == 0.0; });
+        if (all_zeros) {
+            throw std::runtime_error{"Field " + name +
+                                     " in the metadata cannot all be zeros."};
+        }
+    };
+
+    zero_check(info.beam_altitude_angles, "beam_altitude_angles");
+    zero_check(info.beam_azimuth_angles, "beam_azimuth_angles");
 
     info.extrinsic = mat4d::Identity();
 
@@ -851,7 +972,7 @@ enum configuration_version { FW_2_0 = 3, FW_2_2 = 4 };
 std::string convert_to_legacy(const std::string& metadata) {
     if (!is_new_format(metadata))
         throw std::invalid_argument(
-            "Could not convert invalid non-legacy metadata format");
+            "Invalid non-legacy metadata format provided");
 
     Json::Value root{};
     Json::CharReaderBuilder read_builder{};
@@ -860,7 +981,7 @@ std::string convert_to_legacy(const std::string& metadata) {
 
     if (metadata.size()) {
         if (!Json::parseFromStream(read_builder, ss, &root, &errors)) {
-            throw std::invalid_argument{errors.c_str()};
+            throw std::runtime_error{errors};
         }
     }
     Json::Value result{};
@@ -903,12 +1024,12 @@ sensor_info parse_metadata(const std::string& metadata) {
 
     if (metadata.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::invalid_argument{errors.c_str()};
+            throw std::runtime_error{errors};
     }
 
     sensor_info info{};
     if (is_new_format(metadata)) {
-        logger().debug("parsing new metadata format");
+        logger().debug("parsing non-legacy metadata format");
         info = parse_legacy(convert_to_legacy(metadata));
     } else {
         logger().debug("parsing legacy metadata format");
@@ -927,7 +1048,7 @@ sensor_info metadata_from_json(const std::string& json_file) {
     if (!ifs) {
         std::stringstream ss;
         ss << "Failed to read metadata file: " << json_file;
-        throw std::runtime_error(ss.str());
+        throw std::runtime_error{ss.str()};
     }
 
     return parse_metadata(buf.str());
@@ -1041,16 +1162,18 @@ Json::Value to_json(const sensor_config& config) {
     }
 
     if (config.signal_multiplier) {
-        if (config.signal_multiplier < 1) {
+        check_signal_multiplier(config.signal_multiplier.value());
+        if ((config.signal_multiplier == 0.25) ||
+            (config.signal_multiplier == 0.5)) {
             root["signal_multiplier"] = config.signal_multiplier.value();
         } else {
-            // jsoncpp < 1.7.7 strips 0s off of exact representation so 2.0
-            // becomes 2
-            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3
-            // Fix was:
-            // https://github.com/open-source-parsers/jsoncpp/pull/547 Work
-            // around by always casting to int before writing out to json
-            root["signal_multiplier"] = int(config.signal_multiplier.value());
+            // jsoncpp < 1.7.7 strips 0s off of exact representation
+            // so 2.0 becomes 2
+            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3 Fix was:
+            // https://github.com/open-source-parsers/jsoncpp/pull/547
+            // Work around by always casting to int before writing out to json
+            int signal_multiplier_int = int(config.signal_multiplier.value());
+            root["signal_multiplier"] = signal_multiplier_int;
         }
     }
 

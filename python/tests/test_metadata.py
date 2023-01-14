@@ -159,21 +159,21 @@ def test_copy_info(meta: client.SensorInfo) -> None:
 
 def test_parse_info() -> None:
     """Sanity check parsing from json."""
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorInfo('/')
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorInfo('')
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorInfo('{  }')
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.SensorInfo('{ "lidar_mode": "1024x10" }')
 
     # TODO: this should actually fail unless *all* parameters needed to
     # unambiguously interpret a sensor data stream are present
     metadata = {
         'lidar_mode': '1024x10',
-        'beam_altitude_angles': [0] * 64,
-        'beam_azimuth_angles': [0] * 64,
+        'beam_altitude_angles': [1] * 64,
+        'beam_azimuth_angles': [1] * 64,
         'lidar_to_sensor_transform': list(range(16))
     }
     info = client.SensorInfo(json.dumps(metadata))

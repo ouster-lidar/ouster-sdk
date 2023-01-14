@@ -5,7 +5,7 @@
 Ouster SDK Installation
 =======================
 
-Please proceed to the instructions for your language and platform of choice. Newer users may find the Python SDK more approachable.
+Please proceed to the instructions for your programming language and platform of choice.
 
 .. contents::
    :local:

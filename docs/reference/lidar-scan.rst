@@ -231,4 +231,4 @@ both sampling, used in :ref:`ex-visualization-with-matplotlib`, and streaming, u
 Under the hood, this class batches packets into ``LidarScans``. C++ users must batch packets
 themselves using the :cpp:class:`ouster::ScanBatcher` class. To get a feel for how to use it, we recommend
 reading `this example on Github
-<https://github.com/ouster-lidar/ouster_example/blob/master/ouster_client/src/example.cpp#L83>`_.
+<https://github.com/ouster-lidar/ouster_example/blob/master/examples/client_example.cpp#L93>`_.

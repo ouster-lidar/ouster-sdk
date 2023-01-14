@@ -154,10 +154,9 @@ int main(int argc, char* argv[]) {
                                      std::to_string(print_column) + ")";
 
     std::cerr << "In the staggered image, the point at " << point_string
-              << " has reflectivity " << reflectivity(print_row, print_row)
+              << " has reflectivity " << reflectivity(print_row, print_column)
               << " and an x coordinate of "
-              << x_image_staggered(print_column, print_column) << "."
-              << std::endl;
+              << x_image_staggered(print_row, print_column) << "." << std::endl;
     std::cerr << "In the destagged image, the point at " << point_string
               << " has reflectivity "
               << reflectivity_destaggered(print_row, print_column)
