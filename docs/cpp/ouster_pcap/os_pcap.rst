@@ -33,10 +33,12 @@ Functions
 
 .. doxygenfunction:: ouster::sensor_utils::read_packet
 
-.. doxygenfunction:: ouster::sensor_utils::record_initialize
+.. doxygenfunction:: ouster::sensor_utils::record_initialize( const std::string& file, const std::string& src_ip, const std::string& dst_ip, int frag_size, bool use_sll_encapsulation = false)
+
+.. doxygenfunction:: ouster::sensor_utils::record_initialize(const std::string& file, int frag_size, bool use_sll_encapsulation = false);
 
 .. doxygenfunction:: ouster::sensor_utils::record_uninitialize
 
-.. doxygenfunction:: ouster::sensor_utils::record_packet(record_handle& handle, const packet_info& info, const uint8_t* buf, size_t buffer_size)
+.. doxygenfunction:: ouster::sensor_utils::record_packet(record_handle& handle, const std::string& src_ip, const std::string& dst_ip, int src_port, int dst_port, const uint8_t* buf, size_t buffer_size, uint64_t microsecond_timestamp)
 
 

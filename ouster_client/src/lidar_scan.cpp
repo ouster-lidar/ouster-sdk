@@ -27,10 +27,12 @@ enum frame_status_masks : uint64_t {
     FRAME_STATUS_SHOT_LIMITING_MASK = 0xf0      ///< Mask to get shot limting status
 };
 
+//! @cond Doxygen_Suppress
 enum frame_status_shifts: uint64_t {
     FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT = 0,    ///< No shift for thermal shutdown 
     FRAME_STATUS_SHOT_LIMITING_SHIFT = 4        /// shift 4 for shot limiting
 };
+//! @endcond
 
 // clang-format on
 using sensor::ChanField;
@@ -112,10 +114,7 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
 }  // namespace impl
 
 // specify sensor:: namespace for doxygen matching
-LidarScan::LidarScan(
-    size_t w, size_t h,
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-        field_types)
+LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types)
     : timestamp_{Header<uint64_t>::Zero(w)},
       measurement_id_{Header<uint16_t>::Zero(w)},
       status_{Header<uint32_t>::Zero(w)},

@@ -34,7 +34,8 @@ def main() -> None:
                         type=float,
                         required=False,
                         nargs=16,
-                        help='lidar sensor extrinsics to use in viz')
+                        help='lidar sensor extrinsics in homogenous matrix given'
+                        'in row-major order to use in 3D viz')
 
     args = parser.parse_args()
 

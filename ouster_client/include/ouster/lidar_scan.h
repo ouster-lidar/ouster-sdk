@@ -405,11 +405,14 @@ struct XYZLut {
  * Each table is an n x 3 array of doubles stored in column-major order where
  * each row corresponds to the nth point in a lidar scan, with 0 <= n < h*w.
  *
+ * Projections to XYZ made with this XYZLut will be in the coordinate frame
+ * defined by transform*beam_to_lidar_transform.
+ *
  * @param[in] w number of columns in the lidar scan. e.g. 512, 1024, or 2048.
  * @param[in] h number of rows in the lidar scan.
  * @param[in] range_unit the unit, in meters, of the range,  e.g.
  * sensor::range_unit.
- * @param[in] beam_to_lidar_transform, signifying transform between beams and
+ * @param[in] beam_to_lidar_transform transform between beams and
  * lidar origin. Translation portion is in millimeters.
  * @param[in] transform additional transformation to apply to resulting points.
  * @param[in] azimuth_angles_deg azimuth offsets in degrees for each of h beams.
@@ -425,6 +428,8 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 
 /**
  * Convenient overload that uses parameters from the supplied sensor_info.
+ * Projections to XYZ made with this XYZLut will be in the sensor coordinate
+ * frame defined in the sensor documentation.
  *
  * @param[in] sensor metadata returned from the client.
  *

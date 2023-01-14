@@ -898,7 +898,7 @@ class packet_format final {
     /**
      * Read the packet shot limiting countdown
      *
-     * @param[in] liar_buf the lidar buf.
+     * @param[in] lidar_buf the lidar buf.
      *
      * @return the shot limiting countdown.
      */

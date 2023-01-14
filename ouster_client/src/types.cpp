@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -496,23 +497,13 @@ std::string to_string(ThermalShutdownStatus thermal_shutdown_status) {
 }
 
 void check_signal_multiplier(const double signal_multiplier) {
-    int signal_multiplier_int = int(signal_multiplier);
     std::string signal_multiplier_error =
         "Provided signal multiplier is invalid: " +
         std::to_string(signal_multiplier) +
         " cannot be converted to one of [0.25, 0.5, 1, 2, 3]";
 
-    // get the doubles out of the way
-    if (signal_multiplier == 0.25 || signal_multiplier == 0.5) return;
-
-    // everything else has to be essentially an int
-    if (std::fabs(signal_multiplier - double(signal_multiplier_int)) >
-        signal_multiplier_int * std::numeric_limits<double>::epsilon()) {
-        throw std::runtime_error(signal_multiplier_error);
-    }
-
-    // the int has to 1, 2, or 3
-    if (signal_multiplier_int < 1 || signal_multiplier_int > 3) {
+    std::set<double> valid_values = {0.25, 0.5, 1, 2, 3};
+    if (!valid_values.count(signal_multiplier)) {
         throw std::runtime_error(signal_multiplier_error);
     }
 }
@@ -684,7 +675,8 @@ static bool is_new_format(const std::string& metadata) {
 
     if (metadata.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::runtime_error{errors};
+            throw std::runtime_error{
+                "Error parsing metadata when checking format: " + errors};
     }
 
     size_t nonlegacy_fields_present = 0;
@@ -981,7 +973,8 @@ std::string convert_to_legacy(const std::string& metadata) {
 
     if (metadata.size()) {
         if (!Json::parseFromStream(read_builder, ss, &root, &errors)) {
-            throw std::runtime_error{errors};
+            throw std::runtime_error{
+                "Errors parsing metadata for convert_to_legacy: " + errors};
         }
     }
     Json::Value result{};
@@ -1024,7 +1017,8 @@ sensor_info parse_metadata(const std::string& metadata) {
 
     if (metadata.size()) {
         if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::runtime_error{errors};
+            throw std::runtime_error{
+                "Errors parsing metadata for parse_metadata: " + errors};
     }
 
     sensor_info info{};

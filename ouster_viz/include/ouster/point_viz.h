@@ -447,7 +447,7 @@ class Camera {
     /**
      * Get view offset.
      *
-     * @preturn view offset of the camera
+     * @return view offset of the camera
      */
     vec3d get_view_offset() const;
 
@@ -473,7 +473,7 @@ class Camera {
     void set_orthographic(bool state);
 
     /**
-     * Get orthographic state. 
+     * Get orthographic state.
      *
      * @return true if orthographic, false if perspective
      */
@@ -496,14 +496,14 @@ class Camera {
 
     /**
      * Directly set camera target object pose
-     * 
+     *
      * @param[in] target target where camera is looking at
      */
     void set_target(const mat4d& target);
 
     /**
      * Get the pose of a camera target.
-     * 
+     *
      * @return target camera pose
      */
     mat4d get_target() const;
@@ -612,14 +612,14 @@ class Cloud {
      * Resets any changes since the last call to PointViz::update()
      */
     void clear();
-    
+
     /**
      * Set all dirty flags.
      *
      * Re-sets everything so the object is always redrawn.
      */
     void dirty();
-    
+
     /**
      * Get the size of the point cloud.
      *
@@ -629,7 +629,7 @@ class Cloud {
 
     /**
      * Get the columns of the point cloud.
-     * 
+     *
      * @return number of columns in point cloud. (1 - for unstructured)
      */
     size_t get_cols() const { return w_; }
@@ -730,7 +730,7 @@ class Image {
     size_t mask_width_{0};
     size_t mask_height_{0};
     std::vector<float> mask_data_{};
-    float hshift_{0}; // in normalized screen coordinates [-1. 1]
+    float hshift_{0};  // in normalized screen coordinates [-1. 1]
 
    public:
     /**
@@ -795,10 +795,10 @@ class Image {
      *   -1 - image moved to the left for the 1/2 of a horizontal viewport
      *   +1 - image moved to the right for the 1/2 of a horizontal viewport
      * +0.5 - image moved to the right for the 1/4 of a horizontal viewport
-     * 
+     *
      * @param[in] hshift shift in normalized by width coordinates from 0 at
      * the center [-1.0..1.0]
-     * 
+     *
      */
     void set_hshift(float hshift);
 
@@ -917,7 +917,7 @@ class Label {
 
     /**
      * Set the color of the label.
-     * 
+     *
      * @param[in] rgba color in RGBA format
      */
     void set_rgba(const vec4f& rgba);
