@@ -2,8 +2,8 @@
 Changelog
 =========
 
-[unreleased]
-============
+[20230114]
+==========
 
 ouster_client
 --------------
@@ -20,6 +20,9 @@ ouster_client
 * added a new method ``init_logger()`` to provide control over the logs emitted by ``ouster_client``.
 * add parsing for new FW 3.0 thermal features shot_limiting and thermal_shutdown statuses and countdowns
 * add frame_status to LidarScan
+* introduce a new method ``cartesianT()`` which speeds up the computation of point projecion from range
+  image, the method also can process the cartesian product with single float precision. A new unit test
+  ``cartesian_test`` which shows achieved speed up gains by the number of valid returns in lidar scan.
 * add ``RAW_HEADERS`` ChanField to LidarScan for packing headers and footer (alpha version, may be
   changed/removed without notice in the future)
 
