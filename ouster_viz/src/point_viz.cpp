@@ -227,11 +227,11 @@ void PointViz::visible(bool state) { pimpl->glfw->visible(state); }
 bool PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl->update_mx};
 
-    // propagate camera changes
-    pimpl->camera_front = pimpl->camera_back;
-
     // last frame hasn't been drawn yet
     if (pimpl->front_changed) return false;
+
+    // propagate camera changes
+    pimpl->camera_front = pimpl->camera_back;
 
     pimpl->clouds.swap();
     pimpl->cuboids.swap();
