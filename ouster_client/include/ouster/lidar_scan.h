@@ -42,43 +42,11 @@ using LidarScanFieldTypes =
  */
 class LidarScan {
    public:
-    [[deprecated]] static constexpr int N_FIELDS =
-        4;  ///< @deprecated Number of fields now varies by lidar profile or
-            ///< constructor provided arguments. Use N_FIELDS with caution even
-            ///< when working with legacy lidar profile data, and do not use for
-            ///< all non-legacy lidar profile formats.
-
-    using raw_t [[deprecated]] = uint32_t;                 ///< @deprecated
-    using ts_t [[deprecated]] = std::chrono::nanoseconds;  ///< @deprecated
-
     template <typename T>
     using Header = Eigen::Array<T, Eigen::Dynamic, 1>;  ///< Header typedef
 
     /** XYZ coordinates with dimensions arranged contiguously in columns. */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
-
-    /** Old names provided for compatibility, see sensor::ChanField. */
-    using Field [[deprecated]] = sensor::ChanField;  ///< @deprecated
-    [[deprecated]] static constexpr Field RANGE =
-        sensor::RANGE;  ///< @deprecated
-    [[deprecated]] static constexpr Field INTENSITY =
-        sensor::SIGNAL;  ///< @deprecated
-    [[deprecated]] static constexpr Field AMBIENT =
-        sensor::NEAR_IR;  ///< @deprecated
-    [[deprecated]] static constexpr Field REFLECTIVITY =
-        sensor::REFLECTIVITY;  ///< @deprecated
-
-    /**
-     * Measurement block information, other than the channel data.
-     *
-     * @deprecated BlockHeaders are deprecated in favor of Header. See
-     * ``timestamp()``, ``measurement_id()``, and ``status()``
-     */
-    struct [[deprecated]] BlockHeader {
-        ts_t timestamp;
-        uint32_t encoder;
-        uint32_t status;
-    };
 
    private:
     Header<uint64_t> timestamp_;
@@ -105,16 +73,6 @@ class LidarScan {
      * private.
      */
     std::ptrdiff_t h{0};
-
-    /**
-     * Vector containing the header definitions.
-     *
-     * @deprecated BlockHeader is deprecated in favor of Header
-     *
-     * @warning Members variables: use with caution, some of these will become
-     * private.
-     */
-    [[deprecated]] std::vector<BlockHeader> headers{};
 
     /**
      * Frame status - information from the packet header which corresponds to a
@@ -208,28 +166,6 @@ class LidarScan {
      * Get frame thermal shutdown status
      */
     sensor::ThermalShutdownStatus thermal_shutdown() const;
-
-    /**
-     * Access timestamps as a vector.
-     *
-     * @deprecated See `timestamp()` instead
-     *
-     * @returns copy of the measurement timestamps as a vector.
-     */
-    [[deprecated]] std::vector<LidarScan::ts_t> timestamps() const;
-
-    /**
-     * Access measurement block header fields.
-     *
-     * @deprecated Please see `status()`, `measurement_id()`, and `timestamp()`
-     * instead
-     *
-     * @return the header values for the specified measurement id.
-     */
-    [[deprecated]] BlockHeader& header(size_t m_id);
-
-    /** @copydoc header(size_t m_id) */
-    [[deprecated]] const BlockHeader& header(size_t m_id) const;
 
     /**
      * Access a lidar data field.
@@ -350,19 +286,6 @@ std::string to_string(const LidarScan& ls);
  * Operators
  * @{
  */
-
-/**
- * Equality for column headers.
- *
- * @deprecated BlockHeaders are deprecated
- *
- * @param[in] a The first column header to compare.
- * @param[in] b The second column header to compare.
- *
- * @return if a == b.
- */
-[[deprecated]] bool operator==(const LidarScan::BlockHeader& a,
-                               const LidarScan::BlockHeader& b);
 
 /**
  * Equality for scans.

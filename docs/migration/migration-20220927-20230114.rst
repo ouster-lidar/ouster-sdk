@@ -48,9 +48,54 @@ Notes for the future
 --------------------
 
 For customers who know they will continue to upgrade their version of the SDK, we also wish to
-highlight the upcoming breaking changes:
+highlight some upcoming breaking changes.
 
+Default Metadata Format
++++++++++++++++++++++++
 First, the next release will default writing the non-legacy metadata format as opposed to the
 current format, also known as the legacy metadata format. The SDK will continue to read the legacy
 format, i.e., it will continue to read old recorded data), and it will also be able to produce the
 legacy format if the parameter ``legacy=true`` is specified to the ``get_metadata`` function.
+
+Deprecations
+++++++++++++
+We are going to start removing a number of deprecations in the ``ouster_client`` code with the next
+release. We will document any such removals and how to migrate from them in this or the following
+migration guide (whichever is relevant).
+
+ - ``LidarScan::N_FIELDS``: The number of fields in a profile has varied since the introduction of
+   eUDP profiles. To find the number of fields in your scan, we suggest using the iterator to loop
+   over and count the number of fields.
+
+
+ - ``LidarScan::Field``: use ``sensor::ChanField`` instead.
+
+ - ``LidarScan::BlockHeader``: ``BlockHeaders``, structs consisting of the ``timestamp``,
+   ``encoder`` ticks, and ``status`` which corresponded to a single column of measurements
+   (identifiable by``measurement_id``), have been deprecated in favor of ``Headers``, which are
+   Eigen Arrays of length equivalent to the # of columns in a scan, with the ith element being the
+   value from the ith measurement. As such, where once you might write:
+
+        .. code::
+
+            auto n_invalid = std::count_if( scans[i].headers.begin(), scans[i].headers.end(), [](const
+            LidarScan::BlockHeader& h) { return h.status != 0xffffffff; });
+
+  you should now use the ``status()`` function:
+
+        .. code::
+
+            auto status = scan.status(); auto n_invalid = std::count_if(status.data(), status.data() +
+            status.size(), [](const uint32_t s) { return !(s & 0x01); });
+
+  Timestamps are now available through ``timestamp()``, also returning a ``Header``; and the information
+  contained in ``encoder`` is available through ``measurement_id()`` (see the next line item for the
+   conversion).
+
+- ``encoder``: Encoder counts were part of the LEGACY UDP profile, representing the azimuth angle as
+  a raw encoder count starting from 0 to a max value of 90111. It thus incremented 44 ticks per
+  azimuth angle in 2048 mode, 88 ticks in 1024 mode and 176 in 512 mode. To recover encoder
+  infcount, you can multiply the ``measurement_id`` by the number dictated by your lidar mode. We
+  would suggest, however, migrating to use simply ``measurement_id`` and multiplying by ``360
+  degrees/ N`` where ``N`` is the number of columns in your mode (512, 1024, 2048) when you need the
+  azimuth, thus untying any sense of azimuth from the internal mechanicals of the Ouster sensor.

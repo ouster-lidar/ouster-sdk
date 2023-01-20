@@ -742,7 +742,6 @@ PYBIND11_PLUGIN(_client) {
         fields are staggered, so the ith column header value corresponds to the ith
         column of data in each field.
         )")
-        .def_readonly_static("N_FIELDS", &LidarScan::N_FIELDS, "Deprecated.")
         // TODO: Python and C++ API differ in h/w order for some reason
         .def(
             "__init__",
@@ -853,53 +852,6 @@ PYBIND11_PLUGIN(_client) {
              "The frame shot limiting status.")
         .def("thermal_shutdown", &LidarScan::thermal_shutdown,
              "The frame thermal shutdown status.")
-        .def(
-            "header",
-            [](LidarScan& self, py::object& o) {
-                // the argument should be a ColHeader enum defined in
-                // data.py
-                auto ind = py::int_(o).cast<int>();
-                switch (ind) {
-                    case 0:
-                        return py::array(py::dtype::of<uint64_t>(),
-                                         static_cast<size_t>(self.w),
-                                         self.timestamp().data(),
-                                         py::cast(self));
-                    case 1:
-                        // encoder values are deprecated and not included in
-                        // the updated C++ LidarScan API. Access old values
-                        // instead
-                        return py::array(py::dtype::of<uint32_t>(),
-                                         {static_cast<size_t>(self.w)},
-                                         {sizeof(LidarScan::BlockHeader)},
-                                         &self.headers.at(0).encoder,
-                                         py::cast(self));
-                    case 2:
-                        return py::array(py::dtype::of<uint16_t>(),
-                                         static_cast<size_t>(self.w),
-                                         self.measurement_id().data(),
-                                         py::cast(self));
-                    case 3:
-                        return py::array(py::dtype::of<uint32_t>(),
-                                         static_cast<size_t>(self.w),
-                                         self.status().data(), py::cast(self));
-                    default:
-                        throw std::invalid_argument(
-                            "Unexpected index for LidarScan.header()");
-                }
-            },
-            R"(
-        Return the specified column header as a numpy array.
-
-        This function is deprecated. Use the ``measurment_id``, ``timestamp`` or
-        ``status`` properties instead.
-
-        Args:
-            header: The column header to return
-
-        Returns:
-            The specified column header as a numpy array
-        )")
         .def_property_readonly(
             "timestamp",
             [](LidarScan& self) {

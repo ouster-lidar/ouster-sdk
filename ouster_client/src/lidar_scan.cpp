@@ -39,8 +39,6 @@ using sensor::ChanField;
 using sensor::ChanFieldType;
 using sensor::UDPProfileLidar;
 
-constexpr int LidarScan::N_FIELDS;
-
 LidarScan::LidarScan() = default;
 LidarScan::LidarScan(const LidarScan&) = default;
 LidarScan::LidarScan(LidarScan&&) = default;
@@ -120,8 +118,7 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types)
       status_{Header<uint32_t>::Zero(w)},
       field_types_{std::move(field_types)},
       w{static_cast<std::ptrdiff_t>(w)},
-      h{static_cast<std::ptrdiff_t>(h)},
-      headers{w, BlockHeader{ts_t{0}, 0, 0}} {
+      h{static_cast<std::ptrdiff_t>(h)} {
     // TODO: error on duplicate fields
     for (const auto& ft : field_types_) {
         if (fields_.count(ft.first) > 0)
@@ -147,21 +144,6 @@ sensor::ThermalShutdownStatus LidarScan::thermal_shutdown() const {
         (frame_status &
          frame_status_masks::FRAME_STATUS_THERMAL_SHUTDOWN_MASK) >>
         frame_status_shifts::FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT);
-}
-
-std::vector<LidarScan::ts_t> LidarScan::timestamps() const {
-    std::vector<LidarScan::ts_t> res;
-    res.reserve(headers.size());
-    for (const auto& h : headers) res.push_back(h.timestamp);
-    return res;
-}
-
-LidarScan::BlockHeader& LidarScan::header(size_t m_id) {
-    return headers.at(m_id);
-}
-
-const LidarScan::BlockHeader& LidarScan::header(size_t m_id) const {
-    return headers.at(m_id);
 }
 
 template <typename T,
@@ -231,12 +213,6 @@ bool LidarScan::complete(sensor::ColumnWindow window) const {
                    .unaryExpr([](uint32_t s) { return s & 0x01; })
                    .isConstant(0x01);
     }
-}
-
-bool operator==(const LidarScan::BlockHeader& a,
-                const LidarScan::BlockHeader& b) {
-    return a.timestamp == b.timestamp && a.encoder == b.encoder &&
-           a.status == b.status;
 }
 
 bool operator==(const LidarScan& a, const LidarScan& b) {
@@ -420,9 +396,6 @@ void zero_header_cols(LidarScan& ls, std::ptrdiff_t start, std::ptrdiff_t end) {
     ls.timestamp().segment(start, end - start).setZero();
     ls.measurement_id().segment(start, end - start).setZero();
     ls.status().segment(start, end - start).setZero();
-
-    // zero deprecated header blocks
-    for (auto m_id = start; m_id < end; m_id++) ls.header(m_id) = {};
 }
 
 /*
@@ -585,7 +558,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
         const std::chrono::nanoseconds ts(pf.col_timestamp(col_buf));
-        const uint32_t encoder = pf.col_encoder(col_buf);
         const uint32_t status = pf.col_status(col_buf);
         const bool valid = (status & 0x01);
 
@@ -619,9 +591,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
             zero_header_cols(ls, next_valid_m_id, m_id);
             next_valid_m_id = m_id + 1;
         }
-
-        // old header API; will be removed in a future release
-        ls.header(m_id) = {ts, encoder, status};
 
         // write new header values
         ls.timestamp()[m_id] = ts.count();

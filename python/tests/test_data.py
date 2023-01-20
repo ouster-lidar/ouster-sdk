@@ -170,15 +170,9 @@ def test_scan_writeable() -> None:
 
     ls.status[-1] = 0xffff
     assert ls.status[-1] == 0xffff
-    assert ls.header(client.ColHeader.STATUS)[-1] == 0xffff
-
-    ls.header(client.ColHeader.STATUS)[-2] = 0xffff
-    assert ls.status[-2] == 0xffff
-    assert ls.header(client.ColHeader.STATUS)[-2] == 0xffff
 
     ls.status[:] = 0x1
     assert np.all(ls.status == 0x1)
-    assert np.all(ls.header(client.ColHeader.STATUS) == 0x1)
 
 
 def test_scan_from_native() -> None:

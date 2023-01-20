@@ -84,8 +84,6 @@ TEST(LidarScan, EmptyConstructorInit) {
 
     EXPECT_EQ(scan.frame_id, -1);
 
-    EXPECT_EQ(scan.headers.size(), 0u);
-
     EXPECT_EQ(scan.end() - scan.begin(), 0);
 
     zero_check_fields(scan);

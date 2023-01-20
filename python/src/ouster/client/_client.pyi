@@ -575,7 +575,6 @@ class Version:
 
 
 class LidarScan:
-    N_FIELDS: ClassVar[int]
 
     frame_id: int
     frame_status: int
@@ -606,9 +605,6 @@ class LidarScan:
         ...
 
     def shot_limiting(self) -> int:
-        ...
-
-    def header(self, header: ColHeader) -> ndarray:
         ...
 
     def field(self, field: ChanField) -> ndarray:

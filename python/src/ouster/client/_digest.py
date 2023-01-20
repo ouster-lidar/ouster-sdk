@@ -42,7 +42,10 @@ class FieldDigest:
 
     def check(self, other: 'FieldDigest'):
         for k, v in sorted(self.hashes.items()):
-            assert other.hashes.get(k) == v, f"Match failure key: {k}"
+            # TODO - remove when remove deprecated 'ENCODER_COUNT'
+            # TODO (cnt)  from packet parsing and from digest test data
+            if k != 'ENCODER_COUNT':
+                assert other.hashes.get(k) == v, f"Match failure key: {k}"
 
     @classmethod
     def from_packet(cls, packet: LidarPacket) -> 'FieldDigest':
@@ -72,10 +75,6 @@ class FieldDigest:
         hashes['TIMESTAMP'] = _md5(ls.timestamp.astype(np.uint64))
         hashes['STATUS'] = _md5(ls.status.astype(np.uint64))
         hashes['MEASUREMENT_ID'] = _md5(ls.measurement_id.astype(np.uint16))
-
-        # deprecated, zeroed out for non-legacy UDP profiles
-        hashes['ENCODER_COUNT'] = _md5(
-            ls.header(ColHeader.ENCODER_COUNT).astype(np.uint64))
 
         hashes.update({c.name: _md5(ls.field(c)) for c in ls.fields})
 
