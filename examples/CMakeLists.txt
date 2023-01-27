@@ -1,6 +1,9 @@
 add_executable(client_example client_example.cpp)
 target_link_libraries(client_example PRIVATE OusterSDK::ouster_client)
 
+add_executable(mtp_client_example mtp_client_example.cpp)
+target_link_libraries(mtp_client_example PRIVATE OusterSDK::ouster_client)
+
 add_executable(config_example config_example.cpp)
 target_link_libraries(config_example PRIVATE OusterSDK::ouster_client)
 

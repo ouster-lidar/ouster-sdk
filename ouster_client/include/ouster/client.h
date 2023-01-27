@@ -97,6 +97,30 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
                                     int timeout_sec = 60);
+
+/**
+ * [BETA] Connect to and configure the sensor and start listening for data via
+ * multicast.
+ *
+ * @param[in] hostname hostname or ip of the sensor.
+ * @param[in] config sensor config to set on sensor.
+ * @param[in] mtp_dest_host multicast ip address where the sensor should send
+ * data.
+ * @param[in] main a flag that indicates this is the main connection to the
+ * sensor in an multicast setup.
+ * @param[in] timeout_sec how long to wait for the sensor to initialize.
+ *
+ * @return pointer owning the resources associated with the connection.
+ *
+ * @remarks when main flag is set the config object will be used to configure
+ * the sensor, otherwise only the port values within the config object will be
+ * used and the rest will be ignored.
+ */
+std::shared_ptr<client> mtp_init_client(const std::string& hostname,
+                                        const sensor_config& config,
+                                        const std::string& mtp_dest_host,
+                                        bool main, int timeout_sec = 60);
+
 /** @}*/
 
 /**
@@ -212,6 +236,15 @@ int get_lidar_port(client& cli);
  * @return the port number.
  */
 int get_imu_port(client& cli);
+
+/**
+ * Check if ip address in multicast range.
+ *
+ * @param[in] addr ip address to test.
+ *
+ * @return true if addr is in multicast range.
+ */
+bool in_multicast(const std::string& addr);
 
 }  // namespace sensor
 }  // namespace ouster
