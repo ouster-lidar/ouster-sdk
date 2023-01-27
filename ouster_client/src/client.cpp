@@ -154,6 +154,91 @@ SOCKET udp_data_socket(int port) {
     return SOCKET_ERROR;
 }
 
+
+SOCKET mtp_data_socket(int port, const std::string& mtp_group = "",
+                       const std::string& udp_dest_host = "") {
+    struct addrinfo hints, *info_start, *ai;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    auto port_s = std::to_string(port);
+
+    int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
+    if (ret != 0) {
+        std::cerr << "udp getaddrinfo(): " << gai_strerror(ret) << std::endl;
+        return SOCKET_ERROR;
+    }
+    if (info_start == NULL) {
+        std::cerr << "udp getaddrinfo: empty result" << std::endl;
+        return SOCKET_ERROR;
+    }
+
+    for (auto preferred_af : {AF_INET}) { // TODO test with AF_INET6
+        for (ai = info_start; ai != NULL; ai = ai->ai_next) {
+            if (ai->ai_family != preferred_af) continue;
+
+            // choose first addrinfo where bind() succeeds
+            SOCKET sock_fd = 
+                socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+            if (!impl::socket_valid(sock_fd)) {
+                logger().warn("mtp socket(): {}", impl::socket_get_error());
+                continue;
+            }
+
+            int off = 0;
+            if (impl::socket_set_reuse(sock_fd)) {
+                logger().warn("mtp socket_set_reuse(): {}",
+                              impl::socket_get_error());
+            }
+
+            if (::bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
+                logger().warn("mtp bind(): {}", impl::socket_get_error());
+                impl::socket_close(sock_fd);                
+                continue;
+            }
+
+            // bind() succeeded; join to multicast group on with preferred address
+            // connect only if addresses are not empty
+            if (!mtp_group.empty() && !mtp_group.empty()) {
+                ip_mreq mreq;
+                mreq.imr_multiaddr.s_addr = inet_addr(mtp_group.c_str());
+                mreq.imr_interface.s_addr = inet_addr(udp_dest_host.c_str());
+                if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq,
+                            sizeof(mreq))) {
+                    logger().warn("mtp setsockopt(): {}", impl::socket_get_error());
+                    impl::socket_close(sock_fd);
+                    continue;
+                }
+            }
+
+            // join to multicast group succeeded; set some options and return
+            if (impl::socket_set_non_blocking(sock_fd)) {
+                logger().warn("mtp fcntl(): {}", impl::socket_get_error());
+                impl::socket_close(sock_fd);
+                continue;
+            }
+
+            if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
+                           sizeof(RCVBUF_SIZE))) {
+                logger().warn("mtp setsockopt(): {}", impl::socket_get_error());
+                impl::socket_close(sock_fd);
+                continue;
+            }
+
+            freeaddrinfo(info_start);
+            return sock_fd;
+        }
+    }
+
+    // could not bind() a MTP server socket
+    freeaddrinfo(info_start);
+    logger().error("failed to bind mtp socket");
+    return SOCKET_ERROR;
+}
+
 Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname);
     auto timeout_time =
@@ -378,6 +463,56 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     }
 
     return cli;
+}
+
+std::shared_ptr<client> init_client(const std::string& hostname,
+                                    const std::string& mtp_group,
+                                    const std::string& udp_dest_host,
+                                    lidar_mode ld_mode = MODE_UNSPEC,
+                                    timestamp_mode ts_mode = TIME_FROM_UNSPEC,
+                                    int lidar_port = 0, int imu_port = 0,
+                                    int timeout_sec = 60) {
+
+    logger().info("initializing sensor: {} with ports: {}/{}, multicast group: {}",
+                  hostname, lidar_port, imu_port, mtp_group);
+
+    auto cli = std::make_shared<client>();
+    cli->hostname = hostname;
+
+    cli->lidar_fd = mtp_data_socket(lidar_port, mtp_group, udp_dest_host);
+    cli->imu_fd = mtp_data_socket(imu_port); // no need to join multicast group
+
+    if (!impl::socket_valid(cli->lidar_fd) || !impl::socket_valid(cli->imu_fd))
+        return std::shared_ptr<client>();
+
+    lidar_port = get_sock_port(cli->lidar_fd);
+    imu_port = get_sock_port(cli->imu_fd);
+
+    try {
+        sensor::sensor_config config;
+        uint8_t config_flags = 0;
+        config.mtp_group = mtp_group;
+        config.udp_dest = udp_dest_host;        
+        if (ld_mode) config.ld_mode = ld_mode;
+        if (ts_mode) config.ts_mode = ts_mode;
+        if (lidar_port) config.udp_port_lidar = lidar_port;
+        if (imu_port) config.udp_port_imu = imu_port;
+        config.operating_mode = OPERATING_NORMAL;
+        set_config(hostname, config, config_flags);
+
+        // will block until no longer INITIALIZING
+        cli->meta = collect_metadata(hostname, timeout_sec);
+        // check for sensor error states
+        auto status = cli->meta["sensor_info"]["status"].asString();
+        if (status == "ERROR" || status == "UNCONFIGURED")
+            return std::shared_ptr<client>();
+    } catch (const std::runtime_error& e) {
+        // log error message
+        logger().error("init_client(): {}", e.what());
+        return std::shared_ptr<client>();
+    }
+
+    return cli;   
 }
 
 client_state poll_client(const client& c, const int timeout_sec) {

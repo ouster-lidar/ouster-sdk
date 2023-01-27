@@ -97,6 +97,31 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
                                     int timeout_sec = 60);
+
+/**
+ * Connect to and configure the sensor and start listening for data.
+ *
+ * @param[in] hostname hostname or ip of the sensor.
+ * @param[in] mtp_group multicast ip address where the sensor should send data.
+ * @param[in] udp_dest_host ip address of host interface that should recieve multicast data.
+ * @param[in] ld_mode The lidar mode to use.
+ * @param[in] ts_mode The timestamp mode to use.
+ * @param[in] lidar_port port on which the sensor will send lidar data. When
+ * using zero the method will automatically acquire and assign any free port.
+ * @param[in] imu_port port on which the sensor will send imu data. When
+ * using zero the method will automatically acquire and assign any free port.
+ * @param[in] timeout_sec how long to wait for the sensor to initialize.
+ *
+ * @return pointer owning the resources associated with the connection.
+ */
+std::shared_ptr<client> init_client(const std::string& hostname,
+                                    const std::string& mtp_group,
+                                    const std::string& udp_dest_host,
+                                    lidar_mode ld_mode = MODE_UNSPEC,
+                                    timestamp_mode ts_mode = TIME_FROM_UNSPEC,
+                                    int lidar_port = 0, int imu_port = 0,
+                                    int timeout_sec = 60);
+
 /** @}*/
 
 /**
