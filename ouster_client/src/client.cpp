@@ -168,11 +168,11 @@ SOCKET mtp_data_socket(int port, const std::string& mtp_group = "",
 
     int ret = getaddrinfo(NULL, port_s.c_str(), &hints, &info_start);
     if (ret != 0) {
-        std::cerr << "udp getaddrinfo(): " << gai_strerror(ret) << std::endl;
+        logger().error("mtp getaddrinfo(): {}", gai_strerror(ret));
         return SOCKET_ERROR;
     }
     if (info_start == NULL) {
-        std::cerr << "udp getaddrinfo: empty result" << std::endl;
+        logger().error("mtp getaddrinfo(): empty result");
         return SOCKET_ERROR;
     }
 
@@ -188,7 +188,6 @@ SOCKET mtp_data_socket(int port, const std::string& mtp_group = "",
                 continue;
             }
 
-            int off = 0;
             if (impl::socket_set_reuse(sock_fd)) {
                 logger().warn("mtp socket_set_reuse(): {}",
                               impl::socket_get_error());
@@ -468,10 +467,9 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& mtp_group,
                                     const std::string& udp_dest_host,
-                                    lidar_mode ld_mode = MODE_UNSPEC,
-                                    timestamp_mode ts_mode = TIME_FROM_UNSPEC,
-                                    int lidar_port = 0, int imu_port = 0,
-                                    int timeout_sec = 60) {
+                                    lidar_mode ld_mode, timestamp_mode ts_mode,
+                                    int lidar_port, int imu_port,
+                                    int timeout_sec) {
 
     logger().info("initializing sensor: {} with ports: {}/{}, multicast group: {}",
                   hostname, lidar_port, imu_port, mtp_group);
