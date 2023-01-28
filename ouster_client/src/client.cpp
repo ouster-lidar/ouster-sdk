@@ -155,8 +155,8 @@ SOCKET udp_data_socket(int port) {
 }
 
 
-SOCKET mtp_data_socket(int port, const std::string& mtp_group = "",
-                       const std::string& udp_dest_host = "") {
+SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
+                       const std::string& mtp_dest_host = "") {
     struct addrinfo hints, *info_start, *ai;
 
     memset(&hints, 0, sizeof hints);
@@ -201,10 +201,10 @@ SOCKET mtp_data_socket(int port, const std::string& mtp_group = "",
 
             // bind() succeeded; join to multicast group on with preferred address
             // connect only if addresses are not empty
-            if (!mtp_group.empty() && !mtp_group.empty()) {
+            if (!udp_dest_host.empty() && !mtp_dest_host.empty()) {
                 ip_mreq mreq;
-                mreq.imr_multiaddr.s_addr = inet_addr(mtp_group.c_str());
-                mreq.imr_interface.s_addr = inet_addr(udp_dest_host.c_str());
+                mreq.imr_multiaddr.s_addr = inet_addr(udp_dest_host.c_str());
+                mreq.imr_interface.s_addr = inet_addr(mtp_dest_host.c_str());
                 if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq,
                             sizeof(mreq))) {
                     logger().warn("mtp setsockopt(): {}", impl::socket_get_error());
@@ -464,20 +464,20 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     return cli;
 }
 
-std::shared_ptr<client> init_client(const std::string& hostname,
-                                    const std::string& mtp_group,
+std::shared_ptr<client> init_client(const std::string& hostname,                                    
                                     const std::string& udp_dest_host,
+                                    const std::string& mtp_dest_host,
                                     lidar_mode ld_mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
                                     int timeout_sec) {
 
     logger().info("initializing sensor: {} with ports: {}/{}, multicast group: {}",
-                  hostname, lidar_port, imu_port, mtp_group);
+                  hostname, lidar_port, imu_port, udp_dest_host);
 
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
 
-    cli->lidar_fd = mtp_data_socket(lidar_port, mtp_group, udp_dest_host);
+    cli->lidar_fd = mtp_data_socket(lidar_port, udp_dest_host, mtp_dest_host);
     cli->imu_fd = mtp_data_socket(imu_port); // no need to join multicast group
 
     if (!impl::socket_valid(cli->lidar_fd) || !impl::socket_valid(cli->imu_fd))
@@ -489,7 +489,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     try {
         sensor::sensor_config config;
         uint8_t config_flags = 0;
-        config.mtp_group = mtp_group;
+        config.mtp_dest = mtp_dest_host;
         config.udp_dest = udp_dest_host;        
         if (ld_mode) config.ld_mode = ld_mode;
         if (ts_mode) config.ts_mode = ts_mode;

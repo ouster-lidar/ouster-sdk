@@ -114,9 +114,9 @@ std::shared_ptr<client> init_client(const std::string& hostname,
  *
  * @return pointer owning the resources associated with the connection.
  */
-std::shared_ptr<client> init_client(const std::string& hostname,
-                                    const std::string& mtp_group,
+std::shared_ptr<client> init_client(const std::string& hostname,                                    
                                     const std::string& udp_dest_host,
+                                    const std::string& mtp_dest_host,
                                     lidar_mode ld_mode = MODE_UNSPEC,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
