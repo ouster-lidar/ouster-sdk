@@ -10,45 +10,32 @@
 #include <cstring>
 #include <exception>
 #include <memory>
-#include <thread>
 #include <ostream>
+#include <thread>
+#include <algorithm>
+#include <vector>
 
-#include <tins/tins.h>
-
-using namespace Tins;
+#include "ouster/pcap.h"
 
 namespace ouster {
 namespace sensor_utils {
 
-static constexpr int PROTOCOL_UDP = 17;
-
 struct record_handle {
-    std::string dst_ip;     ///< The destination IP
-    std::string src_ip;     ///< The source IP
-    std::string file_name;  ///< The filename of the output pcap file
-    size_t frag_size;       ///< The size of the udp data fragmentation
-    std::unique_ptr<Tins::PacketWriter>
-        pcap_file_writer;  ///< Object that holds the pcap writer
-    bool use_sll_encapsulation;
-    record_handle() {}
+    record_handle(const std::string& path,
+                  PcapWriter::PacketEncapsulation encap, uint16_t frag_size)
+        : writer{std::make_unique<PcapWriter>(path, encap, frag_size)} {}
 
-    ~record_handle() {}
+    std::unique_ptr<PcapWriter> writer;
 };
 
 struct playback_handle {
-    std::string file_name;  ///< The filename of the pcap file
+    std::string path;
+    std::unique_ptr<PcapReader> pcap;
 
-    std::unique_ptr<Tins::FileSniffer>
-        pcap_reader;  ///< Object that holds the unified pcap reader
-    Tins::Packet packet_cache;
-    bool have_new_packet;
+    playback_handle(const std::string& path)
+        : path{path}, pcap{std::make_unique<PcapReader>(path)} {}
 
-    Tins::IPv4Reassembler
-        reassembler;  ///< The reassembler mainly for lidar packets
-
-    int encap_proto;
-
-    playback_handle() {}
+    playback_handle& operator=(playback_handle&& other) = default;
 
     ~playback_handle() {}
 };
@@ -72,290 +59,297 @@ std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
     return stream_in;
 }
 
+bool stream_key::operator==(const struct stream_key &other) const {
+    return dst_ip == other.dst_ip &&
+        src_ip == other.src_ip &&
+        src_port == other.src_port &&
+        dst_port == other.dst_port;
+}
+
+bool stream_key::operator!=(const struct stream_key &other) const {
+    return !(*this == other);
+}
+
+bool stream_key::operator<=(const struct stream_key &other) const {
+    return dst_ip <= other.dst_ip &&
+        src_ip <= other.src_ip &&
+        dst_port <= other.dst_port &&
+        src_port <= other.src_port;
+}
+
+bool stream_key::operator>=(const struct stream_key &other) const {
+    return dst_ip >= other.dst_ip &&
+        src_ip >= other.src_ip &&
+        dst_port >= other.dst_port &&
+        src_port >= other.src_port;
+}
+
+bool stream_key::operator<(const struct stream_key &other) const {
+    return *this <= other && *this != other;
+}
+
+bool stream_key::operator>(const struct stream_key &other) const {
+    return *this >= other && *this != other;
+}
+
+std::ostream& operator<<(std::ostream& stream_in, const stream_key& data) {
+    stream_in << "Source IP: \"" << data.src_ip << "\" " << std::endl;
+    stream_in << "Destination IP: \"" << data.dst_ip << "\" " << std::endl;
+    stream_in << "Source Port: " << data.src_port << std::endl;
+    stream_in << "Destination Port: " << data.dst_port << std::endl;
+    return stream_in;
+}
+
+template <typename T>
+void print_stream_data_vector(std::ostream& stream_in, std::string title,
+    const std::vector<T> &data, int how_many_to_print = 10) 
+{
+    int vec_size = data.size();
+    stream_in << title << ": [";
+    if(vec_size > 0) {
+        stream_in << data.at(0);
+        for(int i = 1; i < std::min(how_many_to_print, vec_size); i++) {
+            stream_in << ", " << data.at(i);
+        }
+        stream_in << "]";
+        if(vec_size > how_many_to_print) {
+            stream_in << " ... " << (vec_size - how_many_to_print) << " More";
+        }
+        
+    } else {
+        stream_in << "NO ITEMS]";
+    }
+    stream_in << std::endl;
+}
+
+std::ostream& operator<<(std::ostream& stream_in, const stream_data& data) {
+    stream_in << "Count: " << data.count << " ";
+
+    print_stream_data_vector<uint64_t>(stream_in, "Payload Sizes", 
+        data.payload_size);
+    print_stream_data_vector<uint64_t>(stream_in, "Fragments In Packet", 
+        data.fragments_in_packet);
+    print_stream_data_vector<uint8_t>(stream_in, "IP Versions", 
+        data.ip_version);
+
+    return stream_in;
+}
+
+std::ostream& operator<<(std::ostream& stream_in, const stream_info& data)
+{
+    stream_in << "Total Packets: " << data.total_packets << std::endl;
+    stream_in << "Encapsultion Protocol: " << data.encapsulation_protocol << std::endl;
+    stream_in << "Max Timestamp: " << data.timestamp_max.count() << std::endl;
+    stream_in << "Min Timestamp: " << data.timestamp_min.count() << std::endl;
+
+    for(auto it : data.udp_streams)
+    {
+        stream_in << "Key: " << std::endl << it.first << std::endl;
+        stream_in << "Data: " << std::endl << it.second << std::endl;
+        stream_in << std::endl << std::endl << std::endl;
+    }
+    return stream_in;
+}
+
 std::shared_ptr<playback_handle> replay_initialize(
-    const std::string& file_name) {
-    std::shared_ptr<playback_handle> result =
-        std::make_shared<playback_handle>();
-
-    result->file_name = file_name;
-    result->pcap_reader.reset(new FileSniffer(file_name));
-    result->encap_proto = result->pcap_reader->link_type();
-
-    return result;
+    const std::string& file_path) {
+    return std::make_shared<playback_handle>(file_path);
 }
 
-void replay_uninitialize(playback_handle& handle) {
-    handle.pcap_reader.reset();
-}
+void replay_uninitialize(playback_handle& handle) { handle.pcap.reset(); }
 
 void replay_reset(playback_handle& handle) {
-    handle.pcap_reader.reset(new FileSniffer(handle.file_name));
+    handle = playback_handle{handle.path};
 }
 
 bool next_packet_info(playback_handle& handle, packet_info& info) {
-    bool result = false;
-
-    bool reassm = false;
-    int reassm_packets = 0;
-    while (!reassm) {
-        reassm_packets++;
-        handle.packet_cache = handle.pcap_reader->next_packet();
-        if (handle.packet_cache) {
-            auto pdu = handle.packet_cache.pdu();
-            if (pdu) {
-                IP* ip = pdu->find_pdu<IP>();
-                IPv6* ipv6 = pdu->find_pdu<IPv6>();
-                // Using short circuiting here
-                if ((ip && ip->protocol() == PROTOCOL_UDP) ||
-                    (ipv6 && ipv6->next_header() == PROTOCOL_UDP)) {
-                    // reassm is also used in the while loop
-                    reassm = (handle.reassembler.process(*pdu) !=
-                              IPv4Reassembler::FRAGMENTED);
-                    if (reassm) {
-                        info.fragments_in_packet = reassm_packets;
-                        reassm_packets = 0;
-
-                        info.encapsulation_protocol = handle.encap_proto;
-                        result = true;
-                        UDP* udp = pdu->find_pdu<UDP>();
-                        auto raw = pdu->find_pdu<RawPDU>();
-                        if (ip) {
-                            info.dst_ip = ip->dst_addr().to_string();
-                            info.src_ip = ip->src_addr().to_string();
-                            info.ip_version = 4;
-                            info.network_protocol = ip->protocol();
-                        } else if (ipv6) {
-                            info.dst_ip = ipv6->dst_addr().to_string();
-                            info.src_ip = ipv6->src_addr().to_string();
-                            info.ip_version = 6;
-                            info.network_protocol = ipv6->next_header();
-                        } else {
-                            throw std::runtime_error(
-                                "Malformed packet: no IP headers");
-                        }
-                        // find_pdu<UDP> will only return NULL when the ipv4
-                        // reassembly succeeds on an ipv6 packet, leading to a
-                        // malformed packet
-                        if (udp != NULL) {
-                            info.dst_port = udp->dport();
-                            info.src_port = udp->sport();
-                            info.payload_size = raw->payload_size();
-                            info.timestamp = handle.packet_cache.timestamp();
-                            handle.have_new_packet = true;
-                        } else {
-                            throw std::runtime_error(
-                                "Malformed Packet: No UDP Detected");
-                        }
-                    }
-                }
-            }
-        } else {
-            reassm = true;
-        }
+    if (handle.pcap && handle.pcap->next_packet()) {
+        info = handle.pcap->current_info();
+        return true;
     }
-
-    return result;
+    return false;
 }
 
 size_t read_packet(playback_handle& handle, uint8_t* buf, size_t buffer_size) {
-    size_t result = 0;
-    if (handle.have_new_packet) {
-        result = true;
-        auto pdu = handle.packet_cache.pdu();
-        auto raw = pdu->find_pdu<RawPDU>();
-        if (raw) {
-            auto temp = (uint32_t*)&(raw->payload()[0]);
-            auto size = raw->payload_size();
-            if (size > buffer_size) {
-                throw std::invalid_argument(
-                    "Incompatible argument: expected a bytearray of "
-                    "size > " +
-                    std::to_string(size));
-            } else {
-                handle.have_new_packet = false;
-                result = size;
-                memcpy(buf, temp, size);
-            }
-        }
-    }
-
-    return result;
-}
-
-std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
-                                                 const std::string& src_ip,
-                                                 const std::string& dst_ip,
-                                                 int frag_size,
-                                                 bool use_sll_encapsulation) {
-    std::shared_ptr<record_handle> result = std::make_shared<record_handle>();
-
-    result->file_name = file_name;
-    result->frag_size = frag_size;
-    result->src_ip = src_ip;
-    result->dst_ip = dst_ip;
-    result->use_sll_encapsulation = use_sll_encapsulation;
-    if (use_sll_encapsulation) {
-        result->pcap_file_writer.reset(
-            new PacketWriter(file_name, DataLinkType<SLL>()));
+    size_t len = handle.pcap->current_length();
+    if (len <= buffer_size) {
+        std::memcpy(buf, handle.pcap->current_data(), len);
     } else {
-        result->pcap_file_writer.reset(
-            new PacketWriter(file_name, DataLinkType<EthernetII>()));
+        len = 0;
     }
-    return result;
+    return len;
 }
 
 std::shared_ptr<record_handle> record_initialize(const std::string& file_name,
                                                  int frag_size,
                                                  bool use_sll_encapsulation) {
-    return record_initialize(file_name, "", "", frag_size,
-                             use_sll_encapsulation);
+    PcapWriter::PacketEncapsulation encap =
+        (use_sll_encapsulation) ? PcapWriter::PacketEncapsulation::SLL
+                                : PcapWriter::PacketEncapsulation::ETHERNET;
+    return std::make_shared<record_handle>(file_name, encap, frag_size);
 }
 
-void record_uninitialize(record_handle& handle) {
-    if (handle.pcap_file_writer) handle.pcap_file_writer.reset();
-}
+void record_uninitialize(record_handle& handle) { handle.writer.reset(); }
 
-/*
- * This was a tricky problem, due to how the ip stack is set up.
- *
- * SLL Container -> ipv4 container -> udp container -> raw data
- *
- * The ipv4 container is what does the packet fragmentation and reassembly.
- * With each full packet we need the ipv4 reassembly to contain only one udp
-header.
-* Due to this, we have to only create one official Tins::UDP packet.
-* We grab the packet id from this packet
-* Every packet after the first Tins::UDP packet needs to just be a ipv4
-* container with a manually set packet type of UDP(dec 17)
-* Every packet but the final packet needs to have the current flag set:
-*
-* pkt.flags(IP::MORE_FRAGMENTS);
-*
-*/
-
-// SLL is the linux pcap capture container
-std::vector<IP> buffer_to_frag_packets(record_handle& handle,
-                                       const std::string& src_ip,
-                                       const std::string& dst_ip, int src_port,
-                                       int dst_port, const uint8_t* buf,
-                                       size_t buf_size) {
-    std::vector<IP> result;
-
-    int id = -1;   ///< This variable is used to track the packet id,
-                   ///< if -1 then create a packet and grab its id
-    size_t i = 0;  ///< Loop variable that contains current bytes processed
-    size_t offset_modifier =
-        0;  ///< This variable contains the offset to account
-            ///< for the udp packet with the fragment_offset
-
-    while (i < buf_size) {
-        // First create the ipv4 packet
-        IP pkt = IP(dst_ip, src_ip);
-
-        // Now figure out the size of the packet payload
-        size_t size = std::min(handle.frag_size, (buf_size - i));
-
-        // Correctly set this packets fragment offset
-        // NOTE: for some reason this has to be divided by 8
-        // NOTE: Reference here
-        // http://libtins.github.io/docs/latest/dd/d3f/classTins_1_1IP.html#a32a6bf84af274748317ef61ce1a91ce5
-        pkt.fragment_offset((i + offset_modifier) / 8);
-
-        // If this is the first packet
-        if (i == 0) {
-            // Fully create the libtins udp structure
-            auto udp = UDP(dst_port, src_port);
-
-            if ((size + udp.header_size()) > handle.frag_size) {
-                // Due to the udp header being included in the payload,
-                // we need to subtract its size from the payload
-                size -= udp.header_size();
-                // Set the "There is more data to follow" flag
-                pkt.flags(IP::MORE_FRAGMENTS);
-            }
-
-            // Pack what we can minus the udp header size into the payload
-            pkt /= udp / RawPDU((uint8_t*)(buf + i), size);
-
-            // Manually set the ipv4 protocol to UDP
-            pkt.protocol(PROTOCOL_UDP);
-
-            // Set the fragment_offset offset with the size of the udp header
-            offset_modifier = udp.header_size();
-        }
-        // This is a packet in the middle or end
-        else {
-            // Set the "There is more data to follow" flag
-            if (i + size < buf_size) pkt.flags(IP::MORE_FRAGMENTS);
-
-            // Manually set the ipv4 protocol to UDP
-            pkt.protocol(PROTOCOL_UDP);
-
-            // Pack what we can into the payload
-            pkt /= RawPDU((uint8_t*)(buf + i), size);
-        }
-
-        // Here is where we correctly set the packet id
-        if (id < 0) {
-            // If this is the first packet, set id to the generated packet id
-            id = pkt.id();
-        } else {
-            // If this is a following packet, use the first packets id
-            pkt.id(id);
-        }
-
-        // Add the resulting packet to the vector
-        result.push_back(pkt);
-
-        // Increment the current byte being processed
-        i += size;
-    }
-
-    return result;
-}
-
-void record_packet(record_handle& handle, int src_port, int dst_port,
-                   const uint8_t* buf, size_t buffer_size,
-                   uint64_t microsecond_timestamp) {
-    record_packet(handle, handle.src_ip, handle.dst_ip, src_port, dst_port, buf,
-                  buffer_size, microsecond_timestamp);
+void record_packet(record_handle& handle, const packet_info& info,
+                   const uint8_t* buf, size_t buffer_size) {
+    handle.writer->write_packet(buf, buffer_size, info);
 }
 
 void record_packet(record_handle& handle, const std::string& src_ip,
                    const std::string& dst_ip, int src_port, int dst_port,
                    const uint8_t* buf, size_t buffer_size,
                    uint64_t microsecond_timestamp) {
-    // ensure IPs were provided
-    if (dst_ip.empty() || src_ip.empty()) {
-        throw std::invalid_argument("Invalid addresses provided for packet");
-    }
-    // For each of the packets write it to the pcap file
-    for (auto item : buffer_to_frag_packets(handle, src_ip, dst_ip, src_port,
-                                            dst_port, buf, buffer_size)) {
-        Packet packet;
-        PDU* pdu;
-        if (handle.use_sll_encapsulation) {
-            pdu = new SLL();
-        } else {
-            pdu = new EthernetII();
+    if (!handle.writer) return;
+
+    auto time = packet_info::ts{microsecond_timestamp};
+    handle.writer->write_packet(buf, buffer_size, src_ip, dst_ip, src_port,
+                                dst_port, time);
+}
+
+std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process) 
+{
+    std::shared_ptr<stream_info> result = std::make_shared<stream_info>();
+    auto handle = replay_initialize(file);
+
+    if(handle) {
+        int i = 0;
+        packet_info info;
+        bool first = true;
+        while(((packets_to_process <= 0) || (i < packets_to_process)) 
+              && next_packet_info(*handle, info))
+        {
+            if(first) 
+            {
+                first = false;
+                result->encapsulation_protocol = info.encapsulation_protocol;
+                result->timestamp_max = info.timestamp;
+                result->timestamp_min = info.timestamp;
+            }
+            result->total_packets++;
+
+            if(info.timestamp < result->timestamp_min) result->timestamp_min = info.timestamp;
+            if(info.timestamp > result->timestamp_max) result->timestamp_max = info.timestamp;
+
+            stream_key key;
+
+            key.dst_ip = info.dst_ip;
+            key.src_ip = info.src_ip;
+            key.dst_port = info.dst_port;
+            key.src_port = info.src_port;
+
+            auto& stream = result->udp_streams[key];
+            stream.count++;
+            stream.payload_size.push_back(info.payload_size);
+            stream.fragments_in_packet.push_back(info.fragments_in_packet);
+            stream.ip_version.push_back(info.ip_version);
         }
-        *pdu /= item;
-        // Nasty libtins bug that causes write to fail
-        // https://www.gitmemory.com/issue/mfontanini/libtins/348/488141933
-        auto _ = pdu->serialize();
-        /*
-         * The next block is due to the fact that the previous serialize does
-         * not treat the udp packet as if it were decodable. Manually tell
-         * libtins to go in and serialize the udp packet as well
-         */
-        if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
-            _ = pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
-        }
-        packet = Packet(
-            *pdu, Timestamp(std::chrono::microseconds{microsecond_timestamp}));
-        handle.pcap_file_writer->write(packet);
-        delete pdu;
+
+        replay_uninitialize(*handle);
     }
+
+    return result;
+}
+
+/*
+          The current approach is roughly: 1) treat each unique source / destination
+    port and IP as a single logical 'stream' of data, 2) filter out streams that
+    don't match the expected packet sizes specified by the metadata, 3) pair up
+    any potential lidar/imu streams that appear to be coming from the same
+    sensor (have matching source IPs) 4) and finally, filter out the pairs that
+    contradict any ports specified in the metadata.
+*/
+std::vector<guessed_ports> guess_ports(stream_info &info, 
+                                       int lidar_packet_sizes, int imu_packet_sizes,
+                                       int lidar_spec, int imu_spec)
+{
+    std::vector<guessed_ports> temp_result;
+    std::vector<guessed_ports> lidar_result;
+    std::vector<guessed_ports> imu_result;
+    std::vector<guessed_ports> result;
+
+    std::vector<stream_key> lidar_keys;
+    std::vector<stream_key> imu_keys;
+    std::vector<std::string> lidar_src_ips;
+    std::vector<std::string> imu_src_ips;
+
+    for(auto it : info.udp_streams)
+    {
+        if(std::find(it.second.payload_size.begin(), 
+                     it.second.payload_size.end(),
+                     lidar_packet_sizes) != it.second.payload_size.end())
+        {
+            lidar_keys.push_back(it.first);
+            lidar_src_ips.push_back(it.first.src_ip);
+        }
+        if(std::find(it.second.payload_size.begin(), 
+                     it.second.payload_size.end(),
+                     imu_packet_sizes) != it.second.payload_size.end())
+        {
+            imu_keys.push_back(it.first);
+            imu_src_ips.push_back(it.first.src_ip);
+        }
+    }
+
+    // Full join on lidar and IMU
+    for(auto lidar_it : lidar_keys)
+    {
+        bool imu_processed = false;
+        for(auto imu_it : imu_keys)
+        {
+            // This case runs for when we have both Lidar and IMU data
+            if(lidar_it.src_ip == imu_it.src_ip)
+            {
+                guessed_ports ports;
+                ports.lidar = lidar_it.dst_port;
+                ports.imu = imu_it.dst_port;
+                imu_processed = true;
+                temp_result.push_back(ports);
+            }
+            // This case runs if we just have an IMU unmatched with the lidar
+            else if(std::find(lidar_src_ips.begin(), lidar_src_ips.end(), 
+                              imu_it.src_ip) == lidar_src_ips.end())
+            {
+                guessed_ports ports;
+                ports.lidar = 0;
+                ports.imu = imu_it.dst_port;
+                imu_result.push_back(ports);
+            }
+        }
+        // This case runs if we just have Lidar data
+        if(!imu_processed && std::find(imu_src_ips.begin(), imu_src_ips.end(), 
+                                       lidar_it.src_ip) == imu_src_ips.end())
+        {
+            guessed_ports ports;
+            ports.lidar = lidar_it.dst_port;
+            ports.imu = 0;
+            lidar_result.push_back(ports);
+        }
+    }
+    // This case runs if we just have IMU data
+    if(lidar_keys.empty())
+    {
+        for(auto imu_it : imu_keys)
+        {
+            guessed_ports ports;
+            ports.lidar = 0;
+            ports.imu = imu_it.dst_port;
+            imu_result.push_back(ports);
+        }
+    }
+
+    temp_result.insert(temp_result.end(), lidar_result.begin(), lidar_result.end());
+    temp_result.insert(temp_result.end(), imu_result.begin(), imu_result.end());
+    
+    for(auto it : temp_result) 
+    {
+        if(((it.lidar == lidar_spec) || (lidar_spec == 0) || (it.lidar == 0)) &&
+             ((it.imu == imu_spec) || (imu_spec == 0) || (it.imu == 0)))
+        {
+            result.push_back(it);
+        }
+    }
+    return result;
 }
 
 }  // namespace sensor_utils

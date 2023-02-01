@@ -82,10 +82,6 @@ ouster_client
 * allow vcpkg configuration via environment variables
 * fix a bug in sensor_config struct equality comparison operator
 
-ouster_pcap
------------
-* fix incorrect encapsulation protocol being reported in ``packet_info``
-
 ouster_viz
 ----------
 * clean up GL context logic to avoid errors on window/intel UHD graphics

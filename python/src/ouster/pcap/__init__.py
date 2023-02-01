@@ -10,4 +10,3 @@ from .pcap import record
 from .pcap import _guess_ports
 from .pcap import _packet_info_stream
 from .pcap import _replay
-from .pcap import _stream_info

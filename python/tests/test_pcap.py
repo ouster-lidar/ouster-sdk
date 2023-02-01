@@ -161,21 +161,19 @@ def test_pcap_info_10(fake_meta, fake_pcap_path) -> None:
     """Test reading packet headers with private helper."""
     ports: Dict[int, int] = defaultdict(int)
     sizes: Dict[int, int] = defaultdict(int)
-    encap: Dict[int, int] = defaultdict(int)
-    net: Dict[int, int] = defaultdict(int)
     af: Dict[int, int] = defaultdict(int)
+    info = pcap._packet_info_stream(fake_pcap_path, 0)
 
-    for item in pcap._packet_info_stream(fake_pcap_path):
-        ports[item.dst_port] += 1
-        sizes[item.payload_size] += 1
-        encap[item.encapsulation_protocol] += 1
-        net[item.network_protocol] += 1
-        af[item.ip_version] += 1
+    for key in info.udp_streams:
+        ports[key.dst_port] += 1
+        for size in info.udp_streams[key].payload_size:
+            sizes[size] += 1
+        for net_ver in info.udp_streams[key].ip_version:
+            af[net_ver] += 1
 
-    assert ports[7502] + ports[7503] == 10
+    assert ports[7502] + ports[7503] == 2
     assert sizes[6464] + sizes[48] == 10
-    assert encap == {ETH_PROTO: 10}
-    assert net == {UDP_PROTO: 10}
+    assert info.encapsulation_protocol == ETH_PROTO
     assert af == {4: 10}
 
 
@@ -183,13 +181,11 @@ def test_pcap_info_10(fake_meta, fake_pcap_path) -> None:
 @pytest.mark.parametrize('use_sll', [True, False])
 def test_pcap_info_encap_proto(fake_pcap_path, use_sll) -> None:
     """Test reading/writing pcaps with different encapsulation."""
-    encap: Dict[int, int] = defaultdict(int)
 
-    for item in pcap._packet_info_stream(fake_pcap_path):
-        encap[item.encapsulation_protocol] += 1
+    info = pcap._packet_info_stream(fake_pcap_path, 0)
 
     proto = SLL_PROTO if use_sll else ETH_PROTO
-    assert encap == {proto: 10}
+    assert info.encapsulation_protocol == proto
 
 
 def test_pcap_reset(fake_pcap) -> None:
@@ -326,11 +322,12 @@ def test_lidar_guess_ambiguous(fake_meta, tmpdir) -> None:
     file_path = path.join(tmpdir, "pcap_test.pcap")
 
     buf_size = 2**16
-    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1",
-                                     buf_size)
+    handle = _pcap.record_initialize(file_path, buf_size)
     try:
-        _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
-        _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7502, 7502,
+                            (next(packets))._data, 1)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7503, 7503,
+                            (next(packets))._data, 2)
     finally:
         _pcap.record_uninitialize(handle)
 
@@ -346,11 +343,12 @@ def test_imu_guess_ambiguous(fake_meta, tmpdir) -> None:
     file_path = path.join(tmpdir, "pcap_test.pcap")
 
     buf_size = 2**16
-    handle = _pcap.record_initialize(file_path, "127.0.0.1", "127.0.0.1",
-                                     buf_size)
+    handle = _pcap.record_initialize(file_path, buf_size)
     try:
-        _pcap.record_packet(handle, 7502, 7502, (next(packets))._data, 1)
-        _pcap.record_packet(handle, 7503, 7503, (next(packets))._data, 2)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7502, 7502,
+                            (next(packets))._data, 1)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7503, 7503,
+                            (next(packets))._data, 2)
     finally:
         _pcap.record_uninitialize(handle)
 
@@ -358,6 +356,32 @@ def test_imu_guess_ambiguous(fake_meta, tmpdir) -> None:
     assert len(source._guesses) > 1
     assert source.ports == (0, 7503)  # arbitrary but deterministic
     assert len(list(source)) == 1
+
+
+def test_lidar_imu_guess_ambiguous(fake_meta, tmpdir) -> None:
+    """Test reading when there's more than one possible lidar port."""
+    lidar_packets = fake_packets(fake_meta, n_lidar=2)
+    imu_packets = fake_packets(fake_meta, n_imu=2)
+    file_path = path.join(tmpdir, "pcap_test.pcap")
+
+    buf_size = 2**16
+    handle = _pcap.record_initialize(file_path, buf_size)
+    try:
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7502, 7502,
+                            (next(lidar_packets))._data, 1)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7503, 7503,
+                            (next(lidar_packets))._data, 2)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7504, 7504,
+                            (next(imu_packets))._data, 3)
+        _pcap.record_packet(handle, "127.0.0.1", "127.0.0.1", 7505, 7505,
+                            (next(imu_packets))._data, 4)
+    finally:
+        _pcap.record_uninitialize(handle)
+
+    source = pcap.Pcap(file_path, fake_meta)
+    assert len(source._guesses) > 1
+    assert source.ports == (7503, 7505)  # arbitrary but deterministic
+    assert len(list(source)) == 2
 
 
 def test_pcap_read_real(real_pcap: pcap.Pcap) -> None:
@@ -388,3 +412,45 @@ def test_pcap_guess_real(meta: client.SensorInfo, real_pcap_path: str) -> None:
 
     real_pcap = pcap.Pcap(real_pcap_path, meta_no_ports)
     assert real_pcap.ports[0] == 7502
+
+
+def test_record_packet_info(fake_meta, tmpdir) -> None:
+    """Test recording packets using the packet_info interface."""
+    packets = fake_packets(fake_meta, 10, 10)
+    file_path = path.join(tmpdir, "pcap_test.pcap")
+
+    buf_size = 2**16
+    record = _pcap.record_initialize(file_path, buf_size)
+    i = 0
+    for next_packet in packets:
+        info = _pcap.packet_info()
+
+        info.dst_ip = "127.0.0." + str(i)
+        info.src_ip = "127.0.1." + str(i)
+
+        info.dst_port = 10000 + i
+        info.src_port = 20000 + i
+
+        info.timestamp = i
+
+        _pcap.record_packet(record, info, next_packet._data)
+
+        i += 1
+
+    _pcap.record_uninitialize(record)
+
+    playback = _pcap.replay_initialize(file_path)
+    info = _pcap.packet_info()
+    i = 0
+    while _pcap.next_packet_info(playback, info):
+        assert (info.dst_ip == "127.0.0." + str(i))
+        assert (info.src_ip == "127.0.1." + str(i))
+
+        assert (info.dst_port == 10000 + i)
+        assert (info.src_port == 20000 + i)
+
+        assert (info.timestamp == i)
+
+        i += 1
+
+    _pcap.replay_uninitialize(playback)

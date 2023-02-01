@@ -4,6 +4,10 @@ FROM ${BASE}
 ENV DEBIAN_FRONTEND=noninteractive \
     BUILD_HOME=/var/lib/build
 
+# Set up non-root build user and environment
+ARG BUILD_UID=1000
+ARG BUILD_GID=${BUILD_UID}
+
 # Install build dependencies
 RUN set -xe \
 && apt-get update \
@@ -27,6 +31,7 @@ RUN set -xe \
  pybind11-dev \
 # Install any additional available cpython versions for testing
  'python3.(7|8|9|10)-dev' \
+ wget \
 && rm -rf /var/lib/apt/lists
 
 # Set up non-root build user and environment

@@ -10,7 +10,7 @@ include(VcpkgEnv)
 project(ouster_example VERSION 20230114)
 
 # generate version header
-set(OusterSDK_VERSION_STRING 0.7.1)
+set(OusterSDK_VERSION_STRING 0.7.2)
 include(VersionGen)
 
 # ==== Options ====
@@ -89,7 +89,6 @@ set(CPACK_DEBIAN_PACKAGE_NAME ouster-sdk)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS
   "libjsoncpp-dev, libeigen3-dev, libtins-dev, libglfw3-dev, libglew-dev, libspdlog-dev")
-
 include(CPack)
 
 # ==== Install ====
