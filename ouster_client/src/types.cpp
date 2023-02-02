@@ -365,6 +365,18 @@ bool operator==(const AzimuthWindow& lhs, const AzimuthWindow& rhs) {
     return (lhs.first == rhs.first && lhs.second == rhs.second);
 }
 
+void check_signal_multiplier(const double signal_multiplier) {
+    std::string signal_multiplier_error =
+        "Provided signal multiplier is invalid: " +
+        std::to_string(signal_multiplier) +
+        " cannot be converted to one of [0.25, 0.5, 1, 2, 3]";
+
+    std::set<double> valid_values = {0.25, 0.5, 1, 2, 3};
+    if (!valid_values.count(signal_multiplier)) {
+        throw std::runtime_error(signal_multiplier_error);
+    }
+}
+
 sensor_config parse_config(const Json::Value& root) {
     sensor_config config{};
 
@@ -385,8 +397,11 @@ sensor_config parse_config(const Json::Value& root) {
             std::make_pair(root["azimuth_window"][0].asInt(),
                            root["azimuth_window"][1].asInt());
 
-    if (!root["signal_multiplier"].empty())
-        config.signal_multiplier = root["signal_multiplier"].asInt();
+    if (!root["signal_multiplier"].empty()) {
+        double signal_multiplier = root["signal_multiplier"].asDouble();
+        check_signal_multiplier(signal_multiplier);
+        config.signal_multiplier = signal_multiplier;
+    }
 
     if (!root["operating_mode"].empty()) {
         auto operating_mode =
@@ -718,7 +733,19 @@ std::string to_string(const sensor_config& config) {
     }
 
     if (config.signal_multiplier) {
-        root["signal_multiplier"] = config.signal_multiplier.value();
+        check_signal_multiplier(config.signal_multiplier.value());
+        if ((config.signal_multiplier == 0.25) ||
+            (config.signal_multiplier == 0.5)) {
+            root["signal_multiplier"] = config.signal_multiplier.value();
+        } else {
+            // jsoncpp < 1.7.7 strips 0s off of exact representation
+            // so 2.0 becomes 2
+            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3 Fix was:
+            // https://github.com/open-source-parsers/jsoncpp/pull/547
+            // Work around by always casting to int before writing out to json
+            int signal_multiplier_int = int(config.signal_multiplier.value());
+            root["signal_multiplier"] = signal_multiplier_int;
+        }
     }
 
     if (config.sync_pulse_out_angle) {

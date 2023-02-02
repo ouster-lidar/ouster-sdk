@@ -114,7 +114,7 @@ struct sensor_config {
     optional<MultipurposeIOMode> multipurpose_io_mode;
 
     optional<AzimuthWindow> azimuth_window;
-    optional<int> signal_multiplier;
+    optional<double> signal_multiplier;
 
     optional<Polarity> nmea_in_polarity;
     optional<bool> nmea_ignore_valid_char;
@@ -271,6 +271,13 @@ optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
  * @return string representation of the azimuth window
  */
 std::string to_string(AzimuthWindow azimuth_window);
+
+/**
+ * Determine validity of provided signal multiplier value
+ *
+ * @param[in] signal_multiplier Signal multiplier value.
+ */
+void check_signal_multiplier(const double signal_multiplier);
 
 /**
  * Parse metadata text blob from the sensor into a sensor_info struct.
