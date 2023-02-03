@@ -25,7 +25,7 @@ from ouster import client
 from ouster.client import _utils
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
-                   spezia_palette)
+                   spezia_palette, grey_palette, viridis_palette, magma_palette)
 
 logger = logging.getLogger("viz-logger")
 
@@ -720,5 +720,6 @@ class SimpleViz:
 
 __all__ = [
     'PointViz', 'Cloud', 'Image', 'Cuboid', 'Label', 'WindowCtx', 'Camera',
-    'TargetDisplay', 'add_default_controls', 'calref_palette', 'spezia_palette'
+    'TargetDisplay', 'add_default_controls', 'calref_palette', 'spezia_palette',
+    'grey_palette', 'viridis_palette', 'magma_palette'
 ]

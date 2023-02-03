@@ -22,7 +22,6 @@ import tempfile
 from string import Template
 import shutil
 import os
-import sys
 import re
 
 project = 'Ouster Sensor SDK'
@@ -40,12 +39,14 @@ if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
     raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 print(OUSTER_SDK_PATH)
 
+
 # https://packaging.python.org/en/latest/guides/single-sourcing-package-version/
 def parse_version():
     with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
         content = listfile.read()
-        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-\)]+)(-(.*))?\)", content)
+        groups = re.search(r"set\(OusterSDK_VERSION_STRING ([^-\)]+)(-(.*))?\)", content)
         return groups.group(1) + (groups.group(3) or "")
+
 
 # The full version, including alpha/beta/rc tags
 version = release = parse_version()
@@ -203,13 +204,14 @@ def do_doxygen_generate_xml(app):
         app.config["breathe_projects"].update(
             {name: os.path.join(doxygen_output_dir, path)})
 
+
 def do_doxygen_temp_cleanup(app, exception):
     if "temp_doxy_file_dir" in app.config:
         shutil.rmtree(app.config["temp_doxy_file_dir"])
+
 
 def setup(app):
 
     # Add a hook for generating doxygen xml and cleaning up
     app.connect("builder-inited", do_doxygen_generate_xml)
     app.connect("build-finished", do_doxygen_temp_cleanup)
-

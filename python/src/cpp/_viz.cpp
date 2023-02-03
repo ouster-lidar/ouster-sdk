@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
@@ -33,12 +34,14 @@ template <typename T, int F>
 static void check_array(const py::array_t<T, F>& array, size_t size = 0,
                         size_t dims = 0, char storage = 'X') {
     if (size && static_cast<size_t>(array.size()) != size)
-        throw std::invalid_argument("Expected array of size: " +
-                                    std::to_string(size));
+        throw std::invalid_argument(
+            "Expected array of size: " + std::to_string(size) +
+            ", but got: " + std::to_string(array.size()));
 
     if (dims && static_cast<size_t>(array.ndim()) != dims)
-        throw std::invalid_argument("Expected an array of dimension: " +
-                                    std::to_string(dims));
+        throw std::invalid_argument(
+            "Expected an array of dimension: " + std::to_string(dims) +
+            ", but got: " + std::to_string(array.ndim()));
 
     if (storage == 'F' && !(array.flags() & py::array::f_style))
         throw std::invalid_argument("Expected a F_CONTIGUOUS array");
@@ -374,16 +377,70 @@ PYBIND11_PLUGIN(_viz) {
         .def(
             "set_key",
             [](viz::Cloud& self, py::array_t<float> key) {
-                check_array(key, self.get_size(), 0, 'C');
-                self.set_key(key.data());
+                // TODO[pb]: Error reporting and error messages needs
+                // improvements (across all _viz module in general)
+                check_array(key, 0, 0, 'C');
+                if (static_cast<size_t>(key.size()) == self.get_size()) {
+                    if (key.ndim() == 1 || key.ndim() == 2 || key.ndim() == 3) {
+                        self.set_key(key.data());
+                        return;
+                    }
+                }
+
+                check_array(key, 0, 3, 'C');
+
+                if (key.shape(2) == 3) {
+                    check_array(key, self.get_size() * 3);
+                    self.set_key_rgb(key.data());
+                    return;
+                }
+
+                if (key.shape(2) == 4) {
+                    check_array(key, self.get_size() * 4);
+                    self.set_key_rgba(key.data());
+                    return;
+                }
+
+                throw std::invalid_argument(
+                    "Expected array with size of 3rd dimension: 1,3 or "
+                    "4, but got: " +
+                    std::to_string(key.shape(2)));
             },
             py::arg("key"),
             R"(
                  Set the key values, used for colouring.
 
+                 Number of elements defines the type of Cloud coloration:
+                 - num elements == cloud.get_size(): MONO with palette
+                 - 3 dimensions with the last dimesion: 3 - RGB, 4 - RGBA,
+                   no palette used
+
                  Args:
                     key: array of at least as many elements as there are
                          points, preferably normalized between 0 and 1
+             )")
+        .def(
+            "set_key_alpha",
+            [](viz::Cloud& self, py::array_t<float> key_alpha) {
+                check_array(key_alpha, self.get_size(), 0, 'C');
+                self.set_key_alpha(key_alpha.data());
+            },
+            py::arg("key_alpha"),
+            R"(
+                 Set the key alpha values, color is not changed.
+
+                 The set alpha will be applied for these forms of
+                 CLoud.set_key() calls:
+
+                 - MONO (palette used to pick a color)
+                 - RGB
+
+                 However when set_key() is used with RGBA the previously set alpha
+                 with set_key_alpha() will be overwritten with the new values.
+
+                 Args:
+                    key_alpha: array of at least as many elements as there are
+                         points, normalized between 0 and 1
              )")
         .def(
             "set_mask",
@@ -487,17 +544,13 @@ PYBIND11_PLUGIN(_viz) {
         .def("__copy__",
              [](const viz::Cloud& self) { return viz::Cloud{self}; })
         .def("__deepcopy__",
-             [](viz::Cloud& self, py::dict) {
-                 return viz::Cloud{self};
-             })
-        .def("__repr__",
-             [](const viz::Cloud& self) {
-                 std::stringstream ss;
-                 ss << "<ouster.viz.Cloud " << &self
-                    << ", pts = " << self.get_size()
-                    << ", cols = " << self.get_cols() << ">";
-                 return ss.str();
-             });
+             [](viz::Cloud& self, py::dict) { return viz::Cloud{self}; })
+        .def("__repr__", [](const viz::Cloud& self) {
+            std::stringstream ss;
+            ss << "<ouster.viz.Cloud " << &self << ", pts = " << self.get_size()
+               << ", cols = " << self.get_cols() << ">";
+            return ss.str();
+        });
 
     py::class_<viz::Image, std::shared_ptr<viz::Image>>(
         m, "Image", "Manages the state of an image.")
@@ -505,14 +558,46 @@ PYBIND11_PLUGIN(_viz) {
         .def(
             "set_image",
             [](viz::Image& self, py::array_t<float> image) {
-                check_array(image, 0, 2, 'C');
-                self.set_image(image.shape(1), image.shape(0), image.data());
+                check_array(image, 0, 0, 'C');  // check for C-CONTIGUOUS
+                if (image.ndim() == 2 ||
+                    (image.ndim() == 3 && image.shape(2) == 1)) {
+                    // MONO
+                    self.set_image(image.shape(1), image.shape(0),
+                                   image.data());
+                    return;
+                }
+
+                check_array(image, 0, 3);
+
+                if (image.shape(2) == 3) {
+                    // RGB
+                    self.set_image_rgb(image.shape(1), image.shape(0),
+                                       image.data());
+                    return;
+                }
+
+                if (image.shape(2) == 4) {
+                    // RGBA
+                    self.set_image_rgba(image.shape(1), image.shape(0),
+                                        image.data());
+                    return;
+                }
+
+                throw std::invalid_argument(
+                    "Expected array with size of 3rd dimension: 1,3 or "
+                    "4, but got: " +
+                    std::to_string(image.shape(2)));
             },
             py::arg("image"), R"(
-                 Set the image data.
+                 Set the image data, MONO or RGB/RGBA depending on dimensions.
+
+                 Color palette is applied for MONO mode if set_palette() was
+                 used to set the palette, otherwise MONO mode makes the
+                 monochrome image.
 
                  Args:
-                    image: 2D array with image data
+                    image: 2D array of floats for a monochrome image or 3D array
+                           with RGB or RGBA components for color image.
              )")
         .def(
             "set_mask",
@@ -559,7 +644,24 @@ PYBIND11_PLUGIN(_viz) {
               ``-1`` - image moved to the left for the 1/2 of a horizontal viewport
               ``+1`` - image moved to the right for the 1/2 of a horizontal viewport
               ``+0.5`` - image moved to the right for the 1/4 of a horizontal viewport
-        )");
+        )")
+        .def(
+            "set_palette",
+            [](viz::Image& self, py::array_t<float> buf) {
+                check_array(buf, 0, 2, 'C');
+                if (buf.shape(1) != 3)
+                    throw std::invalid_argument("Expected a N x 3 array");
+                self.set_palette(buf.data(), buf.shape(0));
+            },
+            py::arg("palette"),
+            R"(
+            Set the image color palette.
+
+            Args:
+                palette: the new palette to use, must have size 3*palette_size
+        )")
+        .def("clear_palette", &viz::Image::clear_palette,
+             "Removes the image palette and use keys as grey color in MONO");
 
     py::class_<viz::Cuboid, std::shared_ptr<viz::Cuboid>>(
         m, "Cuboid", "Manages the state of a single cuboid.")
@@ -711,6 +813,15 @@ PYBIND11_PLUGIN(_viz) {
     m.attr("calref_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::calref_n), static_cast<pysize>(3)},
         &viz::calref_palette[0][0]};
+    m.attr("grey_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::grey_n), static_cast<pysize>(3)},
+        &viz::grey_palette[0][0]};
+    m.attr("viridis_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::viridis_n), static_cast<pysize>(3)},
+        &viz::viridis_palette[0][0]};
+    m.attr("magma_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::magma_n), static_cast<pysize>(3)},
+        &viz::magma_palette[0][0]};
 
     m.attr("__version__") = ouster::SDK_VERSION;
 

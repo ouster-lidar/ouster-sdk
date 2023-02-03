@@ -41,6 +41,7 @@ class GLCloud {
     GLuint transform_texture;
     GLuint palette_texture;
     GLfloat point_size;
+    bool mono;
 
     Eigen::Matrix4d map_pose;
     Eigen::Matrix4f extrinsic;

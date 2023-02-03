@@ -26,7 +26,7 @@ if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
 def parse_version():
     with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
         content = listfile.read()
-        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-\)]+)(.(.*))?\)", content)
+        groups = re.search(r"set\(OusterSDK_VERSION_STRING ([^-\)]+)(.(.*))?\)", content)
         return groups.group(1) + (groups.group(3) or "")
 
 

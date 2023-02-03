@@ -5,7 +5,7 @@ All rights reserved.
 Type annotations for viz python bindings.
 """
 
-from typing import Callable, overload, Tuple, Callable, List
+from typing import Callable, overload, Tuple, List
 
 import numpy as np
 
@@ -13,7 +13,9 @@ from ..client import SensorInfo
 
 calref_palette: np.ndarray
 spezia_palette: np.ndarray
-
+grey_palette: np.ndarray
+viridis_palette: np.ndarray
+magma_palette: np.ndarray
 
 class WindowCtx:
 
@@ -136,6 +138,9 @@ class Cloud:
     def set_key(self, key: np.ndarray) -> None:
         ...
 
+    def set_key_alpha(self, rgb: np.ndarray) -> None:
+        ...
+
     def set_mask(self, mask: np.ndarray) -> None:
         ...
 
@@ -178,6 +183,12 @@ class Image:
         ...
 
     def set_hshift(self, hshift: float) -> None:
+        ...
+
+    def set_palette(self, palette: np.ndarray) -> None:
+        ...
+
+    def clear_palette(self) -> None:
         ...
 
 
