@@ -235,7 +235,7 @@ struct sensor_config {
      * Multiplier for signal strength of sensor. See the sensor docs for more
      * details on usage.
      */
-    optional<int> signal_multiplier;
+    optional<double> signal_multiplier;
 
     /**
      * The nmea polarity for the sensor to use.
@@ -602,6 +602,13 @@ std::string to_string(UDPProfileIMU profile);
  * @return imu profile corresponding to the string, or nullopt on error.
  */
 optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
+
+/**
+ * Determine validity of provided signal multiplier value
+ *
+ * @param[in] signal_multiplier Signal multiplier value.
+ */
+void check_signal_multiplier(const double signal_multiplier);
 
 /**
  * Parse metadata text blob from the sensor into a sensor_info struct.
