@@ -225,8 +225,6 @@ using ColumnWindow = std::pair<int, int>;
 struct sensor_config {
     optional<std::string> udp_dest;  ///< The destination address for the
                                      ///< lidar/imu data to be sent to
-    optional<std::string> mtp_dest;  ///< The host IP address of interfece for the
-                                     ///< lidar/imu data to be sent to via multicast
     optional<int> udp_port_lidar;    ///< The destination port for the lidar
                                      ///< data to be sent to
     optional<int> udp_port_imu;      ///< The destination port for the imu data

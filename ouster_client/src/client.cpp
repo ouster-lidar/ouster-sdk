@@ -489,7 +489,6 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     try {
         sensor::sensor_config config;
         uint8_t config_flags = 0;
-        config.mtp_dest = mtp_dest_host;
         config.udp_dest = udp_dest_host;        
         if (ld_mode) config.ld_mode = ld_mode;
         if (ts_mode) config.ts_mode = ts_mode;
