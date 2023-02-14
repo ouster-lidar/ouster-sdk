@@ -218,9 +218,12 @@ bool get_config(const std::string& hostname, sensor_config& config,
 enum config_flags : uint8_t {
     CONFIG_UDP_DEST_AUTO    = (1 << 0), ///< Set udp_dest automatically
     CONFIG_PERSIST          = (1 << 1), ///< Make configuration persistent
-    CONFIG_FORCE_REINIT     = (1 << 2)  ///< Forces the sensor to re-init during
+    CONFIG_FORCE_REINIT     = (1 << 2), ///< Forces the sensor to re-init during
                                         ///< set_config even when config params
                                         ///< have not changed
+    CONFIG_GET_ACTIVE       = (1 << 3)  ///< Get active config from sensor  
+                                        ///< without forcing any changes, need
+                                        ///< for mtp slave clients
 };
 // clang-format on
 
