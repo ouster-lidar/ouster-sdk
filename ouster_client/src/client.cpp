@@ -464,34 +464,38 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     return cli;
 }
 
-std::shared_ptr<client> init_client(const std::string& hostname,                                    
-                                    const std::string& udp_dest_host,
-                                    const std::string& mtp_dest_host,
-                                    lidar_mode ld_mode, timestamp_mode ts_mode,
-                                    int lidar_port, int imu_port,
-                                    int timeout_sec) {
-
-    logger().info("initializing sensor: {} with ports: {}/{}, multicast group: {}",
-                  hostname, lidar_port, imu_port, udp_dest_host);
+std::shared_ptr<client> mtp_init_client(const std::string& hostname,
+                                        const sensor_config& config,
+                                        const std::string& mtp_dest_host) {
 
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
 
-    cli->lidar_fd = mtp_data_socket(lidar_port, udp_dest_host, mtp_dest_host);
-    cli->imu_fd = mtp_data_socket(imu_port); // no need to join multicast group
+    cli->lidar_fd = mtp_data_socket(config.udp_port_lidar.value(), config.udp_dest.value(), mtp_dest_host);
+    cli->imu_fd = mtp_data_socket(config.udp_port_imu.value()); // no need to join multicast group second time
 
     if (!impl::socket_valid(cli->lidar_fd) || !impl::socket_valid(cli->imu_fd))
         return std::shared_ptr<client>();
+    
+    return cli;
+}
 
-    lidar_port = get_sock_port(cli->lidar_fd);
-    imu_port = get_sock_port(cli->imu_fd);
+std::shared_ptr<client> mtp_init_client_main(const std::string& hostname,                                    
+                                             sensor_config& config,
+                                             const std::string& mtp_dest_host,
+                                             int timeout_sec) {
+
+    logger().info("initializing sensor: {} with ports: {}/{}, multicast group: {}",
+                  hostname, config.udp_port_lidar.value(), config.udp_port_imu.value(),
+                  config.udp_dest.value());
+
+    auto cli = mtp_init_client(hostname, config, mtp_dest_host);
+
+    auto lidar_port = get_sock_port(cli->lidar_fd);
+    auto imu_port = get_sock_port(cli->imu_fd);
 
     try {
-        sensor::sensor_config config;
-        uint8_t config_flags = 0;
-        config.udp_dest = udp_dest_host;        
-        if (ld_mode) config.ld_mode = ld_mode;
-        if (ts_mode) config.ts_mode = ts_mode;
+        uint8_t config_flags = 0;        
         if (lidar_port) config.udp_port_lidar = lidar_port;
         if (imu_port) config.udp_port_imu = imu_port;
         config.operating_mode = OPERATING_NORMAL;
@@ -510,6 +514,15 @@ std::shared_ptr<client> init_client(const std::string& hostname,
     }
 
     return cli;   
+}
+
+std::shared_ptr<client> mtp_init_client_slave(const std::string& hostname,                                    
+                                              const sensor_config& config,
+                                              const std::string& mtp_dest_host) {
+    logger().info("initialize client without sensor configuring: {} with ports: {}/{},"
+                  "multicast group: {}", hostname, config.udp_port_lidar.value(),
+                  config.udp_port_imu.value(), config.udp_dest.value());
+    return mtp_init_client(hostname, config, mtp_dest_host);
 }
 
 client_state poll_client(const client& c, const int timeout_sec) {
