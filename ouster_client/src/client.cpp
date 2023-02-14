@@ -201,10 +201,15 @@ SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
 
             // bind() succeeded; join to multicast group on with preferred address
             // connect only if addresses are not empty
-            if (!udp_dest_host.empty() && !mtp_dest_host.empty()) {
+            if (!udp_dest_host.empty()) {
                 ip_mreq mreq;
                 mreq.imr_multiaddr.s_addr = inet_addr(udp_dest_host.c_str());
-                mreq.imr_interface.s_addr = inet_addr(mtp_dest_host.c_str());
+                if (!mtp_dest_host.empty()) {
+                    mreq.imr_interface.s_addr = inet_addr(mtp_dest_host.c_str());
+                } else {
+                    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+                }
+
                 if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq,
                             sizeof(mreq))) {
                     logger().warn("mtp setsockopt(): {}", impl::socket_get_error());
@@ -582,6 +587,8 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
 int get_lidar_port(client& cli) { return get_sock_port(cli.lidar_fd); }
 
 int get_imu_port(client& cli) { return get_sock_port(cli.imu_fd); }
+
+bool in_multicast(const char* addr) { return IN_MULTICAST(ntohl(inet_addr(addr))); }
 
 /**
  * Return the socket file descriptor used to listen for lidar UDP data.

@@ -260,5 +260,14 @@ int get_lidar_port(client& cli);
  */
 int get_imu_port(client& cli);
 
+/**
+ * Check if ip address in multicast range.
+ *
+ * @param[in] addr ip address to test.
+ *
+ * @return true if addr is in multicast range.
+ */
+bool in_multicast(const char* addr);
+
 }  // namespace sensor
 }  // namespace ouster
