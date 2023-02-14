@@ -481,7 +481,7 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
 }
 
 std::shared_ptr<client> mtp_init_client_main(const std::string& hostname,                                    
-                                             sensor_config& config,
+                                             const sensor_config& config,
                                              const std::string& mtp_dest_host,
                                              int timeout_sec) {
 
@@ -494,12 +494,13 @@ std::shared_ptr<client> mtp_init_client_main(const std::string& hostname,
     auto lidar_port = get_sock_port(cli->lidar_fd);
     auto imu_port = get_sock_port(cli->imu_fd);
 
+    sensor_config config_copy{config};
     try {
         uint8_t config_flags = 0;        
-        if (lidar_port) config.udp_port_lidar = lidar_port;
-        if (imu_port) config.udp_port_imu = imu_port;
-        config.operating_mode = OPERATING_NORMAL;
-        set_config(hostname, config, config_flags);
+        if (lidar_port) config_copy.udp_port_lidar = lidar_port;
+        if (imu_port) config_copy.udp_port_imu = imu_port;
+        config_copy.operating_mode = OPERATING_NORMAL;
+        set_config(hostname, config_copy, config_flags);
 
         // will block until no longer INITIALIZING
         cli->meta = collect_metadata(hostname, timeout_sec);
