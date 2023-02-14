@@ -517,9 +517,9 @@ std::shared_ptr<client> mtp_init_client_main(const std::string& hostname,
     return cli;   
 }
 
-std::shared_ptr<client> mtp_init_client_slave(const std::string& hostname,                                    
-                                              const sensor_config& config,
-                                              const std::string& mtp_dest_host) {
+std::shared_ptr<client> mtp_init_client_secondary(const std::string& hostname,                                    
+                                                  const sensor_config& config,
+                                                  const std::string& mtp_dest_host) {
     logger().info("initialize client without sensor configuring: {} with ports: {}/{},"
                   "multicast group: {}", hostname, config.udp_port_lidar.value(),
                   config.udp_port_imu.value(), config.udp_dest.value());

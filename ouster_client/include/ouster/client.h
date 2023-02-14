@@ -137,9 +137,9 @@ std::shared_ptr<client> mtp_init_client_main(const std::string& hostname,
  *
  * @return pointer owning the resources associated with the connection.
  */
-std::shared_ptr<client> mtp_init_client_slave(const std::string& hostname,                                    
-                                              const sensor_config& config,
-                                              const std::string& mtp_dest_host = "");
+std::shared_ptr<client> mtp_init_client_secondary(const std::string& hostname,                                    
+                                                 const sensor_config& config,
+                                                 const std::string& mtp_dest_host = "");
 
 /** @}*/
 
