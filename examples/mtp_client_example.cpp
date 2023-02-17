@@ -1,3 +1,8 @@
+/**
+ * Copyright (c) 2023, Ouster, Inc.
+ * All rights reserved.
+ */
+
 #include <iostream>
 
 #include "ouster/client.h"
@@ -8,14 +13,13 @@ const size_t UDP_BUF_SIZE = 65536;
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "\n\nUsage: <sensor_hostname> <main secondary>"
+        std::cerr << "\n\nUsage: <sensor_hostname> <main|secondary>"
                   << std::endl;
 
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     const std::string sensor_hostname = argv[1];
-    // sensor::sensor_config config;
 
     bool main = false;
 
@@ -41,16 +45,10 @@ int main(int argc, char* argv[]) {
         std::cerr << "Not a multicast address" << std::endl;
         return -1;
     }
-    std::shared_ptr<ouster::sensor::client> cli;
-    if (main) {
-        // This assumes a change to subscribe to IPADDR_ANY if not specified.
-        // Othewise you need to specify your own IP address such as
-        // cli = sensor::mtp_init_client_main(sensor_hostname, config,
-        // "192.168.1.11");
-        cli = sensor::mtp_init_client_main(sensor_hostname, config);
-    } else {
-        cli = sensor::mtp_init_client_secondary(sensor_hostname, config);
-    }
+
+    std::shared_ptr<ouster::sensor::client> cli =
+        sensor::mtp_init_client(sensor_hostname, config, "", main);
+
     if (!cli) {
         std::cerr << "Failed to initialize sensor" << std::endl;
         return EXIT_FAILURE;
@@ -61,20 +59,23 @@ int main(int argc, char* argv[]) {
     sensor::packet_format pf = sensor::get_format(info);
     auto packet_buf = std::make_unique<uint8_t[]>(UDP_BUF_SIZE);
 
-    while (true) {
-        sensor::client_state st = sensor::poll_client(*cli);
-
-        if (st == sensor::TIMEOUT) {
+    bool done = false;
+    while (!done) {
+        sensor::client_state state = sensor::poll_client(*cli);
+        if (state == sensor::EXIT) {
+            std::cerr << "caught signal, exiting" << std::endl;
+            done = true;
+        }
+        if (state == sensor::TIMEOUT) {
             std::cerr << "Timed out" << std::endl;
             continue;
         }
-        if (st & sensor::LIDAR_DATA) {
+        if (state & sensor::LIDAR_DATA) {
             if (sensor::read_lidar_packet(*cli, packet_buf.get(), pf)) {
                 std::cerr << "Read Lidar Packet" << std::endl;
             }
         }
-
-        if (st & sensor::IMU_DATA) {
+        if (state & sensor::IMU_DATA) {
             if (sensor::read_imu_packet(*cli, packet_buf.get(), pf)) {
                 std::cerr << "Read IMU packet" << std::endl;
             }
