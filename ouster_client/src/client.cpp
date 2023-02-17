@@ -154,7 +154,6 @@ SOCKET udp_data_socket(int port) {
     return SOCKET_ERROR;
 }
 
-
 SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
                        const std::string& mtp_dest_host = "") {
     struct addrinfo hints, *info_start, *ai;
@@ -176,12 +175,12 @@ SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
         return SOCKET_ERROR;
     }
 
-    for (auto preferred_af : {AF_INET}) { // TODO test with AF_INET6
+    for (auto preferred_af : {AF_INET}) {  // TODO test with AF_INET6
         for (ai = info_start; ai != NULL; ai = ai->ai_next) {
             if (ai->ai_family != preferred_af) continue;
 
             // choose first addrinfo where bind() succeeds
-            SOCKET sock_fd = 
+            SOCKET sock_fd =
                 socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
             if (!impl::socket_valid(sock_fd)) {
                 logger().warn("mtp socket(): {}", impl::socket_get_error());
@@ -195,24 +194,26 @@ SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
 
             if (::bind(sock_fd, ai->ai_addr, (socklen_t)ai->ai_addrlen)) {
                 logger().warn("mtp bind(): {}", impl::socket_get_error());
-                impl::socket_close(sock_fd);                
+                impl::socket_close(sock_fd);
                 continue;
             }
 
-            // bind() succeeded; join to multicast group on with preferred address
-            // connect only if addresses are not empty
+            // bind() succeeded; join to multicast group on with preferred
+            // address connect only if addresses are not empty
             if (!udp_dest_host.empty()) {
                 ip_mreq mreq;
                 mreq.imr_multiaddr.s_addr = inet_addr(udp_dest_host.c_str());
                 if (!mtp_dest_host.empty()) {
-                    mreq.imr_interface.s_addr = inet_addr(mtp_dest_host.c_str());
+                    mreq.imr_interface.s_addr =
+                        inet_addr(mtp_dest_host.c_str());
                 } else {
                     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
                 }
 
-                if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq,
-                            sizeof(mreq))) {
-                    logger().warn("mtp setsockopt(): {}", impl::socket_get_error());
+                if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+                               (char*)&mreq, sizeof(mreq))) {
+                    logger().warn("mtp setsockopt(): {}",
+                                  impl::socket_get_error());
                     impl::socket_close(sock_fd);
                     continue;
                 }
