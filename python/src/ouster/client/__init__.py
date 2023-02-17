@@ -31,6 +31,7 @@ from .data import LidarPacket
 from .data import ColHeader
 from .data import XYZLut
 from .data import destagger
+from .data import PacketIdError
 
 from .core import ClientError
 from .core import ClientTimeout

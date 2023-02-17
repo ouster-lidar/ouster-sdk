@@ -10,7 +10,7 @@ from threading import Lock
 from typing import (Iterable, Iterator, Optional, Tuple)
 
 from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
-                           SensorInfo, _client)
+                           SensorInfo, _client, PacketIdError)
 from . import _pcap
 
 MTU_SIZE = 1500
@@ -45,7 +45,8 @@ class Pcap(PacketSource):
                  *,
                  rate: float = 0.0,
                  lidar_port: Optional[int] = None,
-                 imu_port: Optional[int] = None):
+                 imu_port: Optional[int] = None,
+                 _soft_id_check: bool = False):
         """Read a single sensor data stream from a packet capture.
 
         Packet captures can contain arbitrary network traffic or even multiple
@@ -71,6 +72,8 @@ class Pcap(PacketSource):
             rate: Output packets in real time, if non-zero
             lidar_port: Specify the destination port of lidar packets
             imu_port: Specify the destination port of imu packets
+            _soft_id_check: if True, don't skip lidar packets buffers on
+            init_id/sn mismatch
         """
 
         # prefer explicitly specified ports (can probably remove the args?)
@@ -81,6 +84,9 @@ class Pcap(PacketSource):
         self._metadata = copy(info)
         self._metadata.udp_port_lidar = lidar_port
         self._metadata.udp_port_imu = imu_port
+
+        self._soft_id_check = _soft_id_check
+        self._id_error_count = 0
 
         # sample pcap and attempt to find UDP ports consistent with metadata
         n_packets = 1000
@@ -128,15 +134,24 @@ class Pcap(PacketSource):
 
             try:
                 if (packet_info.dst_port == self._metadata.udp_port_lidar):
-                    yield LidarPacket(buf[0:n], self._metadata, timestamp)
+                    lp = LidarPacket(
+                        buf[0:n],
+                        self._metadata,
+                        timestamp,
+                        _raise_on_id_check=not self._soft_id_check)
+                    if lp.id_error:
+                        self._id_error_count += 1
+                    yield lp
                 elif (packet_info.dst_port == self._metadata.udp_port_imu):
                     yield ImuPacket(buf[0:n], self._metadata, timestamp)
+            except PacketIdError:
+                self._id_error_count += 1
             except ValueError:
-                # bad packet size or init_id here: this can happen when
+                # bad packet size: this can happen when
                 # packets are buffered by the OS, not necessarily an error
                 # same pass as in core.py
                 # TODO: introduce status for PacketSource to indicate frequency
-                # of bad packet size or init_id errors
+                # of bad packet size or init_id/sn errors
                 pass
 
     @property
@@ -162,6 +177,10 @@ class Pcap(PacketSource):
         """Check if source is closed. Thread-safe."""
         with self._lock:
             return self._handle is None
+
+    @property
+    def id_error_count(self) -> int:
+        return self._id_error_count
 
     def close(self) -> None:
         """Release resources. Thread-safe."""
