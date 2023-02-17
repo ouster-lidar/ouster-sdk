@@ -244,7 +244,7 @@ int get_imu_port(client& cli);
  *
  * @return true if addr is in multicast range.
  */
-bool in_multicast(const char* addr);
+bool in_multicast(const std::string& addr);
 
 }  // namespace sensor
 }  // namespace ouster

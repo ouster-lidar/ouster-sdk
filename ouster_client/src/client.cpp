@@ -576,7 +576,7 @@ int get_lidar_port(client& cli) { return get_sock_port(cli.lidar_fd); }
 
 int get_imu_port(client& cli) { return get_sock_port(cli.imu_fd); }
 
-bool in_multicast(const char* addr) { return IN_MULTICAST(ntohl(inet_addr(addr))); }
+bool in_multicast(const std::string& addr) { return IN_MULTICAST(ntohl(inet_addr(addr.c_str()))); }
 
 /**
  * Return the socket file descriptor used to listen for lidar UDP data.
