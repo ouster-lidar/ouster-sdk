@@ -99,19 +99,6 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     int timeout_sec = 60);
 
 /**
- * Connect to sensor and start listening for data via multicast.
- *
- * @param[in] hostname hostname or ip of the sensor. 
- * @param[in] config sensor config.
- * @param[in] mtp_dest_host multicast ip address where the sensor should send data.
- *
- * @return pointer owning the resources associated with the connection.
- */
-std::shared_ptr<client> mtp_init_client(const std::string& hostname,
-                                        const sensor_config& config,
-                                        const std::string& mtp_dest_host);
-
-/**
  * Connect to and configure the sensor and start listening for data via multicast.
  *
  * @param[in] hostname hostname or ip of the sensor. 
@@ -121,25 +108,11 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
  *
  * @return pointer owning the resources associated with the connection.
  */
-std::shared_ptr<client> mtp_init_client_main(const std::string& hostname,                                    
+std::shared_ptr<client> mtp_init_client(const std::string& hostname,                                    
                                              const sensor_config& config,
-                                             const std::string& mtp_dest_host = "",
+                                             const std::string& mtp_dest_host,
+                                             bool main,
                                              int timeout_sec = 60);
-
-
-/**
- * Listen for sensor data on the specified ports via multicast; do not configure the sensor.
- *
- * @param[in] hostname hostname or ip of the sensor. 
- * @param[in] config active sensor config from sensor.
- * @param[in] mtp_dest_host multicast ip address where the sensor should send data.
- * @param[in] timeout_sec how long to wait for the sensor to initialize.
- *
- * @return pointer owning the resources associated with the connection.
- */
-std::shared_ptr<client> mtp_init_client_secondary(const std::string& hostname,                                    
-                                                 const sensor_config& config,
-                                                 const std::string& mtp_dest_host = "");
 
 /** @}*/
 
@@ -218,12 +191,9 @@ bool get_config(const std::string& hostname, sensor_config& config,
 enum config_flags : uint8_t {
     CONFIG_UDP_DEST_AUTO    = (1 << 0), ///< Set udp_dest automatically
     CONFIG_PERSIST          = (1 << 1), ///< Make configuration persistent
-    CONFIG_FORCE_REINIT     = (1 << 2), ///< Forces the sensor to re-init during
+    CONFIG_FORCE_REINIT     = (1 << 2)  ///< Forces the sensor to re-init during
                                         ///< set_config even when config params
                                         ///< have not changed
-    CONFIG_GET_ACTIVE       = (1 << 3)  ///< Get active config from sensor  
-                                        ///< without forcing any changes, need
-                                        ///< for mtp slave clients
 };
 // clang-format on
 
