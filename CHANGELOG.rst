@@ -2,6 +2,14 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+ouster_client
+-------------
+- Added a new method ``mtp_init_client`` to init the client with multicast support (experimental).
+
+
 [20230114]
 ==========
 
