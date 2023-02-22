@@ -14,6 +14,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <functional>
 
 #include "ouster/pcap.h"
 
@@ -68,10 +69,16 @@ struct guessed_ports {
 std::ostream& operator<<(std::ostream& stream_in, const stream_key& data);
 
 struct stream_data {
-    uint64_t count;                            ///< Number of packets in a specified stream
-    std::vector<uint64_t> payload_size;        ///< Packet sizes detected in a specified stream
-    std::vector<uint64_t> fragments_in_packet; ///< Fragments detected in a specified stream
-    std::vector<uint8_t> ip_version;           ///< IP version detected in a specified stream
+    uint64_t count;                                   ///< Number of packets in a specified stream
+    std::map<uint64_t, uint64_t> payload_size_counts; ///< Packet sizes detected in a specified stream
+                                                      ///< Key: Packet Size
+                                                      ///< Value: Count of a specific packet size
+    std::map<uint64_t, uint64_t> fragment_counts;     ///< Fragments detected in a specified stream
+                                                      ///< Key: Number of fragments
+                                                      ///< Value: Count of a specific number of packets
+    std::map<uint64_t, uint64_t> ip_version_counts;   ///< IP version detected in a specified stream
+                                                      ///< Key: IP Version
+                                                      ///< Value: Count of the specific ip version
 };
 
 /**
@@ -217,6 +224,18 @@ void record_packet(record_handle& handle, const packet_info& info,
  */
 std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process=-1);
 
+/**
+ * Return the information about network streams in a pcap file.
+ *
+ * @param[in] file The pcap file to read.
+ * @param[in[ progress_callback A callback to invoke after each packet is scanned
+ * @param[in] packets_to_process Number of packets to process < 0 for all of them
+ *
+ * @return A pointer to the resulting stream_info
+ */
+std::shared_ptr<stream_info> get_stream_info(const std::string& file, 
+                                             std::function<void(uint64_t, uint64_t)> progress_callback, 
+                                             int packets_to_process=-1);
 /**
  * Return a guess of the correct ports located in a pcap file.
  *

@@ -29,6 +29,7 @@
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <stdio.h>
 
 #include <tins/tins.h>
 
@@ -46,6 +47,7 @@ struct pcap_impl {
     pcap_t* handle;
     std::unique_ptr<Tins::FileSniffer>
         pcap_reader;  ///< Object that holds the unified pcap reader
+    FILE *pcap_reader_internals;
     Tins::Packet packet_cache;
     Tins::IPv4Reassembler
         reassembler;  ///< The reassembler mainly for lidar packets
@@ -63,6 +65,7 @@ struct pcap_writer_impl {
 PcapReader::PcapReader(const std::string& file) : impl(new pcap_impl) {
     impl->pcap_reader = std::make_unique<Tins::FileSniffer>(file);
     impl->encap_proto = impl->pcap_reader->link_type();
+    impl->pcap_reader_internals = pcap_file(impl->pcap_reader->get_pcap_handle());
 }
 
 PcapReader::~PcapReader() {
@@ -83,8 +86,10 @@ size_t PcapReader::next_packet() {
         reassm_packets++;
         impl->packet_cache = impl->pcap_reader->next_packet();
         if (impl->packet_cache) {
+            info.file_offset = ftell(impl->pcap_reader_internals);
             auto pdu = impl->packet_cache.pdu();
             if (pdu) {
+                info.packet_size = pdu->size();
                 IP* ip = pdu->find_pdu<IP>();
                 IPv6* ipv6 = pdu->find_pdu<IPv6>();
                 // Using short circuiting here

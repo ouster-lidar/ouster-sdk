@@ -100,37 +100,22 @@ std::ostream& operator<<(std::ostream& stream_in, const stream_key& data) {
     return stream_in;
 }
 
-template <typename T>
-void print_stream_data_vector(std::ostream& stream_in, std::string title,
-    const std::vector<T> &data, int how_many_to_print = 10) 
-{
-    int vec_size = data.size();
-    stream_in << title << ": [";
-    if(vec_size > 0) {
-        stream_in << data.at(0);
-        for(int i = 1; i < std::min(how_many_to_print, vec_size); i++) {
-            stream_in << ", " << data.at(i);
-        }
-        stream_in << "]";
-        if(vec_size > how_many_to_print) {
-            stream_in << " ... " << (vec_size - how_many_to_print) << " More";
-        }
-        
-    } else {
-        stream_in << "NO ITEMS]";
-    }
-    stream_in << std::endl;
-}
-
 std::ostream& operator<<(std::ostream& stream_in, const stream_data& data) {
     stream_in << "Count: " << data.count << " ";
+    stream_in << "Payload Sizes: " << std::endl;
+    for(auto const& it :  data.payload_size_counts) {
+        stream_in << "Size: " << it.first << " Count: " << it.second << std::endl;
+    }
 
-    print_stream_data_vector<uint64_t>(stream_in, "Payload Sizes", 
-        data.payload_size);
-    print_stream_data_vector<uint64_t>(stream_in, "Fragments In Packet", 
-        data.fragments_in_packet);
-    print_stream_data_vector<uint8_t>(stream_in, "IP Versions", 
-        data.ip_version);
+    stream_in << "Fragments In Packets: " << std::endl;
+    for(auto const& it :  data.fragment_counts) {
+        stream_in << "Number of Fragments: "<< it.first << " Count: " << it.second << std::endl;
+    }
+
+    stream_in << "IP Versions: " << std::endl;
+    for(auto const& it :  data.ip_version_counts) {
+        stream_in << "IP Version: " << it.first << " Count: " << it.second << std::endl;
+    }
 
     return stream_in;
 }
@@ -207,8 +192,15 @@ void record_packet(record_handle& handle, const std::string& src_ip,
                                 dst_port, time);
 }
 
-std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process) 
+std::shared_ptr<stream_info> get_stream_info(const std::string& file, 
+                                             std::function<void(uint64_t, uint64_t)> progress_callback,
+                                             int packets_to_process) 
 {
+    FILE *fileSizePointer = NULL;
+    fileSizePointer = fopen(file.c_str(),"rb");
+    fseek(fileSizePointer, 0, SEEK_END);
+    int fileSize = ftell(fileSizePointer);
+    fclose(fileSizePointer);
     std::shared_ptr<stream_info> result = std::make_shared<stream_info>();
     auto handle = replay_initialize(file);
 
@@ -240,9 +232,12 @@ std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packet
 
             auto& stream = result->udp_streams[key];
             stream.count++;
-            stream.payload_size.push_back(info.payload_size);
-            stream.fragments_in_packet.push_back(info.fragments_in_packet);
-            stream.ip_version.push_back(info.ip_version);
+            stream.payload_size_counts[info.payload_size]++;
+            stream.fragment_counts[info.fragments_in_packet]++;
+            stream.ip_version_counts[info.ip_version]++;
+
+            progress_callback(info.file_offset, fileSize);
+            i++;
         }
 
         replay_uninitialize(*handle);
@@ -251,6 +246,12 @@ std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packet
     return result;
 }
 
+std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process) 
+{
+    return get_stream_info(file, 
+                           [] (uint64_t, uint64_t) {},
+                           packets_to_process);
+}
 /*
           The current approach is roughly: 1) treat each unique source / destination
     port and IP as a single logical 'stream' of data, 2) filter out streams that
@@ -275,16 +276,12 @@ std::vector<guessed_ports> guess_ports(stream_info &info,
 
     for(auto it : info.udp_streams)
     {
-        if(std::find(it.second.payload_size.begin(), 
-                     it.second.payload_size.end(),
-                     lidar_packet_sizes) != it.second.payload_size.end())
+        if(it.second.payload_size_counts.count(lidar_packet_sizes) > 0)
         {
             lidar_keys.push_back(it.first);
             lidar_src_ips.push_back(it.first.src_ip);
         }
-        if(std::find(it.second.payload_size.begin(), 
-                     it.second.payload_size.end(),
-                     imu_packet_sizes) != it.second.payload_size.end())
+        if(it.second.payload_size_counts.count(imu_packet_sizes) > 0)
         {
             imu_keys.push_back(it.first);
             imu_src_ips.push_back(it.first.src_ip);

@@ -29,10 +29,12 @@ struct packet_info {
     int dst_port;                ///< The destination port
     int src_port;                ///< The source port
     size_t payload_size;         ///< The size of the packet payload
+    size_t packet_size;          ///< The size of the full packet
     ts timestamp;                ///< The packet capture timestamp
     int fragments_in_packet;     ///< Number of fragments in the packet
     int ip_version;              ///< The ip version, 4 or 6
     int encapsulation_protocol;  ///< PCAP encapsulation type
+    uint64_t file_offset;        ///< Where the packet is in the pcap
     // TODO: remove, library ignores non-UDP packes
     int network_protocol;  ///< IANA protocol number. Always 17 (UDP)
 };

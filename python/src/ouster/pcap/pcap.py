@@ -26,8 +26,11 @@ def _guess_ports(stream_info, sensor_info):
     return guesses
 
 
-def _packet_info_stream(path: str, n_packets):
-    result = _pcap.get_stream_info(path, n_packets)
+def _packet_info_stream(path: str, n_packets, progress_callback=None, callback_frequency=1):
+    if progress_callback is not None:
+        result = _pcap.get_stream_info(path, progress_callback, callback_frequency, n_packets)
+    else:
+        result = _pcap.get_stream_info(path, n_packets)
     return result
 
 

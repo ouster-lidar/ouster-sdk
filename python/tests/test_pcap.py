@@ -166,10 +166,10 @@ def test_pcap_info_10(fake_meta, fake_pcap_path) -> None:
 
     for key in info.udp_streams:
         ports[key.dst_port] += 1
-        for size in info.udp_streams[key].payload_size:
-            sizes[size] += 1
-        for net_ver in info.udp_streams[key].ip_version:
-            af[net_ver] += 1
+        for size in info.udp_streams[key].payload_size_counts:
+            sizes[size] += info.udp_streams[key].payload_size_counts[size]
+        for net_ver in info.udp_streams[key].ip_version_counts:
+            af[net_ver] += info.udp_streams[key].ip_version_counts[net_ver]
 
     assert ports[7502] + ports[7503] == 2
     assert sizes[6464] + sizes[48] == 10

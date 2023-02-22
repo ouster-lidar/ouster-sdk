@@ -5,7 +5,7 @@ All rights reserved.
 Type annotations for pcap python bindings.
 """
 
-from typing import (overload, List)
+from typing import (overload, List, Callable)
 
 from ..client.data import BufferT
 
@@ -40,7 +40,15 @@ def guess_ports(file: str,
     ...
 
 
+@overload
 def get_stream_info(file: str, packets_to_process: int) -> stream_info:
+    pass
+
+
+@overload
+def get_stream_info(file: str, progress_callback: Callable[[int, int], int],
+                    callback_frequency: int,
+                    packets_to_process: int) -> stream_info:
     pass
 
 
