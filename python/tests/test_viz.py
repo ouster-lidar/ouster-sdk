@@ -584,7 +584,6 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
             self._post_draw_callback(self)
 
 
-
 @pytest.mark.parametrize('test_key', ['single-2.3'])
 def test_simple_viz_with_callbacks(meta: client.SensorInfo,
                                    scan: client.LidarScan) -> None:
@@ -603,7 +602,7 @@ def test_simple_viz_with_callbacks(meta: client.SensorInfo,
 
     scan_cnt = 0
 
-    def pre_draw(ls: client.LidarScan) -> None:
+    def pre_draw(ls: client.LidarScan) -> client.LidarScan:
         nonlocal scan_cnt
 
         nls = deepcopy(ls)
@@ -626,7 +625,7 @@ def test_simple_viz_with_callbacks(meta: client.SensorInfo,
         ratio = scan_cnt / num_steps
         img_mask = np.zeros((ls.h, ls.w, 4))
         col_idx = int(ls.w * ratio)
-        img_mask[:, col_idx-5:col_idx+5] = np.array([1.0, 0.3, 0.3, 1.0])
+        img_mask[:, col_idx - 5:col_idx + 5] = np.array([1.0, 0.3, 0.3, 1.0])
 
         # there are 2 images - single return and second
         # can safely skip the second, but here we draw on both smth
