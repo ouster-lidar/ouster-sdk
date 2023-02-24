@@ -315,8 +315,14 @@ PYBIND11_PLUGIN(_viz) {
              )")
         .def(
             "__init__",
-            [](viz::Cloud& self, size_t n) { new (&self) viz::Cloud{n}; },
-            py::arg("n"),
+            [](viz::Cloud& self, size_t n, pymatrixd extrinsics) {
+                check_array(extrinsics, 16, 2, 'F');
+                viz::mat4d extrinsica;
+                std::copy(extrinsics.data(), extrinsics.data() + 16,
+                          extrinsica.data());
+                new (&self) viz::Cloud(n, extrinsica);
+            },
+            py::arg("n"), py::arg("extrinsics") = viz::identity4d,
             R"(
                  ``def __init__(self, n_points: int) -> None:``
 

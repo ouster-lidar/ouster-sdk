@@ -14,7 +14,7 @@ import threading
 import time
 from datetime import datetime
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
-                    Optional, Tuple, TypeVar, Union)
+                    Optional, Tuple, TypeVar, Union, Any)
 import weakref
 import logging
 
@@ -133,7 +133,8 @@ class LidarScanViz:
 
     def __init__(self,
                  meta: client.SensorInfo,
-                 viz: Optional[PointViz] = None) -> None:
+                 viz: Optional[PointViz] = None,
+                 _img_aspect_ratio: float = 0) -> None:
         """
         Args:
             meta: sensor metadata used to interpret scans
@@ -152,8 +153,9 @@ class LidarScanViz:
         # image display state
         self._img_ind = [0, 1]  # index of field to display
         self._img_size_fraction = 6
-        self._img_aspect = (meta.beam_altitude_angles[0] -
-                            meta.beam_altitude_angles[-1]) / 360.0
+        self._img_aspect = _img_aspect_ratio or (
+            min(meta.beam_altitude_angles) -
+            max(meta.beam_altitude_angles)) / 360.0
 
         # misc display state
         self._available_fields = []
@@ -370,7 +372,10 @@ class LidarScanViz:
         # update osd
         meta = self._metadata
         enable_ind = [i + 1 for i, b in enumerate(self._cloud_enabled) if b]
-        first_ts = scan.timestamp[np.nonzero(scan.timestamp)][0]
+
+        nonzeros = np.flatnonzero(scan.timestamp)
+        first_ts = scan.timestamp[nonzeros[0]] if len(nonzeros) > 0 else 0
+
         if self._osd_enabled:
             self._osd.set_text(
                 f"image: {image_fields[0]}/{image_fields[1]}\n"
@@ -478,6 +483,13 @@ def _save_fb_to_png(fb_data: List,
     return img_fname
 
 
+# TODO: Make/Define a better ScanViz interface
+# not a best way to describe interface, yeah duck typing danger, etc ...
+# but ScanViz object shoud have a write property 'scan' and underlying
+# Point viz member at '_viz'
+AnyScanViz = Union[LidarScanViz, Any]
+
+
 class SimpleViz:
     """Visualize a stream of LidarScans.
 
@@ -487,8 +499,9 @@ class SimpleViz:
     _playback_rates = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 0.0)
 
     def __init__(self,
-                 arg: Union[client.SensorInfo, LidarScanViz],
+                 arg: Union[client.SensorInfo, AnyScanViz],
                  rate: Optional[float] = None,
+                 pause_at: int = -1,
                  _buflen: int = 50) -> None:
         """
         Args:
@@ -496,6 +509,8 @@ class SimpleViz:
                  LidarScanViz instance to use.
             rate: Playback rate. One of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0 or
                   None for "live" playback (the default).
+            pause_at: scan number to pause at, dafault (-1) - no auto pause, to
+                      stop after the very first scan use 0
 
         Raises:
             ValueError: if the specified rate isn't one of the options
@@ -509,12 +524,16 @@ class SimpleViz:
             self._viz = arg._viz
             self._scan_viz = arg
         else:
-            raise TypeError(f"Bad type for 1st constructor arg: {type(arg)}")
+            # we continue, so custom ScanVizs can be used with the same
+            # SimpleViz class and basic controls
+            self._viz = arg._viz
+            self._scan_viz = arg
 
         self._lock = threading.Lock()
         self._live = (rate is None)
         self._rate_ind = SimpleViz._playback_rates.index(rate or 0.0)
         self._buflen = _buflen
+        self._pause_at = pause_at
 
         # pausing and stepping
         self._cv = threading.Condition()
@@ -644,6 +663,7 @@ class SimpleViz:
     def _process(self, seekable: _Seekable[client.LidarScan]) -> None:
 
         last_ts = time.monotonic()
+        scan_idx = -1
         try:
             while True:
                 # wait until unpaused, step, or quit
@@ -660,11 +680,18 @@ class SimpleViz:
                     period = self._frame_period()
 
                 # process new data
+                scan_idx = seekable.next_ind
                 self._scan_viz.scan = next(seekable)
                 self._scan_viz.draw(update=False)
 
+                if self._pause_at == scan_idx:
+                    self._paused = True
+                    self._update_playback_osd()
+
                 # sleep for remainder of scan period
                 to_sleep = max(0.0, period - (time.monotonic() - last_ts))
+                if scan_idx > 0:
+                    time.sleep(to_sleep)
                 time.sleep(to_sleep)
                 last_ts = time.monotonic()
 
@@ -675,7 +702,11 @@ class SimpleViz:
             pass
 
         finally:
-            # signal rendering (main) thread to exit
+            # signal rendering (main) thread to exit, with a delay
+            # because the viz in main thread may not have been started
+            # and on Mac it was observed that it fails to set a flag if
+            # _process fails immediately after start
+            time.sleep(0.5)
             self._viz.running(False)
 
     def run(self, scans: Iterable[client.LidarScan]) -> None:
@@ -706,8 +737,12 @@ class SimpleViz:
         except KeyboardInterrupt:
             pass
         finally:
-            # some scan sources may be waiting on IO, blocking the processing thread
-            seekable.close()
+            try:
+                # some scan sources may be waiting on IO, blocking the
+                # processing thread
+                seekable.close()
+            except Exception as e:
+                logger.warn(f"Data source closed with error: '{e}'")
 
             # processing thread will still be running if e.g. viz window was closed
             with self._cv:

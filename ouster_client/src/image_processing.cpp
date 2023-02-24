@@ -189,6 +189,11 @@ static Eigen::Array<T, -1, 1> compute_dark_count(
         image.template cast<bool>().colwise().any();
     const size_t n_cols = col_mask.count();
 
+    if (n_cols == 0) {
+        new_dark_count.setZero(image_h);
+        return new_dark_count;
+    }
+
     img_t<T> row_diffs_nonzero{image_h - 1, n_cols};
     for (size_t i = 0, j = 0; i < image_w && j < n_cols; i++) {
         if (col_mask[i]) {
