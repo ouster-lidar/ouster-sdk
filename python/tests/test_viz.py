@@ -4,7 +4,7 @@ All rights reserved.
 """
 
 import weakref
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, Optional, Callable
 
 import pytest
 import numpy as np
@@ -549,3 +549,104 @@ def test_scan_viz_extras(meta: client.SensorInfo,
     point_viz.camera.dolly(150)
     ls_viz.draw()
     point_viz.run()
+
+
+class LidarScanVizWithCallbacks(viz.LidarScanViz):
+    """Add callbacks for pre-draw and post-draw"""
+
+    def __init__(
+        self,
+        meta: client.SensorInfo,
+        viz: Optional[viz.PointViz] = None,
+        pre_draw_callback: Optional[Callable[[client.LidarScan],
+                                             client.LidarScan]] = None,
+        post_draw_callback: Optional[Callable[['LidarScanVizWithCallbacks'],
+                                              None]] = None
+    ) -> None:
+        super().__init__(meta, viz)
+
+        self._pre_draw_callback = pre_draw_callback
+        self._post_draw_callback = post_draw_callback
+
+    def _draw(self) -> None:
+        """Overriding the draw and setting pre/post callbacks"""
+
+        # pre draw callbacl takes LidarScan and returns LidarScan
+        if self._pre_draw_callback:
+            self._scan = self._pre_draw_callback(self._scan)
+
+        # call original draw
+        super()._draw()
+
+        # post draw callbacks takes LidarScanViz object so it can get access
+        # to _clouds and _images within it and set additional masks, colors, etc.
+        if self._post_draw_callback:
+            self._post_draw_callback(self)
+
+
+
+@pytest.mark.parametrize('test_key', ['single-2.3'])
+def test_simple_viz_with_callbacks(meta: client.SensorInfo,
+                                   scan: client.LidarScan) -> None:
+    """Call the callback on pre/post draw example."""
+
+    from itertools import repeat
+    from copy import deepcopy
+
+    start_range = 1    # in meters
+    num_steps = 100
+
+    # this can be any scan source (just a repeater as an example)
+    scans = repeat(scan, num_steps)
+
+    point_viz = viz.PointViz("Test Viz")
+
+    scan_cnt = 0
+
+    def pre_draw(ls: client.LidarScan) -> None:
+        nonlocal scan_cnt
+
+        nls = deepcopy(ls)
+        ratio = scan_cnt / num_steps
+
+        # modifying range in some way
+        range = nls.field(client.ChanField.RANGE)
+        range = start_range * 1000 + (range - start_range * 1000) * ratio
+        nls.field(client.ChanField.RANGE)[:] = range
+
+        scan_cnt += 1
+        # don't forget to return it back
+        return nls
+
+    def post_draw(scan_viz: LidarScanVizWithCallbacks) -> None:
+
+        # currently discplayed LidarScan
+        ls = scan_viz._scan
+
+        ratio = scan_cnt / num_steps
+        img_mask = np.zeros((ls.h, ls.w, 4))
+        col_idx = int(ls.w * ratio)
+        img_mask[:, col_idx-5:col_idx+5] = np.array([1.0, 0.3, 0.3, 1.0])
+
+        # there are 2 images - single return and second
+        # can safely skip the second, but here we draw on both smth
+        for img in scan_viz._images:
+            # set some mask
+            img.set_mask(img_mask)
+
+        # same for clouds, first and second return
+        for cloud in scan_viz._clouds:
+            # set some mask
+            cloud.set_mask(img_mask)
+
+    # regular LidarScanViz
+    # ls_viz = viz.LidarScanViz(meta, point_viz)
+
+    ls_viz = LidarScanVizWithCallbacks(meta,
+                                       point_viz,
+                                       pre_draw_callback=pre_draw,
+                                       post_draw_callback=post_draw)
+
+    viz.SimpleViz(ls_viz, 1.0).run(scans)
+
+    print("Done")
