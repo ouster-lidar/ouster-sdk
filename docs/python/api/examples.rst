@@ -12,7 +12,7 @@ Module :mod:`ouster.sdk.examples`
 
 
 Client Examples :mod:`ouster.sdk.examples.client`
-==================================================
+=================================================
 
 .. automodule:: ouster.sdk.examples.client
    :members:
@@ -22,7 +22,7 @@ Client Examples :mod:`ouster.sdk.examples.client`
 
 
 PCAP Examples :mod:`ouster.sdk.examples.pcap`
-==================================================
+=============================================
 
 .. automodule:: ouster.sdk.examples.pcap
    :members:
@@ -31,14 +31,14 @@ PCAP Examples :mod:`ouster.sdk.examples.pcap`
 
 
 Open3D Examples :mod:`ouster.sdk.examples.open3d`
-==================================================
+=================================================
 
 .. automodule:: ouster.sdk.examples.open3d
    :members:
 
 ----
 
-``PointViz`` Examples :mod:`ouster.sdk.examples.viz`
+Examples ``PointViz`` :mod:`ouster.sdk.examples.viz`
 ====================================================
 
 .. automodule:: ouster.sdk.examples.viz

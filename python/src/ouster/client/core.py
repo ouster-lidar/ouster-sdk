@@ -2,7 +2,7 @@
 
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
- 
+
 This module contains more idiomatic wrappers around the lower-level module
 generated using pybind11.
 """
@@ -250,8 +250,11 @@ class Sensor(PacketSource):
                 else:
                     break
             except ValueError:
-                # TODO: bad packet size or init_id here: this can happen when
+                # bad packet size or init_id here: this can happen when
                 # packets are buffered by the OS, not necessarily an error
+                # same pass as in data.py
+                # TODO: introduce status for PacketSource to indicate frequency
+                # of bad packet size or init_id errors
                 pass
 
     def flush(self, n_frames: int = 3, *, full=False) -> int:
@@ -383,7 +386,7 @@ class Scans:
                 packet = next(it)
             except StopIteration:
                 if ls_write is not None:
-                    if not self._complete or ls_write._complete(column_window):
+                    if not self._complete or ls_write.complete(column_window):
                         yield ls_write
                 return
 
@@ -396,7 +399,7 @@ class Scans:
 
                 if batch(packet._data, ls_write):
                     # Got a new frame, return it and start another
-                    if not self._complete or ls_write._complete(column_window):
+                    if not self._complete or ls_write.complete(column_window):
                         yield ls_write
                         start_ts = time.monotonic()
                     ls_write = None

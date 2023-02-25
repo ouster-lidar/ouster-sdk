@@ -5,6 +5,10 @@
 
 #include "helpers.h"
 
+#include "ouster/lidar_scan.h"
+#include "ouster/os_pcap.h"
+#include "ouster/types.h"
+
 using namespace ouster::sensor;
 
 constexpr std::size_t BUF_SIZE = 65536;
@@ -22,7 +26,7 @@ void get_complete_scan(
     ouster::ScanBatcher batch_to_scan(info.format.columns_per_frame, pf);
 
     // Buffer to store raw packet data
-    std::unique_ptr<uint8_t[]> packet_buf(new uint8_t[BUF_SIZE]);
+    auto packet_buf = std::make_unique<uint8_t[]>(BUF_SIZE);
 
     ouster::sensor_utils::packet_info packet_info;
 

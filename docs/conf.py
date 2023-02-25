@@ -23,14 +23,32 @@ from string import Template
 import shutil
 import os
 import sys
+import re
 
-project = 'Ouster Python SDK'
+project = 'Ouster Sensor SDK'
 copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
 
+# use SDK source location from environment or try to guess
+SRC_PATH = os.path.dirname(os.path.abspath(__file__))
+OUSTER_SDK_PATH = os.getenv('OUSTER_SDK_PATH')
+if OUSTER_SDK_PATH is None:
+    OUSTER_SDK_PATH = os.path.join(SRC_PATH, "sdk")
+if not os.path.exists(OUSTER_SDK_PATH):
+    OUSTER_SDK_PATH = os.path.dirname(SRC_PATH)
+if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
+    raise RuntimeError("Could not guess OUSTER_SDK_PATH")
+print(OUSTER_SDK_PATH)
+
+# https://packaging.python.org/en/latest/guides/single-sourcing-package-version/
+def parse_version():
+    with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
+        content = listfile.read()
+        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-\)]+)(-(.*))?\)", content)
+        return groups.group(1) + (groups.group(3) or "")
+
 # The full version, including alpha/beta/rc tags
-version = '0.4.0'
-release = '0.4.0'
+version = release = parse_version()
 
 # -- General configuration ---------------------------------------------------
 
@@ -135,7 +153,7 @@ napoleon_numpy_docstring = False
 # ----- Todos Configs ------
 todo_include_todos = False
 todo_link_only = True
-todo_emit_warnings = False
+todo_emit_warnings = True
 
 # copybutton configs
 # Note: last entry treats four spaces as a prompt to support "continuation lines"

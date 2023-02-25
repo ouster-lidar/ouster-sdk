@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "helpers.h"
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/os_pcap.h"
@@ -22,9 +22,12 @@ using namespace ouster::sensor;
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "\n\nUsage: lidar_scan_example <pcap_file> <json_file>"
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
+                  << ouster::BUILD_SYSTEM << ")"
+                  << "\n\nUsage: lidar_scan_example <pcap_file> <json_file>"
                   << std::endl;
-        return EXIT_FAILURE;
+
+        return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     const std::string pcap_file = argv[1];
@@ -36,7 +39,7 @@ int main(int argc, char* argv[]) {
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
 
-    // specifyiing only w and h for lidar scan creates one using the LEGACY udp
+    // Specifiying only w and h for lidar scan creates one using the LEGACY udp
     // profile
     //! [doc-stag-lidarscan-default-constructor]
     auto legacy_scan = ouster::LidarScan(w, h);
@@ -59,33 +62,45 @@ int main(int argc, char* argv[]) {
     // Finally, you can construct by specifying fields directly
     static const std::array<std::pair<ChanField, ChanFieldType>, 2>
         reduced_slots{{{ChanField::RANGE, ChanFieldType::UINT32},
-                       {ChanField::REFLECTIVITY, ChanFieldType::UINT8}}};
+                       {ChanField::NEAR_IR, ChanFieldType::UINT16}}};
     auto reduced_fields_scan =
         ouster::LidarScan(w, h, reduced_slots.begin(), reduced_slots.end());
     //! [doc-etag-lidarscan-reduced-slots]
 
-    std::cerr << "Creating scans from pcap...";
-    get_complete_scan(handle, legacy_scan, info);
+    std::cerr << "Creating scans from pcap... ";
+
     get_complete_scan(handle, profile_scan, info);
-    get_complete_scan(handle, dual_returns_scan, info);
     get_complete_scan(handle, reduced_fields_scan, info);
-    std::cerr << ".. scans created!" << std::endl;
+
+    if (info.format.udp_profile_lidar !=
+        UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8) {
+        get_complete_scan(handle, legacy_scan, info);
+    }
+
+    if (info.format.udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL) {
+        get_complete_scan(handle, dual_returns_scan, info);
+    }
+    std::cerr << "Scans created!" << std::endl;
 
     ouster::sensor_utils::replay_uninitialize(*handle);
 
     // Headers
-    auto frame_id = dual_returns_scan.frame_id;
+    auto frame_id = profile_scan.frame_id;
     //! [doc-stag-lidarscan-cpp-headers]
-    auto ts = dual_returns_scan.timestamp();
-    auto status = dual_returns_scan.status();
-    auto measurement_id = dual_returns_scan.measurement_id();
+    auto ts = profile_scan.timestamp();
+    auto status = profile_scan.status();
+    auto measurement_id = profile_scan.measurement_id();
     //! [doc-etag-lidarscan-cpp-headers]
 
     // to access a field:
     //! [doc-stag-lidarscan-cpp-fields]
-    auto range = dual_returns_scan.field(ChanField::RANGE);
-    auto range2 = dual_returns_scan.field(ChanField::RANGE);
+    auto range = profile_scan.field(ChanField::RANGE);
     //! [doc-etag-lidarscan-cpp-fields]
+
+    // On dual returns, second returns are often the same field name with 2
+    // appended:
+    auto range2 = dual_returns_scan.field(ChanField::RANGE2);
 
     std::cerr
         << "\nPrinting first element of received scan headers\n\tframe_id : "
@@ -94,15 +109,21 @@ int main(int argc, char* argv[]) {
 
     std::cerr << "\nPrinting range of pixel at 15th row and 498th "
                  "column...\n\trange(15, 498): "
-              << range(15, 498) << " " << range2(15, 498) << std::endl;
+              << range(15, 498) << std::endl;
 
+    if (info.format.udp_profile_lidar ==
+        ouster::sensor::UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL) {
+        std::cerr << "\nPrinting range of second return at 15th row and 498th "
+                     "column...\n\trange(15, 498): "
+                  << range2(15, 498) << std::endl;
+    }
     // Let's see what happens if you try to access a field that isn't in a
     // LidarScan
     std::cerr << "Accessing field that isn't available...";
     try {
         auto signal_field = reduced_fields_scan.field(ChanField::SIGNAL);
         std::cerr << signal_field(0, 0) << std::endl;
-    } catch (const std::out_of_range& e) {
+    } catch (const std::out_of_range&) {
         std::cerr << " ..received expected out of range error. Continuing..."
                   << std::endl;
     }
@@ -123,7 +144,7 @@ int main(int argc, char* argv[]) {
     };
 
     print_el(legacy_scan, std::string("Legacy Scan"));
+    print_el(profile_scan, std::string("Profile Scan"));
     print_el(dual_returns_scan, std::string("Dual Returns Scan"));
     print_el(reduced_fields_scan, std::string("Reduced fields Scan"));
 }
-

@@ -89,7 +89,7 @@ client_state poll_client(const client& cli, int timeout_sec = 1);
  * Read lidar data from the sensor. Will not block.
  *
  * @param[in] cli client returned by init_client associated with the connection.
- * @param[out] buf buffer to which to write lidar data. Must be at least.\
+ * @param[out] buf buffer to which to write lidar data. Must be at least
  * lidar_packet_bytes + 1 bytes.
  * @param[in] pf The packet format.
  *

@@ -114,6 +114,15 @@ scan through an iterator:
             :end-before: [doc-etag-cpp-scan-iter]
             :dedent:
 
+.. note::
+    
+    The units of a particular field from a ``LidarScan`` are consistent even
+    when you use lidar profiles which scale the returned data from the sensor.
+    This is because the LidarScan will reverse the scaling for you when
+    parsing. For example, the RANGE field on a LidarScan constructed with the
+    low data rate profile will be in millimeters even though the return from
+    the sensor is given in 8mm increments.
+
 Running the above code on a sample ``LidarScan`` will give you output that looks like:
 
 .. include:: /python/examples/lidar-scan.rst

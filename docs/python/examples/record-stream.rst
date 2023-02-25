@@ -53,11 +53,11 @@ a live feed from your :ref:`configured<ex-configure-sensor>` sensor:
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
+        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-reflectivity
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-signal
+        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME live-plot-reflectivity
 
 This should give you a live feed from your sensor that looks like a black and white moving image.
 Try waving your hand or moving around to find yourself within the image!
@@ -65,8 +65,8 @@ Try waving your hand or moving around to find yourself within the image!
 So how did we do that?
 
 .. literalinclude:: /../python/src/ouster/sdk/examples/client.py
-   :start-after: [doc-stag-live-plot-signal]
-   :end-before: [doc-etag-live-plot-signal]
+   :start-after: [doc-stag-live-plot-reflectivity]
+   :end-before: [doc-etag-live-plot-reflectivity]
    :emphasize-lines: 2-3
    :linenos:
    :dedent:

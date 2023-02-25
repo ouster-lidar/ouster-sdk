@@ -74,7 +74,8 @@ class Indexed {
     void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
         for (auto& f : front) {
             if (!f.state) continue;  // skip deleted
-            if (!f.gl) f.gl.reset(new GL{*f.state});  // init GL for added
+            if (!f.gl)
+                f.gl = std::make_unique<GL>(*f.state);  // init GL for added
             f.gl->draw(ctx, camera, *f.state);
         }
     }
@@ -90,7 +91,7 @@ class Indexed {
             if (back[i] && front[i].state) {
                 std::swap(*front[i].state, *back[i]);
             } else if (back[i] && !front[i].state) {
-                front[i].state.reset(new T{*back[i]});
+                front[i].state = std::make_unique<T>(*back[i]);
                 back[i]->clear();
             } else if (!back[i] && front[i].state) {
                 front[i].state.reset();
@@ -105,7 +106,7 @@ class Indexed {
  * PointViz implementation
  */
 struct PointViz::Impl {
-    GLFWContext glfw;
+    std::unique_ptr<GLFWContext> glfw;
     GLuint vao;
 
     // state for drawing
@@ -130,9 +131,7 @@ struct PointViz::Impl {
     Handlers<bool(const WindowCtx&, double, double)> scroll_handlers;
     Handlers<bool(const WindowCtx&, double, double)> mouse_pos_handlers;
 
-    Impl(const std::string& name, bool fix_aspect, int window_width,
-         int window_height)
-        : glfw{name, fix_aspect, window_width, window_height} {}
+    Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
 };
 
 /*
@@ -141,13 +140,15 @@ struct PointViz::Impl {
 
 PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
                    int window_height) {
-    // TODO initialization (and opengl API usage) still pretty messed up due to
-    // single shared vao
-    pimpl = std::unique_ptr<Impl>{
-        new Impl{name, fix_aspect, window_width, window_height}};
+    auto glfw = std::make_unique<GLFWContext>(name, fix_aspect, window_width,
+                                              window_height);
+
+    // set context for GL initialization
+    glfwMakeContextCurrent(glfw->window);
+
+    pimpl = std::make_unique<Impl>(std::move(glfw));
 
     // top-level gl state for point viz
-    glfwMakeContextCurrent(pimpl->glfw.window);
     glGenVertexArrays(1, &pimpl->vao);
     glBindVertexArray(pimpl->vao);
 
@@ -161,30 +162,33 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
     impl::GLRings::initialize();
     impl::GLCuboid::initialize();
 
+    // release context in case subsequent calls are done from another thread
+    glfwMakeContextCurrent(nullptr);
+
     // add user-setable input handlers
-    pimpl->glfw.key_handler = [this](const WindowCtx& ctx, int key, int mods) {
+    pimpl->glfw->key_handler = [this](const WindowCtx& ctx, int key, int mods) {
         for (auto& f : pimpl->key_handlers)
             if (!f(ctx, key, mods)) break;
     };
-    pimpl->glfw.mouse_button_handler = [this](const WindowCtx& ctx, int button,
-                                              int mods) {
+    pimpl->glfw->mouse_button_handler = [this](const WindowCtx& ctx, int button,
+                                               int mods) {
         for (auto& f : pimpl->mouse_button_handlers)
             if (!f(ctx, button, mods)) break;
     };
-    pimpl->glfw.scroll_handler = [this](const WindowCtx& ctx, double x,
-                                        double y) {
+    pimpl->glfw->scroll_handler = [this](const WindowCtx& ctx, double x,
+                                         double y) {
         for (auto& f : pimpl->scroll_handlers)
             if (!f(ctx, x, y)) break;
     };
-    pimpl->glfw.mouse_pos_handler = [this](const WindowCtx& ctx, double x,
-                                           double y) {
+    pimpl->glfw->mouse_pos_handler = [this](const WindowCtx& ctx, double x,
+                                            double y) {
         for (auto& f : pimpl->mouse_pos_handlers)
             if (!f(ctx, x, y)) break;
     };
 
     // glfwPollEvents blocks during resize on macos. Keep rendering to avoid
     // artifacts during resize
-    pimpl->glfw.resize_handler = [this]() {
+    pimpl->glfw->resize_handler = [this]() {
         (void)this;
 #ifdef __APPLE__
         draw();
@@ -195,23 +199,24 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
 PointViz::~PointViz() { glDeleteVertexArrays(1, &pimpl->vao); }
 
 void PointViz::run() {
-    pimpl->glfw.running(true);
-    pimpl->glfw.visible(true);
+    pimpl->glfw->running(true);
+    pimpl->glfw->visible(true);
     while (running()) run_once();
-    pimpl->glfw.visible(false);
+    pimpl->glfw->visible(false);
 }
 
 void PointViz::run_once() {
-    glfwMakeContextCurrent(pimpl->glfw.window);
+    if (glfwGetCurrentContext() != pimpl->glfw->window)
+        glfwMakeContextCurrent(pimpl->glfw->window);
     draw();
     glfwPollEvents();
 }
 
-bool PointViz::running() { return pimpl->glfw.running(); }
+bool PointViz::running() { return pimpl->glfw->running(); }
 
-void PointViz::running(bool state) { pimpl->glfw.running(state); }
+void PointViz::running(bool state) { pimpl->glfw->running(state); }
 
-void PointViz::visible(bool state) { pimpl->glfw.visible(state); }
+void PointViz::visible(bool state) { pimpl->glfw->visible(state); }
 
 bool PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl->update_mx};
@@ -240,7 +245,7 @@ void PointViz::draw() {
     // draw images
     {
         std::lock_guard<std::mutex> guard{pimpl->update_mx};
-        const auto& ctx = pimpl->glfw.window_context;
+        const auto& ctx = pimpl->glfw->window_context;
 
         // calculate camera matrices
         auto camera_data =
@@ -279,7 +284,7 @@ void PointViz::draw() {
         pimpl->front_changed = false;
     }
 
-    glfwSwapBuffers(pimpl->glfw.window);
+    glfwSwapBuffers(pimpl->glfw->window);
 }
 
 /*
@@ -420,7 +425,8 @@ void Cloud::clear() {
 }
 
 void Cloud::set_range(const uint32_t* x) {
-    std::copy(x, x + n_, range_data_.begin());
+    std::transform(x, x + n_, std::begin(range_data_),
+                   [](uint32_t i) { return static_cast<float>(i); });
     range_changed_ = true;
 }
 
@@ -650,7 +656,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
     viz.push_scroll_handler([=, &viz](const WindowCtx&, double, double yoff) {
         auto lock = mx ? std::unique_lock<std::mutex>{*mx}
                        : std::unique_lock<std::mutex>{};
-        viz.camera().dolly(yoff * 5);
+        viz.camera().dolly(static_cast<int>(yoff * 5));
         viz.update();
         return true;
     });

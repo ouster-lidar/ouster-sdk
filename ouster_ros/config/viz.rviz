@@ -77,7 +77,7 @@ Visualization Manager:
       Size (Pixels): 2
       Size (m): 0.029999999329447746
       Style: Flat Squares
-      Topic: /os_cloud_node/points
+      Topic: /ouster/points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -107,14 +107,14 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.029999999329447746
       Style: Flat Squares
-      Topic: /os_cloud_node/points2
+      Topic: /ouster/points2
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /img_node/reflec_image
+      Image Topic: /ouster/reflec_image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -126,7 +126,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: false
-      Image Topic: /img_node/range_image
+      Image Topic: /ouster/range_image
       Max Value: 1
       Median window: 50
       Min Value: 0
@@ -138,7 +138,7 @@ Visualization Manager:
       Value: false
     - Class: rviz/Image
       Enabled: false
-      Image Topic: /img_node/signal_image
+      Image Topic: /ouster/signal_image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -150,7 +150,7 @@ Visualization Manager:
       Value: false
     - Class: rviz/Image
       Enabled: false
-      Image Topic: /img_node/nearir_image
+      Image Topic: /ouster/nearir_image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -162,7 +162,7 @@ Visualization Manager:
       Value: false
     - Class: rviz/Image
       Enabled: false
-      Image Topic: /img_node/reflec_image2
+      Image Topic: /ouster/reflec_image2
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -174,7 +174,7 @@ Visualization Manager:
       Value: false
     - Class: rviz/Image
       Enabled: false
-      Image Topic: /img_node/range_image2
+      Image Topic: /ouster/range_image2
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -186,7 +186,7 @@ Visualization Manager:
       Value: false
     - Class: rviz/Image
       Enabled: false
-      Image Topic: /img_node/signal_image2
+      Image Topic: /ouster/signal_image2
       Max Value: 1
       Median window: 5
       Min Value: 0

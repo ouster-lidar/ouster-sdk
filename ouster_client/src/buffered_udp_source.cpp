@@ -41,7 +41,7 @@ BufferedUDPSource::BufferedUDPSource(size_t buf_size)
     std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
         return std::make_pair(
             client_state::CLIENT_ERROR,
-            std::unique_ptr<uint8_t[]>{new uint8_t[packet_size]});
+            std::make_unique<uint8_t[]>(packet_size));
     });
 }
 

@@ -1,6 +1,8 @@
 import os
+import re
 import sys
 import platform
+import shlex
 import shutil
 import subprocess
 
@@ -15,10 +17,16 @@ OUSTER_SDK_PATH = os.getenv('OUSTER_SDK_PATH')
 if OUSTER_SDK_PATH is None:
     OUSTER_SDK_PATH = os.path.join(SRC_PATH, "sdk")
 if not os.path.exists(OUSTER_SDK_PATH):
-    OUSTER_SDK_PATH = os.path.join(SRC_PATH, "..")
+    OUSTER_SDK_PATH = os.path.dirname(SRC_PATH)
 if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
     raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 
+# https://packaging.python.org/en/latest/guides/single-sourcing-package-version/
+def parse_version():
+    with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
+        content = listfile.read()
+        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-\)]+)(.(.*))?\)", content)
+        return groups.group(1) + (groups.group(3) or "")
 
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=''):
@@ -51,36 +59,23 @@ class CMakeBuild(build_ext):
         # Bug in pybind11 cmake strips symbols with RelWithDebInfo
         # https://github.com/pybind/pybind11/issues/1891
         cfg = 'Debug' if self.debug else 'Release'
+
+        cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
         build_args = ['--config', cfg]
 
         if platform.system() == "Windows":
-            cmake_args += ['-G', 'Visual Studio 15 2017 Win64']
             build_args += ['--', '/m']
         else:
-            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
             build_args += ['--', '-j2']
-
-        env = os.environ.copy()
-        env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(
-            env.get('CXXFLAGS', ''), self.distribution.get_version())
-
-        # allow specifying toolchain in env
-        toolchain = env.get('CMAKE_TOOLCHAIN_FILE')
-        if toolchain:
-            cmake_args += ['-DCMAKE_TOOLCHAIN_FILE=' + toolchain]
-
-        # specify VCPKG triplet in env
-        triplet = env.get('VCPKG_TARGET_TRIPLET')
-        if triplet:
-            cmake_args += ['-DVCPKG_TARGET_TRIPLET=' + triplet]
 
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
 
         # specify additional cmake args
-        extra_args = env.get('CMAKE_ARGS')
+        env = os.environ.copy()
+        extra_args = env.get('OUSTER_SDK_CMAKE_ARGS')
         if extra_args:
-            cmake_args += [extra_args]
+            cmake_args += shlex.split(extra_args)
 
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
@@ -124,16 +119,17 @@ class sdk_bdist_wheel(bdist_wheel):
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
-    version='0.4.0',
+    # read from top-level sdk CMakeLists.txt
+    version=parse_version(),
     package_dir={'': 'src'},
-    packages=find_namespace_packages(where='src'),
-    namespace_packages=['ouster'],
+    packages=find_namespace_packages(where='src', include='ouster.*'),
     package_data={
         'ouster.client': ['py.typed', '_client.pyi'],
         'ouster.pcap': ['py.typed', '_pcap.pyi'],
         'ouster.sdk': ['py.typed', '_viz.pyi'],
     },
-    author='Ouster SW Developers',
+    author='Ouster Sensor SDK Developers',
+    author_email='oss@ouster.io',
     description='Ouster sensor SDK',
     license='BSD 3-Clause License',
     ext_modules=[
@@ -145,9 +141,8 @@ setup(
         'bdist_wheel': sdk_bdist_wheel,
     },
     zip_safe=False,
-    python_requires='>=3.6, <4',
+    python_requires='>=3.7, <4',
     install_requires=[
-        'dataclasses >=0.7; python_version >="3.6" and python_version <"3.7"',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
         'typing-extensions >=3.7',
@@ -162,7 +157,6 @@ setup(
             'sphinx-copybutton ==0.5.0',
             'docutils <0.18',
             'sphinx-tabs ==3.3.1',
-            'open3d',
             'breathe ==4.33.1'
         ],
         'examples': [

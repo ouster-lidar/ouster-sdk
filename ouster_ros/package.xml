@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>ouster_ros</name>
-  <version>0.3.1</version>
+  <version>0.5.1</version>
   <description>Ouster example ROS client</description>
   <maintainer email="oss@ouster.io">ouster developers</maintainer>
   <license>BSD</license>
@@ -13,6 +13,8 @@
   <depend>geometry_msgs</depend>
   <depend>tf2_ros</depend>
 
+  <build_depend>boost</build_depend>
+  <build_depend>nodelet</build_depend>
   <build_depend>libjsoncpp-dev</build_depend>
   <build_depend>eigen</build_depend>
   <build_depend>message_generation</build_depend>
@@ -21,11 +23,14 @@
   <build_depend>pcl_conversions</build_depend>
   <build_depend>tf</build_depend>
   
+  <exec_depend>nodelet</exec_depend>
   <exec_depend>libjsoncpp</exec_depend>
   <exec_depend>message_runtime</exec_depend>
   <exec_depend>topic_tools</exec_depend>
 
   <test_depend>gtest</test_depend>
 
-  <export></export>
+  <export>
+    <nodelet plugin="${prefix}/nodelets_os.xml"/>
+  </export>
 </package>

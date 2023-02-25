@@ -29,7 +29,9 @@ Supported Platforms
 Installation
 --------------
 
-The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0. 
+The Ouster Python SDK binary packages require Python >= 3.7 and pip >= 19.0 on most platforms. On
+Ubuntu 18.04, the default Python 3 version is is 3.6, so you'll have to install and use
+``python3.7`` explicitly. On Apple M1, you'll need need Python >= 3.8.
 
 .. note::
 
@@ -38,18 +40,12 @@ The Ouster Python SDK requires Python >= 3.6 and pip >= 19.0.
     venv. If you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py
     -3`` and ``py -3 -m pip`` in the following Powershell snippets.
 
-.. note::
+If you're using an unsupported platform like a non-glibc-based linux distribution, or wish to modify
+the Ouster Python SDK, you will need to build from source. See the `build instructions`_ for
+requirements needed to build from a source distribution or from a clone of the repository.
 
-    If you're running a non-glibc-based linux distribution, or wish to modify the Ouster Python
-    SDK, you will need to build from source. See the `build instructions`_ for requirements needed to
-    build from a source distribution or from a clone of the repository.
-
-.. note::
-    
-    Apple M1 users should be aware that due to numpy support limitations they will need to use Python
-    >=3.8.
-
-To install on :ref:`supported platforms<supported-platforms>`, please upgrade your pip:
+To install on :ref:`supported platforms<supported-platforms>`, first make sure you have the latest
+version of pip:
 
 .. tabs::
 

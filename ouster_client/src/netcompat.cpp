@@ -3,7 +3,7 @@
  * All rights reserved.
  */
 
-#include "ouster/impl/netcompat.h"
+#include "netcompat.h"
 
 #include <string>
 

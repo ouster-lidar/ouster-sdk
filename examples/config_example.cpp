@@ -12,19 +12,19 @@
 #include <cassert>
 #include <iostream>
 
-#include "ouster/build.h"
+#include "ouster/impl/build.h"
 #include "ouster/client.h"
 
 using namespace ouster;
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        std::cerr
-            << "Version: " << ouster::CLIENT_VERSION_FULL << " {"
-            << ouster::BUILD_SYSTEM << ")"
-            << "\n\nUsage: ouster_client_config_example <sensor_hostname> "
-            << std::endl;
-        return EXIT_FAILURE;
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
+                  << ouster::BUILD_SYSTEM << ")"
+                  << "\n\nUsage: config_example <sensor_hostname> "
+                  << std::endl;
+
+        return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     const std::string sensor_hostname = argv[1];
@@ -94,13 +94,13 @@ int main(int argc, char* argv[]) {
                       << std::endl;
             return EXIT_FAILURE;
         }
-    } catch (std::invalid_argument& ia) {
+    } catch (const std::invalid_argument&) {
         // expected result
         std::cerr << "..success! Got expected failure to set udp_dest while "
                      "auto flag is set."
                   << std::endl;
 
-    } catch (std::runtime_error& e) {
+    } catch (const std::runtime_error& e) {
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
     }

@@ -10,36 +10,35 @@
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_eigen/tf2_eigen.h>
 
-#include <cassert>
 #include <chrono>
 #include <string>
 #include <vector>
-
-#include "ouster/types.h"
 
 namespace ouster_ros {
 
 namespace sensor = ouster::sensor;
 
-bool read_imu_packet(const sensor::client& cli, PacketMsg& m,
+bool read_imu_packet(const sensor::client& cli, PacketMsg& pm,
                      const sensor::packet_format& pf) {
-    m.buf.resize(pf.imu_packet_size + 1);
-    return read_imu_packet(cli, m.buf.data(), pf);
+    pm.buf.resize(pf.imu_packet_size + 1);
+    return read_imu_packet(cli, pm.buf.data(), pf);
 }
 
-bool read_lidar_packet(const sensor::client& cli, PacketMsg& m,
+bool read_lidar_packet(const sensor::client& cli, PacketMsg& pm,
                        const sensor::packet_format& pf) {
-    m.buf.resize(pf.lidar_packet_size + 1);
-    return read_lidar_packet(cli, m.buf.data(), pf);
+    pm.buf.resize(pf.lidar_packet_size + 1);
+    return read_lidar_packet(cli, pm.buf.data(), pf);
 }
 
-sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame,
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
+                                   const ros::Time& timestamp,
+                                   const std::string& frame,
                                    const sensor::packet_format& pf) {
     const double standard_g = 9.80665;
     sensor_msgs::Imu m;
-    const uint8_t* buf = p.buf.data();
+    const uint8_t* buf = pm.buf.data();
 
-    m.header.stamp.fromNSec(pf.imu_gyro_ts(buf));
+    m.header.stamp = timestamp;
     m.header.frame_id = frame;
 
     m.orientation.x = 0;
@@ -66,6 +65,14 @@ sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& p, const std::string& frame,
     }
 
     return m;
+}
+
+sensor_msgs::Imu packet_to_imu_msg(const PacketMsg& pm,
+                                   const std::string& frame,
+                                   const sensor::packet_format& pf) {
+    ros::Time timestamp;
+    timestamp.fromNSec(pf.imu_gyro_ts(pm.buf.data()));
+    return packet_to_imu_msg(pm, timestamp, frame, pf);
 }
 
 struct read_and_cast {
@@ -129,11 +136,13 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
         suitable_return(sensor::ChanField::REFLECTIVITY, second), ls);
 
     auto points = ouster::cartesian(range, xyz_lut);
+    auto timestamp = ls.timestamp();
 
     for (auto u = 0; u < ls.h; u++) {
         for (auto v = 0; v < ls.w; v++) {
             const auto xyz = points.row(u * ls.w + v);
-            const auto ts = (ls.header(v).timestamp - scan_ts).count();
+            const auto ts =
+                (std::chrono::nanoseconds(timestamp[v]) - scan_ts).count();
             cloud(v, u) = ouster_ros::Point{
                 {{static_cast<float>(xyz(0)), static_cast<float>(xyz(1)),
                   static_cast<float>(xyz(2)), 1.0f}},
@@ -149,8 +158,7 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
 
 void scan_to_cloud(const ouster::XYZLut& xyz_lut,
                    ouster::LidarScan::ts_t scan_ts, const ouster::LidarScan& ls,
-                   ouster_ros::Cloud& cloud,
-                   int return_index,
+                   ouster_ros::Cloud& cloud, int return_index,
                    tf::TransformListener & listener,
                    const std::string & fixed_frame,
                    const std::string & sensor_frame,
@@ -161,20 +169,20 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
     pt_stamp.fromNSec(ls.header(ls.w-1).timestamp.count()); // Get last stamp
 
     std::string errorMsg;
-    if(waitForTransform>0.0 && 
-       !listener.waitForTransform(sensor_frame, 
-                                  start_stamp, 
-                                  sensor_frame, 
-                                  pt_stamp, 
-                                  fixed_frame, 
-                                  ros::Duration(waitForTransform), 
-                                  ros::Duration(0.01), 
+    if(waitForTransform>0.0 &&
+       !listener.waitForTransform(sensor_frame,
+                                  start_stamp,
+                                  sensor_frame,
+                                  pt_stamp,
+                                  fixed_frame,
+                                  ros::Duration(waitForTransform),
+                                  ros::Duration(0.01),
                                   &errorMsg))
     {
         ROS_WARN("Could not estimate motion of %s accordingly to fixed "
                  "frame %s, returning possible skewed cloud! (%s)",
-            sensor_frame.c_str(), 
-            fixed_frame.c_str(), 
+            sensor_frame.c_str(),
+            fixed_frame.c_str(),
             errorMsg.c_str());
         // Do original copy
         scan_to_cloud(xyz_lut, scan_ts, ls, cloud, return_index);
@@ -197,10 +205,12 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
         suitable_return(sensor::ChanField::REFLECTIVITY, second), ls);
 
     auto points = ouster::cartesian(range, xyz_lut);
+    auto timestamp = ls.timestamp();
 
     int transformsNotValid = 0;
     for (auto v = 0; v < ls.w; v++) {
-        const auto ts = (ls.header(v).timestamp - scan_ts).count();
+        const auto ts =
+            (std::chrono::nanoseconds(timestamp[v]) - scan_ts).count();
         pt_stamp.fromNSec(ls.header(v).timestamp.count());
 
         tf::StampedTransform transform;
@@ -245,20 +255,28 @@ void scan_to_cloud(const ouster::XYZLut& xyz_lut,
     if(transformsNotValid!=0) {
         ROS_WARN("Could not estimate motion of %s accordingly to fixed "
                  "frame %s, some points (%d/%d) are not corrected based on motion.",
-            sensor_frame.c_str(), 
-            fixed_frame.c_str(), 
-            transformsNotValid*cloud.height, 
+            sensor_frame.c_str(),
+            fixed_frame.c_str(),
+            transformsNotValid*cloud.height,
             (int)cloud.size());
     }
 }
 
-sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns timestamp,
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud,
+                                            const ros::Time& timestamp,
                                             const std::string& frame) {
     sensor_msgs::PointCloud2 msg{};
     pcl::toROSMsg(cloud, msg);
     msg.header.frame_id = frame;
-    msg.header.stamp.fromNSec(timestamp.count());
+    msg.header.stamp = timestamp;
     return msg;
+}
+
+sensor_msgs::PointCloud2 cloud_to_cloud_msg(const Cloud& cloud, ns ts,
+                                            const std::string& frame) {
+    ros::Time timestamp;
+    timestamp.fromNSec(ts.count());
+    return cloud_to_cloud_msg(cloud, timestamp, frame);
 }
 
 geometry_msgs::TransformStamped transform_to_tf_msg(

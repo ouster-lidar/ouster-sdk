@@ -24,7 +24,7 @@ else:
 pytestmark = pytest.mark.interactive
 
 
-def make_checker_board(square_size: int, reps:Tuple[int, int]) -> np.ndarray:
+def make_checker_board(square_size: int, reps: Tuple[int, int]) -> np.ndarray:
     img_data = np.full((square_size, square_size), 0)
     img_data = np.hstack([img_data, np.logical_xor(img_data, 1)])
     img_data = np.vstack([img_data, np.logical_xor(img_data, 1)])
@@ -75,8 +75,10 @@ def test_point_viz_image_with_labels_aligned(point_viz: viz.PointViz) -> None:
     white_rgba = (1.0, 1.0, 1.0, 1)
     gray_rgba = (0.5, 0.5, 0.5, 1)
 
-    colors = [red_rgba, blue_rgba, green_rgba, yellow_rgba, cyan_rgba, magenta_rgba, white_rgba,
-              gray_rgba]
+    colors = [
+        red_rgba, blue_rgba, green_rgba, yellow_rgba, cyan_rgba, magenta_rgba,
+        white_rgba, gray_rgba
+    ]
 
     ylen = 0.15
     xlen_calc = lambda vlen, shape: shape[1] * vlen / shape[0]
@@ -84,22 +86,33 @@ def test_point_viz_image_with_labels_aligned(point_viz: viz.PointViz) -> None:
     label_posy = lambda posy: 1 - (posy + 1) / 2
 
     def gen_rand_img():
-        return make_checker_board(10, (random.randrange(2, 5), random.randrange(2, 5)))
+        return make_checker_board(
+            10, (random.randrange(2, 5), random.randrange(2, 5)))
 
     def gen_rand_color():
         return random.choice(colors)
 
-    def add_image(im_data, xpos, ypos, hshift = 0):
+    def add_image(im_data, xpos, ypos, hshift=0):
         img = viz.Image()
         img.set_position(*xpos, *ypos)
         img.set_image(im_data)
         img.set_hshift(hshift)
         point_viz.add(img)
 
-    def add_label(text, xpos, ypos, align_right=False, align_top=False, rgba=None, scale=2):
+    def add_label(text,
+                  xpos,
+                  ypos,
+                  align_right=False,
+                  align_top=False,
+                  rgba=None,
+                  scale=2):
         xpos = label_posx(xpos)
         ypos = label_posy(ypos)
-        label = viz.Label(text, xpos, ypos, align_right=align_right, align_top=align_top)
+        label = viz.Label(text,
+                          xpos,
+                          ypos,
+                          align_right=align_right,
+                          align_top=align_top)
         label.set_rgba(rgba if rgba else gen_rand_color())
         label.set_scale(scale)
         point_viz.add(label)
@@ -107,15 +120,15 @@ def test_point_viz_image_with_labels_aligned(point_viz: viz.PointViz) -> None:
     # center
     img_data = gen_rand_img()
     xlen = xlen_calc(ylen, img_data.shape)
-    ypos = [- ylen / 2, ylen / 2] # center
-    xpos = [- xlen / 2, xlen / 2]
+    ypos = [-ylen / 2, ylen / 2]  # center
+    xpos = [-xlen / 2, xlen / 2]
     add_image(img_data, xpos, ypos, 0)
     add_label("Center", 0, ypos[1])
 
     # top left
     img_data = gen_rand_img()
     xlen = xlen_calc(ylen, img_data.shape)
-    ypos = [1 - ylen, 1] # top
+    ypos = [1 - ylen, 1]  # top
     xpos = [0, xlen]
     add_image(img_data, xpos, ypos, -1.0)
     add_label("Top Left - top", -1.0, ypos[1], align_top=True)
@@ -124,29 +137,53 @@ def test_point_viz_image_with_labels_aligned(point_viz: viz.PointViz) -> None:
     # top right
     img_data = gen_rand_img()
     xlen = xlen_calc(ylen, img_data.shape)
-    ypos = [1 - ylen, 1] # top
-    xpos = [- xlen, 0]
+    ypos = [1 - ylen, 1]  # top
+    xpos = [-xlen, 0]
     add_image(img_data, xpos, ypos, 1.0)
-    add_label("Top Right - top", 1.0, ypos[1], align_right=True, align_top=True)
-    add_label("Top Right - bottom", 1.0, ypos[0], align_right=True, align_top=False)
+    add_label("Top Right - top",
+              1.0,
+              ypos[1],
+              align_right=True,
+              align_top=True)
+    add_label("Top Right - bottom",
+              1.0,
+              ypos[0],
+              align_right=True,
+              align_top=False)
 
     # bottom left
     img_data = gen_rand_img()
     xlen = xlen_calc(ylen, img_data.shape)
-    ypos = [-1, -1 + ylen] # bottom
+    ypos = [-1, -1 + ylen]  # bottom
     xpos = [0, xlen]
     add_image(img_data, xpos, ypos, -1.0)
-    add_label("Bottom Left - top", -1.0, ypos[1], align_right=False, align_top=True)
-    add_label("Bottom Left - bottom", -1.0, ypos[0], align_right=False, align_top=False)
+    add_label("Bottom Left - top",
+              -1.0,
+              ypos[1],
+              align_right=False,
+              align_top=True)
+    add_label("Bottom Left - bottom",
+              -1.0,
+              ypos[0],
+              align_right=False,
+              align_top=False)
 
     # bottom right
     img_data = gen_rand_img()
     xlen = xlen_calc(ylen, img_data.shape)
-    ypos = [-1, -1 + ylen] # bottom
+    ypos = [-1, -1 + ylen]  # bottom
     xpos = [-xlen, 0]
     add_image(img_data, xpos, ypos, 1.0)
-    add_label("Bottom Right - top", 1.0, ypos[1], align_right=True, align_top=True)
-    add_label("Bottom Right - bottom", 1.0, ypos[0], align_right=True, align_top=False)
+    add_label("Bottom Right - top",
+              1.0,
+              ypos[1],
+              align_right=True,
+              align_top=True)
+    add_label("Bottom Right - bottom",
+              1.0,
+              ypos[0],
+              align_right=True,
+              align_top=False)
 
     point_viz.update()
     point_viz.run()
