@@ -28,8 +28,6 @@
   <arg name="viz" default="true" doc="whether to run a rviz"/>
   <arg name="rviz_config" default="$(find ouster_ros)/config/viz.rviz" doc="optional rviz config file"/>
   <arg name="tf_prefix" default="" doc="namespace for tf transforms"/>
-  <arg name="fixed_frame_id" default="" doc="lidar de-skewing based on motion relative to this fixed frame"/>
-  <arg name="wait_for_transform" default="0.01" doc="maximum time to wait for TF when de-skewing lidar"/>
 
   <group ns="$(arg ouster_ns)">
     <node pkg="nodelet" type="nodelet" name="os_nodelet_mgr"
@@ -51,8 +49,6 @@
       <param name="~/lidar_mode" type="str" value="$(arg lidar_mode)"/>
       <param name="~/timestamp_mode" type="str" value="$(arg timestamp_mode)"/>
       <param name="~/metadata" type="str" value="$(arg metadata)"/>
-      <param name="~/fixed_frame_id" value="$(arg fixed_frame_id)"/>
-      <param name="~/wait_for_transform" value="$(arg wait_for_transform)"/>
     </node>
   </group>
 
