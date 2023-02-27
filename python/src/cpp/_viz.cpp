@@ -316,7 +316,8 @@ PYBIND11_PLUGIN(_viz) {
         .def(
             "__init__",
             [](viz::Cloud& self, size_t n, pymatrixd extrinsics) {
-                check_array(extrinsics, 16, 2, 'F');
+                // expect homogeneous 4x4 pose matrix in 2d or 1d shape
+                check_array(extrinsics, 16, 0, 'F');
                 viz::mat4d extrinsica;
                 std::copy(extrinsics.data(), extrinsics.data() + 16,
                           extrinsica.data());
@@ -324,7 +325,7 @@ PYBIND11_PLUGIN(_viz) {
             },
             py::arg("n"), py::arg("extrinsics") = viz::identity4d,
             R"(
-                 ``def __init__(self, n_points: int) -> None:``
+                 ``def __init__(self, n_points: int, extrinsics: np.ndarray) -> None:``
 
                  Unstructured point cloud for visualization.
 
@@ -332,8 +333,8 @@ PYBIND11_PLUGIN(_viz) {
 
                  Args:
                     n: number of points
-                    extrinsic: sensor extrinsic calibration. 4x4 column-major
-                               homogeneous transformation matrix
+                    extrinsics: sensor extrinsic calibration. 4x4 column-major
+                                homogeneous transformation matrix
              )")
         .def(
             "__init__",

@@ -692,7 +692,7 @@ class SimpleViz:
                 to_sleep = max(0.0, period - (time.monotonic() - last_ts))
                 if scan_idx > 0:
                     time.sleep(to_sleep)
-                time.sleep(to_sleep)
+
                 last_ts = time.monotonic()
 
                 # show new data
