@@ -25,13 +25,13 @@
 #include <pcap/dlt.h>
 #endif
 #include <pcap/pcap.h>
+#include <stdio.h>
+#include <tins/tins.h>
+
 #include <chrono>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
-#include <stdio.h>
-
-#include <tins/tins.h>
 
 using us = std::chrono::microseconds;
 using timepoint = std::chrono::system_clock::time_point;
@@ -47,7 +47,7 @@ struct pcap_impl {
     pcap_t* handle;
     std::unique_ptr<Tins::FileSniffer>
         pcap_reader;  ///< Object that holds the unified pcap reader
-    FILE *pcap_reader_internals;
+    FILE* pcap_reader_internals;
     Tins::Packet packet_cache;
     Tins::IPv4Reassembler
         reassembler;  ///< The reassembler mainly for lidar packets
@@ -65,11 +65,11 @@ struct pcap_writer_impl {
 PcapReader::PcapReader(const std::string& file) : impl(new pcap_impl) {
     impl->pcap_reader = std::make_unique<Tins::FileSniffer>(file);
     impl->encap_proto = impl->pcap_reader->link_type();
-    impl->pcap_reader_internals = pcap_file(impl->pcap_reader->get_pcap_handle());
+    impl->pcap_reader_internals =
+        pcap_file(impl->pcap_reader->get_pcap_handle());
 }
 
-PcapReader::~PcapReader() {
-}
+PcapReader::~PcapReader() {}
 
 const uint8_t* PcapReader::current_data() const { return data; }
 
@@ -146,28 +146,28 @@ PcapWriter::PcapWriter(
     const std::string& file,
     PcapWriter::PacketEncapsulation encap = PcapWriter::ETHERNET,
     uint16_t frag_size = 1500)
-    : impl(new pcap_writer_impl), id{0}, encap(encap), frag_size(frag_size), closed(false) {
-
+    : impl(new pcap_writer_impl),
+      id{0},
+      encap(encap),
+      frag_size(frag_size),
+      closed(false) {
     if (encap != PcapWriter::ETHERNET) {
         impl->pcap_file_writer.reset(
             new Tins::PacketWriter((file), Tins::DataLinkType<Tins::SLL>()));
     } else {
-        impl->pcap_file_writer.reset(
-            new Tins::PacketWriter((file), Tins::DataLinkType<Tins::EthernetII>()));
+        impl->pcap_file_writer.reset(new Tins::PacketWriter(
+            (file), Tins::DataLinkType<Tins::EthernetII>()));
     }
 }
 
-void PcapWriter::flush() {
-}
+void PcapWriter::flush() {}
 
 void PcapWriter::close() {
     flush();
     closed = true;
 }
 
-PcapWriter::~PcapWriter() {
-    close();
-}
+PcapWriter::~PcapWriter() { close(); }
 
 /*
  * This was a tricky problem, due to how the ip stack is set up.
@@ -188,8 +188,7 @@ header.
 */
 size_t global_id = 1;
 // SLL is the linux pcap capture container
-std::vector<IP> buffer_to_frag_packets(
-                                       size_t frag_size,
+std::vector<IP> buffer_to_frag_packets(size_t frag_size,
                                        const std::string& src_ip,
                                        const std::string& dst_ip, int src_port,
                                        int dst_port, const uint8_t* buf,
@@ -275,32 +274,35 @@ std::vector<IP> buffer_to_frag_packets(
 }
 
 void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
-                                const std::string& src_ip,
-                                const std::string& dst_ip, uint16_t src_port,
-                                uint16_t dst_port, packet_info::ts timestamp) {
-
+                              const std::string& src_ip,
+                              const std::string& dst_ip, uint16_t src_port,
+                              uint16_t dst_port, packet_info::ts timestamp) {
     // ensure IPs were provided
     if (dst_ip.empty() || src_ip.empty()) {
-        throw std::invalid_argument("Invalid addresses provided for packet");
+        throw std::invalid_argument(
+            "PcapWriter: dst_ip and/or src_ip arguments to write_packet cannot "
+            "be empty.");
     }
     // For each of the packets write it to the pcap file
     for (auto item : buffer_to_frag_packets(frag_size, src_ip, dst_ip, src_port,
-                                            dst_port, buf, buf_size)) 
-    {
+                                            dst_port, buf, buf_size)) {
         Packet packet;
         PDU* pdu;
         switch (encap) {
-        case PcapWriter::PacketEncapsulation::ETHERNET:
-            pdu = new Tins::EthernetII();
-            break;
-        case PcapWriter::PacketEncapsulation::SLL:
-            pdu = new Tins::SLL();
-            break;
-        case PcapWriter::PacketEncapsulation::NULL_LOOPBACK:
-            throw "Encap not supported";
-            break;
-        default:
-            throw "Encap not supported";
+            case PcapWriter::PacketEncapsulation::ETHERNET:
+                pdu = new Tins::EthernetII();
+                break;
+            case PcapWriter::PacketEncapsulation::SLL:
+                pdu = new Tins::SLL();
+                break;
+            case PcapWriter::PacketEncapsulation::NULL_LOOPBACK:
+                throw std::runtime_error(
+                    "PcapWriter: NULL_LOOPBACK packet encapsulation not "
+                    "supported");
+                break;
+            default:
+                throw std::runtime_error(
+                    "PcapWriter: packet encapsulation not supported");
         }
         *pdu /= item;
         // Nasty libtins bug that causes write to fail
@@ -314,15 +316,14 @@ void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
         if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
             _ = pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
         }
-        packet = Packet(
-            *pdu, timestamp);
+        packet = Packet(*pdu, timestamp);
         impl->pcap_file_writer->write(packet);
         delete pdu;
     }
 }
 
 void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
-                                const packet_info& info) {
+                              const packet_info& info) {
     write_packet(buf, buf_size, info.src_ip, info.dst_ip, info.src_port,
                  info.dst_port, info.timestamp);
 }
