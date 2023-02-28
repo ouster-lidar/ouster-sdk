@@ -149,29 +149,12 @@ This module is generated from the C++ code and not meant to be used directly.
     });
 
     m.def("get_stream_info", [] (const std::string& file, 
-                                 std::function<void(uint64_t, uint64_t)> progress_callback,
+                                 std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
                                  int packets_per_callback,
                                  int packets_to_process=-1)
     {
-        int callback_count = 0;
-        uint64_t last_current = 0;
-        uint64_t last_total = 0;
-        std::function<void(uint64_t, uint64_t)> progress_callback_impl = 
-            [&] 
-            (uint64_t current, uint64_t total) 
-            {
-                callback_count++;
-                last_current = current;
-                last_total = total;
-                if(callback_count >= packets_per_callback)
-                {
-                        callback_count = 0;
-                        progress_callback(current, total);
-                }
-            };
-        auto result = get_stream_info(file, progress_callback_impl, packets_to_process);
-        progress_callback(last_current, last_total);
-        return result;
+        return get_stream_info(file, progress_callback, 
+                               packets_per_callback, packets_to_process);
     });
     m.def("guess_ports", &guess_ports);
     m.def(

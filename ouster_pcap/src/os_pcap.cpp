@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <vector>
 
+#include <fstream>
+
 #include "ouster/pcap.h"
 
 namespace ouster {
@@ -193,24 +195,33 @@ void record_packet(record_handle& handle, const std::string& src_ip,
 }
 
 std::shared_ptr<stream_info> get_stream_info(const std::string& file, 
-                                             std::function<void(uint64_t, uint64_t)> progress_callback,
+                                             std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
+                                             int packets_per_callback,
                                              int packets_to_process) 
 {
-    FILE *fileSizePointer = NULL;
-    fileSizePointer = fopen(file.c_str(),"rb");
-    fseek(fileSizePointer, 0, SEEK_END);
-    int fileSize = ftell(fileSizePointer);
-    fclose(fileSizePointer);
+    uint64_t fileSize = 0;
+    std::ifstream fileSizeStream(file, std::ios::binary);
+    if (fileSizeStream) {
+        fileSizeStream.seekg(0, std::ios::end);
+        fileSize = fileSizeStream.tellg();
+    }
+    
     std::shared_ptr<stream_info> result = std::make_shared<stream_info>();
     auto handle = replay_initialize(file);
+
+    int callback_count = 0;
+    uint64_t last_current = 0;
+    uint64_t diff_acc = 0;
 
     if(handle) {
         int i = 0;
         packet_info info;
         bool first = true;
+        uint64_t prev_location = 0;
         while(((packets_to_process <= 0) || (i < packets_to_process)) 
               && next_packet_info(*handle, info))
         {
+            callback_count++;
             if(first) 
             {
                 first = false;
@@ -236,10 +247,23 @@ std::shared_ptr<stream_info> get_stream_info(const std::string& file,
             stream.fragment_counts[info.fragments_in_packet]++;
             stream.ip_version_counts[info.ip_version]++;
 
-            progress_callback(info.file_offset, fileSize);
+            diff_acc += (info.file_offset - prev_location);
+            last_current = info.file_offset;
+
+            if( callback_count > packets_per_callback
+                && packets_per_callback >= 0)
+            {
+                progress_callback(info.file_offset, diff_acc, fileSize);
+                diff_acc = 0;
+                callback_count = 0;
+            }
+            prev_location = info.file_offset;
             i++;
         }
-
+        if( diff_acc > 0 && packets_per_callback >= 0)
+        {
+            progress_callback(last_current, diff_acc, fileSize);
+        }
         replay_uninitialize(*handle);
     }
 
@@ -249,7 +273,8 @@ std::shared_ptr<stream_info> get_stream_info(const std::string& file,
 std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process) 
 {
     return get_stream_info(file, 
-                           [] (uint64_t, uint64_t) {},
+                           [] (uint64_t, uint64_t, uint64_t) {},
+                           -1,
                            packets_to_process);
 }
 /*

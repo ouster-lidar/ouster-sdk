@@ -228,13 +228,18 @@ std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packet
  * Return the information about network streams in a pcap file.
  *
  * @param[in] file The pcap file to read.
- * @param[in[ progress_callback A callback to invoke after each packet is scanned
+ * @param[in] progress_callback A callback to invoke after each packet is scanned
+ *                              current: The current file offset
+ *                              delta: The delta in file offset
+ *                              total: The total size of the file
+ * @param[in] packets_per_callback Callback every n packets
  * @param[in] packets_to_process Number of packets to process < 0 for all of them
  *
  * @return A pointer to the resulting stream_info
  */
 std::shared_ptr<stream_info> get_stream_info(const std::string& file, 
-                                             std::function<void(uint64_t, uint64_t)> progress_callback, 
+                                             std::function<void(uint64_t current, uint64_t delta, uint64_t total)> progress_callback,
+                                             int packets_per_callback,
                                              int packets_to_process=-1);
 /**
  * Return a guess of the correct ports located in a pcap file.
