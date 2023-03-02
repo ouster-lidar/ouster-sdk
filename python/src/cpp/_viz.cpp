@@ -166,6 +166,13 @@ PYBIND11_PLUGIN(_viz) {
                                &viz::PointViz::viewport_height,
                                "Current viewport height in pixels")
 
+        .def_property_readonly("window_width", &viz::PointViz::window_width,
+                               "Current window width in screen coordinates")
+
+        .def_property_readonly("window_height",
+                               &viz::PointViz::window_height,
+                               "Current window height in screen coordinates")
+
         .def("add",
              py::overload_cast<const std::shared_ptr<viz::Cloud>&>(
                  &viz::PointViz::add),
@@ -216,7 +223,11 @@ PYBIND11_PLUGIN(_viz) {
         .def_readonly("viewport_width", &viz::WindowCtx::viewport_width,
                       "Current viewport width in pixels")
         .def_readonly("viewport_height", &viz::WindowCtx::viewport_height,
-                      "Current viewport height in pixels");
+                      "Current viewport height in pixels")
+        .def_readonly("window_width", &viz::WindowCtx::window_width,
+                      "Current window width in screen coordinates")
+        .def_readonly("window_height", &viz::WindowCtx::window_height,
+                      "Current window height in screen coordinates");
 
     py::class_<viz::Camera>(m, "Camera",
                             "Controls the camera view and projection.")

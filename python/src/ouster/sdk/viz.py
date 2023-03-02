@@ -154,8 +154,8 @@ class LidarScanViz:
         self._img_ind = [0, 1]  # index of field to display
         self._img_size_fraction = 6
         self._img_aspect = _img_aspect_ratio or (
-            min(meta.beam_altitude_angles) -
-            max(meta.beam_altitude_angles)) / 360.0
+            max(meta.beam_altitude_angles) -
+            min(meta.beam_altitude_angles)) / 360.0
 
         # misc display state
         self._available_fields = []

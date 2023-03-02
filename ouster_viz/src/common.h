@@ -205,7 +205,7 @@ static const std::string point_fragment_shader_code =
             void main() {
                 // getting color from palette or as it set in the rgb data
                 // the full resolved color will be in vec4(c, key.a)
-                vec3 c = mono ? texture(palette, vec2(sqrt(key.r), 1)).rgb : key.rgb;
+                vec3 c = mono ? texture(palette, vec2(key.r, 1)).rgb : key.rgb;
                 // compositing the mask RGBA value on top of the resolved point color c
                 // using "over" operator https://en.wikipedia.org/wiki/Alpha_compositing
                 float color_a = mask.a + key.a * (1 - mask.a);
@@ -271,7 +271,7 @@ static const std::string image_fragment_shader_code =
             void main() {
                 vec4 m = texture(mask, uv);
                 vec4 itex = texture(image, uv);
-                vec3 key_color = use_palette ? texture(palette, vec2(itex.r, 1)).rgb : vec3(sqrt(itex.r));
+                vec3 key_color = use_palette ? texture(palette, vec2(itex.r, 1)).rgb : vec3(itex.r);
                 vec3 img_color = mono ? key_color : itex.rgb;
                 float color_a = m.a + itex.a * (1 - m.a);
                 color = vec4((m.rgb * m.a + img_color * (1.0 - m.a)) / color_a, color_a);

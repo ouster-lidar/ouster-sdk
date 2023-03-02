@@ -282,14 +282,34 @@ class PointViz {
      *
      * @return viewport width reported by glfw
      */
-    int viewport_width();
+    int viewport_width() const;
 
     /**
      * Get a viewport height in pixels.
      *
      * @return viewport height reported by glfw
      */
-    int viewport_height();
+    int viewport_height() const;
+
+    /**
+     * Get a window width in screen coordinates.
+     * 
+     * NOTE: this value maybe different from the viewport size on retina
+     * displays
+     *
+     * @return window width reported by glfw
+     */
+    int window_width() const;
+
+    /**
+     * Get a window height in screen coordinates.
+     * 
+     * @note this value maybe different from the viewport size on retina
+     * displays
+     *
+     * @return window height reported by glfw
+     */
+    int window_height() const;
 
    private:
     std::unique_ptr<Impl> pimpl;
@@ -317,6 +337,8 @@ struct WindowCtx {
     double mouse_y{0};         ///< Current mouse y position
     int viewport_width{0};     ///< Current viewport width in pixels
     int viewport_height{0};    ///< Current viewport height in pixels
+    int window_width{0};       ///< Current window width in screen coordinates
+    int window_height{0};      ///< Current window height in screen coordinates
 };
 
 /**

@@ -245,12 +245,20 @@ bool PointViz::update() {
     return true;
 }
 
-int PointViz::viewport_width() {
+int PointViz::viewport_width() const {
     return pimpl->glfw->window_context.viewport_width;
 }
 
-int PointViz::viewport_height() {
+int PointViz::viewport_height() const {
     return pimpl->glfw->window_context.viewport_height;
+}
+
+int PointViz::window_width() const {
+    return pimpl->glfw->window_context.window_width;
+}
+
+int PointViz::window_height() const {
+    return pimpl->glfw->window_context.window_height;
 }
 
 void PointViz::draw() {
@@ -838,11 +846,11 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 viz.camera().yaw(sensitivity * dx);
                 viz.camera().pitch(sensitivity * dy);
             } else if (wc.mbutton_down) {
-                // convert from pixels to fractions of window size
+                // convert from screen coordinated to fractions of window size
                 // TODO: factor out conversion?
                 const double window_diagonal =
-                    std::sqrt(wc.viewport_width * wc.viewport_width +
-                              wc.viewport_height * wc.viewport_height);
+                    std::sqrt(wc.window_width * wc.window_width +
+                              wc.window_height * wc.window_height);
                 dx *= 2.0 / window_diagonal;
                 dy *= 2.0 / window_diagonal;
                 viz.camera().dolly_xy(dx, dy);

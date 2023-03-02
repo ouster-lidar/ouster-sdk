@@ -43,6 +43,14 @@ class WindowCtx:
     def viewport_height(self) -> int:
         ...
 
+    @property
+    def window_width(self) -> int:
+        ...
+
+    @property
+    def window_height(self) -> int:
+        ...
+
 
 class Camera:
 
