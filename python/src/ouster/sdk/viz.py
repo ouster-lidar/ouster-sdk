@@ -627,7 +627,7 @@ class SimpleViz:
         if self._viz_img_recording:
             self._viz_img_recording = False
             self._viz.pop_frame_buffer_handler()
-            print("Key SHIFT-X: Img Recording STOPED")
+            print("Key SHIFT-X: Img Recording STOPPED")
         else:
             self._viz_img_recording = True
 

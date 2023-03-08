@@ -274,6 +274,9 @@ class PointViz:
     def update(self) -> bool:
         ...
 
+    def visible(self, state: bool) -> bool:
+        ...
+
     def push_key_handler(self, f: Callable[[WindowCtx, int, int],
                                            bool]) -> None:
         ...
