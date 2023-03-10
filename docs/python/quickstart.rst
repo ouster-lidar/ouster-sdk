@@ -142,7 +142,7 @@ Now we have a ``source`` from our sensor! You're ready to record, visualize to v
 ``source`` in the Python :doc:`/python/examples/index`.
 
 
-.. _Networking Guide: https://static.ouster.dev/sensor-docs/developer_common_sections/networking-guide.html
+.. _Networking Guide: https://static.ouster.dev/sensor-docs/image_route1/image_route3/networking_guide/networking_guide.html
 
 
 Next Steps
