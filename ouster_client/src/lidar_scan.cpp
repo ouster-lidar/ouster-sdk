@@ -80,6 +80,14 @@ static const Table<ChanField, ChanFieldType, 3> lb_field_slots{{
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
+static const Table<ChanField, ChanFieldType, 12> five_word_slots{{
+    {ChanField::RAW32_WORD1, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD2, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD3, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD4, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD5, ChanFieldType::UINT32},
+}};
+
 struct DefaultFieldsEntry {
     const std::pair<ChanField, ChanFieldType>* fields;
     size_t n_fields;
@@ -93,7 +101,9 @@ Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
      {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
       {single_field_slots.data(), single_field_slots.size()}},
      {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
-      {lb_field_slots.data(), lb_field_slots.size()}}}};
+      {lb_field_slots.data(), lb_field_slots.size()}},
+     {UDPProfileLidar::PROFILE_FIVE_WORD_PIXEL,
+      {five_word_slots.data(), five_word_slots.size()}}}};
 
 static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     UDPProfileLidar profile) {

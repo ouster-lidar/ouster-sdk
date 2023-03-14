@@ -173,6 +173,9 @@ enum UDPProfileLidar {
 
     /** Single Returns Low Data Rate */
     PROFILE_RNG15_RFL8_NIR8,
+
+    /** Five Word Profile */
+    PROFILE_FIVE_WORD_PIXEL,
 };
 
 /** Profile indicating packet format of IMU data. */
@@ -755,6 +758,11 @@ enum ChanField {
     FLAGS = 8,            ///< 1st return flags
     FLAGS2 = 9,           ///< 2nd return flags
     RAW_HEADERS = 40,     ///< raw headers for packet/footer/column for dev use
+    RAW32_WORD5 = 45,     ///< raw word access to packet for dev use
+    RAW32_WORD6 = 46,     ///< raw word access to packet for dev use
+    RAW32_WORD7 = 47,     ///< raw word access to packet for dev use
+    RAW32_WORD8 = 48,     ///< raw word access to packet for dev use
+    RAW32_WORD9 = 49,     ///< raw word access to packet for dev use
     CUSTOM0 = 50,         ///< custom user field
     CUSTOM1 = 51,         ///< custom user field
     CUSTOM2 = 52,         ///< custom user field

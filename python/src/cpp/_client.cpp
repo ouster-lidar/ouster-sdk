@@ -83,8 +83,8 @@ extern const Table<MultipurposeIOMode, const char*, 6>
     multipurpose_io_mode_strings;
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
-extern Table<ChanField, const char*, 24> chanfield_strings;
-extern Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings;
+extern Table<ChanField, const char*, 29> chanfield_strings;
+extern Table<UDPProfileLidar, const char*, 5> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
 extern Table<ThermalShutdownStatus, const char*, 2>

@@ -69,7 +69,7 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-Table<sensor::ChanField, const char*, 24> chanfield_strings{{
+Table<sensor::ChanField, const char*, 29> chanfield_strings{{
     {ChanField::RANGE, "RANGE"},
     {ChanField::RANGE2, "RANGE2"},
     {ChanField::SIGNAL, "SIGNAL"},
@@ -94,13 +94,19 @@ Table<sensor::ChanField, const char*, 24> chanfield_strings{{
     {ChanField::RAW32_WORD2, "RAW32_WORD2"},
     {ChanField::RAW32_WORD3, "RAW32_WORD3"},
     {ChanField::RAW32_WORD4, "RAW32_WORD4"},
+    {ChanField::RAW32_WORD5, "RAW32_WORD5"},
+    {ChanField::RAW32_WORD6, "RAW32_WORD6"},
+    {ChanField::RAW32_WORD7, "RAW32_WORD7"},
+    {ChanField::RAW32_WORD8, "RAW32_WORD8"},
+    {ChanField::RAW32_WORD9, "RAW32_WORD9"},
 }};
 
-Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings{{
+Table<UDPProfileLidar, const char*, 5> udp_profile_lidar_strings{{
     {PROFILE_LIDAR_LEGACY, "LEGACY"},
     {PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
     {PROFILE_RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
     {PROFILE_RNG15_RFL8_NIR8, "RNG15_RFL8_NIR8"},
+    {PROFILE_FIVE_WORD_PIXEL, "FIVE_WORD_PIXEL"},
 }};
 
 Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
