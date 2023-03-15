@@ -77,6 +77,15 @@ size_t PcapReader::current_length() const { return info.payload_size; }
 
 const packet_info& PcapReader::current_info() const { return info; }
 
+void PcapReader::seek(uint64_t offset) {
+    if(offset < sizeof(struct pcap_file_header)) {
+        offset = sizeof(struct pcap_file_header);
+    }
+    if(fseek(impl->pcap_reader_internals, offset, SEEK_SET)) {
+        throw std::runtime_error("pcap seek failed");
+    }
+}
+
 size_t PcapReader::next_packet() {
     size_t result = 0;
 
@@ -84,9 +93,9 @@ size_t PcapReader::next_packet() {
     int reassm_packets = 0;
     while (!reassm) {
         reassm_packets++;
+        info.file_offset = ftell(impl->pcap_reader_internals);
         impl->packet_cache = impl->pcap_reader->next_packet();
         if (impl->packet_cache) {
-            info.file_offset = ftell(impl->pcap_reader_internals);
             auto pdu = impl->packet_cache.pdu();
             if (pdu) {
                 info.packet_size = pdu->size();

@@ -88,6 +88,15 @@ class PcapReader {
      * @return A packet_info object on the current packet
      */
     const packet_info& current_info() const;
+
+    /**
+     * Seek to the position in the file represented by the
+     * number of bytes from the beginning of the file.
+     *
+     * @param position[in] The position to seek to in bytes,
+     * starting from the beginning of the file.
+     */
+    void seek(uint64_t offset);
 };
 
 /**

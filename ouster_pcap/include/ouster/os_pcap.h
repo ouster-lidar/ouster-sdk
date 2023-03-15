@@ -16,6 +16,7 @@
 #include <vector>
 #include <functional>
 
+#include "ouster/types.h"
 #include "ouster/pcap.h"
 
 namespace ouster {

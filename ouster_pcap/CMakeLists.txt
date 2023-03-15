@@ -15,6 +15,8 @@ if(WIN32)
   target_link_libraries(ouster_pcap PUBLIC ws2_32)
 endif()
 target_link_libraries(ouster_pcap
+  PUBLIC
+    OusterSDK::ouster_client
   PRIVATE ${PCAP_LIBRARY} libtins)
 add_library(OusterSDK::ouster_pcap ALIAS ouster_pcap)
 
