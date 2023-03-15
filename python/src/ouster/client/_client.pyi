@@ -142,6 +142,7 @@ class DataFormat:
     column_window: Tuple[int, int]
     udp_profile_lidar: UDPProfileLidar
     udp_profile_imu: UDPProfileIMU
+    fps: int
 
 
 class PacketFormat:

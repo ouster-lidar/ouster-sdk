@@ -367,6 +367,7 @@ struct data_format {
     ColumnWindow column_window;  ///< window of columns over which sensor fires
     UDPProfileLidar udp_profile_lidar;  ///< profile of lidar packet
     UDPProfileIMU udp_profile_imu;      ///< profile of imu packet
+    uint16_t fps;                ///< frames per second
 };
 
 /** Stores necessary information from sensor to parse and project sensor data.

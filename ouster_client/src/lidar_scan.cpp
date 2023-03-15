@@ -301,8 +301,12 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     const std::vector<double>& altitude_angles_deg) {
     if (w <= 0 || h <= 0)
         throw std::invalid_argument("lut dimensions must be greater than zero");
-    if (azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h)
+
+    if ((azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h) &&
+        (azimuth_angles_deg.size() != w * h ||
+         altitude_angles_deg.size() != w * h)) {
         throw std::invalid_argument("unexpected scan dimensions");
+    }
 
     double beam_to_lidar_euclidean_distance_mm = beam_to_lidar_transform(0, 3);
     if (beam_to_lidar_transform(2, 3) != 0) {
@@ -311,24 +315,40 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                       std::pow(beam_to_lidar_transform(2, 3), 2));
     }
 
+    XYZLut lut;
+
     Eigen::ArrayXd encoder(w * h);   // theta_e
     Eigen::ArrayXd azimuth(w * h);   // theta_a
     Eigen::ArrayXd altitude(w * h);  // phi
 
-    const double azimuth_radians = M_PI * 2.0 / w;
+    if (azimuth_angles_deg.size() == h && altitude_angles_deg.size() == h) {
+        // OS sensor
+        const double azimuth_radians = M_PI * 2.0 / w;
 
-    // populate angles for each pixel
-    for (size_t v = 0; v < w; v++) {
-        for (size_t u = 0; u < h; u++) {
-            size_t i = u * w + v;
-            encoder(i) = 2.0 * M_PI - (v * azimuth_radians);
-            azimuth(i) = -azimuth_angles_deg[u] * M_PI / 180.0;
-            altitude(i) = altitude_angles_deg[u] * M_PI / 180.0;
+        // populate angles for each pixel
+        for (size_t v = 0; v < w; v++) {
+            for (size_t u = 0; u < h; u++) {
+                size_t i = u * w + v;
+                encoder(i) = 2.0 * M_PI - (v * azimuth_radians);
+                azimuth(i) = -azimuth_angles_deg[u] * M_PI / 180.0;
+                altitude(i) = altitude_angles_deg[u] * M_PI / 180.0;
+            }
+        }
+
+    } else if (azimuth_angles_deg.size() == w * h &&
+               altitude_angles_deg.size() == w * h) {
+        // DF sensor
+        // populate angles for each pixel
+        for (size_t v = 0; v < w; v++) {
+            for (size_t u = 0; u < h; u++) {
+                size_t i = u * w + v;
+                encoder(i) = 0;
+                azimuth(i) = azimuth_angles_deg[i] * M_PI / 180.0;
+                altitude(i) = altitude_angles_deg[i] * M_PI / 180.0;
+            }
         }
     }
-
-    XYZLut lut;
-
+        
     // unit vectors for each pixel
     lut.direction = LidarScan::Points{w * h, 3};
     lut.direction.col(0) = (encoder + azimuth).cos() * altitude.cos();

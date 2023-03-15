@@ -656,7 +656,12 @@ class SimpleViz:
     def _frame_period(self) -> float:
         rate = SimpleViz._playback_rates[self._rate_ind]
         if rate and not self._paused:
-            return 1.0 / (self._metadata.mode.frequency * rate)
+            if isinstance(self._scan_viz, LidarScanViz):
+                return 1.0 / (self._metadata.format.fps * rate)
+            else:
+                # if some other scan viz that is not derived from LidarScanViz
+                # we default to 10 Hz
+                return 1.0 / (10 * rate)
         else:
             return 0.0
 

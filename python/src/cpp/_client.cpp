@@ -427,7 +427,8 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("pixel_shift_by_row", &data_format::pixel_shift_by_row)
         .def_readwrite("column_window", &data_format::column_window)
         .def_readwrite("udp_profile_lidar", &data_format::udp_profile_lidar)
-        .def_readwrite("udp_profile_imu", &data_format::udp_profile_imu);
+        .def_readwrite("udp_profile_imu", &data_format::udp_profile_imu)
+        .def_readwrite("fps", &data_format::fps);
 
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
@@ -464,8 +465,9 @@ PYBIND11_PLUGIN(_client) {
         )")
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__repr__", [](const sensor_info& self) {
+            const auto mode = self.mode ? to_string(self.mode) : std::to_string(self.format.fps) + "fps";
             return "<ouster.client.SensorInfo " + self.prod_line + " " +
-                self.sn + " " + self.fw_rev + " " + to_string(self.mode) + ">";
+                self.sn + " " + self.fw_rev + " " + mode + ">";
         })
         .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; })
         .def("__deepcopy__", [](const sensor_info& self, py::dict) { return sensor_info{self}; });

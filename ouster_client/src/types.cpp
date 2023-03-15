@@ -21,6 +21,7 @@
 #include "logging.h"
 #include "ouster/impl/build.h"
 #include "ouster/version.h"
+
 namespace ouster {
 
 using nonstd::make_optional;
@@ -145,7 +146,7 @@ bool operator==(const data_format& lhs, const data_format& rhs) {
             lhs.pixel_shift_by_row == rhs.pixel_shift_by_row &&
             lhs.column_window == rhs.column_window &&
             lhs.udp_profile_lidar == rhs.udp_profile_lidar &&
-            lhs.udp_profile_imu == rhs.udp_profile_imu);
+            lhs.udp_profile_imu == rhs.udp_profile_imu && lhs.fps == rhs.fps);
 }
 
 bool operator!=(const data_format& lhs, const data_format& rhs) {
@@ -240,7 +241,8 @@ data_format default_data_format(lidar_mode mode) {
             offset,
             column_window,
             UDPProfileLidar::PROFILE_LIDAR_LEGACY,
-            UDPProfileIMU::PROFILE_IMU_LEGACY};
+            UDPProfileIMU::PROFILE_IMU_LEGACY,
+            static_cast<uint16_t>(frequency_of_lidar_mode(mode))};
 }
 
 static double default_lidar_origin_to_beam_origin(std::string prod_line) {
@@ -712,8 +714,7 @@ static bool is_new_format(const std::string& metadata) {
 
 static data_format parse_data_format(const Json::Value& root) {
     const std::vector<std::string> data_format_required_fields{
-        "pixels_per_column", "columns_per_packet", "columns_per_frame",
-        "pixel_shift_by_row"};
+        "pixels_per_column", "columns_per_packet", "columns_per_frame"};
 
     for (const auto& field : data_format_required_fields) {
         if (!root.isMember(field)) {
@@ -727,12 +728,17 @@ static data_format parse_data_format(const Json::Value& root) {
     format.columns_per_packet = root["columns_per_packet"].asInt();
     format.columns_per_frame = root["columns_per_frame"].asInt();
 
-    if (root["pixel_shift_by_row"].size() != format.pixels_per_column) {
-        throw std::runtime_error{"Unexpected number of pixel_shift_by_row"};
-    }
+    if (root.isMember("pixel_shift_by_row")) {
+        if (root["pixel_shift_by_row"].size() != format.pixels_per_column) {
+            throw std::runtime_error{"Unexpected number of pixel_shift_by_row"};
+        }
 
-    for (const auto& v : root["pixel_shift_by_row"])
-        format.pixel_shift_by_row.push_back(v.asInt());
+        for (const auto& v : root["pixel_shift_by_row"])
+            format.pixel_shift_by_row.push_back(v.asInt());
+    } else {
+        // DF path
+        format.pixel_shift_by_row.assign(format.pixels_per_column, 0);
+    }
 
     if (root.isMember("column_window")) {
         if (root["column_window"].size() != 2) {
@@ -775,6 +781,14 @@ static data_format parse_data_format(const Json::Value& root) {
         format.udp_profile_imu = PROFILE_IMU_LEGACY;
     }
 
+    if (root.isMember("fps")) {
+        format.fps = root["fps"].asInt();
+    } else {
+        logger().warn(
+            "No fps found. Trying to use one from lidar mode (or 0)");
+        format.fps = 0;
+    }
+
     return format;
 }  // namespace sensor
 
@@ -789,8 +803,17 @@ static sensor_info parse_legacy(const std::string& meta) {
             throw std::runtime_error{errors};
     }
 
-    const std::vector<std::string> minimum_legacy_metadata_fields{
-        "beam_altitude_angles", "beam_azimuth_angles", "lidar_mode"};
+    // NOTE[pb]: DF development metadata.json doesn't have beam_altitude_angles
+    // and beam_azimuth_angles and instead provides beam_xyz. However
+    // final implementation should have azimuth/altitude angles and
+    // we may uncomment the validation back closer to the release.
+    // const std::vector<std::string> minimum_legacy_metadata_fields{
+    //     "beam_altitude_angles", "beam_azimuth_angles", "lidar_mode"};
+
+    // NOTE[pb]: DF metadata doesn't have lidar_mode, but because it's
+    // going through convert_to_legacy() function it get's the empty
+    // string lidar_mode ... hmmm, fine for now...
+    const std::vector<std::string> minimum_legacy_metadata_fields{"lidar_mode"};
 
     for (auto field : minimum_legacy_metadata_fields) {
         if (!root.isMember(field)) {
@@ -843,6 +866,11 @@ static sensor_info parse_legacy(const std::string& meta) {
     // "data_format" introduced in fw 2.0. Fall back to 1.13
     if (root.isMember("data_format")) {
         info.format = parse_data_format(root["data_format"]);
+        // data_format.fps was added for DF sensors, so we are backfilling
+        // fps value for OS sensors here if it's not present in metadata
+        if (info.format.fps == 0) {
+            info.format.fps = frequency_of_lidar_mode(info.mode);
+        }
     } else {
         logger().warn("No data_format found. Using default legacy data format");
         info.format = default_data_format(info.mode);
@@ -886,19 +914,78 @@ static sensor_info parse_legacy(const std::string& meta) {
             info.lidar_origin_to_beam_origin_mm;
     }
 
-    if (root["beam_altitude_angles"].size() != info.format.pixels_per_column) {
+    if (root["beam_altitude_angles"].size() != 0 &&
+        root["beam_altitude_angles"].size() != info.format.pixels_per_column) {
         throw std::runtime_error{"Unexpected number of beam_altitude_angles"};
     }
 
-    if (root["beam_azimuth_angles"].size() != info.format.pixels_per_column) {
+    if (root["beam_azimuth_angles"].size() != 0 &&
+        root["beam_azimuth_angles"].size() != info.format.pixels_per_column) {
         throw std::runtime_error{"Unexpected number of beam_azimuth_angles"};
     }
 
-    for (const auto& v : root["beam_altitude_angles"])
-        info.beam_altitude_angles.push_back(v.asDouble());
+    if (root["beam_altitude_angles"].size() == info.format.pixels_per_column) {
+        if (root["beam_altitude_angles"][0].isArray()) {
+            // DF sensor path
+            for (const auto& row : root["beam_altitude_angles"])
+                for (const auto& v : row)
+                    info.beam_altitude_angles.push_back(v.asDouble());
 
-    for (const auto& v : root["beam_azimuth_angles"])
-        info.beam_azimuth_angles.push_back(v.asDouble());
+            if (info.beam_altitude_angles.size() !=
+                info.format.pixels_per_column * info.format.columns_per_frame) {
+                throw std::runtime_error{
+                    "Unexpected number of total beam_altitude_angles"};
+            }
+        } else {
+            // OS sensor path
+            for (const auto& v : root["beam_altitude_angles"])
+                info.beam_altitude_angles.push_back(v.asDouble());
+        }
+    }
+
+    if (root["beam_azimuth_angles"].size() == info.format.pixels_per_column) {
+        if (root["beam_azimuth_angles"][0].isArray()) {
+            // DF sensor path
+            for (const auto& row : root["beam_azimuth_angles"]) {
+                for (const auto& v : row)
+                    info.beam_azimuth_angles.push_back(v.asDouble());
+            }
+
+            if (info.beam_azimuth_angles.size() !=
+                info.format.pixels_per_column * info.format.columns_per_frame) {
+                throw std::runtime_error{
+                    "Unexpected number of total beam_azimuth_angles"};
+            }
+        } else {
+            // OS sensor path
+            for (const auto& v : root["beam_azimuth_angles"])
+                info.beam_azimuth_angles.push_back(v.asDouble());
+        }
+    }
+
+    // NOTE[pb]: this block that handles beam_xyz shouldn't survive past
+    // the DF development phase and we need to swith to azimuth/altitude
+    // angles in the metadata, because they take less space and they
+    // are less redundant configuration of intrinsics than unit xyz vectors
+    if (info.beam_altitude_angles.empty() && info.beam_azimuth_angles.empty()) {
+        if (root["beam_xyz"].size() !=
+            3 * info.format.pixels_per_column * info.format.columns_per_frame) {
+            throw std::runtime_error{"Unexpected number of beam_xyz"};
+        }
+
+        // DF sensor path
+        auto& xyz = root["beam_xyz"];
+        for (Json::Value::ArrayIndex idx = 0; idx < xyz.size(); idx += 3) {
+            auto x = xyz[idx + 0].asDouble();
+            auto y = xyz[idx + 1].asDouble();
+            auto z = xyz[idx + 2].asDouble();
+            auto al = std::atan2(z, sqrt(x * x + y * y)) * 180.0 / M_PI;
+            auto az = std::atan2(y, x) * 180.0 / M_PI;
+            info.beam_altitude_angles.push_back(al);
+            info.beam_azimuth_angles.push_back(az);
+        }
+
+    }
 
     // "imu_to_sensor_transform" may be absent in sensor config
     // produced by Ouster Studio, so we backfill it with default value
@@ -936,6 +1023,7 @@ static sensor_info parse_legacy(const std::string& meta) {
     }
 
     auto zero_check = [](auto el, std::string name) {
+        if (el.size() == 0) return;
         bool all_zeros = std::all_of(el.cbegin(), el.cend(),
                                      [](double k) { return k == 0.0; });
         if (all_zeros) {
@@ -1067,6 +1155,7 @@ std::string to_string(const sensor_info& info) {
     root["data_format"]["pixels_per_column"] = info.format.pixels_per_column;
     root["data_format"]["columns_per_packet"] = info.format.columns_per_packet;
     root["data_format"]["columns_per_frame"] = info.format.columns_per_frame;
+    root["data_format"]["fps"] = info.format.fps;
     for (auto i : info.format.pixel_shift_by_row)
         root["data_format"]["pixel_shift_by_row"].append(i);
 
