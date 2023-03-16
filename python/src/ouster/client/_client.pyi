@@ -731,7 +731,7 @@ class AutoExposure:
                  update_every: int) -> None:
         ...
 
-    def __call__(self, image: ndarray) -> None:
+    def __call__(self, image: ndarray, update_state: Optional[bool] = True) -> None:
         ...
 
 

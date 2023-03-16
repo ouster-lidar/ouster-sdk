@@ -80,7 +80,7 @@ static const Table<ChanField, ChanFieldType, 3> lb_field_slots{{
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
-static const Table<ChanField, ChanFieldType, 12> five_word_slots{{
+static const Table<ChanField, ChanFieldType, 5> five_word_slots{{
     {ChanField::RAW32_WORD1, ChanFieldType::UINT32},
     {ChanField::RAW32_WORD2, ChanFieldType::UINT32},
     {ChanField::RAW32_WORD3, ChanFieldType::UINT32},
