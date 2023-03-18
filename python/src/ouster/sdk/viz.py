@@ -15,8 +15,8 @@ import threading
 import time
 from datetime import datetime
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
-                    Optional, Tuple, TypeVar, Union, Any, runtime_checkable)
-from typing_extensions import Protocol
+                    Optional, Tuple, TypeVar, Union, Any)
+from typing_extensions import Protocol, runtime_checkable
 import weakref
 import logging
 

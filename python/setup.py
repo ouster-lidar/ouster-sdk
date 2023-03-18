@@ -147,7 +147,7 @@ setup(
     install_requires=[
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
-        'typing-extensions >=3.7',
+        'typing-extensions >=3.7.4.3',
         'Pillow >=9.2'
     ],
     extras_require={
