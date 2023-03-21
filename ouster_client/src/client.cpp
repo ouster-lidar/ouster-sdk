@@ -26,7 +26,7 @@
 #include "logging.h"
 #include "netcompat.h"
 #include "ouster/types.h"
-#include "sensor_http.h"
+#include "ouster/sensor_http.h"
 
 using namespace std::chrono_literals;
 namespace chrono = std::chrono;

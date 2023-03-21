@@ -1,4 +1,4 @@
-#include "sensor_http.h"
+#include "ouster/sensor_http.h"
 
 #include <regex>
 

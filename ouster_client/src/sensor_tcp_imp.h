@@ -10,7 +10,7 @@
 #pragma once
 
 #include "netcompat.h"
-#include "sensor_http.h"
+#include "ouster/sensor_http.h"
 
 namespace ouster {
 namespace sensor {

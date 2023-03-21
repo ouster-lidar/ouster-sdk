@@ -2,6 +2,15 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+ouster_client
+--------------
+* the class ``SensorHttp``  which provides easy access to REST APIs of the sensor has been made public
+  under the ``ouster::sensor::util`` namespace.
+
+
 [20230114]
 ==========
 
