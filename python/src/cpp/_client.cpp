@@ -636,6 +636,16 @@ PYBIND11_PLUGIN(_client) {
         )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false,
             py::arg("force_reinit") = false);
 
+    m.def("convert_to_legacy", &ouster::sensor::convert_to_legacy , R"(
+        Convert a non-legacy metadata in string format to legacy
+
+        Args:
+            metadata: non-legacy metadata string
+
+        Returns:
+            returns legacy string representation of metadata.
+            )", py::arg("metadata"));
+
     m.def("get_config", [](const std::string& hostname, bool active) {
         sensor::sensor_config config;
         if (!sensor::get_config(hostname, config, active)) {
@@ -1023,12 +1033,10 @@ PYBIND11_PLUGIN(_client) {
             "sys_ts", [](const ouster::Imu& imu) { return imu.sys_ts; },
             "System timestamp (ns)")
         .def_property_readonly(
-            "accel_ts",
-            [](const ouster::Imu& imu) { return imu.accel_ts; },
+            "accel_ts", [](const ouster::Imu& imu) { return imu.accel_ts; },
             "Accelerometer timestamp (ns)")
         .def_property_readonly(
-            "gyro_ts",
-            [](const ouster::Imu& imu) { return imu.gyro_ts; },
+            "gyro_ts", [](const ouster::Imu& imu) { return imu.gyro_ts; },
             "Gyroscope timestamp (ns)")
         .def_property_readonly(
             "accel",

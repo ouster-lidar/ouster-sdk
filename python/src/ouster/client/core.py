@@ -133,7 +133,7 @@ class Sensor(PacketSource):
                  _overflow_err: bool = False,
                  _flush_before_read: bool = True,
                  _flush_frames: int = 5,
-                 _legacy_format: bool = True,
+                 _legacy_format: bool = False,
                  _soft_id_check: bool = False) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
@@ -209,10 +209,9 @@ class Sensor(PacketSource):
         if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
         if st & _client.ClientState.LIDAR_DATA:
-            lp = LidarPacket(
-                buf,
-                self._metadata,
-                _raise_on_id_check=not self._soft_id_check)
+            lp = LidarPacket(buf,
+                             self._metadata,
+                             _raise_on_id_check=not self._soft_id_check)
             if lp.id_error:
                 self._id_error_count += 1
             return lp
@@ -255,7 +254,7 @@ class Sensor(PacketSource):
 
         # Attempt to flush any old data before producing packets
         if self._flush_before_read:
-            self.flush(n_frames = self._flush_frames, full=True)
+            self.flush(n_frames=self._flush_frames, full=True)
 
         while True:
             try:
@@ -468,9 +467,7 @@ class Scans:
             A tuple of metadata queried from the sensor and an iterator that
             samples n consecutive scans
         """
-        with closing(Sensor(hostname,
-                            lidar_port,
-                            7503,
+        with closing(Sensor(hostname, lidar_port, 7503,
                             metadata=metadata)) as sensor:
             metadata = sensor.metadata
 

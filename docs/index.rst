@@ -43,7 +43,7 @@
    :hidden:
 
     Migrating from 20220927/0.5.1 to 20230114/0.7.1 <migration/migration-20220927-20230114>
-
+    Migrating from 20230114/0.7.1 to 20230403/0.8.1 <migration/migration-20230114-20230403>
 ..
    FAQ <faq>
 

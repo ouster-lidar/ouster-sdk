@@ -169,4 +169,5 @@ setup(
             'PyQt5; platform_system=="Windows"',
         ],
     },
-    entry_points={'console_scripts': ['simple-viz=ouster.sdk.simple_viz:main']})
+    entry_points={'console_scripts': ['simple-viz=ouster.sdk.simple_viz:main',
+        'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main']})

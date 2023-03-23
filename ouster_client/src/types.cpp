@@ -784,8 +784,7 @@ static data_format parse_data_format(const Json::Value& root) {
     if (root.isMember("fps")) {
         format.fps = root["fps"].asInt();
     } else {
-        logger().warn(
-            "No fps found. Trying to use one from lidar mode (or 0)");
+        logger().warn("No fps found. Trying to use one from lidar mode (or 0)");
         format.fps = 0;
     }
 
@@ -984,7 +983,6 @@ static sensor_info parse_legacy(const std::string& meta) {
             info.beam_altitude_angles.push_back(al);
             info.beam_azimuth_angles.push_back(az);
         }
-
     }
 
     // "imu_to_sensor_transform" may be absent in sensor config

@@ -442,7 +442,7 @@ uint16_t packet_format::px_signal(const uint8_t* px_buf) const {
 }
 
 uint16_t packet_format::px_ambient(const uint8_t* px_buf) const {
-    return px_field<uint16_t>(px_buf, ChanField::AMBIENT);
+    return px_field<uint16_t>(px_buf, ChanField::NEAR_IR);
 }
 
 /* IMU packet parsing */

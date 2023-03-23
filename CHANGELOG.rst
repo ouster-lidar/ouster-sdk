@@ -2,13 +2,39 @@
 Changelog
 =========
 
-[unreleased]
-============
+[20230403]
+==========
+
+* Default metadata output across all functionality has been switched to the non-legacy format
 
 ouster_client
---------------
+-------------
 * the class ``SensorHttp``  which provides easy access to REST APIs of the sensor has been made public
   under the ``ouster::sensor::util`` namespace.
+* breaking change: get_metadata defaults to outputting non-legacy metadata
+* add debug five_word profile which will be removed later
+* breaking change: remove deprecations on LidarScan
+
+ouster_viz
+----------
+* update viz camera with other objects in draw
+
+ouster_pcap
+-----------
+* add seek method to PcapReader
+* add port guessing logic
+
+python
+------
+* introduce utility to convert nonlegacy metadata to legacy
+* use resolve_metadata to find unspecified metadata for simple-viz
+* remove port guessing logic in favor of using new C++ ouster_pcap port guessing functionality
+* add soft-id-check to skip the init_id/sn check for lidar_packets with metadata
+
+Numerous changes to SimpleViz and LidarScanViz including:
+* expose visible in viz to Python 
+* introduce ImageMode and CloudMode
+* bugfix: remove spurious sqrt application to autoleveled images
 
 
 [20230114]

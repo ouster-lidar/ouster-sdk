@@ -543,6 +543,8 @@ class SensorConfig:
     def __init__(self, config_string: str) -> None:
         ...
 
+def convert_to_legacy(metadata: str) -> str:
+    ...
 
 def init_logger(log_level: str,
                 log_file_path: str = ...,
