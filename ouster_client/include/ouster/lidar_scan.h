@@ -482,7 +482,6 @@ class ScanBatcher {
     bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 };
 
-// TODO[pb]: use std::array + union instead of vector for a leaner object?
 /**
  * Imu Data
  */
