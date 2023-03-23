@@ -587,7 +587,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
-        const std::chrono::nanoseconds ts(pf.col_timestamp(col_buf));
+        const uint64_t ts = pf.col_timestamp(col_buf);
         const uint32_t status = pf.col_status(col_buf);
         const bool valid = (status & 0x01);
 
@@ -623,7 +623,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         }
 
         // write new header values
-        ls.timestamp()[m_id] = ts.count();
+        ls.timestamp()[m_id] = ts;
         ls.measurement_id()[m_id] = m_id;
         ls.status()[m_id] = status;
 
@@ -631,6 +631,51 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     }
 
     return false;
-}  // namespace ouster
+}
+
+std::string to_string(const Imu& imu) {
+    std::stringstream ss;
+    ss << "Imu: ";
+    ss << "linear_accel: [";
+    for (size_t i = 0; i < imu.linear_accel.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << imu.linear_accel[i];
+    }
+    ss << "]";
+    ss << ", angular_vel = [";
+    for (size_t i = 0; i < imu.angular_vel.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << imu.angular_vel[i];
+    }
+    ss << "]";
+    ss << ", ts: [";
+    std::array<std::string, 3> labels{"sys_ts", "accel_ts", "gyro_ts"};
+    for (size_t i = 0; i < imu.ts.size(); ++i) {
+        if (i > 0) ss << ", ";
+        // just in case imu vector is bigger than 3 (for what we have labels)
+        if (i < labels.size()) {
+            ss << labels[i] << " = ";
+        }
+        ss << imu.ts[i];
+    }
+    ss << "]";
+    return ss.str();
+}
+
+void packet_to_imu(const uint8_t* buf, const ouster::sensor::packet_format& pf,
+                   Imu& imu) {
+    // Storing all available timestamps
+    imu.sys_ts = pf.imu_sys_ts(buf);
+    imu.accel_ts = pf.imu_accel_ts(buf);
+    imu.gyro_ts = pf.imu_gyro_ts(buf);
+
+    imu.linear_accel[0] = pf.imu_la_x(buf);
+    imu.linear_accel[1] = pf.imu_la_y(buf);
+    imu.linear_accel[2] = pf.imu_la_z(buf);
+
+    imu.angular_vel[0] = pf.imu_av_x(buf);
+    imu.angular_vel[1] = pf.imu_av_y(buf);
+    imu.angular_vel[2] = pf.imu_av_z(buf);
+}
 
 }  // namespace ouster

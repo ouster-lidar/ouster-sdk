@@ -975,6 +975,80 @@ PYBIND11_PLUGIN(_client) {
         .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
              py::arg("image"), py::arg("update_state") = true);
 
+    // Imu
+    py::class_<ouster::Imu>(m, "Imu")
+        .def(
+            "__init__",
+            [](ouster::Imu& self, py::buffer& buf,
+               const sensor::packet_format& pf) {
+                new (&self) ouster::Imu{};
+                ouster::packet_to_imu(getptr(pf.imu_packet_size, buf), pf,
+                                      self);
+            },
+            py::arg("buf"), py::arg("pf"),
+            "Creates imu object from ``buf`` and ``pf``")
+        .def(
+            "__init__",
+            [](ouster::Imu& self, py::array_t<double>& accel,
+               py::array_t<double>& angular_vel, uint64_t sys_ts,
+               uint64_t accel_ts, uint64_t gyro_ts) {
+                py::buffer_info accel_buf = accel.request();
+                py::buffer_info angular_buf = angular_vel.request();
+
+                if (accel_buf.ndim != 1 || angular_buf.ndim != 1) {
+                    throw std::invalid_argument(
+                        "Expect number of dimensions 1");
+                }
+                new (&self) ouster::Imu{};
+                if (accel_buf.size == 3) {
+                    double* ptr = static_cast<double*>(accel_buf.ptr);
+                    self.linear_accel[0] = *ptr;
+                    self.linear_accel[1] = *(ptr + 1);
+                    self.linear_accel[2] = *(ptr + 2);
+                }
+                if (angular_buf.size == 3) {
+                    double* ptr = static_cast<double*>(angular_buf.ptr);
+                    self.angular_vel[0] = *ptr;
+                    self.angular_vel[1] = *(ptr + 1);
+                    self.angular_vel[2] = *(ptr + 2);
+                }
+                self.sys_ts = sys_ts;
+                self.accel_ts = accel_ts;
+                self.gyro_ts = gyro_ts;
+            },
+            py::arg("accel"), py::arg("angular_vel"), py::arg("sys_ts") = 0,
+            py::arg("accel_ts") = 0, py::arg("gyro_ts") = 0,
+            "Creates ``client.Imu`` object from imu data.")
+        .def_property_readonly(
+            "sys_ts", [](const ouster::Imu& imu) { return imu.sys_ts; },
+            "System timestamp (ns)")
+        .def_property_readonly(
+            "accel_ts",
+            [](const ouster::Imu& imu) { return imu.accel_ts; },
+            "Accelerometer timestamp (ns)")
+        .def_property_readonly(
+            "gyro_ts",
+            [](const ouster::Imu& imu) { return imu.gyro_ts; },
+            "Gyroscope timestamp (ns)")
+        .def_property_readonly(
+            "accel",
+            [](const ouster::Imu& imu) {
+                return py::array(py::dtype::of<double>(),
+                                 imu.linear_accel.size(),
+                                 imu.linear_accel.data());
+            },
+            "Accelerometer data")
+        .def_property_readonly(
+            "angular_vel",
+            [](const ouster::Imu& imu) {
+                return py::array(py::dtype::of<double>(),
+                                 imu.angular_vel.size(),
+                                 imu.angular_vel.data());
+            },
+            "Angular velocity data")
+        .def("__repr__", [](ouster::Imu& p) { return ouster::to_string(p); })
+        .def("__str__", [](ouster::Imu& p) { return ouster::to_string(p); });
+
     m.attr("__version__") = ouster::SDK_VERSION;
 
     return m.ptr();

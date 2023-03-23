@@ -12,7 +12,7 @@ import warnings
 import numpy as np
 
 from . import _client
-from ._client import (ChanField, LidarScan, SensorInfo)
+from ._client import (ChanField, LidarScan, SensorInfo, Imu)
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -397,3 +397,9 @@ def XYZLut(
                            info.format.columns_per_frame, 3)
 
     return res
+
+
+def imu_from_packet(packet: ImuPacket) -> Imu:
+    """Transform ImuPacket to client.Imu data type"""
+    return Imu(packet.accel, packet.angular_vel, packet.sys_ts, packet.accel_ts,
+               packet.gyro_ts)
