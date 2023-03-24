@@ -3,7 +3,7 @@ find_package(Pcap REQUIRED)
 find_package(libtins REQUIRED)
 
 # ==== Libraries ====
-add_library(ouster_pcap src/pcap.cpp src/os_pcap.cpp)
+add_library(ouster_pcap src/pcap.cpp src/os_pcap.cpp src/indexed_pcap_reader.cpp)
 target_include_directories(ouster_pcap SYSTEM PRIVATE
   ${PCAP_INCLUDE_DIR})
 target_include_directories(ouster_pcap PUBLIC

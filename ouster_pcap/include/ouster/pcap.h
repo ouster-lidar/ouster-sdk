@@ -53,7 +53,7 @@ class PcapReader {
      * @param file[in] A filepath of the pcap to read
      */
     PcapReader(const std::string& file);
-    ~PcapReader();
+    virtual ~PcapReader();
 
     /**
      * Advances to the next packet and returns the size of that packet.
@@ -90,13 +90,32 @@ class PcapReader {
     const packet_info& current_info() const;
 
     /**
+     * @return The size of the PCAP file in bytes
+     */
+    uint64_t file_size() const;
+
+    /**
+     * Return the read position to the start of the PCAP file
+     */
+    void reset();
+
+    /**
      * Seek to the position in the file represented by the
      * number of bytes from the beginning of the file.
      *
-     * @param position[in] The position to seek to in bytes,
+     * @param offset[in] The position to seek to in bytes,
      * starting from the beginning of the file.
+     *
+     * @pre \paramname{offset} must be the offset of a PCAP
+     * record header. If any other value is provided,
+     * subsequent packet reads from this PcapReader will be
+     * invalid until \functionname{reset} is called.
      */
     void seek(uint64_t offset);
+
+   private:
+    uint64_t file_size_{};
+    uint64_t file_start_{};
 };
 
 /**

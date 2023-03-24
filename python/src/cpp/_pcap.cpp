@@ -6,6 +6,7 @@
  * @brief ouster_pyclient_pcap python module
  */
 #include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 #include <pybind11/stl_bind.h>
 #include <pybind11/functional.h>
 #include <pybind11/stl.h>
@@ -18,6 +19,7 @@
 #include "ouster/impl/build.h"
 #include "ouster/pcap.h"
 #include "ouster/os_pcap.h"
+#include "ouster/indexed_pcap_reader.h"
 
 using namespace ouster::sensor_utils;
 namespace py = pybind11;
@@ -71,6 +73,7 @@ This module is generated from the C++ code and not meant to be used directly.
                 std::chrono::microseconds msec{(int)(set * 1e6)};
                 packet_info.timestamp = msec;
             })
+        .def_readonly("file_offset", &packet_info::file_offset)
         .def_readonly("fragments_in_packet", &packet_info::fragments_in_packet)
         .def_readonly("ip_version", &packet_info::ip_version)
         .def_readonly("encapsulation_protocol",
@@ -218,5 +221,26 @@ This module is generated from the C++ code and not meant to be used directly.
         record_packet(*handle, info, static_cast<uint8_t*>(buf_info.ptr),
                       buf_info.size);
     });
+
+    py::class_<IndexedPcapReader>(m, "IndexedPcapReader")
+        .def(py::init<const std::string&, const std::vector<std::string>&, std::function<void(uint64_t, uint64_t, uint64_t)>>())
+        .def("frame_count", &IndexedPcapReader::frame_count)
+        .def("seek_to_frame", &IndexedPcapReader::seek_to_frame)
+        .def("get_stream_info", &IndexedPcapReader::get_stream_info)
+        .def("current_info", &IndexedPcapReader::current_info)
+        .def("next_packet", &IndexedPcapReader::next_packet)
+        .def("current_frame_id",[](IndexedPcapReader& reader) -> py::object {
+            if(auto frame_id = reader.current_frame_id()) {
+                return py::int_(*frame_id);
+            }
+            return py::none();
+        })
+        .def("current_data", [](IndexedPcapReader& reader) -> py::array {
+            uint8_t* data = const_cast<uint8_t*>(reader.current_data());
+            size_t data_size = reader.current_length();
+            return py::array(py::dtype::of<uint8_t>(), data_size, data, py::cast(reader));
+        })
+        .def_readonly("frame_indices", &IndexedPcapReader::frame_indices_);
+
     return m.ptr();
 }

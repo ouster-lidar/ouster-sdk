@@ -18,6 +18,7 @@
 #include <fstream>
 
 #include "ouster/pcap.h"
+#include "ouster/indexed_pcap_reader.h"
 
 namespace ouster {
 namespace sensor_utils {
@@ -194,80 +195,99 @@ void record_packet(record_handle& handle, const std::string& src_ip,
                                 dst_port, time);
 }
 
-std::shared_ptr<stream_info> get_stream_info(const std::string& file, 
+// TODO: make a member of `PcapReader` ?
+std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
                                              std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
                                              int packets_per_callback,
-                                             int packets_to_process) 
-{
-    uint64_t fileSize = 0;
-    std::ifstream fileSizeStream(file, std::ios::binary);
-    if (fileSizeStream) {
-        fileSizeStream.seekg(0, std::ios::end);
-        fileSize = fileSizeStream.tellg();
-    }
-    
+                                             int packets_to_process) {
+    uint64_t fileSize = pcap_reader.file_size();
     std::shared_ptr<stream_info> result = std::make_shared<stream_info>();
-    auto handle = replay_initialize(file);
 
     int callback_count = 0;
     uint64_t last_current = 0;
     uint64_t diff_acc = 0;
 
-    if(handle) {
-        int i = 0;
-        packet_info info;
-        bool first = true;
-        uint64_t prev_location = 0;
-        while(((packets_to_process <= 0) || (i < packets_to_process)) 
-              && next_packet_info(*handle, info))
-        {
-            callback_count++;
-            if(first) 
-            {
-                first = false;
-                result->encapsulation_protocol = info.encapsulation_protocol;
-                result->timestamp_max = info.timestamp;
-                result->timestamp_min = info.timestamp;
-            }
-            result->total_packets++;
+    int i = 0;
+    packet_info info;
+    bool first = true;
+    uint64_t prev_location = 0;
+    while(((packets_to_process <= 0) || (i < packets_to_process))
+          && pcap_reader.next_packet())
+    {
+        info = pcap_reader.current_info();
 
-            if(info.timestamp < result->timestamp_min) result->timestamp_min = info.timestamp;
-            if(info.timestamp > result->timestamp_max) result->timestamp_max = info.timestamp;
-
-            stream_key key;
-
-            key.dst_ip = info.dst_ip;
-            key.src_ip = info.src_ip;
-            key.dst_port = info.dst_port;
-            key.src_port = info.src_port;
-
-            auto& stream = result->udp_streams[key];
-            stream.count++;
-            stream.payload_size_counts[info.payload_size]++;
-            stream.fragment_counts[info.fragments_in_packet]++;
-            stream.ip_version_counts[info.ip_version]++;
-
-            diff_acc += (info.file_offset - prev_location);
-            last_current = info.file_offset;
-
-            if( callback_count > packets_per_callback
-                && packets_per_callback >= 0)
-            {
-                progress_callback(info.file_offset, diff_acc, fileSize);
-                diff_acc = 0;
-                callback_count = 0;
-            }
-            prev_location = info.file_offset;
-            i++;
+        // TODO: if `pcap_reader` is an IndexedPcapReader,
+        // get the `sensor_info` that matches the packet
+        // and the `packet_format` from the `sensor_info`
+        // and possibly use a `ScanBatcher` (one for each sensor stream)
+        // to determine if a scan boundary has been found
+        if(IndexedPcapReader* indexed_pcap_reader_ptr = dynamic_cast<IndexedPcapReader*>(&pcap_reader)) {
+            indexed_pcap_reader_ptr->update_index_for_current_packet();
         }
-        if( diff_acc > 0 && packets_per_callback >= 0)
+
+        callback_count++;
+        if(first)
         {
-            progress_callback(last_current, diff_acc, fileSize);
+            first = false;
+            result->encapsulation_protocol = info.encapsulation_protocol;
+            result->timestamp_max = info.timestamp;
+            result->timestamp_min = info.timestamp;
         }
-        replay_uninitialize(*handle);
+        result->total_packets++;
+
+        if(info.timestamp < result->timestamp_min) result->timestamp_min = info.timestamp;
+        if(info.timestamp > result->timestamp_max) result->timestamp_max = info.timestamp;
+
+        stream_key key;
+
+        key.dst_ip = info.dst_ip;
+        key.src_ip = info.src_ip;
+        key.dst_port = info.dst_port;
+        key.src_port = info.src_port;
+
+        auto& stream = result->udp_streams[key];
+        stream.count++;
+        stream.payload_size_counts[info.payload_size]++;
+        stream.fragment_counts[info.fragments_in_packet]++;
+        stream.ip_version_counts[info.ip_version]++;
+
+        diff_acc += (info.file_offset - prev_location);
+        last_current = info.file_offset;
+
+        if( callback_count > packets_per_callback
+            && packets_per_callback >= 0)
+        {
+            progress_callback(info.file_offset, diff_acc, fileSize);
+            diff_acc = 0;
+            callback_count = 0;
+        }
+        prev_location = info.file_offset;
+        i++;
     }
+    if( diff_acc > 0 && packets_per_callback >= 0)
+    {
+        progress_callback(last_current, diff_acc, fileSize);
+    }
+    pcap_reader.reset();
 
     return result;
+}
+
+std::shared_ptr<stream_info> get_stream_info(const std::string& file,
+                                             std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
+                                             int packets_per_callback,
+                                             int packets_to_process)
+{
+    auto handle = replay_initialize(file);
+    if(handle) {
+        return get_stream_info(
+            *(handle->pcap),
+            progress_callback,
+            packets_per_callback,
+            packets_to_process
+         );
+     }
+     return std::make_shared<stream_info>();
 }
 
 std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process) 

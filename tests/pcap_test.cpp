@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include "ouster/pcap.h"
 #include "ouster/os_pcap.h"
+#include "ouster/indexed_pcap_reader.h"
 
 namespace ouster {
 namespace sensor_utils {
@@ -103,6 +104,55 @@ TEST(PcapReader, seek_past_end_of_file) {
 
     // attempting to read past end of file is not an error, either
     EXPECT_EQ(pcap.next_packet(), 0);
+}
+
+void progress_callback(uint64_t, uint64_t, uint64_t) {}
+
+
+TEST(IndexedPcapReader, constructor) {
+    // it should be constructed with the correct number of indices
+    // and previous frame counts (one for each metadata file)
+    auto data_dir = getenvs("DATA_DIR");
+    std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
+    std::string meta_filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10.json";
+
+    IndexedPcapReader pcap(filename, {meta_filename, meta_filename, meta_filename}, progress_callback);
+    EXPECT_EQ(pcap.frame_indices_.size(), 3);
+    EXPECT_EQ(pcap.previous_frame_ids_.size(), 3);
+}
+
+TEST(IndexedPcapReader, frame_count) {
+    // it should raise std::out_of_range if there is no sensor at that position
+    auto data_dir = getenvs("DATA_DIR");
+    std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
+    IndexedPcapReader pcap(filename, {}, progress_callback);
+    pcap.frame_indices_.push_back(IndexedPcapReader::frame_index());
+    pcap.frame_indices_.at(0).push_back(0);
+
+    EXPECT_EQ(pcap.frame_count(0), 1);
+    EXPECT_THROW(pcap.frame_count(1), std::out_of_range);
+}
+
+TEST(IndexedPcapReader, seek_to_frame) {
+    // it should raise std::out_of_range if there is no sensor or frame at that position
+    auto data_dir = getenvs("DATA_DIR");
+    std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
+    std::string meta_filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10.json";
+    IndexedPcapReader pcap(filename, {meta_filename}, progress_callback);
+    pcap.frame_indices_.push_back(IndexedPcapReader::frame_index());
+
+    EXPECT_EQ(pcap.frame_count(0), 1);
+    EXPECT_NO_THROW(pcap.seek_to_frame(0, 0));
+    EXPECT_THROW(pcap.seek_to_frame(0, 1), std::out_of_range);
+    EXPECT_THROW(pcap.seek_to_frame(1, 1), std::out_of_range);
+}
+
+TEST(IndexedPcapReader, frame_id_rolled_over) {
+    EXPECT_TRUE(IndexedPcapReader::frame_id_rolled_over(65535, 0));
+    EXPECT_TRUE(IndexedPcapReader::frame_id_rolled_over(65290, 100));
+    EXPECT_FALSE(IndexedPcapReader::frame_id_rolled_over(65000, 65535));
+    EXPECT_FALSE(IndexedPcapReader::frame_id_rolled_over(1, 0));
+    EXPECT_FALSE(IndexedPcapReader::frame_id_rolled_over(12, 12));
 }
 
 } // namespace sensor_utils

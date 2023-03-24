@@ -31,6 +31,7 @@
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 
 using us = std::chrono::microseconds;
@@ -63,10 +64,16 @@ struct pcap_writer_impl {
 };
 
 PcapReader::PcapReader(const std::string& file) : impl(new pcap_impl) {
+    std::ifstream fileSizeStream(file, std::ios::binary);
+    if (fileSizeStream) {
+        fileSizeStream.seekg(0, std::ios::end);
+        file_size_ = fileSizeStream.tellg();
+    }
     impl->pcap_reader = std::make_unique<Tins::FileSniffer>(file);
     impl->encap_proto = impl->pcap_reader->link_type();
     impl->pcap_reader_internals =
         pcap_file(impl->pcap_reader->get_pcap_handle());
+    file_start_ = ftell(impl->pcap_reader_internals);
 }
 
 PcapReader::~PcapReader() {}
@@ -84,6 +91,14 @@ void PcapReader::seek(uint64_t offset) {
     if(fseek(impl->pcap_reader_internals, offset, SEEK_SET)) {
         throw std::runtime_error("pcap seek failed");
     }
+}
+
+uint64_t PcapReader::file_size() const {
+    return file_size_;
+}
+
+void PcapReader::reset() {
+    seek(file_start_);
 }
 
 size_t PcapReader::next_packet() {
