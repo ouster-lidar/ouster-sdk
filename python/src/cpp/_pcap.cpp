@@ -222,7 +222,9 @@ This module is generated from the C++ code and not meant to be used directly.
                       buf_info.size);
     });
 
-    py::class_<IndexedPcapReader>(m, "IndexedPcapReader")
+    py::class_<PcapReader>(m, "PcapReader"); // TODO add more complete bindings
+
+    py::class_<IndexedPcapReader, PcapReader>(m, "IndexedPcapReader")
         .def(py::init<const std::string&, const std::vector<std::string>&, std::function<void(uint64_t, uint64_t, uint64_t)>>())
         .def("frame_count", &IndexedPcapReader::frame_count)
         .def("seek_to_frame", &IndexedPcapReader::seek_to_frame)

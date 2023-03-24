@@ -17,7 +17,8 @@ from ouster import pcap
 from ouster.pcap import _pcap
 from ouster import client
 from ouster.client import _client
-from test_batching import _patch_frame_id
+from tests.conftest import DATA_DIR, TESTS
+from tests.test_batching import _patch_frame_id
 
 SLL_PROTO = 113
 ETH_PROTO = 1
@@ -498,7 +499,6 @@ def test_record_packet_info(fake_meta, tmpdir) -> None:
 
 def test_indexed_pcap_reader(tmpdir):
     """It should correctly locate the start of frames in a PCAP file"""
-    from conftest import DATA_DIR, TESTS
     meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     def progress_callback(offset, delta, filesize):
@@ -530,7 +530,6 @@ def test_indexed_pcap_reader(tmpdir):
 
 def test_indexed_pcap_reader_seek(tmpdir):
     """After seeking to the start of a frame, next_packet should return the first packet of that frame"""
-    from conftest import DATA_DIR, TESTS
     meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     def progress_callback(offset, delta, filesize):
@@ -556,7 +555,6 @@ def test_indexed_pcap_reader_seek(tmpdir):
 
 def test_out_of_order_frames(tmpdir):
     """Frames that are out of order are skipped"""
-    from conftest import DATA_DIR, TESTS
     meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     def progress_callback(offset, delta, filesize):
@@ -589,7 +587,6 @@ def test_out_of_order_frames(tmpdir):
 
 def test_current_data(fake_meta, tmpdir):
     """It should provide access to current packet data as a memory view"""
-    from conftest import DATA_DIR, TESTS
     meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     def progress_callback(offset, delta, filesize):
