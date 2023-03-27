@@ -270,8 +270,9 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     try {
         cli.meta = collect_metadata(cli.hostname, timeout_sec);
-    } catch (const std::exception&) {
-        return "";
+    } catch (const std::exception& e) {
+        logger().warn(std::string("Unable to retrieve sensor metadata: ") + e.what());
+        throw;
     }
 
     Json::StreamWriterBuilder builder;
