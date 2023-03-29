@@ -29,13 +29,17 @@ class GLImage {
     static GLuint program_id;
     static GLuint vertex_id;
     static GLuint uv_id;
+    static GLuint mono_id;
     static GLuint image_id;
     static GLuint mask_id;
+    static GLuint palette_id;
+    static GLuint use_palette_id;
 
     // per-image gl state
     std::array<GLuint, 2> vertexbuffers;
     GLuint image_texture_id{0};
     GLuint mask_texture_id{0};
+    GLuint palette_texture_id{0};
     GLuint image_index_id{0};
 
     float x0{-1}, x1{0}, y0{0}, y1{-1}, hshift{0};

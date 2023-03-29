@@ -283,7 +283,7 @@ unstructured point clouds to draw 3D axes at the origin:
 .. literalinclude:: /../python/src/ouster/sdk/examples/viz.py
     :start-after: [doc-stag-axes-helper]
     :end-before:  [doc-etag-axes-helper]
-    :emphasize-lines:  18-23
+    :emphasize-lines:  17-22
     :linenos:
     :dedent:
 

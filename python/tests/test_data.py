@@ -63,7 +63,7 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
                        client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
 
     assert len(
-        client.ChanField.__members__) == 24, "Don't forget to update tests!"
+        client.ChanField.__members__) == 29, "Don't forget to update tests!"
     assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
     assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
                           np.zeros((h, w)))
@@ -170,15 +170,9 @@ def test_scan_writeable() -> None:
 
     ls.status[-1] = 0xffff
     assert ls.status[-1] == 0xffff
-    assert ls.header(client.ColHeader.STATUS)[-1] == 0xffff
-
-    ls.header(client.ColHeader.STATUS)[-2] = 0xffff
-    assert ls.status[-2] == 0xffff
-    assert ls.header(client.ColHeader.STATUS)[-2] == 0xffff
 
     ls.status[:] = 0x1
     assert np.all(ls.status == 0x1)
-    assert np.all(ls.header(client.ColHeader.STATUS) == 0x1)
 
 
 def test_scan_from_native() -> None:

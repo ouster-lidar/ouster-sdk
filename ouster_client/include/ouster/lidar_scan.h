@@ -42,43 +42,11 @@ using LidarScanFieldTypes =
  */
 class LidarScan {
    public:
-    [[deprecated]] static constexpr int N_FIELDS =
-        4;  ///< @deprecated Number of fields now varies by lidar profile or
-            ///< constructor provided arguments. Use N_FIELDS with caution even
-            ///< when working with legacy lidar profile data, and do not use for
-            ///< all non-legacy lidar profile formats.
-
-    using raw_t [[deprecated]] = uint32_t;                 ///< @deprecated
-    using ts_t [[deprecated]] = std::chrono::nanoseconds;  ///< @deprecated
-
     template <typename T>
     using Header = Eigen::Array<T, Eigen::Dynamic, 1>;  ///< Header typedef
 
     /** XYZ coordinates with dimensions arranged contiguously in columns. */
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
-
-    /** Old names provided for compatibility, see sensor::ChanField. */
-    using Field [[deprecated]] = sensor::ChanField;  ///< @deprecated
-    [[deprecated]] static constexpr Field RANGE =
-        sensor::RANGE;  ///< @deprecated
-    [[deprecated]] static constexpr Field INTENSITY =
-        sensor::SIGNAL;  ///< @deprecated
-    [[deprecated]] static constexpr Field AMBIENT =
-        sensor::NEAR_IR;  ///< @deprecated
-    [[deprecated]] static constexpr Field REFLECTIVITY =
-        sensor::REFLECTIVITY;  ///< @deprecated
-
-    /**
-     * Measurement block information, other than the channel data.
-     *
-     * @deprecated BlockHeaders are deprecated in favor of Header. See
-     * ``timestamp()``, ``measurement_id()``, and ``status()``
-     */
-    struct [[deprecated]] BlockHeader {
-        ts_t timestamp;
-        uint32_t encoder;
-        uint32_t status;
-    };
 
    private:
     Header<uint64_t> timestamp_;
@@ -105,16 +73,6 @@ class LidarScan {
      * private.
      */
     std::ptrdiff_t h{0};
-
-    /**
-     * Vector containing the header definitions.
-     *
-     * @deprecated BlockHeader is deprecated in favor of Header
-     *
-     * @warning Members variables: use with caution, some of these will become
-     * private.
-     */
-    [[deprecated]] std::vector<BlockHeader> headers{};
 
     /**
      * Frame status - information from the packet header which corresponds to a
@@ -208,28 +166,6 @@ class LidarScan {
      * Get frame thermal shutdown status
      */
     sensor::ThermalShutdownStatus thermal_shutdown() const;
-
-    /**
-     * Access timestamps as a vector.
-     *
-     * @deprecated See `timestamp()` instead
-     *
-     * @returns copy of the measurement timestamps as a vector.
-     */
-    [[deprecated]] std::vector<LidarScan::ts_t> timestamps() const;
-
-    /**
-     * Access measurement block header fields.
-     *
-     * @deprecated Please see `status()`, `measurement_id()`, and `timestamp()`
-     * instead
-     *
-     * @return the header values for the specified measurement id.
-     */
-    [[deprecated]] BlockHeader& header(size_t m_id);
-
-    /** @copydoc header(size_t m_id) */
-    [[deprecated]] const BlockHeader& header(size_t m_id) const;
 
     /**
      * Access a lidar data field.
@@ -352,19 +288,6 @@ std::string to_string(const LidarScan& ls);
  */
 
 /**
- * Equality for column headers.
- *
- * @deprecated BlockHeaders are deprecated
- *
- * @param[in] a The first column header to compare.
- * @param[in] b The second column header to compare.
- *
- * @return if a == b.
- */
-[[deprecated]] bool operator==(const LidarScan::BlockHeader& a,
-                               const LidarScan::BlockHeader& b);
-
-/**
  * Equality for scans.
  *
  * @param[in] a The first scan to compare.
@@ -405,11 +328,14 @@ struct XYZLut {
  * Each table is an n x 3 array of doubles stored in column-major order where
  * each row corresponds to the nth point in a lidar scan, with 0 <= n < h*w.
  *
+ * Projections to XYZ made with this XYZLut will be in the coordinate frame
+ * defined by transform*beam_to_lidar_transform.
+ *
  * @param[in] w number of columns in the lidar scan. e.g. 512, 1024, or 2048.
  * @param[in] h number of rows in the lidar scan.
  * @param[in] range_unit the unit, in meters, of the range,  e.g.
  * sensor::range_unit.
- * @param[in] beam_to_lidar_transform, signifying transform between beams and
+ * @param[in] beam_to_lidar_transform transform between beams and
  * lidar origin. Translation portion is in millimeters.
  * @param[in] transform additional transformation to apply to resulting points.
  * @param[in] azimuth_angles_deg azimuth offsets in degrees for each of h beams.
@@ -425,6 +351,8 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 
 /**
  * Convenient overload that uses parameters from the supplied sensor_info.
+ * Projections to XYZ made with this XYZLut will be in the sensor coordinate
+ * frame defined in the sensor documentation.
  *
  * @param[in] sensor metadata returned from the client.
  *
@@ -553,6 +481,47 @@ class ScanBatcher {
      */
     bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 };
+
+/**
+ * Imu Data
+ */
+struct Imu {
+    union {
+        std::array<double, 3> angular_vel;
+        struct {
+            double wx, wy, wz;
+        };
+    };
+    union {
+        std::array<double, 3> linear_accel;
+        struct {
+            double ax, ay, az;
+        };
+    };
+    union {
+        std::array<uint64_t, 3> ts;
+        struct {
+            uint64_t sys_ts, accel_ts, gyro_ts;
+        };
+    };
+};
+
+/** Equality for Imu */
+inline bool operator==(const Imu& a, const Imu& b) {
+    return a.angular_vel == b.angular_vel && a.linear_accel == b.linear_accel &&
+           a.ts == b.ts;
+};
+
+/** Not Equality for Imu */
+inline bool operator!=(const Imu& a, const Imu& b) {
+    return !(a == b);
+};
+
+std::string to_string(const Imu& imu);
+
+/// Reconstructs buf with UDP imu_packet to osf::Imu object
+void packet_to_imu(const uint8_t* buf, const ouster::sensor::packet_format& pf,
+                   Imu& imu);
 
 }  // namespace ouster
 

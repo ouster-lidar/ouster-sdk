@@ -56,3 +56,15 @@ set_tests_properties(
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
+
+add_executable(pcap_test pcap_test.cpp)
+
+target_link_libraries(pcap_test OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME pcap_test COMMAND pcap_test --gtest_output=xml:pcap_test.xml)
+set_tests_properties(
+    pcap_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)

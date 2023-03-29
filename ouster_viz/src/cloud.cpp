@@ -22,8 +22,8 @@ namespace viz {
 namespace impl {
 
 struct CloudIds {
-    GLuint xyz_id, off_id, range_id, key_id, mask_id, model_id, proj_view_id,
-        palette_id, transformation_id, trans_index_id;
+    GLuint xyz_id, off_id, range_id, key_id, mask_id, model_id,
+        proj_view_id, mono_id, palette_id, transformation_id, trans_index_id;
     CloudIds() {}
 
     /**
@@ -35,10 +35,11 @@ struct CloudIds {
         : xyz_id(glGetAttribLocation(point_program_id, "xyz")),
           off_id(glGetAttribLocation(point_program_id, "offset")),
           range_id(glGetAttribLocation(point_program_id, "range")),
-          key_id(glGetAttribLocation(point_program_id, "key")),
-          mask_id(glGetAttribLocation(point_program_id, "mask")),
+          key_id(glGetAttribLocation(point_program_id, "vkey")),
+          mask_id(glGetAttribLocation(point_program_id, "vmask")),
           model_id(glGetUniformLocation(point_program_id, "model")),
           proj_view_id(glGetUniformLocation(point_program_id, "proj_view")),
+          mono_id(glGetUniformLocation(point_program_id, "mono")),
           palette_id(glGetUniformLocation(point_program_id, "palette")),
           transformation_id(
               glGetUniformLocation(point_program_id, "transformation")),
@@ -181,13 +182,17 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
                      cloud.range_data_.data(), GL_DYNAMIC_DRAW);
         cloud.range_changed_ = false;
     }
-
+    
     if (cloud.key_changed_) {
+        mono = cloud.mono_;
         glBindBuffer(GL_ARRAY_BUFFER, key_buffer);
         glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.key_data_.size(),
                      cloud.key_data_.data(), GL_DYNAMIC_DRAW);
         cloud.key_changed_ = false;
     }
+
+    // put the shader into mono or rgb mode
+    glUniform1i(GLCloud::cloud_ids.mono_id, mono ? 1 : 0);
 
     glEnableVertexAttribArray(GLCloud::cloud_ids.mask_id);
     glBindBuffer(GL_ARRAY_BUFFER, mask_buffer);
@@ -238,12 +243,13 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
                           0,         // stride
                           (void*)0   // array buffer offset
     );
+
     glEnableVertexAttribArray(GLCloud::cloud_ids.key_id);
     glBindBuffer(GL_ARRAY_BUFFER, key_buffer);
     glVertexAttribPointer(GLCloud::cloud_ids.key_id,
-                          1,         // size
+                          4,         // size
                           GL_FLOAT,  // type
-                          GL_FALSE,  // normalized?
+                          GL_FALSE,  // normalize
                           0,         // stride
                           (void*)0   // array buffer offset
     );
@@ -269,9 +275,15 @@ void GLCloud::uninitialize() {
     glDeleteProgram(GLCloud::program_id);
 }
 
-void GLCloud::beginDraw() { glUseProgram(GLCloud::program_id); }
+void GLCloud::beginDraw() {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
+    glUseProgram(GLCloud::program_id);
+}
 
-void GLCloud::endDraw() {}
+void GLCloud::endDraw() {
+    glDisable(GL_BLEND);
+}
 
 }  // namespace impl
 }  // namespace viz

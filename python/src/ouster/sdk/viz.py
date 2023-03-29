@@ -7,14 +7,16 @@ Sensor data visualization tools.
 Visualize lidar data using OpenGL.
 """
 
-from collections import (defaultdict, deque)
+from collections import (deque)
+from dataclasses import dataclass
 from functools import partial
 import os
 import threading
 import time
 from datetime import datetime
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
-                    Optional, Tuple, TypeVar, Union)
+                    Optional, Tuple, TypeVar, Union, Any)
+from typing_extensions import Protocol, runtime_checkable
 import weakref
 import logging
 
@@ -22,10 +24,11 @@ import numpy as np
 from PIL import Image as PILImage
 
 from ouster import client
-from ouster.client import _utils
+from ouster.client import _utils, ChanField
+from ..client._client import Version
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
-                   spezia_palette)
+                   spezia_palette, grey_palette, viridis_palette, magma_palette)
 
 logger = logging.getLogger("viz-logger")
 
@@ -86,6 +89,219 @@ def push_point_viz_fb_handler(
     viz.push_frame_buffer_handler(handle_fb_data)
 
 
+@runtime_checkable
+class FieldViewMode(Protocol):
+    """LidarScan field processor
+
+    View modes define the process of getting the key data for
+    the scan and return number as well as checks the possibility
+    of showing data in that mode, see `enabled()`.
+    """
+
+    @property
+    def name(self) -> str:
+        """Name of the view mode"""
+        ...
+
+    @property
+    def names(self) -> List[str]:
+        """Name of the view mode per return number"""
+        ...
+
+    def _prepare_data(self,
+                      ls: client.LidarScan,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+        """Prepares data for visualization given the scan and return number"""
+        ...
+
+    def enabled(self, ls: client.LidarScan, return_num: int = 0) -> bool:
+        """Checks the view mode availability for a scan and return number"""
+        ...
+
+
+@runtime_checkable
+class ImageMode(FieldViewMode, Protocol):
+    """Applies the view mode key to the viz.Image"""
+    def set_image(self,
+                  img: Image,
+                  ls: client.LidarScan,
+                  return_num: int = 0) -> None:
+        """Prepares the key data and sets the image key to it."""
+        ...
+
+
+@runtime_checkable
+class CloudMode(FieldViewMode, Protocol):
+    """Applies the view mode key to the viz.Cloud"""
+    def set_cloud_color(self,
+                        cloud: Cloud,
+                        ls: client.LidarScan,
+                        return_num: int = 0) -> None:
+        """Prepares the key data and sets the cloud key to it."""
+        ...
+
+
+class ImageCloudMode(ImageMode, CloudMode, Protocol):
+    """Applies the view mode to viz.Cloud and viz.Image"""
+    pass
+
+
+def _second_chan_field(field: client.ChanField) -> Optional[client.ChanField]:
+    """Get the second return field name."""
+    # yapf: disable
+    second_fields = dict({
+        client.ChanField.RANGE: client.ChanField.RANGE2,
+        client.ChanField.SIGNAL: client.ChanField.SIGNAL2,
+        client.ChanField.REFLECTIVITY: client.ChanField.REFLECTIVITY2,
+        client.ChanField.FLAGS: client.ChanField.FLAGS2
+    })
+    # yapf: enable
+    return second_fields.get(field, None)
+
+
+class SimpleMode(ImageCloudMode):
+    """Basic view mode with AutoExposure and BeamUniformityCorrector
+
+    Handles single and dual returns scans.
+
+    When AutoExposure is enabled its state updates only for return_num=0 but
+    applies for both returns.
+    """
+    def __init__(self,
+                 info: client.SensorInfo,
+                 field: client.ChanField,
+                 *,
+                 prefix: Optional[str] = "",
+                 suffix: Optional[str] = "",
+                 use_ae: bool = True,
+                 use_buc: bool = False) -> None:
+        """
+        Args:
+            info: sensor metadata used mainly for destaggering here
+            field: ChanField to process, second return is handled automatically
+            prefix: name prefix
+            suffix: name suffix
+            use_ae: if True, use AutoExposure for the field
+            use_buc: if True, use BeamUniformityCorrector for the field
+        """
+        self._info = info
+        self._fields = [field]
+        field2 = _second_chan_field(field)
+        if field2:
+            self._fields.append(field2)
+        self._ae = _utils.AutoExposure() if use_ae else None
+        self._buc = _utils.BeamUniformityCorrector() if use_buc else None
+        self._prefix = f"{prefix}: " if prefix else ""
+        self._suffix = f" ({suffix})" if suffix else ""
+        self._wrap_name = lambda n: f"{self._prefix}{n}{self._suffix}"
+
+    @property
+    def name(self) -> str:
+        return self._wrap_name(str(self._fields[0]))
+
+    @property
+    def names(self) -> List[str]:
+        return [self._wrap_name(str(f)) for f in self._fields]
+
+    def _prepare_data(self,
+                      ls: client.LidarScan,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+        if not self.enabled(ls, return_num):
+            return None
+
+        f = self._fields[return_num]
+        key_data = ls.field(f).astype(np.float32)
+
+        if self._buc:
+            self._buc(key_data)
+
+        if self._ae:
+            self._ae(key_data, update_state=(return_num == 0))
+        else:
+            key_max = np.max(key_data)
+            if key_max:
+                key_data = key_data / key_max
+
+        return key_data
+
+    def set_image(self,
+                  img: Image,
+                  ls: client.LidarScan,
+                  return_num: int = 0) -> None:
+        key_data = self._prepare_data(ls, return_num)
+        if key_data is not None:
+            img.set_image(client.destagger(self._info, key_data))
+
+    def set_cloud_color(self,
+                        cloud: Cloud,
+                        ls: client.LidarScan,
+                        return_num: int = 0) -> None:
+        key_data = self._prepare_data(ls, return_num)
+        if key_data is not None:
+            cloud.set_key(key_data)
+
+    def enabled(self, ls: client.LidarScan, return_num: int = 0):
+        return (self._fields[return_num] in ls.fields
+                if return_num < len(self._fields) else False)
+
+
+class ReflMode(SimpleMode, ImageCloudMode):
+    """Prepares image/cloud data for REFLECTIVITY channel"""
+
+    def __init__(self, info: client.SensorInfo) -> None:
+        super().__init__(info, client.ChanField.REFLECTIVITY, use_ae=True)
+        # used only for uncalibrated reflectivity in FW prior v2.1.0
+        # TODO: should we check for calibrated reflectivity status from
+        # metadata too?
+        self._normalized_refl = (Version.from_string(self._info.fw_rev) >=
+                                 Version.from_string("v2.1.0"))
+
+    def _prepare_data(self,
+                      ls: client.LidarScan,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+        if not self.enabled(ls, return_num):
+            return None
+
+        f = self._fields[return_num]
+        refl_data = ls.field(f).astype(np.float32)
+        if self._normalized_refl:
+            refl_data /= 255.0
+        else:
+            # mypy doesn't recognize that we always should have _ae here
+            # so we have explicit check
+            if self._ae:
+                self._ae(refl_data, update_state=(return_num == 0))
+        return refl_data
+
+
+def is_norm_reflectivity_mode(mode: FieldViewMode) -> bool:
+    """Checks whether the image/cloud mode is a normalized REFLECTIVITY mode
+
+    NOTE[pb]: This is highly implementation specific and doesn't look nicely,
+    i.e. it's more like duck/duct plumbing .... but suits the need.
+    """
+    return (hasattr(mode, "_normalized_refl") and mode._normalized_refl)
+
+
+@dataclass
+class ImgModeItem:
+    """Image mode for specific return with explicit name."""
+    mode: ImageMode
+    name: str
+    return_num: int = 0
+
+
+@dataclass
+class CloudPaletteItem:
+    """Palette with a name"""
+    name: str
+    palette: np.ndarray
+
+
+LidarScanVizMode = Union[ImageCloudMode, ImageMode, CloudMode]
+"""Field view mode types"""
+
+
 class LidarScanViz:
     """Visualize LidarScan data.
 
@@ -94,46 +310,16 @@ class LidarScanViz:
     are displayed, and change 2D image and point size.
     """
 
-    @staticmethod
-    def _reflectivity_pp(
-            info: client.SensorInfo) -> Callable[[np.ndarray], None]:
+    _cloud_palette: Optional[CloudPaletteItem]
 
-        if client._client.Version.from_string(info.fw_rev) >= client._client.Version.from_string("v2.1.0"):
-
-            def proc_cal(refl, update_state: bool = True) -> None:
-                refl /= 255.0
-
-            return proc_cal
-        else:
-            return _utils.AutoExposure()
-
-    @staticmethod
-    def _near_ir_pp(info: client.SensorInfo) -> Callable[[np.ndarray], None]:
-        buc = _utils.BeamUniformityCorrector()
-        ae = _utils.AutoExposure()
-
-        def proc(ambient) -> None:
-            destag = client.destagger(info, ambient)
-            buc(destag)
-            ambient[:] = client.destagger(info, destag, inverse=True)
-            ae(ambient)
-
-        return proc
-
-    _cloud_mode_channels: ClassVar[List[Tuple[client.ChanField, client.ChanField]]] = [
-        (client.ChanField.RANGE, client.ChanField.RANGE2),
-        (client.ChanField.SIGNAL, client.ChanField.SIGNAL2),
-        (client.ChanField.REFLECTIVITY, client.ChanField.REFLECTIVITY2),
-        (client.ChanField.NEAR_IR, client.ChanField.NEAR_IR),
-    ]
-
-    _available_fields: List[client.ChanField]
-    _cloud_palette: Optional[np.ndarray]
-    _field_pp: Dict[client.ChanField, Callable[[np.ndarray], None]]
-
-    def __init__(self,
-                 meta: client.SensorInfo,
-                 viz: Optional[PointViz] = None) -> None:
+    def __init__(
+            self,
+            meta: client.SensorInfo,
+            viz: Optional[PointViz] = None,
+            *,
+            _img_aspect_ratio: float = 0,
+            _ext_modes: Optional[List[LidarScanVizMode]] = None,
+            _ext_palettes: Optional[List[CloudPaletteItem]] = None) -> None:
         """
         Args:
             meta: sensor metadata used to interpret scans
@@ -147,35 +333,54 @@ class LidarScanViz:
         self._cloud_mode_ind = 0  # index into _cloud_mode_channels
         self._cloud_enabled = [True, True]
         self._cloud_pt_size = 2.0
-        self._cloud_palette = spezia_palette
+
+        self._cloud_refl_mode = False
+
+        self._cloud_palettes: List[CloudPaletteItem]
+        self._cloud_palettes = [
+            CloudPaletteItem("Ouster Colors", spezia_palette),
+            CloudPaletteItem("Greyscale", grey_palette),
+            CloudPaletteItem("Viridis", viridis_palette),
+            CloudPaletteItem("Magma", magma_palette),
+        ]
+        self._cloud_palettes.extend(_ext_palettes or [])
+
+        self._cloud_palette_ind = 0
+        self._cloud_palette = self._cloud_palettes[self._cloud_palette_ind]
+        self._cloud_palette_name = self._cloud_palette.name
 
         # image display state
         self._img_ind = [0, 1]  # index of field to display
+        self._img_refl_mode = [False, False]
         self._img_size_fraction = 6
-        self._img_aspect = (meta.beam_altitude_angles[0] -
-                            meta.beam_altitude_angles[-1]) / 360.0
+        self._img_aspect = _img_aspect_ratio or (
+            max(meta.beam_altitude_angles) -
+            min(meta.beam_altitude_angles)) / 360.0
 
         # misc display state
-        self._available_fields = []
         self._ring_size = 1
         self._ring_line_width = 1
         self._osd_enabled = True
 
-        # set up post-processing for each channel field
-        range_pp = _utils.AutoExposure()
-        signal_pp = _utils.AutoExposure()
-        refl_pp = LidarScanViz._reflectivity_pp(meta)
-        nearir_pp = LidarScanViz._near_ir_pp(meta)
+        self._modes: List[LidarScanVizMode]
+        self._modes = [
+            SimpleMode(meta, ChanField.NEAR_IR, use_ae=True, use_buc=True),
+            ReflMode(meta),
+            SimpleMode(meta, ChanField.SIGNAL),
+            SimpleMode(meta, ChanField.RANGE),
+        ]
 
-        self._field_pp = {
-            client.ChanField.RANGE: range_pp,
-            client.ChanField.RANGE2: partial(range_pp, update_state=False),
-            client.ChanField.SIGNAL: signal_pp,
-            client.ChanField.SIGNAL2: partial(signal_pp, update_state=False),
-            client.ChanField.REFLECTIVITY: refl_pp,
-            client.ChanField.REFLECTIVITY2: partial(refl_pp, update_state=False),
-            client.ChanField.NEAR_IR: nearir_pp,
-        }
+        self._modes.extend(_ext_modes or [])
+
+        self._image_modes: List[ImgModeItem]
+        self._image_modes = [
+            ImgModeItem(mode, name, num) for mode in self._modes
+            if isinstance(mode, ImageMode)
+            for num, name in enumerate(mode.names)
+        ]
+
+        self._cloud_modes: List[CloudMode]
+        self._cloud_modes = [m for m in self._modes if isinstance(m, CloudMode)]
 
         self._viz = viz or PointViz("Ouster Viz")
 
@@ -209,6 +414,7 @@ class LidarScanViz:
             (ord('B'), 0): partial(LidarScanViz.cycle_img_mode, i=0),
             (ord('N'), 0): partial(LidarScanViz.cycle_img_mode, i=1),
             (ord('M'), 0): LidarScanViz.cycle_cloud_mode,
+            (ord('F'), 0): LidarScanViz.cycle_cloud_palette,
             (ord("'"), 0): partial(LidarScanViz.update_ring_size, amount=1),
             (ord("'"), 1): partial(LidarScanViz.update_ring_size, amount=-1),
             (ord("'"), 2): LidarScanViz.cicle_ring_line_width,
@@ -228,19 +434,19 @@ class LidarScanViz:
     def cycle_img_mode(self, i: int) -> None:
         """Change the displayed field of the i'th image."""
         with self._lock:
-            nfields = len(self._available_fields)
-            if nfields > 0:
-                self._img_ind[i] = (self._img_ind[i] + 1) % nfields
+            self._img_ind[i] += 1
 
     def cycle_cloud_mode(self) -> None:
-        """Change the channel field used to color the 3D point cloud."""
+        """Change the coloring mode of the 3D point cloud."""
         with self._lock:
-            nfields = len(LidarScanViz._cloud_mode_channels)
-            self._cloud_mode_ind = (self._cloud_mode_ind + 1) % nfields
-            new_fields = LidarScanViz._cloud_mode_channels[
-                self._cloud_mode_ind]
-            self._cloud_palette = (calref_palette if client.ChanField.REFLECTIVITY
-                                   in new_fields else spezia_palette)
+            self._cloud_mode_ind = (self._cloud_mode_ind + 1)
+
+    def cycle_cloud_palette(self) -> None:
+        """Change the color palette of the 3D point cloud."""
+        with self._lock:
+            self._cloud_palette_ind = (self._cloud_palette_ind + 1) % len(
+                self._cloud_palettes)
+            self._cloud_palette = self._cloud_palettes[self._cloud_palette_ind]
 
     def toggle_cloud(self, i: int) -> None:
         """Toggle whether the i'th return is displayed."""
@@ -328,60 +534,85 @@ class LidarScanViz:
 
         # figure out what to draw based on current viz state
         scan = self._scan
-        self._available_fields = list(scan.fields)
-        image_fields = tuple(self._available_fields[i] for i in self._img_ind)
-        cloud_fields = LidarScanViz._cloud_mode_channels[self._cloud_mode_ind]
 
-        # extract field data and apply post-processing
-        field_data: Dict[client.ChanField, np.ndarray]
-        field_data = defaultdict(lambda: np.zeros(
-            (scan.h, scan.w), dtype=np.float32))
-
-        for field in {*image_fields, *cloud_fields}:
-            if field in scan.fields:
-                field_data[field] = scan.field(field).astype(np.float32)
-
-        for field, data in field_data.items():
-            if field in self._field_pp:
-                self._field_pp[field](data)
+        # available display modes
+        img_modes = list(
+            filter(lambda m: m.mode.enabled(scan, m.return_num),
+                   self._image_modes))
+        cloud_modes = list(filter(lambda m: m.enabled(scan),
+                                  self._cloud_modes))
 
         # update 3d display
-        palette = self._cloud_palette
-        self._cloud_palette = None
+        self._cloud_mode_ind %= len(cloud_modes)
+        cloud_mode = cloud_modes[self._cloud_mode_ind]
 
-        for i, range_field in ((0, client.ChanField.RANGE), (1, client.ChanField.RANGE2)):
+        refl_mode = is_norm_reflectivity_mode(cloud_mode)
+        if refl_mode:
+            self._cloud_palette = (CloudPaletteItem("Cal. Ref", calref_palette)
+                                   if not self._cloud_refl_mode else None)
+        else:
+            if self._cloud_refl_mode:
+                self._cloud_palette = self._cloud_palettes[
+                    self._cloud_palette_ind]
+        self._cloud_refl_mode = refl_mode
+
+        for i, range_field in ((0, ChanField.RANGE), (1, ChanField.RANGE2)):
             if range_field in scan.fields:
                 range_data = scan.field(range_field)
             else:
                 range_data = np.zeros((scan.h, scan.w), dtype=np.uint32)
 
             self._clouds[i].set_range(range_data)
-            self._clouds[i].set_key(field_data[cloud_fields[i]].astype(
-                np.float32))
-            if palette is not None:
-                self._clouds[i].set_palette(palette)
+
+            if self._cloud_palette is not None:
+                self._clouds[i].set_palette(self._cloud_palette.palette)
+
+            if cloud_mode.enabled(scan, i):
+                cloud_modes[self._cloud_mode_ind].set_cloud_color(
+                    self._clouds[i], scan, return_num=i)
+            else:
+                cloud_modes[self._cloud_mode_ind].set_cloud_color(
+                    self._clouds[i], scan, return_num=0)
+
+        if self._cloud_palette is not None:
+            self._cloud_palette_name = self._cloud_palette.name
+
+        # palette is set only on the first _draw when it's changed
+        self._cloud_palette = None
 
         # update 2d images
         for i in (0, 1):
-            image_data = client.destagger(
-                self._metadata, field_data[image_fields[i]].astype(np.float32))
-            self._images[i].set_image(image_data)
+            self._img_ind[i] %= len(img_modes)
+            img_mode_item = img_modes[self._img_ind[i]]
+            img_mode = img_mode_item.mode
+
+            refl_mode = is_norm_reflectivity_mode(img_mode)
+            if refl_mode and not self._img_refl_mode[i]:
+                self._images[i].set_palette(calref_palette)
+            if not refl_mode and self._img_refl_mode[i]:
+                self._images[i].clear_palette()
+            self._img_refl_mode[i] = refl_mode
+
+            img_mode.set_image(self._images[i], scan, img_mode_item.return_num)
 
         # update osd
         meta = self._metadata
         enable_ind = [i + 1 for i, b in enumerate(self._cloud_enabled) if b]
-        first_ts = scan.timestamp[np.nonzero(scan.timestamp)][0]
+
+        nonzeros = np.flatnonzero(scan.timestamp)
+        first_ts = scan.timestamp[nonzeros[0]] if len(nonzeros) > 0 else 0
+
         if self._osd_enabled:
             self._osd.set_text(
-                f"image: {image_fields[0]}/{image_fields[1]}\n"
-                f"cloud{enable_ind}: {cloud_fields[0]}\n"
+                f"image: {img_modes[self._img_ind[0]].name}/{img_modes[self._img_ind[1]].name}\n"
+                f"cloud{enable_ind}: {cloud_modes[self._cloud_mode_ind].name}\n"
+                f"palette: {self._cloud_palette_name}\n"
                 f"frame: {scan.frame_id}\n"
                 f"sensor ts: {first_ts / 1e9:.3f}s\n"
                 f"profile: {str(meta.format.udp_profile_lidar)}\n"
                 f"{meta.prod_line} {meta.fw_rev} {meta.mode}\n"
                 f"shot limiting status: {str(scan.shot_limiting())}\n"
-                f"thermal shutdown status: {str(scan.thermal_shutdown())}"
-            )
+                f"thermal shutdown status: {str(scan.thermal_shutdown())}")
         else:
             self._osd.set_text("")
 
@@ -478,6 +709,13 @@ def _save_fb_to_png(fb_data: List,
     return img_fname
 
 
+# TODO: Make/Define a better ScanViz interface
+# not a best way to describe interface, yeah duck typing danger, etc ...
+# but ScanViz object shoud have a write property 'scan' and underlying
+# Point viz member at '_viz'
+AnyScanViz = Union[LidarScanViz, Any]
+
+
 class SimpleViz:
     """Visualize a stream of LidarScans.
 
@@ -487,8 +725,9 @@ class SimpleViz:
     _playback_rates = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 0.0)
 
     def __init__(self,
-                 arg: Union[client.SensorInfo, LidarScanViz],
+                 arg: Union[client.SensorInfo, AnyScanViz],
                  rate: Optional[float] = None,
+                 pause_at: int = -1,
                  _buflen: int = 50) -> None:
         """
         Args:
@@ -496,6 +735,8 @@ class SimpleViz:
                  LidarScanViz instance to use.
             rate: Playback rate. One of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0 or
                   None for "live" playback (the default).
+            pause_at: scan number to pause at, dafault (-1) - no auto pause, to
+                      stop after the very first scan use 0
 
         Raises:
             ValueError: if the specified rate isn't one of the options
@@ -509,12 +750,16 @@ class SimpleViz:
             self._viz = arg._viz
             self._scan_viz = arg
         else:
-            raise TypeError(f"Bad type for 1st constructor arg: {type(arg)}")
+            # we continue, so custom ScanVizs can be used with the same
+            # SimpleViz class and basic controls
+            self._viz = arg._viz
+            self._scan_viz = arg
 
         self._lock = threading.Lock()
         self._live = (rate is None)
         self._rate_ind = SimpleViz._playback_rates.index(rate or 0.0)
         self._buflen = _buflen
+        self._pause_at = pause_at
 
         # pausing and stepping
         self._cv = threading.Condition()
@@ -608,7 +853,7 @@ class SimpleViz:
         if self._viz_img_recording:
             self._viz_img_recording = False
             self._viz.pop_frame_buffer_handler()
-            print("Key SHIFT-X: Img Recording STOPED")
+            print("Key SHIFT-X: Img Recording STOPPED")
         else:
             self._viz_img_recording = True
 
@@ -637,13 +882,19 @@ class SimpleViz:
     def _frame_period(self) -> float:
         rate = SimpleViz._playback_rates[self._rate_ind]
         if rate and not self._paused:
-            return 1.0 / (self._metadata.mode.frequency * rate)
+            if isinstance(self._scan_viz, LidarScanViz):
+                return 1.0 / (self._metadata.format.fps * rate)
+            else:
+                # if some other scan viz that is not derived from LidarScanViz
+                # we default to 10 Hz
+                return 1.0 / (10 * rate)
         else:
             return 0.0
 
     def _process(self, seekable: _Seekable[client.LidarScan]) -> None:
 
         last_ts = time.monotonic()
+        scan_idx = -1
         try:
             while True:
                 # wait until unpaused, step, or quit
@@ -660,12 +911,19 @@ class SimpleViz:
                     period = self._frame_period()
 
                 # process new data
+                scan_idx = seekable.next_ind
                 self._scan_viz.scan = next(seekable)
                 self._scan_viz.draw(update=False)
 
+                if self._pause_at == scan_idx:
+                    self._paused = True
+                    self._update_playback_osd()
+
                 # sleep for remainder of scan period
                 to_sleep = max(0.0, period - (time.monotonic() - last_ts))
-                time.sleep(to_sleep)
+                if scan_idx > 0:
+                    time.sleep(to_sleep)
+
                 last_ts = time.monotonic()
 
                 # show new data
@@ -675,7 +933,11 @@ class SimpleViz:
             pass
 
         finally:
-            # signal rendering (main) thread to exit
+            # signal rendering (main) thread to exit, with a delay
+            # because the viz in main thread may not have been started
+            # and on Mac it was observed that it fails to set a flag if
+            # _process fails immediately after start
+            time.sleep(0.5)
             self._viz.running(False)
 
     def run(self, scans: Iterable[client.LidarScan]) -> None:
@@ -706,8 +968,12 @@ class SimpleViz:
         except KeyboardInterrupt:
             pass
         finally:
-            # some scan sources may be waiting on IO, blocking the processing thread
-            seekable.close()
+            try:
+                # some scan sources may be waiting on IO, blocking the
+                # processing thread
+                seekable.close()
+            except Exception as e:
+                logger.warn(f"Data source closed with error: '{e}'")
 
             # processing thread will still be running if e.g. viz window was closed
             with self._cv:
@@ -720,5 +986,7 @@ class SimpleViz:
 
 __all__ = [
     'PointViz', 'Cloud', 'Image', 'Cuboid', 'Label', 'WindowCtx', 'Camera',
-    'TargetDisplay', 'add_default_controls', 'calref_palette', 'spezia_palette'
+    'TargetDisplay', 'add_default_controls', 'calref_palette', 'spezia_palette',
+    'grey_palette', 'viridis_palette', 'magma_palette', 'ImageMode',
+    'CloudMode', 'ImageCloudMode', 'CloudPaletteItem'
 ]

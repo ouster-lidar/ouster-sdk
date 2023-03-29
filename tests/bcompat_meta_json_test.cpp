@@ -56,9 +56,13 @@ testing::Values(
   "2_3_1_os-992146000760-128_legacy",
   "2_3_1_os-992146000760-128",
   "2_4_0_os-992146000760-128_legacy",
-  "2_4_0_os-992146000760-128"
-
+  "2_4_0_os-992146000760-128",
+  "3_0_1_os-122246000293-128_legacy",
+  "3_0_1_os-122246000293-128",
+  "2_5_0_os-992146000760-128_legacy",
+  "2_5_0_os-992146000760-128"
 ));
+
 // clang-format on
 
 std::string data_dir = ".";
@@ -103,6 +107,8 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
               si_expected.lidar_to_sensor_transform);
     EXPECT_EQ(si.extrinsic, si_expected.extrinsic);
     EXPECT_EQ(si.init_id, si_expected.init_id);
+    EXPECT_EQ(si.udp_port_lidar, si_expected.udp_port_lidar);
+    EXPECT_EQ(si.udp_port_imu, si_expected.udp_port_imu);
 }
 
 int main(int argc, char** argv) {

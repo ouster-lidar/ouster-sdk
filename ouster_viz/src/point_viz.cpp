@@ -16,6 +16,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <iostream>
 
 #include "camera.h"
 #include "cloud.h"
@@ -227,11 +228,11 @@ void PointViz::visible(bool state) { pimpl->glfw->visible(state); }
 bool PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl->update_mx};
 
-    // propagate camera changes
-    pimpl->camera_front = pimpl->camera_back;
-
     // last frame hasn't been drawn yet
     if (pimpl->front_changed) return false;
+
+    // propagate camera changes
+    pimpl->camera_front = pimpl->camera_back;
 
     pimpl->clouds.swap();
     pimpl->cuboids.swap();
@@ -244,12 +245,20 @@ bool PointViz::update() {
     return true;
 }
 
-int PointViz::viewport_width() {
+int PointViz::viewport_width() const {
     return pimpl->glfw->window_context.viewport_width;
 }
 
-int PointViz::viewport_height() {
+int PointViz::viewport_height() const {
     return pimpl->glfw->window_context.viewport_height;
+}
+
+int PointViz::window_width() const {
+    return pimpl->glfw->window_context.window_width;
+}
+
+int PointViz::window_height() const {
+    return pimpl->glfw->window_context.window_height;
 }
 
 void PointViz::draw() {
@@ -402,12 +411,13 @@ Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
       w_{w},
       extrinsic_{extrinsic},
       range_data_(n_, 0),
-      key_data_(n_, 0),
+      key_data_(4 * n_, 0),
       mask_data_(4 * n_, 0),
       xyz_data_(3 * n_, 0),
       off_data_(3 * n_, 0),
       transform_data_(12 * w, 0),
-      palette_data_(3 * n_, 0) {
+      palette_data_(&spezia_palette[0][0],
+                    &spezia_palette[0][0] + spezia_n * 3) {
     // set everything to changed so on GLCloud object reuse we properly draw
     // everything first time
     range_changed_ = true;
@@ -416,6 +426,7 @@ Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
     xyz_changed_ = true;
     offset_changed_ = true;
     point_size_changed_ = true;
+    palette_changed_ = true;
 
     // initialize per-column poses to identity
     for (size_t v = 0; v < w; v++) {
@@ -425,10 +436,13 @@ Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
     }
     transform_changed_ = true;
 
+    // set initial rgba alpha to 1.0
+    for (size_t i = 3; i < 4 * n_; i += 4) {
+        key_data_[i] = 1.0;
+    }
+
     Eigen::Map<Eigen::Matrix4d>{pose_.data()}.setIdentity();
     pose_changed_ = true;
-
-    set_palette(&spezia_palette[0][0], spezia_n);
 }
 
 /*
@@ -480,8 +494,53 @@ void Cloud::set_range(const uint32_t* x) {
 }
 
 void Cloud::set_key(const float* key_data) {
-    std::copy(key_data, key_data + n_, key_data_.begin());
+    const float* end = key_data + n_;
+    float* dst = key_data_.data();
+    while (key_data != end) {
+        *dst = *(key_data++);
+        dst += 4;
+    }
     key_changed_ = true;
+    mono_ = true;
+}
+
+void Cloud::set_key_alpha(const float* key_alpha_data) {
+    const float* end = key_alpha_data + n_;
+    float* dst = key_data_.data();
+    while (key_alpha_data != end) {
+        *(dst + 3) = *(key_alpha_data++); // 4th component is alpha
+        dst += 4;
+    }
+    key_changed_ = true;
+    mono_ = true;
+}
+
+void Cloud::set_key_rgb(const float* key_rgb_data) {
+    // 3 color channels per point (RGB)
+    const float* end = key_rgb_data + 3 * n_;
+    float* dst = key_data_.data();
+    while (key_rgb_data != end) {
+        *(dst++) = *(key_rgb_data++);
+        *(dst++) = *(key_rgb_data++);
+        *(dst++) = *(key_rgb_data++);
+        dst++; // alpha left untouched
+    }
+    key_changed_ = true;
+    mono_ = false;
+}
+
+void Cloud::set_key_rgba(const float* key_rgba_data) {
+    // 4 color channels per point (RGBA)
+    const float* end = key_rgba_data + 4 * n_;
+    float* dst = key_data_.data();
+    while (key_rgba_data != end) {
+        *(dst++) = *(key_rgba_data++);
+        *(dst++) = *(key_rgba_data++);
+        *(dst++) = *(key_rgba_data++);
+        *(dst++) = *(key_rgba_data++);
+    }
+    key_changed_ = true;
+    mono_ = false;
 }
 
 void Cloud::set_mask(const float* mask_data) {
@@ -544,15 +603,57 @@ void Image::clear() {
     position_changed_ = false;
     image_changed_ = false;
     mask_changed_ = false;
+    palette_changed_ = false;
 }
 
 void Image::set_image(size_t width, size_t height, const float* image_data) {
     const size_t n = width * height;
-    image_data_.resize(n);
+    image_data_.resize(4 * n);
     image_width_ = width;
     image_height_ = height;
-    std::copy(image_data, image_data + n, image_data_.begin());
+    const float* end = image_data + n;
+    float* dst = image_data_.data();
+    while (image_data != end) {
+        *(dst + 0) = *(image_data++);
+        *(dst + 3) = 1.0; // alpha
+        dst += 4;
+    }
     image_changed_ = true;
+    mono_ = true;
+}
+
+void Image::set_image_rgb(size_t width, size_t height, const float* image_data_rgb) {
+    const size_t n = width * height;
+    image_data_.resize(4 * n);
+    image_width_ = width;
+    image_height_ = height;
+    const float* end = image_data_rgb + 3 * n;
+    float* dst = image_data_.data();
+    while (image_data_rgb != end) {
+        *(dst++) = *(image_data_rgb++);
+        *(dst++) = *(image_data_rgb++);
+        *(dst++) = *(image_data_rgb++);
+        *(dst++) = 1.0; // alpha
+    }
+    image_changed_ = true;
+    mono_ = false;
+}
+
+void Image::set_image_rgba(size_t width, size_t height, const float* image_data_rgba) {
+    const size_t n = width * height;
+    image_data_.resize(4 * n);
+    image_width_ = width;
+    image_height_ = height;
+    const float* end = image_data_rgba + 4 * n;
+    float* dst = image_data_.data();
+    while (image_data_rgba != end) {
+        *(dst++) = *(image_data_rgba++);
+        *(dst++) = *(image_data_rgba++);
+        *(dst++) = *(image_data_rgba++);
+        *(dst++) = *(image_data_rgba++);
+    }
+    image_changed_ = true;
+    mono_ = false;
 }
 
 void Image::set_mask(size_t width, size_t height, const float* mask_data) {
@@ -572,6 +673,19 @@ void Image::set_position(float x_min, float x_max, float y_min, float y_max) {
 void Image::set_hshift(float hshift) {
     hshift_ = hshift;
     position_changed_ = true;
+}
+
+void Image::set_palette(const float* palette, size_t palette_size) {
+    palette_data_.resize(palette_size * 3);
+    std::copy(palette, palette + (palette_size * 3), palette_data_.begin());
+    palette_changed_ = true;
+    use_palette_ = true;
+}
+
+void Image::clear_palette() {
+    palette_data_.clear();
+    palette_changed_ = true;
+    use_palette_ = false;
 }
 
 Cuboid::Cuboid(const mat4d& pose, const std::array<float, 4>& rgba) {
@@ -732,11 +846,11 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 viz.camera().yaw(sensitivity * dx);
                 viz.camera().pitch(sensitivity * dy);
             } else if (wc.mbutton_down) {
-                // convert from pixels to fractions of window size
+                // convert from screen coordinated to fractions of window size
                 // TODO: factor out conversion?
                 const double window_diagonal =
-                    std::sqrt(wc.viewport_width * wc.viewport_width +
-                              wc.viewport_height * wc.viewport_height);
+                    std::sqrt(wc.window_width * wc.window_width +
+                              wc.window_height * wc.window_height);
                 dx *= 2.0 / window_diagonal;
                 dy *= 2.0 / window_diagonal;
                 viz.camera().dolly_xy(dx, dy);

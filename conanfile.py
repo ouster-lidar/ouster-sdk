@@ -4,6 +4,7 @@ from conans import ConanFile, CMake, tools
 
 from pprint import pformat
 
+
 class OusterSDKConan(ConanFile):
     name = "ouster_sdk"
     license = "BSD 3-Clause License"
@@ -48,7 +49,7 @@ class OusterSDKConan(ConanFile):
     # https://docs.conan.io/en/1.51/howtos/capture_version.html#how-to-capture-package-version-from-text-or-build-files
     def set_version(self):
         content = tools.load(os.path.join(self.recipe_folder, "CMakeLists.txt"))
-        version = re.search("set\(OusterSDK_VERSION_STRING (.*)\)", content).group(1)
+        version = re.search(r"set\(OusterSDK_VERSION_STRING (.*)\)", content).group(1)
         self.version = version.strip()
 
     def config_options(self):
@@ -65,7 +66,7 @@ class OusterSDKConan(ConanFile):
         self.requires("eigen/3.4.0")
         self.requires("jsoncpp/1.9.5")
         self.requires("spdlog/1.10.0")
-        self.requires("libcurl/7.82.0")
+        self.requires("libcurl/7.84.0")
 
         if self.options.build_pcap:
             self.requires("libtins/4.3")

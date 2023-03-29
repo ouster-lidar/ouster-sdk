@@ -1,0 +1,130 @@
+===============================================
+Migration from 20230114/0.7.1 to 20230403/0.8.1
+===============================================
+
+The 20230403 release, which corresponds to Python SDK 0.8.1, brings a few breaking changes.  The
+changes and how to mitigate them are summarized here.
+
+Default Metadata Format
++++++++++++++++++++++++
+The default output format for the metadata has changed from the legacy to the non-legacy format.
+However, the SDK continues to read the legacy format, and will therefore continue to able to read
+old recorded data.
+
+To continue to output the legacy format with C++, set the parameter ``legacy`` to ``true`` when
+calling the ``get_metadata`` function.
+
+To continue to output the legacy format with Python, set the parameter ``_legacy_format`` to
+``True`` when instantiating a ``Sensor``.
+
+If you find that you have written data out in the non-legacy format and you wish to use the legacy
+format instead, use the provided Python utility ``convert-meta-to-legacy``::
+    
+    convert-meta-to-legacy </path/to/metadata/json> </path/to/desired/output/json>
+
+
+LidarScan deprecations
+++++++++++++++++++++++
+A number of long-deprecated members of the LidarScan interface have been removed. These are:
+
+ - ``LidarScan::N_FIELDS``: The number of fields in a profile has varied since the introduction of
+   eUDP profiles in FW 2.2. To find the number of fields in your scan, we suggest using the iterator
+   to loop over and count the number of fields.
+
+ - ``LidarScan::Field``: use ``sensor::ChanField`` instead.
+
+ - ``LidarScan::BlockHeader``: ``BlockHeaders``, structs consisting of the ``timestamp``,
+   ``encoder`` ticks, and ``status`` which corresponded to a single column of measurements
+   (identifiable by``measurement_id``), were deprecated in favor of ``Headers``, which are Eigen
+   Arrays of length equivalent to the # of columns in a scan, with the ith element being the value
+   from the ith measurement. As such, where once you might write::
+
+        auto n_invalid = std::count_if( scans[i].headers.begin(), scans[i].headers.end(), [](const
+        LidarScan::BlockHeader& h) { return h.status != 0xffffffff; });
+
+    you should now use the ``status()`` function::
+
+        auto status = scan.status(); 
+        auto n_invalid = std::count_if(status.data(), status.data() + status.size(), [](const uint32_t s) { return !(s & 0x01); });
+
+    Timestamps are now available through ``timestamp()``, also returning a ``Header``; and the
+    information contained in ``encoder`` is available through ``measurement_id()`` (see the next
+    line item for the conversion).
+
+ - ``encoder``: Encoder counts were part of the LEGACY UDP profile, representing the azimuth angle
+   as a raw encoder count starting from 0 to a max value of 90111. It thus incremented 44 ticks per
+   azimuth angle in 2048 mode, 88 ticks in 1024 mode and 176 in 512 mode. To recover encoder
+   infcount, you can multiply the ``measurement_id`` by the number dictated by your lidar mode. We
+   suggest, however, migrating to use simply ``measurement_id`` and multiplying by ``360 degrees/
+   N`` where ``N`` is the number of columns in your mode (512, 1024, 2048) when you need the
+   azimuth, thus untying any sense of azimuth from the internal mechanicals of the Ouster sensor.
+
+
+Notes for the future
+--------------------
+
+For customers who know they will continue to upgrade their version of the SDK, we also wish to
+highlight some upcoming breaking changes.
+
+Dropped Support
++++++++++++++++
+
+Python
+~~~~~~
+Python 3.7 reaches its end of life on June 27th, 2023. We will likely stop producing Python 3.7
+``ouster-sdk`` wheels by November 2023.
+
+FW versions
+~~~~~~~~~~~
+FW 2.0 will be 3 years old in November 2023, with numerous upgrades introduces in subsequent FWs
+2.1-2.5, and FW 3.0. New versions of the Python SDK and new commits of ouster_example will likely
+stop supporting direct communication with sensors running FW 2.0 by November 2023, although recorded
+data in the pcap+json format will continue to be read and supported.
+
+Ubuntu 18.04
+~~~~~~~~~~~~
+Ubuntu 18.04 reaches its end of standard support in May 2023. We will likely stop supporting the C++
+and Python builds of ``ouster_example`` on 18.04 by November 2023. You will still be able to run
+available Python wheels on your system if you so choose.
+
+
+ROS
+~~~
+As already announced in the ouster-ros repo, there will no longer be ROS melodic support past its
+End of Life in May 2023.
+
+Future Dropped Support
+~~~~~~~~~~~~~~~~~~~~~~
+Looking forward, we will be dropping support for Python versions, Ubuntu versions, and ROS distros
+as they reach their end of standard support instead of supporting them past with a grace period.
+This means, for instance, that we will stop supporting Ubuntu 20.04 in April 2025 and Python 3.8
+in October 2024.
+
+
+FW deprecations, current and upcoming
+-------------------------------------
+
+FW 2.5
+~~~~~~
+There is no need to upgrade to this latest release of the SDK in order to work with sensors running
+the new FW 2.5 if you already updated to 20230114/0.7.1. However, please note that the default value
+of ``udp_profile_lidar`` has been updated to the Single Return profile (``RNG19_RFL8_SIG15_NIR16``)
+from the legacy profile (``LEGACY``). The legacy profile is still supported, but you will have to
+change your sensor default via its configuration webpage or the HTTP or TCP APIs.
+
+
+Future
+~~~~~~
+
+We will discuss future FW removals and deprecations and their impact if you are a user of the SDK.
+
+TCP API
+.......
+The planned removal of the TCP API in future firmwares should not affect SDK users who communciate
+with the sensor only through SDK APIs, as we have already updated our code to use the HTTP API where
+it is available.
+
+LEGACY Profile
+..............
+The planned removal of the LEGACY profile in future firmwares also should not affect SDK users, as
+it will just be a code pathway not used.

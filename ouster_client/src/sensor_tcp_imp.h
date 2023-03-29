@@ -2,7 +2,7 @@
  * Copyright (c) 2022, Ouster, Inc.
  * All rights reserved.
  *
- * @file sensor_tcp.h
+ * @file sensor_tcp_imp.h
  * @brief A high level TCP interface for Ouster sensors.
  *
  */
@@ -10,8 +10,7 @@
 #pragma once
 
 #include "netcompat.h"
-
-#include "sensor_http.h"
+#include "ouster/sensor_http.h"
 
 namespace ouster {
 namespace sensor {

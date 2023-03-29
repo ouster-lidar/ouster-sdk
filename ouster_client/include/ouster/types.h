@@ -173,6 +173,9 @@ enum UDPProfileLidar {
 
     /** Single Returns Low Data Rate */
     PROFILE_RNG15_RFL8_NIR8,
+
+    /** Five Word Profile */
+    PROFILE_FIVE_WORD_PIXEL,
 };
 
 /** Profile indicating packet format of IMU data. */
@@ -364,6 +367,7 @@ struct data_format {
     ColumnWindow column_window;  ///< window of columns over which sensor fires
     UDPProfileLidar udp_profile_lidar;  ///< profile of lidar packet
     UDPProfileIMU udp_profile_imu;      ///< profile of imu packet
+    uint16_t fps;                ///< frames per second
 };
 
 /** Stores necessary information from sensor to parse and project sensor data.
@@ -755,6 +759,11 @@ enum ChanField {
     FLAGS = 8,            ///< 1st return flags
     FLAGS2 = 9,           ///< 2nd return flags
     RAW_HEADERS = 40,     ///< raw headers for packet/footer/column for dev use
+    RAW32_WORD5 = 45,     ///< raw word access to packet for dev use
+    RAW32_WORD6 = 46,     ///< raw word access to packet for dev use
+    RAW32_WORD7 = 47,     ///< raw word access to packet for dev use
+    RAW32_WORD8 = 48,     ///< raw word access to packet for dev use
+    RAW32_WORD9 = 49,     ///< raw word access to packet for dev use
     CUSTOM0 = 50,         ///< custom user field
     CUSTOM1 = 51,         ///< custom user field
     CUSTOM2 = 52,         ///< custom user field
@@ -898,7 +907,7 @@ class packet_format final {
     /**
      * Read the packet shot limiting countdown
      *
-     * @param[in] liar_buf the lidar buf.
+     * @param[in] lidar_buf the lidar buf.
      *
      * @return the shot limiting countdown.
      */

@@ -5,6 +5,8 @@ All rights reserved.
 Type annotations for pcap python bindings.
 """
 
+from typing import (overload, List, Callable)
+
 from ..client.data import BufferT
 
 
@@ -16,25 +18,49 @@ class record_handle:
     pass
 
 
-class packet_info:
+class guessed_ports:
     def __init__(self) -> None:
         ...
 
-    @property
-    def dst_ip(self) -> str:
+    lidar: int
+    imu:   int
+
+
+class stream_info:
+    def __init__(self) -> None:
         ...
 
-    @property
-    def src_ip(self) -> str:
+    total_packets: int
+    encapsulation_protocol: int
+    
+
+def guess_ports(file: str, 
+                meta_data_file: str, 
+                packets_to_process: int) -> List[guessed_ports]:
+    ...
+
+
+@overload
+def get_stream_info(file: str, packets_to_process: int) -> stream_info:
+    pass
+
+
+@overload
+def get_stream_info(file: str, progress_callback: Callable[[int, int], int],
+                    callback_frequency: int,
+                    packets_to_process: int) -> stream_info:
+    pass
+
+
+class packet_info:
+
+    def __init__(self) -> None:
         ...
 
-    @property
-    def dst_port(self) -> int:
-        ...
-
-    @property
-    def src_port(self) -> int:
-        ...
+    dst_ip: str
+    src_ip: str
+    dst_port: int
+    src_port: int
 
     @property
     def payload_size(self) -> int:
@@ -42,6 +68,10 @@ class packet_info:
 
     @property
     def timestamp(self) -> float:
+        ...
+
+    @timestamp.setter
+    def timestamp(self, seconds: float) -> None:
         ...
 
     @property
@@ -82,8 +112,6 @@ def replay_reset(handle: playback_handle) -> None:
 
 
 def record_initialize(file_name: str,
-                      src_ip: str,
-                      dst_ip: str,
                       frag_size: int,
                       use_sll_encapsulation: bool = ...) -> record_handle:
     ...
@@ -93,6 +121,14 @@ def record_uninitialize(handle: record_handle) -> None:
     ...
 
 
-def record_packet(handle: record_handle, src_port: int, dst_port: int,
-                  buf: BufferT, timestamp: float) -> None:
+@overload
+def record_packet(handle: record_handle, src_ip: str, dst_ip: str,
+                  src_port: int, dst_port: int, buf: BufferT,
+                  timestamp: float) -> None:
+    ...
+
+
+@overload
+def record_packet(handle: record_handle, info: packet_info,
+                  buf: BufferT) -> None:
     ...

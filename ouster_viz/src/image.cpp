@@ -21,8 +21,11 @@ bool GLImage::initialized = false;
 GLuint GLImage::program_id;
 GLuint GLImage::vertex_id;
 GLuint GLImage::uv_id;
+GLuint GLImage::mono_id;
 GLuint GLImage::image_id;
 GLuint GLImage::mask_id;
+GLuint GLImage::palette_id;
+GLuint GLImage::use_palette_id;
 
 GLImage::GLImage() {
     if (!GLImage::initialized)
@@ -36,15 +39,17 @@ GLImage::GLImage() {
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(GLubyte), indices,
                  GL_STATIC_DRAW);
 
-    GLuint textures[2];
-    glGenTextures(2, textures);
+    GLuint textures[3];
+    glGenTextures(3, textures);
     image_texture_id = textures[0];
     mask_texture_id = textures[1];
+    palette_texture_id = textures[2];
 
     // initialize textures
     GLfloat init[4] = {0, 0, 0, 0};
     load_texture(init, 1, 1, image_texture_id, GL_RED, GL_RED);
     load_texture(init, 1, 1, mask_texture_id, GL_RGBA, GL_RGBA);
+    load_texture(init, 1, 1, palette_texture_id, GL_RGBA, GL_RGBA);
 }
 
 GLImage::GLImage(const Image& /*image*/) : GLImage{} {}
@@ -53,6 +58,7 @@ GLImage::~GLImage() {
     glDeleteBuffers(2, vertexbuffers.data());
     glDeleteTextures(1, &image_texture_id);
     glDeleteTextures(1, &mask_texture_id);
+    glDeleteTextures(1, &palette_texture_id);
 }
 
 void GLImage::draw(const WindowCtx& ctx, const CameraData&, Image& image) {
@@ -68,14 +74,20 @@ void GLImage::draw(const WindowCtx& ctx, const CameraData&, Image& image) {
 
     glUniform1i(image_id, 0);
     glUniform1i(mask_id, 1);
+    glUniform1i(palette_id, 2);
 
     glActiveTexture(GL_TEXTURE0);
     if (image.image_changed_) {
         load_texture(image.image_data_.data(), image.image_width_,
-                     image.image_height_, image_texture_id, GL_RED, GL_RED);
+                     image.image_height_, image_texture_id, GL_RGBA, GL_RGBA,
+                     GL_FLOAT);
         image.image_changed_ = false;
     }
     glBindTexture(GL_TEXTURE_2D, image_texture_id);
+
+    // put the shader into mono or rgb mode
+    glUniform1i(mono_id, image.mono_ ? 1 : 0);
+    glUniform1i(use_palette_id, image.use_palette_ ? 1 : 0);
 
     glActiveTexture(GL_TEXTURE1);
     if (image.mask_changed_) {
@@ -84,6 +96,16 @@ void GLImage::draw(const WindowCtx& ctx, const CameraData&, Image& image) {
         image.mask_changed_ = false;
     }
     glBindTexture(GL_TEXTURE_2D, mask_texture_id);
+
+    glActiveTexture(GL_TEXTURE2);
+    if (image.palette_changed_) {
+        if (!image.palette_data_.empty()) {
+            load_texture(image.palette_data_.data(),
+                         image.palette_data_.size() / 3, 1, palette_texture_id);
+        }
+        image.palette_changed_ = false;
+    }
+    glBindTexture(GL_TEXTURE_2D, palette_texture_id);
 
     // draw
     double aspect = impl::window_aspect(ctx);
@@ -130,14 +152,21 @@ void GLImage::initialize() {
     // TODO: handled differently than cloud ids...
     GLImage::vertex_id = glGetAttribLocation(GLImage::program_id, "vertex");
     GLImage::uv_id = glGetAttribLocation(GLImage::program_id, "vertex_uv");
+    GLImage::mono_id = glGetUniformLocation(GLImage::program_id, "mono");
     GLImage::image_id = glGetUniformLocation(GLImage::program_id, "image");
     GLImage::mask_id = glGetUniformLocation(GLImage::program_id, "mask");
+    GLImage::palette_id = glGetUniformLocation(GLImage::program_id, "palette");
+    GLImage::use_palette_id = glGetUniformLocation(GLImage::program_id, "use_palette");
     GLImage::initialized = true;
 }
 
 void GLImage::uninitialize() { glDeleteProgram(GLImage::program_id); }
 
-void GLImage::beginDraw() { glUseProgram(GLImage::program_id); }
+void GLImage::beginDraw() {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
+    glUseProgram(GLImage::program_id);
+}
 
 void GLImage::endDraw() {}
 

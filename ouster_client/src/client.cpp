@@ -26,7 +26,7 @@
 #include "logging.h"
 #include "netcompat.h"
 #include "ouster/types.h"
-#include "sensor_http.h"
+#include "ouster/sensor_http.h"
 
 using namespace std::chrono_literals;
 namespace chrono = std::chrono;
@@ -360,8 +360,9 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     try {
         cli.meta = collect_metadata(cli.hostname, timeout_sec);
-    } catch (const std::exception&) {
-        return "";
+    } catch (const std::exception& e) {
+        logger().warn(std::string("Unable to retrieve sensor metadata: ") + e.what());
+        throw;
     }
 
     Json::StreamWriterBuilder builder;

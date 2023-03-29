@@ -23,7 +23,7 @@ class HttpClient {
     /**
      * Constructs an HttpClient object to communicate with an http server.
      *
-     * @param[in] base_url url to the http server.
+     * @param[in] base_url_ url to the http server.
      */
     HttpClient(const std::string& base_url_) : base_url(base_url_) {}
 

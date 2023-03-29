@@ -26,7 +26,7 @@ if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
 def parse_version():
     with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
         content = listfile.read()
-        groups = re.search("set\(OusterSDK_VERSION_STRING ([^-\)]+)(.(.*))?\)", content)
+        groups = re.search(r"set\(OusterSDK_VERSION_STRING ([^-\)]+)(.(.*))?\)", content)
         return groups.group(1) + (groups.group(3) or "")
 
 
@@ -147,7 +147,7 @@ setup(
     install_requires=[
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
-        'typing-extensions >=3.7',
+        'typing-extensions >=3.7.4.3',
         'Pillow >=9.2'
     ],
     extras_require={
@@ -169,4 +169,5 @@ setup(
             'PyQt5; platform_system=="Windows"',
         ],
     },
-    entry_points={'console_scripts': ['simple-viz=ouster.sdk.simple_viz:main']})
+    entry_points={'console_scripts': ['simple-viz=ouster.sdk.simple_viz:main',
+        'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main']})

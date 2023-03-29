@@ -27,17 +27,17 @@ enum frame_status_masks : uint64_t {
     FRAME_STATUS_SHOT_LIMITING_MASK = 0xf0      ///< Mask to get shot limting status
 };
 
+//! @cond Doxygen_Suppress
 enum frame_status_shifts: uint64_t {
     FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT = 0,    ///< No shift for thermal shutdown 
     FRAME_STATUS_SHOT_LIMITING_SHIFT = 4        /// shift 4 for shot limiting
 };
+//! @endcond
 
 // clang-format on
 using sensor::ChanField;
 using sensor::ChanFieldType;
 using sensor::UDPProfileLidar;
-
-constexpr int LidarScan::N_FIELDS;
 
 LidarScan::LidarScan() = default;
 LidarScan::LidarScan(const LidarScan&) = default;
@@ -80,6 +80,14 @@ static const Table<ChanField, ChanFieldType, 3> lb_field_slots{{
     {ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
+static const Table<ChanField, ChanFieldType, 5> five_word_slots{{
+    {ChanField::RAW32_WORD1, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD2, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD3, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD4, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD5, ChanFieldType::UINT32},
+}};
+
 struct DefaultFieldsEntry {
     const std::pair<ChanField, ChanFieldType>* fields;
     size_t n_fields;
@@ -93,7 +101,9 @@ Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
      {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
       {single_field_slots.data(), single_field_slots.size()}},
      {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
-      {lb_field_slots.data(), lb_field_slots.size()}}}};
+      {lb_field_slots.data(), lb_field_slots.size()}},
+     {UDPProfileLidar::PROFILE_FIVE_WORD_PIXEL,
+      {five_word_slots.data(), five_word_slots.size()}}}};
 
 static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     UDPProfileLidar profile) {
@@ -112,17 +122,13 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
 }  // namespace impl
 
 // specify sensor:: namespace for doxygen matching
-LidarScan::LidarScan(
-    size_t w, size_t h,
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-        field_types)
+LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types)
     : timestamp_{Header<uint64_t>::Zero(w)},
       measurement_id_{Header<uint16_t>::Zero(w)},
       status_{Header<uint32_t>::Zero(w)},
       field_types_{std::move(field_types)},
       w{static_cast<std::ptrdiff_t>(w)},
-      h{static_cast<std::ptrdiff_t>(h)},
-      headers{w, BlockHeader{ts_t{0}, 0, 0}} {
+      h{static_cast<std::ptrdiff_t>(h)} {
     // TODO: error on duplicate fields
     for (const auto& ft : field_types_) {
         if (fields_.count(ft.first) > 0)
@@ -148,21 +154,6 @@ sensor::ThermalShutdownStatus LidarScan::thermal_shutdown() const {
         (frame_status &
          frame_status_masks::FRAME_STATUS_THERMAL_SHUTDOWN_MASK) >>
         frame_status_shifts::FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT);
-}
-
-std::vector<LidarScan::ts_t> LidarScan::timestamps() const {
-    std::vector<LidarScan::ts_t> res;
-    res.reserve(headers.size());
-    for (const auto& h : headers) res.push_back(h.timestamp);
-    return res;
-}
-
-LidarScan::BlockHeader& LidarScan::header(size_t m_id) {
-    return headers.at(m_id);
-}
-
-const LidarScan::BlockHeader& LidarScan::header(size_t m_id) const {
-    return headers.at(m_id);
 }
 
 template <typename T,
@@ -232,12 +223,6 @@ bool LidarScan::complete(sensor::ColumnWindow window) const {
                    .unaryExpr([](uint32_t s) { return s & 0x01; })
                    .isConstant(0x01);
     }
-}
-
-bool operator==(const LidarScan::BlockHeader& a,
-                const LidarScan::BlockHeader& b) {
-    return a.timestamp == b.timestamp && a.encoder == b.encoder &&
-           a.status == b.status;
 }
 
 bool operator==(const LidarScan& a, const LidarScan& b) {
@@ -316,8 +301,12 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     const std::vector<double>& altitude_angles_deg) {
     if (w <= 0 || h <= 0)
         throw std::invalid_argument("lut dimensions must be greater than zero");
-    if (azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h)
+
+    if ((azimuth_angles_deg.size() != h || altitude_angles_deg.size() != h) &&
+        (azimuth_angles_deg.size() != w * h ||
+         altitude_angles_deg.size() != w * h)) {
         throw std::invalid_argument("unexpected scan dimensions");
+    }
 
     double beam_to_lidar_euclidean_distance_mm = beam_to_lidar_transform(0, 3);
     if (beam_to_lidar_transform(2, 3) != 0) {
@@ -326,23 +315,39 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                       std::pow(beam_to_lidar_transform(2, 3), 2));
     }
 
+    XYZLut lut;
+
     Eigen::ArrayXd encoder(w * h);   // theta_e
     Eigen::ArrayXd azimuth(w * h);   // theta_a
     Eigen::ArrayXd altitude(w * h);  // phi
 
-    const double azimuth_radians = M_PI * 2.0 / w;
+    if (azimuth_angles_deg.size() == h && altitude_angles_deg.size() == h) {
+        // OS sensor
+        const double azimuth_radians = M_PI * 2.0 / w;
 
-    // populate angles for each pixel
-    for (size_t v = 0; v < w; v++) {
-        for (size_t u = 0; u < h; u++) {
-            size_t i = u * w + v;
-            encoder(i) = 2.0 * M_PI - (v * azimuth_radians);
-            azimuth(i) = -azimuth_angles_deg[u] * M_PI / 180.0;
-            altitude(i) = altitude_angles_deg[u] * M_PI / 180.0;
+        // populate angles for each pixel
+        for (size_t v = 0; v < w; v++) {
+            for (size_t u = 0; u < h; u++) {
+                size_t i = u * w + v;
+                encoder(i) = 2.0 * M_PI - (v * azimuth_radians);
+                azimuth(i) = -azimuth_angles_deg[u] * M_PI / 180.0;
+                altitude(i) = altitude_angles_deg[u] * M_PI / 180.0;
+            }
+        }
+
+    } else if (azimuth_angles_deg.size() == w * h &&
+               altitude_angles_deg.size() == w * h) {
+        // DF sensor
+        // populate angles for each pixel
+        for (size_t v = 0; v < w; v++) {
+            for (size_t u = 0; u < h; u++) {
+                size_t i = u * w + v;
+                encoder(i) = 0;
+                azimuth(i) = azimuth_angles_deg[i] * M_PI / 180.0;
+                altitude(i) = altitude_angles_deg[i] * M_PI / 180.0;
+            }
         }
     }
-
-    XYZLut lut;
 
     // unit vectors for each pixel
     lut.direction = LidarScan::Points{w * h, 3};
@@ -421,9 +426,6 @@ void zero_header_cols(LidarScan& ls, std::ptrdiff_t start, std::ptrdiff_t end) {
     ls.timestamp().segment(start, end - start).setZero();
     ls.measurement_id().segment(start, end - start).setZero();
     ls.status().segment(start, end - start).setZero();
-
-    // zero deprecated header blocks
-    for (auto m_id = start; m_id < end; m_id++) ls.header(m_id) = {};
 }
 
 /*
@@ -585,8 +587,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
-        const std::chrono::nanoseconds ts(pf.col_timestamp(col_buf));
-        const uint32_t encoder = pf.col_encoder(col_buf);
+        const uint64_t ts = pf.col_timestamp(col_buf);
         const uint32_t status = pf.col_status(col_buf);
         const bool valid = (status & 0x01);
 
@@ -621,11 +622,8 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
             next_valid_m_id = m_id + 1;
         }
 
-        // old header API; will be removed in a future release
-        ls.header(m_id) = {ts, encoder, status};
-
         // write new header values
-        ls.timestamp()[m_id] = ts.count();
+        ls.timestamp()[m_id] = ts;
         ls.measurement_id()[m_id] = m_id;
         ls.status()[m_id] = status;
 
@@ -633,6 +631,48 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     }
 
     return false;
-}  // namespace ouster
+}
+
+std::string to_string(const Imu& imu) {
+    std::stringstream ss;
+    ss << "Imu: ";
+    ss << "linear_accel: [";
+    for (size_t i = 0; i < imu.linear_accel.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << imu.linear_accel[i];
+    }
+    ss << "]";
+    ss << ", angular_vel = [";
+    for (size_t i = 0; i < imu.angular_vel.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << imu.angular_vel[i];
+    }
+    ss << "]";
+    ss << ", ts: [";
+    std::array<std::string, 3> labels{"sys_ts", "accel_ts", "gyro_ts"};
+    for (size_t i = 0; i < imu.ts.size(); ++i) {
+        if (i > 0) ss << ", ";
+        ss << labels[i] << " = ";
+        ss << imu.ts[i];
+    }
+    ss << "]";
+    return ss.str();
+}
+
+void packet_to_imu(const uint8_t* buf, const ouster::sensor::packet_format& pf,
+                   Imu& imu) {
+    // Storing all available timestamps
+    imu.sys_ts = pf.imu_sys_ts(buf);
+    imu.accel_ts = pf.imu_accel_ts(buf);
+    imu.gyro_ts = pf.imu_gyro_ts(buf);
+
+    imu.linear_accel[0] = pf.imu_la_x(buf);
+    imu.linear_accel[1] = pf.imu_la_y(buf);
+    imu.linear_accel[2] = pf.imu_la_z(buf);
+
+    imu.angular_vel[0] = pf.imu_av_x(buf);
+    imu.angular_vel[1] = pf.imu_av_y(buf);
+    imu.angular_vel[2] = pf.imu_av_z(buf);
+}
 
 }  // namespace ouster

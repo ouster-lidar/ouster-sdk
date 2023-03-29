@@ -37,15 +37,25 @@ void handle_key_press(GLFWwindow* window, int key, int /*scancode*/, int action,
 }
 
 /*
- * Callback for resizing the window
+ * Callback for resizing viewport (i.e. framebuffer)
  */
-void handle_window_resize(GLFWwindow* window, int fb_width, int fb_height) {
+void handle_framebuffer_resize(GLFWwindow* window, int fb_width, int fb_height) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     ctx->window_context.viewport_width = fb_width;
     ctx->window_context.viewport_height = fb_height;
     glViewport(0, 0, fb_width, fb_height);
     gltViewport(fb_width, fb_height);
     if (ctx->resize_handler) ctx->resize_handler();
+}
+
+/*
+ * Callback for resizing the window
+ */
+void handle_window_resize(GLFWwindow* window, int window_width,
+                          int window_height) {
+    auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
+    ctx->window_context.window_width = window_width;
+    ctx->window_context.window_height = window_height;
 }
 
 /*
@@ -181,7 +191,8 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     }
 
     // set up callbacks (run by glfwPollEvents)
-    glfwSetFramebufferSizeCallback(window, handle_window_resize);
+    glfwSetFramebufferSizeCallback(window, handle_framebuffer_resize);
+    glfwSetWindowSizeCallback(window, handle_window_resize);
     glfwSetKeyCallback(window, handle_key_press);
     glfwSetMouseButtonCallback(window, handle_mouse_button);
     glfwSetCursorPosCallback(window, handle_cursor_pos);
@@ -204,9 +215,17 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     int viewport_width, viewport_height;
     glfwGetFramebufferSize(window, &viewport_width, &viewport_height);
 
+    // set viewport for glText (in pixels)
     gltViewport(viewport_width, viewport_height);
+
+    int win_width, win_height;
+    glfwGetWindowSize(window, &win_width, &win_height);
+
+    // store window and viewport (i.e. framebuffer) sizes to the context
     window_context.viewport_width = viewport_width;
     window_context.viewport_height = viewport_height;
+    window_context.window_width = win_width;
+    window_context.window_height = win_height;
 
     // release context in case subsequent calls are done from another thread
     glfwMakeContextCurrent(nullptr);

@@ -170,7 +170,7 @@ image, run:
        -t ouster-sdk-tox
 
 the ``BASE`` argument will default to ``ubuntu:18.04``, but can also be set to other docker tags,
-e.g. ``ubuntu:20.04``, ``ubuntu:22.04`` or ``debian:10``. Then, run the container to invoke tox:
+e.g. ``ubuntu:20.04``, ``ubuntu:22.04`` or ``debian:11``. Then, run the container to invoke tox:
 
 .. code:: console
 
