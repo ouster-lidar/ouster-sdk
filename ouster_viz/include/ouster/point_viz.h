@@ -282,14 +282,34 @@ class PointViz {
      *
      * @return viewport width reported by glfw
      */
-    int viewport_width();
+    int viewport_width() const;
 
     /**
      * Get a viewport height in pixels.
      *
      * @return viewport height reported by glfw
      */
-    int viewport_height();
+    int viewport_height() const;
+
+    /**
+     * Get a window width in screen coordinates.
+     * 
+     * NOTE: this value maybe different from the viewport size on retina
+     * displays
+     *
+     * @return window width reported by glfw
+     */
+    int window_width() const;
+
+    /**
+     * Get a window height in screen coordinates.
+     * 
+     * @note this value maybe different from the viewport size on retina
+     * displays
+     *
+     * @return window height reported by glfw
+     */
+    int window_height() const;
 
    private:
     std::unique_ptr<Impl> pimpl;
@@ -317,6 +337,8 @@ struct WindowCtx {
     double mouse_y{0};         ///< Current mouse y position
     int viewport_width{0};     ///< Current viewport width in pixels
     int viewport_height{0};    ///< Current viewport height in pixels
+    int window_width{0};       ///< Current window width in screen coordinates
+    int window_height{0};      ///< Current window height in screen coordinates
 };
 
 /**
@@ -447,7 +469,7 @@ class Camera {
     /**
      * Get view offset.
      *
-     * @preturn view offset of the camera
+     * @return view offset of the camera
      */
     vec3d get_view_offset() const;
 
@@ -473,7 +495,7 @@ class Camera {
     void set_orthographic(bool state);
 
     /**
-     * Get orthographic state. 
+     * Get orthographic state.
      *
      * @return true if orthographic, false if perspective
      */
@@ -496,14 +518,14 @@ class Camera {
 
     /**
      * Directly set camera target object pose
-     * 
+     *
      * @param[in] target target where camera is looking at
      */
     void set_target(const mat4d& target);
 
     /**
      * Get the pose of a camera target.
-     * 
+     *
      * @return target camera pose
      */
     mat4d get_target() const;
@@ -576,6 +598,7 @@ class Cloud {
     std::vector<float> palette_data_{};
     mat4d pose_{};
     float point_size_{2};
+    bool mono_{true};
 
     Cloud(size_t w, size_t h, const mat4d& extrinsic);
 
@@ -612,14 +635,14 @@ class Cloud {
      * Resets any changes since the last call to PointViz::update()
      */
     void clear();
-    
+
     /**
      * Set all dirty flags.
      *
      * Re-sets everything so the object is always redrawn.
      */
     void dirty();
-    
+
     /**
      * Get the size of the point cloud.
      *
@@ -629,7 +652,7 @@ class Cloud {
 
     /**
      * Get the columns of the point cloud.
-     * 
+     *
      * @return number of columns in point cloud. (1 - for unstructured)
      */
     size_t get_cols() const { return w_; }
@@ -643,12 +666,36 @@ class Cloud {
     void set_range(const uint32_t* range);
 
     /**
-     * Set the key values, used for colouring.
+     * Set the key values, used for coloring.
      *
      * @param[in] key pointer to array of at least as many elements as there are
      *        points, preferably normalized between 0 and 1
      */
     void set_key(const float* key);
+
+    /**
+     * Set the key alpha values, leaving the color the same.
+     *
+     * @param[in] key pointer to array of at least as many elements as there are
+     *        points, normalized between 0 and 1
+     */
+    void set_key_alpha(const float* key_alpha);
+
+    /**
+     * Set the key values in RGB format, used for coloring.
+     *
+     * @param[in] key_rgb pointer to array of at least 3x as many elements as
+     * there are points, normalized between 0 and 1
+     */
+    void set_key_rgb(const float* key_rgb);
+
+    /**
+     * Set the key values in RGBA format, used for coloring.
+     *
+     * @param[in] key_rgb pointer to array of at least 4x as many elements as
+     * there are points, normalized between 0 and 1
+     */
+    void set_key_rgba(const float* key_rgba);
 
     /**
      * Set the RGBA mask values, used as an overlay on top of the key.
@@ -722,6 +769,7 @@ class Image {
     bool position_changed_{false};
     bool image_changed_{false};
     bool mask_changed_{false};
+    bool palette_changed_{false};
 
     vec4f position_{};
     size_t image_width_{0};
@@ -730,7 +778,10 @@ class Image {
     size_t mask_width_{0};
     size_t mask_height_{0};
     std::vector<float> mask_data_{};
-    float hshift_{0}; // in normalized screen coordinates [-1. 1]
+    std::vector<float> palette_data_{};
+    float hshift_{0};  // in normalized screen coordinates [-1. 1]
+    bool mono_{true};
+    bool use_palette_{false};
 
    public:
     /**
@@ -754,6 +805,26 @@ class Image {
      *        interpreted as a row-major monochrome image
      */
     void set_image(size_t width, size_t height, const float* image_data);
+
+    /**
+     * Set the image data (RGB).
+     *
+     * @param[in] width width of the image data in pixels
+     * @param[in] height height of the image data in pixels
+     * @param[in] image_data pointer to an array of width * height elements
+     *        interpreted as a row-major RGB image
+     */
+    void set_image_rgb(size_t width, size_t height, const float* image_data_rgb);
+
+    /**
+     * Set the image data (RGBA).
+     *
+     * @param[in] width width of the image data in pixels
+     * @param[in] height height of the image data in pixels
+     * @param[in] image_data pointer to an array of width * height elements
+     *        interpreted as a row-major RGBA image
+     */
+    void set_image_rgba(size_t width, size_t height, const float* image_data_rgba);
 
     /**
      * Set the RGBA mask.
@@ -795,12 +866,26 @@ class Image {
      *   -1 - image moved to the left for the 1/2 of a horizontal viewport
      *   +1 - image moved to the right for the 1/2 of a horizontal viewport
      * +0.5 - image moved to the right for the 1/4 of a horizontal viewport
-     * 
+     *
      * @param[in] hshift shift in normalized by width coordinates from 0 at
      * the center [-1.0..1.0]
-     * 
+     *
      */
     void set_hshift(float hshift);
+
+    /**
+     * Set the image color palette.
+     *
+     * @param[in] palette the new palette to use, must have size 3*palette_size
+     * @param[in] palette_size the number of colors in the new palette
+     */
+    void set_palette(const float* palette, size_t palette_size);
+
+    /**
+     * Removes the image color palette.
+     *
+     */
+    void clear_palette();
 
     friend class impl::GLImage;
 };
@@ -917,7 +1002,7 @@ class Label {
 
     /**
      * Set the color of the label.
-     * 
+     *
      * @param[in] rgba color in RGBA format
      */
     void set_rgba(const vec4f& rgba);
@@ -925,22 +1010,49 @@ class Label {
     friend class impl::GLLabel;
 };
 /**
- * @todo document me
+ * Spezia palette size in number of colors.
  */
 extern const size_t spezia_n;
 /**
- * @todo document me
+ * Spezia palette, RGB values per element.
  */
 extern const float spezia_palette[][3];
 
 /**
- * @todo document me
+ * Calibrated reflectifiy palette size in number of colors.
  */
 extern const size_t calref_n;
 /**
- * @todo document me
+ * Calibrated reflectifiy, RGB values per element.
  */
 extern const float calref_palette[][3];
+
+/**
+ * Greyscale palette size in number of colors.
+ */
+extern const size_t grey_n;
+/**
+ * Greyscale palette, RGB values per element.
+ */
+extern const float grey_palette[][3];
+
+/**
+ * Viridis palette size in number of colors.
+ */
+extern const size_t viridis_n;
+/**
+ * Viridis palette, RGB values per element.
+ */
+extern const float viridis_palette[][3];
+
+/**
+ * Magma palette size in number of colors.
+ */
+extern const size_t magma_n;
+/**
+ * Magma palette, RGB values per element.
+ */
+extern const float magma_palette[][3];
 
 }  // namespace viz
 }  // namespace ouster

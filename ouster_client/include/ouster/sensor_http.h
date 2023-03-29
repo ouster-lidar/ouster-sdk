@@ -25,8 +25,6 @@ class SensorHttp {
    protected:
     /**
      * Constructs an http interface to communicate with the sensor.
-     *
-     * @param[in] hostname hostname of the sensor to communicate with.
      */
     SensorHttp() = default;
 

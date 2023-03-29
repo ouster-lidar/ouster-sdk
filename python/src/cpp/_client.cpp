@@ -83,8 +83,8 @@ extern const Table<MultipurposeIOMode, const char*, 6>
     multipurpose_io_mode_strings;
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
-extern Table<ChanField, const char*, 24> chanfield_strings;
-extern Table<UDPProfileLidar, const char*, 4> udp_profile_lidar_strings;
+extern Table<ChanField, const char*, 29> chanfield_strings;
+extern Table<UDPProfileLidar, const char*, 5> udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
 extern Table<ThermalShutdownStatus, const char*, 2>
@@ -427,7 +427,8 @@ PYBIND11_PLUGIN(_client) {
         .def_readwrite("pixel_shift_by_row", &data_format::pixel_shift_by_row)
         .def_readwrite("column_window", &data_format::column_window)
         .def_readwrite("udp_profile_lidar", &data_format::udp_profile_lidar)
-        .def_readwrite("udp_profile_imu", &data_format::udp_profile_imu);
+        .def_readwrite("udp_profile_imu", &data_format::udp_profile_imu)
+        .def_readwrite("fps", &data_format::fps);
 
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
@@ -464,8 +465,9 @@ PYBIND11_PLUGIN(_client) {
         )")
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__repr__", [](const sensor_info& self) {
+            const auto mode = self.mode ? to_string(self.mode) : std::to_string(self.format.fps) + "fps";
             return "<ouster.client.SensorInfo " + self.prod_line + " " +
-                self.sn + " " + self.fw_rev + " " + to_string(self.mode) + ">";
+                self.sn + " " + self.fw_rev + " " + mode + ">";
         })
         .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; })
         .def("__deepcopy__", [](const sensor_info& self, py::dict) { return sensor_info{self}; });
@@ -634,6 +636,16 @@ PYBIND11_PLUGIN(_client) {
         )", py::arg("hostname"), py::arg("config"), py::arg("persist") = false, py::arg("udp_dest_auto") = false,
             py::arg("force_reinit") = false);
 
+    m.def("convert_to_legacy", &ouster::sensor::convert_to_legacy , R"(
+        Convert a non-legacy metadata in string format to legacy
+
+        Args:
+            metadata: non-legacy metadata string
+
+        Returns:
+            returns legacy string representation of metadata.
+            )", py::arg("metadata"));
+
     m.def("get_config", [](const std::string& hostname, bool active) {
         sensor::sensor_config config;
         if (!sensor::get_config(hostname, config, active)) {
@@ -742,7 +754,6 @@ PYBIND11_PLUGIN(_client) {
         fields are staggered, so the ith column header value corresponds to the ith
         column of data in each field.
         )")
-        .def_readonly_static("N_FIELDS", &LidarScan::N_FIELDS, "Deprecated.")
         // TODO: Python and C++ API differ in h/w order for some reason
         .def(
             "__init__",
@@ -853,53 +864,6 @@ PYBIND11_PLUGIN(_client) {
              "The frame shot limiting status.")
         .def("thermal_shutdown", &LidarScan::thermal_shutdown,
              "The frame thermal shutdown status.")
-        .def(
-            "header",
-            [](LidarScan& self, py::object& o) {
-                // the argument should be a ColHeader enum defined in
-                // data.py
-                auto ind = py::int_(o).cast<int>();
-                switch (ind) {
-                    case 0:
-                        return py::array(py::dtype::of<uint64_t>(),
-                                         static_cast<size_t>(self.w),
-                                         self.timestamp().data(),
-                                         py::cast(self));
-                    case 1:
-                        // encoder values are deprecated and not included in
-                        // the updated C++ LidarScan API. Access old values
-                        // instead
-                        return py::array(py::dtype::of<uint32_t>(),
-                                         {static_cast<size_t>(self.w)},
-                                         {sizeof(LidarScan::BlockHeader)},
-                                         &self.headers.at(0).encoder,
-                                         py::cast(self));
-                    case 2:
-                        return py::array(py::dtype::of<uint16_t>(),
-                                         static_cast<size_t>(self.w),
-                                         self.measurement_id().data(),
-                                         py::cast(self));
-                    case 3:
-                        return py::array(py::dtype::of<uint32_t>(),
-                                         static_cast<size_t>(self.w),
-                                         self.status().data(), py::cast(self));
-                    default:
-                        throw std::invalid_argument(
-                            "Unexpected index for LidarScan.header()");
-                }
-            },
-            R"(
-        Return the specified column header as a numpy array.
-
-        This function is deprecated. Use the ``measurment_id``, ``timestamp`` or
-        ``status`` properties instead.
-
-        Args:
-            header: The column header to return
-
-        Returns:
-            The specified column header as a numpy array
-        )")
         .def_property_readonly(
             "timestamp",
             [](LidarScan& self) {
@@ -1020,6 +984,78 @@ PYBIND11_PLUGIN(_client) {
              py::arg("image"), py::arg("update_state") = true)
         .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
              py::arg("image"), py::arg("update_state") = true);
+
+    // Imu
+    py::class_<ouster::Imu>(m, "Imu")
+        .def(
+            "__init__",
+            [](ouster::Imu& self, py::buffer& buf,
+               const sensor::packet_format& pf) {
+                new (&self) ouster::Imu{};
+                ouster::packet_to_imu(getptr(pf.imu_packet_size, buf), pf,
+                                      self);
+            },
+            py::arg("buf"), py::arg("pf"),
+            "Creates imu object from ``buf`` and ``pf``")
+        .def(
+            "__init__",
+            [](ouster::Imu& self, py::array_t<double>& accel,
+               py::array_t<double>& angular_vel, uint64_t sys_ts,
+               uint64_t accel_ts, uint64_t gyro_ts) {
+                py::buffer_info accel_buf = accel.request();
+                py::buffer_info angular_buf = angular_vel.request();
+
+                if (accel_buf.ndim != 1 || angular_buf.ndim != 1) {
+                    throw std::invalid_argument(
+                        "Expect number of dimensions 1");
+                }
+                new (&self) ouster::Imu{};
+                if (accel_buf.size == 3) {
+                    double* ptr = static_cast<double*>(accel_buf.ptr);
+                    self.linear_accel[0] = *ptr;
+                    self.linear_accel[1] = *(ptr + 1);
+                    self.linear_accel[2] = *(ptr + 2);
+                }
+                if (angular_buf.size == 3) {
+                    double* ptr = static_cast<double*>(angular_buf.ptr);
+                    self.angular_vel[0] = *ptr;
+                    self.angular_vel[1] = *(ptr + 1);
+                    self.angular_vel[2] = *(ptr + 2);
+                }
+                self.sys_ts = sys_ts;
+                self.accel_ts = accel_ts;
+                self.gyro_ts = gyro_ts;
+            },
+            py::arg("accel"), py::arg("angular_vel"), py::arg("sys_ts") = 0,
+            py::arg("accel_ts") = 0, py::arg("gyro_ts") = 0,
+            "Creates ``client.Imu`` object from imu data.")
+        .def_property_readonly(
+            "sys_ts", [](const ouster::Imu& imu) { return imu.sys_ts; },
+            "System timestamp (ns)")
+        .def_property_readonly(
+            "accel_ts", [](const ouster::Imu& imu) { return imu.accel_ts; },
+            "Accelerometer timestamp (ns)")
+        .def_property_readonly(
+            "gyro_ts", [](const ouster::Imu& imu) { return imu.gyro_ts; },
+            "Gyroscope timestamp (ns)")
+        .def_property_readonly(
+            "accel",
+            [](const ouster::Imu& imu) {
+                return py::array(py::dtype::of<double>(),
+                                 imu.linear_accel.size(),
+                                 imu.linear_accel.data());
+            },
+            "Accelerometer data")
+        .def_property_readonly(
+            "angular_vel",
+            [](const ouster::Imu& imu) {
+                return py::array(py::dtype::of<double>(),
+                                 imu.angular_vel.size(),
+                                 imu.angular_vel.data());
+            },
+            "Angular velocity data")
+        .def("__repr__", [](ouster::Imu& p) { return ouster::to_string(p); })
+        .def("__str__", [](ouster::Imu& p) { return ouster::to_string(p); });
 
     m.attr("__version__") = ouster::SDK_VERSION;
 

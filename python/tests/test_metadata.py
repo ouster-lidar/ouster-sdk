@@ -115,6 +115,7 @@ def test_write_info(meta: client.SensorInfo) -> None:
     meta.format.pixel_shift_by_row = []
     meta.format.udp_profile_lidar = client.UDPProfileLidar(0)
     meta.format.udp_profile_imu = client.UDPProfileIMU(0)
+    meta.format.fps = 0
     meta.beam_azimuth_angles = []
     meta.beam_altitude_angles = []
     meta.imu_to_sensor_transform = numpy.zeros((4, 4))
@@ -212,4 +213,4 @@ def test_equality_format() -> None:
     data_format_attributes = inspect.getmembers(client.DataFormat, lambda a: not inspect.isroutine(a))
     data_format_properties = [a for a in data_format_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(data_format_properties) == 7, "Don't forget to update tests and the data_format == operator!"
+    assert len(data_format_properties) == 8, "Don't forget to update tests and the data_format == operator!"

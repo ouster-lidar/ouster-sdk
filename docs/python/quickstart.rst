@@ -134,7 +134,7 @@ Just like with the sample data, you can create a :py:class:`.PacketSource` from 
 
 .. code:: python
 
-   >>> source = client.Sensor(hostname)
+   >>> source = client.Sensor(hostname, 7502, 7503)
    >>> info = source.metadata
 
 Now we have a ``source`` from our sensor! You're ready to record, visualize to visualize data from your sensor, proceed to

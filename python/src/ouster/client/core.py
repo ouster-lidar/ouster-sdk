@@ -16,7 +16,8 @@ from typing_extensions import Protocol
 
 from . import _client
 from ._client import (SensorInfo, LidarScan, UDPProfileLidar)
-from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet)
+from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet,
+                   PacketIdError)
 
 
 class ClientError(Exception):
@@ -132,7 +133,8 @@ class Sensor(PacketSource):
                  _overflow_err: bool = False,
                  _flush_before_read: bool = True,
                  _flush_frames: int = 5,
-                 _legacy_format: bool = True) -> None:
+                 _legacy_format: bool = False,
+                 _soft_id_check: bool = False) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
         be updated. The metadata will be fetched over the network from the
@@ -148,6 +150,8 @@ class Sensor(PacketSource):
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
             _legacy_format: if True, use legacy metadata format
+            _soft_id_check: if True, don't skip lidar packets buffers on
+            id mismatch (init_id/sn pair)
 
         Raises:
             ClientError: If initializing the client fails.
@@ -160,6 +164,9 @@ class Sensor(PacketSource):
         self._fetched_meta = ""
         self._flush_frames = _flush_frames
         self._legacy_format = _legacy_format
+
+        self._soft_id_check = _soft_id_check
+        self._id_error_count = 0
 
         # Fetch from sensor if not explicitly provided
         if metadata:
@@ -202,7 +209,12 @@ class Sensor(PacketSource):
         if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
         if st & _client.ClientState.LIDAR_DATA:
-            return LidarPacket(buf, self._metadata)
+            lp = LidarPacket(buf,
+                             self._metadata,
+                             _raise_on_id_check=not self._soft_id_check)
+            if lp.id_error:
+                self._id_error_count += 1
+            return lp
         elif st & _client.ClientState.IMU_DATA:
             return ImuPacket(buf, self._metadata)
         elif st == _client.ClientState.TIMEOUT:
@@ -242,7 +254,7 @@ class Sensor(PacketSource):
 
         # Attempt to flush any old data before producing packets
         if self._flush_before_read:
-            self.flush(n_frames = self._flush_frames, full=True)
+            self.flush(n_frames=self._flush_frames, full=True)
 
         while True:
             try:
@@ -251,8 +263,10 @@ class Sensor(PacketSource):
                     yield p
                 else:
                     break
+            except PacketIdError:
+                self._id_error_count += 1
             except ValueError:
-                # bad packet size or init_id here: this can happen when
+                # bad packet size here: this can happen when
                 # packets are buffered by the OS, not necessarily an error
                 # same pass as in data.py
                 # TODO: introduce status for PacketSource to indicate frequency
@@ -311,6 +325,10 @@ class Sensor(PacketSource):
 
     def buf_use(self) -> int:
         return self._cli.size
+
+    @property
+    def id_error_count(self) -> int:
+        return self._id_error_count
 
     def close(self) -> None:
         """Shut down producer thread and close network connection.
@@ -449,9 +467,7 @@ class Scans:
             A tuple of metadata queried from the sensor and an iterator that
             samples n consecutive scans
         """
-        with closing(Sensor(hostname,
-                            lidar_port,
-                            7503,
+        with closing(Sensor(hostname, lidar_port, 7503,
                             metadata=metadata)) as sensor:
             metadata = sensor.metadata
 

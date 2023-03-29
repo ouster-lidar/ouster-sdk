@@ -63,7 +63,14 @@ Keyboard controls:
 ..
    [end-simple-viz-keymap]
 
-For usage and other options, run ``simple-viz -h``
+The visualizer also includes an option to control the orientation of the point cloud in space when
+loaded. If you possess, say, an OS-DOME mounted an upside down, you can start the visualizer with
+the option ``--extrinsics``::
+
+    $ simple-viz --sensor 10.0.0.13 --extrinsics -1 0 0 0 0 1 0 0 0 0 -1 0 0 0 0 1                                                                                 
+The input is a row-major homogenous matrix.
+
+For other options, run ``simple-viz -h``
 
 .. note::
 

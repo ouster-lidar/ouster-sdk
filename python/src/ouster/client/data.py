@@ -6,12 +6,13 @@ All rights reserved.
 from copy import deepcopy
 from enum import Enum
 from typing import Callable, Iterator, Type, List, Optional, Union
+import logging
 import warnings
 
 import numpy as np
 
 from . import _client
-from ._client import (ChanField, LidarScan, SensorInfo)
+from ._client import (ChanField, LidarScan, SensorInfo, Imu)
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -21,6 +22,8 @@ FieldDType = Type[np.unsignedinteger]
 
 Packet = Union['ImuPacket', 'LidarPacket']
 """Packets emitted by a sensor."""
+
+logger = logging.getLogger("ouster.client.data")
 
 
 class ImuPacket:
@@ -112,6 +115,11 @@ class ColHeader(Enum):
         return self.value
 
 
+class PacketIdError(Exception):
+    """Exception raised when init_id/sn from metadata and packet doesn't match."""
+    pass
+
+
 class LidarPacket:
     """Read lidar packet data as numpy arrays.
 
@@ -122,12 +130,16 @@ class LidarPacket:
     """
     _pf: _client.PacketFormat
     _data: np.ndarray
+    _metadata_init_id: int
+    _metadata_sn: int
     capture_timestamp: Optional[float]
 
     def __init__(self,
                  data: BufferT,
                  info: SensorInfo,
-                 timestamp: Optional[float] = None) -> None:
+                 timestamp: Optional[float] = None,
+                 *,
+                 _raise_on_id_check: bool = True) -> None:
         """
         This will always alias the supplied buffer-like object. Pass in a copy
         to avoid unintentional aliasing.
@@ -136,6 +148,8 @@ class LidarPacket:
             data: Buffer containing the packet payload
             info: Metadata associated with the sensor packet stream
             timestamp: A capture timestamp, in seconds
+            _raise_on_id_check: raise PacketIdError if matadata
+                init_id/sn doesn't match packet init_id/sn.
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
@@ -146,10 +160,21 @@ class LidarPacket:
                                    dtype=np.uint8,
                                    count=self._pf.lidar_packet_size)
         self.capture_timestamp = timestamp
+        self._metadata_init_id = info.init_id
+        self._metadata_sn = int(info.sn)
 
         # check that metadata came from the same sensor initialization as data
-        if self.init_id and self.init_id != info.init_id:
-            raise ValueError("Metadata init id does not match")
+        if self.id_error:
+            error_msg = f"Metadata init_id/sn does not match: " \
+                f"expected by metadata - {info.init_id}/{info.sn}, " \
+                f"but got from packet buffer - {self.init_id}/{self.prod_sn}"
+            if _raise_on_id_check:
+                raise PacketIdError(error_msg)
+            else:
+                # Continue with warning. When init_ids/sn doesn't match
+                # the resulting LidarPacket has high chances to be
+                # incompatible with data format set in metadata json file
+                logger.warn(f"LidarPacket validation: {error_msg}")
 
     def __deepcopy__(self, memo) -> 'LidarPacket':
         cls = type(self)
@@ -159,6 +184,12 @@ class LidarPacket:
         cpy._data = deepcopy(self._data, memo)
         cpy.capture_timestamp = self.capture_timestamp
         return cpy
+
+    @property
+    def id_error(self) -> bool:
+        """Check the metadata init_id/sn and packet init_id/sn mismatch."""
+        return bool(self.init_id and (self.init_id != self._metadata_init_id or
+                                      self.prod_sn != self._metadata_sn))
 
     @property
     def packet_type(self) -> int:
@@ -366,3 +397,9 @@ def XYZLut(
                            info.format.columns_per_frame, 3)
 
     return res
+
+
+def imu_from_packet(packet: ImuPacket) -> Imu:
+    """Transform ImuPacket to client.Imu data type"""
+    return Imu(packet.accel, packet.angular_vel, packet.sys_ts, packet.accel_ts,
+               packet.gyro_ts)

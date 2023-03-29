@@ -142,6 +142,7 @@ class DataFormat:
     column_window: Tuple[int, int]
     udp_profile_lidar: UDPProfileLidar
     udp_profile_imu: UDPProfileIMU
+    fps: int
 
 
 class PacketFormat:
@@ -412,6 +413,7 @@ class ChanField:
     FLAGS: ClassVar[ChanField]
     FLAGS2: ClassVar[ChanField]
     NEAR_IR: ClassVar[ChanField]
+    RAW_HEADERS: ClassVar[ChanField]
     CUSTOM0: ClassVar[ChanField]
     CUSTOM1: ClassVar[ChanField]
     CUSTOM2: ClassVar[ChanField]
@@ -426,6 +428,11 @@ class ChanField:
     RAW32_WORD2: ClassVar[ChanField]
     RAW32_WORD3: ClassVar[ChanField]
     RAW32_WORD4: ClassVar[ChanField]
+    RAW32_WORD5: ClassVar[ChanField]
+    RAW32_WORD6: ClassVar[ChanField]
+    RAW32_WORD7: ClassVar[ChanField]
+    RAW32_WORD8: ClassVar[ChanField]
+    RAW32_WORD9: ClassVar[ChanField]
 
     __members__: ClassVar[Dict[str, ChanField]]
     values: ClassVar[Iterator[ChanField]]
@@ -454,6 +461,7 @@ class UDPProfileLidar:
     PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL: ClassVar[UDPProfileLidar]
     PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16: ClassVar[UDPProfileLidar]
     PROFILE_LIDAR_RNG15_RFL8_NIR8: ClassVar[UDPProfileLidar]
+    PROFILE_LIDAR_FIVE_WORD_PIXEL: ClassVar[UDPProfileLidar]
 
     __members__: ClassVar[Dict[str, UDPProfileLidar]]
     values: ClassVar[Iterator[UDPProfileLidar]]
@@ -535,6 +543,8 @@ class SensorConfig:
     def __init__(self, config_string: str) -> None:
         ...
 
+def convert_to_legacy(metadata: str) -> str:
+    ...
 
 def init_logger(log_level: str,
                 log_file_path: str = ...,
@@ -575,7 +585,6 @@ class Version:
 
 
 class LidarScan:
-    N_FIELDS: ClassVar[int]
 
     frame_id: int
     frame_status: int
@@ -606,9 +615,6 @@ class LidarScan:
         ...
 
     def shot_limiting(self) -> int:
-        ...
-
-    def header(self, header: ColHeader) -> ndarray:
         ...
 
     def field(self, field: ChanField) -> ndarray:
@@ -727,7 +733,7 @@ class AutoExposure:
                  update_every: int) -> None:
         ...
 
-    def __call__(self, image: ndarray) -> None:
+    def __call__(self, image: ndarray, update_state: Optional[bool] = True) -> None:
         ...
 
 
@@ -737,3 +743,22 @@ class BeamUniformityCorrector:
 
     def __call__(self, image: ndarray) -> None:
         ...
+
+class Imu:
+    @overload
+    def __init__(self, buf: BufferT, pf) -> None: ...
+
+    @overload
+    def __init__(self, accel: ndarray, angular_vel: ndarray,
+                 sys_ts: int = ..., accel_ts: int = ..., gyro_ts: int = ...) -> None: ...
+
+    @property
+    def accel(self) -> ndarray: ...
+    @property
+    def accel_ts(self) -> int: ...
+    @property
+    def angular_vel(self) -> ndarray: ...
+    @property
+    def gyro_ts(self) -> int: ...
+    @property
+    def sys_ts(self) -> int: ...

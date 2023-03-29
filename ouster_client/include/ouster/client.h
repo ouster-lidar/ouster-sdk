@@ -168,6 +168,10 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  *
  * Will attempt to fetch from the network if not already populated.
  *
+ * @throw runtime_error if the sensor is in ERROR state, the firmware version
+ * used to initialize the HTTP or TCP client is invalid, the metadata could
+ * not be retrieved from the sensor, or the response could not be parsed.
+ *
  * @param[in] cli client returned by init_client associated with the connection.
  * @param[in] timeout_sec how long to wait for the sensor to initialize.
  * @param[in] legacy_format whether to use legacy format of metadata output.
@@ -175,7 +179,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  * @return a text blob of metadata parseable into a sensor_info struct.
  */
 std::string get_metadata(client& cli, int timeout_sec = 60,
-                         bool legacy_format = true);
+                         bool legacy_format = false);
 
 /**
  * Get sensor config from the sensor.

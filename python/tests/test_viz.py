@@ -4,7 +4,7 @@ All rights reserved.
 """
 
 import weakref
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, Optional, Callable
 
 import pytest
 import numpy as np
@@ -48,6 +48,7 @@ def point_viz() -> viz.PointViz:
         return True
 
     point_viz.push_key_handler(handle_keys)
+    viz.add_default_controls(point_viz)
     return point_viz
 
 
@@ -61,6 +62,128 @@ def test_point_viz_image(point_viz: viz.PointViz) -> None:
 
     point_viz.update()
     point_viz.run()
+
+
+def test_point_viz_rgb_image(point_viz: viz.PointViz) -> None:
+    """Test displaying a rgb image."""
+    img = viz.Image()
+    img.set_position(-4 / 3, 4 / 3, -1, 1)
+    point_viz.add(img)
+
+    label = viz.Label("", 0, 0, align_top=True)
+    point_viz.add(label)
+
+    def show_viz():
+        point_viz.update()
+        point_viz.run()
+
+    label.set_text("Image RGB: set..image(mono), 2dim")
+    image_data_mono = np.array(
+        [[0.1, 0.3, 0.7], [0.2, 0.4, 0.8], [0.3, 0.5, 0.9]], dtype=float)
+    img.set_image(image_data_mono)
+    show_viz()
+
+    label.set_text("Image RGB: set..image(mono), 3dim")
+    img.set_image(image_data_mono[:, :, np.newaxis])
+    show_viz()
+
+    # 2 elements on 3rd dimension is an error
+    with pytest.raises(ValueError):
+        img.set_image(np.dstack((image_data_mono, image_data_mono)))
+
+    label.set_text("Image RGB: set..image(rgb), 3dim")
+    image_data_rgb = np.array(
+        [[[0, 0, 0], [1, 0, 0], [0, 1, 0]], [[1, 1, 0], [0, 0, 1], [1, 0, 1]],
+         [[0, 1, 1], [1, 1, 1], [0, 0, 0]]],
+        dtype=float)
+    img.set_image(image_data_rgb)
+    show_viz()
+
+    label.set_text(
+        "Image RGB: set..image(rgba), 3dim, two right columns has 0.5 alpha")
+    image_data_rgba = np.dstack(
+        (image_data_rgb, np.full((*image_data_rgb.shape[:2], 1), 0.5)))
+    image_data_rgba[:, 0, 3] = 1.0
+    img.set_image(image_data_rgba)
+    show_viz()
+
+    label.set_text(
+        "Image RGB: set..mask(rgba), 4 pixels with different alphas, image the same"
+    )
+    mask_data_rgba = np.array([[[0, 0, 1.0, 0.2], [0, 0, 1.0, 0.4]],
+                               [[0, 0, 1.0, 0.6], [0, 0, 1.0, 0.8]]],
+                              dtype=float)
+    img.set_mask(mask_data_rgba)
+    show_viz()
+
+    label.set_text(
+        "Image RGB: set..mask(rgba), +3 columns added to mask, image the same")
+    mask_data_rgba = np.hstack(
+        (mask_data_rgba,
+         np.array([[[1.0, 0, 0, 0.3], [1.0, 0, 0, 0.5], [1.0, 0, 0, 0.7]],
+                   [[1.0, 0, 0, 0.3], [1.0, 0, 0, 0.5], [1.0, 0, 0, 0.7]]],
+                  dtype=float)))
+    img.set_mask(mask_data_rgba)
+    show_viz()
+
+    label.set_text(
+        "Image RGB: set..mask(rgba), last row alpha 0.8, image the same")
+    mask_data_rgba[-1, :, 3] = 0.8
+    img.set_mask(mask_data_rgba)
+    show_viz()
+
+    label.set_text(
+        "Image RGB: set..mask(rgba), last row alpha 1.0, image the same")
+    mask_data_rgba[-1, :, 3] = 1.0
+    img.set_mask(mask_data_rgba)
+    show_viz()
+
+    label.set_text("Image RGB: set..image(mono), mask the same")
+    img.set_image(image_data_mono)
+    show_viz()
+
+
+@pytest.mark.parametrize('test_key', ['single-2.3'])
+def test_point_viz_image_palette(meta: client.SensorInfo,
+                                 scan: client.LidarScan,
+                                 point_viz: viz.PointViz) -> None:
+    """Test displaying a full-window image."""
+
+    palettes = [
+        ('no..palette', lambda i: i.clear_palette()),
+        ('spezia..palette', lambda i: i.set_palette(viz.spezia_palette)),
+        ('calref..palette', lambda i: i.set_palette(viz.calref_palette)),
+        ('viridis..palette', lambda i: i.set_palette(viz.viridis_palette)),
+        ('magma..palette', lambda i: i.set_palette(viz.magma_palette)),
+        ('grey..palette', lambda i: i.set_palette(viz.grey_palette)),
+    ]
+
+    num_palettes = len(palettes)
+
+    images = []
+    labels = []
+
+    key = np.tile(np.linspace(0.0, 1.0, 1024, dtype=np.float32), (128, 1))
+
+    for idx, (palette_name, palette_enable) in enumerate(palettes):
+        img = viz.Image()
+        img_y0 = -1 + idx * 2 / num_palettes
+        img_y1 = -1 + (idx + 1) * 2 / num_palettes
+        img.set_position(-4 / 3, 4 / 3, img_y0, img_y1)
+        palette_enable(img)
+        img.set_image(key)
+        point_viz.add(img)
+        images.append(img)
+
+        label = viz.Label(palette_name, 0.5, (1 - img_y1) / 2, align_top=True)
+        point_viz.add(label)
+        labels.append(label)
+
+    def show_viz():
+        point_viz.update()
+        point_viz.run()
+
+    show_viz()
 
 
 def test_point_viz_image_with_labels_aligned(point_viz: viz.PointViz) -> None:
@@ -244,6 +367,113 @@ def test_point_viz_cloud_unstructured(point_viz: viz.PointViz) -> None:
     thread.join()
 
 
+def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
+    """Test rgb coloring of clouds."""
+
+    cloud = viz.Cloud(1024)
+    point_viz.add(cloud)
+
+    points = np.random.rand(3, 1024).astype(np.float32) * 30 - 15
+
+    # should be r, g, b from top to bottom
+    key = np.zeros(1024, dtype=float)
+
+    key[5.0 < points[2, :]] = 0.2
+    key[(-5.0 < points[2, :]) & (points[2, :] <= 5.0)] = 0.5
+    key[points[2, :] < -5.0] = 0.8
+
+    cloud.set_xyz(points)
+
+    cloud.set_point_size(10)
+    point_viz.camera.pitch(-45.0)
+
+    label = viz.Label("", 0, 0, align_top=True)
+    point_viz.add(label)
+
+    def show_viz():
+        point_viz.update()
+        point_viz.run()
+
+    with pytest.raises(ValueError):
+        cloud.set_key(key.reshape((1, 1024, 1, 1)))
+
+    with pytest.raises(ValueError):
+        cloud.set_key(key[:100])
+
+    with pytest.raises(ValueError):
+        cloud.set_key(np.dstack((key, key)))
+
+    # 1dim key, mono, (HxW) size ===========================
+    label.set_text("Cloud RGB: MONO set..key()")
+    cloud.set_key(key)
+    show_viz()
+
+    # + set_key_alpha() ====================================
+    label.set_text("Cloud RGB: add set..key..alpha() to parts")
+    key_alpha = np.full(1024, 1.0, dtype=float)
+    key_alpha[points[1, :] > 0] = 0.3
+    cloud.set_key_alpha(key_alpha)
+    show_viz()
+
+    # + set_mask(rgba) =====================================
+    label.set_text("Cloud RGB: add set..mask() 1/3 of cloud "
+                   "in RED with transparency")
+    ones = np.ones([1024, 1], dtype=float)
+    mask_rgba = np.hstack((0.1 * ones, 0.1 * ones, 0.1 * ones, 0.5 * ones))
+    mask_rgba[points[0, :] > 5.0] = np.array([0.8, 0.1, 0.1, 0.8])
+    cloud.set_mask(mask_rgba)
+    show_viz()
+
+    # remove mask
+    zeros = np.zeros([1024, 4], dtype=float)
+    cloud.set_mask(zeros)
+
+    # 2dim key, mono, (HxW) size ===========================
+    label.set_text("Cloud RGB: MONO, set..key() 2dim, no mask, but key alpha "
+                   "left")
+    key_2dim = key.reshape((1, 1024))
+    cloud.set_key(key_2dim)
+    show_viz()
+
+    # 3dim key, mono, (HxW) size ===========================
+    label.set_text("Cloud RGB: MONO, set..key() 3dim, x 0.5, no mask, but key "
+                   "alpha left")
+    key_3dim = key.reshape((1, 1024, 1)) * 0.5
+    cloud.set_key(key_3dim)
+    show_viz()
+
+    # 3dim key, color 3 channel RGB, (HxWx3) size ==========
+    label.set_text("Cloud RGB: RGB, set..key() 3dim, no mask, but key alpha "
+                   "left")
+    key_3dim_rgb = np.dstack(
+        (key, np.full(1024, 0.2, dtype=float), np.full(1024, 0.2, dtype=float)))
+    cloud.set_key(key_3dim_rgb)
+    show_viz()
+
+    # 3dim key, color 4 channel RGBA, (HxWx4) size =========
+    label.set_text("Cloud RGB: RGBA, set..key() 3dim, no mask, key alpha "
+                   "should be overwritten by key")
+    key_3dim_rgba = np.dstack(
+        (np.full(1024, 0.1, dtype=float), np.full(1024, 1.0, dtype=float),
+         np.full(1024, 0.1, dtype=float), key))
+    cloud.set_key(key_3dim_rgba)
+    show_viz()
+
+    # millions of points ===================================
+    label.set_text("Cloud RGB: Add big cloud")
+    many_points_num = 5 * 10**6
+    big_cloud = viz.Cloud(many_points_num)
+    big_points = np.random.rand(3, many_points_num).astype(np.float32)
+
+    big_key = big_points[0]
+    big_points = big_points * 300 - 14
+
+    big_cloud.set_xyz(big_points)
+    big_cloud.set_key(big_key)
+    point_viz.add(big_cloud)
+    show_viz()
+
+
 def test_point_viz_destruction() -> None:
     """Check that PointViz is destroyed deterministically."""
     point_viz = viz.PointViz("Test Viz")
@@ -253,7 +483,7 @@ def test_point_viz_destruction() -> None:
     assert ref() is None
 
 
-@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+@pytest.mark.parametrize('test_key', ['single-2.3'])
 def test_scan_viz_destruction(meta: client.SensorInfo,
                               point_viz: viz.PointViz) -> None:
     """Check that LidarScan is destroyed deterministically."""
@@ -264,7 +494,7 @@ def test_scan_viz_destruction(meta: client.SensorInfo,
     assert ref() is None
 
 
-@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+@pytest.mark.parametrize('test_key', ['single-2.3'])
 def test_viz_multiple_instances(meta: client.SensorInfo,
                                 scan: client.LidarScan) -> None:
     """Check that destructing a visualizer doesn't break other instances."""
@@ -291,7 +521,7 @@ def test_scan_viz_smoke(meta: client.SensorInfo,
     ls_viz.run()
 
 
-@pytest.mark.parametrize('test_key', ['legacy-2.0'])
+@pytest.mark.parametrize('test_key', ['single-2.3'])
 def test_scan_viz_extras(meta: client.SensorInfo,
                          scan: client.LidarScan) -> None:
     """Check rendering of labels, cuboids, clouds and images together."""
@@ -319,3 +549,103 @@ def test_scan_viz_extras(meta: client.SensorInfo,
     point_viz.camera.dolly(150)
     ls_viz.draw()
     point_viz.run()
+
+
+class LidarScanVizWithCallbacks(viz.LidarScanViz):
+    """Add callbacks for pre-draw and post-draw"""
+
+    def __init__(
+        self,
+        meta: client.SensorInfo,
+        viz: Optional[viz.PointViz] = None,
+        pre_draw_callback: Optional[Callable[[client.LidarScan],
+                                             client.LidarScan]] = None,
+        post_draw_callback: Optional[Callable[['LidarScanVizWithCallbacks'],
+                                              None]] = None
+    ) -> None:
+        super().__init__(meta, viz)
+
+        self._pre_draw_callback = pre_draw_callback
+        self._post_draw_callback = post_draw_callback
+
+    def _draw(self) -> None:
+        """Overriding the draw and setting pre/post callbacks"""
+
+        # pre draw callbacl takes LidarScan and returns LidarScan
+        if self._pre_draw_callback:
+            self._scan = self._pre_draw_callback(self._scan)
+
+        # call original draw
+        super()._draw()
+
+        # post draw callbacks takes LidarScanViz object so it can get access
+        # to _clouds and _images within it and set additional masks, colors, etc.
+        if self._post_draw_callback:
+            self._post_draw_callback(self)
+
+
+@pytest.mark.parametrize('test_key', ['single-2.3'])
+def test_simple_viz_with_callbacks(meta: client.SensorInfo,
+                                   scan: client.LidarScan) -> None:
+    """Call the callback on pre/post draw example."""
+
+    from itertools import repeat
+    from copy import deepcopy
+
+    start_range = 1    # in meters
+    num_steps = 100
+
+    # this can be any scan source (just a repeater as an example)
+    scans = repeat(scan, num_steps)
+
+    point_viz = viz.PointViz("Test Viz")
+
+    scan_cnt = 0
+
+    def pre_draw(ls: client.LidarScan) -> client.LidarScan:
+        nonlocal scan_cnt
+
+        nls = deepcopy(ls)
+        ratio = scan_cnt / num_steps
+
+        # modifying range in some way
+        range = nls.field(client.ChanField.RANGE)
+        range = start_range * 1000 + (range - start_range * 1000) * ratio
+        nls.field(client.ChanField.RANGE)[:] = range
+
+        scan_cnt += 1
+        # don't forget to return it back
+        return nls
+
+    def post_draw(scan_viz: LidarScanVizWithCallbacks) -> None:
+
+        # currently discplayed LidarScan
+        ls = scan_viz._scan
+
+        ratio = scan_cnt / num_steps
+        img_mask = np.zeros((ls.h, ls.w, 4))
+        col_idx = int(ls.w * ratio)
+        img_mask[:, col_idx - 5:col_idx + 5] = np.array([1.0, 0.3, 0.3, 1.0])
+
+        # there are 2 images - single return and second
+        # can safely skip the second, but here we draw on both smth
+        for img in scan_viz._images:
+            # set some mask
+            img.set_mask(img_mask)
+
+        # same for clouds, first and second return
+        for cloud in scan_viz._clouds:
+            # set some mask
+            cloud.set_mask(img_mask)
+
+    # regular LidarScanViz
+    # ls_viz = viz.LidarScanViz(meta, point_viz)
+
+    ls_viz = LidarScanVizWithCallbacks(meta,
+                                       point_viz,
+                                       pre_draw_callback=pre_draw,
+                                       post_draw_callback=post_draw)
+
+    viz.SimpleViz(ls_viz, 1.0).run(scans)
+
+    print("Done")

@@ -298,6 +298,7 @@ void GLLabel::draw(const WindowCtx& ctx, const CameraData& camera,
         float scale2d = scale;
 #ifdef __APPLE__
         // TODO: maybe try turning GLFW_COCOA_RETINA_FRAMEBUFFER off
+        // TODO[pb]: Also we can start using GLFW window_content_scale for this
         scale2d *= 2.0;
 #endif
         gltDrawText2DAligned(gltext, x, y, scale2d, halign, valign);

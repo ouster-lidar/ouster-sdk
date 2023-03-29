@@ -19,9 +19,11 @@ from ._client import UDPProfileLidar
 from ._client import UDPProfileIMU
 from ._client import SensorConfig
 from ._client import init_logger
+from ._client import convert_to_legacy
 from ._client import get_config
 from ._client import set_config
 from ._client import LidarScan
+from ._client import Imu
 
 from .data import BufferT
 from .data import FieldDType
@@ -31,6 +33,8 @@ from .data import LidarPacket
 from .data import ColHeader
 from .data import XYZLut
 from .data import destagger
+from .data import PacketIdError
+from .data import imu_from_packet
 
 from .core import ClientError
 from .core import ClientTimeout

@@ -4,11 +4,11 @@ All rights reserved.
 """
 
 import argparse
-import os
 import numpy as np
 
 from ouster import client
 from .viz import SimpleViz
+from .util import resolve_metadata
 
 
 def main() -> None:
@@ -34,7 +34,8 @@ def main() -> None:
                         type=float,
                         required=False,
                         nargs=16,
-                        help='lidar sensor extrinsics to use in viz')
+                        help='lidar sensor extrinsics in homogenous matrix given'
+                        'in row-major order to use in 3D viz')
 
     args = parser.parse_args()
 
@@ -59,14 +60,13 @@ def main() -> None:
     elif args.pcap:
         import ouster.pcap as pcap
 
-        if args.meta:
-            metadata_path = args.meta
-        else:
-            print("Deducing metadata based on pcap name. "
-                  "To provide a different metadata path, use --meta")
-            metadata_path = os.path.splitext(args.pcap)[0] + ".json"
-
+        metadata_path = resolve_metadata(args.pcap, args.meta)
+        if not metadata_path:
+            print("Metadata file not found, please specify "
+                  "a valid metadata file with `--meta`")
+            return
         with open(metadata_path) as json:
+            print(f"Reading metadata from: {metadata_path}")
             info = client.SensorInfo(json.read())
         scans = client.Scans(pcap.Pcap(args.pcap, info))
         rate = 1.0

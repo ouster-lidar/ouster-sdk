@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from ouster import client
-from ouster.client import ColHeader, ChanField
+from ouster.client import ChanField
 
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
@@ -120,7 +120,6 @@ def test_scans_meta(packets: client.PacketSource) -> None:
     assert len(scan.timestamp) == scan.w
     assert len(scan.measurement_id) == scan.w
     assert len(scan.status) == scan.w
-    assert len(scan.header(ColHeader.ENCODER_COUNT)) == scan.w
 
     assert scan.complete()
 
@@ -131,14 +130,9 @@ def test_scans_meta(packets: client.PacketSource) -> None:
             client.UDPProfileLidar.PROFILE_LIDAR_LEGACY):
         # check that all columns are valid
         assert (scan.status == 0xffffffff).all()
-        # only first encoder count is zero
-        assert np.count_nonzero(scan.header(
-            ColHeader.ENCODER_COUNT)) == scan.w - 1
     else:
         # only lowest bit indicates valid
         assert (scan.status & 0x1).all()
-        # encoder counts zeroed
-        assert (scan.header(ColHeader.ENCODER_COUNT) == 0).all()
 
 
 def test_scans_first_packet(packet: client.LidarPacket,
@@ -173,9 +167,6 @@ def test_scans_first_packet(packet: client.LidarPacket,
     assert packet.frame_id == scan.frame_id
 
     assert np.array_equal(packet.timestamp, scan.timestamp[:w])
-
-    assert np.array_equal(packet.header(ColHeader.ENCODER_COUNT),
-                          scan.header(ColHeader.ENCODER_COUNT)[:w])
 
     assert np.array_equal(packet.status, scan.status[:w])
 
