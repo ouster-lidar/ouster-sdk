@@ -11,7 +11,6 @@
 #include <array>
 #include <cmath>
 #include <fstream>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>

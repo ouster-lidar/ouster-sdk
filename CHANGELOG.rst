@@ -9,6 +9,7 @@ Changelog
 
 ouster_client
 -------------
+* Added a new method ``mtp_init_client`` to init the client with multicast support (experimental).
 * the class ``SensorHttp``  which provides easy access to REST APIs of the sensor has been made public
   under the ``ouster::sensor::util`` namespace.
 * breaking change: get_metadata defaults to outputting non-legacy metadata

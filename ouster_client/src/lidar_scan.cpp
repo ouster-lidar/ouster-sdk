@@ -348,7 +348,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
             }
         }
     }
-        
+
     // unit vectors for each pixel
     lut.direction = LidarScan::Points{w * h, 3};
     lut.direction.col(0) = (encoder + azimuth).cos() * altitude.cos();
@@ -652,10 +652,7 @@ std::string to_string(const Imu& imu) {
     std::array<std::string, 3> labels{"sys_ts", "accel_ts", "gyro_ts"};
     for (size_t i = 0; i < imu.ts.size(); ++i) {
         if (i > 0) ss << ", ";
-        // just in case imu vector is bigger than 3 (for what we have labels)
-        if (i < labels.size()) {
-            ss << labels[i] << " = ";
-        }
+        ss << labels[i] << " = ";
         ss << imu.ts[i];
     }
     ss << "]";
