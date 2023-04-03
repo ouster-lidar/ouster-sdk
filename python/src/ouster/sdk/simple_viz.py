@@ -24,11 +24,12 @@ def main() -> None:
     group.add_argument('--sensor', metavar='HOST', help='sensor hostname')
     group.add_argument('--pcap', metavar='PATH', help='path to pcap file')
     parser.add_argument('--meta', metavar='PATH', help='path to metadata json')
-    parser.add_argument('--lidar-port', type=int, help='lidar port for sensor')
+    parser.add_argument('--lidar-port', type=int,
+            help='configure sensor to use specified port for lidar data if running against sensor')
     parser.add_argument('-x',
                         '--no-auto-dest',
                         action='store_true',
-                        help='do not auto configure udp destination')
+                        help='do not auto configure udp destination if running against sensor')
     parser.add_argument('--extrinsics',
                         metavar="F",
                         type=float,

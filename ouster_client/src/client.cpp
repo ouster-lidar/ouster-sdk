@@ -414,8 +414,8 @@ bool init_logger(const std::string& log_level, const std::string& log_file_path,
 
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
-    logger().info("initializing sensor: {} with ports: {}/{}", hostname,
-                  lidar_port, imu_port);
+    logger().info("initializing sensor: {} with lidar port/imu port: {}/{}",
+                  hostname, lidar_port, imu_port);
 
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
