@@ -783,7 +783,8 @@ static data_format parse_data_format(const Json::Value& root) {
     if (root.isMember("fps")) {
         format.fps = root["fps"].asInt();
     } else {
-        logger().warn("No fps found. Trying to use one from lidar mode (or 0)");
+        // logger().warn("No fps found. Trying to use one from lidar mode (or
+        // 0)");
         format.fps = 0;
     }
 
