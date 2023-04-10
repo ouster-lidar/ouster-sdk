@@ -125,9 +125,12 @@ def pcap_to_csv(source: client.PacketSource,
     The number of saved lines per csv file is always H x W, which corresponds to
     a full 2D image representation of a lidar scan.
 
-    Each line in a csv file is (for LEGACY profile):
+    Each line in a csv file is (for DUAL profile):
 
-        TIMESTAMP, RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (mm), Y (mm), Z (mm)
+        TIMESTAMP (ns), RANGE (mm), RANGE2 (mm), SIGNAL (photons),
+            SIGNAL2 (photons), REFLECTIVITY (%), REFLECTIVITY2 (%),
+            NEAR_IR (photons), X (mm), Y (mm), Z (mm), X2 (mm), Y2 (mm), Z2(mm),
+            MEASUREMENT_ID, ROW, COLUMN
 
     If ``csv_ext`` ends in ``.gz``, the file is automatically saved in
     compressed gzip format. :func:`.numpy.loadtxt` can be used to read gzipped
@@ -158,14 +161,19 @@ def pcap_to_csv(source: client.PacketSource,
 
     # construct csv header and data format
     def get_fields_info(scan: client.LidarScan) -> Tuple[str, List[str]]:
-        field_names = 'TIMESTAMP (ns)'
-        field_fmts = ['%d']
+        field_names = 'TIMESTAMP (ns), ROW, DESTAGGERED IMAGE COLUMN, MEASUREMENT_ID'
+        field_fmts = ['%d'] * 4
         for chan_field in scan.fields:
             field_names += f', {chan_field}'
             if chan_field in [client.ChanField.RANGE, client.ChanField.RANGE2]:
                 field_names += ' (mm)'
+            if chan_field in [client.ChanField.REFLECTIVITY, client.ChanField.REFLECTIVITY2]:
+                field_names += ' (%)'
+            if chan_field in [client.ChanField.SIGNAL, client.ChanField.SIGNAL2,
+                    client.ChanField.NEAR_IR]:
+                field_names += ' (photons)'
             field_fmts.append('%d')
-        field_names += ', X (mm), Y (mm), Z (mm)'
+        field_names += ', X1 (mm), Y1 (mm), Z1 (mm)'
         field_fmts.extend(3 * ['%d'])
         if dual:
             field_names += ', X2 (mm), Y2 (mm), Z2 (mm)'
@@ -185,14 +193,21 @@ def pcap_to_csv(source: client.PacketSource,
     if num:
         scans = islice(scans, num)
 
+    row_layer = np.fromfunction(lambda i, j: i,
+            (metadata.format.pixels_per_column, metadata.format.columns_per_frame), dtype=int)
+    column_layer = np.fromfunction(lambda i, j: j,
+            (metadata.format.pixels_per_column, metadata.format.columns_per_frame), dtype=int)
+    column_layer_staggered = client.destagger(metadata, column_layer, inverse=True)
+
     for idx, scan in enumerate(scans):
 
         # initialize the field names for csv header
         if not field_names or not field_fmts:
             field_names, field_fmts = get_fields_info(scan)
 
-        # copy per-column timestamps for each channel
+        # copy per-column timestamps and measurement_ids for each beam
         timestamps = np.tile(scan.timestamp, (scan.h, 1))
+        measurement_ids = np.tile(scan.measurement_id, (scan.h, 1))
 
         # grab channel data
         fields_values = [scan.field(ch) for ch in scan.fields]
@@ -206,13 +221,15 @@ def pcap_to_csv(source: client.PacketSource,
                 np.int64)
 
             # get all data as one H x W x num fields int64 array for savetxt()
-            frame = np.dstack((timestamps, *fields_values, xyz, xyz2))
+            frame = np.dstack((timestamps, row_layer, column_layer_staggered,
+                measurement_ids, *fields_values, xyz, xyz2))
 
         else:
             # get all data as one H x W x num fields int64 array for savetxt()
-            frame = np.dstack((timestamps, *fields_values, xyz))
+            frame = np.dstack((timestamps, row_layer, column_layer_staggered,
+                measurement_ids, *fields_values, xyz))
 
-        # not necessary, but output points in "image" vs. staggered order
+        # output points in "image" vs. staggered order
         frame = client.destagger(metadata, frame)
 
         # write csv out to file

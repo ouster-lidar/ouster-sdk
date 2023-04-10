@@ -41,7 +41,7 @@ Pre-built binaries are provided on `PyPI`_ for the following platforms:
 
 Building from source is supported on:
 
-- Ubuntu 18.04, 20.04, 22.04, and Debian 10 (x86-64, aarch64)
+- Ubuntu 18.04, 20.04, 22.04, and Debian 11 (x86-64, aarch64)
 - macOS >= 10.13 (x86-64), >= 11.0 (arm64)
 - Windows 10 (x86-64)
 
