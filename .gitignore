@@ -10,3 +10,6 @@ python/**/*.pyd
 # visual studio
 .vs/
 out/
+
+# vim
+*.swp
