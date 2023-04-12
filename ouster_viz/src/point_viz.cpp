@@ -383,6 +383,7 @@ void PointViz::add(const std::shared_ptr<Cuboid>& cuboid) {
 }
 
 void PointViz::add(const std::shared_ptr<Label>& label) {
+    label->dirty();
     pimpl->labels.add(label);
 }
 
@@ -724,6 +725,13 @@ void Label::clear() {
     pos_changed_ = false;
     scale_changed_ = false;
     rgba_changed_ = false;
+}
+
+void Label::dirty() {
+    text_changed_ = true;
+    pos_changed_ = true;
+    scale_changed_ = true;
+    rgba_changed_ = true;
 }
 
 void Label::set_position(const vec3d& position) {

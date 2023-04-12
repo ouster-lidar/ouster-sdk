@@ -969,6 +969,13 @@ class Label {
     void clear();
 
     /**
+     * Set all dirty flags.
+     *
+     * Re-sets everything so the object is always redrawn.
+     */
+    void dirty();
+
+    /**
      * Update label text.
      *
      * @param[in] text new text to display
