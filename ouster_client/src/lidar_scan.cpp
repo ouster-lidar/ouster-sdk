@@ -126,10 +126,10 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types)
     : timestamp_{Header<uint64_t>::Zero(w)},
       measurement_id_{Header<uint16_t>::Zero(w)},
       status_{Header<uint32_t>::Zero(w)},
+      pose_(w, mat4d::Identity()),
       field_types_{std::move(field_types)},
       w{static_cast<std::ptrdiff_t>(w)},
       h{static_cast<std::ptrdiff_t>(h)} {
-    // TODO: error on duplicate fields
     for (const auto& ft : field_types_) {
         if (fields_.count(ft.first) > 0)
             throw std::invalid_argument("Duplicated fields found");
@@ -206,6 +206,9 @@ Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
     return status_;
 }
 
+std::vector<mat4d>& LidarScan::pose() { return pose_; }
+const std::vector<mat4d>& LidarScan::pose() const { return pose_; }
+
 bool LidarScan::complete(sensor::ColumnWindow window) const {
     const auto& status = this->status();
     auto start = window.first;
@@ -231,7 +234,7 @@ bool operator==(const LidarScan& a, const LidarScan& b) {
            a.field_types_ == b.field_types_ &&
            (a.timestamp() == b.timestamp()).all() &&
            (a.measurement_id() == b.measurement_id()).all() &&
-           (a.status() == b.status()).all();
+           (a.status() == b.status()).all() && a.pose() == b.pose();
 }
 
 LidarScanFieldTypes get_field_types(const LidarScan& ls) {
@@ -289,7 +292,7 @@ std::string to_string(const LidarScan& ls) {
     auto st = ls.status().cast<uint64_t>();
     ss << "  status = (" << st.minCoeff() << "; " << st.mean() << "; "
        << st.maxCoeff() << ")" << std::endl;
-
+    ss << "  poses = (size: " << ls.pose().size() << ")" << std::endl;
     ss << "}";
     return ss.str();
 }

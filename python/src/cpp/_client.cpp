@@ -886,6 +886,16 @@ PYBIND11_PLUGIN(_client) {
             },
             "The measurement status header as a W-element numpy array.")
         .def_property_readonly(
+            "pose",
+            [](LidarScan& self) {
+                return py::array(
+                    py::dtype::of<double>(),
+                    std::vector<size_t>{
+                        static_cast<size_t>(self.timestamp().size()), 4, 4},
+                    self.pose().data()->data(), py::cast(self));
+            },
+            "The pose vector of 4x4 homogeneous matrices (per each timestamp).")
+        .def_property_readonly(
             "fields",
             // NOTE: keep_alive seems to be ignored without cpp_function wrapper
             py::cpp_function(

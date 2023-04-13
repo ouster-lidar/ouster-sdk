@@ -632,6 +632,10 @@ class LidarScan:
     def status(self) -> ndarray:
         ...
 
+    @property
+    def pose(self) -> ndarray:
+        ...
+
     def complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
         ...
 

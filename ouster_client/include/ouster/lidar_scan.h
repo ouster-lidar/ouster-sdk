@@ -52,6 +52,7 @@ class LidarScan {
     Header<uint64_t> timestamp_;
     Header<uint16_t> measurement_id_;
     Header<uint32_t> status_;
+    std::vector<mat4d> pose_;
     std::map<sensor::ChanField, impl::FieldSlot> fields_;
     LidarScanFieldTypes field_types_;
 
@@ -235,6 +236,15 @@ class LidarScan {
 
     /** @copydoc status() */
     Eigen::Ref<const Header<uint32_t>> status() const;
+
+    /**
+     * Access the vector of poses (per each timestamp).
+     *
+     * @return a reference to vector with poses (4x4) homogeneous.
+     */
+    std::vector<mat4d>& pose();
+    /** @copydoc pose() */
+    const std::vector<mat4d>& pose() const;
 
     /**
      * Assess completeness of scan.

@@ -174,6 +174,12 @@ def test_scan_writeable() -> None:
     ls.status[:] = 0x1
     assert np.all(ls.status == 0x1)
 
+    assert np.all(ls.pose == np.eye(4))
+
+    ls.pose[1][0, 2] = 8
+    assert np.all(ls.pose[1] == np.array([[1, 0, 8, 0], [0, 1, 0, 0],
+                                          [0, 0, 1, 0], [0, 0, 0, 1]]))
+
 
 def test_scan_from_native() -> None:
     ls = client.LidarScan(1024, 32)
@@ -436,6 +442,7 @@ def test_scan_copy_eq() -> None:
     ls0 = client.LidarScan(32, 512)
     ls0.status[:] = 0x1
     ls0.field(client.ChanField.REFLECTIVITY)[:] = 100
+    ls0.pose[:, 0, 3] = 8
 
     ls1 = deepcopy(ls0)
 
@@ -464,6 +471,12 @@ def test_scan_copy_eq() -> None:
     assert ls0 != ls1
 
     ls1.field(client.ChanField.RANGE)[0, 0] = 42
+    assert ls0 == ls1
+
+    ls0.pose[1] = np.eye(4)
+    assert ls0 != ls1
+
+    ls0.pose[1, 0, 3] = 8
     assert ls0 == ls1
 
 

@@ -2,6 +2,15 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+ouster_client
+-------------
+
+* Add ``LidarScan.pose`` with poses per column
+
+
 [20230403]
 ==========
 
