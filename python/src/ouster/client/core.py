@@ -18,7 +18,7 @@ from . import _client
 from ._client import (SensorInfo, LidarScan, UDPProfileLidar)
 from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet,
                    PacketIdError)
-
+import numpy as np
 
 class ClientError(Exception):
     """Base class for client errors."""
@@ -522,3 +522,14 @@ class Scans:
                    complete=complete,
                    fields=fields,
                    _max_latency=2)
+
+
+def first_valid_column(scan: LidarScan) -> int:
+    """Return first valid column of a LidarScan"""
+    return np.bitwise_and(scan.status, 1).argmax()
+
+
+def last_valid_column(scan: LidarScan) -> int:
+    """Return last valid column of a LidarScan"""
+    return (scan.w - 1 - np.bitwise_and(scan.status, 1)[::-1].argmax())
+
