@@ -15,10 +15,9 @@ Note:
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
 from numpy import ndarray
-from typing import (Callable, ClassVar, Dict, Iterator, List, Optional,
-                    overload, Tuple, Union)
+from typing import (ClassVar, Dict, Iterator, List, Optional, overload, Tuple)
 
-from .data import (BufferT, ColHeader, FieldDType)
+from .data import (BufferT, ColHeader, FieldDType, FieldTypes)
 
 
 class Client:
@@ -737,7 +736,9 @@ class AutoExposure:
                  update_every: int) -> None:
         ...
 
-    def __call__(self, image: ndarray, update_state: Optional[bool] = True) -> None:
+    def __call__(self,
+                 image: ndarray,
+                 update_state: Optional[bool] = True) -> None:
         ...
 
 
@@ -748,13 +749,19 @@ class BeamUniformityCorrector:
     def __call__(self, image: ndarray) -> None:
         ...
 
+
 class Imu:
     @overload
     def __init__(self, buf: BufferT, pf) -> None: ...
 
     @overload
-    def __init__(self, accel: ndarray, angular_vel: ndarray,
-                 sys_ts: int = ..., accel_ts: int = ..., gyro_ts: int = ...) -> None: ...
+    def __init__(self,
+                 accel: ndarray,
+                 angular_vel: ndarray,
+                 sys_ts: int = ...,
+                 accel_ts: int = ...,
+                 gyro_ts: int = ...) -> None:
+        ...
 
     @property
     def accel(self) -> ndarray: ...
@@ -766,3 +773,10 @@ class Imu:
     def gyro_ts(self) -> int: ...
     @property
     def sys_ts(self) -> int: ...
+
+
+@overload
+def get_field_types(scan: LidarScan) -> FieldTypes: ...
+
+@overload
+def get_field_types(info: SensorInfo) -> FieldTypes: ...

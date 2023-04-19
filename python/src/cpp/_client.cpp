@@ -198,6 +198,26 @@ static sensor::ChanFieldType field_type_of_dtype(const py::dtype& dt) {
         throw std::invalid_argument("Invalid dtype for a channel field");
 }
 
+/*
+ * Map a channel field type to a dtype
+ */
+static py::dtype dtype_of_field_type(const sensor::ChanFieldType& ftype) {
+    switch (ftype) {
+        case sensor::ChanFieldType::UINT8:
+            return py::dtype::of<uint8_t>();
+        case sensor::ChanFieldType::UINT16:
+            return py::dtype::of<uint16_t>();
+        case sensor::ChanFieldType::UINT32:
+            return py::dtype::of<uint32_t>();
+        case sensor::ChanFieldType::UINT64:
+            return py::dtype::of<uint64_t>();
+        default:
+            throw std::invalid_argument(
+                "Invalid field_type for convertion to dtype");
+    }
+    return py::dtype();  // unreachable ...
+}
+
 #if (SPDLOG_VER_MAJOR >= 1)  // don't include for spdlog < 1.x.x
 
 /*
@@ -1066,6 +1086,50 @@ PYBIND11_PLUGIN(_client) {
             "Angular velocity data")
         .def("__repr__", [](ouster::Imu& p) { return ouster::to_string(p); })
         .def("__str__", [](ouster::Imu& p) { return ouster::to_string(p); });
+
+    m.def(
+        "get_field_types",
+        [](const sensor::sensor_info& info) {
+            auto field_types = ouster::get_field_types(info);
+            std::map<sensor::ChanField, py::dtype> field_types_res{};
+            for (const auto& f : field_types) {
+                auto dtype = dtype_of_field_type(f.second);
+                field_types_res.emplace(f.first, dtype);
+            }
+            return field_types_res;
+        },
+        R"(
+        Extracts LidarScan fields with types for a given SensorInfo
+
+        Args:
+            info: sensor metadata for which to find fields types
+
+        Returns:
+            returns field types
+            )",
+        py::arg("info"));
+
+    m.def(
+        "get_field_types",
+        [](const LidarScan& ls) {
+            auto field_types = ouster::get_field_types(ls);
+            std::map<sensor::ChanField, py::dtype> field_types_res{};
+            for (const auto& f : field_types) {
+                auto dtype = dtype_of_field_type(f.second);
+                field_types_res.emplace(f.first, dtype);
+            }
+            return field_types_res;
+        },
+        R"(
+        Extracts LidarScan fields with types for a given lidar scan ``ls``
+
+        Args:
+            ls: lidar scan from which to get field types
+
+        Returns:
+            returns field types
+            )",
+        py::arg("lidar_scan"));
 
     m.attr("__version__") = ouster::SDK_VERSION;
 

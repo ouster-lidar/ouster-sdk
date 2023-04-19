@@ -5,7 +5,7 @@ All rights reserved.
 
 from copy import deepcopy
 from enum import Enum
-from typing import Callable, Iterator, Type, List, Optional, Union
+from typing import Callable, Iterator, Type, List, Optional, Union, Dict
 import logging
 import warnings
 
@@ -22,6 +22,9 @@ FieldDType = Type[np.unsignedinteger]
 
 Packet = Union['ImuPacket', 'LidarPacket']
 """Packets emitted by a sensor."""
+
+FieldTypes = Dict[ChanField, FieldDType]
+"""LidarScan chan fields with types"""
 
 logger = logging.getLogger("ouster.client.data")
 
@@ -403,3 +406,9 @@ def imu_from_packet(packet: ImuPacket) -> Imu:
     """Transform ImuPacket to client.Imu data type"""
     return Imu(packet.accel, packet.angular_vel, packet.sys_ts, packet.accel_ts,
                packet.gyro_ts)
+
+
+def packet_ts(packet: Packet) -> int:
+    """Return the packet timestamp in nanoseconds"""
+    return int(packet.capture_timestamp *
+               10**9) if packet.capture_timestamp else 0
