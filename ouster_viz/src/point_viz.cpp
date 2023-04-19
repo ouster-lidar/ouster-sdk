@@ -592,6 +592,23 @@ void Cloud::set_column_poses(const float* rotation, const float* translation) {
     transform_changed_ = true;
 }
 
+void Cloud::set_column_poses(const float* column_poses) {
+    // columns_poses: is [Wx4x4] and column-major storage
+    for (size_t v = 0; v < w_; v++) {
+        for (size_t u = 0; u < 3; u++) {
+            for (size_t r = 0; r < 3; r++) {
+                transform_data_[(r * w_ + v) * 3 + u] =
+                    column_poses[(r * 4 + u) * w_ + v];
+            }
+        }
+        for (size_t u = 0; u < 3; u++) {
+            transform_data_[9 * w_ + 3 * v + u] =
+                column_poses[(3 * 4 + u) * w_ + v];
+        }
+    }
+    transform_changed_ = true;
+}
+
 void Cloud::set_palette(const float* palette, size_t palette_size) {
     palette_data_.resize(palette_size * 3);
     std::copy(palette, palette + (palette_size * 3), palette_data_.begin());

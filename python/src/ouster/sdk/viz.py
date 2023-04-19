@@ -24,7 +24,7 @@ import numpy as np
 from PIL import Image as PILImage
 
 from ouster import client
-from ouster.client import _utils, ChanField
+from ouster.client import _utils, ChanField, first_valid_column_pose
 from ..client._client import Version
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
@@ -280,7 +280,7 @@ def is_norm_reflectivity_mode(mode: FieldViewMode) -> bool:
     NOTE[pb]: This is highly implementation specific and doesn't look nicely,
     i.e. it's more like duck/duct plumbing .... but suits the need.
     """
-    return (hasattr(mode, "_normalized_refl") and mode._normalized_refl)
+    return (isinstance(mode, ReflMode) and mode._normalized_refl)
 
 
 @dataclass
@@ -361,6 +361,7 @@ class LidarScanViz:
         self._ring_size = 1
         self._ring_line_width = 1
         self._osd_enabled = True
+        self._scan_poses_enabled = False
 
         self._modes: List[LidarScanVizMode]
         self._modes = [
@@ -403,6 +404,13 @@ class LidarScanViz:
         self._osd = Label("", 0, 1)
         self._viz.add(self._osd)
 
+        self._scan_ind = -1
+
+        # scan identity poses to re-use
+        self._scan_column_poses_identity = np.array(
+            [np.eye(4) for _ in range(self._metadata.format.columns_per_frame)],
+            dtype=np.float32)
+
         # key bindings. will be called from rendering thread, must be synchronized
         key_bindings: Dict[Tuple[int, int], Callable[[LidarScanViz], None]] = {
             (ord('E'), 0): partial(LidarScanViz.update_image_size, amount=1),
@@ -419,6 +427,7 @@ class LidarScanViz:
             (ord("'"), 1): partial(LidarScanViz.update_ring_size, amount=-1),
             (ord("'"), 2): LidarScanViz.cicle_ring_line_width,
             (ord("O"), 0): LidarScanViz.toggle_osd,
+            (ord('T'), 0): LidarScanViz.toggle_scan_poses,
         }
 
         def handle_keys(self: LidarScanViz, ctx: WindowCtx, key: int,
@@ -501,6 +510,16 @@ class LidarScanViz:
         with self._lock:
             self._osd_enabled = not self._osd_enabled if state is None else state
 
+    def toggle_scan_poses(self) -> None:
+        """Toggle the per column poses use."""
+        with self._lock:
+            if self._scan_poses_enabled:
+                self._scan_poses_enabled = False
+                print("LidarScanViz: Key T: Scan Poses: OFF")
+            else:
+                self._scan_poses_enabled = True
+                print("LidarScanViz: Key T: Scan Poses: ON")
+
     @property
     def scan(self) -> client.LidarScan:
         """The currently displayed scan."""
@@ -510,6 +529,16 @@ class LidarScanViz:
     def scan(self, scan: client.LidarScan) -> None:
         """Set the scan to display"""
         self._scan = scan
+
+    @property
+    def scan_ind(self) -> int:
+        """The currently displayed scan number (-1 if was never set)"""
+        return self._scan_ind
+
+    @scan_ind.setter
+    def scan_ind(self, scan_ind: int) -> None:
+        """Set the scan number of the currently displayed scan"""
+        self._scan_ind = scan_ind
 
     def draw(self, update: bool = True) -> bool:
         """Process and draw the latest state to the screen."""
@@ -615,6 +644,23 @@ class LidarScanViz:
                 f"thermal shutdown status: {str(scan.thermal_shutdown())}")
         else:
             self._osd.set_text("")
+
+        self._draw_update_scan_poses()
+
+    def _draw_update_scan_poses(self) -> None:
+        """Apply poses from the scan to the cloud"""
+
+        column_poses = (self._scan.pose if self._scan_poses_enabled else
+                        self._scan_column_poses_identity)
+
+        for cloud in self._clouds:
+            cloud.set_column_poses(column_poses)
+
+        # with poses camera tracks the scan position
+        camera_target = (np.linalg.inv(first_valid_column_pose(self._scan))
+                         if self._scan_poses_enabled else np.eye(4))
+
+        self._viz.camera.set_target(camera_target)
 
 
 class _Seekable(Generic[T]):
@@ -913,6 +959,7 @@ class SimpleViz:
                 # process new data
                 scan_idx = seekable.next_ind
                 self._scan_viz.scan = next(seekable)
+                self._scan_viz.scan_ind = scan_idx
                 self._scan_viz.draw(update=False)
 
                 if self._pause_at == scan_idx:

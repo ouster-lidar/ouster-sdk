@@ -752,6 +752,16 @@ class Cloud {
     void set_column_poses(const float* rotation, const float* translation);
 
     /**
+     * Set the per-column poses, so that the point corresponding to the
+     * pixel at row u, column v in the staggered lidar scan is transformed
+     * by the vth pose, given as a homogeneous transformation matrix.
+     *
+     * @param[in] column_poses array of 4x4 pose elements and length w
+     * (i.e. [wx4x4]) column-storage
+     */
+    void set_column_poses(const float* column_poses);
+
+    /**
      * Set the point cloud color palette.
      *
      * @param[in] palette the new palette to use, must have size 3*palette_size

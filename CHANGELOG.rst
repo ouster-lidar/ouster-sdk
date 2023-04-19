@@ -10,6 +10,14 @@ ouster_client
 
 * Add ``LidarScan.pose`` with poses per column
 
+ouster_viz
+-------------
+
+* [BREAKING] Changed Python binding for ``Cloud.set_column_poses()`` to accept ``[Wx4x4]`` array
+  of poses, column-storage order
+* Add ``LidarScan.pose`` handling to ``viz.LidarScanViz``, and new ``T`` keyboard
+  binding to toggle column poses usage
+
 
 [20230403]
 ==========

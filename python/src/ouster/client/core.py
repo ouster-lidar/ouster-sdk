@@ -20,6 +20,7 @@ from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet,
                    PacketIdError)
 import numpy as np
 
+
 class ClientError(Exception):
     """Base class for client errors."""
     pass
@@ -526,10 +527,29 @@ class Scans:
 
 def first_valid_column(scan: LidarScan) -> int:
     """Return first valid column of a LidarScan"""
-    return np.bitwise_and(scan.status, 1).argmax()
+    return int(np.bitwise_and(scan.status, 1).argmax())
 
 
 def last_valid_column(scan: LidarScan) -> int:
     """Return last valid column of a LidarScan"""
-    return (scan.w - 1 - np.bitwise_and(scan.status, 1)[::-1].argmax())
+    return int(scan.w - 1 - np.bitwise_and(scan.status, 1)[::-1].argmax())
 
+
+def first_valid_column_ts(scan: LidarScan) -> int:
+    """Return first valid column timestamp of a LidarScan"""
+    return scan.timestamp[first_valid_column(scan)]
+
+
+def last_valid_column_ts(scan: LidarScan) -> int:
+    """Return last valid column timestamp of a LidarScan"""
+    return scan.timestamp[last_valid_column(scan)]
+
+
+def first_valid_column_pose(scan: LidarScan) -> int:
+    """Return first valid column pose of a LidarScan"""
+    return scan.pose[first_valid_column(scan)]
+
+
+def last_valid_column_pose(scan: LidarScan) -> int:
+    """Return last valid column pose of a LidarScan"""
+    return scan.pose[last_valid_column(scan)]
