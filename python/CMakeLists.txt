@@ -26,7 +26,7 @@ option(BUILD_VIZ "Enabled for Python build" ON)
 option(BUILD_PCAP "Enabled for Python build" ON)
 
 # ==== Requirements ====
-find_package(pybind11 2.0 REQUIRED)
+find_package(Pybind11Internal)
 find_package(Eigen3 REQUIRED)
 find_package(OusterSDK REQUIRED)
 find_package(spdlog REQUIRED)

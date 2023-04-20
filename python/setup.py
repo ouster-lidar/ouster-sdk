@@ -81,12 +81,27 @@ class CMakeBuild(build_ext):
 
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
-        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args,
-                              cwd=self.build_temp,
-                              env=env)
-        subprocess.check_call(['cmake', '--build', '.'] + build_args,
-                              cwd=self.build_temp)
+        output1 = subprocess.run(['cmake', ext.sourcedir] + cmake_args,
+                                 cwd=self.build_temp,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 env=env, text=True)
 
+        print("CMAKE CONFIG OUTPUT")
+        print(output1.stdout)
+        if output1.returncode != 0:
+            raise "Error running cmake"
+
+        output2 = subprocess.run(['cmake', '--build', '.'],
+                                 cwd=self.build_temp,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 env=env, text=True)
+        print("CMAKE BUILD OUTPUT")
+        print(output2.stdout)
+        if output2.returncode != 0:
+            raise "Error running cmake --build"
+        
 
 class sdk_sdist(sdist):
     """Allow including files from parent directory via symlink."""
