@@ -92,7 +92,7 @@ class PcapReader {
     /**
      * @return The size of the PCAP file in bytes
      */
-    uint64_t file_size() const;
+    int64_t file_size() const;
 
     /**
      * Return the read position to the start of the PCAP file
@@ -113,9 +113,11 @@ class PcapReader {
      */
     void seek(uint64_t offset);
 
+    int64_t current_offset() const;
+
    private:
-    uint64_t file_size_{};
-    uint64_t file_start_{};
+    int64_t file_size_{};
+    int64_t file_start_{};
 };
 
 /**

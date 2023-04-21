@@ -9,13 +9,16 @@
  * @TODO improve error reporting
  */
 
+#define _FILE_OFFSET_BITS 64
 #include "ouster/pcap.h"
 
 #if defined _WIN32
 #include <winsock2.h>
+#define FTELL ftell
 #else
 #include <arpa/inet.h>  // inet_ntop
 #include <sys/time.h>   // timeval
+#define FTELL ftello
 #endif
 
 #include <pcap.h>
@@ -73,7 +76,7 @@ PcapReader::PcapReader(const std::string& file) : impl(new pcap_impl) {
     impl->encap_proto = impl->pcap_reader->link_type();
     impl->pcap_reader_internals =
         pcap_file(impl->pcap_reader->get_pcap_handle());
-    file_start_ = ftell(impl->pcap_reader_internals);
+    file_start_ = FTELL(impl->pcap_reader_internals);
 }
 
 PcapReader::~PcapReader() {}
@@ -93,8 +96,18 @@ void PcapReader::seek(uint64_t offset) {
     }
 }
 
-uint64_t PcapReader::file_size() const {
+int64_t PcapReader::file_size() const {
     return file_size_;
+}
+
+int64_t PcapReader::current_offset() const {
+    int64_t ret = FTELL(impl->pcap_reader_internals);
+
+    if(ret == -1L) {
+        fclose(impl->pcap_reader_internals);
+        throw std::runtime_error("ftell error: errno " + std::to_string(errno));
+    }
+    return ret;
 }
 
 void PcapReader::reset() {
@@ -108,7 +121,7 @@ size_t PcapReader::next_packet() {
     int reassm_packets = 0;
     while (!reassm) {
         reassm_packets++;
-        info.file_offset = ftell(impl->pcap_reader_internals);
+        info.file_offset = current_offset();
         impl->packet_cache = impl->pcap_reader->next_packet();
         if (impl->packet_cache) {
             auto pdu = impl->packet_cache.pdu();

@@ -224,25 +224,30 @@ This module is generated from the C++ code and not meant to be used directly.
 
     py::class_<PcapReader>(m, "PcapReader"); // TODO add more complete bindings
 
+    py::class_<PcapIndex>(m, "PcapIndex")
+        .def(py::init<int>())
+        .def("frame_count", &PcapIndex::frame_count)
+        .def("seek_to_frame", &PcapIndex::seek_to_frame)
+        .def_readonly("frame_indices", &PcapIndex::frame_indices_);
+
     py::class_<IndexedPcapReader, PcapReader>(m, "IndexedPcapReader")
-        .def(py::init<const std::string&, const std::vector<std::string>&, std::function<void(uint64_t, uint64_t, uint64_t)>>())
-        .def("frame_count", &IndexedPcapReader::frame_count)
-        .def("seek_to_frame", &IndexedPcapReader::seek_to_frame)
-        .def("get_stream_info", &IndexedPcapReader::get_stream_info)
+        .def(py::init<const std::string&, const std::vector<std::string>&>())
         .def("current_info", &IndexedPcapReader::current_info)
         .def("next_packet", &IndexedPcapReader::next_packet)
+        .def("update_index_for_current_packet", &IndexedPcapReader::update_index_for_current_packet)
         .def("current_frame_id",[](IndexedPcapReader& reader) -> py::object {
             if(auto frame_id = reader.current_frame_id()) {
                 return py::int_(*frame_id);
             }
             return py::none();
         })
+        .def("reset", &IndexedPcapReader::reset) // TODO move to PcapReader binding?
+        .def("get_index", &IndexedPcapReader::get_index)
         .def("current_data", [](IndexedPcapReader& reader) -> py::array {
             uint8_t* data = const_cast<uint8_t*>(reader.current_data());
             size_t data_size = reader.current_length();
             return py::array(py::dtype::of<uint8_t>(), data_size, data, py::cast(reader));
-        })
-        .def_readonly("frame_indices", &IndexedPcapReader::frame_indices_);
+        });
 
     return m.ptr();
 }

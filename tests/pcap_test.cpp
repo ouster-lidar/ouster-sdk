@@ -106,9 +106,6 @@ TEST(PcapReader, seek_past_end_of_file) {
     EXPECT_EQ(pcap.next_packet(), 0);
 }
 
-void progress_callback(uint64_t, uint64_t, uint64_t) {}
-
-
 TEST(IndexedPcapReader, constructor) {
     // it should be constructed with the correct number of indices
     // and previous frame counts (one for each metadata file)
@@ -116,8 +113,8 @@ TEST(IndexedPcapReader, constructor) {
     std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
     std::string meta_filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10.json";
 
-    IndexedPcapReader pcap(filename, {meta_filename, meta_filename, meta_filename}, progress_callback);
-    EXPECT_EQ(pcap.frame_indices_.size(), 3);
+    IndexedPcapReader pcap(filename, {meta_filename, meta_filename, meta_filename});
+    EXPECT_EQ(pcap.index_.frame_indices_.size(), 3);
     EXPECT_EQ(pcap.previous_frame_ids_.size(), 3);
 }
 
@@ -125,12 +122,12 @@ TEST(IndexedPcapReader, frame_count) {
     // it should raise std::out_of_range if there is no sensor at that position
     auto data_dir = getenvs("DATA_DIR");
     std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
-    IndexedPcapReader pcap(filename, {}, progress_callback);
-    pcap.frame_indices_.push_back(IndexedPcapReader::frame_index());
-    pcap.frame_indices_.at(0).push_back(0);
+    IndexedPcapReader pcap(filename, {});
+    pcap.index_.frame_indices_.push_back(PcapIndex::frame_index());
+    pcap.index_.frame_indices_.at(0).push_back(0);
 
-    EXPECT_EQ(pcap.frame_count(0), 1);
-    EXPECT_THROW(pcap.frame_count(1), std::out_of_range);
+    EXPECT_EQ(pcap.index_.frame_count(0), 1);
+    EXPECT_THROW(pcap.index_.frame_count(1), std::out_of_range);
 }
 
 TEST(IndexedPcapReader, seek_to_frame) {
@@ -138,13 +135,21 @@ TEST(IndexedPcapReader, seek_to_frame) {
     auto data_dir = getenvs("DATA_DIR");
     std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
     std::string meta_filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10.json";
-    IndexedPcapReader pcap(filename, {meta_filename}, progress_callback);
-    pcap.frame_indices_.push_back(IndexedPcapReader::frame_index());
+    IndexedPcapReader pcap(filename, {meta_filename});
 
-    EXPECT_EQ(pcap.frame_count(0), 1);
-    EXPECT_NO_THROW(pcap.seek_to_frame(0, 0));
-    EXPECT_THROW(pcap.seek_to_frame(0, 1), std::out_of_range);
-    EXPECT_THROW(pcap.seek_to_frame(1, 1), std::out_of_range);
+    std::vector<int> progress;
+    while(pcap.next_packet()) {
+        progress.push_back(pcap.update_index_for_current_packet());
+    }
+    for(size_t i = 0; i < progress.size(); i++) {
+        std::cerr << "progress: " << progress[i] << std::endl;
+    }
+    pcap.index_.frame_indices_.push_back(PcapIndex::frame_index());
+
+    EXPECT_EQ(pcap.index_.frame_count(0), 1);
+    EXPECT_NO_THROW(pcap.index_.seek_to_frame(pcap, 0, 0));
+    EXPECT_THROW(pcap.index_.seek_to_frame(pcap, 0, 1), std::out_of_range);
+    EXPECT_THROW(pcap.index_.seek_to_frame(pcap, 1, 1), std::out_of_range);
 }
 
 TEST(IndexedPcapReader, frame_id_rolled_over) {
