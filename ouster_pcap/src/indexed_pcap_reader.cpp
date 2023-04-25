@@ -56,8 +56,7 @@ int IndexedPcapReader::update_index_for_current_packet() {
             }
         }
     }
-    return static_cast<int>(100 * static_cast<float>(current_offset()/file_size()));
-
+    return static_cast<int>(100 * static_cast<float>(current_offset())/file_size());
 }
 
 const PcapIndex& IndexedPcapReader::get_index() const {

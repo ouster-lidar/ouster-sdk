@@ -133,17 +133,24 @@ TEST(IndexedPcapReader, frame_count) {
 TEST(IndexedPcapReader, seek_to_frame) {
     // it should raise std::out_of_range if there is no sensor or frame at that position
     auto data_dir = getenvs("DATA_DIR");
-    std::string filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
-    std::string meta_filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10.json";
+    std::string filename = data_dir + "/OS-2-128-U1_v2.3.0_1024x10.pcap";
+    std::string meta_filename = data_dir + "/OS-2-128-U1_v2.3.0_1024x10.json";
     IndexedPcapReader pcap(filename, {meta_filename});
 
     std::vector<int> progress;
     while(pcap.next_packet()) {
         progress.push_back(pcap.update_index_for_current_packet());
     }
+    ASSERT_GT(progress.size(), 2);
+    // progress values are in the range and are increasing [1, 100]
+    int prev_progress = 0l;
     for(size_t i = 0; i < progress.size(); i++) {
-        std::cerr << "progress: " << progress[i] << std::endl;
+        EXPECT_GE(progress[i], 1);
+        EXPECT_LE(progress[i], 100);
+        EXPECT_GE(progress[i], prev_progress);
+        prev_progress = progress[i];
     }
+    EXPECT_EQ(progress[progress.size() - 1], 100); // last progress value is 100
     pcap.index_.frame_indices_.push_back(PcapIndex::frame_index());
 
     EXPECT_EQ(pcap.index_.frame_count(0), 1);
