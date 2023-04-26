@@ -23,15 +23,28 @@ if(DEFINED PYTHON_EXECUTABLE)
     else()
       find_package(pybind11 2.0 REQUIRED)
     endif()
-    if(PYTHON_VERSION STREQUAL "")
-      if(NOT "${_version_full}" VERSION_EQUAL "${PYTHONLIBS_VERSION_STRING}")
-        message(FATAL_ERROR "Python Versions Do Not Match: PYTHON_EXECUTABLE VERSION: ${_version_full} PYTHONLIBS_VERSION_STRING: ${PYTHONLIBS_VERSION_STRING}")
-      endif()
-    else()
-      if(NOT "${_version_full}" VERSION_EQUAL "${PYTHON_VERSION}")
-        message(FATAL_ERROR "Python Versions Do Not Match: PYTHON_EXECUTABLE VERSION: ${_version_full} PYTHON_VERSION: ${PYTHON_VERSION}")
-      endif()
+
+    set(_PYBIND11_INTERNAL_PYTHON_VERSION "")
+    if(NOT PYTHON_VERSION STREQUAL "")
+      message("Found Python Version VIA: PYTHON_VERSION")
+      set(_PYBIND11_INTERNAL_PYTHON_VERSION "${PYTHON_VERSION}")
+    elseif(NOT PYTHONLIBS_VERSION_STRING STREQUAL "")
+      message("Found Python Version VIA: PYTHONLIBS_VERSION_STRING")
+     set(_PYBIND11_INTERNAL_PYTHON_VERSION "${PYTHONLIBS_VERSION_STRING}")
+    elseif(NOT PYTHON_VERSION_STRING STREQUAL "")
+      message("Found Python Version VIA: PYTHON_VERSION_STRING")
+      set(_PYBIND11_INTERNAL_PYTHON_VERSION "${PYTHON_VERSION_STRING}")
     endif()
+    if(VCPKG_TOOLCHAIN AND NOT "${_version_full}" VERSION_EQUAL "${_PYBIND11_INTERNAL_PYTHON_VERSION}")
+      message(FATAL_ERROR "Python Versions Do Not Match
+\tRequested Version:
+\t\t${_version_full}
+\tVersions Found:
+\t\tPYTHON_VERSION: \"${PYTHON_VERSION}\"
+\t\tPYTHONLIBS_VERSION_STRING: \"${PYTHONLIBS_VERSION_STRING}\"
+\t\tPYTHON_VERSION_STRING: \"${PYTHON_VERSION_STRING}\"
+\tInternal Cache: \"${_PYBIND11_INTERNAL_PYTHON_VERSION}\"")
+      endif()
   else()
     message(FATAL_ERROR "ERROR In Setting Pybind11 CMAKE Prefix Path: ${_pybind_error}")
   endif()
