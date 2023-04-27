@@ -545,11 +545,11 @@ def last_valid_column_ts(scan: LidarScan) -> int:
     return scan.timestamp[last_valid_column(scan)]
 
 
-def first_valid_column_pose(scan: LidarScan) -> int:
+def first_valid_column_pose(scan: LidarScan) -> np.ndarray:
     """Return first valid column pose of a LidarScan"""
     return scan.pose[first_valid_column(scan)]
 
 
-def last_valid_column_pose(scan: LidarScan) -> int:
+def last_valid_column_pose(scan: LidarScan) -> np.ndarray:
     """Return last valid column pose of a LidarScan"""
     return scan.pose[last_valid_column(scan)]
