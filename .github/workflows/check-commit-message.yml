@@ -1,0 +1,38 @@
+name: check-commit-message
+
+run-name: Check commit messages by ${{ github.actor }} on ${{ github.ref }}
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - master
+
+jobs: 
+  # push events have commits as a list of actions
+  check_commit_on_push:
+    if: github.event_name == 'push'
+    name: check commit message
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: check commit message python script
+        run: python .github/check_commit_message.py
+        shell: bash
+        env:
+          COMMITS: ${{ toJSON(github.event.commits) }}
+
+  complain_if_not_squash:
+    if: github.event_name == 'pull_request' && ! github.event.pull_request.draft
+    name: complain if not squash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: complain if not squash python script
+        run: python .github/complain_if_not_squash.py
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          NUM_COMMITS: ${{ github.event.pull_request.commits }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
