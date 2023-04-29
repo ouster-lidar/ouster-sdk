@@ -1,0 +1,19 @@
+name: check-commit-message
+run-name: Check commit messages by ${{ github.actor }} on ${{ github.ref }}
+on:
+  push:
+    branches:
+      - master
+      - kai/test
+
+jobs: 
+  check_commit:
+    name: check commit message
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v3
+        - name: check commit message python script
+          run: python .github/check_commit_message.py
+          shell: bash
+          env:
+              COMMITS: ${{ toJSON(github.event.commits) }}
