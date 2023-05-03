@@ -257,14 +257,6 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
         status = sensor_http->sensor_info()["status"].asString();
     } while (status == "INITIALIZING");
 
-    // not all metadata available when sensor isn't RUNNING
-    if (status != "RUNNING") {
-        throw std::runtime_error(
-            "Cannot obtain full metadata with sensor status: " + status +
-            ". Please ensure that sensor is not in a STANDBY, UNCONFIGURED, "
-            "WARMUP, or ERROR state");
-    }
-
     auto metadata = sensor_http->metadata();
     // merge extra info into metadata
     metadata["client_version"] = client_version();
