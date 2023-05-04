@@ -4,11 +4,12 @@ run-name: Check merge commit messages by ${{ github.actor }} on ${{ github.ref }
 on: [pull_request]
 
 jobs: 
-    check_title_and_description:
+  check_title_and_description:
     if: github.event_name == 'pull_request' && ! github.event.pull_request.draft
     name: check PR title and description
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
       - name: check PR title and description
         run: python .github/check_title_and_description.py
         shell: bash
