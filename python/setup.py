@@ -92,7 +92,7 @@ class CMakeBuild(build_ext):
         if output1.returncode != 0:
             raise "Error running cmake"
 
-        output2 = subprocess.run(['cmake', '--build', '.'],
+        output2 = subprocess.run(['cmake', '--build', '.'] + build_args,
                                  cwd=self.build_temp,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
