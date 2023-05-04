@@ -7,7 +7,7 @@ description_re = r'(\n(\n[\20-\x7E]{0,100})+)?(\n)?'
 num_commits = int(os.environ.get("NUM_COMMITS"))
 title = os.environ.get("TITLE")
 pr_number_string = os.environ.get("PR_NUMBER")
-pr_description = "\n" + os.environ.get("PR_BODY")
+pr_description = "\n\n" + os.environ.get("PR_BODY")
 
 # check title length with (PR number) added at end
 new_title = title + " (#" + pr_number_string + ")"
