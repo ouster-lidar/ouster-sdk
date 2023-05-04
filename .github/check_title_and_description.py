@@ -7,7 +7,7 @@ description_re = r'(\n(\n[\20-\x7E]{0,100})+)?(\n)?'
 num_commits = int(os.environ.get("NUM_COMMITS"))
 title = os.environ.get("TITLE")
 pr_number_string = os.environ.get("PR_NUMBER")
-pr_description = "\n\n" + os.environ.get("PR_BODY")
+pr_description = "\n" + os.environ.get("PR_BODY")
 
 # check title length with (PR number) added at end
 new_title = title + " (#" + pr_number_string + ")"
@@ -27,7 +27,7 @@ if not re.fullmatch(title_re, new_title):
     error = True
 
 if not re.fullmatch(description_re, pr_description):
-    print(f"Error: Please revise your PR description {pr_description}\n to match the regex {description_re}")
+    print(f"Error: Please revise your PR description: {pr_description}\n to match the regex {description_re}")
     error = True
 
 # No need to check two new lines since it is determined by GH Merge settings
