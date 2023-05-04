@@ -1,38 +1,19 @@
-name: check-commit-message
+name: check-merge-commit-message-on-PR
 
-run-name: Check commit messages by ${{ github.actor }} on ${{ github.ref }}
-on:
-  push:
-    branches:
-      - "**"
-  pull_request:
-    branches:
-      - master
+run-name: Check merge commit messages by ${{ github.actor }} on ${{ github.ref }}
+on: [pull_request]
 
 jobs: 
-  # push events have commits as a list of actions
-  check_commit_on_push:
-    if: github.event_name == 'push'
-    name: check commit message
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: check commit message python script
-        run: python .github/check_commit_message.py
-        shell: bash
-        env:
-          COMMITS: ${{ toJSON(github.event.commits) }}
-
-  complain_if_not_squash:
+  check_title_and_description:
     if: github.event_name == 'pull_request' && ! github.event.pull_request.draft
-    name: complain if not squash
+    name: check PR title and description
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: complain if not squash python script
-        run: python .github/complain_if_not_squash.py
+      - name: check PR title and description
+        run: python .github/check_title_and_description.py
         shell: bash
         env:
           TITLE: ${{ github.event.pull_request.title }}
-          NUM_COMMITS: ${{ github.event.pull_request.commits }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
