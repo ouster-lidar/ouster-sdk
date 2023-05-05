@@ -13,9 +13,9 @@ pr_description = "\n" + os.environ.get("PR_BODY")
 new_title = title + " (#" + pr_number_string + ")"
 
 error = False
-print(f"Checking your PR title {new_title}...")
+print(f"Checking PR title {repr(new_title)}...")
 if not re.fullmatch(title_re, new_title):
-    print(f"Error: Please revise your PR title {new_title} "
+    print(f"Error: Please revise the PR title {new_title} "
             "to match the regex {title_re} where:\n"
             "* the first letter is a capital letter or numeral 0-9\n"
             "* title is more than 2 characters long\n"
@@ -23,9 +23,9 @@ if not re.fullmatch(title_re, new_title):
             "the addition of (###) for the PR number")
     error = True
 
-print(f"Checking your PR description {repr(pr_description)}")
+print(f"Checking PR description {repr(pr_description)}")
 if not re.fullmatch(description_re, pr_description):
-    print(f"Error: Your PR description {repr(pr_description)}, "
+    print(f"Error: The PR description {repr(pr_description)}, "
             "which will be treated as your commit message, does "
             "not match the regex {description_re}")
     error = True
