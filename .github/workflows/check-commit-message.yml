@@ -1,0 +1,19 @@
+name: check-merge-commit-message-on-PR
+
+run-name: Check merge commit messages by ${{ github.actor }} on ${{ github.ref }}
+on: [pull_request]
+
+jobs: 
+  check_title_and_description:
+    if: github.event_name == 'pull_request' && ! github.event.pull_request.draft
+    name: check PR title and description
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: check PR title and description
+        run: python .github/check_title_and_description.py
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
