@@ -33,14 +33,14 @@ On supported Debian-based linux systems, you can install all build dependencies 
 
    $ sudo apt install build-essential cmake \
                       libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
-                      python3-dev python3-pip pybind11-dev libcurl4-openssl-dev \
+                      python3-dev python3-pip libcurl4-openssl-dev \
                       libglfw3-dev libglew-dev libspdlog-dev
 
 On macos >= 10.13, using homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen curl jsoncpp libtins python3 pybind11 glfw glew spdlog
+  $ brew install cmake eigen curl jsoncpp libtins python3 glfw glew spdlog
 
 After you have the system dependencies, you can build the SDK with:
 
@@ -51,6 +51,9 @@ After you have the system dependencies, you can build the SDK with:
 
    # make sure you have an up-to-date version of pip installed
    $ python3 -m pip install --user --upgrade pip
+
+   # install pybind11
+   $ python3 -m pip install pybind11
 
    # then, build an installable "wheel" package
    $ python3 -m pip wheel --no-deps $OUSTER_SDK_PATH/python
@@ -74,9 +77,9 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins pybind11 glfw3 glad[gl-api-33] spdlog
+   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog
 
-The currently tested vcpkg tag is ``2022.02.23``. After that, using a developer powershell prompt:
+The currently tested vcpkg tag is ``2023.02.24``. After that, using a developer powershell prompt:
 
 .. code:: powershell
 
@@ -92,6 +95,9 @@ The currently tested vcpkg tag is ``2022.02.23``. After that, using a developer 
    # set build options related to the compiler
    PS > $env:CMAKE_GENERATOR_PLATFORM="x64"
    PS > $env:CMAKE_GENERATOR="Visual Studio 15 2017"
+
+   # install pybind11
+   PS > py -m pip install pybind11
    
    # then, build an installable "wheel" package
    PS > py -m pip wheel --no-deps "$env:OUSTER_SDK_PATH\python"
@@ -116,7 +122,9 @@ change. For a local debug build, you can also add the ``-g`` flag.
 The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To run:
 
 .. code:: console
-
+   # install pybind11
+   $ python3 -m pip install pybind11
+   
    # install and run flake8 linter
    $ python3 -m pip install flake8
    $ cd ${OUSTER_SDK_PATH}/python
