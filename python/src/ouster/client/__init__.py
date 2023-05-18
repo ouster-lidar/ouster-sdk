@@ -23,7 +23,6 @@ from ._client import convert_to_legacy
 from ._client import get_config
 from ._client import set_config
 from ._client import LidarScan
-from ._client import Imu
 from ._client import get_field_types
 
 from .data import BufferT
@@ -36,7 +35,6 @@ from .data import ColHeader
 from .data import XYZLut
 from .data import destagger
 from .data import PacketIdError
-from .data import imu_from_packet
 from .data import packet_ts
 
 from .core import ClientError

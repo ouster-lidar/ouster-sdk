@@ -750,31 +750,6 @@ class BeamUniformityCorrector:
         ...
 
 
-class Imu:
-    @overload
-    def __init__(self, buf: BufferT, pf) -> None: ...
-
-    @overload
-    def __init__(self,
-                 accel: ndarray,
-                 angular_vel: ndarray,
-                 sys_ts: int = ...,
-                 accel_ts: int = ...,
-                 gyro_ts: int = ...) -> None:
-        ...
-
-    @property
-    def accel(self) -> ndarray: ...
-    @property
-    def accel_ts(self) -> int: ...
-    @property
-    def angular_vel(self) -> ndarray: ...
-    @property
-    def gyro_ts(self) -> int: ...
-    @property
-    def sys_ts(self) -> int: ...
-
-
 @overload
 def get_field_types(scan: LidarScan) -> FieldTypes: ...
 

@@ -492,47 +492,6 @@ class ScanBatcher {
     bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 };
 
-/**
- * Imu Data
- */
-struct Imu {
-    union {
-        std::array<double, 3> angular_vel;
-        struct {
-            double wx, wy, wz;
-        };
-    };
-    union {
-        std::array<double, 3> linear_accel;
-        struct {
-            double ax, ay, az;
-        };
-    };
-    union {
-        std::array<uint64_t, 3> ts;
-        struct {
-            uint64_t sys_ts, accel_ts, gyro_ts;
-        };
-    };
-};
-
-/** Equality for Imu */
-inline bool operator==(const Imu& a, const Imu& b) {
-    return a.angular_vel == b.angular_vel && a.linear_accel == b.linear_accel &&
-           a.ts == b.ts;
-};
-
-/** Not Equality for Imu */
-inline bool operator!=(const Imu& a, const Imu& b) {
-    return !(a == b);
-};
-
-std::string to_string(const Imu& imu);
-
-/// Reconstructs buf with UDP imu_packet to osf::Imu object
-void packet_to_imu(const uint8_t* buf, const ouster::sensor::packet_format& pf,
-                   Imu& imu);
-
 }  // namespace ouster
 
 #include "ouster/impl/cartesian.h"

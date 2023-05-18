@@ -11,6 +11,7 @@ ouster_client
 * Add ``LidarScan.pose`` with poses per column
 * Add ``_client.IndexedPcapReader`` and ``_client.PcapIndex`` to enable random
   pcap file access by frame number
+* [BREAKING] remove ``ouster::Imu`` object
 
 ouster_viz
 -------------

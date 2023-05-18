@@ -636,46 +636,4 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     return false;
 }
 
-std::string to_string(const Imu& imu) {
-    std::stringstream ss;
-    ss << "Imu: ";
-    ss << "linear_accel: [";
-    for (size_t i = 0; i < imu.linear_accel.size(); ++i) {
-        if (i > 0) ss << ", ";
-        ss << imu.linear_accel[i];
-    }
-    ss << "]";
-    ss << ", angular_vel = [";
-    for (size_t i = 0; i < imu.angular_vel.size(); ++i) {
-        if (i > 0) ss << ", ";
-        ss << imu.angular_vel[i];
-    }
-    ss << "]";
-    ss << ", ts: [";
-    std::array<std::string, 3> labels{"sys_ts", "accel_ts", "gyro_ts"};
-    for (size_t i = 0; i < imu.ts.size(); ++i) {
-        if (i > 0) ss << ", ";
-        ss << labels[i] << " = ";
-        ss << imu.ts[i];
-    }
-    ss << "]";
-    return ss.str();
-}
-
-void packet_to_imu(const uint8_t* buf, const ouster::sensor::packet_format& pf,
-                   Imu& imu) {
-    // Storing all available timestamps
-    imu.sys_ts = pf.imu_sys_ts(buf);
-    imu.accel_ts = pf.imu_accel_ts(buf);
-    imu.gyro_ts = pf.imu_gyro_ts(buf);
-
-    imu.linear_accel[0] = pf.imu_la_x(buf);
-    imu.linear_accel[1] = pf.imu_la_y(buf);
-    imu.linear_accel[2] = pf.imu_la_z(buf);
-
-    imu.angular_vel[0] = pf.imu_av_x(buf);
-    imu.angular_vel[1] = pf.imu_av_y(buf);
-    imu.angular_vel[2] = pf.imu_av_z(buf);
-}
-
 }  // namespace ouster
