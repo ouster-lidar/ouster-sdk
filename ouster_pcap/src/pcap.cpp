@@ -15,10 +15,12 @@
 #if defined _WIN32
 #include <winsock2.h>
 #define FTELL ftell
+#define FSEEK fseek
 #else
 #include <arpa/inet.h>  // inet_ntop
 #include <sys/time.h>   // timeval
 #define FTELL ftello
+#define FSEEK fseeko
 #endif
 
 #include <pcap.h>
@@ -91,7 +93,7 @@ void PcapReader::seek(uint64_t offset) {
     if(offset < sizeof(struct pcap_file_header)) {
         offset = sizeof(struct pcap_file_header);
     }
-    if(fseek(impl->pcap_reader_internals, offset, SEEK_SET)) {
+    if(FSEEK(impl->pcap_reader_internals, offset, SEEK_SET)) {
         throw std::runtime_error("pcap seek failed");
     }
 }
