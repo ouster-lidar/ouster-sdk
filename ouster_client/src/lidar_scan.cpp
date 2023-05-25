@@ -93,7 +93,9 @@ struct DefaultFieldsEntry {
     size_t n_fields;
 };
 
-Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
+using ouster::sensor::impl::MAX_NUM_PROFILES;
+// clang-format off
+Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_scan_fields{
     {{UDPProfileLidar::PROFILE_LIDAR_LEGACY,
       {legacy_field_slots.data(), legacy_field_slots.size()}},
      {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,

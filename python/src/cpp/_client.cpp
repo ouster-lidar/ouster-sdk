@@ -44,6 +44,7 @@
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
 #include "ouster/impl/build.h"
+#include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -84,7 +85,8 @@ extern const Table<MultipurposeIOMode, const char*, 6>
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
 extern Table<ChanField, const char*, 29> chanfield_strings;
-extern Table<UDPProfileLidar, const char*, 5> udp_profile_lidar_strings;
+extern Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES>
+    udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
 extern Table<ThermalShutdownStatus, const char*, 2>
@@ -114,6 +116,11 @@ void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
 template <typename C, typename E, size_t N>
 void def_enum(C& Enum, const Table<E, const char*, N>& strings_table,
               const std::string& enum_prefix = "") {
+    // weed out empty profiles
+    auto end = std::find_if(
+        strings_table.begin(), strings_table.end(),
+        [](const std::pair<E, const char*>& p) { return p.second == nullptr; });
+
     // in pybind11 2.0, calling enum.value(const char* name, val) doesn't make a
     // copy of the name argument. When value names aren't statically allocated,
     // we have to keep them alive. Use deque for stability of c_str() pointers
@@ -124,14 +131,15 @@ void def_enum(C& Enum, const Table<E, const char*, N>& strings_table,
         py::module::import("types").attr("MappingProxyType");
 
     // declare enumerators
-    for (const auto& p : strings_table) {
-        enumerator_names.push_back(enum_prefix + p.second);
-        Enum.value(enumerator_names.back().c_str(), p.first);
+    for (auto it = strings_table.begin(); it != end; ++it) {
+        enumerator_names.push_back(enum_prefix + it->second);
+        Enum.value(enumerator_names.back().c_str(), it->first);
     }
 
     // use immutable MappingProxy to return members dict
     std::map<std::string, E> members;
-    for (const auto& p : strings_table) members[p.second] = p.first;
+    for (auto it = strings_table.begin(); it != end; ++it)
+        members[it->second] = it->first;
     py::object py_members = MappingProxy(members);
     Enum.def_property_readonly_static(
         "__members__", [=](py::object) { return py_members; },
@@ -140,9 +148,8 @@ void def_enum(C& Enum, const Table<E, const char*, N>& strings_table,
     // can't make the class iterable itself easily
     Enum.def_property_readonly_static(
         "values",
-        [&](py::object) {
-            return py::make_key_iterator(strings_table.begin(),
-                                         strings_table.end());
+        [&, end](py::object) {
+            return py::make_key_iterator(strings_table.begin(), end);
         },
         "Returns an iterator of all enum members.");
 
@@ -1058,6 +1065,25 @@ PYBIND11_PLUGIN(_client) {
             returns field types
             )",
         py::arg("lidar_scan"));
+
+    using ouster::sensor::impl::FieldInfo;
+    py::class_<FieldInfo>(m, "FieldInfo")
+        .def("__init__",
+             [](FieldInfo& self, py::object dt, size_t offset, uint64_t mask,
+                int shift) {
+                 new (&self)
+                     FieldInfo{field_type_of_dtype(py::dtype::from_args(dt)),
+                               offset, mask, shift};
+             })
+        .def_property_readonly("ty_tag",
+                               [](const FieldInfo& self) {
+                                   return dtype_of_field_type(self.ty_tag);
+                               })
+        .def_readwrite("offset", &FieldInfo::offset)
+        .def_readwrite("mask", &FieldInfo::mask)
+        .def_readwrite("shift", &FieldInfo::shift);
+
+    m.def("add_custom_profile", &ouster::sensor::add_custom_profile);
 
     m.attr("__version__") = ouster::SDK_VERSION;
 

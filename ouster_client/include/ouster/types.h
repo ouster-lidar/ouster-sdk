@@ -1165,5 +1165,12 @@ class packet_format final {
  */
 const packet_format& get_format(const sensor_info& info);
 
+namespace impl {
+
+/** Maximum number of allowed lidar profiles */
+constexpr int MAX_NUM_PROFILES = 32;
+
+}  // namespace impl
+
 }  // namespace sensor
 }  // namespace ouster

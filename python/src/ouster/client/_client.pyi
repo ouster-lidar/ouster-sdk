@@ -749,6 +749,23 @@ class BeamUniformityCorrector:
     def __call__(self, image: ndarray) -> None:
         ...
 
+class FieldInfo:
+    @property
+    def ty_tag(self) -> FieldDType:
+        ...
+
+    def __init__(self, ty_tag: FieldDType, offset: int, mask: int, shift: int) -> None:
+        ...
+
+    offset: int
+    mask:   int
+    shift:  int
+
+def add_custom_profile(profile_nr: int,
+                       name: str,
+                       fields: List[Tuple[int, FieldInfo]],
+                       chan_data_size: int) -> None:
+    ...
 
 @overload
 def get_field_types(scan: LidarScan) -> FieldTypes: ...

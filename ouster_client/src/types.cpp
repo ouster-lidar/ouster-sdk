@@ -101,7 +101,8 @@ Table<sensor::ChanField, const char*, 29> chanfield_strings{{
     {ChanField::RAW32_WORD9, "RAW32_WORD9"},
 }};
 
-Table<UDPProfileLidar, const char*, 5> udp_profile_lidar_strings{{
+// clang-format off
+Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{{
     {PROFILE_LIDAR_LEGACY, "LEGACY"},
     {PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
     {PROFILE_RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
@@ -368,7 +369,7 @@ static optional<K> rlookup(const impl::Table<K, const char*, N> table,
     auto end = table.end();
     auto res = std::find_if(table.begin(), end,
                             [&](const std::pair<K, const char*>& p) {
-                                return std::strcmp(p.second, v) == 0;
+                                return p.second && std::strcmp(p.second, v) == 0;
                             });
 
     return res == end ? nullopt : make_optional<K>(res->first);
