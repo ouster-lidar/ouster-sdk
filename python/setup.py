@@ -160,6 +160,12 @@ setup(
     zip_safe=False,
     python_requires='>=3.7, <4',
     install_requires=[
+        'zeroconf ==0.58.2',
+        'click >=8.1.3, <9',
+        'python-magic ==0.4.27',
+        'importlib_metadata ==6.6.0',
+        'prettytable >= 2.1.0',
+        'requests >=2.0, <3',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
         'typing-extensions >=3.7.4.3',
@@ -184,5 +190,10 @@ setup(
             'PyQt5; platform_system=="Windows"',
         ],
     },
-    entry_points={'console_scripts': ['simple-viz=ouster.sdk.simple_viz:main',
-        'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main']})
+    entry_points={'console_scripts': [
+            'simple-viz=ouster.sdk.simple_viz:main',
+            'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main',
+            'ouster-cli=ouster.cli.core:run'
+        ]
+    }
+)
