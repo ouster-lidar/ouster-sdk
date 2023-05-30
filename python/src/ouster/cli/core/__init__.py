@@ -14,6 +14,7 @@ from ouster.client import ClientError, init_logger
 
 from .pcap import pcap_group
 from .sensor import sensor_group
+from .util import util_group
 
 APP_NAME = 'ouster'
 TRACEBACK = False
@@ -70,6 +71,9 @@ cli.add_command(pcap_group)
 
 # sensor commands
 cli.add_command(sensor_group)
+
+# util commands
+cli.add_command(util_group)
 
 
 # from https://github.com/python/importlib_metadata, Apache 2.0 license

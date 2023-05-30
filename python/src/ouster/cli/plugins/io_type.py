@@ -9,6 +9,7 @@ class OusterIoType(Enum):
     PCAP = 2
     OSF = 3
     ROSBAG = 4
+    CSV = 5
 
 
 def extension_from_io_type(source: OusterIoType) -> Optional[str]:
@@ -19,6 +20,8 @@ def extension_from_io_type(source: OusterIoType) -> Optional[str]:
         return '.osf'
     elif source == OusterIoType.ROSBAG:
         return '.bag'
+    elif source == OusterIoType.CSV:
+        return '.csv'
     return None
 
 
@@ -31,8 +34,10 @@ def io_type_from_extension(source: str) -> OusterIoType:
         return OusterIoType.OSF
     elif source_lower.endswith('.bag'):
         return OusterIoType.ROSBAG
+    elif source_lower.endswith('.csv'):
+        return OusterIoType.CSV
     else:
-        raise ValueError('Expecing .pcap, .osf, or .bag.')
+        raise ValueError('Expecting .pcap, .osf, .bag, or .csv.')
 
 
 def io_type_from_magic(source: str) -> Optional[OusterIoType]:
@@ -49,11 +54,15 @@ def io_type_from_magic(source: str) -> Optional[OusterIoType]:
 
 def io_type(source: str) -> OusterIoType:
     """Return a OusterIoType given a source arg str"""
+    # source cannot be a CSV (or, in the future, LAS or PLY)
+    proper_source_list = [OusterIoType.PCAP, OusterIoType.OSF, OusterIoType.ROSBAG]
     if os.path.isfile(source):
         magic_type = io_type_from_magic(source)
-        if magic_type:
+        if magic_type and magic_type in proper_source_list:
             return magic_type
-        return io_type_from_extension(source)
+        io_type = io_type_from_extension(source)
+        if io_type in proper_source_list:
+            return io_type
     try:
         if socket.gethostbyname(source):
             return OusterIoType.SENSOR
@@ -61,4 +70,4 @@ def io_type(source: str) -> OusterIoType:
         pass
 
     raise ValueError(
-        "Source type expected to be a sensor hostname, ip address, or a .pcap, .osf, or .bag file.")
+        "Source type expected to be a sensor hostname, ip address, or an EXISTING .pcap, .osf, or .bag file.")

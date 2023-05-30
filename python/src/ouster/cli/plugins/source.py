@@ -5,7 +5,7 @@ from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
 import ouster.cli.core.pcap
 import ouster.cli.core.sensor
-from typing import List
+from typing import List, Optional
 from .io_type import extension_from_io_type, io_type_from_extension, io_type, OusterIoType
 
 
@@ -118,9 +118,32 @@ def bag_from_pcap(ctx, output_file, meta, lidar_port, imu_port, output, soft_id_
     return ouster.cli.core.pcap.pcap_to_bag_impl(source, meta, lidar_port, imu_port, output_file, soft_id_check)
 
 
+@click.command
+@click.argument(_output_file_arg_name, required=True)
+@click.option('-f', '--meta', type=click_ro_file)
+@click.option('--start-index', default=0, help="index of scan to start outputting")
+@click.option('--num-scans', default=1, help="number of scans to save from pcap to csv files")
+@click.pass_context
+def csv_from_pcap(ctx,
+                output_file: str,
+                meta: Optional[str],
+                start_index: Optional[int],
+                num_scans: Optional[int]) -> None:
+    """Convert the source PCAP to CSV"""
+
+    source = ctx.obj.get(_source_arg_name)
+    if num_scans is not None and num_scans > 1:
+        click.echo("INFO: You've selected to output multiple scans. Your output CSV names will be suffixed with index.")
+        csv_base = output_file[0:-4]
+        output_paths = [f'{csv_base}_{idx:06d}.csv' for idx in range(0, num_scans)]
+    else:
+        output_paths = [output_file]
+
+    return ouster.cli.core.pcap.pcap_to_csv_impl(source, meta, start_index, num_scans, output_paths)
+
+
 class SourceConvertCommand(click.Command):
-    """Generalizes
-    ouster-cli source <sourcefile> convert <outputfile>
+    """Generalizes ouster-cli source <sourcefile> convert <outputfile>
     """
     def __init__(self, *args, **kwargs):
         kwargs['add_help_option'] = False
@@ -158,14 +181,13 @@ class SourceConvertCommand(click.Command):
 
 
 class PcapConvertCommand(SourceConvertCommand):
-    """Implements
-    ouster-cli source <sourcefile>.pcap convert <otherfile>
-
-    This method delegates to the approrpiate command depending on the file
-    extension of the output file argument.
+    """Implements ouster-cli source <sourcefile>.pcap convert <otherfile>
     """
+#    This method delegates to the appropriate command depending on the file
+#    extension of the output file argument.
     conversions = {
-        OusterIoType.ROSBAG: bag_from_pcap,
+        # OusterIoType.ROSBAG: bag_from_pcap,
+        OusterIoType.CSV: csv_from_pcap,
     }
 
 
@@ -271,7 +293,7 @@ class SourceMultiCommand(click.MultiCommand):
             },
             OusterIoType.PCAP: {
                 # TODO FLEETSW-4407 not MVP
-                'convert': PcapConvertCommand('convert', hidden=True,
+                'convert': PcapConvertCommand('convert',
                     context_settings=dict(ignore_unknown_options=True, allow_extra_args=True)),
                 'info': pcap_info,
                 'slice': pcap_slice,

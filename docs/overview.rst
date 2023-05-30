@@ -12,11 +12,11 @@ Quick links
 * :doc:`python/quickstart`
 * :doc:`cpp/building`
 * `Ouster ROS 1 driver`_
+* :doc:`python/viz/index`
 
 .. figure:: /images/simple-viz.png
     :align: center
 
-* :doc:`python/viz/index`
 
 Compatibility with FW
 ---------------------

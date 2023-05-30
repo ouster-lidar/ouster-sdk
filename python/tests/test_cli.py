@@ -10,7 +10,6 @@ from click.testing import CliRunner
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins.io_type import io_type_from_extension, io_type_from_magic, OusterIoType
-from ouster.cli.plugins import util  # noqa: F401
 from ouster.cli.plugins import source  # noqa: F401
 from ouster.cli.plugins import discover  # noqa: F401
 
@@ -149,8 +148,7 @@ def test_source() -> None:
     with tempfile.NamedTemporaryFile(suffix='.pcap') as temp_pcap:
         result = runner.invoke(core.cli, ['source', temp_pcap.name])
         assert result.exit_code == 0
-        # TODO add 'convert' when conversion is added
-        assert read_commands_from_help_text(result.output) == ['info', 'slice', 'viz']
+        assert read_commands_from_help_text(result.output) == ['convert', 'info', 'slice', 'viz']
 
     # TODO FLEETSW-4407: not MVP
     # rosbag
@@ -163,7 +161,7 @@ def test_source() -> None:
     # invalid file type
     with tempfile.NamedTemporaryFile(suffix='.invalid') as temp_pcap:
         result = runner.invoke(core.cli, ['source', temp_pcap.name])
-        assert "Error: Expecing .pcap, .osf, or .bag." in result.output
+        assert "Error: Expecting .pcap, .osf, .bag, or .csv." in result.output
         assert result.exit_code == 2
 
 
@@ -196,8 +194,8 @@ def test_source_could_not_resolve():
     # we don't expect this to succeed because there is no such sensor
     # so we should see exit code 1
     result = runner.invoke(core.cli, ['source', 'badhostname', 'config'])
-    assert "Error: Source type expected to be a sensor hostname, ip address, \
-or a .pcap, .osf, or .bag file." in result.output
+    assert ("Error: Source type expected to be a sensor hostname, ip address, "
+            "or an EXISTING .pcap, .osf, or .bag file.") in result.output
     assert result.exit_code == 2
 
 
@@ -298,20 +296,20 @@ def test_source_pcap_convert_help():
     assert "Usage: cli source SOURCE convert [OPTIONS] OUTPUT_FILE" in result.output
     assert result.exit_code == 0
 
-
-def test_source_pcap_convert_help_3():
-    """ouster-cli source <src>.pcap convert <output>.bag --help
-    should display Rosbag convert help"""
-    with tempfile.NamedTemporaryFile(suffix='.pcap') as pcap_file:
-        runner = CliRunner()
-        with tempfile.NamedTemporaryFile(suffix='.bag') as f:
-            result = runner.invoke(core.cli, CliArgs(['source', pcap_file.name, 'convert', f.name, '--help']).args)
-            assert "Usage: cli source SOURCE convert [OPTIONS] OUTPUT_FILE" in result.output
-            option_names = [option.name.replace('_', '-') for option in source.bag_from_pcap.params]
-
-            # check that all the options for the command are present in the help
-            assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
-            assert result.exit_code == 0
+# TODO: Uncomment when bag conversion is re-enabled
+# def test_source_pcap_convert_help_3():
+#    """ouster-cli source <src>.pcap convert <output>.bag --help
+#     should display Rosbag convert help"""
+#    with tempfile.NamedTemporaryFile(suffix='.pcap') as pcap_file:
+#        runner = CliRunner()
+#        with tempfile.NamedTemporaryFile(suffix='.bag') as f:
+#            result = runner.invoke(core.cli, CliArgs(['source', pcap_file.name, 'convert', f.name, '--help']).args)
+#            assert "Usage: cli source SOURCE convert [OPTIONS] OUTPUT_FILE" in result.output
+#            option_names = [option.name.replace('_', '-') for option in source.bag_from_pcap.params]
+#
+#            # check that all the options for the command are present in the help
+#            assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
+#            assert result.exit_code == 0
 
 
 def test_source_pcap_convert_bad_extension():

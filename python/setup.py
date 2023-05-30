@@ -101,7 +101,7 @@ class CMakeBuild(build_ext):
         print(output2.stdout)
         if output2.returncode != 0:
             raise "Error running cmake --build"
-        
+
 
 class sdk_sdist(sdist):
     """Allow including files from parent directory via symlink."""
@@ -190,7 +190,8 @@ setup(
             'PyQt5; platform_system=="Windows"',
         ],
     },
-    entry_points={'console_scripts': [
+    entry_points={'console_scripts':
+        [
             'simple-viz=ouster.sdk.simple_viz:main',
             'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main',
             'ouster-cli=ouster.cli.core:run'

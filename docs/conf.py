@@ -65,8 +65,12 @@ extensions = [
     'sphinx_rtd_theme',
     'sphinx_copybutton',
     'sphinx_tabs.tabs',
-    'breathe'
+    'breathe',
+    'sphinx_rtd_size',
 ]
+
+# Page width
+sphinx_rtd_size_width = "70%"
 
 # Full path generated Doxygen XML dir resolved in do_doxygen_generate_xml()
 # handler below
