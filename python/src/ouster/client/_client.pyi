@@ -132,6 +132,10 @@ class SensorInfo:
     def __init__(self, metadata: str) -> None:
         ...
 
+    @overload
+    def __init__(self, metadata: str, skip_beam_validation: bool) -> None:
+        ...
+
 
 class DataFormat:
     columns_per_frame: int

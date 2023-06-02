@@ -135,7 +135,8 @@ class Sensor(PacketSource):
                  _flush_before_read: bool = True,
                  _flush_frames: int = 5,
                  _legacy_format: bool = False,
-                 _soft_id_check: bool = False) -> None:
+                 _soft_id_check: bool = False,
+                 _skip_metadata_beam_validation: bool = False) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
         be updated. The metadata will be fetched over the network from the
@@ -151,8 +152,9 @@ class Sensor(PacketSource):
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
             _legacy_format: if True, use legacy metadata format
-            _soft_id_check: if True, don't skip lidar packets buffers on
-            id mismatch (init_id/sn pair)
+            _soft_id_check: if True, don't skip lidar packets buffers on,
+            id mismatch (init_id/sn pair),
+            _skip_metadata_beam_validation: if True, skip metadata beam angle check
 
         Raises:
             ClientError: If initializing the client fails.
@@ -168,13 +170,14 @@ class Sensor(PacketSource):
 
         self._soft_id_check = _soft_id_check
         self._id_error_count = 0
+        self._skip_metadata_beam_validation = _skip_metadata_beam_validation
 
         # Fetch from sensor if not explicitly provided
         if metadata:
             self._metadata = metadata
         else:
             self._fetch_metadata()
-            self._metadata = SensorInfo(self._fetched_meta)
+            self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
 
         # Use args to avoid capturing self causing circular reference

@@ -793,7 +793,7 @@ static data_format parse_data_format(const Json::Value& root) {
     return format;
 }  // namespace sensor
 
-static sensor_info parse_legacy(const std::string& meta) {
+static sensor_info parse_legacy(const std::string& meta, bool skip_beam_validation) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
@@ -1032,8 +1032,12 @@ static sensor_info parse_legacy(const std::string& meta) {
         }
     };
 
-    zero_check(info.beam_altitude_angles, "beam_altitude_angles");
-    zero_check(info.beam_azimuth_angles, "beam_azimuth_angles");
+    if (!skip_beam_validation) {
+        zero_check(info.beam_altitude_angles, "beam_altitude_angles");
+        zero_check(info.beam_azimuth_angles, "beam_azimuth_angles");
+    } else {
+        logger().warn("Skipping all 0 beam angle check");
+    }
 
     info.extrinsic = mat4d::Identity();
 
@@ -1103,7 +1107,7 @@ std::string convert_to_legacy(const std::string& metadata) {
     return Json::writeString(write_builder, result);
 }
 
-sensor_info parse_metadata(const std::string& metadata) {
+sensor_info parse_metadata(const std::string& metadata, bool skip_beam_validation) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
     std::string errors{};
@@ -1118,15 +1122,15 @@ sensor_info parse_metadata(const std::string& metadata) {
     sensor_info info{};
     if (is_new_format(metadata)) {
         logger().debug("parsing non-legacy metadata format");
-        info = parse_legacy(convert_to_legacy(metadata));
+        info = parse_legacy(convert_to_legacy(metadata), skip_beam_validation);
     } else {
         logger().debug("parsing legacy metadata format");
-        info = parse_legacy(metadata);
+        info = parse_legacy(metadata, skip_beam_validation);
     }
     return info;
 }
 
-sensor_info metadata_from_json(const std::string& json_file) {
+sensor_info metadata_from_json(const std::string& json_file, bool skip_beam_validation) {
     std::stringstream buf{};
     std::ifstream ifs{};
     ifs.open(json_file);
@@ -1139,7 +1143,7 @@ sensor_info metadata_from_json(const std::string& json_file) {
         throw std::runtime_error{ss.str()};
     }
 
-    return parse_metadata(buf.str());
+    return parse_metadata(buf.str(), skip_beam_validation);
 }
 
 std::string to_string(const sensor_info& info) {

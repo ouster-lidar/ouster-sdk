@@ -17,7 +17,7 @@ from ouster import pcap
 from ouster.pcap import _pcap
 from ouster import client
 from ouster.client import _client
-from tests.conftest import DATA_DIR, TESTS
+from tests.conftest import PCAPS_DATA_DIR, TESTS
 from tests.test_batching import _patch_frame_id
 
 SLL_PROTO = 113
@@ -499,7 +499,7 @@ def test_record_packet_info(fake_meta, tmpdir) -> None:
 
 def test_indexed_pcap_reader(tmpdir):
     """It should correctly locate the start of frames in a PCAP file"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     sensor_info = client.SensorInfo(open(meta_path).read())
     num_frames = 10
@@ -531,7 +531,7 @@ def test_indexed_pcap_reader(tmpdir):
 
 def test_indexed_pcap_reader_seek(tmpdir):
     """After seeking to the start of a frame, next_packet should return the first packet of that frame"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     sensor_info = client.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
@@ -557,7 +557,7 @@ def test_indexed_pcap_reader_seek(tmpdir):
 
 def test_out_of_order_frames(tmpdir):
     """Frames that are out of order are skipped"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     sensor_info = client.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
@@ -590,7 +590,7 @@ def test_out_of_order_frames(tmpdir):
 
 def test_current_data(fake_meta, tmpdir):
     """It should provide access to current packet data as a memory view"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
     sensor_info = client.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)

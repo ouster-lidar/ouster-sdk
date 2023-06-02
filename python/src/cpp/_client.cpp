@@ -467,10 +467,10 @@ PYBIND11_PLUGIN(_client) {
         Args:
             raw (str): json string to parse
         )")
-        .def("__init__", [](sensor_info& self, const std::string& s) {
+        .def("__init__", [](sensor_info& self, const std::string& s, bool skip_beam_validation) {
             new (&self) sensor_info{};
-            self = sensor::parse_metadata(s);
-        })
+            self = sensor::parse_metadata(s, skip_beam_validation);
+        }, py::arg("s"), py::arg("skip_beam_validation") = false)
         .def_readwrite("hostname", &sensor_info::name, "Sensor hostname.")
         .def_readwrite("sn", &sensor_info::sn, "Sensor serial number.")
         .def_readwrite("fw_rev", &sensor_info::fw_rev, "Sensor firmware revision.")

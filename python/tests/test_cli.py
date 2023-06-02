@@ -13,7 +13,7 @@ from ouster.cli.plugins.io_type import io_type_from_extension, io_type_from_magi
 from ouster.cli.plugins import source  # noqa: F401
 from ouster.cli.plugins import discover  # noqa: F401
 
-from tests.conftest import DATA_DIR
+from tests.conftest import PCAPS_DATA_DIR
 
 
 has_magic = False
@@ -77,7 +77,7 @@ def test_cli_args_borg_2() -> None:
 def test_io_type_from_magic() -> None:
     # test_osf_file = str(test_data_dir / 'lib-osf' / 'OS1_128_sample_n5_standard.osf')
     # assert io_type_from_magic(test_osf_file) is None
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     assert io_type_from_magic(test_pcap_file) == OusterIoType.PCAP
     # test_bag_file = str(test_data_dir / 'lib-osf' / 'OS1_128_sample_fw23_lb_n3.bag')
     # assert io_type_from_magic(test_bag_file) is None
@@ -225,7 +225,7 @@ def test_source_config_help():
 
 def test_source_pcap_info():
     """source <pcap> info should work as expected."""
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'info', '-n', 10])
     assert "Packets read:  10" in result.output
@@ -235,7 +235,7 @@ def test_source_pcap_info():
 def test_source_pcap_slice_help():
     """ouster-cli source <src> slice --help
     should display help"""
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice', '--help'])
     assert "Usage: cli source SOURCE slice [OPTIONS] OUTPUT" in result.output
@@ -244,7 +244,7 @@ def test_source_pcap_slice_help():
 
 def test_source_pcap_slice_no_output():
     # help option not provided, but no output file provided
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice'])
     assert "Usage: cli source SOURCE slice [OPTIONS] OUTPUT" in result.output
@@ -255,7 +255,7 @@ def test_source_pcap_slice_no_output():
 def test_source_pcap_slice_help_2():
     """ouster-cli source <src> slice <output> --help
     should display help"""
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice', 'outputfile.pcap', '--help'])
     assert result.exit_code == 0
@@ -264,7 +264,7 @@ def test_source_pcap_slice_help_2():
 
 def test_source_pcap_slice():
     """Slicing a pcap should succeed with exit code 0."""
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     try:
         with tempfile.NamedTemporaryFile(suffix='.pcap', delete=False) as f:
@@ -280,7 +280,7 @@ def test_source_pcap_slice():
 
 
 def test_source_pcap_convert_no_output_file():
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert']).args)
     assert "Error: Missing argument 'OUTPUT_FILE'." in result.output
@@ -290,7 +290,7 @@ def test_source_pcap_convert_no_output_file():
 def test_source_pcap_convert_help():
     """ouster-cli source <src> convert --help
     should display help"""
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert', '--help']).args)
     assert "Usage: cli source SOURCE convert [OPTIONS] OUTPUT_FILE" in result.output
@@ -315,7 +315,7 @@ def test_source_pcap_convert_help():
 def test_source_pcap_convert_bad_extension():
     """ouster-cli source <src>.pcap convert <output>.badextension
     should display an error"""
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     with tempfile.NamedTemporaryFile(suffix='.badextension') as f:
         result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert', f.name]).args)
@@ -327,7 +327,7 @@ def test_source_pcap_convert_bad_extension():
 def test_source_pcap_convert_bad_extension_2():
     """ouster-cli source <src>.pcap convert <output>.pcap
     should display an error"""
-    test_pcap_file = str(Path(DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     runner = CliRunner()
     with tempfile.NamedTemporaryFile(suffix='.pcap') as f:
         result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert', f.name]).args)
