@@ -761,7 +761,8 @@ static data_format parse_data_format(const Json::Value& root) {
         if (profile) {
             format.udp_profile_lidar = profile.value();
         } else {
-            throw std::runtime_error{"Unexpected udp lidar profile"};
+            throw std::runtime_error{"Unexpected udp lidar profile: " +
+                                     root["udp_profile_lidar"].asString()};
         }
     } else {
         logger().warn("No lidar profile found. Using LEGACY lidar profile");

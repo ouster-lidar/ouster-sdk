@@ -24,11 +24,10 @@ struct FieldInfo {
 
 }  // namespace impl
 
-// clang-format off
-void add_custom_profile(int profile_nr,
-                        const std::string& name,
-                        const std::vector<std::pair<int, impl::FieldInfo>>& fields,
-                        size_t chan_data_size);
+void add_custom_profile(
+    int profile_nr, const std::string& name,
+    const std::vector<std::pair<int, impl::FieldInfo>>& fields,
+    size_t chan_data_size);
 
 }  // namespace sensor
 }  // namespace ouster

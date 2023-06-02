@@ -33,10 +33,9 @@ struct DefaultFieldsEntry {
 extern Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES>
     default_scan_fields;
 
-// clang-format off
 static void extend_default_scan_fields(
-        UDPProfileLidar profile,
-        const std::vector<std::pair<ChanField, ChanFieldType>>& scan_fields) {
+    UDPProfileLidar profile,
+    const std::vector<std::pair<ChanField, ChanFieldType>>& scan_fields) {
     auto end = impl::default_scan_fields.end();
     auto it = std::find_if(impl::default_scan_fields.begin(), end,
                            [](const auto& kv) { return kv.first == 0; });
@@ -81,11 +80,10 @@ extern Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES>
 // parsing.cpp
 extern Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles;
 
-// clang-format off
 static void extend_profile_entries(
-        UDPProfileLidar profile,
-        const std::vector<std::pair<ChanField, FieldInfo>>& fields,
-        size_t chan_data_size) {
+    UDPProfileLidar profile,
+    const std::vector<std::pair<ChanField, FieldInfo>>& fields,
+    size_t chan_data_size) {
     auto end = impl::profiles.end();
     auto it = std::find_if(impl::profiles.begin(), end,
                            [](const auto& kv) { return kv.first == 0; });
@@ -114,7 +112,8 @@ void extend_udp_profile_lidar_strings(UDPProfileLidar profile,
         throw std::invalid_argument(
             "Lidar profile of given name already exists");
 
-    auto it = std::find_if(begin, end, [](const auto& kv) { return kv.first == 0; });
+    auto it =
+        std::find_if(begin, end, [](const auto& kv) { return kv.first == 0; });
 
     if (it == end)
         throw std::runtime_error("Limit of lidar profiles has been reached");
@@ -132,7 +131,8 @@ void add_custom_profile(int profile_nr,  // int as UDPProfileLidar
 
     auto udp_profile = static_cast<UDPProfileLidar>(profile_nr);
 
-    {  // fill in profile
+    {
+        // fill in profile
         impl::ExtendedProfile profile{
             udp_profile, name, {}, {}, chan_data_size};
         for (auto&& pair : fields) {

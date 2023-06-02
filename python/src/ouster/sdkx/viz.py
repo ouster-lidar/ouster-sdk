@@ -23,8 +23,10 @@ class RGBMode(ImageCloudMode):
                  *,
                  prefix: Optional[str] = "",
                  suffix: Optional[str] = "",
-                 use_buc: bool = False) -> None:
+                 use_buc: bool = False,
+                 use_max_value_normalizer: bool = False) -> None:
         self._info = info
+        self._use_max_value_normalizer = use_max_value_normalizer
         self._rgb_fields = []
         self._bucs = []
 
@@ -67,7 +69,7 @@ class RGBMode(ImageCloudMode):
         if r.dtype != np.uint8 or g.dtype != np.uint8 or b.dtype != np.uint8:
             max_rgb = np.max((np.max(r), np.max(g), np.max(b)))
             if max_rgb > 255:
-                normalizer = 65535
+                normalizer = max_rgb if self._use_max_value_normalizer else 65535
 
         r = (r / normalizer).clip(0, 1.0).astype(float)
         g = (g / normalizer).clip(0, 1.0).astype(float)
@@ -138,7 +140,13 @@ class ExtendedScanViz(LidarScanViz):
                         ChanField.CUSTOM0, ChanField.CUSTOM1, ChanField.CUSTOM2
                     ],
                     suffix="w BUC",
-                    use_buc=True)
+                    use_buc=True),
+            RGBMode(meta,
+                    rgb_fields=[
+                        ChanField.CUSTOM0, ChanField.CUSTOM1, ChanField.CUSTOM2
+                    ],
+                    suffix="w MAX VAL NORMALIZER",
+                    use_max_value_normalizer=True)
         ]
         # add additional color palettes for cloud points
         magma_bright_palette = np.ones(magma_palette.shape)

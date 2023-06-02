@@ -195,7 +195,7 @@ def test_source_could_not_resolve():
     # so we should see exit code 1
     result = runner.invoke(core.cli, ['source', 'badhostname', 'config'])
     assert ("Error: Source type expected to be a sensor hostname, ip address, "
-            "or an EXISTING .pcap, .osf, or .bag file.") in result.output
+            "or a .pcap, .osf, or .bag file.") in result.output
     assert result.exit_code == 2
 
 

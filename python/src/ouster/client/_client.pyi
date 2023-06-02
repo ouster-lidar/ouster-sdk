@@ -161,6 +161,26 @@ class PacketFormat:
     def pixels_per_column(self) -> int:
         ...
 
+    @property
+    def packet_header_size(self) -> int:
+        ...
+
+    @property
+    def col_header_size(self) -> int:
+        ...
+
+    @property
+    def col_footer_size(self) -> int:
+        ...
+
+    @property
+    def col_size(self) -> int:
+        ...
+
+    @property
+    def packet_footer_size(self) -> int:
+        ...
+
     def packet_type(self, buf: BufferT) -> int:
         ...
 

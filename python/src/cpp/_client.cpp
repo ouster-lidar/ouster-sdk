@@ -556,6 +556,22 @@ PYBIND11_PLUGIN(_client) {
 
     auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass());
     def_enum(UDPProfileLidar, sensor::impl::udp_profile_lidar_strings, "PROFILE_LIDAR_");
+    UDPProfileLidar.attr("from_string") = py::cpp_function(
+        [](const std::string& s) {
+            return sensor::udp_profile_lidar_of_string(s);
+        },
+        py::name("from_string"), "Create UDPProfileLidar from string.");
+    UDPProfileLidar.def_property_readonly_static(
+        "values",
+        [](py::object) {
+            return py::make_key_iterator(
+                sensor::impl::udp_profile_lidar_strings.begin(),
+                std::find_if(
+                    sensor::impl::udp_profile_lidar_strings.begin(),
+                    sensor::impl::udp_profile_lidar_strings.end(),
+                    [](const auto& p) { return p.second == nullptr; }));
+        },
+        "Returns an iterator of all UDPProfileLidar enum members.");
 
     auto UDPProfileIMU = py::enum_<sensor::UDPProfileIMU>(m, "UDPProfileIMU", "UDP imu profile.", py::metaclass());
     def_enum(UDPProfileIMU, sensor::impl::udp_profile_imu_strings, "PROFILE_IMU_");

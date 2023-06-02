@@ -61,10 +61,12 @@ _five_word_pixel_fields: Dict[ChanField, FieldDType] = {
 }
 
 
+# TODO[pb]: This method should be removed and replaced with smth that matches
+#           the states of the profiles in C++
 def default_scan_fields(
         profile: UDPProfileLidar,
         flags: bool = False,
-        raw_headers: bool = False) -> Dict[ChanField, FieldDType]:
+        raw_headers: bool = False) -> Optional[Dict[ChanField, FieldDType]]:
     """Get the default fields populated on scans for a profile.
 
     Convenient helper function if you want to tweak which fields are parsed
@@ -76,7 +78,8 @@ def default_scan_fields(
         raw_headers: Include RAW_HEADERS field
 
     Returns:
-        A field configuration that can be passed to `client.Scans`.
+        A field configuration that can be passed to `client.Scans`. or None for
+        custom added UDPProfileLidar
     """
     profile_fields = {
         UDPProfileLidar.PROFILE_LIDAR_LEGACY:
@@ -90,6 +93,10 @@ def default_scan_fields(
         UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL:
         _five_word_pixel_fields
     }
+
+    # bail if it's some new added custom profile
+    if profile not in profile_fields:
+        return None
 
     fields = profile_fields[profile]
 

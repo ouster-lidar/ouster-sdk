@@ -45,7 +45,8 @@ def io_type_from_magic(source: str) -> Optional[OusterIoType]:
     try:
         import magic
         # Note - python-magic doesn't know what .osf or .bag files are.
-        if magic.from_file(source, mime=True) == 'application/vnd.tcpdump.pcap':
+        if magic.from_file(os.path.realpath(source),
+                           mime=True) == 'application/vnd.tcpdump.pcap':
             return OusterIoType.PCAP
     except ImportError:
         pass
@@ -69,5 +70,5 @@ def io_type(source: str) -> OusterIoType:
     except Exception:
         pass
 
-    raise ValueError(
-        "Source type expected to be a sensor hostname, ip address, or an EXISTING .pcap, .osf, or .bag file.")
+    raise ValueError("Source type expected to be a sensor hostname, ip address,"
+                     " or a .pcap, .osf, or .bag file.")
