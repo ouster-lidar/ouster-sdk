@@ -63,18 +63,27 @@ def pcap_info(file: str, n: int) -> None:
     # format output
     table = PrettyTable()
     table.field_names = [
-        'Src IP', 'Dst IP', 'Src Port', 'Dst Port', 'AF', 'Frag', 'Size',
+        '', 'Src IP', 'Dst IP', 'Src Port', 'Dst Port', 'AF', 'Frag', 'Size',
         'Count'
     ]
 
     for k, v in all_infos.udp_streams.items():
-        af = singleton_or([k for k, v in v.ip_version_counts.items()], '<MULTIPLE>')
-        size = singleton_or([k for k, v in v.payload_size_counts.items()], '<MULTIPLE>')
         frag = 'No' if [k for k, v in v.fragment_counts.items()] else 'Yes'
 
-        table.add_row([
-            k.src_ip, k.dst_ip, k.src_port, k.dst_port, af, frag, size, v.count
-        ])
+        first = True
+        af_count = len(v.payload_size_counts.items())
+        for af_key, af_value in v.ip_version_counts.items():
+            size_count = len(v.payload_size_counts.items())
+            for size_key, size_value in v.payload_size_counts.items():
+                cont = ""
+
+                if (size_count > 1 or af_count > 1):
+                    cont = 'X' if first else '↳'
+
+                table.add_row([
+                    cont, k.src_ip, k.dst_ip, k.src_port, k.dst_port, af_key, frag, size_key, size_value
+                ])
+                first = False
 
     encap = {
         0: '<MULTIPLE>',
