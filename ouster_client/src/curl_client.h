@@ -6,12 +6,13 @@
 
 class CurlClient : public ouster::util::HttpClient {
    public:
-    CurlClient(const std::string& base_url_) : HttpClient(base_url_) {
+    CurlClient(const std::string& base_url_, int timeout_seconds) : HttpClient(base_url_) {
         curl_global_init(CURL_GLOBAL_ALL);
         curl_handle = curl_easy_init();
         curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION,
                          &CurlClient::write_memory_callback);
         curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, this);
+        curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, timeout_seconds);
     }
 
     virtual ~CurlClient() override {

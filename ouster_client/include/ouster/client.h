@@ -14,6 +14,7 @@
 
 #include "ouster/types.h"
 #include "ouster/version.h"
+#include "ouster/defaults.h"
 
 namespace ouster {
 namespace sensor {
@@ -96,7 +97,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     lidar_mode ld_mode = MODE_UNSPEC,
                                     timestamp_mode ts_mode = TIME_FROM_UNSPEC,
                                     int lidar_port = 0, int imu_port = 0,
-                                    int timeout_sec = 60);
+                                    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /**
  * [BETA] Connect to and configure the sensor and start listening for data via
@@ -119,7 +120,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 std::shared_ptr<client> mtp_init_client(const std::string& hostname,
                                         const sensor_config& config,
                                         const std::string& mtp_dest_host,
-                                        bool main, int timeout_sec = 60);
+                                        bool main, int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /** @}*/
 
@@ -178,7 +179,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  *
  * @return a text blob of metadata parseable into a sensor_info struct.
  */
-std::string get_metadata(client& cli, int timeout_sec = 60,
+std::string get_metadata(client& cli, int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
                          bool legacy_format = false);
 
 /**
@@ -193,7 +194,7 @@ std::string get_metadata(client& cli, int timeout_sec = 60,
  * @return true if sensor config successfully populated.
  */
 bool get_config(const std::string& hostname, sensor_config& config,
-                bool active = true);
+                bool active = true, int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 // clang-format off
 /**
@@ -221,7 +222,7 @@ enum config_flags : uint8_t {
  * @return true if config params successfuly set on sensor.
  */
 bool set_config(const std::string& hostname, const sensor_config& config,
-                uint8_t config_flags = 0);
+                uint8_t config_flags = 0, int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /**
  * Return the port used to listen for lidar UDP data.

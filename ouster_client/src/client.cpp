@@ -245,7 +245,7 @@ SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
 }
 
 Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
-    auto sensor_http = SensorHttp::create(hostname);
+    auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto timeout_time =
         chrono::steady_clock::now() + chrono::seconds{timeout_sec};
     std::string status;
@@ -273,16 +273,16 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
 }  // namespace
 
 bool get_config(const std::string& hostname, sensor_config& config,
-                bool active) {
-    auto sensor_http = SensorHttp::create(hostname);
+                bool active, int timeout_sec) {
+    auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto res = sensor_http->get_config_params(active);
     config = parse_config(res);
     return true;
 }
 
 bool set_config(const std::string& hostname, const sensor_config& config,
-                uint8_t config_flags) {
-    auto sensor_http = SensorHttp::create(hostname);
+                uint8_t config_flags, int timeout_sec) {
+    auto sensor_http = SensorHttp::create(hostname, timeout_sec);
 
     // reset staged config to avoid spurious errors
     auto config_params = sensor_http->active_config_params();
@@ -386,7 +386,7 @@ std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     // TODO: remove after release of FW 3.2/3.3 (sufficient warning)
     sensor_config config;
     get_config(cli.hostname, config);
-    auto fw_version = SensorHttp::firmware_version(cli.hostname);
+    auto fw_version = SensorHttp::firmware_version(cli.hostname, timeout_sec);
     // only warn for people on the latest FW, as people on older FWs may not
     // care
     if (fw_version.major >= 3 &&

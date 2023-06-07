@@ -172,7 +172,10 @@ setup(
         'Pillow >=9.2'
     ],
     extras_require={
-        'test': ['pytest >=7.0, <8'],
+        'test': [
+            'pytest >=7.0, <8',
+            'flask==2.2.5'
+        ],
         'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
         'docs': [
             'Sphinx >=3.5',

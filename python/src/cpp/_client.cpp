@@ -743,9 +743,9 @@ PYBIND11_PLUGIN(_client) {
              py::arg("timestamp_mode") =
                  sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
              py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
-             py::arg("timeout_sec") = 30, py::arg("capacity") = 128)
+             py::arg("timeout_sec") = 10, py::arg("capacity") = 128)
         .def("get_metadata", &BufferedUDPSource::get_metadata,
-             py::arg("timeout_sec") = 60, py::arg("legacy") = true)
+             py::arg("timeout_sec") = 10, py::arg("legacy") = true)
         .def("shutdown", &BufferedUDPSource::shutdown)
         .def("consume",
              [](BufferedUDPSource& self, py::buffer buf, float timeout_sec) {
