@@ -38,7 +38,7 @@ def print_version(ctx, param, value):
     this_package_name = 'ouster-sdk'
     click.echo(f"ouster-cli, version {version(this_package_name)}")
     click.echo('\nOuster Python packages:')
-    for dist_name in packages_distributions().get('ouster', []):
+    for dist_name in set(packages_distributions().get('ouster', [])):
         if dist_name == this_package_name:
             continue
         click.echo(f"{dist_name}, {version(dist_name)}")
