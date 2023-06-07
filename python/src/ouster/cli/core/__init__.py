@@ -20,6 +20,18 @@ APP_NAME = 'ouster'
 TRACEBACK = False
 
 
+class SourceArgsException(Exception):
+    def __init__(self, context_object):
+        self._context_object = context_object
+        super().__init__("Incorrect Args Supplied")
+
+    def get_usage(self):
+        return self._context_object.get_usage()
+
+    def get_unexpected_args(self):
+        return self._context_object.args
+
+
 def print_version(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
@@ -133,21 +145,25 @@ def run(args=None) -> None:
     try:
         find_plugins()
         exit_code = cli.main(args=args, standalone_mode=False)
+    except click.Abort:
+        print('Aborted!')
+        exit_code = 1
+    except click.ClickException as e:
+        e.show(file=sys.stderr)
+        exit_code = e.exit_code
+    except ClientError as e:
+        print(f'Client error: {e}', file=sys.stderr)
+        exit_code = 2
+    except SourceArgsException as e:
+        print(e.get_usage())
+        print("")
+        print(f"Error: Got unexpected extra arguments ({' '.join(e.get_unexpected_args())})")
     except Exception as e:
-        if isinstance(e, click.Abort):
-            print('Aborted!')
-            exit_code = 1
-        elif isinstance(e, click.ClickException):
-            e.show(file=sys.stderr)
-            exit_code = e.exit_code
-        elif isinstance(e, ClientError):
-            print(f'Client error: {e}', file=sys.stderr)
-            exit_code = 2
-        else:
-            if TRACEBACK:
-                print("-" * 70)
-                traceback.print_exc(file=sys.stderr)
-                print("-" * 70)
+        print(e)
+        if TRACEBACK:
+            print("-" * 70)
+            traceback.print_exc(file=sys.stderr)
+            print("-" * 70)
             print(f'Internal error: {e}', file=sys.stderr)
             exit_code = 3
 

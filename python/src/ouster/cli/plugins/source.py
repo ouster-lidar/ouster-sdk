@@ -176,7 +176,11 @@ class SourceConvertCommand(click.Command):
                 click.echo(convert_command.get_help(ctx))
             else:
                 convert_command.parse_args(ctx, [output_file] + ctx.args)
-                ctx.forward(convert_command, *ctx.args)
+                try:
+                    ctx.forward(convert_command, *ctx.args)
+                except TypeError:
+                    if len(ctx.args) > 0:
+                        raise ouster.cli.core.SourceArgsException(ctx)
         except KeyError:
             raise click.exceptions.UsageError(file_extension_err_text)
 
