@@ -14,6 +14,25 @@ class OusterIoType(Enum):
     PCD = 7
     LAS = 8
 
+    def __str__(self):
+        if self.value == 1:
+            return "SENSOR"
+        if self.value == 2:
+            return "PCAP"
+        if self.value == 3:
+            return "OSF"
+        if self.value == 4:
+            return "ROSBAG"
+        if self.value == 5:
+            return "CSV"
+        if self.value == 6:
+            return "PLY"
+        if self.value == 7:
+            return "PCD"
+        if self.value == 8:
+            return "LAS"
+        return "UNKNOWN"
+
 
 def extension_from_io_type(source: OusterIoType) -> Optional[str]:
     """Return a file extension for the given source type, if it's a file-based source."""

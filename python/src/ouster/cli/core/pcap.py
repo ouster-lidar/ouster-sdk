@@ -29,7 +29,7 @@ except ImportError as e:
     logging.debug(e)
 
 
-@click.group(name="pcap")
+@click.group(name="pcap", hidden=True)
 def pcap_group() -> None:
     """Commands for working with pcap files."""
     pass

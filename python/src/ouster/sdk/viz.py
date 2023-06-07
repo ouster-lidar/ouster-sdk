@@ -643,7 +643,7 @@ class LidarScanViz:
         with self._lock:
             print(">---------------- Key Bindings --------------<")
             for key_binding in self._key_definitions:
-                print(f"{key_binding:^5}: {self._key_definitions[key_binding]}")
+                print(f"{key_binding:^7}: {self._key_definitions[key_binding]}")
             print(">--------------------------------------------<")
 
     @property
@@ -986,8 +986,8 @@ class SimpleViz:
 
         key_definitions: Dict[str, str] = {
             'o': "Toggle information overlay",
-            'X': "Toggle a continuous saving of screenshots",
-            'Z': "Take a screenshot!",
+            'shift+x': "Toggle a continuous saving of screenshots",
+            'shift+z': "Take a screenshot!",
             ". / ,": "Step forward one frame",
             "> / <": "Increase/decrease playback rate (during replay)",
             'SPACE': "Pause and unpause",

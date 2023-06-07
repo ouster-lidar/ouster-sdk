@@ -3,7 +3,7 @@ import click
 from typing import Iterator, Dict, cast
 
 
-@click.group(name="osf")
+@click.group(name="osf", hidden=True)
 @click.pass_context
 def osf_group(ctx) -> None:
     """Commands for working with OSF files and converting data to OSF."""

@@ -123,7 +123,13 @@ def test_source_help() -> None:
     """It should return 0 if --help is specified."""
     runner = CliRunner()
     result = runner.invoke(core.cli, CliArgs(['source', '--help']).args)
-    assert "SOURCE is sensor hostname, or a" in result.output
+
+    # check that a variety of SOURCE commands are in the output
+    assert "PCAP info" in result.output
+    assert "SENSOR config" in result.output
+
+    # check that general message is there
+    assert "Run a command with the specified source" in result.output
     assert result.exit_code == 0
 
 

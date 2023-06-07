@@ -77,8 +77,9 @@ def sensor_record(ctx, *args, **kwargs) -> None:
 
 
 @click.command
-@click.option('-l', '--lidar-port', default=7502, help="Lidar port")
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-l', '--lidar-port', type=int, help="Lidar port")
+@click.option('-f', '--meta', help="Provide separate metadata to use with sensor",
+        type=click_ro_file, hidden=True)
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
 @click.option('-b', '--buf-size', default=256, help="Max packets to buffer")
 @click.option('-v', '--verbose', is_flag=True, help="Print some debug output")
@@ -90,8 +91,7 @@ def sensor_record(ctx, *args, **kwargs) -> None:
               help='Lidar sensor extrinsics to use in viz')
 @click.option('--soft-id-check',
               is_flag=True,
-              help="Continue parsing lidar packets even if init_id/sn doesn't "
-              "match with metadata")
+              help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.pass_context
 def sensor_viz(ctx, *args, **kwargs) -> None:
     """Visualize the sensor data in a 3D viewer"""  # Implements ouster-cli source <hostname> viz
@@ -104,13 +104,12 @@ def sensor_viz(ctx, *args, **kwargs) -> None:
 @click.command
 @click.argument(_output_file_arg_name, required=True)
 @click.option('-m', '--meta', required=False)  # TWS 20230426: changed from -f to -m
-@click.option('-l', '--lidar-port', default=None, help="Dest. port of lidar data")
-@click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
+@click.option('-l', '--lidar-port', default=None, help="Dest port of lidar data")
+@click.option('-i', '--imu-port', default=None, help="Dest port of imu data")
 @click.option('-o', '--output', required=False, help="BAG output filename")
 @click.option('--soft-id-check',
               is_flag=True,
-              help="Continue parsing lidar packets even if init_id/sn doesn't "
-              "match with metadata")
+              help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.pass_context
 def bag_from_pcap(ctx, output_file, meta, lidar_port, imu_port, output, soft_id_check) -> None:
     """Convert the source PCAP to Rosbag"""
@@ -221,8 +220,7 @@ def pcap_info(ctx, *args, **kwargs) -> None:
 @click.option('-i', '--imu-port', type=int, default=None, help="Dest. port of imu data")
 @click.option('--soft-id-check',
               is_flag=True,
-              help="Continue parsing lidar packets even if init_id/sn doesn't "
-              "match with metadata")
+              help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.pass_context
 def pcap_slice(ctx, *args, **kwargs) -> None:
     """Writes a portion of the input PCAP file to a new file"""
@@ -249,8 +247,7 @@ def pcap_slice(ctx, *args, **kwargs) -> None:
               help='Lidar sensor extrinsics to use in viz')
 @click.option('--soft-id-check',
               is_flag=True,
-              help="Continue parsing lidar packets even if init_id/sn doesn't "
-              "match with metadata")
+              help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.option("-p", "--pause", is_flag=True, help="Pause after the first scan")
 @click.option("--pause-at",
               default=-1,
@@ -325,9 +322,21 @@ class SourceMultiCommand(click.MultiCommand):
         source = ctx.params.get(_source_arg_name)
         file_extensions_str = self.get_source_file_extension_str()
         if not source and CliArgs().has_any_of(ctx.help_option_names):
-            click.echo(ctx.get_usage())
-            click.echo(f"\n{_source_arg_name.upper()} is sensor hostname, or a {file_extensions_str} file.")
-            ctx.exit()
+            # TODO comment out since it repeats - need to clean this up sometime
+            # click.echo(ctx.get_usage())
+            # click.echo(f"\nERROR: Please specify a {_source_arg_name.upper()},
+            # which should be a " f"sensor hostname, or a {file_extensions_str} file.")
+            command_dict_list = []
+            for source_type in self.commands.keys():
+                command_dict_list = command_dict_list + [{ f"{str(source_type)} {inner_command}":self.commands[source_type][inner_command]  # noqa
+                        for inner_command in self.commands[source_type].keys()}]
+
+            all_command_dict = {}
+            for command_dict in command_dict_list:
+                all_command_dict.update(command_dict)
+
+            return all_command_dict
+
         if not source:
             param_decls = [_source_arg_name]
             param = click.core.Argument(param_decls=param_decls)
@@ -349,8 +358,13 @@ class SourceMultiCommand(click.MultiCommand):
         ctx.ensure_object(dict)
         # add source to context so the command can access it
         ctx.obj[_source_arg_name] = source
-        if name in self.list_commands(ctx):
-            return self.commands[io_type(source)][name]
+
+        list_commands = self.list_commands(ctx)
+        if name in list_commands:
+            if source:
+                return self.commands[io_type(source)][name]
+            else:
+                return list_commands[name]
         else:
             return None
 
@@ -367,6 +381,7 @@ class SourceMultiCommand(click.MultiCommand):
 @cli.group(cls=SourceMultiCommand)
 @click.argument(_source_arg_name, required=True, type=click.Path())
 def source(source):
-    """Run a command with the specified source as input.
+    """Run a command with the specified source (SENSOR, PCAP, or OSF) as SOURCE.
+    For example, a sensor source: ouster-cli source os1-992xxx.local viz
     """
     pass

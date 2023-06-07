@@ -177,7 +177,7 @@ class Sensor(PacketSource):
         if metadata:
             self._metadata = metadata
         else:
-            self._fetch_metadata(self._timeout)
+            self._fetch_metadata()
             self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
 
@@ -187,7 +187,7 @@ class Sensor(PacketSource):
         self._producer.start()
 
     def _fetch_metadata(self, timeout: Optional[float] = None) -> None:
-        timeout_sec = 10
+        timeout_sec = 45
         if timeout:
             timeout_sec = ceil(timeout)
         if not self._fetched_meta:
@@ -421,6 +421,9 @@ class Scans:
                 if ls_write is not None:
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write
+                return
+            except ClientTimeout:
+                self._timed_out = True
                 return
 
             if self._timeout is not None and (time.monotonic() >=

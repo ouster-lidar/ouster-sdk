@@ -12,7 +12,7 @@ from ouster.sdk.util import resolve_metadata
 _click_ro_file = click.Path(exists=True, dir_okay=False, readable=True)
 
 # Pipe logging statements away so we can use output of digest directly as hash
-client.init_logger("info", "ouster-python.log")
+# client.init_logger("info", "ouster-python.log")
 
 
 @cli.group(name="testing", hidden=True)
