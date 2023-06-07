@@ -63,6 +63,7 @@ def sensor_info(ctx, *args, **kwargs) -> None:
 @click.option('-b', '--buf-size', default=640, help="Max packets to buffer")
 @click.option('-t', '--timeout', default=1.0, help="Seconds to wait for data")
 @click.option('-p', '--prefix', default="", help="Recorded file name prefix")
+@click.option('--viz', default=False, is_flag=True, help="Visualize point cloud during recording")
 @click.option('--legacy/--non-legacy',
               default=False,
               help="Use legacy metadata format or not")

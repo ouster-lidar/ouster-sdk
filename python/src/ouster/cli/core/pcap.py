@@ -8,7 +8,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 import click
-from more_itertools import time_limited, side_effect
+from more_itertools import side_effect, consume
 from prettytable import PrettyTable, PLAIN_COLUMNS  # type: ignore
 from textwrap import indent
 
@@ -123,12 +123,14 @@ def pcap_info(file: str, n: int) -> None:
 @click.option('-b', '--buf-size', default=640, help="Max packets to buffer")
 @click.option('-t', '--timeout', default=1.0, help="Seconds to wait for data")
 @click.option('-p', '--prefix', default="", help="Recorded file name prefix")
+@click.option('--viz', required=False, is_flag=True, help="Visualize point cloud during recording")
 @click.option('--legacy/--non-legacy',
               default=False,
               help="Use legacy metadata format or not")
 def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
                 n_frames: Optional[int], n_seconds: float, chunk_size: int,
                 buf_size: int, timeout: float, prefix: str,
+                viz: bool,
                 legacy: bool) -> None:
     """Record lidar and IMU packets from a sensor to a pcap file.
 
@@ -137,7 +139,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     settings separately.
     """
     try:
-        import ouster.pcap as pcap
+        import ouster.pcap as pcap  # noqa: F401
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
@@ -159,46 +161,34 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 
     # fancy automatic file naming
     time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    meta = source.metadata
-    base_name = f"{prefix}{meta.prod_line}_{meta.fw_rev}_{meta.mode}_{time}"
+    metadata = source.metadata
+    base_name = f"{prefix}{metadata.prod_line}_{metadata.fw_rev}_{metadata.mode}_{time}"
     meta_path = os.path.join(dest, base_name) + ".json"
 
     try:
         click.echo(f"Writing metadata to {meta_path}")
         source.write_metadata(meta_path)
+        packets = packet_iter.RecordingPacketSource(
+            source, dest,
+            prefix=prefix, n_seconds=n_seconds, n_frames=n_frames, chunk_size=chunk_size
+        )
 
-        # apply packet limit and timeout
-        packets = iter(source)
-        if n_frames:
-            packets = packet_iter.n_frames(packets, n_frames)
-        if n_seconds:
-            packets = time_limited(n_seconds, packets)
+        if viz:
+            # TODO: deduplicate, handle extrinsics (maybe? not sure this would make sense...)
+            # enable parsing flags field
+            field_types = default_scan_fields(
+                source.metadata.format.udp_profile_lidar, flags=True)
 
-        # ensure tmp file exists for size calculation
-        tmp_path = os.path.join(dest, base_name) + ".tmp"
-        with open(tmp_path, 'w'):
-            pass
+            scans_source = client.Scans(packets,
+                                        fields=field_types,
+                                        complete=filter)
 
-        # decide how to chunk output (only file size currently supported)
-        pred = lambda _: False
-        if chunk_size:
-            pred = lambda _: os.path.getsize(tmp_path) > chunk_size * 2**20
-        chunks = packet_iter.ichunked_framed(packets, pred)
+            ls_viz = ExtendedScanViz(scans_source.metadata)
+            SimpleViz(ls_viz, rate=1.0, pause_at=-1,
+                      _buflen=0).run(scans_source)
 
-        # write a pcap per chunk
-        click.echo(f"{message}...")
-        for i, chunk in enumerate(chunks):
-            try:
-                pcap.record(chunk,
-                            tmp_path,
-                            lidar_port=lidar_port,
-                            imu_port=imu_port)
-            finally:
-                if os.path.exists(tmp_path):
-                    pcap_path = os.path.join(dest, base_name) + f"-{i:03}.pcap"
-                    os.rename(tmp_path, pcap_path)
-                    sz = os.path.getsize(pcap_path)
-                    click.echo(f"Wrote {sz/2**20:.1f} MiB to {pcap_path}")
+        else:
+            consume(packets)
 
     except KeyboardInterrupt:
         click.echo("\nInterrupted")
@@ -806,3 +796,32 @@ def pcap_to_csv_impl(file: str,
     if idx is None:
         print("No CSVs outputted. Check your start index to ensure that it "
               "doesn't start past the total number of frames in your PCAP")
+
+
+@pcap_group.command(hidden=True)
+@click.argument('file', required=True, type=click.Path(exists=True))
+@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-c', '--cycle', is_flag=True, required=False, type=bool, help='Loop playback')
+@click.option('-h', '--host', required=False, type=str, default='127.0.1.1', help='Dest. host of UDP packets')
+@click.option('--lidar-port', required=False, type=int, default=7502, help='Dest. port of lidar data')
+@click.option('--imu-port', required=False, type=int, default=7503, help='Dest. port of imu data')
+def replay(file, meta, cycle, host, lidar_port, imu_port):
+    """Replay lidar and IMU packets from a PCAP file to a UDP socket."""
+    try:
+        import ouster.pcap as pcap
+    except ImportError:
+        raise click.ClickException("Please verify that libpcap is installed")
+    meta = resolve_metadata(file, meta)
+    with open(meta) as json:
+        click.echo(f"Reading metadata from: {meta}")
+        info = client.SensorInfo(json.read())
+
+    click.echo(f"Sending UDP packets to host {host}, ports {lidar_port} and {imu_port} - Ctrl-C to exit.")
+
+    def replay_once():
+        replay = pcap._replay(file, info, host, lidar_port, imu_port)
+        consume(replay)
+
+    replay_once()
+    while cycle:
+        replay_once()
