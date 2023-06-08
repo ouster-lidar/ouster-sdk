@@ -14,11 +14,9 @@ from textwrap import indent
 
 from ouster import client
 from ouster.sdk.util import resolve_metadata
-from ouster.sdk.viz import SimpleViz
 from ouster.sdkx import packet_iter
 from ouster.sdkx.parsing import default_scan_fields
 from ouster.sdkx.util import resolve_extrinsics
-from ouster.sdkx.viz import ExtendedScanViz
 from .util import (click_ro_file, import_rosbag_modules)
 
 HAS_MULTI = False
@@ -174,6 +172,12 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
         )
 
         if viz:
+            try:
+                from ouster.sdk.viz import SimpleViz
+                from ouster.sdkx.viz import ExtendedScanViz
+            except ImportError as e:
+                raise click.ClickException(
+                    "Please verify that libGL is installed. Error: " + str(e))
             # TODO: deduplicate, handle extrinsics (maybe? not sure this would make sense...)
             # enable parsing flags field
             field_types = default_scan_fields(
@@ -242,6 +246,13 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libpcap is installed. Error: " + str(e))
+
+    try:
+        from ouster.sdk.viz import SimpleViz
+        from ouster.sdkx.viz import ExtendedScanViz
+    except ImportError as e:
+        raise click.ClickException(
+            "Please verify that libGL is installed. Error: " + str(e))
 
     if not HAS_MULTI and multi:
         raise click.ClickException("--multi is not supported in this version.")
