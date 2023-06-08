@@ -16,6 +16,8 @@ from .pcap import pcap_group
 from .sensor import sensor_group
 from .util import util_group
 
+
+this_package_name = 'ouster-sdk'
 APP_NAME = 'ouster'
 TRACEBACK = False
 
@@ -32,16 +34,26 @@ class SourceArgsException(Exception):
         return self._context_object.args
 
 
+def get_packages_and_versions():
+    result = set()
+    for dist_name in set(packages_distributions().get('ouster', [])):
+        if dist_name == this_package_name:
+            continue
+        result.add((dist_name, version(dist_name)))
+    return result
+
+
 def print_version(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
-    this_package_name = 'ouster-sdk'
     click.echo(f"ouster-cli, version {version(this_package_name)}")
-    click.echo('\nOuster Python packages:')
-    for dist_name in packages_distributions().get('ouster', []):
-        if dist_name == this_package_name:
-            continue
-        click.echo(f"{dist_name}, {version(dist_name)}")
+
+    packages_and_versions = get_packages_and_versions()
+    if packages_and_versions:
+        click.echo('\nOuster Python packages:')
+        for dist_name, dist_version in packages_and_versions:
+            click.echo(f"{dist_name}, {dist_version}")
+
     click.echo('\nPlugins provided:')
     for plugin in find_plugins():
         click.echo(plugin.name)
