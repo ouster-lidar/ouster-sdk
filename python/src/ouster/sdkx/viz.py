@@ -14,8 +14,8 @@ from ouster.sdk.viz import (PointViz, LidarScanViz, WindowCtx, Image, Cloud,
 from ouster.sdkx.util import img_aspect_ratio
 
 
-class RGBMode(ImageCloudMode):
-    """View mode to use RGB channels"""
+class ThreeChannelMode(ImageCloudMode):
+    """View mode for ThreeChannel"""
 
     def __init__(self,
                  info: client.SensorInfo,
@@ -46,7 +46,7 @@ class RGBMode(ImageCloudMode):
 
     @property
     def name(self) -> str:
-        return self._wrap_name("RGB")
+        return self._wrap_name("ThreeChannel")
 
     @property
     def names(self) -> str:
@@ -131,17 +131,17 @@ class ExtendedScanViz(LidarScanViz):
                  _img_aspect_ratio: float = 0) -> None:
         # add additional image/cloud modes
         ext_modes = [
-            RGBMode(meta,
+            ThreeChannelMode(meta,
                     rgb_fields=[
                         ChanField.CUSTOM0, ChanField.CUSTOM1, ChanField.CUSTOM2
                     ]),
-            RGBMode(meta,
+            ThreeChannelMode(meta,
                     rgb_fields=[
                         ChanField.CUSTOM0, ChanField.CUSTOM1, ChanField.CUSTOM2
                     ],
                     suffix="w BUC",
                     use_buc=True),
-            RGBMode(meta,
+            ThreeChannelMode(meta,
                     rgb_fields=[
                         ChanField.CUSTOM0, ChanField.CUSTOM1, ChanField.CUSTOM2
                     ],

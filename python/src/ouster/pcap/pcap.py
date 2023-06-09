@@ -75,8 +75,7 @@ class Pcap(PacketSource):
             rate: Output packets in real time, if non-zero
             lidar_port: Specify the destination port of lidar packets
             imu_port: Specify the destination port of imu packets
-            _soft_id_check: if True, don't skip lidar packets buffers on
-            init_id/sn mismatch
+            _soft_id_check: if True, don't skip lidar packets buffers on init_id/sn mismatch
         """
 
         # prefer explicitly specified ports (can probably remove the args?)
