@@ -35,29 +35,14 @@ def pcap_group() -> None:
     pass
 
 
-@pcap_group.command(name='info')
-@click.argument('file', required=True, type=click_ro_file)
-@click.option('-n', type=int, default=0, help="Read only INTEGER packets.")
-def pcap_info(file: str, n: int) -> None:
-    """Print information about a pcap file to stdout."""
+def match_metadata_with_data_stream(all_infos, meta):
     try:
-        import ouster.pcap as pcap
-    except ImportError:
-        raise click.ClickException("Please verify that libpcap is installed")
+        return [k for k in all_infos.udp_streams.keys() if k.dst_port == meta.udp_port_lidar][0]
+    except IndexError:
+        return None
 
-    # helper to get value from single-element sets
-    def singleton_or(s, default):
-        return next(iter(s)) if len(s) == 1 else default
 
-    pcap_size = os.path.getsize(file)
-    # read full pcap with progress bar
-    all_infos = None
-    with click.progressbar(length=pcap_size, label="Reading pcap:") as bar:
-        def progress_callback(current, diff, total):
-            bar.update(diff)
-        all_infos = pcap._packet_info_stream(file, n, progress_callback, 100)
-        bar.update(pcap_size)
-
+def print_stream_table(all_infos):
     # format output
     table = PrettyTable()
     table.field_names = [
@@ -82,6 +67,30 @@ def pcap_info(file: str, n: int) -> None:
                     cont, k.src_ip, k.dst_ip, k.src_port, k.dst_port, af_key, frag, size_key, size_value
                 ])
                 first = False
+    table.set_style(PLAIN_COLUMNS)
+    table.align = 'r'
+    table.align['Src IP'] = 'l'  # type: ignore
+    click.echo(indent(str(table), '  '))
+
+
+@pcap_group.command(name='info')
+@click.argument('file', required=True, type=click_ro_file)
+@click.option('-n', type=int, default=0, help="Read only INTEGER packets.")
+def pcap_info(file: str, n: int) -> None:
+    """Print information about a pcap file to stdout."""
+    try:
+        import ouster.pcap as pcap
+    except ImportError:
+        raise click.ClickException("Please verify that libpcap is installed")
+
+    pcap_size = os.path.getsize(file)
+    # read full pcap with progress bar
+    all_infos = None
+    with click.progressbar(length=pcap_size, label="Reading pcap:") as bar:
+        def progress_callback(current, diff, total):
+            bar.update(diff)
+        all_infos = pcap._packet_info_stream(file, n, progress_callback, 100)
+        bar.update(pcap_size)
 
     encap = {
         0: '<MULTIPLE>',
@@ -99,10 +108,7 @@ def pcap_info(file: str, n: int) -> None:
     click.echo(f"Capture end:   {max_datetime}")
     click.echo(f"Duration:      {duration}")
     click.echo("UDP Streams:")
-    table.set_style(PLAIN_COLUMNS)
-    table.align = 'r'
-    table.align['Src IP'] = 'l'  # type: ignore
-    click.echo(indent(str(table), '  '))
+    print_stream_table(all_infos)
 
 
 @pcap_group.command(name="record")
@@ -229,17 +235,24 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
               is_flag=True,
               hidden=not HAS_MULTI,
               help='Turn on multi sensor pcap handling and metadata resolutions')
+@click.option('--timeout',
+              type=float,
+              default=10.0,
+              help="Timeout in seconds, after which the script will terminate \
+if no lidar data is encountered in the PCAP file")
 def pcap_viz(file: str, meta: Optional[str], cycle: bool,
              lidar_port: Optional[int], imu_port: Optional[int], filter: bool,
              buf: int, rate: float, extrinsics: Optional[List[float]],
              soft_id_check: bool, pause: bool, pause_at: int,
-             multi: bool) -> None:
+             multi: bool, timeout: float) -> None:
     """Visualize data from a pcap file.
 
     To correctly visualize a pcap containing multiple UDP streams, you must
     specify a destination port. All packets recorded with a different
     destination port will be filtered out.
     """
+    if timeout <= 0.0:
+        timeout = None
 
     try:
         import ouster.pcap as pcap
@@ -311,7 +324,8 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
 
             scans_source = client.Scans(source,
                                         fields=field_types,
-                                        complete=filter)
+                                        complete=filter,
+                                        timeout=timeout)
 
             ls_viz = ExtendedScanViz(scans_source.metadata)
 
@@ -363,6 +377,18 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
 
         SimpleViz(ls_viz, rate=rate, pause_at=pause_at,
                   _buflen=buf).run(scans_source)
+
+        if scans_source._timed_out or scans_source._scans_produced == 0:
+            click.echo(f"\nERROR: no packets matching the provided metadata '{meta}' were found in '{file}'.")
+            all_infos = pcap._packet_info_stream(file, scans_source._packets_consumed, None, 100)
+            matched_stream = match_metadata_with_data_stream(all_infos, source.metadata)
+            if not matched_stream:
+                click.echo(f"No UDP stream in the data file has a destination port \
+of {source.metadata.udp_port_lidar}, ", nl=False)
+                click.echo("which is the port specified in the metadata file.\n")
+            click.echo("The packets read contained the following data streams:")
+            # TODO: check packet sizes and print appropriate errors if there's a mismatch
+            print_stream_table(all_infos)
 
     finally:
         if source.id_error_count:

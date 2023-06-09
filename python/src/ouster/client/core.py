@@ -380,6 +380,7 @@ class Scans:
         self._source = source
         self._complete = complete
         self._timeout = timeout
+        self._timed_out = False
         self._max_latency = _max_latency
         # used to initialize LidarScan
         self._fields: Union[Dict[ChanField, FieldDType], UDPProfileLidar] = (
@@ -406,9 +407,12 @@ class Scans:
         start_ts = time.monotonic()
 
         it = iter(self._source)
+        self._packets_consumed = 0
+        self._scans_produced = 0
         while True:
             try:
                 packet = next(it)
+                self._packets_consumed += 1
             except StopIteration:
                 if ls_write is not None:
                     if not self._complete or ls_write.complete(column_window):
@@ -417,7 +421,8 @@ class Scans:
 
             if self._timeout is not None and (time.monotonic() >=
                                               start_ts + self._timeout):
-                raise ClientTimeout(f"No lidar scans within {self._timeout}s")
+                self._timed_out = True
+                return
 
             if isinstance(packet, LidarPacket):
                 ls_write = ls_write or LidarScan(h, w, self._fields)
@@ -426,6 +431,7 @@ class Scans:
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write
+                        self._scans_produced += 1
                         start_ts = time.monotonic()
                     ls_write = None
 

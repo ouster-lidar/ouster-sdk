@@ -191,11 +191,16 @@ def test_scans_timeout(packets: client.PacketSource) -> None:
     """A zero timeout should deterministically throw.
 
     TODO: should it, though?
-    """
-    scans = iter(client.Scans(packets, timeout=0.0))
 
-    with pytest.raises(client.ClientTimeout):
-        next(scans)
+    TWS 20230609: a timeout no longer raises an exception...
+    instead it stops iteration and sets _timed_out=True.
+    """
+    scans = client.Scans(packets, timeout=0.0)
+    scans_itr = iter(scans)
+
+    with pytest.raises(StopIteration):
+        next(scans_itr)
+    assert scans._timed_out
 
 
 def test_scans_digest(stream_digest, packets: client.PacketSource) -> None:

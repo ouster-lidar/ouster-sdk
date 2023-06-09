@@ -12,6 +12,7 @@ from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins.io_type import io_type_from_extension, io_type_from_magic, OusterIoType
 from ouster.cli.plugins import source  # noqa: F401
 from ouster.cli.plugins import discover  # noqa: F401
+import ouster.pcap
 
 from tests.conftest import PCAPS_DATA_DIR
 
@@ -343,3 +344,13 @@ def test_discover():
     result = runner.invoke(core.cli, ['discover', '--help'])
     assert "Usage: cli discover [OPTIONS]" in result.output
     assert result.exit_code == 0
+
+
+def test_match_metadata_with_data_stream():
+    """It should find the data stream with a destination port that matches the metadata file lidar port"""
+    test_pcap_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    test_metadata_file = str(Path(PCAPS_DATA_DIR) / 'OS-0-128-U1_v2.3.0_1024x10.json')
+    all_infos = ouster.pcap._packet_info_stream(test_pcap_file, 0, None, 100)
+    meta = ouster.client.SensorInfo(open(test_metadata_file).read())
+    matched_stream = ouster.cli.core.pcap.match_metadata_with_data_stream(all_infos, meta)
+    assert matched_stream.dst_port == 7502
