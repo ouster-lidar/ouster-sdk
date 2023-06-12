@@ -409,9 +409,10 @@ of {source.metadata.udp_port_lidar}, ", nl=False)
 @click.option('-f', '--meta', required=False, type=click_ro_file)
 @click.option('-l',
               '--lidar-port',
+              type=int,
               default=None,
               help="Dest. port of lidar data")
-@click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
+@click.option('-i', '--imu-port', type=int, default=None, help="Dest. port of imu data")
 @click.option('-o', '--output', default=None, type=click.Path(exists=False))
 @click.option('--soft-id-check',
               is_flag=True,

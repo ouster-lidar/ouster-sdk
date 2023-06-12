@@ -215,8 +215,9 @@ def pcap_info(ctx, *args, **kwargs) -> None:
 @click.option('-l',
               '--lidar-port',
               default=None,
+              type=int,
               help="Dest. port of lidar data")
-@click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
+@click.option('-i', '--imu-port', type=int, default=None, help="Dest. port of imu data")
 @click.option('--soft-id-check',
               is_flag=True,
               help="Continue parsing lidar packets even if init_id/sn doesn't "
