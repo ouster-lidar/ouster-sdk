@@ -186,10 +186,13 @@ class Sensor(PacketSource):
                                 args=(self._cli, self._pf))
         self._producer.start()
 
-    def _fetch_metadata(self, timeout: float = 10) -> None:
+    def _fetch_metadata(self, timeout: Optional[float] = None) -> None:
+        timeout_sec = 10
+        if timeout:
+            timeout_sec = ceil(timeout)
         if not self._fetched_meta:
             self._fetched_meta = self._cli.get_metadata(
-                legacy=self._legacy_format, timeout_sec = ceil(timeout))
+                legacy=self._legacy_format, timeout_sec = timeout_sec)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 
