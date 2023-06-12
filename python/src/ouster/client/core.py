@@ -10,6 +10,7 @@ from contextlib import closing
 from typing import cast, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 from threading import Thread
 import time
+from math import ceil
 
 from more_itertools import take
 from typing_extensions import Protocol
@@ -176,7 +177,7 @@ class Sensor(PacketSource):
         if metadata:
             self._metadata = metadata
         else:
-            self._fetch_metadata()
+            self._fetch_metadata(self._timeout)
             self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
 
@@ -185,10 +186,10 @@ class Sensor(PacketSource):
                                 args=(self._cli, self._pf))
         self._producer.start()
 
-    def _fetch_metadata(self) -> None:
+    def _fetch_metadata(self, timeout: float = 10) -> None:
         if not self._fetched_meta:
             self._fetched_meta = self._cli.get_metadata(
-                legacy=self._legacy_format)
+                legacy=self._legacy_format, timeout_sec = ceil(timeout))
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 
