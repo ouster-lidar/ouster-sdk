@@ -245,6 +245,9 @@ SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
 }
 
 Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
+    // Note, this function throws std::runtime_error if
+    // 1. the metadata couldn't be retrieved
+    // 2. the sensor is in the INITIALIZING state when timeout is reached
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto timeout_time =
         chrono::steady_clock::now() + chrono::seconds{timeout_sec};
@@ -252,7 +255,11 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
 
     // TODO: can remove this loop when we drop support for FW 2.4
     do {
-        if (chrono::steady_clock::now() >= timeout_time) return false;
+        if (chrono::steady_clock::now() >= timeout_time) {
+            throw std::runtime_error(
+                "A timeout occurred while waiting for the sensor to initialize."
+            );
+        }
         std::this_thread::sleep_for(1s);
         status = sensor_http->sensor_info()["status"].asString();
     } while (status == "INITIALIZING");
@@ -357,6 +364,8 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 }
 
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
+    // Note, this function calls functions that throw std::runtime_error
+    // on timeout.
     try {
         cli.meta = collect_metadata(cli.hostname, timeout_sec);
     } catch (const std::exception& e) {

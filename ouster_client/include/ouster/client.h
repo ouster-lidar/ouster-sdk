@@ -171,7 +171,9 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  *
  * @throw runtime_error if the sensor is in ERROR state, the firmware version
  * used to initialize the HTTP or TCP client is invalid, the metadata could
- * not be retrieved from the sensor, or the response could not be parsed.
+ * not be retrieved from the sensor within the timeout period,
+ * a timeout occured while waiting for the sensor to finish initializing,
+ * or the response could not be parsed.
  *
  * @param[in] cli client returned by init_client associated with the connection.
  * @param[in] timeout_sec how long to wait for the sensor to initialize.
