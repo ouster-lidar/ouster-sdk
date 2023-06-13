@@ -18,6 +18,7 @@ reading and visualizing data.
 
 * `ouster_client <ouster_client/>`_ contains an example C++ client for ouster sensors
 * `ouster_pcap <ouster_pcap/>`_ contains C++ pcap functions for ouster sensors
+* `ouster_osf <ouster_osf/>`_ contains C++ OSF library to store ouster sensors data
 * `ouster_viz <ouster_viz/>`_ contains a customizable point cloud visualizer
 * `python <python/>`_ contains the code for the ouster sensor python SDK (``ouster-sdk`` Python package)
 

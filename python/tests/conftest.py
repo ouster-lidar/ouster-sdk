@@ -6,6 +6,7 @@ All rights reserved.
 from contextlib import closing
 from os import path
 from typing import Iterator
+from pathlib import Path
 
 from more_itertools import partition
 import pytest
@@ -125,3 +126,8 @@ def packets(real_pcap_path: str,
 def scan(packets: client.PacketSource) -> client.LidarScan:
     scans = client.Scans(packets)
     return next(iter(scans))
+
+
+@pytest.fixture(scope="package")
+def test_data_dir():
+    return Path(path.dirname(path.abspath(__file__))) / ".." / ".." / "tests"

@@ -1,0 +1,27 @@
+namespace ouster.osf.v2;
+
+// See 'msgs/*.fb' files for messages and corresponding stream specs
+
+table StampedMessage {
+
+    // timestamp in nanoseconds
+    ts:uint64 (key);
+
+    // 'id' should always refer to the existing Metadata.entries[] field
+    // that is then used to reconstruct the 'StampedMessage.buffer' field to
+    // the corresponding msg Flatbuffer object.
+    // (e.g metadata.entries[].id == StampedMessage.id)
+    id:uint32;
+
+    // Flatbuffer encoded object that described in Metadata entry (by 'id')
+    buffer:[uint8];
+}
+
+table Chunk {
+    // List of messages in chunk (sorting by ts is not guaranteed)
+    messages:[StampedMessage];
+}
+
+file_identifier "OSF!";
+file_extension "osfc";
+root_type Chunk;

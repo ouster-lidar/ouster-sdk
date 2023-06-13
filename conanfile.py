@@ -17,6 +17,7 @@ class OusterSDKConan(ConanFile):
     options = {
         "build_viz": [True, False],
         "build_pcap": [True, False],
+        "build_osf": [True, False],
         "shared": [True, False],
         "fPIC": [True, False],
         "ensure_cpp17": [True, False],
@@ -25,6 +26,7 @@ class OusterSDKConan(ConanFile):
     default_options = {
         "build_viz": False,
         "build_pcap": False,
+        "build_osf": False,
         "shared": False,
         "fPIC": True,
         "ensure_cpp17": False,
@@ -37,6 +39,7 @@ class OusterSDKConan(ConanFile):
         "conan/*",
         "ouster_client/*",
         "ouster_pcap/*",
+        "ouster_osf/*",
         "ouster_viz/*",
         "tests/*",
         "CMakeLists.txt",
@@ -71,6 +74,10 @@ class OusterSDKConan(ConanFile):
         if self.options.build_pcap:
             self.requires("libtins/4.3")
 
+        if self.options.build_osf:
+            self.requires("flatbuffers/23.5.26")
+            self.requires("libpng/1.6.39")
+
         if self.options.build_viz:
             self.requires("glad/0.1.34")
             if self.settings.os != "Windows":
@@ -83,6 +90,7 @@ class OusterSDKConan(ConanFile):
         cmake = CMake(self)
         cmake.definitions["BUILD_VIZ"] = self.options.build_viz
         cmake.definitions["BUILD_PCAP"] = self.options.build_pcap
+        cmake.definitions["BUILD_OSF"] = self.options.build_osf
         cmake.definitions["OUSTER_USE_EIGEN_MAX_ALIGN_BYTES_32"] = self.options.eigen_max_align_bytes
         # alt way, but we use CMAKE_TOOLCHAIN_FILE in other pipeline so avoid overwrite
         # cmake.definitions["CMAKE_TOOLCHAIN_FILE"] = os.path.join(self.build_folder, "conan_paths.cmake")

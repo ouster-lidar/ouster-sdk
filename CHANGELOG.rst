@@ -5,6 +5,11 @@ Changelog
 [unreleased]
 ============
 
+ouster_osf
+----------
+
+* Add Ouster OSF C++/Python library to save stream of LidarScans with metadata
+
 ouster_client
 -------------
 

@@ -16,6 +16,8 @@ Building the Python SDK from source requires several dependencies:
 - `jsoncpp <https://github.com/open-source-parsers/jsoncpp>`_ >= 1.7
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
+- `libpng <http://www.libpng.org>`_ >= 1.6
+- `flatbuffers <https://flatbuffers.dev/>`_ >= 1.1
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
 - `libglew <http://glew.sourceforge.net/>`_ >= 2.1 or `glad <https://github.com/Dav1dde/glad>`_
 - `spdlog <https://github.com/gabime/spdlog>`_ >= 1.9
@@ -34,13 +36,14 @@ On supported Debian-based linux systems, you can install all build dependencies 
    $ sudo apt install build-essential cmake \
                       libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
                       python3-dev python3-pip libcurl4-openssl-dev \
-                      libglfw3-dev libglew-dev libspdlog-dev
+                      libglfw3-dev libglew-dev libspdlog-dev \
+                      libpng-dev libflatbuffers-dev
 
 On macos >= 10.13, using homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen curl jsoncpp libtins python3 glfw glew spdlog
+  $ brew install cmake eigen curl jsoncpp libtins python3 glfw glew spdlog libpng flatbuffers
 
 After you have the system dependencies, you can build the SDK with:
 
@@ -77,7 +80,7 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog
+   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog libpng flatbuffers
 
 The currently tested vcpkg tag is ``2023.02.24``. After that, using a developer powershell prompt:
 
@@ -177,8 +180,8 @@ image, run:
        --build-arg BASE=ubuntu:20.04 \
        -t ouster-sdk-tox
 
-the ``BASE`` argument will default to ``ubuntu:18.04``, but can also be set to other docker tags,
-e.g. ``ubuntu:20.04``, ``ubuntu:22.04`` or ``debian:11``. Then, run the container to invoke tox:
+the ``BASE`` argument will default to ``ubuntu:20.04``, but can also be set to other docker tags,
+e.g. ``ubuntu:22.04`` or ``debian:11``. Then, run the container to invoke tox:
 
 .. code:: console
 

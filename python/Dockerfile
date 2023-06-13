@@ -1,4 +1,4 @@
-ARG BASE="ubuntu:18.04"
+ARG BASE="ubuntu:20.04"
 
 FROM ${BASE}
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -24,6 +24,8 @@ RUN set -xe \
  libglfw3-dev \
  libglew-dev \
  libspdlog-dev \
+ libpng-dev \
+ libflatbuffers-dev \
 # Python deps
  python3-dev \
  python3-pip \

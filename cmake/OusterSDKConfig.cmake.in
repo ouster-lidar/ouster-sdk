@@ -8,6 +8,13 @@ find_dependency(jsoncpp)
 find_dependency(CURL)
 find_dependency(spdlog)
 
+# ouster_osf dependencies
+if(@BUILD_OSF@)
+  find_package(ZLIB REQUIRED)
+  find_package(PNG REQUIRED)
+  find_package(Flatbuffers NAMES Flatbuffers FlatBuffers)
+endif()
+
 # viz dependencies
 if(@BUILD_VIZ@)
   set(OpenGL_GL_PREFERENCE GLVND)
