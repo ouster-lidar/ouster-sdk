@@ -174,6 +174,13 @@ class Writer:
 
 def slice_and_cast(lidar_scan: LidarScan, field_types = ...) -> LidarScan: ...
 
+def init_logger(log_level: str,
+                log_file_path: str = ...,
+                rotating: bool = ...,
+                max_size_in_bytes: int = ...,
+                max_files: int = ...) -> bool:
+    ...
+
 def dump_metadata(file: str, full: bool = ...) -> str: ...
 def parse_and_print(file: str, with_decoding: bool = ...) -> None: ...
 
