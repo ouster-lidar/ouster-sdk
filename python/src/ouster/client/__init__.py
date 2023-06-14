@@ -31,10 +31,11 @@ from .data import FieldTypes
 from .data import Packet
 from .data import ImuPacket
 from .data import LidarPacket
+from .data import LidarPacketValidator
 from .data import ColHeader
 from .data import XYZLut
 from .data import destagger
-from .data import PacketIdError
+from .data import PacketIdError, PacketSizeError
 from .data import packet_ts
 
 from .core import ClientError

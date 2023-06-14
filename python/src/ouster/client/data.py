@@ -118,9 +118,50 @@ class ColHeader(Enum):
         return self.value
 
 
-class PacketIdError(Exception):
+class PacketValidationFailure(Exception):
+    pass
+
+
+class PacketIdError(PacketValidationFailure):
     """Exception raised when init_id/sn from metadata and packet doesn't match."""
     pass
+
+class PacketSizeError(PacketValidationFailure):
+    """Exception raised when the packet size wrong for the given metadata."""
+    pass
+
+
+class LidarPacketValidator:
+    """A utility class for validating lidar packets for a given sensor info."""
+    def __init__(self, metadata: SensorInfo, id_check: bool):
+        self._metadata = metadata
+        self._metadata_init_id = metadata.init_id
+        self._metadata_sn = int(metadata.sn)
+        self._pf = _client.PacketFormat.from_info(metadata)
+        self._id_check = id_check
+
+    def check_packet(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
+        for check in [self.id_and_sn_valid, self.packet_size_valid]:
+            result = check(data, n_bytes)
+            if result:
+                return result
+        return None
+
+    def id_and_sn_valid(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
+        """Check the metadata init_id/sn and packet init_id/sn mismatch."""
+        init_id = self._pf.init_id(data)
+        sn = self._pf.prod_sn(data)
+        if bool(init_id and (init_id != self._metadata_init_id or sn != self._metadata_sn)):
+            error_msg = f"Metadata init_id/sn does not match: " \
+                    f"expected by metadata - {self._metadata_init_id}/{self._metadata_sn}, " \
+                    f"but got from packet buffer - {init_id}/{sn}"
+            return PacketIdError(error_msg)
+        return None
+
+    def packet_size_valid(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
+        if self._pf.lidar_packet_size != n_bytes:
+            return PacketSizeError(f"Expected a packet of size {self._pf.lidar_packet_size} but got a buffer of size {n_bytes}")
+        return None
 
 
 class LidarPacket:
@@ -167,6 +208,10 @@ class LidarPacket:
         self._metadata_sn = int(info.sn)
 
         # check that metadata came from the same sensor initialization as data
+        error_msg = f"Metadata init_id/sn does not match: " \
+            f"expected by metadata - {info.init_id}/{info.sn}, " \
+            f"but got from packet buffer - {self.init_id}/{self.prod_sn}"
+        print(error_msg)
         if self.id_error:
             error_msg = f"Metadata init_id/sn does not match: " \
                 f"expected by metadata - {info.init_id}/{info.sn}, " \
