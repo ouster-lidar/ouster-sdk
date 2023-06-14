@@ -133,15 +133,15 @@ class PacketSizeError(PacketValidationFailure):
 
 class LidarPacketValidator:
     """A utility class for validating lidar packets for a given sensor info."""
-    def __init__(self, metadata: SensorInfo, id_check: bool):
+    def __init__(self, metadata: SensorInfo, checks=['id_and_sn_valid', 'packet_size_valid']):
         self._metadata = metadata
         self._metadata_init_id = metadata.init_id
         self._metadata_sn = int(metadata.sn)
         self._pf = _client.PacketFormat.from_info(metadata)
-        self._id_check = id_check
+        self._checks = [getattr(self, check) for check in checks]
 
     def check_packet(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
-        for check in [self.id_and_sn_valid, self.packet_size_valid]:
+        for check in self._checks:
             result = check(data, n_bytes)
             if result:
                 return result
@@ -208,10 +208,6 @@ class LidarPacket:
         self._metadata_sn = int(info.sn)
 
         # check that metadata came from the same sensor initialization as data
-        error_msg = f"Metadata init_id/sn does not match: " \
-            f"expected by metadata - {info.init_id}/{info.sn}, " \
-            f"but got from packet buffer - {self.init_id}/{self.prod_sn}"
-        print(error_msg)
         if self.id_error:
             error_msg = f"Metadata init_id/sn does not match: " \
                 f"expected by metadata - {info.init_id}/{info.sn}, " \

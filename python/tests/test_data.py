@@ -518,7 +518,7 @@ def test_lidar_packet_validator() -> None:
     metadata2.init_id = 1234
     metadata2.sn = "5678"
 
-    validator = client.LidarPacketValidator(metadata2, True)
+    validator = client.LidarPacketValidator(metadata2)
     pcap_handle = _pcap.replay_initialize(pcap_file_path)
     buf = bytearray(2**16)
     info = _pcap.packet_info()
@@ -546,7 +546,7 @@ def test_lidar_packet_validator_2() -> None:
 
     metadata2 = deepcopy(metadata)
 
-    validator = client.LidarPacketValidator(metadata2, True)
+    validator = client.LidarPacketValidator(metadata2)
     pcap_handle = _pcap.replay_initialize(pcap_file_path)
     buf = bytearray(2**16)
     info = _pcap.packet_info()
@@ -566,7 +566,7 @@ def test_lidar_packet_validator_3() -> None:
     metadata2 = deepcopy(metadata)
     metadata2.format.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
 
-    validator = client.LidarPacketValidator(metadata2, True)
+    validator = client.LidarPacketValidator(metadata2)
     pcap_handle = _pcap.replay_initialize(pcap_file_path)
     buf = bytearray(2**16)
     info = _pcap.packet_info()
@@ -591,7 +591,7 @@ def test_lidar_packet_validator_4() -> None:
     meta_json['beam_azimuth_angles'] = [1]*16
     metadata2 = client.SensorInfo(json.dumps(meta_json))
 
-    validator = client.LidarPacketValidator(metadata2, True)
+    validator = client.LidarPacketValidator(metadata2)
     pcap_handle = _pcap.replay_initialize(pcap_file_path)
     buf = bytearray(2**16)
     info = _pcap.packet_info()
