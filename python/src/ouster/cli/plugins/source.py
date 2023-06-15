@@ -186,10 +186,12 @@ class SourceConvertCommand(click.Command):
 
 
 class PcapConvertCommand(SourceConvertCommand):
-    """Implements ouster-cli source <sourcefile>.pcap convert <otherfile>
+    """Implements ouster-cli source <sourcefile>.pcap convert <otherfile>,
     """
-#    This method delegates to the appropriate command depending on the file
-#    extension of the output file argument.
+    def __init__(self, *args, **kwargs):
+        kwargs['help'] = f"Convert from PCAP to {self.get_output_type_file_extensions_str()}"
+        super().__init__(*args, **kwargs)
+    # this is a map from output type to a conversion function
     conversions = {
         # OusterIoType.ROSBAG: bag_from_pcap,
         OusterIoType.CSV: csv_from_pcap,
@@ -200,8 +202,7 @@ class PcapConvertCommand(SourceConvertCommand):
 @click.option('-n', type=int, default=0, help="Read only INTEGER packets.")
 @click.pass_context
 def pcap_info(ctx, *args, **kwargs) -> None:
-    """Implements
-    ouster-cli source <sourcefile>.pcap info"""
+    """Display info about the PCAP file"""
     source = ctx.obj.get(_source_arg_name)
     kwargs['file'] = source
     ctx.forward(ouster.cli.core.pcap.pcap_info, *args, **kwargs)
@@ -224,8 +225,7 @@ def pcap_info(ctx, *args, **kwargs) -> None:
               "match with metadata")
 @click.pass_context
 def pcap_slice(ctx, *args, **kwargs) -> None:
-    """Implements
-    ouster-cli source <sourcefile>.pcap slice"""
+    """Writes a portion of the input PCAP file to a new file"""
     source = ctx.obj.get(_source_arg_name)
     kwargs['file'] = source
     ctx.forward(ouster.cli.core.pcap.pcap_slice, *args, **kwargs)
