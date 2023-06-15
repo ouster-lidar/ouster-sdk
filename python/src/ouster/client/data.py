@@ -119,7 +119,11 @@ class ColHeader(Enum):
 
 
 class PacketValidationFailure(Exception):
-    pass
+    def __eq__(self, other):
+        return type(self) == type(other) and self.args == other.args
+
+    def __hash__(self):
+        return hash((type(self), self.args))
 
 
 class PacketIdError(PacketValidationFailure):
@@ -140,12 +144,13 @@ class LidarPacketValidator:
         self._pf = _client.PacketFormat.from_info(metadata)
         self._checks = [getattr(self, check) for check in checks]
 
-    def check_packet(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
+    def check_packet(self, data: BufferT, n_bytes: int) -> List[PacketValidationFailure]:
+        errors = []
         for check in self._checks:
-            result = check(data, n_bytes)
-            if result:
-                return result
-        return None
+            error = check(data, n_bytes)
+            if error:
+                errors.append(error)
+        return errors
 
     def id_and_sn_valid(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
         """Check the metadata init_id/sn and packet init_id/sn mismatch."""

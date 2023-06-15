@@ -9,6 +9,7 @@ from os import path
 from random import getrandbits, shuffle, random
 from typing import (Dict, Iterable, Iterator, List, Callable)
 from itertools import chain
+from more_itertools import consume
 
 import pytest
 import time
@@ -617,3 +618,18 @@ def test_current_data(fake_meta, tmpdir):
             packet_data = reader.current_data()
             frame_ids.append(packet_format.frame_id(packet_data.tobytes()))
     assert frame_ids == [2, 1, 4, 3, 6, 5, 8, 7, 10, 9]
+
+
+def test_validation():
+    """The Pcap class should accumlate errors detected by LidarPacketValidator"""
+    meta_file_path = path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
+    pcap_file_path = path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    metadata = client.SensorInfo(open(meta_file_path).read())
+    metadata.init_id = 123
+    metadata.format.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
+    reader = pcap.Pcap(pcap_file_path, metadata)
+    consume(reader)
+    assert reader._errors == {
+        client.PacketIdError('Metadata init_id/sn does not match: expected by metadata - 123/122150000150, but got from packet buffer - 5431292/122150000150'): 64,
+        client.PacketSizeError('Expected a packet of size 41216 but got a buffer of size 8448'): 64
+    }

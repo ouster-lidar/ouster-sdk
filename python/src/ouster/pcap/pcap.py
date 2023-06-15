@@ -7,9 +7,10 @@ import os
 import socket
 import time
 from threading import Lock
+from collections import defaultdict
 from typing import (Iterable, Iterator, Optional, Tuple)
 
-from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
+from ouster.client import (LidarPacketValidator, LidarPacket, ImuPacket, Packet, PacketSource,
                            SensorInfo, _client, PacketIdError)
 from . import _pcap
 
@@ -88,7 +89,8 @@ class Pcap(PacketSource):
         self._metadata.udp_port_imu = imu_port
 
         self._soft_id_check = _soft_id_check
-        self._id_error_count = 0
+        self._id_error_count = 0    # TWS 20230615 TODO generialize error counting and reporting
+        self._errors = defaultdict(int)
 
         # sample pcap and attempt to find UDP ports consistent with metadata
         n_packets = 1000
@@ -116,6 +118,7 @@ class Pcap(PacketSource):
 
         real_start_ts = time.monotonic()
         pcap_start_ts = None
+        validator = LidarPacketValidator(self.metadata)
         while True:
             with self._lock:
                 if not (self._handle
@@ -136,6 +139,9 @@ class Pcap(PacketSource):
 
             try:
                 if (packet_info.dst_port == self._metadata.udp_port_lidar):
+                    for error in validator.check_packet(buf, n):
+                        print(error)
+                        self._errors[error] += 1  #  accumulate counts of errors
                     lp = LidarPacket(
                         buf[0:n],
                         self._metadata,
