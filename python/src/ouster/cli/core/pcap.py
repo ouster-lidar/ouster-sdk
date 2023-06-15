@@ -380,7 +380,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
                   _buflen=buf).run(scans_source)
 
         if scans_source._timed_out or scans_source._scans_produced == 0:
-            click.echo(f"\nERROR: no packets matching the provided metadata '{meta}' were found in '{file}'.")
+            click.echo(f"\nERROR: no complete frames matching the provided metadata '{meta}' were found in '{file}'.")
             all_infos = pcap._packet_info_stream(file, scans_source._packets_consumed, None, 100)
             matched_stream = match_metadata_with_data_stream(all_infos, source.metadata)
             if not matched_stream:
@@ -391,8 +391,14 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
             click.echo("The packets read contained the following data streams:")
             # TODO: check packet sizes and print appropriate errors if there's a mismatch
             print_stream_table(all_infos)
+            if source._errors:
+                click.echo(click.style("Packet errors were detected in the dataset:", fg='yellow'))
+                for k, v in source._errors.items():
+                    click.echo(click.style(f"    {str(k)}, count={v}", fg='yellow'))
 
     finally:
+        # TODO: remove try/finally
+        """
         if source.id_error_count:
             print(f"WARNING: {source.id_error_count} lidar_packets with "
                   "mismatched init_id/sn were detected.")
@@ -400,7 +406,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
                 print("NOTE: To disable strict init_id/sn checking use "
                       "--soft-id-check option (may lead to parsing "
                       "errors)")
-
+        """
     click.echo("Done")
 
 
