@@ -32,13 +32,15 @@ def test_service_info_as_text_str(monkeypatch):
     with monkeypatch.context() as m:
         m.setattr(requests, "get", mock_get)
 
-        server, address, prod_line = service_info_as_text_str(FakeInfo(FAKESERVER, [])).split()
+        text, color = service_info_as_text_str(FakeInfo(FAKESERVER, []))
+        server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == '-'
         assert prod_line == '-'
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
-        server, address, prod_line = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses)).split()
+        text, color= service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
         assert prod_line == '-'
@@ -52,7 +54,8 @@ def test_service_info_as_text_str_2(monkeypatch):
         m.setattr(requests, "get", mock_get)
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
-        server, address, prod_line = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses)).split()
+        text, color = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
         assert prod_line == '-'
@@ -70,7 +73,8 @@ def test_service_info_as_text_str_3(monkeypatch):
         m.setattr(requests, "get", mock_get)
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
-        server, address, prod_line = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses)).split()
+        text, color = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
         assert prod_line == 'fake_prod_line'

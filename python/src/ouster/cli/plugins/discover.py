@@ -9,20 +9,31 @@ This is a POC adapted from zeroconf's async_browser.py example.
 from typing import Optional
 import requests
 import time
+from socket import AddressFamily
 import asyncio
 import click
 from ouster.cli.core import cli
+from ouster.client import SensorInfo, get_config
+from ouster.client._client import Client
 from zeroconf import IPVersion, ServiceStateChange, Zeroconf
 from zeroconf.asyncio import (
     AsyncServiceBrowser,
     AsyncServiceInfo,
     AsyncZeroconf,
 )
+from psutil import net_if_addrs
 
+host_interfaces = net_if_addrs()
+host_addresses = [
+                address.address for iface in host_interfaces.values()
+                for address in iface
+                if address.family == AddressFamily.AF_INET or address.family == AddressFamily.AF_INET6
+            ]
 
-text_columns = ["HOSTNAME", "ADDRESS", "MODEL"]
-text_column_widths = [28, 20, 12]
+text_columns = ["HOSTNAME", "ADDRESS", "MODEL", "UDP DESTINATION", "DEST. LIDAR PORT", "DEST. IMU PORT"]
+text_column_widths = [28, 20, 16, 20, 20, 20]
 mdns_services = ["_roger._tcp.local."]
+propagate_exceptions = False
 
 
 class AsyncServiceDiscovery:
@@ -66,6 +77,9 @@ def service_info_as_text_str(info) -> str:
     addresses = ["%s" % (addr,) for addr in info.parsed_scoped_addresses()]
     first_address = '-'
     prod_line = '-'
+    udp_dest = '-'
+    udp_port_lidar = '-'
+    udp_port_imu = '-'
     if addresses:
         first_address = addresses[0]
         try:
@@ -73,19 +87,31 @@ def service_info_as_text_str(info) -> str:
             response = requests.get(url)
             response_json = response.json()
             prod_line = response_json['prod_line']
-        except Exception:
-            pass
-    strs = [info.server, first_address, prod_line]
+            config = get_config(first_address)
+            if config:
+                if config.udp_dest:
+                    udp_dest = config.udp_dest
+                udp_port_lidar = str(config.udp_port_lidar)
+                udp_port_imu = str(config.udp_port_imu)
+        except Exception as e:
+            if propagate_exceptions:
+                print(e)
+                raise
+    color = 'white'
+    if udp_dest in host_addresses:
+        color = 'green'
+    strs = [info.server, first_address, prod_line, udp_dest, udp_port_lidar, udp_port_imu]
     for i in range(len(strs)):
         strs[i] = strs[i].ljust(text_column_widths[i])
-    return ''.join(strs)
+    return ''.join(strs), color
 
 
 async def async_display_service_info(zeroconf: Zeroconf, service_type: str, name: str) -> None:
     info = AsyncServiceInfo(service_type, name)
     await info.async_request(zeroconf, 1000)
     if info and info.server:
-        click.echo(service_info_as_text_str(info))
+        strs, color = service_info_as_text_str(info)
+        click.echo(click.style(''.join(strs), fg=color))
 
 
 @cli.command()
