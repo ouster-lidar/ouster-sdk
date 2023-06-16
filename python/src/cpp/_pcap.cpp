@@ -31,7 +31,7 @@ PYBIND11_MAKE_OPAQUE(std::vector<int>);
 PYBIND11_MAKE_OPAQUE(std::vector<guessed_ports>);
 PYBIND11_MAKE_OPAQUE(std::vector<uint64_t>);
 PYBIND11_MAKE_OPAQUE(std::vector<uint8_t>);
-using stream_map = std::map<stream_key, stream_data>;
+using stream_map = std::unordered_map<stream_key, stream_data>;
 PYBIND11_MAKE_OPAQUE(stream_map);
 using count_map = std::map<uint64_t, uint64_t>;
 PYBIND11_MAKE_OPAQUE(count_map);
@@ -49,7 +49,7 @@ This module is generated from the C++ code and not meant to be used directly.
     py::bind_vector<std::vector<guessed_ports>>(m, "VectorGuessedPorts");
     py::bind_vector<std::vector<uint64_t>>(m, "VectorUint64");
     py::bind_vector<std::vector<uint8_t>>(m, "VectorUint8");
-    py::bind_map<std::map<stream_key, stream_data>>(m, "MapUdpStreams");
+    py::bind_map<std::unordered_map<stream_key, stream_data>>(m, "MapUdpStreams");
     py::bind_map<std::map<uint64_t, uint64_t>>(m, "CountMap");
     py::class_<packet_info, std::shared_ptr<packet_info>>(m, "packet_info")
         .def(py::init<>())

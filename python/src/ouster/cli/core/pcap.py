@@ -50,7 +50,10 @@ def print_stream_table(all_infos):
         'Count'
     ]
 
-    for k, v in all_infos.udp_streams.items():
+    def stream_sort(k):
+        return (list(k)[0].dst_ip, list(k)[0].src_ip, list(k)[0].dst_port)
+
+    for k, v in sorted(all_infos.udp_streams.items(), key=stream_sort):
         frag = 'No' if [k for k, v in v.fragment_counts.items()] else 'Yes'
 
         first = True

@@ -13,11 +13,36 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <functional>
 
 #include "ouster/types.h"
 #include "ouster/pcap.h"
+namespace ouster {
+namespace sensor_utils {
+/**
+ * Structure representing a hash key/sorting key for a udp stream
+ */
+struct stream_key {
+    std::string dst_ip;          ///< The destination IP
+    std::string src_ip;          ///< The source IP
+    int src_port;                ///< The src port
+    int dst_port;                ///< The destination port
+
+    bool operator==(const struct stream_key &other) const;
+};
+}}
+
+template<>
+struct std::hash<ouster::sensor_utils::stream_key> {
+    std::size_t operator()(const ouster::sensor_utils::stream_key& key) const noexcept {
+        return std::hash<std::string>{}(key.src_ip) ^
+               (std::hash<std::string>{}(key.src_ip) << 1) ^
+               (std::hash<int>{}(key.src_port << 2)) ^
+               (std::hash<int>{}(key.dst_port << 3));
+    }
+};
 
 namespace ouster {
 namespace sensor_utils {
@@ -34,22 +59,7 @@ using ts = std::chrono::microseconds;  ///< Microsecond timestamp
  */
 std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
 
-/**
- * Structure representing a hash key/sorting key for a udp stream
- */
-struct stream_key {
-    std::string dst_ip;          ///< The destination IP
-    std::string src_ip;          ///< The source IP
-    int src_port;                ///< The src port
-    int dst_port;                ///< The destination port
 
-    bool operator==(const struct stream_key &other) const;
-    bool operator!=(const struct stream_key &other) const;
-    bool operator<(const struct stream_key &other) const;
-    bool operator>(const struct stream_key &other) const;
-    bool operator<=(const struct stream_key &other) const;
-    bool operator>=(const struct stream_key &other) const;
-};
 
 /**
  * Structure representing a hash key/sorting key for a udp stream
@@ -102,7 +112,7 @@ struct stream_info {
     ts timestamp_max;                   ///< The latest timestamp detected
     ts timestamp_min;                   ///< The earliest timestamp detected
 
-    std::map<stream_key, stream_data> udp_streams; ///< Datastructure containing info on all of the different streams
+    std::unordered_map<stream_key, stream_data> udp_streams; ///< Datastructure containing info on all of the different streams
 };
 
 /**
