@@ -124,6 +124,7 @@ def pcap_info(file: str, n: int) -> None:
               help="Directory to output files. Defaults to current dir")
 @click.option('-l', '--lidar-port', default=7502, help="default: 7502")
 @click.option('-i', '--imu-port', default=7503, help="default: 7503")
+@click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
 @click.option('-n', '--n-frames', type=int, help="number of lidar frames")
 @click.option('-s', '--n-seconds', default=0.0, help="max time to record")
 @click.option('--chunk-size', default=0, help="split output by size (MB)")
@@ -135,10 +136,9 @@ def pcap_info(file: str, n: int) -> None:
               default=False,
               help="Use legacy metadata format or not")
 def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
-                n_frames: Optional[int], n_seconds: float, chunk_size: int,
-                buf_size: int, timeout: float, prefix: str,
-                viz: bool,
-                legacy: bool) -> None:
+                filter: bool, n_frames: Optional[int], n_seconds: float,
+                chunk_size: int, buf_size: int, timeout: float, prefix: str,
+                viz: bool, legacy: bool) -> None:
     """Record lidar and IMU packets from a sensor to a pcap file.
 
     Note: this will currently not configure the sensor or query the sensor for
@@ -182,8 +182,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 
         if viz:
             try:
-                from ouster.sdk.viz import SimpleViz
-                from ouster.sdkx.viz import ExtendedScanViz
+                from ouster.sdk.viz import SimpleViz, LidarScanViz
             except ImportError as e:
                 raise click.ClickException(
                     "Please verify that libGL is installed. Error: " + str(e))
@@ -196,7 +195,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
                                         fields=field_types,
                                         complete=filter)
 
-            ls_viz = ExtendedScanViz(scans_source.metadata)
+            ls_viz = LidarScanViz(scans_source.metadata)
             SimpleViz(ls_viz, rate=1.0, pause_at=-1,
                       _buflen=0).run(scans_source)
 
@@ -241,8 +240,8 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 @click.option('--timeout',
               type=float,
               default=10.0,
-              help="Timeout in seconds, after which the script will terminate \
-if no lidar data is encountered in the PCAP file")
+              help="Timeout in seconds, after which the script will terminate "
+              "if no lidar data is encountered in the PCAP file")
 def pcap_viz(file: str, meta: Optional[str], cycle: bool,
              lidar_port: Optional[int], imu_port: Optional[int], filter: bool,
              buf: int, rate: float, extrinsics: Optional[List[float]],
@@ -264,8 +263,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
             "Please verify that libpcap is installed. Error: " + str(e))
 
     try:
-        from ouster.sdk.viz import SimpleViz
-        from ouster.sdkx.viz import ExtendedScanViz
+        from ouster.sdk.viz import SimpleViz, LidarScanViz
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libGL is installed. Error: " + str(e))
@@ -330,7 +328,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
                                         complete=filter,
                                         timeout=timeout)
 
-            ls_viz = ExtendedScanViz(scans_source.metadata)
+            ls_viz = LidarScanViz(scans_source.metadata)
 
         elif HAS_MULTI and multi:
             # Multi sensor pcap handling
@@ -386,9 +384,10 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
             all_infos = pcap._packet_info_stream(file, scans_source._packets_consumed, None, 100)
             matched_stream = match_metadata_with_data_stream(all_infos, source.metadata)
             if not matched_stream:
-                click.echo(f"No UDP stream in the data file has a destination port \
-of {source.metadata.udp_port_lidar}, ", nl=False)
-                click.echo("which is the port specified in the metadata file.\n")
+                click.echo(
+                    "No UDP stream in the data file has a destination port "
+                    f"of {source.metadata.udp_port_lidar}, "
+                    "which is the port specified in the metadata file.\n")
             click.echo("The packets read contained the following data streams:")
             # TODO: check packet sizes and print appropriate errors if there's a mismatch
             print_stream_table(all_infos)

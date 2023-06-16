@@ -123,8 +123,7 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool,
     settings separately.
     """
     try:
-        from ouster.sdk.viz import SimpleViz
-        from ouster.sdkx.viz import ExtendedScanViz
+        from ouster.sdk.viz import SimpleViz, LidarScanViz
         from ouster.sdkx.parsing import default_scan_fields
     except ImportError as e:
         raise click.ClickException(str(e))
@@ -163,7 +162,7 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool,
             scans.metadata.extrinsic = np.array(extrinsics).reshape((4, 4))
             print(f"Using sensor extrinsics:\n{scans.metadata.extrinsic}")
 
-        ls_viz = ExtendedScanViz(scans.metadata)
+        ls_viz = LidarScanViz(scans.metadata)
         SimpleViz(ls_viz).run(scans)
     finally:
         if source.id_error_count:

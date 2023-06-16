@@ -7,15 +7,16 @@ Sensor data visualization tools.
 Visualize lidar data using OpenGL.
 """
 
-from collections import (deque)
+from collections import deque
 from dataclasses import dataclass
 from functools import partial
+from enum import Enum
 import os
 import threading
 import time
 from datetime import datetime
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
-                    Optional, Tuple, TypeVar, Union, Any)
+                    Optional, Tuple, TypeVar, Union, Any, cast)
 from typing_extensions import Protocol, runtime_checkable
 import weakref
 import logging
@@ -29,6 +30,8 @@ from ..client._client import Version
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
                    spezia_palette, grey_palette, viridis_palette, magma_palette)
+
+from ouster.sdkx.util import img_aspect_ratio  # type: ignore
 
 logger = logging.getLogger("viz-logger")
 
@@ -98,6 +101,8 @@ class FieldViewMode(Protocol):
     of showing data in that mode, see `enabled()`.
     """
 
+    _info: Optional[client.SensorInfo]
+
     @property
     def name(self) -> str:
         """Name of the view mode"""
@@ -122,6 +127,7 @@ class FieldViewMode(Protocol):
 @runtime_checkable
 class ImageMode(FieldViewMode, Protocol):
     """Applies the view mode key to the viz.Image"""
+
     def set_image(self,
                   img: Image,
                   ls: client.LidarScan,
@@ -133,9 +139,11 @@ class ImageMode(FieldViewMode, Protocol):
 @runtime_checkable
 class CloudMode(FieldViewMode, Protocol):
     """Applies the view mode key to the viz.Cloud"""
+
     def set_cloud_color(self,
                         cloud: Cloud,
                         ls: client.LidarScan,
+                        *,
                         return_num: int = 0) -> None:
         """Prepares the key data and sets the cloud key to it."""
         ...
@@ -168,9 +176,9 @@ class SimpleMode(ImageCloudMode):
     applies for both returns.
     """
     def __init__(self,
-                 info: client.SensorInfo,
                  field: client.ChanField,
                  *,
+                 info: Optional[client.SensorInfo] = None,
                  prefix: Optional[str] = "",
                  suffix: Optional[str] = "",
                  use_ae: bool = True,
@@ -228,6 +236,9 @@ class SimpleMode(ImageCloudMode):
                   img: Image,
                   ls: client.LidarScan,
                   return_num: int = 0) -> None:
+        if self._info is None:
+            raise ValueError(
+                f"VizMode[{self.name}] requires metadata to make a 2D image")
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
             img.set_image(client.destagger(self._info, key_data))
@@ -248,13 +259,19 @@ class SimpleMode(ImageCloudMode):
 class ReflMode(SimpleMode, ImageCloudMode):
     """Prepares image/cloud data for REFLECTIVITY channel"""
 
-    def __init__(self, info: client.SensorInfo) -> None:
-        super().__init__(info, client.ChanField.REFLECTIVITY, use_ae=True)
+    def __init__(self, *, info: Optional[client.SensorInfo] = None) -> None:
+        super().__init__(client.ChanField.REFLECTIVITY, info=info, use_ae=True)
         # used only for uncalibrated reflectivity in FW prior v2.1.0
         # TODO: should we check for calibrated reflectivity status from
         # metadata too?
-        self._normalized_refl = (Version.from_string(self._info.fw_rev) >=
-                                 Version.from_string("v2.1.0"))
+        if info is not None:
+            self._info = cast(client.SensorInfo, self._info)
+            self._normalized_refl = (Version.from_string(self._info.fw_rev) >=
+                                     Version.from_string("v2.1.0"))
+        else:
+            # NOTE/TODO[pb]: ReflMode added through viz extra mode mechanism
+            # may not have a correct normalized_refl set ... need a refactor.
+            self._normalized_refl = True
 
     def _prepare_data(self,
                       ls: client.LidarScan,
@@ -302,6 +319,31 @@ LidarScanVizMode = Union[ImageCloudMode, ImageMode, CloudMode]
 """Field view mode types"""
 
 
+@dataclass
+class VizExtraMode:
+    """Image/Cloud mode factory func
+
+    Used to embed viz modes from external plugins.
+    """
+    func: Callable[[], LidarScanVizMode]
+
+    def create(self,
+               info: Optional[client.SensorInfo] = None) -> LidarScanVizMode:
+        extra_mode = self.func()
+        if info and hasattr(extra_mode, "_info") and extra_mode._info is None:
+            extra_mode._info = info
+        return extra_mode
+
+
+# Viz modes added externally
+_viz_extra_modes: List[VizExtraMode]
+_viz_extra_modes = []
+
+# Viz palettes added externally
+_viz_extra_palettes: List[CloudPaletteItem]
+_viz_extra_palettes = []
+
+
 class LidarScanViz:
     """Visualize LidarScan data.
 
@@ -309,6 +351,12 @@ class LidarScanViz:
     LidarScan. Sets up key bindings to toggle which channel fields and returns
     are displayed, and change 2D image and point size.
     """
+
+    class FlagsMode(Enum):
+        NONE = 0
+        HIGHLIGHT_SECOND = 1
+        HIGHLIGHT_BLOOM = 2
+        HIDE_BLOOM = 3
 
     _cloud_palette: Optional[CloudPaletteItem]
 
@@ -343,6 +391,10 @@ class LidarScanViz:
             CloudPaletteItem("Viridis", viridis_palette),
             CloudPaletteItem("Magma", magma_palette),
         ]
+
+        # Add extra color palettes, usually inserted through plugins
+        self._cloud_palettes.extend(_viz_extra_palettes)
+
         self._cloud_palettes.extend(_ext_palettes or [])
 
         self._cloud_palette_ind = 0
@@ -353,9 +405,7 @@ class LidarScanViz:
         self._img_ind = [0, 1]  # index of field to display
         self._img_refl_mode = [False, False]
         self._img_size_fraction = 6
-        self._img_aspect = _img_aspect_ratio or (
-            max(meta.beam_altitude_angles) -
-            min(meta.beam_altitude_angles)) / 360.0
+        self._img_aspect = _img_aspect_ratio or img_aspect_ratio(meta)
 
         # misc display state
         self._ring_size = 1
@@ -365,11 +415,14 @@ class LidarScanViz:
 
         self._modes: List[LidarScanVizMode]
         self._modes = [
-            SimpleMode(meta, ChanField.NEAR_IR, use_ae=True, use_buc=True),
-            ReflMode(meta),
-            SimpleMode(meta, ChanField.SIGNAL),
-            SimpleMode(meta, ChanField.RANGE),
+            SimpleMode(ChanField.NEAR_IR, info=meta, use_ae=True, use_buc=True),
+            ReflMode(info=meta),
+            SimpleMode(ChanField.SIGNAL, info=meta),
+            SimpleMode(ChanField.RANGE, info=meta),
         ]
+
+        # Add extra viz mode, usually inserted through plugins
+        self._modes.extend([vm.create(meta) for vm in _viz_extra_modes])
 
         self._modes.extend(_ext_modes or [])
 
@@ -382,6 +435,15 @@ class LidarScanViz:
 
         self._cloud_modes: List[CloudMode]
         self._cloud_modes = [m for m in self._modes if isinstance(m, CloudMode)]
+
+        # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
+        # initialize masks to just green with zero opacity
+        mask = np.zeros(
+            (meta.format.pixels_per_column, meta.format.columns_per_frame, 4),
+            dtype=np.float32)
+        mask[:, :, 1] = 1.0
+        self._cloud_masks = (mask, mask.copy())
+        self._flags_mode = LidarScanViz.FlagsMode.NONE
 
         self._viz = viz or PointViz("Ouster Viz")
 
@@ -428,6 +490,8 @@ class LidarScanViz:
             (ord("'"), 2): LidarScanViz.cicle_ring_line_width,
             (ord("O"), 0): LidarScanViz.toggle_osd,
             (ord('T'), 0): LidarScanViz.toggle_scan_poses,
+            # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
+            (ord('C'), 0): LidarScanViz.update_flags_mode,
         }
 
         def handle_keys(self: LidarScanViz, ctx: WindowCtx, key: int,
@@ -519,6 +583,35 @@ class LidarScanViz:
             else:
                 self._scan_poses_enabled = True
                 print("LidarScanViz: Key T: Scan Poses: ON")
+
+    # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
+    def update_flags_mode(self,
+                          mode: 'Optional[LidarScanViz.FlagsMode]' = None) -> None:
+        with self._lock:
+            # cycle between flag mode enum values
+            if mode is None:
+                self._flags_mode = LidarScanViz.FlagsMode(
+                    (self._flags_mode.value + 1) %
+                    len(LidarScanViz.FlagsMode.__members__))
+            else:
+                self._flags_mode = mode
+
+            # set mask on all points in the second cloud, clear other mask
+            if self._flags_mode == LidarScanViz.FlagsMode.HIGHLIGHT_SECOND:
+                self._cloud_masks[0][:, :, 3] = 0.0
+                self._cloud_masks[1][:, :, 3] = 1.0
+                self._clouds[0].set_mask(self._cloud_masks[0])
+                self._clouds[1].set_mask(self._cloud_masks[1])
+            # clear masks on both clouds, expected to be set dynamically in _draw()
+            else:
+                self._cloud_masks[0][:, :, 3] = 0.0
+                self._cloud_masks[1][:, :, 3] = 0.0
+                self._clouds[0].set_mask(self._cloud_masks[0])
+                self._clouds[1].set_mask(self._cloud_masks[1])
+
+            # not bothering with OSD
+            # TODO[pb]: hmm, probably should bother with OSD somehow
+            print("Flags mode:", self._flags_mode.name)
 
     @property
     def scan(self) -> client.LidarScan:
@@ -647,6 +740,9 @@ class LidarScanViz:
 
         self._draw_update_scan_poses()
 
+        # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
+        self._draw_update_flags_mode()
+
     def _draw_update_scan_poses(self) -> None:
         """Apply poses from the scan to the cloud"""
 
@@ -661,6 +757,28 @@ class LidarScanViz:
                          if self._scan_poses_enabled else np.eye(4))
 
         self._viz.camera.set_target(camera_target)
+
+    def _draw_update_flags_mode(self) -> None:
+        """Apply selected FlagsMode to the cloud"""
+        # set a cloud mask based where first flags bit is set
+        if self._flags_mode == LidarScanViz.FlagsMode.HIGHLIGHT_BLOOM:
+            for i, flag_field in ((0, ChanField.FLAGS), (1, ChanField.FLAGS2)):
+                if flag_field in self._scan.fields:
+                    mask_opacity = (self._scan.field(flag_field) & 0x1) * 1.0
+                    self._cloud_masks[i][:, :, 3] = mask_opacity
+                    self._clouds[i].set_mask(self._cloud_masks[i])
+
+        # set range to zero where first flags bit is set
+        elif self._flags_mode == LidarScanViz.FlagsMode.HIDE_BLOOM:
+            for i, flag_field, range_field in ((0, ChanField.FLAGS,
+                                                ChanField.RANGE),
+                                               (1, ChanField.FLAGS2,
+                                                ChanField.RANGE2)):
+                if flag_field in self._scan.fields and range_field in self._scan.fields:
+                    # modifying the scan in-place would break cycling modes while paused
+                    range = self._scan.field(range_field).copy()
+                    range[self._scan.field(flag_field) & 0x1 == 0x1] = 0
+                    self._clouds[i].set_range(range)
 
 
 class _Seekable(Generic[T]):
@@ -1035,5 +1153,5 @@ __all__ = [
     'PointViz', 'Cloud', 'Image', 'Cuboid', 'Label', 'WindowCtx', 'Camera',
     'TargetDisplay', 'add_default_controls', 'calref_palette', 'spezia_palette',
     'grey_palette', 'viridis_palette', 'magma_palette', 'ImageMode',
-    'CloudMode', 'ImageCloudMode', 'CloudPaletteItem'
+    'CloudMode', 'ImageCloudMode', 'CloudPaletteItem', 'VizExtraMode'
 ]
