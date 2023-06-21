@@ -8,10 +8,10 @@ import socket
 import time
 from threading import Lock
 from collections import defaultdict
-from typing import (Iterable, Iterator, Optional, Tuple, Dict)
+from typing import (Iterable, Iterator, Optional, Tuple, Dict)  # noqa: F401
 
-from ouster.client import (LidarPacketValidator, LidarPacket, ImuPacket, Packet, PacketSource,
-                           SensorInfo, _client, PacketValidationFailure, PacketIdError)
+from ouster.client import (LidarPacketValidator, LidarPacket, ImuPacket, Packet, PacketSource,  # noqa: F401
+                           SensorInfo, _client, PacketValidationFailure, PacketIdError)         # noqa: F401
 from . import _pcap
 
 MTU_SIZE = 1500
