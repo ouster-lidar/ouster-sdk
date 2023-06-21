@@ -8,10 +8,10 @@ import socket
 import time
 from threading import Lock
 from collections import defaultdict
-from typing import (Iterable, Iterator, Optional, Tuple)
+from typing import (Iterable, Iterator, Optional, Tuple, Dict)
 
 from ouster.client import (LidarPacketValidator, LidarPacket, ImuPacket, Packet, PacketSource,
-                           SensorInfo, _client, PacketIdError)
+                           SensorInfo, _client, PacketValidationFailure, PacketIdError)
 from . import _pcap
 
 MTU_SIZE = 1500
@@ -90,7 +90,7 @@ class Pcap(PacketSource):
 
         self._soft_id_check = _soft_id_check
         self._id_error_count = 0    # TWS 20230615 TODO generialize error counting and reporting
-        self._errors = defaultdict(int)
+        self._errors = defaultdict(int)  # type: Dict[PacketValidationFailure,int]
 
         # sample pcap and attempt to find UDP ports consistent with metadata
         n_packets = 1000
