@@ -194,6 +194,7 @@ setup(
             'laspy',
             'PyQt5; platform_system=="Windows"',
         ],
+        'mapping': ['kiss-icp >= 0.2.9', 'scipy'],
     },
     entry_points={'console_scripts':
         [

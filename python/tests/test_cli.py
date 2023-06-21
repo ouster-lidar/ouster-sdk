@@ -143,13 +143,13 @@ def test_source() -> None:
     # sensor
     result = runner.invoke(core.cli, ['source', '127.0.0.1'])
     assert result.exit_code == 0
-    assert read_commands_from_help_text(result.output) == ['config', 'metadata', 'record', 'viz']
+    assert read_commands_from_help_text(result.output) == ['config', 'metadata', 'record', 'viz', 'slam']
 
     # pcap
     with tempfile.NamedTemporaryFile(suffix='.pcap') as temp_pcap:
         result = runner.invoke(core.cli, ['source', temp_pcap.name])
         assert result.exit_code == 0
-        assert read_commands_from_help_text(result.output) == ['convert', 'info', 'slice', 'viz']
+        assert read_commands_from_help_text(result.output) == ['convert', 'info', 'slice', 'viz', 'slam']
 
     # TODO FLEETSW-4407: not MVP
     # rosbag
@@ -162,7 +162,8 @@ def test_source() -> None:
     # invalid file type
     with tempfile.NamedTemporaryFile(suffix='.invalid') as temp_pcap:
         result = runner.invoke(core.cli, ['source', temp_pcap.name])
-        assert "Error: Expecting .pcap, .osf, .bag, or .csv." in result.output
+        assert "Source type expected to be a sensor hostname, ip address,"
+        "or a .bag, .osf, or .pcap file" in result.output
         assert result.exit_code == 2
 
 
@@ -196,7 +197,7 @@ def test_source_could_not_resolve():
     # so we should see exit code 1
     result = runner.invoke(core.cli, ['source', 'badhostname', 'config'])
     assert ("Error: Source type expected to be a sensor hostname, ip address, "
-            "or a .pcap, .osf, or .bag file.") in result.output
+            "or a .bag, .osf, or .pcap file.") in result.output
     assert result.exit_code == 2
 
 

@@ -10,6 +10,9 @@ class OusterIoType(Enum):
     OSF = 3
     ROSBAG = 4
     CSV = 5
+    PLY = 6
+    PCD = 7
+    LAS = 8
 
 
 def extension_from_io_type(source: OusterIoType) -> Optional[str]:
@@ -22,6 +25,12 @@ def extension_from_io_type(source: OusterIoType) -> Optional[str]:
         return '.bag'
     elif source == OusterIoType.CSV:
         return '.csv'
+    elif source == OusterIoType.PLY:
+        return '.ply'
+    elif source == OusterIoType.PCD:
+        return '.pcd'
+    elif source == OusterIoType.LAS:
+        return '.las'
     return None
 
 
@@ -36,8 +45,14 @@ def io_type_from_extension(source: str) -> OusterIoType:
         return OusterIoType.ROSBAG
     elif source_lower.endswith('.csv'):
         return OusterIoType.CSV
+    elif source_lower.endswith('.ply'):
+        return OusterIoType.PLY
+    elif source_lower.endswith('.pcd'):
+        return OusterIoType.PCD
+    elif source_lower.endswith('.las'):
+        return OusterIoType.LAS
     else:
-        raise ValueError('Expecting .pcap, .osf, .bag, or .csv.')
+        raise ValueError('Expecting .pcap, .osf, .bag, .ply, .pcd, .las or .csv.')
 
 
 def io_type_from_magic(source: str) -> Optional[OusterIoType]:
@@ -45,9 +60,16 @@ def io_type_from_magic(source: str) -> Optional[OusterIoType]:
     try:
         import magic
         # Note - python-magic doesn't know what .osf or .bag files are.
-        if magic.from_file(os.path.realpath(source),
-                           mime=True) == 'application/vnd.tcpdump.pcap':
+        type_wizard = magic.from_file(os.path.realpath(source))
+        if "pcap capture file" in type_wizard:
             return OusterIoType.PCAP
+        elif "Point Cloud Data" in type_wizard:
+            return OusterIoType.PCD
+        elif "LIDAR point data records" in type_wizard:
+            return OusterIoType.LAS
+        elif "CSV text" in type_wizard:
+            return OusterIoType.CSV
+
     except ImportError:
         pass
     return None
@@ -55,15 +77,12 @@ def io_type_from_magic(source: str) -> Optional[OusterIoType]:
 
 def io_type(source: str) -> OusterIoType:
     """Return a OusterIoType given a source arg str"""
-    # source cannot be a CSV (or, in the future, LAS or PLY)
-    proper_source_list = [OusterIoType.PCAP, OusterIoType.OSF, OusterIoType.ROSBAG]
     if os.path.isfile(source):
         magic_type = io_type_from_magic(source)
-        if magic_type and magic_type in proper_source_list:
+        if magic_type:
             return magic_type
         io_type = io_type_from_extension(source)
-        if io_type in proper_source_list:
-            return io_type
+        return io_type
     try:
         if socket.gethostbyname(source):
             return OusterIoType.SENSOR

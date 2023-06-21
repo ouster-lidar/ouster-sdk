@@ -9,8 +9,8 @@ from typing import List, Optional
 from .io_type import extension_from_io_type, io_type_from_extension, io_type, OusterIoType
 
 
-_source_arg_name = 'source'
-_output_file_arg_name = 'output_file'
+_source_arg_name: str = 'source'
+_output_file_arg_name: str = 'output_file'
 
 
 def _join_with_conjunction(things_to_join: List[str], separator: str = ', ', conjunction: str = 'or') -> str:
@@ -334,9 +334,14 @@ class SourceMultiCommand(click.MultiCommand):
             raise click.exceptions.MissingParameter(None, ctx, param=param)
         try:
             return self.commands[io_type(source)].keys()
-        except (KeyError, ValueError) as e:
+        except ValueError as e:  # noqa: F841
             click.echo(ctx.get_usage())
-            raise click.exceptions.UsageError(e)
+            raise click.exceptions.UsageError("Source type expected to be a sensor hostname, "
+                                              f"ip address, or a {file_extensions_str} file.")
+        except KeyError as e:  # noqa: F841
+            click.echo(ctx.get_usage())
+            raise click.exceptions.UsageError("Source type expected to be a sensor hostname, "
+                                              f"ip address, or a {file_extensions_str} file.")
 
     def get_command(self, ctx, name):
         """Get the click.Command object for the given command name"""
