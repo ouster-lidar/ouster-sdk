@@ -379,7 +379,10 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
               _buflen=buf).run(scans_source)
 
     if scans_source._timed_out or scans_source._scans_produced == 0:
-        click.echo(click.style(f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.", fg='yellow'))
+        click.echo(click.style(
+            f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.",
+            fg='yellow'
+        ))
         all_infos = pcap._packet_info_stream(file, scans_source._packets_consumed, None, 100)
         matched_stream = match_metadata_with_data_stream(all_infos, source.metadata)
         if not matched_stream:
