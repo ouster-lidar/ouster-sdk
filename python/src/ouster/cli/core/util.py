@@ -68,11 +68,9 @@ def get_system_info() -> dict:
 
     # TODO: try importlib_metadata again?
     sdk = pkg_resources.get_distribution('ouster-sdk')
-    tools = pkg_resources.get_distribution('ouster-sensor-tools')
 
     res['packages'] = {
-        sdk.project_name: sdk.version,
-        tools.project_name: tools.version,
+        sdk.project_name: sdk.version
     }
 
     deps = [pkg_resources.get_distribution(r) for r in sdk.requires()]
@@ -200,7 +198,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
 
     workdir = os.path.join(os.getcwd(), "ouster-bench")
     if not os.path.exists(workdir):
-        os.mkdir(workdir, mode=0o770)
+        os.mkdir(workdir)
     os.chdir(workdir)
     click.echo(f"Working directory: {workdir}")
 
@@ -228,9 +226,6 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     click.echo(f"  platform: {sys_info['platform']['platform']}")
     click.echo(f"  python: {sys_info['platform']['python_version']}")
     click.echo(f"  ouster-sdk: {sys_info['packages']['ouster-sdk']}")
-    click.echo(
-        f"  ouster-sensor-tools: {sys_info['packages']['ouster-sensor-tools']}"
-    )
 
     report['sys_info'] = sys_info
 
