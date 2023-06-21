@@ -23,9 +23,9 @@ from ouster.cli.core.util import click_ro_file
     'NEAR_IR',
     'REFLECTIVITY'],
     case_sensitive=False),
-    default="SIGNAL",
+    default="REFLECTIVITY",
     help="chanfield for output file key value. Choose between SIGNAL, NEAR_IR, "
-    "REFLECTIVITY. Default field is SIGNAL")
+    "REFLECTIVITY. Default field is REFLECTIVITY")
 @click.option('--print_process', required=False, type=bool, default=True, help="Default is On")
 @click.option('--verbose_print', required=False, type=bool, default=False,
               help="Print point cloud status much frequently. Default is Off")

@@ -12,6 +12,7 @@ import ouster.osf as osf
 from ouster.sdkx.mapping.slam import KissBackend
 import ouster.sdkx.mapping.util as util
 from ouster.sdk.viz import SimpleViz
+from ouster.sdkx.parsing import default_scan_fields
 from datetime import datetime
 import time
 
@@ -147,14 +148,14 @@ def run_slam(
     'NEAR_IR',
     'REFLECTIVITY'],
     case_sensitive=False),
-    default="SIGNAL",
+    default="REFLECTIVITY",
     help="chanfield for output file key value. Choose between SIGNAL, NEAR_IR, "
-    "REFLECTIVITY. Default field is SIGNAL")
+    "REFLECTIVITY. Default field is REFLECTIVITY")
 @click.option('--print_process', required=False, type=bool, default=True, help="Default is On")
 @click.option('--verbose_print', required=False, type=bool, default=False,
               help="Print point cloud status much frequently. Default is Off")
 def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
-                       voxel_size: float, field: Optional[str],
+                       voxel_size: float, field: str,
                        print_process: Optional[bool], verbose_print: Optional[bool]) -> None:
     """
     Point Cloud Render takes in an OSF file and saves point cloud into a file.
@@ -215,6 +216,15 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
     sensor_meta = reader.meta_store.get(osf.LidarSensor)
     info = sensor_meta.info
     sensor_id = sensor_meta.id
+
+    valid_fields = default_scan_fields(info.format.udp_profile_lidar, flags=False)
+    channel_field = client.ChanField.from_string(field)
+
+    if channel_field not in valid_fields:
+        valid_fields_str = ", ".join(map(str, list(valid_fields.keys())))
+
+        sys.exit(f"Exit! field {field} is not in the lidar UDP field\n"
+                 f"use -f and choose a valid field from {valid_fields_str}")
 
     scan_streams = reader.meta_store.find(osf.LidarScanStream)
     sensor_stream_id = next((mid for mid, m in scan_streams.items()
@@ -301,7 +311,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
             empty_pose = False
 
         points = xyzlut(scan)
-        keys = scan.field(client.ChanField.SIGNAL)
+        keys = scan.field(channel_field)
         if delta_cnt != 0 and (scan_idx + 1) % delta_cnt == 0 and (100 // parts_cnt) * \
             ((scan_idx + 1) // delta_cnt) <= 100:
             print(f"{(100//parts_cnt) * ((scan_idx+1)//delta_cnt)} % of data processed")
