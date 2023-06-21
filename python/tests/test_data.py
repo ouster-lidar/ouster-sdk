@@ -594,9 +594,9 @@ def test_lidar_packet_validator_4() -> None:
     meta_json = json.load(open(meta_file_path))
     meta_json['data_format']['columns_per_frame'] = 4096
     meta_json['data_format']['pixels_per_column'] = 16
-    meta_json['data_format']['pixel_shift_by_row'] = [0]*16
-    meta_json['beam_altitude_angles'] = [1]*16
-    meta_json['beam_azimuth_angles'] = [1]*16
+    meta_json['data_format']['pixel_shift_by_row'] = [0] * 16
+    meta_json['beam_altitude_angles'] = [1] * 16
+    meta_json['beam_azimuth_angles'] = [1] * 16
     meta_json['prod_sn'] = '1234'
     metadata2 = client.SensorInfo(json.dumps(meta_json))
 
@@ -610,7 +610,8 @@ def test_lidar_packet_validator_4() -> None:
     errors = validator.check_packet(buf, n_bytes)
     assert len(errors) == 2
     assert type(errors[0]) == client.PacketIdError
-    assert str(errors[0]) == 'Metadata init_id/sn does not match: expected by metadata - 5431292/1234, but got from packet buffer - 5431292/122150000150'
+    assert str(
+        errors[0]) == 'Metadata init_id/sn does not match: expected by metadata - 5431292/1234, but got from packet buffer - 5431292/122150000150'
     assert type(errors[1]) == client.PacketSizeError
     assert str(errors[1]) == 'Expected a packet of size 1280 but got a buffer of size 8448'
     _pcap.replay_uninitialize(pcap_handle)
