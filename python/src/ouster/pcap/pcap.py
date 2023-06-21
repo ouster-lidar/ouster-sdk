@@ -140,7 +140,7 @@ class Pcap(PacketSource):
             try:
                 if (packet_info.dst_port == self._metadata.udp_port_lidar):
                     for error in validator.check_packet(buf, n):
-                        self._errors[error] += 1  #  accumulate counts of errors
+                        self._errors[error] += 1  # accumulate counts of errors
                     lp = LidarPacket(
                         buf[0:n],
                         self._metadata,

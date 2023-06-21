@@ -130,6 +130,7 @@ class PacketIdError(PacketValidationFailure):
     """Exception raised when init_id/sn from metadata and packet doesn't match."""
     pass
 
+
 class PacketSizeError(PacketValidationFailure):
     """Exception raised when the packet size wrong for the given metadata."""
     pass
@@ -165,7 +166,8 @@ class LidarPacketValidator:
 
     def packet_size_valid(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
         if self._pf.lidar_packet_size != n_bytes:
-            return PacketSizeError(f"Expected a packet of size {self._pf.lidar_packet_size} but got a buffer of size {n_bytes}")
+            return PacketSizeError(
+                f"Expected a packet of size {self._pf.lidar_packet_size} but got a buffer of size {n_bytes}")
         return None
 
 
