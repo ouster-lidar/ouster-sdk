@@ -537,7 +537,8 @@ def test_lidar_packet_validator() -> None:
         assert type(errors) == list
         assert len(errors) == 1
         assert str(e) == str(errors[0])
-        assert str(e) == "Metadata init_id/sn does not match: expected by metadata - 1234/5678, but got from packet buffer - 5431292/122150000150"
+        assert str(e) == "Metadata init_id/sn does not match: expected by metadata \
+- 1234/5678, but got from packet buffer - 5431292/122150000150"
         pass
     else:
         assert False, "Expected an exception to be raised by client.LidarPacket."
@@ -565,7 +566,8 @@ def test_lidar_packet_validator_2() -> None:
 
 
 def test_lidar_packet_validator_3() -> None:
-    """LidarPacketValidator check_packet should identify a packet that's the wrong size according to the lidar UDP profile."""
+    """LidarPacketValidator check_packet should identify a packet
+    that's the wrong size according to the lidar UDP profile."""
     meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
     pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     metadata = client.SensorInfo(open(meta_file_path).read())
@@ -588,7 +590,8 @@ def test_lidar_packet_validator_3() -> None:
 
 
 def test_lidar_packet_validator_4() -> None:
-    """LidarPacketValidator check_packet should identify a packet that's the wrong size according to the data format."""
+    """LidarPacketValidator check_packet should identify a packet
+    that's the wrong size according to the data format."""
     meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
     pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     meta_json = json.load(open(meta_file_path))
@@ -611,7 +614,8 @@ def test_lidar_packet_validator_4() -> None:
     assert len(errors) == 2
     assert type(errors[0]) == client.PacketIdError
     assert str(
-        errors[0]) == 'Metadata init_id/sn does not match: expected by metadata - 5431292/1234, but got from packet buffer - 5431292/122150000150'
+        errors[0]) == 'Metadata init_id/sn does not match: expected by metadata - \
+5431292/1234, but got from packet buffer - 5431292/122150000150'
     assert type(errors[1]) == client.PacketSizeError
     assert str(errors[1]) == 'Expected a packet of size 1280 but got a buffer of size 8448'
     _pcap.replay_uninitialize(pcap_handle)

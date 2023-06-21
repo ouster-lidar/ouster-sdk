@@ -73,7 +73,7 @@ def print_stream_table(all_infos):
     table.set_style(PLAIN_COLUMNS)
     table.align = 'r'
     table.align['Src IP'] = 'l'  # type: ignore
-    click.echo(indent(str(table), '  '))
+    click.echo(click.style(indent(str(table), '  '), fg='yellow'))
 
 
 @pcap_group.command(name='info')
@@ -278,136 +278,128 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
     if rate not in SimpleViz._playback_rates:
         raise click.ClickException("Invalid rate specified")
 
-    try:
+    if not multi:
+        # Single sensor pcap handling
 
-        if not multi:
-            # Single sensor pcap handling
+        # the only reason why we can't always use PcapMulti is that we still
+        # want to pass custom lidar_port and imu_port from command line (for
+        # now at least)
+        # TODO[pb]: Decide when we can remove the custom lidar_port/imu_port
+        #           params from command line and switch everything to a
+        #           single PcapMulti source (it will simplify branching in
+        #           pcap_viz)
 
-            # the only reason why we can't always use PcapMulti is that we still
-            # want to pass custom lidar_port and imu_port from command line (for
-            # now at least)
-            # TODO[pb]: Decide when we can remove the custom lidar_port/imu_port
-            #           params from command line and switch everything to a
-            #           single PcapMulti source (it will simplify branching in
-            #           pcap_viz)
+        meta = resolve_metadata(file, meta)
+        if not meta:
+            raise click.ClickException(
+                "File not found, please specify a metadata file with `-f`")
+        with open(meta) as json:
+            click.echo(f"Reading metadata from: {meta}")
+            info = client.SensorInfo(json.read())
 
-            meta = resolve_metadata(file, meta)
-            if not meta:
-                raise click.ClickException(
-                    "File not found, please specify a metadata file with `-f`")
-            with open(meta) as json:
-                click.echo(f"Reading metadata from: {meta}")
-                info = client.SensorInfo(json.read())
+        source = pcap.Pcap(file,
+                           info,
+                           lidar_port=lidar_port,
+                           imu_port=imu_port,
+                           _soft_id_check=soft_id_check)
 
-            source = pcap.Pcap(file,
-                               info,
-                               lidar_port=lidar_port,
-                               imu_port=imu_port,
-                               _soft_id_check=soft_id_check)
+        # Handle extrinsics, for single sensor source
+        ext_found = False
+        if extrinsics:
+            source.metadata.extrinsic = np.array(extrinsics).reshape((4, 4))
+        else:
+            # Lookup for known extrinsics
+            ext_results = resolve_extrinsics(data_path=file,
+                                             infos=[source.metadata])
+            if ext_results and ext_results[0]:
+                source.metadata.extrinsic = ext_results[0][0]
+                ext_found = True
 
-            # Handle extrinsics, for single sensor source
-            ext_found = False
-            if extrinsics:
-                source.metadata.extrinsic = np.array(extrinsics).reshape((4, 4))
-            else:
-                # Lookup for known extrinsics
-                ext_results = resolve_extrinsics(data_path=file,
-                                                 infos=[source.metadata])
-                if ext_results and ext_results[0]:
-                    source.metadata.extrinsic = ext_results[0][0]
-                    ext_found = True
+        if extrinsics or ext_found:
+            print(f"Using sensor extrinsics:\n{source.metadata.extrinsic}")
 
-            if extrinsics or ext_found:
-                print(f"Using sensor extrinsics:\n{source.metadata.extrinsic}")
+        # enable parsing flags field
+        field_types = default_scan_fields(
+            source.metadata.format.udp_profile_lidar, flags=True)
 
-            # enable parsing flags field
-            field_types = default_scan_fields(
-                source.metadata.format.udp_profile_lidar, flags=True)
+        scans_source = client.Scans(source,
+                                    fields=field_types,
+                                    complete=filter,
+                                    timeout=timeout)
 
-            scans_source = client.Scans(source,
-                                        fields=field_types,
-                                        complete=filter,
-                                        timeout=timeout)
+        ls_viz = LidarScanViz(scans_source.metadata)
 
-            ls_viz = LidarScanViz(scans_source.metadata)
+    elif HAS_MULTI and multi:
+        # Multi sensor pcap handling
 
-        elif HAS_MULTI and multi:
-            # Multi sensor pcap handling
+        metadata_paths = resolve_metadata_multi(file)
+        if not metadata_paths:
+            raise click.ClickException(
+                "Metadata jsons not found. Make sure that metadata json files "
+                "have common prefix with a PCAP file")
 
-            metadata_paths = resolve_metadata_multi(file)
-            if not metadata_paths:
-                raise click.ClickException(
-                    "Metadata jsons not found. Make sure that metadata json files "
-                    "have common prefix with a PCAP file")
+        source = PcapMulti(file,
+                           metadata_paths=metadata_paths,
+                           _soft_id_check=soft_id_check,
+                           _resolve_extrinsics=True)
 
-            source = PcapMulti(file,
-                               metadata_paths=metadata_paths,
-                               _soft_id_check=soft_id_check,
-                               _resolve_extrinsics=True)
+        # print extrinsics if any were found
+        for ext_source, m in zip(source.extrinsics_source,
+                                 source._metadata):
+            if ext_source:
+                print(f"Found extrinsics for {m.sn} "
+                      f"(from {ext_source}):\n{m.extrinsic}")
 
-            # print extrinsics if any were found
-            for ext_source, m in zip(source.extrinsics_source,
-                                     source._metadata):
-                if ext_source:
-                    print(f"Found extrinsics for {m.sn} "
-                          f"(from {ext_source}):\n{m.extrinsic}")
+        # enable parsing flags field
+        field_types = [
+            default_scan_fields(m.format.udp_profile_lidar, flags=True)
+            for m in source.metadata
+        ]
 
-            # enable parsing flags field
-            field_types = [
-                default_scan_fields(m.format.udp_profile_lidar, flags=True)
-                for m in source.metadata
-            ]
+        # set sensor names as idx in the source
+        for idx, m in enumerate(source.metadata):
+            source.metadata[idx].hostname = f"sensoridx: {idx}"
 
-            # set sensor names as idx in the source
-            for idx, m in enumerate(source.metadata):
-                source.metadata[idx].hostname = f"sensoridx: {idx}"
+        ls_viz = MultiLidarScanViz(source.metadata, source_name=file)
 
-            ls_viz = MultiLidarScanViz(source.metadata, source_name=file)
+        lidar_source = ScansMulti(source,
+                                  fields=field_types,
+                                  complete=filter)
 
-            lidar_source = ScansMulti(source,
-                                      fields=field_types,
-                                      complete=filter)
+        scans_source = collate_scans(lidar_source, use_unsynced=True)
 
-            scans_source = collate_scans(lidar_source, use_unsynced=True)
+    if cycle:
+        # NOTE: itertools.cycle() usage below consumes a lot of memory
+        # since it keeps every object from iterator which is a whole file.
+        # Need to be revisited if we want to play huge files on a limited
+        # RAM machines.
+        scans_source = itertools.cycle(scans_source)
 
-        if cycle:
-            # NOTE: itertools.cycle() usage below consumes a lot of memory
-            # since it keeps every object from iterator which is a whole file.
-            # Need to be revisited if we want to play huge files on a limited
-            # RAM machines.
-            scans_source = itertools.cycle(scans_source)
+    SimpleViz(ls_viz, rate=rate, pause_at=pause_at,
+              _buflen=buf).run(scans_source)
 
-        SimpleViz(ls_viz, rate=rate, pause_at=pause_at,
-                  _buflen=buf).run(scans_source)
+    if scans_source._timed_out or scans_source._scans_produced == 0:
+        click.echo(click.style(f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.", fg='yellow'))
+        all_infos = pcap._packet_info_stream(file, scans_source._packets_consumed, None, 100)
+        matched_stream = match_metadata_with_data_stream(all_infos, source.metadata)
+        if not matched_stream:
+            click.echo(click.style(
+                "No UDP stream in the data file has a destination port "
+                f"of {source.metadata.udp_port_lidar}, "
+                "which is the port specified in the metadata file.\n", fg='yellow'))
+        click.echo(click.style("The packets read contained the following data streams:", fg='yellow'))
+        # TODO: check packet sizes and print appropriate errors if there's a mismatch
+        print_stream_table(all_infos)
+        if source._errors:
+            click.echo(click.style("Packet errors were detected in the dataset:", fg='yellow'))
+            for k, v in source._errors.items():
+                click.echo(click.style(f"    {str(k)}, count={v}", fg='yellow'))
 
-        if scans_source._timed_out or scans_source._scans_produced == 0:
-            click.echo(f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.")
-            all_infos = pcap._packet_info_stream(file, scans_source._packets_consumed, None, 100)
-            matched_stream = match_metadata_with_data_stream(all_infos, source.metadata)
-            if not matched_stream:
-                click.echo(
-                    "No UDP stream in the data file has a destination port "
-                    f"of {source.metadata.udp_port_lidar}, "
-                    "which is the port specified in the metadata file.\n")
-            click.echo("The packets read contained the following data streams:")
-            # TODO: check packet sizes and print appropriate errors if there's a mismatch
-            print_stream_table(all_infos)
-            if source._errors:
-                click.echo(click.style("Packet errors were detected in the dataset:", fg='yellow'))
-                for k, v in source._errors.items():
-                    click.echo(click.style(f"    {str(k)}, count={v}", fg='yellow'))
+    if source.id_error_count and not soft_id_check:
+        click.echo(click.style("NOTE: To disable strict init_id/sn checking use "
+              "--soft-id-check option (may lead to parsing "
+              "errors)", fg='yellow'))
 
-    finally:
-        # TODO: remove try/finally
-        """
-        if source.id_error_count:
-            print(f"WARNING: {source.id_error_count} lidar_packets with "
-                  "mismatched init_id/sn were detected.")
-            if not soft_id_check:
-                print("NOTE: To disable strict init_id/sn checking use "
-                      "--soft-id-check option (may lead to parsing "
-                      "errors)")
-        """
     click.echo("Done")
 
 

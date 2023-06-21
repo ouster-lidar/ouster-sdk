@@ -630,6 +630,7 @@ def test_validation():
     reader = pcap.Pcap(pcap_file_path, metadata)
     consume(reader)
     assert reader._errors == {
-        client.PacketIdError('Metadata init_id/sn does not match: expected by metadata - 123/122150000150, but got from packet buffer - 5431292/122150000150'): 64,
+        client.PacketIdError('Metadata init_id/sn does not match: expected by metadata - \
+123/122150000150, but got from packet buffer - 5431292/122150000150'): 64,
         client.PacketSizeError('Expected a packet of size 41216 but got a buffer of size 8448'): 64
     }
