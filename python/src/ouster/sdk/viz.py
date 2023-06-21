@@ -492,6 +492,7 @@ class LidarScanViz:
             (ord('T'), 0): LidarScanViz.toggle_scan_poses,
             # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
             (ord('C'), 0): LidarScanViz.update_flags_mode,
+            (ord('/'), 1): LidarScanViz.print_keys,
         }
 
         def handle_keys(self: LidarScanViz, ctx: WindowCtx, key: int,
@@ -500,6 +501,31 @@ class LidarScanViz:
                 key_bindings[key, mods](self)
                 self.draw()
             return True
+
+        key_definitions: Dict[str, str] = {
+            'w': "Camera pitch up",
+            's': "Camera pitch down",
+            'a': "Camera yaw left",
+            'd': "Camera yaw right",
+            "e / E": "Increase/decrease size of displayed 2D images",
+            "p / P": "Increase/decrease point size",
+            "R": "Reset camera orientation",
+            "0": "Toggle orthographic camera",
+            "1": "Toggle point cloud 1 visibility",
+            "2": "Toggle point cloud 2 visibility",
+            "b": "Cycle top 2D image",
+            "n": "Cycle bottom 2D image",
+            'm': "Cycle through point cloud coloring mode",
+            'f': "Cycle through point cloud color palette",
+            't': "Toggle scan poses",
+            '?': "Print keys to standard out",
+            "= / -": "Dolly in and out",
+            "' / \"": "Increase/decrease spacing in range markers",
+            'SHIFT': "Camera Translation with mouse drag",
+            'ESC': "Exit the application",
+        }
+        self._key_definitions = key_definitions
+        print("Press \'?\' to print key bindings")
 
         push_point_viz_handler(self._viz, self, handle_keys)
         add_default_controls(self._viz)
@@ -612,6 +638,13 @@ class LidarScanViz:
             # not bothering with OSD
             # TODO[pb]: hmm, probably should bother with OSD somehow
             print("Flags mode:", self._flags_mode.name)
+
+    def print_keys(self) -> None:
+        with self._lock:
+            print(">---------------- Key Bindings --------------<")
+            for key_binding in self._key_definitions:
+                print(f"{key_binding:^5}: {self._key_definitions[key_binding]}")
+            print(">--------------------------------------------<")
 
     @property
     def scan(self) -> client.LidarScan:
@@ -950,6 +983,16 @@ class SimpleViz:
             (ord('X'), 1): SimpleViz.toggle_img_recording,
             (ord('Z'), 1): SimpleViz.screenshot,
         }
+
+        key_definitions: Dict[str, str] = {
+            'o': "Toggle information overlay",
+            'X': "Toggle a continuous saving of screenshots",
+            'Z': "Take a screenshot!",
+            ". / ,": "Step forward one frame",
+            "> / <": "Increase/decrease playback rate (during replay)",
+            'SPACE': "Pause and unpause",
+        }
+        self._scan_viz._key_definitions.update(key_definitions)
 
         # only allow changing rate when not in "live" mode
         if not self._live:
