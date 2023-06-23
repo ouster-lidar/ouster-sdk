@@ -39,7 +39,7 @@ def test_service_info_as_text_str(monkeypatch):
         assert prod_line == '-'
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
-        text, color= service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        text, color = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
         server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
