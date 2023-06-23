@@ -33,7 +33,7 @@ host_addresses = [
 text_columns = ["HOSTNAME", "ADDRESS", "MODEL", "UDP DESTINATION", "DEST. LIDAR PORT", "DEST. IMU PORT"]
 text_column_widths = [28, 20, 16, 20, 20, 20]
 mdns_services = ["_roger._tcp.local."]
-propagate_exceptions = False
+rethrow_exceptions = False
 
 
 class AsyncServiceDiscovery:
@@ -94,9 +94,10 @@ def service_info_as_text_str(info) -> str:
                 udp_port_lidar = str(config.udp_port_lidar)
                 udp_port_imu = str(config.udp_port_imu)
         except Exception as e:
-            if propagate_exceptions:
-                print(e)
+            if rethrow_exceptions:
                 raise
+            else:
+                click.echo(click.style(e, fg='yellow'))
     color = 'white'
     if udp_dest in host_addresses:
         color = 'green'
@@ -121,6 +122,8 @@ async def async_display_service_info(zeroconf: Zeroconf, service_type: str, name
 def discover(ctx, timeout, continuous):
     """Perform a one-time or continuous network search for Ouster sensors.
     """
+    global rethrow_exceptions
+    rethrow_exceptions = ctx.obj.get('TRACEBACK', False)
     strs = text_columns
     # TODO: extract a text row fmt method
     for i in range(len(strs)):
