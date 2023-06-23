@@ -13,8 +13,7 @@ from socket import AddressFamily
 import asyncio
 import click
 from ouster.cli.core import cli
-from ouster.client import SensorInfo, get_config
-from ouster.client._client import Client
+from ouster.client import get_config
 from zeroconf import IPVersion, ServiceStateChange, Zeroconf
 from zeroconf.asyncio import (
     AsyncServiceBrowser,
