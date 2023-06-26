@@ -368,17 +368,18 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
 
         scans_source = collate_scans(lidar_source, use_unsynced=True)
 
+    scans_source2 = scans_source
     if cycle:
         # NOTE: itertools.cycle() usage below consumes a lot of memory
         # since it keeps every object from iterator which is a whole file.
         # Need to be revisited if we want to play huge files on a limited
         # RAM machines.
-        scans_source = itertools.cycle(scans_source)
+        scans_source2 = itertools.cycle(scans_source)
 
     SimpleViz(ls_viz, rate=rate, pause_at=pause_at,
-              _buflen=buf).run(scans_source)
+              _buflen=buf).run(scans_source2)
 
-    if scans_source._timed_out or scans_source._scans_produced == 0:
+    if type(scans_source) == client.Scans and (scans_source._timed_out or scans_source._scans_produced == 0):
         click.echo(click.style(
             f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.",
             fg='yellow'
@@ -398,7 +399,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
             for k, v in source._errors.items():
                 click.echo(click.style(f"    {str(k)}, count={v}", fg='yellow'))
 
-    if source.id_error_count and not soft_id_check:
+    if hasattr(source, 'id_error_count') and source.id_error_count and not soft_id_check:
         click.echo(click.style("NOTE: To disable strict init_id/sn checking use "
               "--soft-id-check option (may lead to parsing "
               "errors)", fg='yellow'))

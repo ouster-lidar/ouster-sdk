@@ -992,7 +992,8 @@ class SimpleViz:
             "> / <": "Increase/decrease playback rate (during replay)",
             'SPACE': "Pause and unpause",
         }
-        self._scan_viz._key_definitions.update(key_definitions)
+        if hasattr(self._scan_viz, "_key_definitions"):
+            self._scan_viz._key_definitions.update(key_definitions)
 
         # only allow changing rate when not in "live" mode
         if not self._live:
