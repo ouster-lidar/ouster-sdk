@@ -212,7 +212,10 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 @pcap_group.command(name="viz")
 @click.argument('file', required=True, type=click.Path(exists=True))
 @click.option('-f', '--meta', required=False, type=click_ro_file)
-@click.option('-c', '--cycle', is_flag=True, help="Loop playback")
+# TWS 20230627: '--cycle' is a deprecated option and only hidden to prevent breaking scripts that may be using it
+@click.option('-c', '--cycle', is_flag=True, help="Loop playback", hidden=True)
+@click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
+    help="Loop, stop, or exit after reaching end of file")
 @click.option('-l', '--lidar-port', default=None, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
@@ -243,7 +246,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
               default=10.0,
               help="Timeout in seconds, after which the script will terminate "
               "if no lidar data is encountered in the PCAP file")
-def pcap_viz(file: str, meta: Optional[str], cycle: bool,
+def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
              lidar_port: Optional[int], imu_port: Optional[int], filter: bool,
              buf: int, rate: float, extrinsics: Optional[List[float]],
              soft_id_check: bool, pause: bool, pause_at: int,
@@ -301,6 +304,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
                            info,
                            lidar_port=lidar_port,
                            imu_port=imu_port,
+                           loop=(on_eof == 'loop'),
                            _soft_id_check=soft_id_check)
 
         # Handle extrinsics, for single sensor source
@@ -368,16 +372,8 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool,
 
         scans_source = collate_scans(lidar_source, use_unsynced=True)
 
-    scans_source2 = scans_source
-    if cycle:
-        # NOTE: itertools.cycle() usage below consumes a lot of memory
-        # since it keeps every object from iterator which is a whole file.
-        # Need to be revisited if we want to play huge files on a limited
-        # RAM machines.
-        scans_source2 = itertools.cycle(scans_source)
-
-    SimpleViz(ls_viz, rate=rate, pause_at=pause_at,
-              _buflen=buf).run(scans_source2)
+    SimpleViz(ls_viz, rate=rate, pause_at=pause_at, on_eof=on_eof,
+              _buflen=buf).run(scans_source)
 
     if type(scans_source) == client.Scans and (scans_source._timed_out or scans_source._scans_produced == 0):
         click.echo(click.style(

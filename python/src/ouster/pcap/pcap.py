@@ -50,6 +50,7 @@ class Pcap(PacketSource):
                  rate: float = 0.0,
                  lidar_port: Optional[int] = None,
                  imu_port: Optional[int] = None,
+                 loop: bool = False,
                  _soft_id_check: bool = False):
         """Read a single sensor data stream from a packet capture.
 
@@ -76,6 +77,7 @@ class Pcap(PacketSource):
             rate: Output packets in real time, if non-zero
             lidar_port: Specify the destination port of lidar packets
             imu_port: Specify the destination port of imu packets
+            loop: Specify whether to reload the PCAP file when the end is reached
             _soft_id_check: if True, don't skip lidar packets buffers on init_id/sn mismatch
         """
 
@@ -88,6 +90,7 @@ class Pcap(PacketSource):
         self._metadata.udp_port_lidar = lidar_port
         self._metadata.udp_port_imu = imu_port
 
+        self.loop = loop
         self._soft_id_check = _soft_id_check
         self._id_error_count = 0    # TWS 20230615 TODO generialize error counting and reporting
         self._errors = defaultdict(int)  # type: Dict[PacketValidationFailure,int]
@@ -121,9 +124,14 @@ class Pcap(PacketSource):
         validator = LidarPacketValidator(self.metadata)
         while True:
             with self._lock:
-                if not (self._handle
-                        and _pcap.next_packet_info(self._handle, packet_info)):
+                if not self._handle:
                     break
+                if not _pcap.next_packet_info(self._handle, packet_info):
+                    if self.loop:
+                        _pcap.replay_reset(self._handle)
+                        _pcap.next_packet_info(self._handle, packet_info)
+                    else:
+                        break
                 n = _pcap.read_packet(self._handle, buf)
 
             # if rate is set, read in 'real time' simulating UDP stream

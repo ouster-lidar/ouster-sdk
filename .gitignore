@@ -13,3 +13,14 @@ out/
 
 # vim
 *.swp
+
+# CMake, Ninja
+.ninja_deps
+.ninja_log
+CMakeFiles
+CTestTestfile.cmake
+
+# Built artifacts
+generated
+rules.ninja
+*.a

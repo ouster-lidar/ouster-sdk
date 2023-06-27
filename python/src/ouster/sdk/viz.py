@@ -949,6 +949,7 @@ class SimpleViz:
                  arg: Union[client.SensorInfo, AnyScanViz],
                  rate: Optional[float] = None,
                  pause_at: int = -1,
+                 on_eof: str = 'exit',
                  _buflen: int = 50) -> None:
         """
         Args:
@@ -981,6 +982,7 @@ class SimpleViz:
         self._rate_ind = SimpleViz._playback_rates.index(rate or 0.0)
         self._buflen = _buflen
         self._pause_at = pause_at
+        self._on_eof = on_eof
 
         # pausing and stepping
         self._cv = threading.Condition()
@@ -1130,40 +1132,41 @@ class SimpleViz:
         try:
             while True:
                 # wait until unpaused, step, or quit
-                with self._cv:
-                    self._cv.wait_for(lambda: not self._paused or self._step or
-                                      self._proc_exit)
-                    if self._proc_exit:
+                try:
+                    with self._cv:
+                        self._cv.wait_for(lambda: not self._paused or self._step or
+                                          self._proc_exit)
+                        if self._proc_exit:
+                            break
+                        if self._step:
+                            seek_ind = seekable.next_ind + self._step - 1
+                            self._step = 0
+                            if not seekable.seek(seek_ind):
+                                continue
+                        period = self._frame_period()
+
+                    # process new data
+                    scan_idx = seekable.next_ind
+                    self._scan_viz.scan = next(seekable)
+                    self._scan_viz.scan_ind = scan_idx
+                    self._scan_viz.draw(update=False)
+
+                    if self._pause_at == scan_idx:
+                        self._paused = True
+                        self._update_playback_osd()
+
+                    # sleep for remainder of scan period
+                    to_sleep = max(0.0, period - (time.monotonic() - last_ts))
+                    if scan_idx > 0:
+                        time.sleep(to_sleep)
+
+                    last_ts = time.monotonic()
+
+                    # show new data
+                    self._viz.update()
+                except StopIteration:
+                    if self._on_eof == 'exit':
                         break
-                    if self._step:
-                        seek_ind = seekable.next_ind + self._step - 1
-                        self._step = 0
-                        if not seekable.seek(seek_ind):
-                            continue
-                    period = self._frame_period()
-
-                # process new data
-                scan_idx = seekable.next_ind
-                self._scan_viz.scan = next(seekable)
-                self._scan_viz.scan_ind = scan_idx
-                self._scan_viz.draw(update=False)
-
-                if self._pause_at == scan_idx:
-                    self._paused = True
-                    self._update_playback_osd()
-
-                # sleep for remainder of scan period
-                to_sleep = max(0.0, period - (time.monotonic() - last_ts))
-                if scan_idx > 0:
-                    time.sleep(to_sleep)
-
-                last_ts = time.monotonic()
-
-                # show new data
-                self._viz.update()
-
-        except StopIteration:
-            pass
 
         finally:
             # signal rendering (main) thread to exit, with a delay

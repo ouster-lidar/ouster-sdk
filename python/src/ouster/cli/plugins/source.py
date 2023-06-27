@@ -231,7 +231,10 @@ def pcap_slice(ctx, *args, **kwargs) -> None:
 
 @click.command
 @click.option('-m', '--meta', required=False, type=click_ro_file)  # TWS 20230426: changed this to `-m` from `-f`.
-@click.option('-c', '--cycle', is_flag=True, help="Loop playback")
+# TWS 20230627: '--cycle' is a deprecated option and only hidden to prevent breaking scripts that may be using it
+@click.option('-c', '--cycle', is_flag=True, help="Loop playback", hidden=True)
+@click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
+    help="Loop, stop, or exit after reaching end of file")
 @click.option('-l', '--lidar-port', default=None, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")

@@ -25,6 +25,7 @@ from .osf import osf_group
 this_package_name = 'ouster-sdk'
 APP_NAME = 'ouster'
 TRACEBACK = False
+TRACEBACK_FLAG = '--traceback'
 
 
 logger = logging.getLogger("cli-args-logger")
@@ -77,7 +78,7 @@ def print_version(ctx, param, value):
 @click.group()
 @click.option('-v', '--version', is_flag=True, callback=print_version,
               expose_value=False, is_eager=True)
-@click.option("--traceback",
+@click.option(TRACEBACK_FLAG,
               "trace",
               is_flag=True,
               default=False,
@@ -141,7 +142,7 @@ def _top_level_inferred(dist):
     return list(filter(lambda name: name is not None and '.' not in name, opt_names))
 
 
-def find_plugins():
+def find_plugins(show_traceback: bool = False):
     import ouster.cli.plugins
     import pkgutil
     import importlib
@@ -159,19 +160,26 @@ def find_plugins():
             else:
                 submodules.append(module)
                 importlib.import_module(module.name)
-        except Exception:
+        except Exception as e:
             load_fail = True
             logger.debug(f"Failed to load plugin {module.name} due to an error.")
             click.echo(click.style(
-                f"Failed to load plugin {module.name} due to an error.",
+                f"Failed to load plugin {module.name} due to an error: {e}",
                 fg="yellow"
-            ))
-            click.echo(click.style(
-                traceback.format_exc(),
-                fg="yellow"
-            ))
+            ), err=True)
+            if show_traceback:
+                click.echo(click.style(
+                    traceback.format_exc(),
+                    fg="yellow"
+                ), err=True)
+            else:
+                click.echo(click.style(
+                    f"Run {os.path.basename(os.path.sys.argv[0])} {TRACEBACK_FLAG} for debug output.",
+                    fg="yellow"
+                ), err=True)
     if load_fail:
         log_packages()
+
     return submodules
 
 
@@ -215,7 +223,7 @@ def run(args=None) -> None:
     logger.debug(platform.python_version() + " : " + " ".join(sys.argv))
 
     try:
-        find_plugins()
+        find_plugins(TRACEBACK_FLAG in sys.argv)
         exit_code = cli.main(args=args, standalone_mode=False)
     except click.Abort:
         print('Aborted!')

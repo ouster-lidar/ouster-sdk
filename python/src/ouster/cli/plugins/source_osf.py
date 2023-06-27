@@ -63,7 +63,10 @@ def osf_info(ctx, *args, **kwargs) -> None:
 
 
 @click.command
-@click.option("-c", "--cycle", is_flag=True, help="Loop playback")
+# TWS 20230627: '--cycle' is a deprecated option and only hidden to prevent breaking scripts that may be using it
+@click.option("-c", "--cycle", is_flag=True, help="Loop playback", hidden=True)
+@click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
+    help="Loop, stop, or exit after reaching end of file")
 @click.option("-p", "--pause", is_flag=True, help="Pause at first lidar scan")
 @click.option("--pause-at",
               default=-1,
@@ -74,13 +77,14 @@ def osf_info(ctx, *args, **kwargs) -> None:
 @click.option("--accum-every",
               default=50,
               help="Accumulate lidar scan clouds every Nth scan")
-@click.option("--skip-poses",
-              is_flag=True,
-              help="Don't read and don't apply trajectories")
-@click.option("--alt-traj-file",
-              required=False,
-              type=click.Path(exists=True, dir_okay=False),
-              help="Alternative source of trajectories (OSF with traj msgs)")
+# FIXME! apparently these options were removed but not updated here
+# @click.option("--skip-poses",
+#              is_flag=True,
+#              help="Don't read and don't apply trajectories")
+# @click.option("--alt-traj-file",
+#              required=False,
+#              type=click.Path(exists=True, dir_okay=False),
+#              help="Alternative source of trajectories (OSF with traj msgs)")
 @click.option("-r", "--rate", default=1.0, help="Playback rate")
 @click.option("--extrinsics",
               type=float,
