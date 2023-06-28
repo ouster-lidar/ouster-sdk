@@ -20,6 +20,7 @@ from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
 from typing_extensions import Protocol, runtime_checkable
 import weakref
 import logging
+import click
 
 import numpy as np
 from PIL import Image as PILImage
@@ -31,14 +32,37 @@ from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
                    spezia_palette, grey_palette, viridis_palette, magma_palette)
 
-from ouster.sdkx.util import img_aspect_ratio  # type: ignore
+from ouster.sdkx.util import img_aspect_ratio  # type:ignore
+import platform
 
 logger = logging.getLogger("viz-logger")
+client_log_location = None
+if platform.system() == "Windows":
+    client_log_dir = os.getenv("LOCALAPPDATA")
 
-# limit ouster_client log statements to "debug" and direct the output to log file
-# rather than the console (default).
-# TODO uncomment when we figure out where we want to write it everywhere, have more useful logs
-# client.init_logger("info", "ouster-python.log")
+    if not client_log_dir:
+        client_log_dir = os.getenv("TMP")
+        if not client_log_dir:
+            client_log_dir = "C:"
+    client_log_dir = os.path.join(client_log_dir, "ouster-cli")
+    client_log_location = os.path.join(client_log_dir, "ouster-sdk.log")
+
+else:
+    client_log_dir = os.path.join(os.path.expanduser("~"), ".ouster-cli")
+    client_log_location = os.path.join(client_log_dir, "ouster-sdk.log")
+
+logging_enabled = True
+if not os.path.exists(client_log_dir):
+    try:
+        os.makedirs(client_log_dir)
+    except Exception as e:
+        click.echo(f"Can't enable logging: {e}")
+        logging_enabled = False
+if not os.access(client_log_dir, os.W_OK):
+    click.echo("Can't enable logging")
+    logging_enabled = False
+if logging_enabled:
+    client.init_logger("info", client_log_location)
 
 T = TypeVar('T')
 

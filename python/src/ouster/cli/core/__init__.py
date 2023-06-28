@@ -4,6 +4,10 @@ import sys
 import traceback
 import collections
 import click
+import logging
+from logging.handlers import RotatingFileHandler
+import platform
+import os
 from importlib_metadata import distributions, version
 from more_itertools import always_iterable
 import inspect
@@ -21,6 +25,15 @@ from .osf import osf_group
 this_package_name = 'ouster-sdk'
 APP_NAME = 'ouster'
 TRACEBACK = False
+
+
+logger = logging.getLogger("cli-args-logger")
+
+
+def log_packages():
+    import pkg_resources
+    package_list = sorted([f"{item.key}=={item.version}" for item in pkg_resources.working_set])
+    logger.debug(str(package_list))
 
 
 class SourceArgsException(Exception):
@@ -133,6 +146,7 @@ def find_plugins():
     import pkgutil
     import importlib
     submodules = []
+    load_fail = False
     for module in pkgutil.iter_modules(
         ouster.cli.plugins.__path__, ouster.cli.plugins.__name__ + "."
     ):
@@ -146,6 +160,8 @@ def find_plugins():
                 submodules.append(module)
                 importlib.import_module(module.name)
         except Exception:
+            load_fail = True
+            logger.debug(f"Failed to load plugin {module.name} due to an error.")
             click.echo(click.style(
                 f"Failed to load plugin {module.name} due to an error.",
                 fg="yellow"
@@ -154,27 +170,71 @@ def find_plugins():
                 traceback.format_exc(),
                 fg="yellow"
             ))
+    if load_fail:
+        log_packages()
     return submodules
 
 
 def run(args=None) -> None:
     exit_code = None
+
+    if platform.system() == "Windows":
+        client_log_dir = os.getenv("LOCALAPPDATA")
+
+        if not client_log_dir:
+            client_log_dir = os.getenv("TMP")
+            if not client_log_dir:
+                client_log_dir = "C:"
+        client_log_dir = os.path.join(client_log_dir, "ouster-cli")
+        client_log_location = os.path.join(client_log_dir, "cli.log")
+    else:
+        client_log_dir = os.path.join(os.path.expanduser("~"), ".ouster-cli")
+        client_log_location = os.path.join(client_log_dir, "cli.log")
+
+    handler = None
+    if not os.path.exists(client_log_dir):
+        try:
+            os.makedirs(client_log_dir)
+        except Exception as e:
+            click.echo(f"Can't enable logging: {e}")
+            handler = logging.NullHandler()
+
+    if not os.access(client_log_dir, os.W_OK):
+        click.echo("Can't enable logging")
+        handler = logging.NullHandler()
+
+    if not handler:
+        handler = RotatingFileHandler(client_log_location, maxBytes=(5 * 1024 * 1024), backupCount=10)
+        handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
+
+    # if this is not set, it will continue on to display the log to console
+    logger.propagate = False
+
+    logger.debug(platform.python_version() + " : " + " ".join(sys.argv))
+
     try:
         find_plugins()
         exit_code = cli.main(args=args, standalone_mode=False)
     except click.Abort:
         print('Aborted!')
+        logger.debug('Aborted!')
         exit_code = 1
     except click.ClickException as e:
         e.show(file=sys.stderr)
         exit_code = e.exit_code
+        logger.debug(e)
     except ClientError as e:
         print(f'Client error: {e}', file=sys.stderr)
+        logger.debug(e)
         exit_code = 2
     except SourceArgsException as e:
         print(e.get_usage())
         print("")
         print(f"Error: Got unexpected extra arguments ({' '.join(e.get_unexpected_args())})")
+        exit_code = 3
+        logger.debug(e.get_unexpected_args())
     except Exception as e:
         print(e)
         if TRACEBACK:
@@ -182,8 +242,12 @@ def run(args=None) -> None:
             traceback.print_exc(file=sys.stderr)
             print("-" * 70)
             print(f'Internal error: {e}', file=sys.stderr)
-            exit_code = 3
-
+            exit_code = 4
+            logger.debug(e)
+    logger.debug("return code: " + str(exit_code))
+    if exit_code != 0:
+        logger.debug("error detected, listing packages")
+        log_packages()
     sys.exit(exit_code)
 
 
