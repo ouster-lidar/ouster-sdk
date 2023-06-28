@@ -41,7 +41,7 @@ class KissBackend(SLAMBackend):
 
         # filtering our zero returns makes it substantially faster for kiss-icp
         sel_flag = scan.field(client.ChanField.RANGE) != 0
-        xyz = self.xyz_lut(scan)[sel_flag]
+        xyz = self.xyz_lut(scan.field(client.ChanField.RANGE))[sel_flag]
         self.kiss_icp.register_frame(xyz, self.timestamps[sel_flag])
 
         # accumulate scan timestamps in parallel list to poses
