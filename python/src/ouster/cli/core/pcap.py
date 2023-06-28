@@ -13,6 +13,7 @@ from prettytable import PrettyTable, PLAIN_COLUMNS  # type: ignore
 from textwrap import indent
 
 from ouster import client
+from ouster.cli.core.sensor import configure_sensor
 from ouster.sdk.util import resolve_metadata
 from ouster.sdkx import packet_iter
 from ouster.sdkx.parsing import default_scan_fields
@@ -135,10 +136,14 @@ def pcap_info(file: str, n: int) -> None:
 @click.option('--legacy/--non-legacy',
               default=False,
               help="Use legacy metadata format or not")
+@click.option('-x', '--do-not-reinitialize', is_flag=True, default=False,
+              help="Do not reinitialize (by default it will reinitialize if needed)")
+@click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
+              help="Do not automatically set udp_dest (by default it will auto set udp_dest")
 def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
                 filter: bool, n_frames: Optional[int], n_seconds: float,
                 chunk_size: int, buf_size: int, timeout: float, prefix: str,
-                viz: bool, legacy: bool) -> None:
+                viz: bool, legacy: bool, do_not_reinitialize: bool, no_auto_udp_dest: bool) -> None:
     """Record lidar and IMU packets from a sensor to a pcap file.
 
     Note: this will currently not configure the sensor or query the sensor for
@@ -158,9 +163,13 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     else:
         message += ", hit ctrl-c to exit"
 
-    click.echo(f"Connecting to {hostname}")
+    config = configure_sensor(hostname, lidar_port, do_not_reinitialize, no_auto_udp_dest)
+
+    click.echo(f"Initializing connection to sensor {hostname} on "
+               f"lidar port {config.udp_port_lidar} with udp dest '{config.udp_dest}'...")
+
     source = client.Sensor(hostname,
-                           lidar_port,
+                           config.udp_port_lidar,
                            imu_port,
                            buf_size=buf_size,
                            timeout=timeout if timeout > 0 else None,
@@ -206,6 +215,11 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     except KeyboardInterrupt:
         click.echo("\nInterrupted")
     finally:
+        if scans_source._timed_out:
+            click.echo(f"ERROR: Timed out while awaiting new packets from sensor {hostname} "
+                       f"using udp destination {config.udp_dest} on port {config.udp_port_lidar}. "
+                       f"Check your firewall settings and/or ensure that the lidar port "
+                       f"{config.udp_port_lidar} is not being held open.")
         source.close()
 
 

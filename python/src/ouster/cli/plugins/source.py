@@ -67,6 +67,10 @@ def sensor_info(ctx, *args, **kwargs) -> None:
 @click.option('--legacy/--non-legacy',
               default=False,
               help="Use legacy metadata format or not")
+@click.option('-x', '--do-not-reinitialize', is_flag=True, default=False,
+              help="Do not reinitialize (by default it will reinitialize if needed)")
+@click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
+              help="Do not automatically set udp_dest (by default it will auto set udp_dest")
 @click.pass_context
 def sensor_record(ctx, *args, **kwargs) -> None:
     """Record a sensor data stream as PCAP"""  # Implements ouster-cli source <hostname> record

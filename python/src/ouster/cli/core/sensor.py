@@ -9,6 +9,7 @@ import click
 from click import ClickException
 
 import ouster.client as client
+from ouster.client._client import SensorConfig
 from .util import click_ro_file
 from copy import copy
 
@@ -127,6 +128,62 @@ def auto_detected_udp_dest(hostname: str) -> int:
     return udp_auto_config.udp_dest
 
 
+def configure_sensor(hostname: str, lidar_port: int, do_not_reinitialize: bool, no_auto_udp_dest) -> SensorConfig:
+    """Depending on the args do_not_reinitialize, no_auto_udp_dest,
+    possibly reconfigure the sensor. Then, return the configuration that is used."""
+
+    click.echo(f"Contacting sensor {hostname}...")
+
+    # original config
+    orig_config = client.get_config(hostname, active=True)
+    auto_config_udp_dest = auto_detected_udp_dest(hostname)
+
+    if orig_config.udp_dest != auto_config_udp_dest:
+        if no_auto_udp_dest or do_not_reinitialize:
+            click.echo(f"WARNING: Your sensor's udp destination {orig_config.udp_dest} does "
+                       f"not match the detected udp destination {auto_config_udp_dest}. "
+                       f"If you get a Timeout error, drop -x and -y from your "
+                       f"arguments to allow automatic udp_dest setting.")
+
+    if do_not_reinitialize:
+
+        if orig_config.operating_mode == client.OperatingMode.OPERATING_STANDBY:
+            raise click.ClickException("Your sensor is in STANDBY mode but you have disallowed "
+                                       "reinitialization. Drop -x to allow reinitialiation or "
+                                       "change your sensor's operating mode.")
+
+        if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:
+            raise click.ClickException(f"Sensor's lidar port {orig_config.udp_port_lidar} does "
+                                       f"not match provided lidar port but you have disallowed "
+                                       f"reinitialization. Drop -x to allow reinitialization or "
+                                       f"change your specified lidar_port {lidar_port}")
+        return orig_config
+
+    new_config = copy(orig_config)
+    if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:
+        new_config.udp_port_lidar = lidar_port
+        click.echo((f"Will change lidar port from {orig_config.udp_port_lidar} to "
+                    f"{new_config.udp_port_lidar}..."))
+    else:
+        # lidar port from arguments is None
+        lidar_port = orig_config.udp_port_lidar
+
+    if not no_auto_udp_dest and orig_config.udp_dest != auto_config_udp_dest:
+        click.echo((f"Will change udp_dest from '{orig_config.udp_dest}' to automatically "
+                    f"detected '{auto_config_udp_dest}'..."))
+        new_config.udp_dest = auto_config_udp_dest
+
+    new_config.operating_mode = client.OperatingMode.OPERATING_NORMAL
+    if new_config.operating_mode != orig_config.operating_mode:
+        click.echo((f"Will change sensor's operating mode from {orig_config.operating_mode}"
+                    f" to {new_config.operating_mode}"))
+
+    if orig_config != new_config:
+        click.echo("Setting sensor config...")
+        client.set_config(hostname, new_config)
+    return new_config
+
+
 @sensor_group.command()
 @click.argument('hostname', required=True)
 @click.option('-b', '--buf-size', default=256, help="Max packets to buffer")
@@ -158,66 +215,10 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool, buf_s
     except ImportError as e:
         raise click.ClickException(str(e))
 
-    click.echo(f"Contacting sensor {hostname}...")
-
-    # original config
-    orig_config = client.get_config(hostname, active=True)
-    auto_config_udp_dest = auto_detected_udp_dest(hostname)
-
-    if orig_config.udp_dest != auto_config_udp_dest:
-        if no_auto_udp_dest or do_not_reinitialize:
-            click.echo(f"WARNING: Your sensor's udp destination {orig_config.udp_dest} does "
-                       f"not match the detected udp destination {auto_config_udp_dest}. "
-                       f"If you get a Timeout error, drop -x and -y from your "
-                       f"arguments to allow automatic udp_dest setting.")
-
-    if do_not_reinitialize:
-
-        if orig_config.operating_mode == client.OperatingMode.OPERATING_STANDBY:
-            raise click.ClickException("Your sensor is in STANDBY mode but you have disallowed "
-                                       "reinitialization. Drop -x to allow reinitialiation or "
-                                       "change your sensor's operating mode.")
-
-        if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:
-            raise click.ClickException(f"Sensor's lidar port {orig_config.udp_port_lidar} does "
-                                       f"not match provided lidar port but you have disallowed "
-                                       f"reinitialization. Drop -x to allow reinitialization or "
-                                       f"change your specified lidar_port {lidar_port}")
-
-        # set for later printouts
-        udp_dest = orig_config.udp_dest
-        lidar_port = orig_config.udp_port_lidar
-
-    else:
-        new_config = copy(orig_config)
-        if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:
-            new_config.udp_port_lidar = lidar_port
-            click.echo((f"Will change lidar port from {orig_config.udp_port_lidar} to "
-                        f"{new_config.udp_port_lidar}..."))
-        else:
-            # lidar port from arguments is None
-            lidar_port = orig_config.udp_port_lidar
-
-        if not no_auto_udp_dest and orig_config.udp_dest != auto_config_udp_dest:
-            click.echo((f"Will change udp_dest from '{orig_config.udp_dest}' to automatically "
-                        f"detected '{auto_config_udp_dest}'..."))
-            new_config.udp_dest = auto_config_udp_dest
-
-        new_config.operating_mode = client.OperatingMode.OPERATING_NORMAL
-        if new_config.operating_mode != orig_config.operating_mode:
-            click.echo((f"Will change sensor's operating mode from {orig_config.operating_mode}"
-                        f" to {new_config.operating_mode}"))
-
-        if orig_config != new_config:
-            click.echo("Setting sensor config...")
-            client.set_config(hostname, new_config)
-
-        # set for later printouts
-        udp_dest = new_config.udp_dest
-        lidar_port = new_config.udp_port_lidar
+    config = configure_sensor(hostname, lidar_port, do_not_reinitialize, no_auto_udp_dest)
 
     click.echo(f"Initializing connection to sensor {hostname} on "
-               f"lidar port {lidar_port} with udp dest '{udp_dest}'...")
+               f"lidar port {config.udp_port_lidar} with udp dest '{config.udp_dest}'...")
 
     # make 0 timeout in the cli mean no timeout
     timeout_ = timeout if timeout > 0 else None
@@ -236,7 +237,7 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool, buf_s
             meta_override = client.SensorInfo(json.read())
 
     source = client.Sensor(hostname,
-                           lidar_port,
+                           config.udp_port_lidar,
                            7503,  # doesn't matter as viz doesn't handle IMU packets
                            metadata=meta_override,
                            buf_size=buf_size,
@@ -264,9 +265,9 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool, buf_s
     finally:
         if scans._timed_out:
             click.echo(f"ERROR: Timed out while awaiting new packets from sensor {hostname} "
-                       f"using udp destination {udp_dest} on port {lidar_port}. "
+                       f"using udp destination {config.udp_dest} on port {config.udp_port_lidar}. "
                        f"Check your firewall settings and/or ensure that the lidar port "
-                       f"{lidar_port} is not being held open.")
+                       f"{config.udp_port_lidar} is not being held open.")
 
         if source.id_error_count:
             click.echo(f"WARNING: {source.id_error_count} lidar_packets with "
