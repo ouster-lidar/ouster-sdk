@@ -171,6 +171,8 @@ setup(
         'requests >=2.0, <3',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
+        # scipy is not supported on Mac M1 with Mac OS < 12.0
+        'scipy >=1.7, <2;platform_system != "Darwin" or platform_machine != "arm64" or platform_version >= "21.0.0"',
         'typing-extensions >=3.7.4.3',
         'Pillow >=9.2'
     ],
@@ -195,7 +197,7 @@ setup(
             'laspy',
             'PyQt5; platform_system=="Windows"',
         ],
-        'mapping': ['kiss-icp >= 0.2.9', 'scipy'],
+        'mapping': ['kiss-icp >= 0.2.9'],
     },
     entry_points={'console_scripts':
         [
