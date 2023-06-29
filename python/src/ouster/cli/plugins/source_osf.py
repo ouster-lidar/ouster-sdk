@@ -2,7 +2,7 @@
 
 import click
 from typing import Optional, List
-import ouster.cli.core.osf
+import ouster.cli.core.osf as osf_cli
 from .io_type import OusterIoType
 from .source import source, _source_arg_name, _output_file_arg_name, SourceConvertCommand
 
@@ -44,7 +44,7 @@ def osf_from_pcap(ctx, meta: Optional[str], output_file: Optional[str],
     """Convert the source PCAP to OSF"""
     # Implements ouster-cli source <sourcefile>.pcap convert <destfile>.osf
     source = ctx.obj.get(_source_arg_name)
-    ouster.cli.plugins.osf.osf_from_pcap_impl(
+    osf_cli.osf_from_pcap_impl(
         source, meta, output_file,
         chunk_size, flags, raw_headers,
         raw_fields, extrinsics,
@@ -59,60 +59,60 @@ def osf_info(ctx, *args, **kwargs) -> None:
     source = ctx.obj.get(_source_arg_name)
     kwargs['file'] = source
     # TODO refactor
-    ctx.forward(ouster.cli.plugins.osf.osf_info, *args, **kwargs)
+    ctx.forward(osf_cli.osf_info, *args, **kwargs)
 
 
-@click.command
+# @click.command
 # TWS 20230627: '--cycle' is a deprecated option and only hidden to prevent breaking scripts that may be using it
-@click.option("-c", "--cycle", is_flag=True, help="Loop playback", hidden=True)
-@click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
-    help="Loop, stop, or exit after reaching end of file")
-@click.option("-p", "--pause", is_flag=True, help="Pause at first lidar scan")
-@click.option("--pause-at",
-              default=-1,
-              help="Lidar Scan number where to pause (if --pause is ON)")
-@click.option("--accum-num",
-              default=0,
-              help="Number of lidar scan clouds to accumulate")
-@click.option("--accum-every",
-              default=50,
-              help="Accumulate lidar scan clouds every Nth scan")
-# FIXME! apparently these options were removed but not updated here
-# @click.option("--skip-poses",
-#              is_flag=True,
-#              help="Don't read and don't apply trajectories")
-# @click.option("--alt-traj-file",
+# @click.option("-c", "--cycle", is_flag=True, help="Loop playback", hidden=True)
+# @click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
+#    help="Loop, stop, or exit after reaching end of file")
+# @click.option("-p", "--pause", is_flag=True, help="Pause at first lidar scan")
+# @click.option("--pause-at",
+#              default=-1,
+#              help="Lidar Scan number where to pause (if --pause is ON)")
+# @click.option("--accum-num",
+#              default=0,
+#              help="Number of lidar scan clouds to accumulate")
+# @click.option("--accum-every",
+#              default=50,
+#              help="Accumulate lidar scan clouds every Nth scan")
+# # FIXME! apparently these options were removed but not updated here
+# # @click.option("--skip-poses",
+# #              is_flag=True,
+# #              help="Don't read and don't apply trajectories")
+# # @click.option("--alt-traj-file",
+# #              required=False,
+# #              type=click.Path(exists=True, dir_okay=False),
+# #              help="Alternative source of trajectories (OSF with traj msgs)")
+# @click.option("-r", "--rate", default=1.0, help="Playback rate")
+# @click.option("--extrinsics",
+#              type=float,
 #              required=False,
-#              type=click.Path(exists=True, dir_okay=False),
-#              help="Alternative source of trajectories (OSF with traj msgs)")
-@click.option("-r", "--rate", default=1.0, help="Playback rate")
-@click.option("--extrinsics",
-              type=float,
-              required=False,
-              nargs=16,
-              help="Lidar sensor extrinsics to use in viz (instead possible "
-                   " extrinsics stored in OSF)")
-@click.option("--skip-extrinsics",
-              is_flag=True,
-              help="Don't use any extrinsics (leaves them at Identity)")
-@click.option("-s",
-              "--start-ts",
-              type=int,
-              required=False,
-              default=0,
-              help="Viz from the provided start timestamp (nanosecs)")
-@click.option("--sensor-id",
-              type=int,
-              required=False,
-              default=0,
-              help="Viz only the single sensor by sensor_id")
-@click.pass_context
-def osf_viz(ctx, *args, **kwargs) -> None:
-    """Visualize the OSF data in a 3D viewer"""  # Implements ouster-cli source <sourcefile>.osf viz
-    source = ctx.obj.get(_source_arg_name)
-    kwargs['file'] = source
-    # TODO refactor
-    ctx.forward(ouster.cli.plugins.osf.osf_viz, *args, **kwargs)
+#              nargs=16,
+#              help="Lidar sensor extrinsics to use in viz (instead possible "
+#                   " extrinsics stored in OSF)")
+# @click.option("--skip-extrinsics",
+#              is_flag=True,
+#              help="Don't use any extrinsics (leaves them at Identity)")
+# @click.option("-s",
+#              "--start-ts",
+#              type=int,
+#              required=False,
+#              default=0,
+#              help="Viz from the provided start timestamp (nanosecs)")
+# @click.option("--sensor-id",
+#              type=int,
+#              required=False,
+#              default=0,
+#              help="Viz only the single sensor by sensor_id")
+# @click.pass_context
+# def osf_viz(ctx, *args, **kwargs) -> None:
+#    """Visualize the OSF data in a 3D viewer"""  # Implements ouster-cli source <sourcefile>.osf viz
+#    source = ctx.obj.get(_source_arg_name)
+#    kwargs['file'] = source
+#    # TODO refactor
+#    ctx.forward(osf_cli.osf_viz, *args, **kwargs)
 
 
 # TODO FLEETSW-4407: various OSF convert stories
@@ -136,7 +136,7 @@ source.commands[OusterIoType.OSF] = {
         help="Saves point cloud from an OSF file into specific formats"
     ),
     'info': osf_info,
-    'viz': osf_viz,
+    # 'viz': osf_viz,
 }
 
 

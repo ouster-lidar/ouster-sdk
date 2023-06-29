@@ -49,6 +49,7 @@ def pytest_collection_modifyitems(items, config) -> None:
 # TODO: add OS-DOME-32/64 in 1024x10 mode pcap with digest
 PCAPS_DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/pcaps")
 METADATA_DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/metadata")
+OSFS_DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/osfs")
 
 TESTS = {
     'legacy-2.0': 'OS-2-32-U0_v2.0.0_1024x10',

@@ -170,7 +170,7 @@ class SourceConvertCommand(click.Command):
         except (KeyError, ValueError):
             if CliArgs().has_any_of(ctx.help_option_names):
                 click.echo(self.get_help(ctx))
-                click.echo(f"\nWhere {_output_file_arg_name.upper()} ends with {output_type_file_extensions}")
+                click.echo(f"\nERROR: {file_extension_err_text}")
                 return
             raise click.exceptions.UsageError(file_extension_err_text)
         try:
@@ -321,6 +321,9 @@ class SourceMultiCommand(click.MultiCommand):
             [extension_from_io_type(source_type)
                 for source_type in self.commands.keys() if extension_from_io_type(source_type)]
         )
+        # TODO: remove hack when bag is introduced
+        exts.remove('.bag')
+
         return _join_with_conjunction(exts)
 
     def list_commands(self, ctx):
@@ -353,11 +356,19 @@ class SourceMultiCommand(click.MultiCommand):
         except ValueError as e:  # noqa: F841
             click.echo(ctx.get_usage())
             raise click.exceptions.UsageError("Source type expected to be a sensor hostname, "
-                                              f"ip address, or a {file_extensions_str} file.")
+                                              f"ip address, or a(n) {file_extensions_str} file. "
+                                              "For a sensor source, please check that you can "
+                                              "ping the sensor hostname/ip address. For a file "
+                                              "source, please check that the file path you have "
+                                              "provided exists.")
         except KeyError as e:  # noqa: F841
             click.echo(ctx.get_usage())
             raise click.exceptions.UsageError("Source type expected to be a sensor hostname, "
-                                              f"ip address, or a {file_extensions_str} file.")
+                                              f"ip address, or a(n) {file_extensions_str} file. "
+                                              "For a sensor source, please check that you can "
+                                              "ping the sensor hostname/ip address. For a file "
+                                              "source, please check that the file path you have "
+                                              "provided exists.")
 
     def get_command(self, ctx, name):
         """Get the click.Command object for the given command name"""

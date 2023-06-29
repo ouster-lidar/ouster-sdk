@@ -90,7 +90,6 @@ def run_slam(
 
     Run with a sensor or a pcap file to produce an OSF containing the lidar data and SLAM poses.
     To turn on visualizer, append 'viz' or 'visualizer' to the command, case insensitive.
-
     """
 
     data_source = util.Source(source, meta = meta)
