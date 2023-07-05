@@ -1,6 +1,7 @@
 import numpy as np
 from unittest.mock import MagicMock
 import ouster.sdkx.mapping.util as util
+import ouster.sdk.pose_util as pu
 
 
 def create_mock_ls():
@@ -20,89 +21,11 @@ def create_mock_ls():
     return mock_ls
 
 
-def test_Pose6toPose4by4():
-    # test with an identity matrix
-    posev = np.array([0, 0, 0, 0, 0, 0])
-    expected = np.eye(4)
-    result = util.pose6toHomMatrix(posev)
-    np.testing.assert_allclose(result, expected, atol=1e-4)
-
-    # test with a simple example
-    posev = np.array([0.1, 0.2, 0.3, 1.0, 2.0, 3.0])
-    # Used internal transformation matrix PoseV expSeries()
-    expected = np.array([
-        [0.935755, -0.283165, 0.210192, 1.0],
-        [0.302933, 0.950581, -0.0680313, 2.0],
-        [-0.18054, 0.127335, 0.97529, 3.0],
-        [0.0, 0.0, 0.0, 1.0]])
-    result = util.pose6toHomMatrix(posev)
-
-    assert np.allclose(result, expected, rtol=1e-4)
-
-    # test with a vecvtorized input
-    posev = np.array([[-0.1, -0.2, -0.3, -1.0, -2.0, -3.0], [0.4, 0.5, 0.6, 4.0, 5.0, 6.0]])
-    # Used internal transformation matrix PoseV expSeries()
-    expected = np.array([
-        [
-            [0.935755, 0.302933, -0.18054, -1.0],
-            [-0.283165, 0.950581, 0.127335, -2.0],
-            [0.210192, -0.0680313, 0.97529, -3.0],
-            [0.0, 0.0, 0.0, 1.0]
-        ],
-        [
-            [0.714075, -0.432165, 0.550754, 4],
-            [0.619657, 0.756261, -0.209988, 5],
-            [-0.325764, 0.491226, 0.807821, 6],
-            [0.0, 0.0, 0.0, 1.0]
-        ]
-    ])
-    result = util.pose6toHomMatrix(posev)
-
-    assert np.allclose(result, expected, rtol=1e-4)
-
-
-def test_Pose4by4toPose6():
-    # test with an identity matrix
-    poseh = np.eye(4)
-    expected = np.array([0, 0, 0, 0, 0, 0])
-    result = util.homMatToPose6(poseh)
-    np.testing.assert_allclose(result, expected, atol=1e-4)
-
-    # test with a simple example
-    poseh = np.array([
-        [0.935755, -0.283165, 0.210192, 1.0],
-        [0.302933, 0.950581, -0.0680313, 2.0],
-        [-0.18054, 0.127335, 0.97529, 3.0],
-        [0.0, 0.0, 0.0, 1.0]])
-    expected = np.array([0.1, 0.2, 0.3, 1.0, 2.0, 3.0])
-    result = util.homMatToPose6(poseh)
-    np.testing.assert_allclose(result, expected, atol=1e-4)
-
-    # test with a vecvtorized input
-    poseh = np.array([
-        [
-            [0.935755, 0.302933, -0.18054, -1.0],
-            [-0.283165, 0.950581, 0.127335, -2.0],
-            [0.210192, -0.0680313, 0.97529, -3.0],
-            [0.0, 0.0, 0.0, 1.0]
-        ],
-        [
-            [0.714075, -0.432165, 0.550754, 4],
-            [0.619657, 0.756261, -0.209988, 5],
-            [-0.325764, 0.491226, 0.807821, 6],
-            [0.0, 0.0, 0.0, 1.0]
-        ]
-    ])
-    expected = np.array([[-0.1, -0.2, -0.3, -1.0, -2.0, -3.0], [0.4, 0.5, 0.6, 4.0, 5.0, 6.0]])
-    result = util.homMatToPose6(poseh)
-    assert np.allclose(result, expected, rtol=1e-4)
-
-
 def test_getScanColPose():
     start_ts_pose_v = np.array([0, 1, 0, 0, 1, 0])
-    start_ts_pose_h = util.pose6toHomMatrix(start_ts_pose_v)
+    start_ts_pose_h = pu.exp_pose6(start_ts_pose_v)
     end_ts_pose_v = np.array([2, 3, 4, 1, 2, 3])
-    end_ts_pose_h = util.pose6toHomMatrix(end_ts_pose_v)
+    end_ts_pose_h = pu.exp_pose6(end_ts_pose_v)
 
     # test start ts and end ts diff is 1 s
     start_ts_pose = (0, start_ts_pose_h)

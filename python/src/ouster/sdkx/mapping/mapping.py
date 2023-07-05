@@ -5,6 +5,7 @@ import ipaddress
 from typing import Optional
 from ouster.cli.core import cli
 from ouster.cli.core.util import click_ro_file
+import ouster.sdk.pose_util as pu
 from ouster.sdk.util import resolve_metadata
 from ouster import client
 from pathlib import Path
@@ -303,7 +304,6 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
     empty_pose = True
     for scan_idx, scan in enumerate(scans):
         # Pose attribute is per col global pose so we use identity for scan pose
-        scan_pose = np.identity(4)
         column_poses = scan.pose
 
         if (empty_pose and column_poses.size > 0
@@ -319,7 +319,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
         # to remove near points
         row_index = scan.field(client.ChanField.RANGE) > (min_dist * 1000)
         zero_row_index = scan.field(client.ChanField.RANGE) == 0
-        dewarpped_points = util.dewarp(points, scan_pose, column_poses)
+        dewarpped_points = pu.dewarp(points, column_poses=column_poses)
         filtered_points = dewarpped_points[row_index]
         filtered_keys = keys[row_index]
 
