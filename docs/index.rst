@@ -39,6 +39,16 @@
    Changelog <reference/changelog>
 
 .. toctree::
+   :caption: Command Line Utility Guide
+   :hidden:
+
+   Overview <cli/overview>
+   Getting Started <cli/getting-started>
+   Sample Sessions <cli/sample-sessions>
+   Common Use Cases <cli/common-use-cases>
+   Changelog <cli/changelog>
+
+.. toctree::
    :caption: Migration Guides
    :hidden:
 

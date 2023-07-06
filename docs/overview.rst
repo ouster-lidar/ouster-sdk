@@ -13,7 +13,7 @@ Quick links
 * :doc:`cpp/building`
 * `Ouster ROS 1 driver`_
 * :doc:`python/viz/index`
-
+  :doc:`cli/getting-started`
 .. figure:: /images/simple-viz.png
     :align: center
 
