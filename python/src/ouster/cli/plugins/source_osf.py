@@ -133,7 +133,7 @@ source.commands[OusterIoType.OSF] = {
     'convert': OsfConvertCommand(
         'convert',
         context_settings=dict(ignore_unknown_options=True, allow_extra_args=True),
-        help="Saves point cloud from an OSF file into specific formats"
+        help="Save point cloud from an OSF file into specific formats"
     ),
     'info': osf_info,
     # 'viz': osf_viz,

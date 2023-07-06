@@ -277,12 +277,13 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
 
     def pc_status_print():
         nonlocal points_sum, points_near_removed, points_down_removed, points_saved, points_zero
-        near_removed_pernt = ((points_near_removed - points_zero) / points_sum) * 100
+        near_minus_zero = points_near_removed - points_zero
+        near_removed_pernt = (near_minus_zero / points_sum) * 100
         down_removed_pernt = (points_down_removed / points_sum) * 100
         zero_pernt = (points_zero / points_sum) * 100
         save_pernt = (points_saved / points_sum) * 100
         print(
-            f"{points_sum} points accumulated during this period,\n{points_near_removed} "
+            f"{points_sum} points accumulated during this period,\n{near_minus_zero} "
             f"near points are removed [{near_removed_pernt:.2f} %],\n{points_down_removed} "
             f"down sampling points are removed [{down_removed_pernt:.2f} %],\n{points_zero} "
             f"zero range points are removed [{zero_pernt:.2f} %],\n{points_saved} points"
