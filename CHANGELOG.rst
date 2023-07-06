@@ -2,8 +2,9 @@
 Changelog
 =========
 
-[unreleased]
-============
+20230710
+========
+
 
 ouster_osf
 ----------
@@ -19,12 +20,23 @@ ouster_client
 * [BREAKING] remove ``ouster::Imu`` object
 
 ouster_viz
--------------
+----------
 
 * [BREAKING] Changed Python binding for ``Cloud.set_column_poses()`` to accept ``[Wx4x4]`` array
   of poses, column-storage order
 * Add ``LidarScan.pose`` handling to ``viz.LidarScanViz``, and new ``T`` keyboard
   binding to toggle column poses usage
+
+
+Python SDK
+----------
+* Retire simple-viz
+
+ouster-cli
+----------
+* Introduce ouster-cli utility for common interactions with sensors, pcaps
+* Inclusion of mapping utilities
+* 
 
 
 [20230403]

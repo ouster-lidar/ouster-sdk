@@ -439,8 +439,8 @@ class LidarScanViz:
 
         self._modes: List[LidarScanVizMode]
         self._modes = [
-            SimpleMode(ChanField.NEAR_IR, info=meta, use_ae=True, use_buc=True),
             ReflMode(info=meta),
+            SimpleMode(ChanField.NEAR_IR, info=meta, use_ae=True, use_buc=True),
             SimpleMode(ChanField.SIGNAL, info=meta),
             SimpleMode(ChanField.RANGE, info=meta),
         ]

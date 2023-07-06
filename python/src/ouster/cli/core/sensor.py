@@ -34,7 +34,6 @@ def metadata(hostname: str, legacy: bool) -> None:
         raise ClickException(str(e))
 
 
-
 @sensor_group.command()
 @click.argument('hostname', type=str, required=True)
 @click.argument('keyval', metavar='[KEY VAL]...', type=str, nargs=-1)

@@ -17,7 +17,7 @@ endif()
 target_link_libraries(ouster_pcap
   PUBLIC
     OusterSDK::ouster_client
-  PRIVATE ${PCAP_LIBRARY} libtins::libtins)
+  PRIVATE libpcap::libpcap libtins::libtins)
 add_library(OusterSDK::ouster_pcap ALIAS ouster_pcap)
 
 # ==== Install ====
