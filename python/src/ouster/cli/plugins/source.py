@@ -51,7 +51,7 @@ def sensor_info(ctx, *args, **kwargs) -> None:
     source = ctx.obj.get(_source_arg_name)
     kwargs['hostname'] = source
     # TODO refactor
-    ctx.forward(ouster.cli.core.sensor.info, *args, **kwargs)
+    ctx.forward(ouster.cli.core.sensor.metadata, *args, **kwargs)
 
 
 @click.command

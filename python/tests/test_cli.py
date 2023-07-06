@@ -244,6 +244,14 @@ def test_source_config(runner):
     assert result.exit_code == 1
 
 
+def test_source_metadata():
+    """It should attempt to get metadata (and fail when there is no sensor)"""
+    runner = CliRunner()
+    result = runner.invoke(core.cli, ['source', '127.0.0.1', 'metadata'])
+    assert "Error: CurlClient::execute_get failed" in result.output
+    assert result.exit_code == 1
+
+
 def test_source_config_help(runner):
     """It should not exit 2 (see click.exceptions.UsageError) if a valid command
     for the given source was provided."""

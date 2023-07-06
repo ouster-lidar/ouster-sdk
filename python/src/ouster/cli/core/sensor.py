@@ -27,8 +27,12 @@ def sensor_group() -> None:
               help="Use legacy metadata format or not")
 def metadata(hostname: str, legacy: bool) -> None:
     """Dump sensor metadata to stdout."""
-    click.echo(client.Sensor(hostname, 7502, 7503,
-                             _legacy_format=legacy)._fetched_meta)
+    try:
+        click.echo(client.Sensor(hostname, 7502, 7503,
+                                 _legacy_format=legacy)._fetched_meta)
+    except RuntimeError as e:
+        raise ClickException(str(e))
+
 
 
 @sensor_group.command()
