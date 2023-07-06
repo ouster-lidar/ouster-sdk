@@ -20,15 +20,8 @@ import time
 
 @cli.group(name="mapping")
 def mapping_group() -> None:
-    """Commands for running mapping tools. Can process single or consecutive multi pcap files"""
+    """Mapping tools."""
     pass
-
-
-""" The current run_slam_pcap run kiss SLAM on a live sensor or a recoded PCAP
-    and save lidarScans and SLAM output trajectory into an OSF file which
-    are be used in PLY maker or OSF viewer.
-    # TODO: after have per_col_ts in LidarScan and new viz, apply them in the code.
-"""
 
 
 class SLAMOSFWriter:
@@ -75,17 +68,17 @@ def slam_scans_generator(scan_source, slam, osf_writer):
     osf_writer.close()
 
 
-@mapping_group.command(name='run_slam')
-@click.argument('hostname', required=True, type=str)
+@mapping_group.command(name='slam')
+@click.argument('source', required=True, type=str)
 @click.argument('viz', required=False, default="", type=str)
 @click.option('-m', '--meta', required=False, default=None, type=click_ro_file,
-              help="metadata file for pcap input")
-@click.option('--slam_name', default='kiss_slam', help="slam name")
+              help="Metadata file for pcap input")
+@click.option('--slam_name', default='kiss_slam', help="Slam name")
 @click.option('-l', '--lidar_port', default=7502, help="Lidar port")
 @click.option('-i', '--imu_port', default=7503, help="IMU port")
 @click.option('-o', '--output', required=False, help="OSF output filename")
 def run_slam(
-    hostname: str,
+    source: str,
     viz: str,
     meta: Optional[str],
     slam_name: str,
@@ -93,15 +86,14 @@ def run_slam(
     imu_port: int,
     output: Optional[str]) -> None:
     """
-    run_slam command runs SLAM with an optinal visualizer. the choice of using
-    a live sensor or a recorded pcap. The output of the SLAM process consists of
-    poses, which can be further processed using an algorithm to generate
-    perturbed poses for each lidar scan column. These overwritten lidar scans
-    are be saved in an OSF file for later use.\n To turn on visualizer, append
-    'viz' or 'visualizer' to the command, case insensitive.
+    Run SLAM algorithm with an optional visualizer
+
+    Run with a sensor or a pcap file to produce an OSF containing the lidar data and SLAM poses.
+    To turn on visualizer, append 'viz' or 'visualizer' to the command, case insensitive.
+
     """
 
-    data_source = util.Source(hostname, meta = meta)
+    data_source = util.Source(source, meta = meta)
 
     if not output:
         date_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -114,7 +106,7 @@ def run_slam(
         raise ValueError("Only support KISS-ICP SLAM for now")
 
     chunk_size = 0
-    osf_writer = SLAMOSFWriter(hostname, output, chunk_size, lidar_port, imu_port)
+    osf_writer = SLAMOSFWriter(source, output, chunk_size, lidar_port, imu_port)
 
     print(f"Running {slam_name} SLAM and start writing LidarScan and Traj into {output}\nhit ctrl-c to exit")
 
@@ -133,13 +125,13 @@ def run_slam(
     print(f"Elapsed time: {elapsed_time} seconds")
 
 
-@mapping_group.command(name='point_cloud_convert')
+@mapping_group.command(name='convert')
 @click.argument('input_file', required=True, type=click_ro_file)
 @click.argument('output_file', required=True)
-@click.option('-d', '--min_dist', default=2.0, help="min dist (m) for points to "
+@click.option('-d', '--min_dist', default=2.0, help="Min dist (m) for points to "
         "save. Default value is 2m")
-@click.option('-s', '--voxel_size', default=0.1, help="voxel map size for down "
-        "sampling. This is same with open3D voxel size. Default value is 0.1. "
+@click.option('-s', '--voxel_size', default=0.1, help="Voxel map size for downsampling."
+        "This parameter is the same as the open3D voxel size. Default value is 0.1. "
         "The bigger the value, the fewer points it outputs"
         " http://www.open3d.org/docs/0.6.0/python_api/open3d.geometry.voxel_down_sample.html")
 @click.option('-f',
@@ -150,7 +142,7 @@ def run_slam(
     'REFLECTIVITY'],
     case_sensitive=False),
     default="REFLECTIVITY",
-    help="chanfield for output file key value. Choose between SIGNAL, NEAR_IR, "
+    help="Chanfield for output file key value. Choose between SIGNAL, NEAR_IR, "
     "REFLECTIVITY. Default field is REFLECTIVITY")
 @click.option('--print_process', required=False, type=bool, default=True, help="Default is On")
 @click.option('--verbose_print', required=False, type=bool, default=False,
@@ -159,11 +151,12 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
                        voxel_size: float, field: str,
                        print_process: Optional[bool], verbose_print: Optional[bool]) -> None:
     """
-    Point Cloud Render takes in an OSF file and saves point cloud into a file.
+    Save point cloud from an OSF file into specific formats
+
     Output file format depends on output filename extension. The valid output files
-    extention are .las, .ply and .pcd. Default output format is .ply. For large point
+    extensions are .las, .ply and .pcd. Default output format is .ply. For large point
     cloud, the output will be split into multiple files and each file is around 1G.
-    Currently this tool only supports single lidar osf file.
+    Currently this tool only supports single lidar OSF files.
     """
     try:
         import open3d as o3d
@@ -178,7 +171,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
     file_wo_ext = str(output_file_path.stem)
     outfile_ext = str(output_file_path.suffix)
     if outfile_ext not in [".las", ".ply", ".pcd"]:
-        sys.exit("Exit! output file extension only support .las, .ply, and "
+        sys.exit("Error: output file extension only support .las, .ply, and "
                  f".pcd, but input file extension is {outfile_ext}")
 
     points_for_downsample = np.empty(shape = [0, 3])
@@ -224,7 +217,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
     if channel_field not in valid_fields:
         valid_fields_str = ", ".join(map(str, list(valid_fields.keys())))
 
-        sys.exit(f"Exit! field {field} is not in the lidar UDP field\n"
+        sys.exit(f"Exit! field {field} is not available in the low bandwidth mode\n"
                  f"use -f and choose a valid field from {valid_fields_str}")
 
     scan_streams = reader.meta_store.find(osf.LidarScanStream)
@@ -260,7 +253,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
         pcd.clear()
 
     def save_file(file_wo_ext: str, outfile_ext: str, points_total):
-        print(f"output file: {file_wo_ext + outfile_ext}")
+        print(f"Output file: {file_wo_ext + outfile_ext}")
 
         pc_status_print()
         if outfile_ext == ".ply":
@@ -290,9 +283,9 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
         zero_pernt = (points_zero / points_sum) * 100
         save_pernt = (points_saved / points_sum) * 100
         print(
-            f"{points_sum} points accumulated during this period,\n{points_near_removed}"
-            f"near points are removed [{near_removed_pernt:.2f} %],\n{points_down_removed}"
-            f"down sampling points are removed [{down_removed_pernt:.2f} %],\n{points_zero}"
+            f"{points_sum} points accumulated during this period,\n{points_near_removed} "
+            f"near points are removed [{near_removed_pernt:.2f} %],\n{points_down_removed} "
+            f"down sampling points are removed [{down_removed_pernt:.2f} %],\n{points_zero} "
             f"zero range points are removed [{zero_pernt:.2f} %],\n{points_saved} points"
             f"are saved [{save_pernt:.2f} %].")
         points_sum = 0
@@ -354,7 +347,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
 
     if empty_pose:
         print(
-            "[Warnings] Empty lidar scan pose in the OSF file.\n"
-            "[Warnings] For dynamic recording, you need to use SLAM processes and output OSF file")
+            "Warning: Empty lidar scan pose in the OSF file.\n"
+            "Suggest: Use SLAM output OSF file for conversion. By command: ouster-cli mapping slam FILE")
 
     save_file(file_wo_ext + str(file_numb), outfile_ext, points_total)

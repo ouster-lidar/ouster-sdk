@@ -197,7 +197,11 @@ setup(
             'laspy',
             'PyQt5; platform_system=="Windows"',
         ],
-        'mapping': ['kiss-icp >= 0.2.9'],
+        'mapping': [
+            'kiss-icp >=0.2.10, <1',
+            'open3d >=0, <1',
+            'laspy >=2.0, <3',
+        ],
     },
     entry_points={'console_scripts':
         [
