@@ -17,7 +17,7 @@ def osf_group(ctx) -> None:
         _osf.init_logger(sdk_log_level)
 
 
-@osf_group.command(name='info')
+@osf_group.command(name='info') # type: ignore
 @click.argument('file', required=True, type=click.Path(exists=True))
 @click.option('-s', '--short', is_flag=True, help='Print less metadata info')
 @click.pass_context
@@ -40,7 +40,7 @@ def osf_info(ctx, file: str, short: bool) -> None:
     print(_osf.dump_metadata(file, not short))
 
 
-@osf_group.command(name='parse')
+@osf_group.command(name='parse') # type: ignore
 @click.argument('file',
                 required=True,
                 type=click.Path(exists=True, dir_okay=False))
