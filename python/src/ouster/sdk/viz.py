@@ -428,7 +428,7 @@ class LidarScanViz:
         # image display state
         self._img_ind = [0, 1]  # index of field to display
         self._img_refl_mode = [False, False]
-        self._img_size_fraction = 6
+        self._img_size_fraction = 4
         self._img_aspect = _img_aspect_ratio or img_aspect_ratio(meta)
 
         # misc display state
@@ -549,7 +549,7 @@ class LidarScanViz:
             'ESC': "Exit the application",
         }
         self._key_definitions = key_definitions
-        print("Press \'?\' to print key bindings")
+        print("Press \'?\' while viz window is focused to print key bindings")
 
         push_point_viz_handler(self._viz, self, handle_keys)
         add_default_controls(self._viz)
@@ -1191,14 +1191,14 @@ class SimpleViz:
 
         seekable = _Seekable(scans, maxlen=self._buflen)
         try:
-            logger.warn("Starting processing thread...")
+            logger.info("Starting processing thread...")
             self._proc_exit = False
             proc_thread = threading.Thread(name="Viz processing",
                                            target=self._process,
                                            args=(seekable, ))
             proc_thread.start()
 
-            logger.warn("Starting rendering loop...")
+            logger.info("Starting rendering loop...")
             self._viz.run()
             logger.info("Done rendering loop")
         except KeyboardInterrupt:

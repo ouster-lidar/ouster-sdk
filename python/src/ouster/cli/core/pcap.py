@@ -123,13 +123,13 @@ def pcap_info(file: str, n: int) -> None:
               default=".",
               type=click.Path(exists=True, file_okay=False, writable=True),
               help="Directory to output files. Defaults to current dir")
-@click.option('-l', '--lidar-port', default=7502, help="default: 7502")
-@click.option('-i', '--imu-port', default=7503, help="default: 7503")
+@click.option('-l', '--lidar-port', default=None, type=int, help="Lidar port")
+@click.option('-i', '--imu-port', default=None, type=int, help="Imu port")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
 @click.option('-n', '--n-frames', type=int, help="number of lidar frames")
 @click.option('-s', '--n-seconds', default=0.0, help="max time to record")
 @click.option('--chunk-size', default=0, help="split output by size (MB)")
-@click.option('-b', '--buf-size', default=640, help="Max packets to buffer")
+@click.option('-b', '--buf-size', default=640, hidden=True, help="Max packets to buffer")
 @click.option('-t', '--timeout', default=1.0, help="Seconds to wait for data")
 @click.option('-p', '--prefix', default="", help="Recorded file name prefix")
 @click.option('--viz', required=False, is_flag=True, help="Visualize point cloud during recording")
@@ -170,7 +170,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 
     source = client.Sensor(hostname,
                            config.udp_port_lidar,
-                           imu_port,
+                           config.udp_port_imu,
                            buf_size=buf_size,
                            timeout=timeout if timeout > 0 else None,
                            _legacy_format=legacy)
@@ -181,12 +181,15 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     base_name = f"{prefix}{metadata.prod_line}_{metadata.fw_rev}_{metadata.mode}_{time}"
     meta_path = os.path.join(dest, base_name) + ".json"
 
+    scans_source = None
+
     try:
         click.echo(f"Writing metadata to {meta_path}")
         source.write_metadata(meta_path)
         packets = packet_iter.RecordingPacketSource(
             source, dest,
-            prefix=prefix, n_seconds=n_seconds, n_frames=n_frames, chunk_size=chunk_size
+            prefix=prefix, n_seconds=n_seconds, n_frames=n_frames, chunk_size=chunk_size,
+            lidar_port = config.udp_port_lidar, imu_port = config.udp_port_imu
         )
 
         click.echo(message)
@@ -215,7 +218,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     except KeyboardInterrupt:
         click.echo("\nInterrupted")
     finally:
-        if scans_source._timed_out:
+        if scans_source is not None and scans_source._timed_out:
             click.echo(f"ERROR: Timed out while awaiting new packets from sensor {hostname} "
                        f"using udp destination {config.udp_dest} on port {config.udp_port_lidar}. "
                        f"Check your firewall settings and/or ensure that the lidar port "
@@ -486,8 +489,8 @@ def pcap_slice(file: str, start_frame: int, num_frames: int,
 @pcap_group.command(name="to_bag")
 @click.argument('file', required=True)
 @click.option('-f', '--meta', required=False, type=click_ro_file)
-@click.option('-l', '--lidar-port', default=None, help="Dest. port of lidar data")
-@click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
+@click.option('-l', '--lidar-port', default=None, type=int, help="Dest. port of lidar data")
+@click.option('-i', '--imu-port', default=None, type=int, help="Dest. port of imu data")
 @click.option('-o', '--output', required=False, help="BAG output filename")
 @click.option('--soft-id-check',
               is_flag=True,

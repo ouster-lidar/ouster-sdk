@@ -115,7 +115,7 @@ def osf_info(ctx, *args, **kwargs) -> None:
 #    ctx.forward(osf_cli.osf_viz, *args, **kwargs)
 
 
-# TODO FLEETSW-4407: various OSF convert stories
+# TODO SW-4407: various OSF convert stories
 class OsfConvertCommand(SourceConvertCommand):
     """Implements
     ouster-cli source <sourcefile>.osf convert <otherfile>

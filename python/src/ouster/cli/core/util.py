@@ -31,11 +31,15 @@ DEFAULT_SAMPLE_URL = 'https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_samp
 
 click_ro_file = click.Path(exists=True, dir_okay=False, readable=True)
 
+_rethrow_exceptions = False
+
 
 @click.group(name='util')
-def util_group() -> None:
+@click.pass_context
+def util_group(ctx) -> None:
     """Miscellaneous utilities."""
-    pass
+    global _rethrow_exceptions
+    _rethrow_exceptions = ctx.obj.get('TRACEBACK', False)
 
 
 def get_system_info() -> dict:
@@ -73,8 +77,12 @@ def get_system_info() -> dict:
         sdk.project_name: sdk.version
     }
 
-    deps = [pkg_resources.get_distribution(r) for r in sdk.requires()]
-    res['packages'].update({d.project_name: d.version for d in deps})
+    try:
+        deps = [pkg_resources.get_distribution(r) for r in sdk.requires()]
+        res['packages'].update({d.project_name: d.version for d in deps})
+    except Exception:
+        if _rethrow_exceptions:
+            raise
 
     return res
 

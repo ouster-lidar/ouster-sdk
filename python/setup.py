@@ -174,7 +174,8 @@ setup(
         # scipy is not supported on Mac M1 with Mac OS < 12.0
         'scipy >=1.7, <2;platform_system != "Darwin" or platform_machine != "arm64" or platform_version >= "21.0.0"',
         'typing-extensions >=3.7.4.3',
-        'Pillow >=9.2'
+        'Pillow >=9.2',
+        'packaging',
     ],
     extras_require={
         'test': [

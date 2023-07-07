@@ -10,8 +10,13 @@ from click import ClickException
 
 import ouster.client as client
 from ouster.client._client import SensorConfig
+from ouster.sdk.util import firmware_version
 from .util import click_ro_file
 from copy import copy
+from packaging import version
+
+
+MIN_AUTO_DEST_FW = version.Version("2.3.1")
 
 
 @click.group(name="sensor", hidden=True)
@@ -131,22 +136,36 @@ def auto_detected_udp_dest(hostname: str) -> int:
     return udp_auto_config.udp_dest
 
 
-def configure_sensor(hostname: str, lidar_port: int, do_not_reinitialize: bool, no_auto_udp_dest) -> SensorConfig:
+def configure_sensor(hostname: str, lidar_port: int,
+        do_not_reinitialize: bool, no_auto_udp_dest) -> SensorConfig:
     """Depending on the args do_not_reinitialize, no_auto_udp_dest,
     possibly reconfigure the sensor. Then, return the configuration that is used."""
 
     click.echo(f"Contacting sensor {hostname}...")
 
+    fw_version = firmware_version(hostname)
+
+    auto_config_udp_dest = None
+    use_set_config_auto = False
+
     # original config
     orig_config = client.get_config(hostname, active=True)
-    auto_config_udp_dest = auto_detected_udp_dest(hostname)
 
-    if orig_config.udp_dest != auto_config_udp_dest:
+    if fw_version >= MIN_AUTO_DEST_FW:
+        auto_config_udp_dest = auto_detected_udp_dest(hostname)
+        if orig_config.udp_dest != auto_config_udp_dest:
+            if no_auto_udp_dest or do_not_reinitialize:
+                click.echo(f"WARNING: Your sensor's udp destination {orig_config.udp_dest} does "
+                           f"not match the detected udp destination {auto_config_udp_dest}. "
+                           f"If you get a Timeout error, drop -x and -y from your "
+                           f"arguments to allow automatic udp_dest setting.")
+    else:
         if no_auto_udp_dest or do_not_reinitialize:
-            click.echo(f"WARNING: Your sensor's udp destination {orig_config.udp_dest} does "
-                       f"not match the detected udp destination {auto_config_udp_dest}. "
-                       f"If you get a Timeout error, drop -x and -y from your "
-                       f"arguments to allow automatic udp_dest setting.")
+            click.echo("WARNING: You have opted not to allow us to reset your auto UDP dest "
+                       "by using either -x or -y. If you get a Timeout error, drop -x and -y "
+                       "from  your arguments to allow automatic udp_dest setting.")
+        else:
+            use_set_config_auto = True
 
     if do_not_reinitialize:
 
@@ -171,32 +190,40 @@ def configure_sensor(hostname: str, lidar_port: int, do_not_reinitialize: bool, 
         # lidar port from arguments is None
         lidar_port = orig_config.udp_port_lidar
 
-    if not no_auto_udp_dest and orig_config.udp_dest != auto_config_udp_dest:
+    if not no_auto_udp_dest and auto_config_udp_dest and orig_config.udp_dest != auto_config_udp_dest:
         click.echo((f"Will change udp_dest from '{orig_config.udp_dest}' to automatically "
                     f"detected '{auto_config_udp_dest}'..."))
         new_config.udp_dest = auto_config_udp_dest
+
+    if use_set_config_auto:
+        click.echo(f"Will change udp_dest from '{orig_config.udp_dest}' to automatically "
+            "detected UDP DEST")
+        new_config.udp_dest = None
 
     new_config.operating_mode = client.OperatingMode.OPERATING_NORMAL
     if new_config.operating_mode != orig_config.operating_mode:
         click.echo((f"Will change sensor's operating mode from {orig_config.operating_mode}"
                     f" to {new_config.operating_mode}"))
 
-    if orig_config != new_config:
+    if orig_config != new_config or use_set_config_auto:
         click.echo("Setting sensor config...")
-        client.set_config(hostname, new_config)
+        client.set_config(hostname, new_config, persist=False, udp_dest_auto = use_set_config_auto)
+
+        new_config = client.get_config(hostname)
+
     return new_config
 
 
 @sensor_group.command()
 @click.argument('hostname', required=True)
-@click.option('-b', '--buf-size', default=256, help="Max packets to buffer")
+@click.option('-b', '--buf-size', default=256, hidden=True, help="Max packets to buffer")
 @click.option('-e', '--extrinsics', type=float, nargs=16,
               help='Lidar sensor extrinsics to use in viz')
 @click.option('-f', '--meta', type=click_ro_file,
         help="Provide separate metadata to use with sensor", hidden=True)
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
-@click.option('-l', '--lidar-port', type=int, help="Lidar port")
-@click.option('-s', '--soft-id-check', is_flag=True,
+@click.option('-l', '--lidar-port', type=int, default=None, help="Lidar port")
+@click.option('-s', '--soft-id-check', is_flag=True, hidden=True,
               help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.option('-t', '--timeout', default=1.0, help="Seconds to wait for data")
 @click.option('-v', '--verbose', is_flag=True, help="Print some debug output")

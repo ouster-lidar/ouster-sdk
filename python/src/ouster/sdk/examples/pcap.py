@@ -268,6 +268,16 @@ def pcap_read_packets(
     # [doc-etag-pcap-read-packets]
 
 
+def pcap_to_csv(
+        source: client.PacketSource,
+        metadata: client.SensorInfo,
+        num: int = 0) -> None:
+    # leave comment directing users to ouster-cli
+    print("NOTICE: The pcap-to-csv example has been retired in favor of "
+          "the ouster-cli utility installed with the Python Ouster SDK.\n"
+          "To try: ouster-cli source <PCAP> convert <OUT.CSV>")
+
+
 def main():
     """Pcap examples runner."""
     examples = {
@@ -276,6 +286,7 @@ def main():
         "pcap-to-las": pcap_to_las,
         "pcap-to-pcd": pcap_to_pcd,
         "pcap-to-ply": pcap_to_ply,
+        "pcap-to-csv": pcap_to_csv,
         "query-scan": pcap_query_scan,
         "read-packets": pcap_read_packets,
     }

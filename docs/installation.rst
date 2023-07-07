@@ -35,10 +35,21 @@ Ubuntu 18.04, the default Python 3 version is is 3.6, so you'll have to install 
 
 .. note::
 
-    Using a virtual environment with the Ouster Python SDK is recommended. Users newer to Python should
-    read the official `venv instructions`_ and ensure that they upgrade pip *after* activating their
-    venv. If you're using venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py
+    Using a virtual environment with the Ouster Python SDK is recommended.
+    Users newer to Python should read the official `venv instructions`_ and
+    ensure that they upgrade pip *after* activating their venv. If you're using
+    venv on Windows, you'll want to use ``python`` and ``pip`` instead of ``py
     -3`` and ``py -3 -m pip`` in the following Powershell snippets.
+
+.. note::
+
+    Python 3 when installed with macOS Developer Tools uses LibreSSL 2.8.3 (or
+    an older version.) OusterSDK, like many Python 3-compatible packages,
+    requires urllib3 which is not compatible with LibreSSL and requires OpenSSL
+    1.1.1 or newer. To account for this, macOS users should install an official
+    distribution of Python 3 or one provided by Homebrew, as these use OpenSSL
+    1.1.1 or newer. In either case, installing OusterSDK into a Python 3
+    virtual enviroment is still recommended.
 
 If you're using an unsupported platform like a non-glibc-based linux distribution, or wish to modify
 the Ouster Python SDK, you will need to build from source. See the `build instructions`_ for

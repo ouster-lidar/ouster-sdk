@@ -5,6 +5,8 @@ Changelog
 20230710
 ========
 
+* Update vcpkg ref of build to 2023-02-24
+* 
 
 ouster_osf
 ----------
@@ -18,25 +20,44 @@ ouster_client
 * Add ``_client.IndexedPcapReader`` and ``_client.PcapIndex`` to enable random
   pcap file access by frame number
 * [BREAKING] remove ``ouster::Imu`` object
+* Add get_field_types function for LidarScan, from sensor_info
+* bugfix: return metadata regardless of sensor_info status field
+* Make timeout on curl more configurable
 
 ouster_viz
 ----------
 
 * [BREAKING] Changed Python binding for ``Cloud.set_column_poses()`` to accept ``[Wx4x4]`` array
   of poses, column-storage order
+* bugfix: fix label re-use
 * Add ``LidarScan.pose`` handling to ``viz.LidarScanViz``, and new ``T`` keyboard
   binding to toggle column poses usage
 
+ouster_pcap
+-----------
+* bugfix: Use unordered map to store stream_keys to avoid comparison operators on map
 
 Python SDK
 ----------
-* Retire simple-viz
+* Add Python 3.11 wheels
+* Retire simple-viz for ouster-cli utility
+* Add default ? key binding to LidarScanViz and consolidate bindings into stored definition
+* Remove pcap-to-csv for ouster-cli utility
+* Add validator class for LidarPacket
 
 ouster-cli
 ----------
-* Introduce ouster-cli utility for common interactions with sensors, pcaps
-* Inclusion of mapping utilities
-* 
+This release also marks the introduction of the ouster-cli utility which includes, among many features:
+* Visualization from a connected sensor with automatic configuration
+* Recording from a connected sensor
+* Simultaneous record and viz from a connected sensor
+* Obtaining metadata from a connected sensor
+* Visualization from a specified PCAP
+* Slice, info, and conversion for a specificed PCAP
+* Utilities for benchmarking system, printing system-info
+* Discovery which indicates all connected sensors on network
+* Automatic logging to .ouster-cli
+* Mapping utilities
 
 
 [20230403]
