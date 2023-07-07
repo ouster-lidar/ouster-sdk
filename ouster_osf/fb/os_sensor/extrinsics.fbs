@@ -1,0 +1,14 @@
+namespace ouster.osf.v2;
+
+// ============ Extrinsics ========================================
+
+table Extrinsics {
+    extrinsics:[double]; // vector of 16, row-major representaton of [4x4]
+                         // matrix
+    ref_id:uint32;  // reference metadata id of the object it's related to
+    name:string;    // optional name of the extrinsics source or originator
+}
+
+// MetadataEntry.type: ouster/v1/os_sensor/Extrinsics
+root_type Extrinsics;
+file_identifier "oExt";

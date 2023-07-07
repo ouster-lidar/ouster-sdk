@@ -9,8 +9,11 @@ import json
 import numpy
 import pytest
 import inspect
+from pathlib import Path
 
 from ouster import client
+
+from tests.conftest import METADATA_DATA_DIR
 
 
 @pytest.mark.parametrize("mode, string", [
@@ -214,3 +217,24 @@ def test_equality_format() -> None:
     data_format_properties = [a for a in data_format_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
     assert len(data_format_properties) == 8, "Don't forget to update tests and the data_format == operator!"
+
+
+def test_skip_metadata_beam_validation() -> None:
+    """Check that skipping beam validation works"""
+
+    all_zeros_metadata = str(Path(METADATA_DATA_DIR) / "malformed/complete_but_all_zeros_legacy.json")
+
+    # test that you can simply initialize without any metadata specified
+    client.SensorInfo()
+
+    with open(all_zeros_metadata, 'r') as f:
+
+        # test that by default it raises an error
+        with pytest.raises(RuntimeError):
+            client.SensorInfo(f.read())
+
+        # reset
+        f.seek(0)
+
+        # test that specifying skip doesn't raise error
+        client.SensorInfo(f.read(), skip_beam_validation = True)

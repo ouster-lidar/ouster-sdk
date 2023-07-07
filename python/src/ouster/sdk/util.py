@@ -1,7 +1,10 @@
 """Miscellaneous utilites."""
 
 import os
-from typing import Optional, List
+from typing import Optional, List, Any
+from packaging import version
+import requests
+import re
 
 
 def resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
@@ -78,3 +81,20 @@ def resolve_metadata_multi(data_path: str) -> List[str]:
         list of metadata json paths guessed with the most common prefix match
     """
     return resolve_metadata_multi_with_prefix_guess(data_path)
+
+
+def firmware_version(hostname: str) -> Any:
+    firmware_version_endpoint = f"http://{hostname}/api/v1/system/firmware"
+    response = requests.get(firmware_version_endpoint)
+    if response.status_code != requests.codes.ok:
+        raise RuntimeError("Could not get sensor firmware version")
+
+    match = re.search("v(\\d+).(\\d+)\\.(\\d+)", response.text)
+    if match:
+        return version.Version(".".join(
+            [match.group(1), match.group(2),
+             match.group(3)]))
+    else:
+        raise RuntimeError(
+            f"Could not get sensor firmware version from {response.text}")
+    return None

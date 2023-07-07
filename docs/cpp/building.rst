@@ -14,7 +14,7 @@ The C++ example code is available `on the Ouster Github
 Building on Linux / macOS
 =========================
 
-To install build dependencies on Ubuntu, run:
+To install build dependencies on Ubuntu:20.04+, run:
 
 .. code:: console
 
@@ -47,9 +47,24 @@ defaults:
 
    -DBUILD_VIZ=OFF                    # Do not build the sample visualizer
    -DBUILD_PCAP=OFF                   # Do not build pcap tools
+   -DBUILD_OSF=OFF                    # Do not build OSF lib
    -DBUILD_EXAMPLES=ON                # Build C++ examples
    -DBUILD_TESTING=ON                 # Build tests
    -DBUILD_SHARED_LIBS=ON             # Build shared instead of static libraries
+
+.. admonition:: Additional dependencies required to build Ouster OSF lib
+
+   To build Ouster OSF library as part of the SDK you need to pass ``BUILD_OSF=ON`` and ensure that
+   ``libpng`` and ``flatbuffers`` packages are available on the system.
+
+   On Ubuntu:20.04+ systems::
+
+      $ sudo apt install libpng-dev libflatbuffers-dev
+
+   On macOS::
+
+      $ brew install libpng flatbuffers
+
 
 Building on Windows
 ===================
@@ -62,10 +77,10 @@ for dependencies. Follow the official documentation to set up your build environ
   <https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019>`_
 * `Visual Studio CPP Support
   <https://docs.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=vs-2019>`_
-* `Vcpkg, at tag "2022.02.23" installed and integrated with Visual Studio
+* `Vcpkg, at tag "2023.02.24" installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-**Note** You'll need to run ``git checkout 2022.02.23`` in the vcpkg directory before bootstrapping
+**Note** You'll need to run ``git checkout 2023.02.24`` in the vcpkg directory before bootstrapping
 to use the correct versions of the dependencies. Building may fail unexpectedly if you skip this
 step.
 
@@ -79,7 +94,7 @@ You should be able to install dependencies with
 
 .. code:: powershell
 
-   PS > .\vcpkg.exe install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog
+   PS > .\vcpkg.exe install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
 
 After these steps are complete, you should be able to open, build and run the ``ouster_example``
 project using Visual Studio:

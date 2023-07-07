@@ -10,6 +10,7 @@ from contextlib import closing
 from typing import cast, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 from threading import Thread
 import time
+from math import ceil
 
 from more_itertools import take
 from typing_extensions import Protocol
@@ -18,6 +19,7 @@ from . import _client
 from ._client import (SensorInfo, LidarScan, UDPProfileLidar)
 from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet,
                    PacketIdError)
+import numpy as np
 
 
 class ClientError(Exception):
@@ -134,7 +136,8 @@ class Sensor(PacketSource):
                  _flush_before_read: bool = True,
                  _flush_frames: int = 5,
                  _legacy_format: bool = False,
-                 _soft_id_check: bool = False) -> None:
+                 _soft_id_check: bool = False,
+                 _skip_metadata_beam_validation: bool = False) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
         be updated. The metadata will be fetched over the network from the
@@ -150,8 +153,9 @@ class Sensor(PacketSource):
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
             _legacy_format: if True, use legacy metadata format
-            _soft_id_check: if True, don't skip lidar packets buffers on
-            id mismatch (init_id/sn pair)
+            _soft_id_check: if True, don't skip lidar packets buffers on,
+            id mismatch (init_id/sn pair),
+            _skip_metadata_beam_validation: if True, skip metadata beam angle check
 
         Raises:
             ClientError: If initializing the client fails.
@@ -167,13 +171,14 @@ class Sensor(PacketSource):
 
         self._soft_id_check = _soft_id_check
         self._id_error_count = 0
+        self._skip_metadata_beam_validation = _skip_metadata_beam_validation
 
         # Fetch from sensor if not explicitly provided
         if metadata:
             self._metadata = metadata
         else:
             self._fetch_metadata()
-            self._metadata = SensorInfo(self._fetched_meta)
+            self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
 
         # Use args to avoid capturing self causing circular reference
@@ -181,10 +186,13 @@ class Sensor(PacketSource):
                                 args=(self._cli, self._pf))
         self._producer.start()
 
-    def _fetch_metadata(self) -> None:
+    def _fetch_metadata(self, timeout: Optional[float] = None) -> None:
+        timeout_sec = 45
+        if timeout:
+            timeout_sec = ceil(timeout)
         if not self._fetched_meta:
             self._fetched_meta = self._cli.get_metadata(
-                legacy=self._legacy_format)
+                legacy=self._legacy_format, timeout_sec = timeout_sec)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 
@@ -376,6 +384,7 @@ class Scans:
         self._source = source
         self._complete = complete
         self._timeout = timeout
+        self._timed_out = False
         self._max_latency = _max_latency
         # used to initialize LidarScan
         self._fields: Union[Dict[ChanField, FieldDType], UDPProfileLidar] = (
@@ -402,18 +411,25 @@ class Scans:
         start_ts = time.monotonic()
 
         it = iter(self._source)
+        self._packets_consumed = 0
+        self._scans_produced = 0
         while True:
             try:
                 packet = next(it)
+                self._packets_consumed += 1
             except StopIteration:
                 if ls_write is not None:
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write
                 return
+            except ClientTimeout:
+                self._timed_out = True
+                return
 
             if self._timeout is not None and (time.monotonic() >=
                                               start_ts + self._timeout):
-                raise ClientTimeout(f"No lidar scans within {self._timeout}s")
+                self._timed_out = True
+                return
 
             if isinstance(packet, LidarPacket):
                 ls_write = ls_write or LidarScan(h, w, self._fields)
@@ -422,6 +438,7 @@ class Scans:
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write
+                        self._scans_produced += 1
                         start_ts = time.monotonic()
                     ls_write = None
 
@@ -522,3 +539,33 @@ class Scans:
                    complete=complete,
                    fields=fields,
                    _max_latency=2)
+
+
+def first_valid_column(scan: LidarScan) -> int:
+    """Return first valid column of a LidarScan"""
+    return int(np.bitwise_and(scan.status, 1).argmax())
+
+
+def last_valid_column(scan: LidarScan) -> int:
+    """Return last valid column of a LidarScan"""
+    return int(scan.w - 1 - np.bitwise_and(scan.status, 1)[::-1].argmax())
+
+
+def first_valid_column_ts(scan: LidarScan) -> int:
+    """Return first valid column timestamp of a LidarScan"""
+    return scan.timestamp[first_valid_column(scan)]
+
+
+def last_valid_column_ts(scan: LidarScan) -> int:
+    """Return last valid column timestamp of a LidarScan"""
+    return scan.timestamp[last_valid_column(scan)]
+
+
+def first_valid_column_pose(scan: LidarScan) -> np.ndarray:
+    """Return first valid column pose of a LidarScan"""
+    return scan.pose[first_valid_column(scan)]
+
+
+def last_valid_column_pose(scan: LidarScan) -> np.ndarray:
+    """Return last valid column pose of a LidarScan"""
+    return scan.pose[last_valid_column(scan)]

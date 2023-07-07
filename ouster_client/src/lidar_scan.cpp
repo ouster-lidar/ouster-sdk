@@ -93,7 +93,9 @@ struct DefaultFieldsEntry {
     size_t n_fields;
 };
 
-Table<UDPProfileLidar, DefaultFieldsEntry, 32> default_scan_fields{
+using ouster::sensor::impl::MAX_NUM_PROFILES;
+// clang-format off
+Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_scan_fields{
     {{UDPProfileLidar::PROFILE_LIDAR_LEGACY,
       {legacy_field_slots.data(), legacy_field_slots.size()}},
      {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
@@ -126,10 +128,10 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types)
     : timestamp_{Header<uint64_t>::Zero(w)},
       measurement_id_{Header<uint16_t>::Zero(w)},
       status_{Header<uint32_t>::Zero(w)},
+      pose_(w, mat4d::Identity()),
       field_types_{std::move(field_types)},
       w{static_cast<std::ptrdiff_t>(w)},
       h{static_cast<std::ptrdiff_t>(h)} {
-    // TODO: error on duplicate fields
     for (const auto& ft : field_types_) {
         if (fields_.count(ft.first) > 0)
             throw std::invalid_argument("Duplicated fields found");
@@ -206,6 +208,9 @@ Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
     return status_;
 }
 
+std::vector<mat4d>& LidarScan::pose() { return pose_; }
+const std::vector<mat4d>& LidarScan::pose() const { return pose_; }
+
 bool LidarScan::complete(sensor::ColumnWindow window) const {
     const auto& status = this->status();
     auto start = window.first;
@@ -231,7 +236,7 @@ bool operator==(const LidarScan& a, const LidarScan& b) {
            a.field_types_ == b.field_types_ &&
            (a.timestamp() == b.timestamp()).all() &&
            (a.measurement_id() == b.measurement_id()).all() &&
-           (a.status() == b.status()).all();
+           (a.status() == b.status()).all() && a.pose() == b.pose();
 }
 
 LidarScanFieldTypes get_field_types(const LidarScan& ls) {
@@ -289,7 +294,7 @@ std::string to_string(const LidarScan& ls) {
     auto st = ls.status().cast<uint64_t>();
     ss << "  status = (" << st.minCoeff() << "; " << st.mean() << "; "
        << st.maxCoeff() << ")" << std::endl;
-
+    ss << "  poses = (size: " << ls.pose().size() << ")" << std::endl;
     ss << "}";
     return ss.str();
 }
@@ -631,48 +636,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     }
 
     return false;
-}
-
-std::string to_string(const Imu& imu) {
-    std::stringstream ss;
-    ss << "Imu: ";
-    ss << "linear_accel: [";
-    for (size_t i = 0; i < imu.linear_accel.size(); ++i) {
-        if (i > 0) ss << ", ";
-        ss << imu.linear_accel[i];
-    }
-    ss << "]";
-    ss << ", angular_vel = [";
-    for (size_t i = 0; i < imu.angular_vel.size(); ++i) {
-        if (i > 0) ss << ", ";
-        ss << imu.angular_vel[i];
-    }
-    ss << "]";
-    ss << ", ts: [";
-    std::array<std::string, 3> labels{"sys_ts", "accel_ts", "gyro_ts"};
-    for (size_t i = 0; i < imu.ts.size(); ++i) {
-        if (i > 0) ss << ", ";
-        ss << labels[i] << " = ";
-        ss << imu.ts[i];
-    }
-    ss << "]";
-    return ss.str();
-}
-
-void packet_to_imu(const uint8_t* buf, const ouster::sensor::packet_format& pf,
-                   Imu& imu) {
-    // Storing all available timestamps
-    imu.sys_ts = pf.imu_sys_ts(buf);
-    imu.accel_ts = pf.imu_accel_ts(buf);
-    imu.gyro_ts = pf.imu_gyro_ts(buf);
-
-    imu.linear_accel[0] = pf.imu_la_x(buf);
-    imu.linear_accel[1] = pf.imu_la_y(buf);
-    imu.linear_accel[2] = pf.imu_la_z(buf);
-
-    imu.angular_vel[0] = pf.imu_av_x(buf);
-    imu.angular_vel[1] = pf.imu_av_y(buf);
-    imu.angular_vel[2] = pf.imu_av_z(buf);
 }
 
 }  // namespace ouster

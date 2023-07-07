@@ -1,0 +1,37 @@
+namespace ouster.osf.v2;
+
+
+enum HEADER_STATUS:uint8 {
+    UNKNOWN = 0,
+
+    // INVALID is used during writing and generally means that
+    // file wasn't finished properly
+    INVALID,
+
+    // VALID means that the OSF file is properly finished and
+    // reader might expect the `metadata_offset` pointing to valid metadata
+    // object
+    VALID
+}
+
+table Header {
+    version:uint64;
+    status:HEADER_STATUS;
+
+    // Offset to the Metadata object from the beginning of the file
+    metadata_offset:uint64 = 1;
+
+    // Length of the file in bytes, should be used for validation
+    // that file was constructed and finished correctly
+    file_length:uint64 = 1;
+
+    // metadata_offset and file_length defaults to 1 (and not 0), so
+    // we can write actual zero without forcing Flatbuffer to do so.
+    // Because when we use the default value the value is actually
+    // not inserted in the buffer and so it is smaller but we want
+    // it to have a stable byte size.
+}
+
+file_identifier "OSF$";
+file_extension "osfh";
+root_type Header;

@@ -9,6 +9,7 @@ from os import path
 from random import getrandbits, shuffle, random
 from typing import (Dict, Iterable, Iterator, List, Callable)
 from itertools import chain
+from more_itertools import consume
 
 import pytest
 import time
@@ -17,7 +18,7 @@ from ouster import pcap
 from ouster.pcap import _pcap
 from ouster import client
 from ouster.client import _client
-from tests.conftest import DATA_DIR, TESTS
+from tests.conftest import PCAPS_DATA_DIR, TESTS
 from tests.test_batching import _patch_frame_id
 
 SLL_PROTO = 113
@@ -499,21 +500,22 @@ def test_record_packet_info(fake_meta, tmpdir) -> None:
 
 def test_indexed_pcap_reader(tmpdir):
     """It should correctly locate the start of frames in a PCAP file"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    def progress_callback(offset, delta, filesize):
-        pass
     sensor_info = client.SensorInfo(open(meta_path).read())
     num_frames = 10
     in_packets = list(fake_packet_stream_with_frame_id(sensor_info, num_frames, 3, 3, lambda frame_num: frame_num))
     assert len(in_packets) > 0
     file_path = path.join(tmpdir, "pcap_index_test.pcap")
     pcap.record(in_packets, file_path)
-    reader = _pcap.IndexedPcapReader(file_path, [meta_path], progress_callback)
+    reader = _pcap.IndexedPcapReader(file_path, [meta_path])
+    while reader.next_packet():
+        reader.update_index_for_current_packet()
+    reader.reset()
 
     # the index should contain the number of frames from the file
-    assert reader.frame_count(0) == num_frames
-    assert len(reader.frame_indices[0]) == num_frames
+    assert reader.get_index().frame_count(0) == num_frames
+    assert len(reader.get_index().frame_indices[0]) == num_frames
 
     # make sure that the file offset for a frame in the index corresponds to the offset of the first packet of the frame
     frame_num = 0
@@ -523,17 +525,15 @@ def test_indexed_pcap_reader(tmpdir):
         if info.dst_port == sensor_info.udp_port_lidar:
             packet_frame_id = reader.current_frame_id()
             if previous_frame_id is None or packet_frame_id > previous_frame_id:
-                assert reader.frame_indices[0][frame_num] == info.file_offset
+                assert reader.get_index().frame_indices[0][frame_num] == info.file_offset
                 previous_frame_id = packet_frame_id
                 frame_num += 1
 
 
 def test_indexed_pcap_reader_seek(tmpdir):
     """After seeking to the start of a frame, next_packet should return the first packet of that frame"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    def progress_callback(offset, delta, filesize):
-        pass
     sensor_info = client.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
     num_frames = 10
@@ -543,22 +543,23 @@ def test_indexed_pcap_reader_seek(tmpdir):
     assert len(in_packets) > 0
     file_path = path.join(tmpdir, "pcap_index_test.pcap")
     pcap.record(in_packets, file_path)
-    reader = _pcap.IndexedPcapReader(file_path, [meta_path], progress_callback)
+    reader = _pcap.IndexedPcapReader(file_path, [meta_path])
+    while reader.next_packet():
+        reader.update_index_for_current_packet()
+    reader.reset()
 
     for frame in range(num_frames):
-        reader.seek_to_frame(0, frame)
+        reader.get_index().seek_to_frame(reader, 0, frame)
         assert packet_format.lidar_packet_size == reader.next_packet()
-        assert reader.current_info().file_offset == reader.frame_indices[0][frame]
+        assert reader.current_info().file_offset == reader.get_index().frame_indices[0][frame]
         assert reader.current_frame_id() == frame
         assert reader.current_frame_id() == packet_format.frame_id(reader.current_data().tobytes())
 
 
 def test_out_of_order_frames(tmpdir):
     """Frames that are out of order are skipped"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    def progress_callback(offset, delta, filesize):
-        pass
     sensor_info = client.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
     num_frames = 10
@@ -572,25 +573,26 @@ def test_out_of_order_frames(tmpdir):
     assert len(in_packets) > 0
     file_path = path.join(tmpdir, "pcap_index_test.pcap")
     pcap.record(in_packets, file_path)
-    reader = _pcap.IndexedPcapReader(file_path, [meta_path], progress_callback)
+    reader = _pcap.IndexedPcapReader(file_path, [meta_path])
+    while reader.next_packet():
+        reader.update_index_for_current_packet()
+    reader.reset()
 
     # since odd number frames are out of order, there should be half as many in the index as in the input
-    assert len(reader.frame_indices[0]) == num_frames // 2
+    assert len(reader.get_index().frame_indices[0]) == num_frames // 2
 
-    for frame in range(len(reader.frame_indices[0])):
-        reader.seek_to_frame(0, frame)
+    for frame in range(len(reader.get_index().frame_indices[0])):
+        reader.get_index().seek_to_frame(reader, 0, frame)
         assert packet_format.lidar_packet_size == reader.next_packet()
-        assert reader.current_info().file_offset == reader.frame_indices[0][frame]
+        assert reader.current_info().file_offset == reader.get_index().frame_indices[0][frame]
         assert reader.current_frame_id() == (frame + 1) * 2
         assert reader.current_frame_id() == packet_format.frame_id(reader.current_data().tobytes())
 
 
 def test_current_data(fake_meta, tmpdir):
     """It should provide access to current packet data as a memory view"""
-    meta_path = path.join(DATA_DIR, f"{TESTS['dual-2.2']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    def progress_callback(offset, delta, filesize):
-        pass
     sensor_info = client.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
     num_frames = 10
@@ -604,7 +606,11 @@ def test_current_data(fake_meta, tmpdir):
     assert len(in_packets) > 0
     file_path = path.join(tmpdir, "pcap_index_test.pcap")
     pcap.record(in_packets, file_path)
-    reader = _pcap.IndexedPcapReader(file_path, [meta_path], progress_callback)
+    reader = _pcap.IndexedPcapReader(file_path, [meta_path])
+    while reader.next_packet():
+        reader.update_index_for_current_packet()
+    reader.reset()
+
     frame_ids = []
     while reader.next_packet():
         info = reader.current_info()
@@ -612,3 +618,19 @@ def test_current_data(fake_meta, tmpdir):
             packet_data = reader.current_data()
             frame_ids.append(packet_format.frame_id(packet_data.tobytes()))
     assert frame_ids == [2, 1, 4, 3, 6, 5, 8, 7, 10, 9]
+
+
+def test_validation():
+    """The Pcap class should accumlate errors detected by LidarPacketValidator"""
+    meta_file_path = path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
+    pcap_file_path = path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    metadata = client.SensorInfo(open(meta_file_path).read())
+    metadata.init_id = 123
+    metadata.format.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
+    reader = pcap.Pcap(pcap_file_path, metadata)
+    consume(reader)
+    assert reader._errors == {
+        client.PacketIdError('Metadata init_id/sn does not match: expected by metadata - \
+123/122150000150, but got from packet buffer - 5431292/122150000150'): 64,
+        client.PacketSizeError('Expected a packet of size 41216 but got a buffer of size 8448'): 64
+    }

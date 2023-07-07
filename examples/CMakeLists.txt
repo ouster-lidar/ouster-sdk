@@ -17,6 +17,13 @@ else()
   message(STATUS "No ouster_pcap library available; skipping examples")
 endif()
 
+if(TARGET OusterSDK::ouster_osf)
+  add_executable(osf_reader_example osf_reader_example.cpp)
+  target_link_libraries(osf_reader_example PRIVATE OusterSDK::ouster_osf)
+else()
+  message(STATUS "No ouster_osf library available; skipping examples")
+endif()
+
 if(TARGET OusterSDK::ouster_viz)
   add_executable(viz_example viz_example.cpp)
   target_link_libraries(viz_example PRIVATE OusterSDK::ouster_client OusterSDK::ouster_viz)

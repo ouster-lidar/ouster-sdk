@@ -1,4 +1,4 @@
-ARG BASE="ubuntu:18.04"
+ARG BASE="ubuntu:20.04"
 
 FROM ${BASE}
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -24,11 +24,12 @@ RUN set -xe \
  libglfw3-dev \
  libglew-dev \
  libspdlog-dev \
+ libpng-dev \
+ libflatbuffers-dev \
 # Python deps
  python3-dev \
  python3-pip \
  python3-venv \
- pybind11-dev \
 # Install any additional available cpython versions for testing
  'python3.(7|8|9|10)-dev' \
  wget \
@@ -50,7 +51,7 @@ WORKDIR ${BUILD_HOME}
 RUN set -xe \
 # use oldest available, supported python as tox default
 && PYTHON=$(which python3.7 python3.8 python3.9 python3.10 | head -1) \
-&& $PYTHON -m pip install --no-cache-dir --user -U pip tox
+&& $PYTHON -m pip install --no-cache-dir --user -U pip tox pybind11
 
 # Populate source dir
 COPY . ${OUSTER_SDK_PATH}

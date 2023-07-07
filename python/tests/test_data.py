@@ -6,6 +6,8 @@ Tests for lidar data parsing.
 
 Checks that the output of parsing hasn't changed unexpectedly.
 """
+import os
+import json
 from copy import deepcopy
 
 import numpy as np
@@ -13,6 +15,9 @@ import pytest
 
 from ouster import client
 from ouster.client import _client
+from ouster.pcap import _pcap
+
+from tests.conftest import PCAPS_DATA_DIR
 
 
 def test_make_packets(meta: client.SensorInfo) -> None:
@@ -173,6 +178,12 @@ def test_scan_writeable() -> None:
 
     ls.status[:] = 0x1
     assert np.all(ls.status == 0x1)
+
+    assert np.all(ls.pose == np.eye(4))
+
+    ls.pose[1][0, 2] = 8
+    assert np.all(ls.pose[1] == np.array([[1, 0, 8, 0], [0, 1, 0, 0],
+                                          [0, 0, 1, 0], [0, 0, 0, 1]]))
 
 
 def test_scan_from_native() -> None:
@@ -436,6 +447,7 @@ def test_scan_copy_eq() -> None:
     ls0 = client.LidarScan(32, 512)
     ls0.status[:] = 0x1
     ls0.field(client.ChanField.REFLECTIVITY)[:] = 100
+    ls0.pose[:, 0, 3] = 8
 
     ls1 = deepcopy(ls0)
 
@@ -466,6 +478,12 @@ def test_scan_copy_eq() -> None:
     ls1.field(client.ChanField.RANGE)[0, 0] = 42
     assert ls0 == ls1
 
+    ls0.pose[1] = np.eye(4)
+    assert ls0 != ls1
+
+    ls0.pose[1, 0, 3] = 8
+    assert ls0 == ls1
+
 
 def test_scan_eq_with_custom_fields() -> None:
     """Test equality with custom fields."""
@@ -488,3 +506,116 @@ def test_scan_eq_with_custom_fields() -> None:
     assert ls1 is not ls0
     assert ls1 != ls0
     assert ls2 == ls0
+
+
+def test_error_eq() -> None:
+    assert client.PacketSizeError("abc") == client.PacketSizeError("abc")
+
+
+def test_lidar_packet_validator() -> None:
+    """LidarPacketValidator should be capable of the same init_id/sn check as LidarPacket."""
+    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
+    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    metadata = client.SensorInfo(open(meta_file_path).read())
+
+    metadata2 = deepcopy(metadata)
+    metadata2.init_id = 1234
+    metadata2.sn = "5678"
+
+    validator = client.LidarPacketValidator(metadata2)
+    pcap_handle = _pcap.replay_initialize(pcap_file_path)
+    buf = bytearray(2**16)
+    info = _pcap.packet_info()
+    _pcap.next_packet_info(pcap_handle, info)
+    n_bytes = _pcap.read_packet(pcap_handle, buf)
+    errors = validator.check_packet(buf, n_bytes)
+    assert n_bytes == 8448
+    try:
+        # LidarPacket constructor should throw the same error if _raise_on_id_check is True
+        client.LidarPacket(buf, metadata2, None, _raise_on_id_check=True)
+    except client.data.PacketIdError as e:
+        assert type(errors) == list
+        assert len(errors) == 1
+        assert str(e) == str(errors[0])
+        assert str(e) == "Metadata init_id/sn does not match: expected by metadata \
+- 1234/5678, but got from packet buffer - 5431292/122150000150"
+        pass
+    else:
+        assert False, "Expected an exception to be raised by client.LidarPacket."
+    finally:
+        _pcap.replay_uninitialize(pcap_handle)
+
+
+def test_lidar_packet_validator_2() -> None:
+    """LidarPacketValidator check_packet should return None if there are no issues."""
+    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
+    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    metadata = client.SensorInfo(open(meta_file_path).read())
+
+    metadata2 = deepcopy(metadata)
+
+    validator = client.LidarPacketValidator(metadata2)
+    pcap_handle = _pcap.replay_initialize(pcap_file_path)
+    buf = bytearray(2**16)
+    info = _pcap.packet_info()
+    _pcap.next_packet_info(pcap_handle, info)
+    n_bytes = _pcap.read_packet(pcap_handle, buf)
+    assert n_bytes == 8448
+    assert validator.check_packet(buf, n_bytes) == []
+    _pcap.replay_uninitialize(pcap_handle)
+
+
+def test_lidar_packet_validator_3() -> None:
+    """LidarPacketValidator check_packet should identify a packet
+    that's the wrong size according to the lidar UDP profile."""
+    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
+    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    metadata = client.SensorInfo(open(meta_file_path).read())
+
+    metadata2 = deepcopy(metadata)
+    metadata2.format.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
+
+    validator = client.LidarPacketValidator(metadata2)
+    pcap_handle = _pcap.replay_initialize(pcap_file_path)
+    buf = bytearray(2**16)
+    info = _pcap.packet_info()
+    _pcap.next_packet_info(pcap_handle, info)
+    n_bytes = _pcap.read_packet(pcap_handle, buf)
+    assert n_bytes == 8448
+    errors = validator.check_packet(buf, n_bytes)
+    assert len(errors) == 1
+    assert type(errors[0]) == client.PacketSizeError
+    assert str(errors[0]) == 'Expected a packet of size 41216 but got a buffer of size 8448'
+    _pcap.replay_uninitialize(pcap_handle)
+
+
+def test_lidar_packet_validator_4() -> None:
+    """LidarPacketValidator check_packet should identify a packet
+    that's the wrong size according to the data format."""
+    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
+    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+    meta_json = json.load(open(meta_file_path))
+    meta_json['data_format']['columns_per_frame'] = 4096
+    meta_json['data_format']['pixels_per_column'] = 16
+    meta_json['data_format']['pixel_shift_by_row'] = [0] * 16
+    meta_json['beam_altitude_angles'] = [1] * 16
+    meta_json['beam_azimuth_angles'] = [1] * 16
+    meta_json['prod_sn'] = '1234'
+    metadata2 = client.SensorInfo(json.dumps(meta_json))
+
+    validator = client.LidarPacketValidator(metadata2)
+    pcap_handle = _pcap.replay_initialize(pcap_file_path)
+    buf = bytearray(2**16)
+    info = _pcap.packet_info()
+    _pcap.next_packet_info(pcap_handle, info)
+    n_bytes = _pcap.read_packet(pcap_handle, buf)
+    assert n_bytes == 8448
+    errors = validator.check_packet(buf, n_bytes)
+    assert len(errors) == 2
+    assert type(errors[0]) == client.PacketIdError
+    assert str(
+        errors[0]) == 'Metadata init_id/sn does not match: expected by metadata - \
+5431292/1234, but got from packet buffer - 5431292/122150000150'
+    assert type(errors[1]) == client.PacketSizeError
+    assert str(errors[1]) == 'Expected a packet of size 1280 but got a buffer of size 8448'
+    _pcap.replay_uninitialize(pcap_handle)

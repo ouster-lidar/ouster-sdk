@@ -499,26 +499,16 @@ PYBIND11_PLUGIN(_viz) {
             "set_column_poses",
             [](viz::Cloud& self,
                py::array_t<float, py::array::f_style | py::array::forcecast>
-                   rotation,
-               py::array_t<float, py::array::f_style | py::array::forcecast>
-                   translation) {
-                check_array(rotation, self.get_cols() * 9, 0, 'F');
-                check_array(translation, self.get_cols() * 3, 0, 'F');
-                self.set_column_poses(rotation.data(), translation.data());
+                   column_poses) {
+                check_array(column_poses, self.get_cols() * 16, 0, 'F');
+                self.set_column_poses(column_poses.data());
             },
-            py::arg("rotation"), py::arg("translation"),
+            py::arg("column_poses"),
             R"(
-                 Set the rotation and translation values per column.
+                 Set scan poses (per every column).
 
                  Args:
-                    rotation: array of exactly 9n where n is number of columns,
-                         so that the rotation of the ith column is ``i``,
-                         ``i + 3n``, ``i + 6n``, ``i + n``, ``i + n + 3n``,
-                         ``i + n + 6n``, ``i + 2n``, ``i + 2n + 3n``,
-                         ``i + 2n + 6n``
-                    translation: array of exactly 3n where n is number of
-                         columns, so that the translation of the ith column is
-                         ``i``, ``i + n``, ``i + 2n``
+                    column_poses: array of poses (Wx4x4) per every column.
              )")
         .def(
             "set_pose",

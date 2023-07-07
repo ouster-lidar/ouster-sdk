@@ -103,7 +103,7 @@ static const Table<ChanField, FieldInfo, 14> five_word_pixel_info{{
     {ChanField::RAW32_WORD5, {UINT32, 16, 0, 0}},
 }};
 
-Table<UDPProfileLidar, ProfileEntry, 32> profiles{{
+Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles{{
     {UDPProfileLidar::PROFILE_LIDAR_LEGACY,
      {legacy_field_info.data(), legacy_field_info.size(), 12}},
     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,

@@ -14,6 +14,14 @@ find_library(PCAP_LIBRARY
   NAMES pcap pcap_static wpcap
   HINTS ${PC_PCAP_LIBRARY_DIRS})
 
+if(NOT TARGET libpcap::libpcap)
+  add_library(libpcap::libpcap UNKNOWN IMPORTED)
+  set_target_properties(libpcap::libpcap PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${PCAP_INCLUDE_DIR}"
+    IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+    IMPORTED_LOCATION "${PCAP_LIBRARY}")
+endif()
+
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Pcap
   REQUIRED_VARS PCAP_LIBRARY PCAP_INCLUDE_DIR

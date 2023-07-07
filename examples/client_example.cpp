@@ -37,9 +37,8 @@ int main(int argc, char* argv[]) {
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
-    // Limit ouster_client log statements to "info" and direct the output to log
-    // file rather than the console (default).
-    sensor::init_logger("info", "ouster.log");
+    // Limit ouster_client log statements to "info"
+    sensor::init_logger("info");
 
     std::cerr << "Ouster client example " << ouster::SDK_VERSION << std::endl;
     /*

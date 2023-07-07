@@ -7,16 +7,17 @@ include(DefaultBuildType)
 include(VcpkgEnv)
 
 # ==== Project Name ====
-project(ouster_example VERSION 20230403)
+project(ouster_example VERSION 20230710)
 
 # generate version header
-set(OusterSDK_VERSION_STRING 0.8.1)
+set(OusterSDK_VERSION_STRING 0.9.0)
 include(VersionGen)
 
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 option(BUILD_SHARED_LIBS "Build shared libraries." OFF)
 option(BUILD_PCAP "Build pcap utils." ON)
+option(BUILD_OSF "Build Ouster OSF library." OFF)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_EXAMPLES "Build C++ examples" OFF)
@@ -56,6 +57,10 @@ if(BUILD_PCAP)
   add_subdirectory(ouster_pcap)
 endif()
 
+if(BUILD_OSF)
+  add_subdirectory(ouster_osf)
+endif()
+
 if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
 endif()
@@ -88,7 +93,7 @@ set(CPACK_SOURCE_IGNORE_FILES /.git /dist)
 set(CPACK_DEBIAN_PACKAGE_NAME ouster-sdk)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS
-  "libjsoncpp-dev, libeigen3-dev, libtins-dev, libglfw3-dev, libglew-dev, libspdlog-dev")
+  "libjsoncpp-dev, libeigen3-dev, libtins-dev, libglfw3-dev, libglew-dev, libspdlog-dev, libpng-dev, libflatbuffers-dev")
 include(CPack)
 
 # ==== Install ====

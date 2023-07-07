@@ -52,6 +52,7 @@ class LidarScan {
     Header<uint64_t> timestamp_;
     Header<uint16_t> measurement_id_;
     Header<uint32_t> status_;
+    std::vector<mat4d> pose_;
     std::map<sensor::ChanField, impl::FieldSlot> fields_;
     LidarScanFieldTypes field_types_;
 
@@ -235,6 +236,15 @@ class LidarScan {
 
     /** @copydoc status() */
     Eigen::Ref<const Header<uint32_t>> status() const;
+
+    /**
+     * Access the vector of poses (per each timestamp).
+     *
+     * @return a reference to vector with poses (4x4) homogeneous.
+     */
+    std::vector<mat4d>& pose();
+    /** @copydoc pose() */
+    const std::vector<mat4d>& pose() const;
 
     /**
      * Assess completeness of scan.
@@ -481,47 +491,6 @@ class ScanBatcher {
      */
     bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 };
-
-/**
- * Imu Data
- */
-struct Imu {
-    union {
-        std::array<double, 3> angular_vel;
-        struct {
-            double wx, wy, wz;
-        };
-    };
-    union {
-        std::array<double, 3> linear_accel;
-        struct {
-            double ax, ay, az;
-        };
-    };
-    union {
-        std::array<uint64_t, 3> ts;
-        struct {
-            uint64_t sys_ts, accel_ts, gyro_ts;
-        };
-    };
-};
-
-/** Equality for Imu */
-inline bool operator==(const Imu& a, const Imu& b) {
-    return a.angular_vel == b.angular_vel && a.linear_accel == b.linear_accel &&
-           a.ts == b.ts;
-};
-
-/** Not Equality for Imu */
-inline bool operator!=(const Imu& a, const Imu& b) {
-    return !(a == b);
-};
-
-std::string to_string(const Imu& imu);
-
-/// Reconstructs buf with UDP imu_packet to osf::Imu object
-void packet_to_imu(const uint8_t* buf, const ouster::sensor::packet_format& pf,
-                   Imu& imu);
 
 }  // namespace ouster
 
