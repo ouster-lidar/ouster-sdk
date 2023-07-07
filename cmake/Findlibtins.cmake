@@ -54,5 +54,6 @@ if(NOT TARGET libtins)
   add_library(libtins INTERFACE)
   set_target_properties(libtins PROPERTIES
     INTERFACE_LINK_LIBRARIES ${LIBTINS_LIBRARIES})
+  add_library(libtins::libtins ALIAS libtins)
   install(TARGETS libtins EXPORT ouster-sdk-targets)
 endif()

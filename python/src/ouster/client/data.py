@@ -5,14 +5,14 @@ All rights reserved.
 
 from copy import deepcopy
 from enum import Enum
-from typing import Callable, Iterator, Type, List, Optional, Union
+from typing import Callable, Iterator, Type, List, Optional, Union, Dict
 import logging
 import warnings
 
 import numpy as np
 
 from . import _client
-from ._client import (ChanField, LidarScan, SensorInfo, Imu)
+from ._client import (ChanField, LidarScan, SensorInfo)
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""
@@ -22,6 +22,9 @@ FieldDType = Type[np.unsignedinteger]
 
 Packet = Union['ImuPacket', 'LidarPacket']
 """Packets emitted by a sensor."""
+
+FieldTypes = Dict[ChanField, FieldDType]
+"""LidarScan chan fields with types"""
 
 logger = logging.getLogger("ouster.client.data")
 
@@ -115,9 +118,57 @@ class ColHeader(Enum):
         return self.value
 
 
-class PacketIdError(Exception):
+class PacketValidationFailure(Exception):
+    def __eq__(self, other):
+        return type(self) == type(other) and self.args == other.args
+
+    def __hash__(self):
+        return hash((type(self), self.args))
+
+
+class PacketIdError(PacketValidationFailure):
     """Exception raised when init_id/sn from metadata and packet doesn't match."""
     pass
+
+
+class PacketSizeError(PacketValidationFailure):
+    """Exception raised when the packet size wrong for the given metadata."""
+    pass
+
+
+class LidarPacketValidator:
+    """A utility class for validating lidar packets for a given sensor info."""
+    def __init__(self, metadata: SensorInfo, checks=['id_and_sn_valid', 'packet_size_valid']):
+        self._metadata = metadata
+        self._metadata_init_id = metadata.init_id
+        self._metadata_sn = int(metadata.sn)
+        self._pf = _client.PacketFormat.from_info(metadata)
+        self._checks = [getattr(self, check) for check in checks]
+
+    def check_packet(self, data: BufferT, n_bytes: int) -> List[PacketValidationFailure]:
+        errors = []
+        for check in self._checks:
+            error = check(data, n_bytes)
+            if error:
+                errors.append(error)
+        return errors
+
+    def id_and_sn_valid(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
+        """Check the metadata init_id/sn and packet init_id/sn mismatch."""
+        init_id = self._pf.init_id(data)
+        sn = self._pf.prod_sn(data)
+        if bool(init_id and (init_id != self._metadata_init_id or sn != self._metadata_sn)):
+            error_msg = f"Metadata init_id/sn does not match: " \
+                    f"expected by metadata - {self._metadata_init_id}/{self._metadata_sn}, " \
+                    f"but got from packet buffer - {init_id}/{sn}"
+            return PacketIdError(error_msg)
+        return None
+
+    def packet_size_valid(self, data: BufferT, n_bytes: int) -> Optional[PacketValidationFailure]:
+        if self._pf.lidar_packet_size != n_bytes:
+            return PacketSizeError(
+                f"Expected a packet of size {self._pf.lidar_packet_size} but got a buffer of size {n_bytes}")
+        return None
 
 
 class LidarPacket:
@@ -399,7 +450,7 @@ def XYZLut(
     return res
 
 
-def imu_from_packet(packet: ImuPacket) -> Imu:
-    """Transform ImuPacket to client.Imu data type"""
-    return Imu(packet.accel, packet.angular_vel, packet.sys_ts, packet.accel_ts,
-               packet.gyro_ts)
+def packet_ts(packet: Packet) -> int:
+    """Return the packet timestamp in nanoseconds"""
+    return int(packet.capture_timestamp *
+               10**9) if packet.capture_timestamp else 0

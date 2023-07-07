@@ -1,0 +1,11 @@
+namespace ouster.osf.v2;
+
+// ============ Lidar Sensor ========================================
+
+table LidarSensor {
+    metadata:string;
+}
+
+// MetadataEntry.type: ouster/v1/os_sensor/LidarSensor
+root_type LidarSensor;
+file_identifier "oLS_";

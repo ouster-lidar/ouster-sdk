@@ -5,8 +5,8 @@
 using std::string;
 using namespace ouster::sensor::impl;
 
-SensorHttpImp::SensorHttpImp(const string& hostname)
-    : http_client(std::make_unique<CurlClient>("http://" + hostname)) {}
+SensorHttpImp::SensorHttpImp(const string& hostname, int timeout_sec)
+    : http_client(std::make_unique<CurlClient>("http://" + hostname, timeout_sec)) {}
 
 SensorHttpImp::~SensorHttpImp() = default;
 
@@ -96,16 +96,16 @@ void SensorHttpImp::execute(const string& url, const string& validation) const {
                                  validation + "]");
 }
 
-SensorHttpImp_2_2::SensorHttpImp_2_2(const string& hostname)
-    : SensorHttpImp(hostname) {}
+SensorHttpImp_2_2::SensorHttpImp_2_2(const string& hostname, int timeout_sec)
+    : SensorHttpImp(hostname, timeout_sec) {}
 
 void SensorHttpImp_2_2::set_udp_dest_auto() const {
     return execute("api/v1/sensor/cmd/set_udp_dest_auto",
                    "\"set_config_param\"");
 }
 
-SensorHttpImp_2_1::SensorHttpImp_2_1(const string& hostname)
-    : SensorHttpImp_2_2(hostname) {}
+SensorHttpImp_2_1::SensorHttpImp_2_1(const string& hostname, int timeout_sec)
+    : SensorHttpImp_2_2(hostname, timeout_sec) {}
 
 Json::Value SensorHttpImp_2_1::metadata() const {
     Json::Value root;

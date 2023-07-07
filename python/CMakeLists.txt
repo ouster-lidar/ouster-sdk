@@ -23,10 +23,11 @@ else()
 endif()
 
 option(BUILD_VIZ "Enabled for Python build" ON)
+option(BUILD_OSF "Build OSF library." ON)
 option(BUILD_PCAP "Enabled for Python build" ON)
 
 # ==== Requirements ====
-find_package(pybind11 2.0 REQUIRED)
+find_package(Pybind11Internal)
 find_package(Eigen3 REQUIRED)
 find_package(OusterSDK REQUIRED)
 find_package(spdlog REQUIRED)
@@ -70,3 +71,9 @@ target_include_directories(_viz SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_viz PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/sdk/$<0:>)
+
+pybind11_add_module(_osf src/cpp/_osf.cpp)
+target_link_libraries(_osf PRIVATE ouster_osf ouster_build)
+set_target_properties(_osf PROPERTIES
+  POSITION_INDEPENDENT_CODE TRUE
+  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/osf/$<0:>)

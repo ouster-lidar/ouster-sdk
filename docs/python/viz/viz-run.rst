@@ -51,13 +51,16 @@ Keyboard controls:
     ``2``           Toggle second return point cloud visibility
     ``0``           Toggle orthographic camera
     ``=/-``         Dolly in/out
-    ``(space)``     Toggle pause
+    ``?``           Prints key bindings
+    ``space``       Toggle pause
+    ``esc``         Exit visualization
     ``./,``         Step one frame forward/back
     ``ctrl + ./,``  Step 10 frames forward/back
     ``>/<``         Increase/decrease playback rate (during replay)
     ``shift``       Camera Translation with mouse drag
-    ``shift-z``     Save a screenshot of the current view
-    ``shift-x``     Toggle a continuous saving of screenshots
+    ``shift+z``     Save a screenshot of the current view
+    ``shift+x``     Toggle a continuous saving of screenshots
+    ``?``           Print keys to standard out
     ==============  ===============================================
 
 ..

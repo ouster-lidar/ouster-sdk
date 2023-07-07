@@ -31,10 +31,9 @@ To convert the first ``5`` scans of our sample data from a pcap file, you can tr
 
 The source code of an example below:
 
-.. literalinclude:: /../python/src/ouster/sdk/examples/pcap.py
+.. literalinclude:: /../python/src/ouster/cli/core/pcap.py
     :start-after: [doc-stag-pcap-to-csv]
     :end-before: [doc-etag-pcap-to-csv]
-    :emphasize-lines: 37-41
     :linenos:
     :dedent:
 

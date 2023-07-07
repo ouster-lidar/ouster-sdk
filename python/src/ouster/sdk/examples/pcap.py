@@ -11,8 +11,6 @@ This module has a rudimentary command line interface. For usage, run::
 import os
 import argparse
 from contextlib import closing
-from typing import Tuple, List
-
 import numpy as np
 
 from ouster import client, pcap
@@ -112,121 +110,6 @@ def pcap_display_xyz_points(source: client.PacketSource,
     ax.scatter(x, y, z, c=normalize(key.flatten()), s=0.2)
     plt.show()
     # [doc-etag-pcap-plot-xyz-points]
-
-
-def pcap_to_csv(source: client.PacketSource,
-                metadata: client.SensorInfo,
-                num: int = 0,
-                csv_dir: str = ".",
-                csv_base: str = "pcap_out",
-                csv_ext: str = "csv") -> None:
-    """Write scans from a pcap to csv files (one per lidar scan).
-
-    The number of saved lines per csv file is always H x W, which corresponds to
-    a full 2D image representation of a lidar scan.
-
-    Each line in a csv file is (for LEGACY profile):
-
-        TIMESTAMP, RANGE (mm), SIGNAL, NEAR_IR, REFLECTIVITY, X (mm), Y (mm), Z (mm)
-
-    If ``csv_ext`` ends in ``.gz``, the file is automatically saved in
-    compressed gzip format. :func:`.numpy.loadtxt` can be used to read gzipped
-    files transparently back to :class:`.numpy.ndarray`.
-
-    Args:
-        source: PacketSource from pcap
-        metadata: associated SensorInfo for PacketSource
-        num: number of scans to save from pcap to csv files
-        csv_dir: path to the directory where csv files will be saved
-        csv_base: string to use as the base of the filename for pcap output
-        csv_ext: file extension to use, "csv" by default
-    """
-
-    dual = False
-    if metadata.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
-        dual = True
-        print("Note: You've selected to convert a dual returns pcap to CSV. Each row "
-              "will represent a single pixel, so that both returns for that pixel will "
-              "be on a single row. As this is an example we provide for getting "
-              "started, we realize that you may have conversion needs which are not met "
-              "by this function. You can find the source code on the Python SDK "
-              "documentation website to modify it for your own needs.")
-
-    # ensure that base csv_dir exists
-    if not os.path.exists(csv_dir):
-        os.makedirs(csv_dir)
-
-    # construct csv header and data format
-    def get_fields_info(scan: client.LidarScan) -> Tuple[str, List[str]]:
-        field_names = 'TIMESTAMP (ns)'
-        field_fmts = ['%d']
-        for chan_field in scan.fields:
-            field_names += f', {chan_field}'
-            if chan_field in [client.ChanField.RANGE, client.ChanField.RANGE2]:
-                field_names += ' (mm)'
-            field_fmts.append('%d')
-        field_names += ', X (mm), Y (mm), Z (mm)'
-        field_fmts.extend(3 * ['%d'])
-        if dual:
-            field_names += ', X2 (mm), Y2 (mm), Z2 (mm)'
-            field_fmts.extend(3 * ['%d'])
-        return field_names, field_fmts
-
-    field_names: str = ''
-    field_fmts: List[str] = []
-
-    # [doc-stag-pcap-to-csv]
-    from itertools import islice
-    # precompute xyzlut to save computation in a loop
-    xyzlut = client.XYZLut(metadata)
-
-    # create an iterator of LidarScans from pcap and bound it if num is specified
-    scans = iter(client.Scans(source))
-    if num:
-        scans = islice(scans, num)
-
-    for idx, scan in enumerate(scans):
-
-        # initialize the field names for csv header
-        if not field_names or not field_fmts:
-            field_names, field_fmts = get_fields_info(scan)
-
-        # copy per-column timestamps for each channel
-        timestamps = np.tile(scan.timestamp, (scan.h, 1))
-
-        # grab channel data
-        fields_values = [scan.field(ch) for ch in scan.fields]
-
-        # use integer mm to avoid loss of precision casting timestamps
-        xyz = (xyzlut(scan.field(client.ChanField.RANGE)) * 1000).astype(
-            np.int64)
-
-        if dual:
-            xyz2 = (xyzlut(scan.field(client.ChanField.RANGE2)) * 1000).astype(
-                np.int64)
-
-            # get all data as one H x W x num fields int64 array for savetxt()
-            frame = np.dstack((timestamps, *fields_values, xyz, xyz2))
-
-        else:
-            # get all data as one H x W x num fields int64 array for savetxt()
-            frame = np.dstack((timestamps, *fields_values, xyz))
-
-        # not necessary, but output points in "image" vs. staggered order
-        frame = client.destagger(metadata, frame)
-
-        # write csv out to file
-        csv_path = os.path.join(csv_dir, f'{csv_base}_{idx:06d}.{csv_ext}')
-        print(f'write frame #{idx}, to file: {csv_path}')
-
-        header = '\n'.join([f'frame num: {idx}', field_names])
-
-        np.savetxt(csv_path,
-                   frame.reshape(-1, frame.shape[2]),
-                   fmt=field_fmts,
-                   delimiter=',',
-                   header=header)
-    # [doc-etag-pcap-to-csv]
 
 
 def pcap_to_las(source: client.PacketSource,
@@ -385,15 +268,25 @@ def pcap_read_packets(
     # [doc-etag-pcap-read-packets]
 
 
+def pcap_to_csv(
+        source: client.PacketSource,
+        metadata: client.SensorInfo,
+        num: int = 0) -> None:
+    # leave comment directing users to ouster-cli
+    print("NOTICE: The pcap-to-csv example has been retired in favor of "
+          "the ouster-cli utility installed with the Python Ouster SDK.\n"
+          "To try: ouster-cli source <PCAP> convert <OUT.CSV>")
+
+
 def main():
     """Pcap examples runner."""
     examples = {
         "open3d-one-scan": pcap_3d_one_scan,
         "plot-xyz-points": pcap_display_xyz_points,
-        "pcap-to-csv": pcap_to_csv,
         "pcap-to-las": pcap_to_las,
         "pcap-to-pcd": pcap_to_pcd,
         "pcap-to-ply": pcap_to_ply,
+        "pcap-to-csv": pcap_to_csv,
         "query-scan": pcap_query_scan,
         "read-packets": pcap_read_packets,
     }

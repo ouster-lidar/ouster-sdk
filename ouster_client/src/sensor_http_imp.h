@@ -26,7 +26,7 @@ class SensorHttpImp : public util::SensorHttp {
      *
      * @param[in] hostname hostname of the sensor to communicate with.
      */
-    SensorHttpImp(const std::string& hostname);
+    SensorHttpImp(const std::string& hostname, int timeout_sec);
 
     /**
      * Deconstruct the sensor http interface.
@@ -130,7 +130,7 @@ class SensorHttpImp : public util::SensorHttp {
 // TODO: remove when firmware 2.2 has been fully phased out
 class SensorHttpImp_2_2 : public SensorHttpImp {
    public:
-    SensorHttpImp_2_2(const std::string& hostname);
+    SensorHttpImp_2_2(const std::string& hostname, int timeout_sec);
 
     void set_udp_dest_auto() const override;
 };
@@ -145,7 +145,7 @@ class SensorHttpImp_2_1 : public SensorHttpImp_2_2 {
      *
      * @param[in] hostname hostname of the sensor to communicate with.
      */
-    SensorHttpImp_2_1(const std::string& hostname);
+    SensorHttpImp_2_1(const std::string& hostname, int timeout_sec);
 
     /**
      * Queries the sensor metadata.

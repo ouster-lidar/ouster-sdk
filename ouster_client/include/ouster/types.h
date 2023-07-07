@@ -367,7 +367,7 @@ struct data_format {
     ColumnWindow column_window;  ///< window of columns over which sensor fires
     UDPProfileLidar udp_profile_lidar;  ///< profile of lidar packet
     UDPProfileIMU udp_profile_imu;      ///< profile of imu packet
-    uint16_t fps;                ///< frames per second
+    uint16_t fps;                       ///< frames per second
 };
 
 /** Stores necessary information from sensor to parse and project sensor data.
@@ -675,10 +675,13 @@ void check_signal_multiplier(const double signal_multiplier);
  * @throw runtime_error if the text is not valid json
  *
  * @param[in] metadata a text blob returned by get_metadata from client.h.
+ * @param[in] skip_beam_validation whether to skip validation on metdata - not
+ * for use on recorded data or metadata from sensors
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
-sensor_info parse_metadata(const std::string& metadata);
+sensor_info parse_metadata(const std::string& metadata,
+                           bool skip_beam_validation = false);
 
 /**
  * Parse metadata given path to a json file.
@@ -686,10 +689,13 @@ sensor_info parse_metadata(const std::string& metadata);
  * @throw runtime_error if json file does not exist or is malformed.
  *
  * @param[in] json_file path to a json file containing sensor metadata.
+ * @param[in] skip_beam_validation whether to skip validation on metadata - not
+ * for use on recorded data or metadata from sensors
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
-sensor_info metadata_from_json(const std::string& json_file);
+sensor_info metadata_from_json(const std::string& json_file,
+                               bool skip_beam_validation = false);
 
 /**
  * Get a string representation of the sensor_info. All fields included. Not
@@ -1164,6 +1170,13 @@ class packet_format final {
  * @return a packet_format suitable for parsing UDP packets sent by the sensor.
  */
 const packet_format& get_format(const sensor_info& info);
+
+namespace impl {
+
+/** Maximum number of allowed lidar profiles */
+constexpr int MAX_NUM_PROFILES = 32;
+
+}  // namespace impl
 
 }  // namespace sensor
 }  // namespace ouster

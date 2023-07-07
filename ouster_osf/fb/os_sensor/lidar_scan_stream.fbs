@@ -1,0 +1,88 @@
+namespace ouster.osf.v2;
+
+// sensor::ChanField enum mapping
+enum CHAN_FIELD:uint8 {
+    UNKNOWN = 0,
+    RANGE = 1,
+    RANGE2 = 2,
+    SIGNAL = 3,
+    SIGNAL2 = 4,
+    REFLECTIVITY = 5,
+    REFLECTIVITY2 = 6,
+    NEAR_IR = 7,
+    FLAGS = 8,
+    FLAGS2 = 9,
+    RAW_HEADERS = 40,
+    RAW32_WORD5 = 45,
+    RAW32_WORD6 = 46,
+    RAW32_WORD7 = 47,
+    RAW32_WORD8 = 48,
+    RAW32_WORD9 = 49,
+    CUSTOM0 = 50,
+    CUSTOM1 = 51,
+    CUSTOM2 = 52,
+    CUSTOM3 = 53,
+    CUSTOM4 = 54,
+    CUSTOM5 = 55,
+    CUSTOM6 = 56,
+    CUSTOM7 = 57,
+    CUSTOM8 = 58,
+    CUSTOM9 = 59,
+    RAW32_WORD1 = 60,
+    RAW32_WORD2 = 61,
+    RAW32_WORD3 = 62,
+    RAW32_WORD4 = 63
+}
+
+// sensor::ChanFieldType enum mapping
+enum CHAN_FIELD_TYPE:uint8 {
+    VOID = 0,
+    UINT8 = 1,
+    UINT16 = 2,
+    UINT32 = 3,
+    UINT64 = 4
+}
+
+// PNG encoded channel fields of LidarScan
+table ChannelData {
+    buffer:[uint8];
+}
+
+// Single lidar field spec
+struct ChannelField {
+    chan_field:CHAN_FIELD;
+    chan_field_type:CHAN_FIELD_TYPE;
+}
+
+table LidarScanMsg {
+    // ====== LidarScan Channels =======================
+    // encoded ChanField data
+    channels:[ChannelData];
+    // corresponding ChanField description to what is contained in channels[] above
+    field_types:[ChannelField];
+
+    // ===== LidarScan Headers =========================
+    header_timestamp:[uint64];
+    header_measurement_id:[uint16];
+    header_status:[uint32];
+    frame_id:int32;
+    // pose vector of 4x4 matrices per every timestamp element (i.e. number of
+    // elements in a vector should be 16 x timestamp.size()), every 4x4 matrix
+    // has a col-major storage
+    pose:[double];
+}
+
+// Scan data from a lidar sensor. One scan is a sweep of a sensor (360 degree).
+table LidarScanStream {
+    sensor_id:uint32;        // referenced to metadata.entry[].id with LidarScan
+
+    // LidarScan field_types spec, used only as a HINT about what type
+    // of messages to expect from LidarScanMsg in a stream. 
+    // NOTE: For LidarScanMsg decoding field types from
+    //       LidarScanMsg.field_types[] should be used.
+    field_types:[ChannelField];
+}
+
+// MetadataEntry.type: ouster/v1/os_sensor/LidarScanStream
+root_type LidarScanStream;
+file_identifier "oLSS";

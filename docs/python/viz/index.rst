@@ -1,6 +1,6 @@
-=======================
+======================
 Point Cloud Visualizer
-=======================
+======================
 
 The Ouster visualization toolkit is written in C++ with Python bindings for Python functionality. It
 consists of the following:

@@ -6,6 +6,7 @@ All rights reserved.
 from contextlib import closing
 from os import path
 from typing import Iterator
+from pathlib import Path
 
 from more_itertools import partition
 import pytest
@@ -46,7 +47,9 @@ def pytest_collection_modifyitems(items, config) -> None:
 
 # test data
 # TODO: add OS-DOME-32/64 in 1024x10 mode pcap with digest
-DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/pcaps")
+PCAPS_DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/pcaps")
+METADATA_DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/metadata")
+OSFS_DATA_DIR = path.join(path.dirname(path.abspath(__file__)), "../../tests/osfs")
 
 TESTS = {
     'legacy-2.0': 'OS-2-32-U0_v2.0.0_1024x10',
@@ -69,28 +72,28 @@ def base_name(test_key: str) -> str:
 
 @pytest.fixture
 def stream_digest(base_name: str):
-    digest_path = path.join(DATA_DIR, f"{base_name}_digest.json")
+    digest_path = path.join(PCAPS_DATA_DIR, f"{base_name}_digest.json")
     with open(digest_path, 'r') as f:
         return digest.StreamDigest.from_json(f.read())
 
 
 @pytest.fixture
 def meta(base_name: str):
-    meta_path = path.join(DATA_DIR, f"{base_name}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{base_name}.json")
     with open(meta_path, 'r') as f:
         return client.SensorInfo(f.read())
 
 
 @pytest.fixture
 def meta_2_0():
-    meta_path = path.join(DATA_DIR, f"{TESTS['legacy-2.0']}.json")
+    meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['legacy-2.0']}.json")
     with open(meta_path, 'r') as f:
         return client.SensorInfo(f.read())
 
 
 @pytest.fixture
 def real_pcap_path(base_name: str, meta: client.SensorInfo) -> str:
-    return path.join(DATA_DIR, f"{base_name}.pcap")
+    return path.join(PCAPS_DATA_DIR, f"{base_name}.pcap")
 
 
 @pytest.fixture
@@ -124,3 +127,8 @@ def packets(real_pcap_path: str,
 def scan(packets: client.PacketSource) -> client.LidarScan:
     scans = client.Scans(packets)
     return next(iter(scans))
+
+
+@pytest.fixture(scope="package")
+def test_data_dir():
+    return Path(path.dirname(path.abspath(__file__))) / ".." / ".." / "tests"

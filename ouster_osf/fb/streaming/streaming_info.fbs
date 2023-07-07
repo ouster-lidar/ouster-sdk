@@ -1,0 +1,41 @@
+namespace ouster.osf.v2;
+
+table StreamStats {
+    // refers to metadata.entries[id] that describes a stream
+    stream_id:uint32;
+    // host timestamp of the first message in `stream_id` stream
+    // in the whole OSF file
+    start_ts:uint64;
+    // host timestamp of the last message in `stream_id` stream
+    // in the whole OSF file
+    end_ts:uint64;
+    // total number of messages in a `stream_id` in the whole OSF file
+    message_count:uint64;
+    // avg size of the messages in bytes for a `stream_id` in the whole
+    // OSF file
+    message_avg_size:uint32;
+}
+
+table ChunkInfo {
+    // offset of the chunk, matches the offset of `metadata.chunks[].offset` and
+    // serves as a key to address specific Chunk. (offsets always unique per OSF file)
+    offset:uint64;
+    // type of messages present in a chunk
+    stream_id:uint32;
+    // number of messages in a chunk
+    message_count:uint32;
+}
+
+// If StreamingInfo is present in metadata it marks that chunks were stored in a
+// particular way and the file can be readily used for streaming messages data for
+// visualization (web-viz/Data-App etc.) with a guaranteed order by timestamp.
+
+table StreamingInfo {
+    // chunk information that describes the message/streams per chunk
+    chunks:[ChunkInfo];
+    // stream statistics per stream for the whole OSF file
+    stream_stats:[StreamStats];
+}
+
+// MetadataEntry.type: ouster/v1/streaming/StreamingInfo
+root_type StreamingInfo;

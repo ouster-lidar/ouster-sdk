@@ -44,6 +44,7 @@
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
 #include "ouster/impl/build.h"
+#include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -84,7 +85,8 @@ extern const Table<MultipurposeIOMode, const char*, 6>
 extern const Table<Polarity, const char*, 2> polarity_strings;
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings;
 extern Table<ChanField, const char*, 29> chanfield_strings;
-extern Table<UDPProfileLidar, const char*, 5> udp_profile_lidar_strings;
+extern Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES>
+    udp_profile_lidar_strings;
 extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
 extern Table<ThermalShutdownStatus, const char*, 2>
@@ -114,6 +116,11 @@ void image_proc_call(T& self, pyimg_t<U> image, bool update_state) {
 template <typename C, typename E, size_t N>
 void def_enum(C& Enum, const Table<E, const char*, N>& strings_table,
               const std::string& enum_prefix = "") {
+    // weed out empty profiles
+    auto end = std::find_if(
+        strings_table.begin(), strings_table.end(),
+        [](const std::pair<E, const char*>& p) { return p.second == nullptr; });
+
     // in pybind11 2.0, calling enum.value(const char* name, val) doesn't make a
     // copy of the name argument. When value names aren't statically allocated,
     // we have to keep them alive. Use deque for stability of c_str() pointers
@@ -124,14 +131,15 @@ void def_enum(C& Enum, const Table<E, const char*, N>& strings_table,
         py::module::import("types").attr("MappingProxyType");
 
     // declare enumerators
-    for (const auto& p : strings_table) {
-        enumerator_names.push_back(enum_prefix + p.second);
-        Enum.value(enumerator_names.back().c_str(), p.first);
+    for (auto it = strings_table.begin(); it != end; ++it) {
+        enumerator_names.push_back(enum_prefix + it->second);
+        Enum.value(enumerator_names.back().c_str(), it->first);
     }
 
     // use immutable MappingProxy to return members dict
     std::map<std::string, E> members;
-    for (const auto& p : strings_table) members[p.second] = p.first;
+    for (auto it = strings_table.begin(); it != end; ++it)
+        members[it->second] = it->first;
     py::object py_members = MappingProxy(members);
     Enum.def_property_readonly_static(
         "__members__", [=](py::object) { return py_members; },
@@ -140,9 +148,8 @@ void def_enum(C& Enum, const Table<E, const char*, N>& strings_table,
     // can't make the class iterable itself easily
     Enum.def_property_readonly_static(
         "values",
-        [&](py::object) {
-            return py::make_key_iterator(strings_table.begin(),
-                                         strings_table.end());
+        [&, end](py::object) {
+            return py::make_key_iterator(strings_table.begin(), end);
         },
         "Returns an iterator of all enum members.");
 
@@ -196,6 +203,26 @@ static sensor::ChanFieldType field_type_of_dtype(const py::dtype& dt) {
         return sensor::ChanFieldType::UINT64;
     else
         throw std::invalid_argument("Invalid dtype for a channel field");
+}
+
+/*
+ * Map a channel field type to a dtype
+ */
+static py::dtype dtype_of_field_type(const sensor::ChanFieldType& ftype) {
+    switch (ftype) {
+        case sensor::ChanFieldType::UINT8:
+            return py::dtype::of<uint8_t>();
+        case sensor::ChanFieldType::UINT16:
+            return py::dtype::of<uint16_t>();
+        case sensor::ChanFieldType::UINT32:
+            return py::dtype::of<uint32_t>();
+        case sensor::ChanFieldType::UINT64:
+            return py::dtype::of<uint64_t>();
+        default:
+            throw std::invalid_argument(
+                "Invalid field_type for convertion to dtype");
+    }
+    return py::dtype();  // unreachable ...
 }
 
 #if (SPDLOG_VER_MAJOR >= 1)  // don't include for spdlog < 1.x.x
@@ -440,10 +467,10 @@ PYBIND11_PLUGIN(_client) {
         Args:
             raw (str): json string to parse
         )")
-        .def("__init__", [](sensor_info& self, const std::string& s) {
+        .def("__init__", [](sensor_info& self, const std::string& s, bool skip_beam_validation) {
             new (&self) sensor_info{};
-            self = sensor::parse_metadata(s);
-        })
+            self = sensor::parse_metadata(s, skip_beam_validation);
+        }, py::arg("s"), py::arg("skip_beam_validation") = false)
         .def_readwrite("hostname", &sensor_info::name, "Sensor hostname.")
         .def_readwrite("sn", &sensor_info::sn, "Sensor serial number.")
         .def_readwrite("fw_rev", &sensor_info::fw_rev, "Sensor firmware revision.")
@@ -529,6 +556,22 @@ PYBIND11_PLUGIN(_client) {
 
     auto UDPProfileLidar = py::enum_<sensor::UDPProfileLidar>(m, "UDPProfileLidar", "UDP lidar profile.", py::metaclass());
     def_enum(UDPProfileLidar, sensor::impl::udp_profile_lidar_strings, "PROFILE_LIDAR_");
+    UDPProfileLidar.attr("from_string") = py::cpp_function(
+        [](const std::string& s) {
+            return sensor::udp_profile_lidar_of_string(s);
+        },
+        py::name("from_string"), "Create UDPProfileLidar from string.");
+    UDPProfileLidar.def_property_readonly_static(
+        "values",
+        [](py::object) {
+            return py::make_key_iterator(
+                sensor::impl::udp_profile_lidar_strings.begin(),
+                std::find_if(
+                    sensor::impl::udp_profile_lidar_strings.begin(),
+                    sensor::impl::udp_profile_lidar_strings.end(),
+                    [](const auto& p) { return p.second == nullptr; }));
+        },
+        "Returns an iterator of all UDPProfileLidar enum members.");
 
     auto UDPProfileIMU = py::enum_<sensor::UDPProfileIMU>(m, "UDPProfileIMU", "UDP imu profile.", py::metaclass());
     def_enum(UDPProfileIMU, sensor::impl::udp_profile_imu_strings, "PROFILE_IMU_");
@@ -700,9 +743,9 @@ PYBIND11_PLUGIN(_client) {
              py::arg("timestamp_mode") =
                  sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
              py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
-             py::arg("timeout_sec") = 30, py::arg("capacity") = 128)
+             py::arg("timeout_sec") = 10, py::arg("capacity") = 128)
         .def("get_metadata", &BufferedUDPSource::get_metadata,
-             py::arg("timeout_sec") = 60, py::arg("legacy") = true)
+             py::arg("timeout_sec") = 10, py::arg("legacy") = true)
         .def("shutdown", &BufferedUDPSource::shutdown)
         .def("consume",
              [](BufferedUDPSource& self, py::buffer buf, float timeout_sec) {
@@ -886,6 +929,16 @@ PYBIND11_PLUGIN(_client) {
             },
             "The measurement status header as a W-element numpy array.")
         .def_property_readonly(
+            "pose",
+            [](LidarScan& self) {
+                return py::array(
+                    py::dtype::of<double>(),
+                    std::vector<size_t>{
+                        static_cast<size_t>(self.timestamp().size()), 4, 4},
+                    self.pose().data()->data(), py::cast(self));
+            },
+            "The pose vector of 4x4 homogeneous matrices (per each timestamp).")
+        .def_property_readonly(
             "fields",
             // NOTE: keep_alive seems to be ignored without cpp_function wrapper
             py::cpp_function(
@@ -985,77 +1038,68 @@ PYBIND11_PLUGIN(_client) {
         .def("__call__", &image_proc_call<viz::BeamUniformityCorrector, double>,
              py::arg("image"), py::arg("update_state") = true);
 
-    // Imu
-    py::class_<ouster::Imu>(m, "Imu")
-        .def(
-            "__init__",
-            [](ouster::Imu& self, py::buffer& buf,
-               const sensor::packet_format& pf) {
-                new (&self) ouster::Imu{};
-                ouster::packet_to_imu(getptr(pf.imu_packet_size, buf), pf,
-                                      self);
-            },
-            py::arg("buf"), py::arg("pf"),
-            "Creates imu object from ``buf`` and ``pf``")
-        .def(
-            "__init__",
-            [](ouster::Imu& self, py::array_t<double>& accel,
-               py::array_t<double>& angular_vel, uint64_t sys_ts,
-               uint64_t accel_ts, uint64_t gyro_ts) {
-                py::buffer_info accel_buf = accel.request();
-                py::buffer_info angular_buf = angular_vel.request();
+    m.def(
+        "get_field_types",
+        [](const sensor::sensor_info& info) {
+            auto field_types = ouster::get_field_types(info);
+            std::map<sensor::ChanField, py::dtype> field_types_res{};
+            for (const auto& f : field_types) {
+                auto dtype = dtype_of_field_type(f.second);
+                field_types_res.emplace(f.first, dtype);
+            }
+            return field_types_res;
+        },
+        R"(
+        Extracts LidarScan fields with types for a given SensorInfo
 
-                if (accel_buf.ndim != 1 || angular_buf.ndim != 1) {
-                    throw std::invalid_argument(
-                        "Expect number of dimensions 1");
-                }
-                new (&self) ouster::Imu{};
-                if (accel_buf.size == 3) {
-                    double* ptr = static_cast<double*>(accel_buf.ptr);
-                    self.linear_accel[0] = *ptr;
-                    self.linear_accel[1] = *(ptr + 1);
-                    self.linear_accel[2] = *(ptr + 2);
-                }
-                if (angular_buf.size == 3) {
-                    double* ptr = static_cast<double*>(angular_buf.ptr);
-                    self.angular_vel[0] = *ptr;
-                    self.angular_vel[1] = *(ptr + 1);
-                    self.angular_vel[2] = *(ptr + 2);
-                }
-                self.sys_ts = sys_ts;
-                self.accel_ts = accel_ts;
-                self.gyro_ts = gyro_ts;
-            },
-            py::arg("accel"), py::arg("angular_vel"), py::arg("sys_ts") = 0,
-            py::arg("accel_ts") = 0, py::arg("gyro_ts") = 0,
-            "Creates ``client.Imu`` object from imu data.")
-        .def_property_readonly(
-            "sys_ts", [](const ouster::Imu& imu) { return imu.sys_ts; },
-            "System timestamp (ns)")
-        .def_property_readonly(
-            "accel_ts", [](const ouster::Imu& imu) { return imu.accel_ts; },
-            "Accelerometer timestamp (ns)")
-        .def_property_readonly(
-            "gyro_ts", [](const ouster::Imu& imu) { return imu.gyro_ts; },
-            "Gyroscope timestamp (ns)")
-        .def_property_readonly(
-            "accel",
-            [](const ouster::Imu& imu) {
-                return py::array(py::dtype::of<double>(),
-                                 imu.linear_accel.size(),
-                                 imu.linear_accel.data());
-            },
-            "Accelerometer data")
-        .def_property_readonly(
-            "angular_vel",
-            [](const ouster::Imu& imu) {
-                return py::array(py::dtype::of<double>(),
-                                 imu.angular_vel.size(),
-                                 imu.angular_vel.data());
-            },
-            "Angular velocity data")
-        .def("__repr__", [](ouster::Imu& p) { return ouster::to_string(p); })
-        .def("__str__", [](ouster::Imu& p) { return ouster::to_string(p); });
+        Args:
+            info: sensor metadata for which to find fields types
+
+        Returns:
+            returns field types
+            )",
+        py::arg("info"));
+
+    m.def(
+        "get_field_types",
+        [](const LidarScan& ls) {
+            auto field_types = ouster::get_field_types(ls);
+            std::map<sensor::ChanField, py::dtype> field_types_res{};
+            for (const auto& f : field_types) {
+                auto dtype = dtype_of_field_type(f.second);
+                field_types_res.emplace(f.first, dtype);
+            }
+            return field_types_res;
+        },
+        R"(
+        Extracts LidarScan fields with types for a given lidar scan ``ls``
+
+        Args:
+            ls: lidar scan from which to get field types
+
+        Returns:
+            returns field types
+            )",
+        py::arg("lidar_scan"));
+
+    using ouster::sensor::impl::FieldInfo;
+    py::class_<FieldInfo>(m, "FieldInfo")
+        .def("__init__",
+             [](FieldInfo& self, py::object dt, size_t offset, uint64_t mask,
+                int shift) {
+                 new (&self)
+                     FieldInfo{field_type_of_dtype(py::dtype::from_args(dt)),
+                               offset, mask, shift};
+             })
+        .def_property_readonly("ty_tag",
+                               [](const FieldInfo& self) {
+                                   return dtype_of_field_type(self.ty_tag);
+                               })
+        .def_readwrite("offset", &FieldInfo::offset)
+        .def_readwrite("mask", &FieldInfo::mask)
+        .def_readwrite("shift", &FieldInfo::shift);
+
+    m.def("add_custom_profile", &ouster::sensor::add_custom_profile);
 
     m.attr("__version__") = ouster::SDK_VERSION;
 

@@ -5,31 +5,15 @@ namespace sensor_utils {
 
 IndexedPcapReader::IndexedPcapReader(
     const std::string& pcap_filename,
-    const std::vector<std::string>& metadata_filenames,
-    std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback)
+    const std::vector<std::string>& metadata_filenames)
     : PcapReader(pcap_filename)
-    , frame_indices_(metadata_filenames.size())
+    , index_(metadata_filenames.size())
     , previous_frame_ids_(metadata_filenames.size())
 {
     for(const std::string& metadata_filename : metadata_filenames) {
         sensor_infos_.push_back(
             ouster::sensor::metadata_from_json(metadata_filename)
         );
-    }
-    stream_info_ = ouster::sensor_utils::get_stream_info(*this, progress_callback, 256, -1);
-    if(sensor_infos_.size() == 1 && sensor_infos_[0].udp_port_lidar == 0) {
-        // guess lidar port for a single sensor if it is unspecified in sensor info
-        const ouster::sensor::packet_format& pf = ouster::sensor::packet_format(sensor_infos_[0]);
-        std::vector<guessed_ports> ports = guess_ports(
-            *stream_info_,
-            pf.lidar_packet_size, pf.imu_packet_size,
-            sensor_infos_[0].udp_port_lidar, sensor_infos_[0].udp_port_imu
-        );
-        if(ports.empty()) {
-            throw std::runtime_error("IndexedPcapReader: unable to determine lidar UDP port");
-        }
-        sensor_infos_[0].udp_port_lidar = ports[0].lidar;
-        sensor_infos_[0].udp_port_imu = ports[0].imu;
     }
 }
 
@@ -60,31 +44,32 @@ bool IndexedPcapReader::frame_id_rolled_over(uint16_t previous, uint16_t current
     return previous > 0xff00 && current < 0x00ff;
 }
 
-void IndexedPcapReader::update_index_for_current_packet() {
+int IndexedPcapReader::update_index_for_current_packet() {
     if(nonstd::optional<size_t> sensor_info_idx = sensor_idx_for_current_packet()) {
         if(nonstd::optional<uint16_t> frame_id = current_frame_id()) {
             if(!previous_frame_ids_[*sensor_info_idx]
                 || *previous_frame_ids_[*sensor_info_idx] < *frame_id  // frame_id is greater than previous
                 || frame_id_rolled_over(*previous_frame_ids_[*sensor_info_idx], *frame_id)
             ) {
-                frame_indices_[*sensor_info_idx].push_back(current_info().file_offset);
+                index_.frame_indices_[*sensor_info_idx].push_back(current_info().file_offset);
                 previous_frame_ids_[*sensor_info_idx] = *frame_id;
             }
         }
     }
+    return static_cast<int>(100 * static_cast<float>(current_offset())/file_size());
 }
 
-void IndexedPcapReader::seek_to_frame(size_t sensor_index, unsigned int frame_number) {
-    seek(frame_indices_.at(sensor_index).at(frame_number));
+const PcapIndex& IndexedPcapReader::get_index() const {
+    return index_;
+}
+
+void PcapIndex::seek_to_frame(PcapReader& reader, size_t sensor_index, unsigned int frame_number) {
+    reader.seek(frame_indices_.at(sensor_index).at(frame_number));
 }
 
 
-size_t IndexedPcapReader::frame_count(size_t sensor_index) const {
+size_t PcapIndex::frame_count(size_t sensor_index) const {
     return frame_indices_.at(sensor_index).size();
-}
-
-std::shared_ptr<stream_info> IndexedPcapReader::get_stream_info() const {
-    return stream_info_;
 }
 
 } // namespace sensor_utils

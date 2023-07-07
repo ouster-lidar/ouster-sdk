@@ -28,8 +28,8 @@ target_link_libraries(lidar_scan_test OusterSDK::ouster_client GTest::gtest GTes
 add_test(NAME lidar_scan_test COMMAND lidar_scan_test --gtest_output=xml:lidar_scan_test.xml)
 set_tests_properties(
     lidar_scan_test
-        PROPERTIES 
-        ENVIRONMENT 
+        PROPERTIES
+        ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
 
@@ -40,8 +40,8 @@ target_link_libraries(cartesian_test OusterSDK::ouster_client GTest::gtest GTest
 add_test(NAME cartesian_test COMMAND cartesian_test --gtest_output=xml:cartesian_test.xml)
 set_tests_properties(
   cartesian_test
-        PROPERTIES 
-        ENVIRONMENT 
+        PROPERTIES
+        ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
 
@@ -68,3 +68,9 @@ set_tests_properties(
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
 )
+
+add_executable(profile_extension_test profile_extension_test.cpp)
+
+target_link_libraries(profile_extension_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
+
+add_test(NAME profile_extension_test COMMAND profile_extension_test --gtest_output=xml:profile_extension_test.xml)

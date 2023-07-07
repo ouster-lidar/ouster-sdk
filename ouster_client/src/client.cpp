@@ -25,8 +25,8 @@
 
 #include "logging.h"
 #include "netcompat.h"
-#include "ouster/types.h"
 #include "ouster/sensor_http.h"
+#include "ouster/types.h"
 
 using namespace std::chrono_literals;
 namespace chrono = std::chrono;
@@ -245,45 +245,51 @@ SOCKET mtp_data_socket(int port, const std::string& udp_dest_host = "",
 }
 
 Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
-    auto sensor_http = SensorHttp::create(hostname);
+    // Note, this function throws std::runtime_error if
+    // 1. the metadata couldn't be retrieved
+    // 2. the sensor is in the INITIALIZING state when timeout is reached
+    auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto timeout_time =
         chrono::steady_clock::now() + chrono::seconds{timeout_sec};
     std::string status;
 
     // TODO: can remove this loop when we drop support for FW 2.4
     do {
-        if (chrono::steady_clock::now() >= timeout_time) return false;
+        if (chrono::steady_clock::now() >= timeout_time) {
+            throw std::runtime_error(
+                "A timeout occurred while waiting for the sensor to initialize."
+            );
+        }
         std::this_thread::sleep_for(1s);
         status = sensor_http->sensor_info()["status"].asString();
     } while (status == "INITIALIZING");
 
-    // not all metadata available when sensor isn't RUNNING
-    if (status != "RUNNING") {
+    try {
+        auto metadata = sensor_http->metadata();
+        // merge extra info into metadata
+        metadata["client_version"] = client_version();
+        return metadata;
+    } catch (const std::runtime_error& e) {
         throw std::runtime_error(
             "Cannot obtain full metadata with sensor status: " + status +
             ". Please ensure that sensor is not in a STANDBY, UNCONFIGURED, "
             "WARMUP, or ERROR state");
     }
-
-    auto metadata = sensor_http->metadata();
-    // merge extra info into metadata
-    metadata["client_version"] = client_version();
-    return metadata;
 }
 
 }  // namespace
 
 bool get_config(const std::string& hostname, sensor_config& config,
-                bool active) {
-    auto sensor_http = SensorHttp::create(hostname);
+                bool active, int timeout_sec) {
+    auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto res = sensor_http->get_config_params(active);
     config = parse_config(res);
     return true;
 }
 
 bool set_config(const std::string& hostname, const sensor_config& config,
-                uint8_t config_flags) {
-    auto sensor_http = SensorHttp::create(hostname);
+                uint8_t config_flags, int timeout_sec) {
+    auto sensor_http = SensorHttp::create(hostname, timeout_sec);
 
     // reset staged config to avoid spurious errors
     auto config_params = sensor_http->active_config_params();
@@ -358,10 +364,13 @@ bool set_config(const std::string& hostname, const sensor_config& config,
 }
 
 std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
+    // Note, this function calls functions that throw std::runtime_error
+    // on timeout.
     try {
         cli.meta = collect_metadata(cli.hostname, timeout_sec);
     } catch (const std::exception& e) {
-        logger().warn(std::string("Unable to retrieve sensor metadata: ") + e.what());
+        logger().warn(std::string("Unable to retrieve sensor metadata: ") +
+                      e.what());
         throw;
     }
 
@@ -386,7 +395,7 @@ std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     // TODO: remove after release of FW 3.2/3.3 (sufficient warning)
     sensor_config config;
     get_config(cli.hostname, config);
-    auto fw_version = SensorHttp::firmware_version(cli.hostname);
+    auto fw_version = SensorHttp::firmware_version(cli.hostname, timeout_sec);
     // only warn for people on the latest FW, as people on older FWs may not
     // care
     if (fw_version.major >= 3 &&
@@ -550,8 +559,8 @@ client_state poll_client(const client& c, const int timeout_sec) {
 }
 
 static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
-    // Have to read longer than len because you need to know if the packet is
-    // too large
+    // Have to read longer than len because you need to know if the packet
+    // is too large
     int64_t bytes_read = recv(fd, (char*)buf, len + 1, 0);
 
     if (bytes_read == len) {
@@ -577,12 +586,15 @@ int get_lidar_port(client& cli) { return get_sock_port(cli.lidar_fd); }
 
 int get_imu_port(client& cli) { return get_sock_port(cli.imu_fd); }
 
-bool in_multicast(const std::string& addr) { return IN_MULTICAST(ntohl(inet_addr(addr.c_str()))); }
+bool in_multicast(const std::string& addr) {
+    return IN_MULTICAST(ntohl(inet_addr(addr.c_str())));
+}
 
 /**
  * Return the socket file descriptor used to listen for lidar UDP data.
  *
- * @param[in] cli client returned by init_client associated with the connection.
+ * @param[in] cli client returned by init_client associated with the
+ * connection.
  *
  * @return the socket file descriptor.
  */
@@ -591,7 +603,8 @@ extern SOCKET get_lidar_socket_fd(client& cli) { return cli.lidar_fd; }
 /**
  * Return the socket file descriptor used to listen for imu UDP data.
  *
- * @param[in] cli client returned by init_client associated with the connection.
+ * @param[in] cli client returned by init_client associated with the
+ * connection.
  *
  * @return the socket file descriptor.
  */

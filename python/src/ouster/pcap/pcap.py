@@ -7,10 +7,11 @@ import os
 import socket
 import time
 from threading import Lock
-from typing import (Iterable, Iterator, Optional, Tuple)
+from collections import defaultdict
+from typing import (Iterable, Iterator, Optional, Tuple, Dict)  # noqa: F401
 
-from ouster.client import (LidarPacket, ImuPacket, Packet, PacketSource,
-                           SensorInfo, _client, PacketIdError)
+from ouster.client import (LidarPacketValidator, LidarPacket, ImuPacket, Packet, PacketSource,  # noqa: F401
+                           SensorInfo, _client, PacketValidationFailure, PacketIdError)         # noqa: F401
 from . import _pcap
 
 MTU_SIZE = 1500
@@ -49,6 +50,7 @@ class Pcap(PacketSource):
                  rate: float = 0.0,
                  lidar_port: Optional[int] = None,
                  imu_port: Optional[int] = None,
+                 loop: bool = False,
                  _soft_id_check: bool = False):
         """Read a single sensor data stream from a packet capture.
 
@@ -75,8 +77,8 @@ class Pcap(PacketSource):
             rate: Output packets in real time, if non-zero
             lidar_port: Specify the destination port of lidar packets
             imu_port: Specify the destination port of imu packets
-            _soft_id_check: if True, don't skip lidar packets buffers on
-            init_id/sn mismatch
+            loop: Specify whether to reload the PCAP file when the end is reached
+            _soft_id_check: if True, don't skip lidar packets buffers on init_id/sn mismatch
         """
 
         # prefer explicitly specified ports (can probably remove the args?)
@@ -88,8 +90,10 @@ class Pcap(PacketSource):
         self._metadata.udp_port_lidar = lidar_port
         self._metadata.udp_port_imu = imu_port
 
+        self.loop = loop
         self._soft_id_check = _soft_id_check
-        self._id_error_count = 0
+        self._id_error_count = 0    # TWS 20230615 TODO generialize error counting and reporting
+        self._errors = defaultdict(int)  # type: Dict[PacketValidationFailure,int]
 
         # sample pcap and attempt to find UDP ports consistent with metadata
         n_packets = 1000
@@ -117,11 +121,17 @@ class Pcap(PacketSource):
 
         real_start_ts = time.monotonic()
         pcap_start_ts = None
+        validator = LidarPacketValidator(self.metadata)
         while True:
             with self._lock:
-                if not (self._handle
-                        and _pcap.next_packet_info(self._handle, packet_info)):
+                if not self._handle:
                     break
+                if not _pcap.next_packet_info(self._handle, packet_info):
+                    if self.loop:
+                        _pcap.replay_reset(self._handle)
+                        _pcap.next_packet_info(self._handle, packet_info)
+                    else:
+                        break
                 n = _pcap.read_packet(self._handle, buf)
 
             # if rate is set, read in 'real time' simulating UDP stream
@@ -137,6 +147,8 @@ class Pcap(PacketSource):
 
             try:
                 if (packet_info.dst_port == self._metadata.udp_port_lidar):
+                    for error in validator.check_packet(buf, n):
+                        self._errors[error] += 1  # accumulate counts of errors
                     lp = LidarPacket(
                         buf[0:n],
                         self._metadata,

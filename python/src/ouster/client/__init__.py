@@ -23,18 +23,20 @@ from ._client import convert_to_legacy
 from ._client import get_config
 from ._client import set_config
 from ._client import LidarScan
-from ._client import Imu
+from ._client import get_field_types
 
 from .data import BufferT
 from .data import FieldDType
+from .data import FieldTypes
 from .data import Packet
 from .data import ImuPacket
 from .data import LidarPacket
+from .data import LidarPacketValidator
 from .data import ColHeader
 from .data import XYZLut
 from .data import destagger
-from .data import PacketIdError
-from .data import imu_from_packet
+from .data import PacketValidationFailure, PacketIdError, PacketSizeError
+from .data import packet_ts
 
 from .core import ClientError
 from .core import ClientTimeout
@@ -44,3 +46,9 @@ from .core import ScanSource
 from .core import Packets
 from .core import Sensor
 from .core import Scans
+from .core import first_valid_column
+from .core import last_valid_column
+from .core import first_valid_column_ts
+from .core import last_valid_column_ts
+from .core import first_valid_column_pose
+from .core import last_valid_column_pose

@@ -1,0 +1,38 @@
+namespace ouster.osf.v2;
+
+struct ChunkOffset {
+    // lowest timestamp of a StampedMessage in a Chunk
+    start_ts:uint64;
+    // highest timestamp of a StampedMessage in a Chunk
+    end_ts:uint64;
+    // offset from the beginning of Chunks (the address following Header's CRC32)
+    offset:uint64;
+}
+
+// Contains file information (streams metadata, file/session data, etc)
+table MetadataEntry {
+    // used in references from other metadata entries
+    // and from StampedMessage.id
+    id:uint32 (key);
+
+    // type identifier of the stream or metas,
+    // (e.g. 'ouster/os_sensor/LidarSensor') used to dispatch to the fb spec
+    // for parsing 'buffer' field.
+    type:string;
+
+    // Flatbuffer encoded object of 'type' (see 'type' field description)
+    buffer:[uint8];
+}
+
+table Metadata {
+    id:string;
+    start_ts:uint64;
+    end_ts:uint64;
+    chunks:[ChunkOffset];
+    entries:[MetadataEntry];  // required to be sorted and unique
+                              // by MetadataEntry.id for fast lookups
+}
+
+file_identifier "OSF#";
+file_extension "osfs";
+root_type Metadata;

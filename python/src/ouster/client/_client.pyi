@@ -15,10 +15,9 @@ Note:
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
 from numpy import ndarray
-from typing import (Callable, ClassVar, Dict, Iterator, List, Optional,
-                    overload, Tuple, Union)
+from typing import (ClassVar, Dict, Iterator, List, Optional, overload, Tuple)
 
-from .data import (BufferT, ColHeader, FieldDType)
+from .data import (BufferT, ColHeader, FieldDType, FieldTypes)
 
 
 class Client:
@@ -133,6 +132,10 @@ class SensorInfo:
     def __init__(self, metadata: str) -> None:
         ...
 
+    @overload
+    def __init__(self, metadata: str, skip_beam_validation: bool) -> None:
+        ...
+
 
 class DataFormat:
     columns_per_frame: int
@@ -160,6 +163,26 @@ class PacketFormat:
 
     @property
     def pixels_per_column(self) -> int:
+        ...
+
+    @property
+    def packet_header_size(self) -> int:
+        ...
+
+    @property
+    def col_header_size(self) -> int:
+        ...
+
+    @property
+    def col_footer_size(self) -> int:
+        ...
+
+    @property
+    def col_size(self) -> int:
+        ...
+
+    @property
+    def packet_footer_size(self) -> int:
         ...
 
     def packet_type(self, buf: BufferT) -> int:
@@ -632,6 +655,10 @@ class LidarScan:
     def status(self) -> ndarray:
         ...
 
+    @property
+    def pose(self) -> ndarray:
+        ...
+
     def complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
         ...
 
@@ -733,7 +760,9 @@ class AutoExposure:
                  update_every: int) -> None:
         ...
 
-    def __call__(self, image: ndarray, update_state: Optional[bool] = True) -> None:
+    def __call__(self,
+                 image: ndarray,
+                 update_state: Optional[bool] = True) -> None:
         ...
 
 
@@ -744,21 +773,26 @@ class BeamUniformityCorrector:
     def __call__(self, image: ndarray) -> None:
         ...
 
-class Imu:
-    @overload
-    def __init__(self, buf: BufferT, pf) -> None: ...
+class FieldInfo:
+    @property
+    def ty_tag(self) -> FieldDType:
+        ...
 
-    @overload
-    def __init__(self, accel: ndarray, angular_vel: ndarray,
-                 sys_ts: int = ..., accel_ts: int = ..., gyro_ts: int = ...) -> None: ...
+    def __init__(self, ty_tag: FieldDType, offset: int, mask: int, shift: int) -> None:
+        ...
 
-    @property
-    def accel(self) -> ndarray: ...
-    @property
-    def accel_ts(self) -> int: ...
-    @property
-    def angular_vel(self) -> ndarray: ...
-    @property
-    def gyro_ts(self) -> int: ...
-    @property
-    def sys_ts(self) -> int: ...
+    offset: int
+    mask:   int
+    shift:  int
+
+def add_custom_profile(profile_nr: int,
+                       name: str,
+                       fields: List[Tuple[int, FieldInfo]],
+                       chan_data_size: int) -> None:
+    ...
+
+@overload
+def get_field_types(scan: LidarScan) -> FieldTypes: ...
+
+@overload
+def get_field_types(info: SensorInfo) -> FieldTypes: ...

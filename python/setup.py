@@ -81,11 +81,26 @@ class CMakeBuild(build_ext):
 
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
-        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args,
-                              cwd=self.build_temp,
-                              env=env)
-        subprocess.check_call(['cmake', '--build', '.'] + build_args,
-                              cwd=self.build_temp)
+        output1 = subprocess.run(['cmake', ext.sourcedir] + cmake_args,
+                                 cwd=self.build_temp,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 env=env, text=True)
+
+        print("CMAKE CONFIG OUTPUT")
+        print(output1.stdout)
+        if output1.returncode != 0:
+            raise "Error running cmake"
+
+        output2 = subprocess.run(['cmake', '--build', '.'] + build_args,
+                                 cwd=self.build_temp,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 env=env, text=True)
+        print("CMAKE BUILD OUTPUT")
+        print(output2.stdout)
+        if output2.returncode != 0:
+            raise "Error running cmake --build"
 
 
 class sdk_sdist(sdist):
@@ -128,11 +143,13 @@ setup(
     package_data={
         'ouster.client': ['py.typed', '_client.pyi'],
         'ouster.pcap': ['py.typed', '_pcap.pyi'],
+        'ouster.osf': ['py.typed', '_osf.pyi'],
         'ouster.sdk': ['py.typed', '_viz.pyi'],
+        'ouster.sdkx': ['py.typed'],
     },
     author='Ouster Sensor SDK Developers',
     author_email='oss@ouster.io',
-    description='Ouster sensor SDK',
+    description='Ouster Sensor SDK',
     license='BSD 3-Clause License',
     ext_modules=[
         CMakeExtension('ouster.*'),
@@ -145,13 +162,26 @@ setup(
     zip_safe=False,
     python_requires='>=3.7, <4',
     install_requires=[
+        'psutil >=5.9.5, <6',
+        'zeroconf ==0.58.2',
+        'click >=8.1.3, <9',
+        'python-magic ==0.4.27',
+        'importlib_metadata ==6.6.0',
+        'prettytable >= 2.1.0',
+        'requests >=2.0, <3',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
+        # scipy is not supported on Mac M1 with Mac OS < 12.0
+        'scipy >=1.7, <2;platform_system != "Darwin" or platform_machine != "arm64" or platform_version >= "21.0.0"',
         'typing-extensions >=3.7.4.3',
-        'Pillow >=9.2'
+        'Pillow >=9.2',
+        'packaging',
     ],
     extras_require={
-        'test': ['pytest >=7.0, <8'],
+        'test': [
+            'pytest >=7.0, <8',
+            'flask==2.2.5'
+        ],
         'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
         'docs': [
             'Sphinx >=3.5',
@@ -168,6 +198,17 @@ setup(
             'laspy',
             'PyQt5; platform_system=="Windows"',
         ],
+        'mapping': [
+            'kiss-icp >=0.2.10, <1',
+            'open3d >=0, <1',
+            'laspy >=2.0, <3',
+        ],
     },
-    entry_points={'console_scripts': ['simple-viz=ouster.sdk.simple_viz:main',
-        'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main']})
+    entry_points={'console_scripts':
+        [
+            'simple-viz=ouster.sdk.simple_viz:main',
+            'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main',
+            'ouster-cli=ouster.cli.core:run'
+        ]
+    }
+)

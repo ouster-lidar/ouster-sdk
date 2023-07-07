@@ -69,32 +69,6 @@ bool stream_key::operator==(const struct stream_key &other) const {
         dst_port == other.dst_port;
 }
 
-bool stream_key::operator!=(const struct stream_key &other) const {
-    return !(*this == other);
-}
-
-bool stream_key::operator<=(const struct stream_key &other) const {
-    return dst_ip <= other.dst_ip &&
-        src_ip <= other.src_ip &&
-        dst_port <= other.dst_port &&
-        src_port <= other.src_port;
-}
-
-bool stream_key::operator>=(const struct stream_key &other) const {
-    return dst_ip >= other.dst_ip &&
-        src_ip >= other.src_ip &&
-        dst_port >= other.dst_port &&
-        src_port >= other.src_port;
-}
-
-bool stream_key::operator<(const struct stream_key &other) const {
-    return *this <= other && *this != other;
-}
-
-bool stream_key::operator>(const struct stream_key &other) const {
-    return *this >= other && *this != other;
-}
-
 std::ostream& operator<<(std::ostream& stream_in, const stream_key& data) {
     stream_in << "Source IP: \"" << data.src_ip << "\" " << std::endl;
     stream_in << "Destination IP: \"" << data.dst_ip << "\" " << std::endl;
