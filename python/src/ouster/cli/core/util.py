@@ -186,10 +186,11 @@ def system_info() -> None:
 
 @util_group.command()
 @click.argument('file', required=False, type=click.Path(exists=True))
-@click.option('-f',
+@click.option('-m',
               '--meta',
               required=False,
-              type=click.Path(exists=True, dir_okay=False, readable=True))
+              type=click.Path(exists=True, dir_okay=False, readable=True),
+              help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-u', '--url', required=False)
 def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     """Run a quick set of benchmarks and record results.
@@ -207,8 +208,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     workdir = os.path.join(os.getcwd(), "ouster-bench")
     if not os.path.exists(workdir):
         os.mkdir(workdir)
-    os.chdir(workdir)
-    click.echo(f"Working directory: {workdir}")
+    click.echo(f"Will write output to: {workdir}")
 
     if file is None:
         file, meta = download_sample_data(url or DEFAULT_SAMPLE_URL, workdir)
@@ -307,7 +307,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     report['times']['cartesian'] = dur
 
     # name report based on file hash, hostname, python version, and sdk version
-    report_file = (f"report-{hash[:7]}"
+    report_file = (f"{workdir}/report-{hash[:7]}"
                    f"-{sys_info['platform']['node']}"
                    f"-py{sys_info['platform']['python_version']}"
                    f"-sdk{sys_info['packages']['ouster-sdk']}.json")

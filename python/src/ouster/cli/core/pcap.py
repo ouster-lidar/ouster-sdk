@@ -228,7 +228,8 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 
 @pcap_group.command(name="viz")
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 # TWS 20230627: '--cycle' is a deprecated option and only hidden to prevent breaking scripts that may be using it
 @click.option('-c', '--cycle', is_flag=True, help="Loop playback", hidden=True)
 @click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
@@ -236,7 +237,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 @click.option('-l', '--lidar-port', default=None, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
-@click.option('-b', '--buf', default=50, help="Scans to buffer for stepping.")
+@click.option('-b', '--buf', default=50, help="Scans to buffer for stepping")
 @click.option('-r',
               '--rate',
               default=1.0,
@@ -424,7 +425,8 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
 @click.argument('file', type=click_ro_file)
 @click.option('-s', '--start-frame', default=0, help="Start frame index")
 @click.option('-n', '--num-frames', default=10, help="Number of frames")
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l',
               '--lidar-port',
               type=int,
@@ -488,7 +490,8 @@ def pcap_slice(file: str, start_frame: int, num_frames: int,
 
 @pcap_group.command(name="to_bag")
 @click.argument('file', required=True)
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=None, type=int, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, type=int, help="Dest. port of imu data")
 @click.option('-o', '--output', required=False, help="BAG output filename")
@@ -598,7 +601,8 @@ def pcap_to_bag_impl(file: str, meta: Optional[str], lidar_port: Optional[int],
 
 @pcap_group.command(name="from_bag")
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-f', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-topic', default="", help="Topic with lidar data")
 @click.option('-i', '--imu-topic', default="", help="Topic with imu data")
 @click.option('-o', '--output', required=False, help="BAG output filename")
@@ -686,7 +690,8 @@ def bag_to_pcap(file: str, meta: Optional[str], lidar_topic: str,
 
 @pcap_group.command(name="to_csv")
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('--csv-dir', default=".", help="path to the directory to save csv files")
 @click.option('--csv-base', default="csv_out", help="base filename string for pcap output")
 @click.option('--csv-ext', default='csv', help="file extension to use, 'csv' by default.")
@@ -856,7 +861,8 @@ def pcap_to_csv_impl(file: str,
 
 @pcap_group.command(hidden=True)
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-c', '--cycle', is_flag=True, required=False, type=bool, help='Loop playback')
 @click.option('-h', '--host', required=False, type=str, default='127.0.1.1', help='Dest. host of UDP packets')
 @click.option('--lidar-port', required=False, type=int, default=7502, help='Dest. port of lidar data')

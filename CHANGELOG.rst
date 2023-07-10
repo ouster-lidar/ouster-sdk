@@ -2,6 +2,13 @@
 Changelog
 =========
 
+[unreleased]
+============
+
+ouster-cli
+----------
+Change all metadata options to match - now they are all -m
+
 20230710
 ========
 

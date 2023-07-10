@@ -12,7 +12,8 @@ from .source import source, _source_arg_name, _output_file_arg_name, SourceConve
 @click.option('-m',
               '--meta',
               required=False,
-              type=click.Path(exists=True, dir_okay=False, readable=True))
+              type=click.Path(exists=True, dir_okay=False, readable=True),
+              help="Metadata for PCAP, should automatic metadata resolution fail")
 @click.option('-s', '--chunk-size', default=0, help="Chunk size in bytes")
 @click.option('-f',
               '--flags',

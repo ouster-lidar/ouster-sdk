@@ -42,7 +42,8 @@ at ``source``:
     ouster-cli source <PCAP FILE>
 
 You should see a few commands listed there, including ``viz`` and ``info``. To figure out how to use
-them, try using ``--help``. For example, for help with the ``ouster-cli source <SAMPLE PCAP FILE> viz`` command:
+them, try using ``--help``. For example, for help with the ``ouster-cli source <SAMPLE PCAP FILE>
+viz`` command:
 
 .. code:: 
 
@@ -69,10 +70,11 @@ If you have a live sensor, you can replace the <SAMPLE PCAP FILE> with the hostn
     - sensor lidar packets traffic is seen on the expected machine and can be recorded with
       ``tcpdump -w`` command to a pcap file (or ``Wireshark`` tools)
     - CLI comamnd ``ouster-cli source <SENSOR HOSTNAME> {info,config}`` are working properly
-    - Viz ``ouster-cli source [pcap file] viz`` from the ``tcpdump`` recorded pcap can be played and visualized
+    - Viz ``ouster-cli source [pcap file] viz`` from the ``tcpdump`` recorded pcap can be played and
+      visualized
     
-    But ``ouster-cli source <SENSOR HOSTNAME> viz``, or ``ouster-cli source <SENSOR HOSTNAME> record`` still can't receive any packets
-    and get the following error::
+    But ``ouster-cli source <SENSOR HOSTNAME> viz``, or ``ouster-cli source <SENSOR HOSTNAME>
+     record`` still can't receive any packets and get the following error::
 
         ouster.client.core.ClientTimeout: No packets received within 1.0s
 
@@ -90,5 +92,6 @@ What next?
 ----------
 
 You can now to use ``ouster-cli`` as you please, exploring available utilities with the handy
-``---help``. If you'd prefer something more documented, you can check out our :ref:`sample sessions` to
-see what an ``ouster-cli`` workflow might look like, or you can read through :ref:`common commands`.
+``---help``. If you'd prefer something more documented, you can check out our :ref:`sample sessions`
+to see what an ``ouster-cli`` workflow might look like, or you can read through :ref:`common
+commands`.

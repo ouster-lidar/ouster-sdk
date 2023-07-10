@@ -257,8 +257,8 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
     do {
         if (chrono::steady_clock::now() >= timeout_time) {
             throw std::runtime_error(
-                "A timeout occurred while waiting for the sensor to initialize."
-            );
+                "A timeout occurred while waiting for the sensor to "
+                "initialize.");
         }
         std::this_thread::sleep_for(1s);
         status = sensor_http->sensor_info()["status"].asString();
@@ -279,8 +279,8 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
 
 }  // namespace
 
-bool get_config(const std::string& hostname, sensor_config& config,
-                bool active, int timeout_sec) {
+bool get_config(const std::string& hostname, sensor_config& config, bool active,
+                int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto res = sensor_http->get_config_params(active);
     config = parse_config(res);
@@ -422,8 +422,10 @@ bool init_logger(const std::string& log_level, const std::string& log_file_path,
 
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
-    logger().info("initializing sensor: {} with lidar port/imu port: {}/{}",
-                  hostname, lidar_port, imu_port);
+    logger().info(
+        "initializing sensor client: {} expecting lidar port/imu port: {}/{} "
+        "(0 means a random port will be chosen)",
+        hostname, lidar_port, imu_port);
 
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
@@ -485,7 +487,8 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
                                         const std::string& mtp_dest_host,
                                         bool main, int timeout_sec) {
     logger().info(
-        "initializing sensor client: {} with ports: {}/{}, multicast group: {}",
+        "initializing sensor client: {} expecting ports: {}/{}, multicast "
+        "group: {} (0 means a random port will be chosen)",
         hostname, config.udp_port_lidar.value(), config.udp_port_imu.value(),
         config.udp_dest.value());
 

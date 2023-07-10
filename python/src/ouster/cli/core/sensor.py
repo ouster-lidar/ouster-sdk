@@ -219,7 +219,7 @@ def configure_sensor(hostname: str, lidar_port: int,
 @click.option('-b', '--buf-size', default=256, hidden=True, help="Max packets to buffer")
 @click.option('-e', '--extrinsics', type=float, nargs=16,
               help='Lidar sensor extrinsics to use in viz')
-@click.option('-f', '--meta', type=click_ro_file,
+@click.option('-m', '--meta', type=click_ro_file,
         help="Provide separate metadata to use with sensor", hidden=True)
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
 @click.option('-l', '--lidar-port', type=int, default=None, help="Lidar port")

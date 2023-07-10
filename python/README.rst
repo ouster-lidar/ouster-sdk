@@ -45,7 +45,12 @@ Building from source is supported on:
 - macOS >= 10.13 (x86-64), >= 11.0 (arm64)
 - Windows 10 (x86-64)
 
+The Ouster SDK drops languages and platforms as they exit their standard support cycle. Please
+follow our `Lifecycle Policy`_ page to understand when support for a Python version, C++ compiler,
+Operating System, or Sensor FW may dropped from support.
+
 .. _PyPI: https://pypi.org/project/ouster-sdk/
+.. _Lifecycle Policy: https://github.com/ouster-lidar/ouster_example/discussions/532
 
 ..
     [python-supported-platforms-end]
