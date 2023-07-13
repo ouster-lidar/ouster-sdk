@@ -85,7 +85,7 @@ def service_info_as_text_str(info) -> str:
             url = f"http://{first_address}/api/v1/sensor/metadata/sensor_info"
             response = requests.get(url)
             response_json = response.json()
-            prod_line = response_json['prod_line']
+            prod_line = response_json.get('prod_line', prod_line)
             config = get_config(first_address)
             if config:
                 if config.udp_dest:

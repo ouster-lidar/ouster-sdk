@@ -78,3 +78,22 @@ def test_service_info_as_text_str_3(monkeypatch):
         assert FAKESERVER == server
         assert address == fake_addresses[0]
         assert prod_line == 'fake_prod_line'
+
+
+def test_service_info_as_text_str_4(monkeypatch):
+    """It should not set prod_line when the HTTP response does not contain it."""
+    def mock_get(url):
+        class MockResponse:
+            def json(self):
+                return {}
+        return MockResponse()
+
+    with monkeypatch.context() as m:
+        m.setattr(requests, "get", mock_get)
+
+        fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
+        text, color = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
+        assert FAKESERVER == server
+        assert address == fake_addresses[0]
+        assert prod_line == '-'
