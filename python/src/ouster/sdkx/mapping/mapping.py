@@ -286,7 +286,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
             f"{points_sum} points accumulated during this period,\n{near_minus_zero} "
             f"near points are removed [{near_removed_pernt:.2f} %],\n{points_down_removed} "
             f"down sampling points are removed [{down_removed_pernt:.2f} %],\n{points_zero} "
-            f"zero range points are removed [{zero_pernt:.2f} %],\n{points_saved} points"
+            f"zero range points are removed [{zero_pernt:.2f} %],\n{points_saved} points "
             f"are saved [{save_pernt:.2f} %].")
         points_sum = 0
         points_zero = 0
