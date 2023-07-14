@@ -8,7 +8,7 @@ consists of the following:
 - ``simple-viz`` (:class:`.viz.SimpleViz`): the default Python application visualizer, which can
   also be used as an entrypoint for more sophisticated custom point cloud visualizations
 - ``ouster_viz``: the core C++ library 
-- :mod:`ouster.sdk.viz`: the Python module for the bindings
+- :mod:`ouster.viz`: the Python module for the bindings
 
 ``simple-viz`` is a fastest way to visualize data from a connected sensor or a recorded ``pcap``:
 

@@ -7,7 +7,16 @@ Changelog
 
 ouster-cli
 ----------
-Change all metadata options to match - now they are all -m
+
+* Change all metadata options to match - now they are all ``-m``
+
+
+ouster.sdk
+----------
+
+* [BREAKING] change the ``ouster.sdk.viz`` location to the ``ouster.viz``
+  package, please update the references if you used ``ouster.sdk.viz`` module
+
 
 20230710
 ========

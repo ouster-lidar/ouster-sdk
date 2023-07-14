@@ -240,7 +240,7 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool, buf_s
     may have to disable your firewall for packets to reach the visualizer/client.
     """
     try:
-        from ouster.sdk.viz import SimpleViz, LidarScanViz
+        from ouster.viz import SimpleViz, LidarScanViz
         from ouster.sdkx.parsing import default_scan_fields
     except ImportError as e:
         raise click.ClickException(str(e))

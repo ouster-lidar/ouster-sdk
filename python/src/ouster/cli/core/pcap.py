@@ -195,7 +195,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
         click.echo(message)
         if viz:
             try:
-                from ouster.sdk.viz import SimpleViz, LidarScanViz
+                from ouster.viz import SimpleViz, LidarScanViz
             except ImportError as e:
                 raise click.ClickException(
                     "Please verify that libGL is installed. Error: " + str(e))
@@ -241,7 +241,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 @click.option('-r',
               '--rate',
               default=1.0,
-              help="Playback rate. One of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0")
+              help="Playback rate. One of 0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0")
 @click.option('--extrinsics',
               type=float,
               required=False,
@@ -285,7 +285,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
             "Please verify that libpcap is installed. Error: " + str(e))
 
     try:
-        from ouster.sdk.viz import SimpleViz, LidarScanViz
+        from ouster.viz import SimpleViz, LidarScanViz
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libGL is installed. Error: " + str(e))

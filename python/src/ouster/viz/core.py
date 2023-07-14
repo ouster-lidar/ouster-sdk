@@ -26,11 +26,12 @@ import numpy as np
 from PIL import Image as PILImage
 
 from ouster import client
-from ouster.client import _utils, ChanField, first_valid_column_pose
+from ouster.client import _utils, ChanField
 from ..client._client import Version
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
                    spezia_palette, grey_palette, viridis_palette, magma_palette)
+from . import util as vizu
 
 from ouster.sdkx.util import img_aspect_ratio  # type:ignore
 import platform
@@ -52,6 +53,8 @@ else:
     client_log_location = os.path.join(client_log_dir, "ouster-sdk.log")
 
 logging_enabled = True
+# TODO[pb]: Consider the dependency on `click`` here, and why we are using the
+#           click.echo() and not prints for example?
 if not os.path.exists(client_log_dir):
     try:
         os.makedirs(client_log_dir)
@@ -471,6 +474,7 @@ class LidarScanViz:
 
         self._viz = viz or PointViz("Ouster Viz")
 
+        # initialize scan's first and second return clouds
         self._metadata = meta
         self._clouds = (Cloud(meta), Cloud(meta))
         self._viz.add(self._clouds[0])
@@ -489,6 +493,12 @@ class LidarScanViz:
         # initialize osd
         self._osd = Label("", 0, 1)
         self._viz.add(self._osd)
+
+        # initialize scan axis helper
+        self._scan_axis = vizu.AxisWithLabel(self._viz,
+                                             thickness=3,
+                                             length=1.0,
+                                             enabled=False)
 
         self._scan_ind = -1
 
@@ -516,6 +526,7 @@ class LidarScanViz:
             (ord('T'), 0): LidarScanViz.toggle_scan_poses,
             # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
             (ord('C'), 0): LidarScanViz.update_flags_mode,
+            (ord('H'), 0): LidarScanViz.toggle_scan_axis,
             (ord('/'), 1): LidarScanViz.print_keys,
         }
 
@@ -534,6 +545,7 @@ class LidarScanViz:
             "e / E": "Increase/decrease size of displayed 2D images",
             "p / P": "Increase/decrease point size",
             "R": "Reset camera orientation",
+            "ctr+r": "Camera bird-eye view",
             "0": "Toggle orthographic camera",
             "1": "Toggle point cloud 1 visibility",
             "2": "Toggle point cloud 2 visibility",
@@ -542,6 +554,7 @@ class LidarScanViz:
             'm': "Cycle through point cloud coloring mode",
             'f': "Cycle through point cloud color palette",
             't': "Toggle scan poses",
+            "h": "Toggle axis helpers at scan origin",
             '?': "Print keys to standard out",
             "= / -": "Dolly in and out",
             "' / \"": "Increase/decrease spacing in range markers",
@@ -662,6 +675,11 @@ class LidarScanViz:
             # not bothering with OSD
             # TODO[pb]: hmm, probably should bother with OSD somehow
             print("Flags mode:", self._flags_mode.name)
+
+    def toggle_scan_axis(self) -> None:
+        """Toggle the helper axis of a scan ON/OFF"""
+        with self._lock:
+            self._scan_axis.toggle()
 
     def print_keys(self) -> None:
         with self._lock:
@@ -809,11 +827,16 @@ class LidarScanViz:
         for cloud in self._clouds:
             cloud.set_column_poses(column_poses)
 
+        scan_pose = client.first_valid_column_pose(self._scan)
+
         # with poses camera tracks the scan position
-        camera_target = (np.linalg.inv(first_valid_column_pose(self._scan))
+        camera_target = (np.linalg.inv(scan_pose)
                          if self._scan_poses_enabled else np.eye(4))
 
         self._viz.camera.set_target(camera_target)
+
+        # update scan axis helper
+        self._scan_axis.pose = scan_pose @ self._metadata.extrinsic
 
     def _draw_update_flags_mode(self) -> None:
         """Apply selected FlagsMode to the cloud"""

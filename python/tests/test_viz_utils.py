@@ -27,10 +27,9 @@ from .test_viz import point_viz as point_viz_plain  # noqa: F401
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
 if TYPE_CHECKING:
-    from ouster.sdk import viz, viz_util as vizu
+    import ouster.viz as viz
 else:
-    viz = pytest.importorskip('ouster.sdk.viz')
-    vizu = pytest.importorskip('ouster.sdk.viz_util')
+    viz = pytest.importorskip('ouster.viz')
 
 # Loose vector type
 Vector = Union[List, Tuple, np.ndarray]
@@ -104,11 +103,11 @@ def spin(pviz: viz.PointViz,
 def test_viz_util_axes(point_viz: viz.PointViz) -> None:
     """Test displaying a full-window image."""
 
-    vizu.AxisWithLabel(point_viz,
-                       label="O",
-                       thickness=3,
-                       label_scale=1,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      label="O",
+                      thickness=3,
+                      label_scale=1,
+                      enabled=True)
 
     point_viz.update()
     point_viz.run()
@@ -116,11 +115,11 @@ def test_viz_util_axes(point_viz: viz.PointViz) -> None:
 
 def test_viz_util_spin(point_viz: viz.PointViz) -> None:
     """Test displaying a spin and axis movement."""
-    axis = vizu.AxisWithLabel(point_viz,
-                              label="O",
-                              thickness=3,
-                              label_scale=1,
-                              enabled=True)
+    axis = viz.AxisWithLabel(point_viz,
+                             label="O",
+                             thickness=3,
+                             label_scale=1,
+                             enabled=True)
 
     def on_update(_, tick_ts) -> None:
         axis.pose[0, 3] += 0.1
@@ -133,38 +132,38 @@ def test_viz_util_spin(point_viz: viz.PointViz) -> None:
 @pytest.mark.skipif(_no_scipy, reason="didn't have the scipy.")
 def test_viz_util_one_arc(point_viz: viz.PointViz) -> None:
     """Test moving along the arc."""
-    axis_a = vizu.AxisWithLabel(point_viz,
-                              label="A",
-                              thickness=5,
-                              length=1.0,
-                              label_scale=0.3)
+    axis_a = viz.AxisWithLabel(point_viz,
+                               label="A",
+                               thickness=5,
+                               length=1.0,
+                               label_scale=0.3)
 
-    axis_b = vizu.AxisWithLabel(point_viz,
-                              label="B",
-                              thickness=5,
-                              length=0.5,
-                              label_scale=0.3)
+    axis_b = viz.AxisWithLabel(point_viz,
+                               label="B",
+                               thickness=5,
+                               length=0.5,
+                               label_scale=0.3)
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=pose_from_tr([0, 0, 0], [0, 0, 0]),
-                       label="O",
-                       thickness=10,
-                       length=0.3,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=pose_from_tr([0, 0, 0], [0, 0, 0]),
+                      label="O",
+                      thickness=10,
+                      length=0.3,
+                      enabled=True)
 
-    point_z = vizu.AxisWithLabel(point_viz,
-                                 pose=pose_from_tr([0, 0, 3], [90, 0, 0]),
-                                 label="X",
-                                 thickness=10,
-                                 length=0.1,
-                                 enabled=True)
+    point_z = viz.AxisWithLabel(point_viz,
+                                pose=pose_from_tr([0, 0, 3], [90, 0, 0]),
+                                label="X",
+                                thickness=10,
+                                length=0.1,
+                                enabled=True)
 
-    point_y = vizu.AxisWithLabel(point_viz,
-                                 pose=pose_from_tr([0, 3, 0], [90, 90, 0]),
-                                 label="Y",
-                                 length=0.1,
-                                 thickness=10,
-                                 enabled=True)
+    point_y = viz.AxisWithLabel(point_viz,
+                                pose=pose_from_tr([0, 3, 0], [90, 90, 0]),
+                                label="Y",
+                                length=0.1,
+                                thickness=10,
+                                enabled=True)
 
     period_t = 0.1
     total_t = 2
@@ -216,27 +215,27 @@ def test_viz_util_traj_eval(point_viz: viz.PointViz) -> None:
     traj_poses = list([(i * time_dil, p) for i, p in enumerate(poses6)])
     traj_eval = pu.TrajectoryEvaluator(traj_poses)
 
-    axis_a = vizu.AxisWithLabel(point_viz,
-                                pose=traj_eval.pose_at(0),
-                                label="A",
-                                thickness=5,
-                                length=1.0,
-                                label_scale=0.3)
+    axis_a = viz.AxisWithLabel(point_viz,
+                               pose=traj_eval.pose_at(0),
+                               label="A",
+                               thickness=5,
+                               length=1.0,
+                               label_scale=0.3)
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=np.eye(4),
-                       label="O",
-                       thickness=10,
-                       length=0.3,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=10,
+                      length=0.3,
+                      enabled=True)
 
     for i, p in enumerate(poses6):
-        vizu.AxisWithLabel(point_viz,
-                           pose=pu.exp_pose6(p),
-                           label=f"P{i}",
-                           thickness=10,
-                           length=0.1,
-                           enabled=True)
+        viz.AxisWithLabel(point_viz,
+                          pose=pu.exp_pose6(p),
+                          label=f"P{i}",
+                          thickness=10,
+                          length=0.1,
+                          enabled=True)
 
     period_t = 0.1
     total_t = 3 * time_dil * len(poses6)
@@ -271,28 +270,28 @@ def test_viz_util_traj_eval_kitti(kitti_poses_file, point_viz: viz.PointViz) -> 
     traj_poses = pu.make_kiss_traj_poses(poses)
     traj_eval = pu.TrajectoryEvaluator(traj_poses, time_bounds=1.0)
 
-    axis_a = vizu.AxisWithLabel(point_viz,
-                                pose=traj_eval.pose_at(0),
-                                label="A",
-                                thickness=5,
-                                length=0.2,
-                                label_scale=0.3)
+    axis_a = viz.AxisWithLabel(point_viz,
+                               pose=traj_eval.pose_at(0),
+                               label="A",
+                               thickness=5,
+                               length=0.2,
+                               label_scale=0.3)
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=np.eye(4),
-                       label="O",
-                       thickness=10,
-                       length=0.1,
-                       label_scale=0.3,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=10,
+                      length=0.1,
+                      label_scale=0.3,
+                      enabled=True)
 
     for i, p in enumerate(poses):
-        vizu.AxisWithLabel(point_viz,
-                           pose=p,
-                           thickness=10,
-                           length=0.1,
-                           label_scale=0.3,
-                           enabled=True)
+        viz.AxisWithLabel(point_viz,
+                          pose=p,
+                          thickness=10,
+                          length=0.1,
+                          label_scale=0.3,
+                          enabled=True)
 
     loops = 1
     period_t = 0.01
@@ -364,22 +363,22 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
 
     point_viz.update()
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=np.eye(4),
-                       label="O",
-                       thickness=5,
-                       length=1,
-                       label_scale=1,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=5,
+                      length=1,
+                      label_scale=1,
+                      enabled=True)
 
     for i, p in enumerate(poses):
-        vizu.AxisWithLabel(point_viz,
-                           pose=p,
-                           label=f"{i}",
-                           thickness=2,
-                           length=0.3,
-                           label_scale=0.3,
-                           enabled=True)
+        viz.AxisWithLabel(point_viz,
+                          pose=p,
+                          label=f"{i}",
+                          thickness=2,
+                          length=0.3,
+                          label_scale=0.3,
+                          enabled=True)
 
     total_traj_t = 2
 

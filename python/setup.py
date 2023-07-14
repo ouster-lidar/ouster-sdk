@@ -144,7 +144,7 @@ setup(
         'ouster.client': ['py.typed', '_client.pyi'],
         'ouster.pcap': ['py.typed', '_pcap.pyi'],
         'ouster.osf': ['py.typed', '_osf.pyi'],
-        'ouster.sdk': ['py.typed', '_viz.pyi'],
+        'ouster.viz': ['py.typed', '_viz.pyi'],
         'ouster.sdkx': ['py.typed'],
     },
     author='Ouster Sensor SDK Developers',

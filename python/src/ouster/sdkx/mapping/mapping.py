@@ -12,7 +12,7 @@ from pathlib import Path
 import ouster.osf as osf
 from ouster.sdkx.mapping.slam import KissBackend
 import ouster.sdkx.mapping.util as util
-from ouster.sdk.viz import SimpleViz
+from ouster.viz import SimpleViz
 from ouster.sdkx.parsing import default_scan_fields
 from datetime import datetime
 import time

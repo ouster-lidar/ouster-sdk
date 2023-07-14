@@ -70,7 +70,7 @@ target_link_libraries(_viz PRIVATE ouster_client ouster_viz ouster_build)
 target_include_directories(_viz SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_viz PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
-  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/sdk/$<0:>)
+  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/viz/$<0:>)
 
 pybind11_add_module(_osf src/cpp/_osf.cpp)
 target_link_libraries(_osf PRIVATE ouster_osf ouster_build)

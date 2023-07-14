@@ -4,7 +4,7 @@ import numpy as np
 
 import ouster.sdk.pose_util as pu
 
-import ouster.sdk.viz as viz
+from ._viz import PointViz, Cloud, Label
 
 
 def _cloud_axis_points(axis_length: float = 1.0) -> np.ndarray:
@@ -27,7 +27,7 @@ def _cloud_axis_points(axis_length: float = 1.0) -> np.ndarray:
     return axis_points
 
 
-def _make_cloud_axis(axis_points) -> viz.Cloud:
+def _make_cloud_axis(axis_points) -> Cloud:
     """Create viz.Cloud object with colors from coordinate axis points"""
 
     axis_n = int(axis_points.shape[0] / 3)
@@ -37,7 +37,7 @@ def _make_cloud_axis(axis_points) -> viz.Cloud:
         (axis_n, 4), [1, 0.1, 0.1, 1]), np.full((axis_n, 4), [0.1, 1, 0.1, 1]),
                                  np.full((axis_n, 4), [0.1, 0.1, 1, 1])))
 
-    cloud_axis = viz.Cloud(axis_points.shape[0])
+    cloud_axis = Cloud(axis_points.shape[0])
     cloud_axis.set_xyz(axis_points)
     cloud_axis.set_key(np.full(axis_points.shape[0], 0.5))
     # TODO[pb]: To use set_key(rgb) instead of set_mask() for colors
@@ -50,7 +50,7 @@ class AxisWithLabel:
     """Coordinate axis with a text label."""
 
     def __init__(self,
-                 point_viz: viz.PointViz,
+                 point_viz: PointViz,
                  *,
                  pose: pu.PoseH = np.eye(4),
                  label: str = "",
@@ -65,7 +65,7 @@ class AxisWithLabel:
         self._axis_cloud = _make_cloud_axis(_cloud_axis_points(length))
         self._axis_cloud.set_point_size(thickness)
         self._axis_cloud.set_pose(self._pose)
-        self._axis_label = viz.Label(self._label, *pose[:3, 3])
+        self._axis_label = Label(self._label, *pose[:3, 3])
         if label_scale:
             self._axis_label.set_scale(label_scale)
 

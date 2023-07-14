@@ -16,9 +16,9 @@ from ouster import client
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
 if TYPE_CHECKING:
-    from ouster.sdk import viz
+    import ouster.viz as viz
 else:
-    viz = pytest.importorskip('ouster.sdk.viz')
+    viz = pytest.importorskip('ouster.viz')
 
 # mark all tests in this module so they only run with the --interactive flag
 pytestmark = pytest.mark.interactive
