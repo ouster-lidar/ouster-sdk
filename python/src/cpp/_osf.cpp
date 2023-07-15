@@ -9,8 +9,8 @@
 #include <iostream>
 
 #include "ouster/client.h"
-#include "ouster/lidar_scan.h"
 #include "ouster/impl/profile_extension.h"
+#include "ouster/lidar_scan.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/meta_extrinsics.h"
 #include "ouster/osf/meta_lidar_sensor.h"

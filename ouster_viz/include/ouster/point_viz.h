@@ -293,7 +293,7 @@ class PointViz {
 
     /**
      * Get a window width in screen coordinates.
-     * 
+     *
      * NOTE: this value maybe different from the viewport size on retina
      * displays
      *
@@ -303,7 +303,7 @@ class PointViz {
 
     /**
      * Get a window height in screen coordinates.
-     * 
+     *
      * @note this value maybe different from the viewport size on retina
      * displays
      *
@@ -824,7 +824,8 @@ class Image {
      * @param[in] image_data pointer to an array of width * height elements
      *        interpreted as a row-major RGB image
      */
-    void set_image_rgb(size_t width, size_t height, const float* image_data_rgb);
+    void set_image_rgb(size_t width, size_t height,
+                       const float* image_data_rgb);
 
     /**
      * Set the image data (RGBA).
@@ -834,7 +835,8 @@ class Image {
      * @param[in] image_data pointer to an array of width * height elements
      *        interpreted as a row-major RGBA image
      */
-    void set_image_rgba(size_t width, size_t height, const float* image_data_rgba);
+    void set_image_rgba(size_t width, size_t height,
+                        const float* image_data_rgba);
 
     /**
      * Set the RGBA mask.

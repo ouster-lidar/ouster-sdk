@@ -12,8 +12,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "ouster/impl/build.h"
 #include "ouster/client.h"
+#include "ouster/impl/build.h"
 
 using namespace ouster;
 
@@ -80,7 +80,8 @@ int main(int argc, char* argv[]) {
     assert(new_config.azimuth_window == config.azimuth_window);
     assert(new_config.ld_mode == config.ld_mode);
 
-    std::cerr << "Updated config: \n" << to_string(new_config) << std::endl;
+    std::cerr << "Updated config: \n"
+              << to_string(new_config) << std::endl;
 
     // 4. You cannot set the udp_dest flag while simultaneously setting
     // config.udp_dest Will throw an invalid_argument if you do

@@ -67,7 +67,6 @@ PointsF cartesian_f(const Eigen::Ref<const img_t<uint32_t>>& range,
     return (nooffset.array() == 0.0).select(nooffset, nooffset + offset);
 }
 
-
 class CarteianParamterizedTestFixture
     : public ::testing::TestWithParam<std::pair<int, int>> {
    protected:
@@ -131,12 +130,14 @@ TEST(CarteianParamterizedTestFixture, CartesianFunctionsMatchF) {
 }
 
 TEST_P(CarteianParamterizedTestFixture, SpeedCheck) {
+    // clang-format off
     std::map<std::string, std::string> styles = {
         {"red", "\033[0;31m"},     {"green", "\033[0;32m"},
         {"yellow", "\033[0;33m"},  {"blue", "\033[0;34m"},
         {"magenta", "\033[0;35m"}, {"cyan", "\033[0;36m"},
         {"bold", "\033[1m"},       {"reset", "\033[0m"}};
-
+    // clang-format on
+    //
     const auto test_params = GetParam();
     const auto WIDTH = test_params.first;
     const auto HEIGHT = test_params.second;

@@ -8,14 +8,14 @@
  */
 #pragma once
 
-#include "ouster/osf/writer.h"
-
 #include "ouster/osf/meta_streaming_info.h"
+#include "ouster/osf/writer.h"
 
 namespace ouster {
 namespace osf {
 
-constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE = 2 * 1024 * 1024; // not strict ...
+constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE =
+    2 * 1024 * 1024;  // not strict ...
 
 /**
  * Sreaming Layout chunking strategy

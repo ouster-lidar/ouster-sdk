@@ -51,7 +51,8 @@ TEST_F(OperationsTest, ParseAndPrintSmoke) {
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
 }
 
-// TODO[pb]: Remove this test and remove PcapRawSource since it's not mathing the python impl.
+// TODO[pb]: Remove this test and remove PcapRawSource since it's not mathing
+// the python impl.
 TEST_F(OperationsTest, PcapToOsf) {
     std::string pcap_file = path_concat(
         test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10_lb_n3.pcap");

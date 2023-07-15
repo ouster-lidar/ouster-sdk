@@ -11,7 +11,6 @@
 
 #include "common.h"
 #include "osf_test.h"
-#include "ouster/types.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/meta_extrinsics.h"
@@ -19,13 +18,14 @@
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/types.h"
 
 namespace ouster {
 namespace osf {
 namespace {
 
-using ouster::sensor::sensor_info;
 using ouster::osf::get_random_lidar_scan;
+using ouster::sensor::sensor_info;
 
 class WriterTest : public osf::OsfTestWithDataAndFiles {};
 
@@ -497,7 +497,8 @@ TEST_F(WriterTest, WriteExample) {
     EXPECT_EQ(1, streaming_info_entry.size());
     auto streaming_info = streaming_info_entry.begin()->second;
 
-    // std::cout << "streaming_info = " << streaming_info->to_string() << std::endl;
+    // std::cout << "streaming_info = " << streaming_info->to_string() <<
+    // std::endl;
 
     // One stream: LidarScanStream
     EXPECT_EQ(1, streaming_info->stream_stats().size());

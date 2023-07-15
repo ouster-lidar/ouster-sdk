@@ -7,16 +7,15 @@
 
 #include <gtest/gtest.h>
 
-#include "ouster/osf/basics.h"
-#include "osf_test.h"
-
 #include "fb_utils.h"
+#include "osf_test.h"
+#include "ouster/osf/basics.h"
 
 namespace ouster {
 namespace osf {
 namespace {
 
-class OsfFileTest : public OsfTestWithData {}; 
+class OsfFileTest : public OsfTestWithData {};
 
 TEST_F(OsfFileTest, OpensOsfFileDefaultAsBadState) {
     // This opens nothing and produces the file in a !good() state
@@ -34,7 +33,6 @@ TEST_F(OsfFileTest, OpensOsfFileDefaultAsBadState) {
     if (ok) FAIL();
 }
 
-
 TEST_F(OsfFileTest, OpenOsfFileNominally) {
     OsfFile osf_file(
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
@@ -45,7 +43,6 @@ TEST_F(OsfFileTest, OpenOsfFileNominally) {
 
     EXPECT_EQ(osf_file.metadata_offset(), 1013976);
     std::cout << "file = " << osf_file.to_string() << std::endl;
-    
 
     EXPECT_EQ(osf_file.seek(100).offset(), 100);
 
@@ -55,7 +52,6 @@ TEST_F(OsfFileTest, OpenOsfFileNominally) {
     // OSF v2 OsfFile should be OK
     EXPECT_TRUE(osf_file.valid());
 
-    
     // Test move semantics
     OsfFile osff(std::move(osf_file));
     EXPECT_FALSE(osf_file.good());
@@ -87,7 +83,7 @@ TEST_F(OsfFileTest, OpenOsfFileNominally) {
 
     // Header length is always 52 bytes (0x34)
     EXPECT_EQ(header_size, 52);
-    
+
     // Close copied out
     osff.close();
     EXPECT_FALSE(osff.good());
@@ -98,7 +94,6 @@ TEST_F(OsfFileTest, OpenOsfFileNominally) {
     EXPECT_FALSE(osf_new.good());
     EXPECT_FALSE(osf_new);
 }
-
 
 TEST_F(OsfFileTest, OpenOsfFileWithStandardRead) {
     OsfFile osf_file(

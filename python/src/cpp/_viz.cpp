@@ -16,11 +16,11 @@
 
 #include <atomic>
 #include <csignal>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 #include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
@@ -172,8 +172,7 @@ PYBIND11_PLUGIN(_viz) {
         .def_property_readonly("window_width", &viz::PointViz::window_width,
                                "Current window width in screen coordinates")
 
-        .def_property_readonly("window_height",
-                               &viz::PointViz::window_height,
+        .def_property_readonly("window_height", &viz::PointViz::window_height,
                                "Current window height in screen coordinates")
 
         .def("add",
@@ -251,8 +250,7 @@ PYBIND11_PLUGIN(_viz) {
         .def("dolly", &viz::Camera::dolly, py::arg("amount"),
              "Move the camera towards or away from the target.")
 
-        .def("set_dolly", &viz::Camera::set_dolly,
-             py::arg("log_distance"),
+        .def("set_dolly", &viz::Camera::set_dolly, py::arg("log_distance"),
              "Set the dolly (i.e. log distance) of the camera from the target.")
         .def("get_dolly", &viz::Camera::get_dolly,
              "Get the dolly (i.e. log distance) of the camera from the target.")

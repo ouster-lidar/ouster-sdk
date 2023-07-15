@@ -8,11 +8,11 @@
  */
 #pragma once
 
-#include <memory>
 #include <iostream>
+#include <memory>
 
-#include "ouster/types.h"
 #include "ouster/osf/metadata.h"
+#include "ouster/types.h"
 
 namespace ouster {
 namespace osf {
@@ -63,9 +63,7 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
 
 template <>
 struct MetadataTraits<Extrinsics> {
-    static const std::string type() {
-        return "ouster/v1/os_sensor/Extrinsics";
-    }
+    static const std::string type() { return "ouster/v1/os_sensor/Extrinsics"; }
 };
 
 }  // namespace osf

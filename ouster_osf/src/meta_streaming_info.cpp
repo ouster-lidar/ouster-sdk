@@ -5,15 +5,13 @@
 
 #include "ouster/osf/meta_streaming_info.h"
 
-#include <sstream>
 #include <map>
+#include <sstream>
 
 #include "json/json.h"
-
+#include "json_utils.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "streaming/streaming_info_generated.h"
-
-#include "json_utils.h"
 
 namespace ouster {
 namespace osf {
@@ -22,8 +20,7 @@ std::string to_string(ChunkInfo chunk_info) {
     std::stringstream ss;
     ss << "{offset = " << chunk_info.offset
        << ", stream_id = " << chunk_info.stream_id
-       << ", message_count = " << chunk_info.message_count
-       << "}";
+       << ", message_count = " << chunk_info.message_count << "}";
     return ss.str();
 }
 
@@ -41,7 +38,6 @@ flatbuffers::Offset<ouster::osf::gen::StreamingInfo> create_streaming_info(
     flatbuffers::FlatBufferBuilder& fbb,
     const std::map<uint64_t, ChunkInfo>& chunks_info,
     const std::map<uint32_t, StreamStats>& stream_stats) {
-
     // Pack chunks vector
     std::vector<flatbuffers::Offset<gen::ChunkInfo>> chunks_info_vec;
     for (const auto& chunk_info : chunks_info) {
@@ -77,7 +73,6 @@ std::vector<uint8_t> StreamingInfo::buffer() const {
 
 std::unique_ptr<MetadataEntry> StreamingInfo::from_buffer(
     const std::vector<uint8_t>& buf) {
-    
     auto streaming_info = gen::GetSizePrefixedStreamingInfo(buf.data());
 
     std::unique_ptr<StreamingInfo> si = std::make_unique<StreamingInfo>();

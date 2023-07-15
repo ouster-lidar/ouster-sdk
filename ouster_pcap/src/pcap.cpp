@@ -35,8 +35,8 @@
 
 #include <chrono>
 #include <cstring>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <stdexcept>
 
 using us = std::chrono::microseconds;
@@ -90,31 +90,27 @@ size_t PcapReader::current_length() const { return info.payload_size; }
 const packet_info& PcapReader::current_info() const { return info; }
 
 void PcapReader::seek(uint64_t offset) {
-    if(offset < sizeof(struct pcap_file_header)) {
+    if (offset < sizeof(struct pcap_file_header)) {
         offset = sizeof(struct pcap_file_header);
     }
-    if(FSEEK(impl->pcap_reader_internals, offset, SEEK_SET)) {
+    if (FSEEK(impl->pcap_reader_internals, offset, SEEK_SET)) {
         throw std::runtime_error("pcap seek failed");
     }
 }
 
-int64_t PcapReader::file_size() const {
-    return file_size_;
-}
+int64_t PcapReader::file_size() const { return file_size_; }
 
 int64_t PcapReader::current_offset() const {
     int64_t ret = FTELL(impl->pcap_reader_internals);
 
-    if(ret == -1L) {
+    if (ret == -1L) {
         fclose(impl->pcap_reader_internals);
         throw std::runtime_error("ftell error: errno " + std::to_string(errno));
     }
     return ret;
 }
 
-void PcapReader::reset() {
-    seek(file_start_);
-}
+void PcapReader::reset() { seek(file_start_); }
 
 size_t PcapReader::next_packet() {
     size_t result = 0;

@@ -6,3 +6,4 @@ Language: Cpp
 DerivePointerAlignment: false
 PointerAlignment: Left
 Cpp11BracedListStyle: true
+ColumnLimit:     0

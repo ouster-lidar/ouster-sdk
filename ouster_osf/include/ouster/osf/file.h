@@ -8,18 +8,20 @@
  */
 #pragma once
 
-#include <string>
 #include <fstream>
+#include <string>
 
 #include "ouster/osf/basics.h"
 
 namespace ouster {
 namespace osf {
 
-enum class OpenMode : uint8_t { READ = 0, WRITE = 1 };
+enum class OpenMode : uint8_t { READ = 0,
+                                WRITE = 1 };
 
 /** State of %OSF file */
-enum class FileState : uint8_t { GOOD = 0, BAD = 1 };
+enum class FileState : uint8_t { GOOD = 0,
+                                 BAD = 1 };
 
 /** Chunk buffer type to store raw byte buffers of data. */
 using ChunkBuffer = std::vector<uint8_t>;
@@ -76,7 +78,7 @@ class OsfFile {
     /**
      * Read from file (in current mmap mode it's copying data from
      * mmap address to the 'buf' address).
-     * 
+     *
      * @todo Handle errors in future and get the way to read them back
      * with FileState etc.
      */

@@ -300,15 +300,14 @@ struct read_and_cast {
         dest = src.template cast<U>();
     }
 };
-    
+
 // Copy fields from `ls_source` LidarScan to `field_dest` img with casting
 // to the img_t<T> type of `field_dest`.
 struct copy_and_cast {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field_dest, const LidarScan& ls_source,
                     sensor::ChanField ls_source_field) {
-        visit_field(ls_source, ls_source_field, read_and_cast(),
-                                  field_dest);
+        visit_field(ls_source, ls_source_field, read_and_cast(), field_dest);
     }
 };
 }  // namespace impl
