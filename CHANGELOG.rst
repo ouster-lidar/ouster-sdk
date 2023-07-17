@@ -36,8 +36,10 @@ ouster_client
 * Add ``_client.IndexedPcapReader`` and ``_client.PcapIndex`` to enable random
   pcap file access by frame number
 * [BREAKING] remove ``ouster::Imu`` object
-* Add get_field_types function for LidarScan, from sensor_info
-* bugfix: return metadata regardless of sensor_info status field
+* [BREAKING] change the return type of ``ouster::packet_format::frame_id`` from ``uint16_t`` to ``uint32_t``
+* [BREAKING] remove methods ``px_range``, ``px_reflectivity``, ``px_signal``, and ``px_ambient`` from ``ouster::packet_format``
+* Add ``get_field_types`` function for ``LidarScan``, from ``sensor_info``
+* bugfix: return metadata regardless of ``sensor_info`` status field
 * Make timeout on curl more configurable
 
 ouster_viz

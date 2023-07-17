@@ -176,6 +176,9 @@ enum UDPProfileLidar {
 
     /** Five Word Profile */
     PROFILE_FIVE_WORD_PIXEL,
+
+    /** FuSa two-word pixel */
+    PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
 };
 
 /** Profile indicating packet format of IMU data. */
@@ -885,7 +888,7 @@ class packet_format final {
      *
      * @return the frame id.
      */
-    uint16_t frame_id(const uint8_t* lidar_buf) const;
+    uint32_t frame_id(const uint8_t* lidar_buf) const;
 
     /**
      * Read the initialization id packet header.
@@ -1043,43 +1046,6 @@ class packet_format final {
      * @return pointer to nth pixel of a column buffer.
      */
     const uint8_t* nth_px(int n, const uint8_t* col_buf) const;
-
-    /**
-     * Read range from pixel buffer.
-     *
-     * @param[in] px_buf the pixel buffer.
-     *
-     * @return range from pixel buffer.
-     */
-    uint32_t px_range(const uint8_t* px_buf) const;
-
-    /**
-     * Read reflectivity from pixel buffer.
-     *
-     * @param[in] px_buf the pixel buffer.
-     *
-     * @return reflectivity from pixel buffer.
-     */
-    uint16_t px_reflectivity(const uint8_t* px_buf) const;
-
-    /**
-     * Read signal from pixel buffer.
-     *
-     * @param[in] px_buf the pixel buffer.
-     *
-     * @return signal from pixel buffer.
-     */
-    uint16_t px_signal(const uint8_t* px_buf) const;
-
-    // TODO switch to px_near_ir
-    /**
-     * Read ambient from pixel buffer.
-     *
-     * @param[in] px_buf the pixel buffer.
-     *
-     * @return ambient from pixel buffer.
-     */
-    uint16_t px_ambient(const uint8_t* px_buf) const;
 
     // IMU packet accessors
     /**

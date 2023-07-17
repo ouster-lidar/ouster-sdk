@@ -88,6 +88,16 @@ static const Table<ChanField, ChanFieldType, 5> five_word_slots{{
     {ChanField::RAW32_WORD5, ChanFieldType::UINT32},
 }};
 
+static const Table<ChanField, ChanFieldType, 7> fusa_two_word_slots{{
+    {ChanField::RANGE, ChanFieldType::UINT32},
+    {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+    {ChanField::NEAR_IR, ChanFieldType::UINT8},
+    {ChanField::RANGE2, ChanFieldType::UINT32},
+    {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
+    {ChanField::RAW32_WORD1, ChanFieldType::UINT32},
+    {ChanField::RAW32_WORD2, ChanFieldType::UINT32},
+}};
+
 struct DefaultFieldsEntry {
     const std::pair<ChanField, ChanFieldType>* fields;
     size_t n_fields;
@@ -105,7 +115,10 @@ Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_scan_fields
      {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
       {lb_field_slots.data(), lb_field_slots.size()}},
      {UDPProfileLidar::PROFILE_FIVE_WORD_PIXEL,
-      {five_word_slots.data(), five_word_slots.size()}}}};
+      {five_word_slots.data(), five_word_slots.size()}},
+     {UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
+      {fusa_two_word_slots.data(), fusa_two_word_slots.size()}},
+}};
 
 static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     UDPProfileLidar profile) {

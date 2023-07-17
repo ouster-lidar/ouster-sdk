@@ -108,6 +108,7 @@ Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{
     {PROFILE_RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
     {PROFILE_RNG15_RFL8_NIR8, "RNG15_RFL8_NIR8"},
     {PROFILE_FIVE_WORD_PIXEL, "FIVE_WORD_PIXEL"},
+    {PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL, "FUSA_RNG15_RFL8_NIR8_DUAL"},
 }};
 
 Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{

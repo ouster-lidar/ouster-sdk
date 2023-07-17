@@ -74,3 +74,16 @@ add_executable(profile_extension_test profile_extension_test.cpp)
 target_link_libraries(profile_extension_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
 
 add_test(NAME profile_extension_test COMMAND profile_extension_test --gtest_output=xml:profile_extension_test.xml)
+
+add_executable(fusa_profile_test fusa_profile_test.cpp)
+
+target_link_libraries(fusa_profile_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME fusa_profile_test COMMAND fusa_profile_test --gtest_output=xml:fusa_profile_test.xml)
+set_tests_properties(
+    fusa_profile_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)
+

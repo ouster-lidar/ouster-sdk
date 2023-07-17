@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -103,6 +104,16 @@ static const Table<ChanField, FieldInfo, 14> five_word_pixel_info{{
     {ChanField::RAW32_WORD5, {UINT32, 16, 0, 0}},
 }};
 
+static const Table<ChanField, FieldInfo, 7> fusa_two_word_pixel_info{{
+    {ChanField::RANGE, {UINT16, 0, 0x7fff, -3}},
+    {ChanField::REFLECTIVITY, {UINT8, 2, 0xff, 0}},
+    {ChanField::NEAR_IR, {UINT8, 3, 0xff, 0}},
+    {ChanField::RANGE2, {UINT16, 4, 0x7fff, -3}},
+    {ChanField::REFLECTIVITY2, {UINT8, 6, 0xff, 0}},
+    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+}};
+
 Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles{{
     {UDPProfileLidar::PROFILE_LIDAR_LEGACY,
      {legacy_field_info.data(), legacy_field_info.size(), 12}},
@@ -114,6 +125,8 @@ Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles{{
      {lb_field_info.data(), lb_field_info.size(), 4}},
     {UDPProfileLidar::PROFILE_FIVE_WORD_PIXEL,
      {five_word_pixel_info.data(), five_word_pixel_info.size(), 20}},
+    {UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
+     {fusa_two_word_pixel_info.data(), fusa_two_word_pixel_info.size(), 8}},
 }};
 
 static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
@@ -273,17 +286,26 @@ uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
         // LEGACY profile has no packet_type - use 0 to code as 'legacy'
         return 0;
     }
-    uint16_t res;
-    std::memcpy(&res, lidar_buf + 0, sizeof(uint16_t));
+    uint16_t res = 0;
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        // FuSa profile has 8-bit packet_type
+        std::memcpy(&res, lidar_buf + 0, sizeof(uint8_t));
+    } else {
+        std::memcpy(&res, lidar_buf + 0, sizeof(uint16_t));
+    }
     return res;
 }
 
-uint16_t packet_format::frame_id(const uint8_t* lidar_buf) const {
+uint32_t packet_format::frame_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
         return col_frame_id(nth_col(0, lidar_buf));
     }
-    uint16_t res;
-    std::memcpy(&res, lidar_buf + 2, sizeof(uint16_t));
+    uint16_t res = 0;
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        std::memcpy(&res, lidar_buf + 4, sizeof(uint16_t));  // FIXME FuSa frame_id is 32 bits!
+    } else {
+        std::memcpy(&res, lidar_buf + 2, sizeof(uint16_t));
+    }
     return res;
 }
 
@@ -292,8 +314,12 @@ uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
         // LEGACY profile has no init_id - use 0 to code as 'legacy'
         return 0;
     }
-    uint32_t res;
-    std::memcpy(&res, lidar_buf + 4, sizeof(uint32_t));
+    uint32_t res = 0;
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        std::memcpy(&res, lidar_buf + 1, sizeof(uint32_t));
+    } else {
+        std::memcpy(&res, lidar_buf + 4, sizeof(uint32_t));
+    }
     return res & 0x00ffffff;
 }
 
@@ -303,8 +329,12 @@ uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
         // 'legacy'
         return 0;
     }
-    uint64_t res;
-    std::memcpy(&res, lidar_buf + 7, sizeof(uint64_t));
+    uint64_t res = 0;
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        std::memcpy(&res, lidar_buf + 11, sizeof(uint64_t));
+    } else {
+        std::memcpy(&res, lidar_buf + 7, sizeof(uint64_t));
+    }
     return res & 0x000000ffffffffff;
 }
 
@@ -315,7 +345,7 @@ uint16_t packet_format::countdown_thermal_shutdown(
         // 'normal operation'
         return 0;
     }
-    uint16_t res;
+    uint16_t res = 0;
     std::memcpy(&res, lidar_buf + 16, sizeof(uint8_t));
     return res;
 }
@@ -327,7 +357,7 @@ uint16_t packet_format::countdown_shot_limiting(
         // 0 for 'normal operation'
         return 0;
     }
-    uint16_t res;
+    uint16_t res = 0;
     std::memcpy(&res, lidar_buf + 17, sizeof(uint8_t));
     return res;
 }
@@ -338,7 +368,7 @@ uint8_t packet_format::thermal_shutdown(const uint8_t* lidar_buf) const {
         // 'normal operation'
         return 0;
     }
-    uint8_t res;
+    uint8_t res = 0;
     std::memcpy(&res, lidar_buf + 18, sizeof(uint8_t));
     return res & 0x0f;
 }
@@ -349,7 +379,7 @@ uint8_t packet_format::shot_limiting(const uint8_t* lidar_buf) const {
         // 'normal operation'
         return 0;
     }
-    uint8_t res;
+    uint8_t res = 0;
     std::memcpy(&res, lidar_buf + 19, sizeof(uint8_t));
     return res & 0x0f;
 }
@@ -367,7 +397,7 @@ const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
 }
 
 uint32_t packet_format::col_status(const uint8_t* col_buf) const {
-    uint32_t res;
+    uint32_t res = 0;
     std::memcpy(&res, col_buf + impl_->status_offset, sizeof(uint32_t));
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
         return res;  // LEGACY was 32 bits of all 1s
@@ -377,20 +407,20 @@ uint32_t packet_format::col_status(const uint8_t* col_buf) const {
 }
 
 uint64_t packet_format::col_timestamp(const uint8_t* col_buf) const {
-    uint64_t res;
+    uint64_t res = 0;
     std::memcpy(&res, col_buf + impl_->timestamp_offset, sizeof(uint64_t));
     return res;
 }
 
 uint16_t packet_format::col_measurement_id(const uint8_t* col_buf) const {
-    uint16_t res;
+    uint16_t res = 0;
     std::memcpy(&res, col_buf + impl_->measurement_id_offset, sizeof(uint16_t));
     return res;
 }
 
 uint32_t packet_format::col_encoder(const uint8_t* col_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        uint32_t res;
+        uint32_t res = 0;
         std::memcpy(&res, col_buf + 12, sizeof(uint32_t));
         return res;
     } else {
@@ -400,7 +430,7 @@ uint32_t packet_format::col_encoder(const uint8_t* col_buf) const {
 
 uint16_t packet_format::col_frame_id(const uint8_t* col_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        uint16_t res;
+        uint16_t res = 0;
         std::memcpy(&res, col_buf + 10, sizeof(uint16_t));
         return res;
     } else {
@@ -429,74 +459,58 @@ T packet_format::px_field(const uint8_t* px_buf, ChanField i) const {
     return res;
 }
 
-uint32_t packet_format::px_range(const uint8_t* px_buf) const {
-    return px_field<uint32_t>(px_buf, ChanField::RANGE);
-}
-
-uint16_t packet_format::px_reflectivity(const uint8_t* px_buf) const {
-    return px_field<uint16_t>(px_buf, ChanField::REFLECTIVITY);
-}
-
-uint16_t packet_format::px_signal(const uint8_t* px_buf) const {
-    return px_field<uint16_t>(px_buf, ChanField::SIGNAL);
-}
-
-uint16_t packet_format::px_ambient(const uint8_t* px_buf) const {
-    return px_field<uint16_t>(px_buf, ChanField::NEAR_IR);
-}
-
 /* IMU packet parsing */
 
 uint64_t packet_format::imu_sys_ts(const uint8_t* imu_buf) const {
-    uint64_t res;
+    uint64_t res = 0;
     std::memcpy(&res, imu_buf, sizeof(uint64_t));
     return res;
 }
 
 uint64_t packet_format::imu_accel_ts(const uint8_t* imu_buf) const {
-    uint64_t res;
+    uint64_t res = 0;
     std::memcpy(&res, imu_buf + 8, sizeof(uint64_t));
     return res;
 }
 
 uint64_t packet_format::imu_gyro_ts(const uint8_t* imu_buf) const {
-    uint64_t res;
+    uint64_t res = 0;
     std::memcpy(&res, imu_buf + 16, sizeof(uint64_t));
     return res;
 }
 
 float packet_format::imu_la_x(const uint8_t* imu_buf) const {
-    float res;
+    float res = 0;
     std::memcpy(&res, imu_buf + 24, sizeof(float));
     return res;
 }
 
 float packet_format::imu_la_y(const uint8_t* imu_buf) const {
-    float res;
+    float res = 0;
     std::memcpy(&res, imu_buf + 28, sizeof(float));
     return res;
 }
 
 float packet_format::imu_la_z(const uint8_t* imu_buf) const {
-    float res;
+    float res = 0;
     std::memcpy(&res, imu_buf + 32, sizeof(float));
     return res;
 }
 
 float packet_format::imu_av_x(const uint8_t* imu_buf) const {
-    float res;
+    float res = 0;
     std::memcpy(&res, imu_buf + 36, sizeof(float));
     return res;
 }
 
 float packet_format::imu_av_y(const uint8_t* imu_buf) const {
-    float res;
+    float res = 0;
     std::memcpy(&res, imu_buf + 40, sizeof(float));
     return res;
 }
 
 float packet_format::imu_av_z(const uint8_t* imu_buf) const {
-    float res;
+    float res = 0;
     std::memcpy(&res, imu_buf + 44, sizeof(float));
     return res;
 }
