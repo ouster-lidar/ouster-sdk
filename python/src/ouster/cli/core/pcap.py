@@ -55,7 +55,7 @@ def print_stream_table(all_infos):
         return (list(k)[0].dst_ip, list(k)[0].src_ip, list(k)[0].dst_port)
 
     for k, v in sorted(all_infos.udp_streams.items(), key=stream_sort):
-        frag = 'No' if [k for k, v in v.fragment_counts.items()] else 'Yes'
+        frag = 'No' if (len(v.fragment_counts) == 1) and (1 in v.fragment_counts) else 'Yes'
 
         first = True
         af_count = len(v.payload_size_counts.items())
@@ -79,7 +79,7 @@ def print_stream_table(all_infos):
 
 @pcap_group.command(name='info')
 @click.argument('file', required=True, type=click_ro_file)
-@click.option('-n', type=int, default=0, help="Read only INTEGER packets.")
+@click.option('-n', type=int, default=-1, help="Read only INTEGER packets.")
 def pcap_info(file: str, n: int) -> None:
     """Print information about a pcap file to stdout."""
     try:

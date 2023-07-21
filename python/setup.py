@@ -190,7 +190,8 @@ setup(
             'sphinx-copybutton ==0.5.0',
             'docutils <0.18',
             'sphinx-tabs ==3.3.1',
-            'breathe ==4.33.1'
+            'breathe ==4.33.1',
+            'sphinx-rtd-size'
         ],
         'examples': [
             'matplotlib',

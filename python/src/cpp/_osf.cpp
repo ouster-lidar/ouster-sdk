@@ -43,13 +43,13 @@ inline std::vector<uint8_t> getvector(py::buffer& buf) {
  * Map a dtype to a channel field type
  */
 static sensor::ChanFieldType field_type_of_dtype(const py::dtype& dt) {
-    if (dt == py::dtype::of<uint8_t>())
+    if (dt.is(py::dtype::of<uint8_t>()))
         return sensor::ChanFieldType::UINT8;
-    else if (dt == py::dtype::of<uint16_t>())
+    else if (dt.is(py::dtype::of<uint16_t>()))
         return sensor::ChanFieldType::UINT16;
-    else if (dt == py::dtype::of<uint32_t>())
+    else if (dt.is(py::dtype::of<uint32_t>()))
         return sensor::ChanFieldType::UINT32;
-    else if (dt == py::dtype::of<uint64_t>())
+    else if (dt.is(py::dtype::of<uint64_t>()))
         return sensor::ChanFieldType::UINT64;
     else
         throw std::invalid_argument("Invalid dtype for a channel field");

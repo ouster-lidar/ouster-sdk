@@ -23,7 +23,6 @@ namespace sensor {
 namespace impl {
 
 constexpr int imu_packet_size = 48;
-constexpr int64_t encoder_ticks_per_rev = 90112;
 
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
@@ -193,7 +192,6 @@ packet_format::packet_format(const sensor_info& info)
       imu_packet_size{impl::imu_packet_size},
       columns_per_packet(info.format.columns_per_packet),
       pixels_per_column(info.format.pixels_per_column),
-      encoder_ticks_per_rev{impl::encoder_ticks_per_rev},
       packet_header_size{impl_->packet_header_size},
       col_header_size{impl_->col_header_size},
       col_footer_size{impl_->col_footer_size},

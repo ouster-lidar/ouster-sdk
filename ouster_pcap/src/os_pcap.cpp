@@ -188,6 +188,7 @@ std::shared_ptr<stream_info> get_stream_info(
     packet_info info;
     bool first = true;
     uint64_t prev_location = 0;
+
     while (((packets_to_process <= 0) || (i < packets_to_process)) &&
            pcap_reader.next_packet()) {
         info = pcap_reader.current_info();

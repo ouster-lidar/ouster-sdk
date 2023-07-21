@@ -87,6 +87,7 @@ def config(hostname, keyval, dump, file, auto, persist, standby) -> None:
         cfg.udp_port_lidar = 7502
         cfg.udp_port_imu = 7503
         cfg.azimuth_window = (0, 360000)
+        cfg.signal_multiplier = 1
         cfg.operating_mode = client.OperatingMode.OPERATING_NORMAL
         click.echo("No config specified; using defaults and auto UDP dest:")
     else:

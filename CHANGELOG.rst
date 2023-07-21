@@ -9,6 +9,10 @@ ouster-cli
 ----------
 
 * Change all metadata options to match - now they are all ``-m``
+* Set signal multiplier by default in sensor/SOURCE sensor config
+* [bugfix] Fix report of fragmentation for ouster-cli pcap/SOURCE pcap info
+* use PYBIND11_MODULE instead of deprecated module constructor
+* remove deprecated == in pybind for .is()
 
 
 ouster.sdk
@@ -41,6 +45,7 @@ ouster_client
 * Add ``get_field_types`` function for ``LidarScan``, from ``sensor_info``
 * bugfix: return metadata regardless of ``sensor_info`` status field
 * Make timeout on curl more configurable
+* [BREAKING] remove encoder_ticks_per_rev (deprecated)
 
 ouster_viz
 ----------

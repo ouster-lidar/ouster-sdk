@@ -859,12 +859,11 @@ class packet_format final {
                                                  ///< of packet
 
     const UDPProfileLidar
-        udp_profile_lidar;                           ///< udp lidar profile of packet format
-    const size_t lidar_packet_size;                  ///< lidar packet size
-    const size_t imu_packet_size;                    ///< imu packet size
-    const int columns_per_packet;                    ///< columns per lidar packet
-    const int pixels_per_column;                     ///< pixels per column for lidar
-    [[deprecated]] const int encoder_ticks_per_rev;  ///< @deprecated
+        udp_profile_lidar;           ///< udp lidar profile of packet format
+    const size_t lidar_packet_size;  ///< lidar packet size
+    const size_t imu_packet_size;    ///< imu packet size
+    const int columns_per_packet;    ///< columns per lidar packet
+    const int pixels_per_column;     ///< pixels per column for lidar
 
     const size_t packet_header_size;
     const size_t col_header_size;
