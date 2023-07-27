@@ -27,9 +27,6 @@ namespace impl {
 
 using fsec = std::chrono::duration<float>;
 
-// 64 big enough for any UDP packet
-constexpr size_t packet_size = 65536;
-
 /*
  * Initialize the internal circular buffer.
  *
@@ -40,7 +37,7 @@ BufferedUDPSource::BufferedUDPSource(size_t buf_size)
     : capacity_{buf_size + 1} {
     std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
         return std::make_pair(client_state::CLIENT_ERROR,
-                              std::make_unique<uint8_t[]>(packet_size));
+                              Packet<packet_size>());
     });
 }
 
@@ -132,7 +129,7 @@ client_state BufferedUDPSource::consume(uint8_t* buf, size_t buf_sz,
     // read data into buffer
     auto sz = std::min<size_t>(buf_sz, packet_size);
     auto& e = bufs_[read_ind_];
-    std::memcpy(buf, e.second.get(), sz);
+    std::memcpy(buf, e.second.buf.data(), sz);  // TODO: Law of Demeter
 
     // advance read ind and unblock producer, if necessary
     {
@@ -173,9 +170,12 @@ void BufferedUDPSource::produce(const packet_format& pf) {
 
         auto& e = bufs_[write_ind_];
         if (st & LIDAR_DATA) {
-            if (!read_lidar_packet(*cli_, e.second.get(), pf)) continue;
+            LidarPacket& packet = e.second.as<LidarPacket>();
+            if (!read_lidar_packet(*cli_, packet, pf)) continue;
         } else if (st & IMU_DATA) {
-            if (!read_imu_packet(*cli_, e.second.get(), pf)) continue;
+            // TODO: accept ImuPacket& and set timestamp, for symmetry if for no
+            // other reason
+            if (!read_imu_packet(*cli_, e.second.buf.data(), pf)) continue;
         }
         if (overflow) st = client_state(st | CLIENT_OVERFLOW);
         e.first = st;

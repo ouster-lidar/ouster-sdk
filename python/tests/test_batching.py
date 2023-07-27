@@ -71,6 +71,7 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
     ls = client.LidarScan(info.format.pixels_per_column,
                           info.format.columns_per_frame,
                           info.format.udp_profile_lidar)
+    assert ls.host_timestamp.shape == (packets_per_frame,)
 
     # initialize fields and headers with nonzero values
     ls.timestamp[:] = 1
@@ -170,6 +171,7 @@ def test_incompatible_profile(lidar_stream: client.PacketSource) -> None:
     ls = client.LidarScan(info.format.pixels_per_column,
                           info.format.columns_per_frame,
                           client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+    assert ls.host_timestamp.shape == (packets_per_frame,)
 
     # Try to decode a legacy packet into a dual returns scan
     # TODO change exception thrown on the cpp side

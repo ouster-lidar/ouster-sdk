@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "ouster/defaults.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -50,13 +51,15 @@ class LidarScan {
 
    private:
     Header<uint64_t> timestamp_;
+    Header<uint64_t> host_timestamp_;
     Header<uint16_t> measurement_id_;
     Header<uint32_t> status_;
     std::vector<mat4d> pose_;
     std::map<sensor::ChanField, impl::FieldSlot> fields_;
     LidarScanFieldTypes field_types_;
 
-    LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types);
+    LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
+              size_t columns_per_packet);
 
    public:
     /**
@@ -105,6 +108,9 @@ class LidarScan {
      * @param[in] w horizontal resoulution, i.e. the number of measurements per
      * scan.
      * @param[in] h vertical resolution, i.e. the number of channels.
+     *
+     * Note, the number of columns per packet is set to the default
+     * (DEFAULT_COLUMNS_PER_PACKET).
      */
     LidarScan(size_t w, size_t h);
 
@@ -116,7 +122,8 @@ class LidarScan {
      * @param[in] h vertical resolution, i.e. the number of channels.
      * @param[in] profile udp profile.
      */
-    LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile);
+    LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile,
+              size_t columns_per_packet = DEFAULT_COLUMNS_PER_PACKET);
 
     /**
      * Initialize a scan with a custom set of fields.
@@ -130,8 +137,9 @@ class LidarScan {
      * @param[in] end end iterator of pairs of channel fields and types.
      */
     template <typename Iterator>
-    LidarScan(size_t w, size_t h, Iterator begin, Iterator end)
-        : LidarScan(w, h, {begin, end}){};
+    LidarScan(size_t w, size_t h, Iterator begin, Iterator end,
+              size_t columns_per_packet = DEFAULT_COLUMNS_PER_PACKET)
+        : LidarScan(w, h, {begin, end}, columns_per_packet){};
 
     /**
      * Initialize a lidar scan from another lidar scan.
@@ -216,6 +224,20 @@ class LidarScan {
      * @copydoc timestamp()
      */
     Eigen::Ref<const Header<uint64_t>> timestamp() const;
+
+    /**
+     * Access the host timestamp headers.
+     *
+     * @return a view of timestamp as a w-element vector.
+     */
+    Eigen::Ref<Header<uint64_t>> host_timestamp();
+
+    /**
+     * Access the host timestamp headers.
+     *
+     * @return a view of timestamp as a w-element vector.
+     */
+    Eigen::Ref<const Header<uint64_t>> host_timestamp() const;
 
     /**
      * Access the measurement id headers.
@@ -483,13 +505,27 @@ class ScanBatcher {
 
     /**
      * Add a packet to the scan.
+     * @deprecated this method is deprecated in favor of one that accepts a
+     * reference to a LidarPacket.
      *
-     * @param[in] packet_buf the lidar packet.
+     * @param[in] packet_buf a buffer containing raw bytes from a lidar packet.
      * @param[in] ls lidar scan to populate.
      *
      * @return true when the provided lidar scan is ready to use.
      */
-    bool operator()(const uint8_t* packet_buf, LidarScan& ls);
+    [[deprecated(
+        "Use ScanBatcher::operator(LidarPacket&, LidarScan&) instead.")]] bool
+    operator()(const uint8_t* packet_buf, LidarScan& ls);
+
+    /**
+     * Add a packet to the scan.
+     *
+     * @param[in] packet a LidarPacket.
+     * @param[in] ls lidar scan to populate.
+     *
+     * @return true when the provided lidar scan is ready to use.
+     */
+    bool operator()(const ouster::sensor::LidarPacket& packet, LidarScan& ls);
 };
 
 }  // namespace ouster

@@ -583,8 +583,28 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
     return recv_fixed(cli.lidar_fd, buf, pf.lidar_packet_size);
 }
 
+bool read_lidar_packet(const client& cli, LidarPacket& packet,
+                       const packet_format& pf) {
+    auto now = std::chrono::high_resolution_clock::now();
+    packet.host_timestamp =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch())
+            .count();
+    return read_lidar_packet(cli, packet.buf.data(), pf);
+}
+
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
     return recv_fixed(cli.imu_fd, buf, pf.imu_packet_size);
+}
+
+bool read_imu_packet(const client& cli, ImuPacket& packet,
+                     const packet_format& pf) {
+    auto now = std::chrono::high_resolution_clock::now();
+    packet.host_timestamp =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch())
+            .count();
+    return read_imu_packet(cli, packet.buf.data(), pf);
 }
 
 int get_lidar_port(client& cli) { return get_sock_port(cli.lidar_fd); }

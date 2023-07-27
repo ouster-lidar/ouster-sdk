@@ -1214,6 +1214,30 @@ class packet_format final {
  */
 const packet_format& get_format(const sensor_info& info);
 
+/**
+ * Encapsulate a packet buffer and attributes associated with it.
+ */
+template <int packet_size = 65536>
+struct Packet {
+    uint64_t host_timestamp;
+    std::array<uint8_t, packet_size> buf;
+
+    template <typename PacketType>
+    PacketType& as() {
+        return static_cast<PacketType&>(*this);
+    }
+};
+
+/**
+ * Encapsulate a lidar packet buffer and attributes associated with it.
+ */
+struct LidarPacket : public Packet<> {};
+
+/**
+ * Encapsulate an imu packet buffer and attributes associated with it.
+ */
+struct ImuPacket : public Packet<> {};
+
 namespace impl {
 
 /** Maximum number of allowed lidar profiles */

@@ -396,7 +396,8 @@ class Scans:
 
         w = self._source.metadata.format.columns_per_frame
         h = self._source.metadata.format.pixels_per_column
-        packets_per_frame = w // self._source.metadata.format.columns_per_packet
+        columns_per_packet = self._source.metadata.format.columns_per_packet
+        packets_per_frame = w // columns_per_packet
         column_window = self._source.metadata.format.column_window
 
         # If source is a sensor, make a type-specialized reference available
@@ -432,7 +433,8 @@ class Scans:
                 return
 
             if isinstance(packet, LidarPacket):
-                ls_write = ls_write or LidarScan(h, w, self._fields)
+                print("Columns per packet, w ", columns_per_packet, w)
+                ls_write = ls_write or LidarScan(h, w, self._fields, columns_per_packet)
 
                 if batch(packet._data, ls_write):
                     # Got a new frame, return it and start another

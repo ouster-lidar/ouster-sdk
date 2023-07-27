@@ -871,12 +871,13 @@ PYBIND11_MODULE(_client, m) {
         Returns:
             New LidarScan of 0x0 expecting fields of the LEGACY profile
 
-        )")
+        )",
+            py::arg("w"), py::arg("h"))
         .def(
             "__init__",
             [](LidarScan& self, size_t h, size_t w,
-               sensor::UDPProfileLidar profile) {
-                new (&self) LidarScan(w, h, profile);
+               sensor::UDPProfileLidar profile, size_t columns_per_packet) {
+                new (&self) LidarScan(w, h, profile, columns_per_packet);
             },
             R"(
         
@@ -890,17 +891,21 @@ PYBIND11_MODULE(_client, m) {
         Returns:
             New LidarScan of specified dimensions expecting fields of specified profile
 
-         )")
+         )",
+            py::arg("w"), py::arg("h"), py::arg("profile"),
+            py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
         .def(
             "__init__",
             [](LidarScan& self, size_t h, size_t w,
-               const std::map<sensor::ChanField, py::object>& field_types) {
+               const std::map<sensor::ChanField, py::object>& field_types,
+               size_t columns_per_packet) {
                 std::map<sensor::ChanField, sensor::ChanFieldType> ft;
                 for (const auto& kv : field_types) {
                     auto dt = py::dtype::from_args(kv.second);
                     ft[kv.first] = field_type_of_dtype(dt);
                 }
-                new (&self) LidarScan(w, h, ft.begin(), ft.end());
+                new (&self)
+                    LidarScan(w, h, ft.begin(), ft.end(), columns_per_packet);
             },
             R"(
         Initialize a scan with a custom set of fields
@@ -915,7 +920,9 @@ PYBIND11_MODULE(_client, m) {
             
 
 
-         )")
+         )",
+            py::arg("w"), py::arg("h"), py::arg("field_types"),
+            py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
         .def_readonly("w", &LidarScan::w,
                       "Width or horizontal resolution of the scan.")
         .def_readonly("h", &LidarScan::h,
@@ -971,6 +978,15 @@ PYBIND11_MODULE(_client, m) {
                                  self.timestamp().data(), py::cast(self));
             },
             "The measurement timestamp header as a W-element numpy array.")
+        .def_property_readonly(
+            "host_timestamp",
+            [](LidarScan& self) {
+                return py::array(py::dtype::of<uint64_t>(),
+                                 self.host_timestamp().rows(),
+                                 self.host_timestamp().data(), py::cast(self));
+            },
+            "The host timestamp header as a numpy array with "
+            "W/columns-per-packet entries.")
         .def_property_readonly(
             "measurement_id",
             [](LidarScan& self) {

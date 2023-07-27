@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -152,6 +153,19 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
                        const packet_format& pf);
 
 /**
+ * Read lidar data from the sensor. Will not block.
+ *
+ * @param[in] cli client returned by init_client associated with the connection.
+ * @param[out] packet A LidarPacket to store lidar data read from a sensor. In
+ * addition, the LidarPacket's host_timestamp attribute is also set.
+ * @param[in] pf The packet format.
+ *
+ * @return true if a lidar packet was successfully read.
+ */
+bool read_lidar_packet(const client& cli, LidarPacket& packet,
+                       const packet_format& pf);
+
+/**
  * Read imu data from the sensor. Will not block.
  *
  * @param[in] cli client returned by init_client associated with the connection.
@@ -162,6 +176,20 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
  * @return true if an imu packet was successfully read.
  */
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
+
+/**
+ * Read imu data from the sensor. Will not block.
+ *
+ * @param[in] cli client returned by init_client associated with the connection.
+ * @param[out] packet An ImuPacket to store imu data read from a sensor. In
+ * addition, the ImuPacket's host_timestamp attribute is also set.
+ * imu_packet_bytes + 1 bytes.
+ * @param[in] pf The packet format.
+ *
+ * @return true if an imu packet was successfully read.
+ */
+bool read_imu_packet(const client& cli, ImuPacket& packet,
+                     const packet_format& pf);
 
 /**
  * Get metadata text blob from the sensor.

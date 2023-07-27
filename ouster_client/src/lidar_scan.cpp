@@ -45,7 +45,6 @@ LidarScan::LidarScan(LidarScan&&) = default;
 LidarScan& LidarScan::operator=(const LidarScan&) = default;
 LidarScan& LidarScan::operator=(LidarScan&&) = default;
 LidarScan::~LidarScan() = default;
-
 namespace impl {
 
 template <typename K, typename V, size_t N>
@@ -137,8 +136,9 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
 }  // namespace impl
 
 // specify sensor:: namespace for doxygen matching
-LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types)
+LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types, size_t columns_per_packet)
     : timestamp_{Header<uint64_t>::Zero(w)},
+      host_timestamp_{Header<uint64_t>::Zero(w/columns_per_packet)},
       measurement_id_{Header<uint16_t>::Zero(w)},
       status_{Header<uint32_t>::Zero(w)},
       pose_(w, mat4d::Identity()),
@@ -152,11 +152,11 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types)
     }
 }
 
-LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile)
-    : LidarScan{w, h, impl::lookup_scan_fields(profile)} {}
+LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile, size_t columns_per_packet)
+    : LidarScan{w, h, impl::lookup_scan_fields(profile), columns_per_packet} {}
 
 LidarScan::LidarScan(size_t w, size_t h)
-    : LidarScan{w, h, UDPProfileLidar::PROFILE_LIDAR_LEGACY} {}
+    : LidarScan{w, h, UDPProfileLidar::PROFILE_LIDAR_LEGACY, DEFAULT_COLUMNS_PER_PACKET} {}
 
 sensor::ShotLimitingStatus LidarScan::shot_limiting() const {
     return static_cast<sensor::ShotLimitingStatus>(
@@ -204,8 +204,16 @@ LidarScan::FieldIter LidarScan::end() const { return field_types_.cend(); }
 Eigen::Ref<LidarScan::Header<uint64_t>> LidarScan::timestamp() {
     return timestamp_;
 }
+
 Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::timestamp() const {
     return timestamp_;
+}
+
+Eigen::Ref<LidarScan::Header<uint64_t>> LidarScan::host_timestamp() {
+    return host_timestamp_;
+}
+Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::host_timestamp() const {
+    return host_timestamp_;
 }
 
 Eigen::Ref<LidarScan::Header<uint16_t>> LidarScan::measurement_id() {
@@ -222,6 +230,7 @@ Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
 }
 
 std::vector<mat4d>& LidarScan::pose() { return pose_; }
+
 const std::vector<mat4d>& LidarScan::pose() const { return pose_; }
 
 bool LidarScan::complete(sensor::ColumnWindow window) const {
@@ -558,6 +567,8 @@ struct pack_raw_headers_col {
 bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     if (ls.w != w || ls.h != h)
         throw std::invalid_argument("unexpected scan dimensions");
+    if (ls.host_timestamp().rows() != ls.w / pf.columns_per_packet)
+        throw std::invalid_argument("unexpected scan columns_per_packet");
 
     // process cached packet
     if (cached_packet) {
@@ -595,6 +606,13 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         }
 
         zero_header_cols(ls, next_valid_m_id, w);
+
+        // zero host timestamp separately, since it's a different width based on columns_per_packet
+        ls.host_timestamp().segment(
+            next_valid_m_id/pf.columns_per_packet,
+            w/pf.columns_per_packet - next_valid_m_id/pf.columns_per_packet
+        ).setZero();
+
         std::memcpy(cache.data(), packet_buf, cache.size());
         cached_packet = true;
 
@@ -637,6 +655,11 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
                                   field_type.first, next_valid_m_id, m_id);
             }
             zero_header_cols(ls, next_valid_m_id, m_id);
+            // zero host timestamp separately, since it's a different width based on columns_per_packet
+            ls.host_timestamp().segment(
+                next_valid_m_id/pf.columns_per_packet,
+                m_id/pf.columns_per_packet - next_valid_m_id/pf.columns_per_packet
+            ).setZero();
             next_valid_m_id = m_id + 1;
         }
 
@@ -649,6 +672,25 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     }
 
     return false;
+}
+
+bool ScanBatcher::operator()(const ouster::sensor::LidarPacket& packet, LidarScan& ls) {
+    const uint8_t* col_buf = pf.nth_col(0, packet.buf.data());
+    // measurement id of first column in packet
+    const uint16_t m_id = pf.col_measurement_id(col_buf);
+
+    if(pf.columns_per_packet <= 0) {
+        throw std::invalid_argument("ScanBatcher::operator(): packet format has an invalid number of columns per packet.");
+    }
+
+    int host_timestamp_header_idx = m_id / pf.columns_per_packet;
+
+    if(host_timestamp_header_idx > ls.host_timestamp().rows()) {
+        throw std::runtime_error("ScanBatcher::operator(): host timestamp index exceeded header size.");
+    }
+
+    ls.host_timestamp()[host_timestamp_header_idx] = packet.host_timestamp;
+    return (*this)(packet.buf.data(), ls);
 }
 
 }  // namespace ouster

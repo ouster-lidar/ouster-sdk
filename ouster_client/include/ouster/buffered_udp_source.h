@@ -30,6 +30,9 @@ namespace ouster {
 namespace sensor {
 namespace impl {
 
+// 64 big enough for any UDP packet
+constexpr size_t packet_size = 65536;
+
 class BufferedUDPSource {
     // client handle
     std::mutex cli_mtx_;
@@ -47,7 +50,7 @@ class BufferedUDPSource {
 
     // internal packet buffer
     size_t capacity_{0};
-    using entry = std::pair<client_state, std::unique_ptr<uint8_t[]>>;
+    using entry = std::pair<client_state, ouster::sensor::Packet<packet_size>>;
     std::vector<entry> bufs_;
 
     explicit BufferedUDPSource(size_t buf_size);

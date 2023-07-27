@@ -642,8 +642,16 @@ class LidarScan:
         ...
 
     @overload
+    def __init__(self, h: int, w: int, profile: UDPProfileLidar, columns_per_packet: int) -> None:
+        ...
+
+    @overload
     def __init__(self, h: int, w: int, fields: Dict[ChanField,
                                                     FieldDType]) -> None:
+        ...
+
+    @overload
+    def __init__(self, w: int, h: int, fields: Dict[ChanField, FieldDType], columns_per_packet: int) -> None:
         ...
 
     @property
@@ -659,6 +667,10 @@ class LidarScan:
         ...
 
     def shot_limiting(self) -> int:
+        ...
+
+    @property
+    def host_timestamp(self) -> ndarray:
         ...
 
     def field(self, field: ChanField) -> ndarray:

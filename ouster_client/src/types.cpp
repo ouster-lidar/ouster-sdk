@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "logging.h"
+#include "ouster/defaults.h"
 #include "ouster/impl/build.h"
 #include "ouster/version.h"
 
@@ -208,7 +209,7 @@ data_format default_data_format(lidar_mode mode) {
     };
 
     uint32_t pixels_per_column = 64;
-    uint32_t columns_per_packet = 16;
+    uint32_t columns_per_packet = DEFAULT_COLUMNS_PER_PACKET;
     uint32_t columns_per_frame = n_cols_of_lidar_mode(mode);
     ColumnWindow column_window = default_column_window(columns_per_frame);
 
