@@ -442,6 +442,14 @@ def pcap_slice(file: str, start_frame: int, num_frames: int,
                meta: Optional[str], lidar_port: Optional[int],
                imu_port: Optional[int], output: Optional[str],
                soft_id_check: bool) -> None:
+    pcap_slice_impl(file, start_frame, num_frames, meta, lidar_port,
+                    imu_port, output, soft_id_check)
+
+
+def pcap_slice_impl(file: str, start_frame: int, num_frames: int,
+                    meta: Optional[str], lidar_port: Optional[int],
+                    imu_port: Optional[int], output: Optional[str],
+                    soft_id_check: bool) -> None:
     """Truncate a pcap file to the specified frames."""
 
     try:
