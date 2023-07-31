@@ -393,7 +393,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
     SimpleViz(ls_viz, rate=rate, pause_at=pause_at, on_eof=on_eof,
               _buflen=buf).run(scans_source)
 
-    if type(scans_source) == client.Scans and (scans_source._timed_out or scans_source._scans_produced == 0):
+    if type(scans_source) is client.Scans and (scans_source._timed_out or scans_source._scans_produced == 0):
         click.echo(click.style(
             f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.",
             fg='yellow'

@@ -120,7 +120,7 @@ class ColHeader(Enum):
 
 class PacketValidationFailure(Exception):
     def __eq__(self, other):
-        return type(self) == type(other) and self.args == other.args
+        return type(self) is type(other) and self.args == other.args
 
     def __hash__(self):
         return hash((type(self), self.args))

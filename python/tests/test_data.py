@@ -534,7 +534,7 @@ def test_lidar_packet_validator() -> None:
         # LidarPacket constructor should throw the same error if _raise_on_id_check is True
         client.LidarPacket(buf, metadata2, None, _raise_on_id_check=True)
     except client.data.PacketIdError as e:
-        assert type(errors) == list
+        assert type(errors) is list
         assert len(errors) == 1
         assert str(e) == str(errors[0])
         assert str(e) == "Metadata init_id/sn does not match: expected by metadata \
@@ -584,7 +584,7 @@ def test_lidar_packet_validator_3() -> None:
     assert n_bytes == 8448
     errors = validator.check_packet(buf, n_bytes)
     assert len(errors) == 1
-    assert type(errors[0]) == client.PacketSizeError
+    assert type(errors[0]) is client.PacketSizeError
     assert str(errors[0]) == 'Expected a packet of size 41216 but got a buffer of size 8448'
     _pcap.replay_uninitialize(pcap_handle)
 
@@ -612,10 +612,10 @@ def test_lidar_packet_validator_4() -> None:
     assert n_bytes == 8448
     errors = validator.check_packet(buf, n_bytes)
     assert len(errors) == 2
-    assert type(errors[0]) == client.PacketIdError
+    assert type(errors[0]) is client.PacketIdError
     assert str(
         errors[0]) == 'Metadata init_id/sn does not match: expected by metadata - \
 5431292/1234, but got from packet buffer - 5431292/122150000150'
-    assert type(errors[1]) == client.PacketSizeError
+    assert type(errors[1]) is client.PacketSizeError
     assert str(errors[1]) == 'Expected a packet of size 1280 but got a buffer of size 8448'
     _pcap.replay_uninitialize(pcap_handle)
