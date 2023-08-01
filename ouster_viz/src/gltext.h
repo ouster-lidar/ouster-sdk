@@ -423,22 +423,8 @@ GLT_API void gltDrawText2D(GLTtext* text, GLfloat x, GLfloat y, GLfloat scale) {
 #endif
 
     const GLfloat model[16] = {
-        scale,
-        0.0f,
-        0.0f,
-        0.0f,
-        0.0f,
-        scale,
-        0.0f,
-        0.0f,
-        0.0f,
-        0.0f,
-        scale,
-        0.0f,
-        x,
-        y,
-        0.0f,
-        1.0f,
+        scale, 0.0f, 0.0f,  0.0f, 0.0f, scale, 0.0f, 0.0f,
+        0.0f,  0.0f, scale, 0.0f, x,    y,     0.0f, 1.0f,
     };
 
     GLfloat mvp[16];
@@ -479,22 +465,14 @@ GLT_API void gltDrawText3D(GLTtext* text, GLfloat x, GLfloat y, GLfloat z,
     if (!text->vertexCount) return;
 
     const GLfloat model[16] = {
-        scale,
-        0.0f,
-        0.0f,
-        0.0f,
-        0.0f,
-        -scale,
-        0.0f,
-        0.0f,
-        0.0f,
-        0.0f,
-        scale,
-        0.0f,
-        x,
-        y + (GLfloat)_gltFontGlyphHeight * scale,
-        z,
-        1.0f,
+        scale, 0.0f,
+        0.0f,  0.0f,
+        0.0f,  -scale,
+        0.0f,  0.0f,
+        0.0f,  0.0f,
+        scale, 0.0f,
+        x,     y + (GLfloat)_gltFontGlyphHeight * scale,
+        z,     1.0f,
     };
 
     GLfloat mvp[16];

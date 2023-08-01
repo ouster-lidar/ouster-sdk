@@ -37,7 +37,8 @@ struct stream_key {
 
 template <>
 struct std::hash<ouster::sensor_utils::stream_key> {
-    std::size_t operator()(const ouster::sensor_utils::stream_key& key) const noexcept {
+    std::size_t operator()(
+        const ouster::sensor_utils::stream_key& key) const noexcept {
         return std::hash<std::string>{}(key.src_ip) ^
                (std::hash<std::string>{}(key.src_ip) << 1) ^
                (std::hash<int>{}(key.src_port << 2)) ^

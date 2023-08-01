@@ -285,7 +285,8 @@ uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
         return 0;
     }
     uint16_t res = 0;
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+    if (udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
         // FuSa profile has 8-bit packet_type
         std::memcpy(&res, lidar_buf + 0, sizeof(uint8_t));
     } else {
@@ -299,8 +300,10 @@ uint32_t packet_format::frame_id(const uint8_t* lidar_buf) const {
         return col_frame_id(nth_col(0, lidar_buf));
     }
     uint16_t res = 0;
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        std::memcpy(&res, lidar_buf + 4, sizeof(uint16_t));  // FIXME FuSa frame_id is 32 bits!
+    if (udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        std::memcpy(&res, lidar_buf + 4,
+                    sizeof(uint16_t));  // FIXME FuSa frame_id is 32 bits!
     } else {
         std::memcpy(&res, lidar_buf + 2, sizeof(uint16_t));
     }
@@ -313,7 +316,8 @@ uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
         return 0;
     }
     uint32_t res = 0;
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+    if (udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
         std::memcpy(&res, lidar_buf + 1, sizeof(uint32_t));
     } else {
         std::memcpy(&res, lidar_buf + 4, sizeof(uint32_t));
@@ -328,7 +332,8 @@ uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
         return 0;
     }
     uint64_t res = 0;
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+    if (udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
         std::memcpy(&res, lidar_buf + 11, sizeof(uint64_t));
     } else {
         std::memcpy(&res, lidar_buf + 7, sizeof(uint64_t));

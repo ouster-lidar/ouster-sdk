@@ -18,9 +18,7 @@
 namespace ouster {
 namespace osf {
 
-enum class ChunkValidity { UNKNOWN = 0,
-                           VALID,
-                           INVALID };
+enum class ChunkValidity { UNKNOWN = 0, VALID, INVALID };
 
 /**
  * Chunks state. Validity info and next offset for forward iteration.

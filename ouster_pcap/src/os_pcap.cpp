@@ -105,13 +105,9 @@ std::ostream& operator<<(std::ostream& stream_in, const stream_info& data) {
     stream_in << "Min Timestamp: " << data.timestamp_min.count() << std::endl;
 
     for (auto it : data.udp_streams) {
-        stream_in << "Key: " << std::endl
-                  << it.first << std::endl;
-        stream_in << "Data: " << std::endl
-                  << it.second << std::endl;
-        stream_in << std::endl
-                  << std::endl
-                  << std::endl;
+        stream_in << "Key: " << std::endl << it.first << std::endl;
+        stream_in << "Data: " << std::endl << it.second << std::endl;
+        stream_in << std::endl << std::endl << std::endl;
     }
     return stream_in;
 }

@@ -13,7 +13,7 @@ namespace sensor_utils {
 
 struct PcapIndex {
     using frame_index =
-        std::vector<uint64_t>;                ///< Maps a frame number to a file offset
+        std::vector<uint64_t>;  ///< Maps a frame number to a file offset
     std::vector<frame_index> frame_indices_;  ///< frame index for each sensor
 
     PcapIndex(size_t num_sensors) : frame_indices_(num_sensors) {}

@@ -16,12 +16,10 @@
 namespace ouster {
 namespace osf {
 
-enum class OpenMode : uint8_t { READ = 0,
-                                WRITE = 1 };
+enum class OpenMode : uint8_t { READ = 0, WRITE = 1 };
 
 /** State of %OSF file */
-enum class FileState : uint8_t { GOOD = 0,
-                                 BAD = 1 };
+enum class FileState : uint8_t { GOOD = 0, BAD = 1 };
 
 /** Chunk buffer type to store raw byte buffers of data. */
 using ChunkBuffer = std::vector<uint8_t>;
