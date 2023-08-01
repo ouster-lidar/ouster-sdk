@@ -53,13 +53,16 @@ class CurlClient : public ouster::util::HttpClient {
         return url1 + url2;
     }
 
-    std::string execute_get(const std::string& url, int attempts = 3, int retry_delay_ms = 500) const {
+    std::string execute_get(const std::string& url, int attempts = 3,
+                            int retry_delay_ms = 500) const {
         long http_code = 0;
         if (attempts < 1) {
-            throw std::invalid_argument("CurlClient::execute_get: invalid number of retries");
+            throw std::invalid_argument(
+                "CurlClient::execute_get: invalid number of retries");
         }
         if (retry_delay_ms < 0) {
-            throw std::invalid_argument("CurlClient::execute_get: invalid retry delay");
+            throw std::invalid_argument(
+                "CurlClient::execute_get: invalid retry delay");
         }
         curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1L);
@@ -67,9 +70,9 @@ class CurlClient : public ouster::util::HttpClient {
             buffer.clear();
             auto res = curl_easy_perform(curl_handle);
             if (res == CURLE_SEND_ERROR) {
-                // Specific versions of curl does't play well with the sensor http
-                // server. When CURLE_SEND_ERROR happens for the first time silently
-                // re-attempting the http request resolves the problem.
+                // Specific versions of curl does't play well with the sensor
+                // http server. When CURLE_SEND_ERROR happens for the first time
+                // silently re-attempting the http request resolves the problem.
                 res = curl_easy_perform(curl_handle);
             }
             if (res != CURLE_OK) {
@@ -86,19 +89,21 @@ class CurlClient : public ouster::util::HttpClient {
                 // HTTP 5XX means a server error, so we should re-attempt.
                 // log a warning and sleep before re-attempting
                 ouster::sensor::logger().warn(
-                    std::string("Re-attempting CurlClient::execute_get after failure for url: ") +
+                    std::string("Re-attempting CurlClient::execute_get after "
+                                "failure for url: ") +
                         "[{}] with the code: [{}] - and return: {}",
                     url, http_code, buffer);
-                std::this_thread::sleep_for(std::chrono::milliseconds(retry_delay_ms));
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(retry_delay_ms));
             }
         }
 
-        // the request failed after repeated attempts with a response code other than HTTP 2XX
+        // the request failed after repeated attempts with a response code other
+        // than HTTP 2XX
         throw std::runtime_error(
             std::string("CurlClient::execute_get failed for url: [" + url +
-                        "] with the code: [" +
-                        std::to_string(http_code) + std::string("] - and return: ") +
-                        buffer));
+                        "] with the code: [" + std::to_string(http_code) +
+                        std::string("] - and return: ") + buffer));
     }
 
     static size_t write_memory_callback(void* contents, size_t element_size,

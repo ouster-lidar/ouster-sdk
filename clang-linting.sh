@@ -1,20 +1,27 @@
 #!/bin/bash
-# How to run:
-# cd ouster-sdk; then run ./clang-linting.sh
-# Default: performs a clang format check and prints errors if they exist
-# ./clang-linting.sh -a
-# applies the clang format to the files
+
+help='false'
 apply='false'
 check='true'
 SUBCOMMAND='--Werror --dry-run'
 #Input arguments
-while getopts 'a' flag
+while getopts 'ha' flag
 do
     case "${flag}" in
+        h) help='true';;
         a) apply='true';;
     esac
 done
 
+if [[ $help == 'true' ]]; then
+  echo """
+  How to run:
+  cd ouster-sdk; then run ./clang-linting.sh
+  Default: performs a clang format check and prints errors if they exist
+  ./clang-linting.sh -a
+  applies the clang format to the files
+  """
+fi
 
 if [[ $apply == 'true' ]]; then
   check='false'

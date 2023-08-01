@@ -366,8 +366,8 @@ struct data_format {
     uint32_t
         columns_per_frame;  ///< columns per frame, should match with lidar mode
     std::vector<int>
-        pixel_shift_by_row;             ///< shift of pixels by row to enable destagger
-    ColumnWindow column_window;         ///< window of columns over which sensor fires
+        pixel_shift_by_row;      ///< shift of pixels by row to enable destagger
+    ColumnWindow column_window;  ///< window of columns over which sensor fires
     UDPProfileLidar udp_profile_lidar;  ///< profile of lidar packet
     UDPProfileIMU udp_profile_imu;      ///< profile of imu packet
     uint16_t fps;                       ///< frames per second
@@ -375,16 +375,17 @@ struct data_format {
 
 /** Stores necessary information from sensor to parse and project sensor data.
  */
+// clang-format off
 struct sensor_info {
     [[deprecated("Will be removed in the next version")]] std::string
-        name;               ///< @deprecated Will be removed in the next version
-    std::string sn;         ///< sensor serial number
-    std::string fw_rev;     ///< fw revision
-    lidar_mode mode;        ///< lidar mode of sensor
-    std::string prod_line;  ///< prod line
-    data_format format;     ///< data format of sensor
+        name;                               ///< @deprecated Will be removed in the next version
+    std::string sn;                         ///< sensor serial number
+    std::string fw_rev;                     ///< fw revision
+    lidar_mode mode;                        ///< lidar mode of sensor
+    std::string prod_line;                  ///< prod line
+    data_format format;                     ///< data format of sensor
     std::vector<double>
-        beam_azimuth_angles;  ///< beam azimuth angles for 3D projection
+        beam_azimuth_angles;                ///< beam azimuth angles for 3D projection
     std::vector<double>
         beam_altitude_angles;               ///< beam altitude angles for 3D projection
     double lidar_origin_to_beam_origin_mm;  ///< distance between lidar origin
@@ -399,6 +400,7 @@ struct sensor_info {
     uint16_t udp_port_lidar;                ///< the lidar destination port
     uint16_t udp_port_imu;                  ///< the imu destination port
 };
+// clang-format on
 
 /**
  * Equality for data_format.
@@ -803,11 +805,7 @@ std::string to_string(ChanField field);
 /**
  * Types of channel fields.
  */
-enum ChanFieldType { VOID = 0,
-                     UINT8,
-                     UINT16,
-                     UINT32,
-                     UINT64 };
+enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
 
 /**
  * Get the size of the ChanFieldType in bytes.
