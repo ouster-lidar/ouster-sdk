@@ -39,7 +39,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
     /// TODO]pb]: This is soft DEPRECATED until we have an updated sensor_info,
     ///           since we are not encouraging storing the serialized metadata
     explicit LidarSensor(const sensor_info& si)
-        : sensor_info_(si), metadata_(sensor::to_string(si)) {
+        : sensor_info_(si), metadata_(si.original_string()) {
         throw std::invalid_argument(
             "\nERROR: `osf::LidarSensor()` constructor accepts only "
             "metadata_json "

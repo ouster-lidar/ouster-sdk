@@ -162,8 +162,10 @@ enum NMEABaudRate {
 
 /** Profile indicating packet format of lidar data. */
 enum UDPProfileLidar {
+    PROFILE_LIDAR_UNKNOWN = 0,
+
     /** Legacy lidar data */
-    PROFILE_LIDAR_LEGACY = 1,
+    PROFILE_LIDAR_LEGACY,
 
     /** Dual Returns data */
     PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
@@ -183,7 +185,7 @@ enum UDPProfileLidar {
 
 /** Profile indicating packet format of IMU data. */
 enum UDPProfileIMU {
-    PROFILE_IMU_LEGACY = 1  ///< Legacy IMU data
+    PROFILE_IMU_LEGACY = 1,  ///< Legacy IMU data
 };
 
 /** Thermal Shutdown status. */
@@ -368,39 +370,83 @@ struct data_format {
     std::vector<int>
         pixel_shift_by_row;      ///< shift of pixels by row to enable destagger
     ColumnWindow column_window;  ///< window of columns over which sensor fires
-    UDPProfileLidar udp_profile_lidar;  ///< profile of lidar packet
-    UDPProfileIMU udp_profile_imu;      ///< profile of imu packet
-    uint16_t fps;                       ///< frames per second
+    UDPProfileLidar udp_profile_lidar{};  ///< profile of lidar packet
+    UDPProfileIMU udp_profile_imu{};      ///< profile of imu packet
+    uint16_t fps;                         ///< frames per second
 };
 
-/** Stores necessary information from sensor to parse and project sensor data.
- */
-// clang-format off
-struct sensor_info {
-    [[deprecated("Will be removed in the next version")]] std::string
-        name;                               ///< @deprecated Will be removed in the next version
-    std::string sn;                         ///< sensor serial number
-    std::string fw_rev;                     ///< fw revision
-    lidar_mode mode;                        ///< lidar mode of sensor
-    std::string prod_line;                  ///< prod line
-    data_format format;                     ///< data format of sensor
-    std::vector<double>
-        beam_azimuth_angles;                ///< beam azimuth angles for 3D projection
-    std::vector<double>
-        beam_altitude_angles;               ///< beam altitude angles for 3D projection
-    double lidar_origin_to_beam_origin_mm;  ///< distance between lidar origin
-                                            ///< and beam origin in mm
-    mat4d beam_to_lidar_transform;          ///< transform between beam and lidar frame
-    mat4d imu_to_sensor_transform;          ///< transform between sensor coordinate
-                                            ///< frame and imu
-    mat4d lidar_to_sensor_transform;        ///< transform between lidar and sensor
-                                            ///< coordinate frames
-    mat4d extrinsic;                        ///< extrinsic matrix
-    uint32_t init_id;                       ///< initialization ID updated every reinit
-    uint16_t udp_port_lidar;                ///< the lidar destination port
-    uint16_t udp_port_imu;                  ///< the imu destination port
+/** Stores from-sensor calibration information */
+struct calibration_status {
+    optional<bool> reflectivity_status;
+    optional<std::string> reflectivity_timestamp;
 };
-// clang-format on
+
+/** Stores parsed information from metadata and */
+struct sensor_info {
+    // clang-format off
+    std::string
+        name{};                 ///< user-convenience client-side assignable name, corresponds
+                                ///< to hostname in metadata.json if present
+    std::string sn{};           ///< sensor serial number corresponding to prod_sn in
+                                ///< metadata.json
+    std::string
+        fw_rev{};               ///< fw revision corresponding to build_rev in metadata.json
+    lidar_mode mode{};          ///< lidar mode of sensor
+    std::string prod_line{};    ///< prod line
+    data_format format{};       ///< data format of sensor
+    std::vector<double>
+        beam_azimuth_angles{};  ///< beam azimuth angles for 3D projection
+    std::vector<double>
+        beam_altitude_angles{}; ///< beam altitude angles for 3D projection
+    double lidar_origin_to_beam_origin_mm{};  ///< distance between lidar origin
+                                              ///< and beam origin in mm
+    mat4d beam_to_lidar_transform =
+        mat4d::Zero();          ///< transform between beam and lidar frame
+    mat4d imu_to_sensor_transform =
+        mat4d::Zero();          ///< transform between sensor coordinate
+                                ///< frame and imu
+    mat4d lidar_to_sensor_transform =
+        mat4d::Zero();          ///< transform between lidar and sensor
+                                ///< coordinate frames
+    // TODO read extrinsic from metadata.json in the future
+    mat4d extrinsic =
+        mat4d::Zero();          ///< user-convenience client-side assignable extrinsic
+                                ///< matrix, currently is not read from metadata.json
+    uint32_t init_id{};         ///< initialization ID updated every reinit
+    uint16_t udp_port_lidar{};  ///< the lidar destination port
+    uint16_t udp_port_imu{};    ///< the imu destination port
+
+    std::string build_date{};   ///< build date from FW sensor_info
+    std::string image_rev{};    ///< image rev from FW sensor_info
+    std::string prod_pn{};      ///< prod pn
+    std::string status{};       ///< sensor status at time of pulling metadata
+
+    calibration_status cal{};  ///< sensor calibration
+    sensor_config config{};    ///< parsed sensor config if available from metadata
+
+    /* Constructor from metadata */
+    sensor_info(const std::string& metadata, bool skip_beam_validation = false);
+
+    /* Empty constructor -- keep for  */
+    sensor_info();
+
+    /* Return original metadata string should sensor_info have been
+     * constructed from one  -- this string will be **unchanged** and
+     * will not reflect the changes to fields made to sensor_info*/
+    std::string original_string() const;
+
+    /* Return an updated version of the metadata string reflecting any
+     * changes to the sensor_info.
+     * Errors out if changes are incompatible but does not check for validity */
+    std::string updated_metadata_string();
+
+    bool has_fields_equal(const sensor_info& other) const;
+
+   private:
+    std::string
+        original_metadata_string{};  ///< string from which values were parsed
+    // clang-format on
+};
 
 /**
  * Equality for data_format.
@@ -461,6 +507,22 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs);
  * @return lhs != rhs
  */
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
+
+/**
+ * Equality of sensor calibration.
+ *
+ * @param[in] lhs The first object to compare.
+ * @param[out] rhs The second object to compare.
+ */
+bool operator==(const calibration_status& lhs, const calibration_status& rhs);
+
+/**
+ * Not-Equality of sensor calibration.
+ *
+ * @param[in] lhs The first object to compare.
+ * @param[out] rhs The second object to compare.
+ */
+bool operator!=(const calibration_status& lhs, const calibration_status& rhs);
 
 /**
  * Get a default sensor_info for the given lidar mode.
@@ -703,14 +765,17 @@ sensor_info metadata_from_json(const std::string& json_file,
                                bool skip_beam_validation = false);
 
 /**
- * Get a string representation of the sensor_info. All fields included. Not
- * equivalent or interchangeable with metadata from sensor.
+ * String representation of the sensor_info. All fields included. NOT equivalent
+ * or interchangeable with metadata from sensor.
  *
  * @param[in] info sensor_info struct
  *
- * @return a json metadata string
+ * @return a debug string in json format
  */
-std::string to_string(const sensor_info& info);
+[
+    [deprecated("This is a debug function. Use original_string() or "
+                "updated_metadata_string()")]] std::string
+to_string(const sensor_info& info);
 
 /**
  * Parse config text blob from the sensor into a sensor_config struct.
@@ -744,6 +809,17 @@ std::string to_string(const sensor_config& config);
  * @return legacy string representation of metadata.
  */
 std::string convert_to_legacy(const std::string& metadata);
+
+/**
+ * Get a string representation of sensor calibration. Only set fields will be
+ * represented.
+ *
+ * @param[in] calibraiton a struct of calibration.
+ *
+ * @return string representation of sensor calibration.
+ */
+
+std::string to_string(const calibration_status& cal);
 
 /**
  * Get client version.

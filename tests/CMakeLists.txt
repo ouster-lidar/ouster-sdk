@@ -6,9 +6,10 @@ else()
 endif()
 
 find_package(GTest REQUIRED)
+find_package(jsoncpp REQUIRED)
 
 add_executable(bcompat_meta_json_test
-  bcompat_meta_json_test.cpp bcompat_sensor_info_data.h)
+  bcompat_meta_json_test.cpp)
 
 target_link_libraries(bcompat_meta_json_test
   OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
@@ -20,6 +21,22 @@ set_tests_properties(
         PROPERTIES
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/)
+
+
+add_executable(metadata_test metadata_test.cpp)
+target_link_libraries(metadata_test
+    PUBLIC
+        OusterSDK::ouster_client GTest::gtest GTest::gtest_main
+    PRIVATE
+        jsoncpp_lib)
+add_test(NAME metadata_test COMMAND metadata_test --gtest_output=xml:metadata_test.xml)
+set_tests_properties(
+    metadata_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
+)
+
 
 add_executable(lidar_scan_test lidar_scan_test.cpp)
 

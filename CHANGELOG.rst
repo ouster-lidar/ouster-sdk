@@ -5,6 +5,14 @@ Changelog
 [unreleased]
 ============
 
+ouster_client
+-------------
+* [BREAKING] sensor_info: Updates to sensor_info include:
+    * new fields added: build_date, image_rev, prod_pn, status, cal (calibration_status), config (sensor_config)
+    * original string accessible via original_string()
+    * updated_metadata_string available for write-out
+    * to_string debug marked as deprecated
+
 ouster-cli
 ----------
 
@@ -26,7 +34,6 @@ ouster.sdk
 ========
 
 * Update vcpkg ref of build to 2023-02-24
-* 
 
 ouster_osf
 ----------

@@ -119,9 +119,27 @@ class SensorInfo:
     init_id: int
     udp_port_lidar: int
     udp_port_imu: int
+    build_date: str
+    image_rev: str
+    prod_pn: str
+    status: str
+    cal: SensorCalibration
+    config: SensorConfig
 
     @classmethod
     def from_default(cls, mode: LidarMode) -> SensorInfo:
+        ...
+
+    @classmethod
+    def original_string(cls) -> str:
+        ...
+
+    @classmethod
+    def updated_metadata_string(cls) -> str:
+        ...
+
+    @classmethod
+    def has_fields_equal(self, info: SensorInfo) -> bool:
         ...
 
     @overload
@@ -532,6 +550,9 @@ class UDPProfileIMU:
     def from_string(cls, s: str) -> UDPProfileIMU:
         ...
 
+class SensorCalibration:
+    reflectivity_status: Optional[bool]
+    reflectivity_timestamp: Optional[str]
 
 class SensorConfig:
     udp_dest: Optional[str]

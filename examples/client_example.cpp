@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
      * accurate point clouds.
      */
     std::cerr << "Gathering metadata..." << std::endl;
-    auto metadata = sensor::get_metadata(*handle);
+    auto metadata = sensor::get_metadata(*handle, 10, false);
 
     // Raw metadata can be parsed into a `sensor_info` struct
     sensor::sensor_info info = sensor::parse_metadata(metadata);

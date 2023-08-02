@@ -18,6 +18,7 @@ from ._client import ChanField
 from ._client import UDPProfileLidar
 from ._client import UDPProfileIMU
 from ._client import SensorConfig
+from ._client import SensorCalibration
 from ._client import init_logger
 from ._client import convert_to_legacy
 from ._client import get_config

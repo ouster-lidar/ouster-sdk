@@ -300,6 +300,8 @@ uint32_t packet_format::frame_id(const uint8_t* lidar_buf) const {
         return col_frame_id(nth_col(0, lidar_buf));
     }
     uint16_t res = 0;
+
+    // TODO FIXME
     if (udp_profile_lidar ==
         UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
         std::memcpy(&res, lidar_buf + 4,

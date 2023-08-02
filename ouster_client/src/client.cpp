@@ -48,7 +48,7 @@ struct client {
 };
 
 // defined in types.cpp
-Json::Value to_json(const sensor_config& config);
+Json::Value config_to_json(const sensor_config& config);
 
 namespace {
 
@@ -266,8 +266,10 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
 
     try {
         auto metadata = sensor_http->metadata();
-        // merge extra info into metadata
-        metadata["client_version"] = client_version();
+
+        metadata["ouster-sdk"]["client_version"] = client_version();
+        metadata["ouster-sdk"]["output_source"] = "collect_metadata";
+
         return metadata;
     } catch (const std::runtime_error& e) {
         throw std::runtime_error(
@@ -296,7 +298,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     Json::Value config_params_copy = config_params;
 
     // set all desired config parameters
-    Json::Value config_json = to_json(config);
+    Json::Value config_json = config_to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
         config_params[key] = config_json[key];
     }

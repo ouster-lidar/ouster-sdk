@@ -134,7 +134,7 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
 
     uint32_t sensor_meta_id_{0};
 
-    sensor::sensor_info sensor_info_{};
+    sensor::sensor_info sensor_info_;
 };
 
 }  // namespace osf

@@ -52,6 +52,7 @@ namespace py = pybind11;
 namespace chrono = std::chrono;
 using spdlog::sinks::base_sink;
 
+using ouster::sensor::calibration_status;
 using ouster::sensor::data_format;
 using ouster::sensor::packet_format;
 using ouster::sensor::sensor_config;
@@ -491,6 +492,15 @@ PYBIND11_MODULE(_client, m) {
         :type: int
         )");
 
+    py::class_<calibration_status>(m, "SensorCalibration")
+        .def(py::init<>(), R"(
+           Sensor Calibration in a Sensor Metadata, covering reflectivity calibration and more"
+        )")
+        .def_readwrite("reflectivity_status", &calibration_status::reflectivity_status, "Reflectivity calibration status")
+        .def_readwrite("reflectivity_timestamp", &calibration_status::reflectivity_timestamp, "Reflectivity timestamp")
+        .def("__str__", [](const calibration_status& i) { return to_string(i); })
+        .def("__eq__", [](const calibration_status& i, const calibration_status& j) { return i == j; });
+
     // Sensor Info
     py::class_<sensor_info>(m, "SensorInfo", R"(
         Sensor Info required to interpret UDP data streams.
@@ -521,9 +531,22 @@ PYBIND11_MODULE(_client, m) {
         .def_readwrite("init_id", &sensor_info::init_id, "Initialization id.")
         .def_readwrite("udp_port_lidar", &sensor_info::udp_port_lidar, "Configured port for lidar data.")
         .def_readwrite("udp_port_imu", &sensor_info::udp_port_imu, "Configured port for imu data.")
+        .def_readwrite("build_date", &sensor_info::build_date, "Build date")
+        .def_readwrite("image_rev", &sensor_info::image_rev, "Image rev")
+        .def_readwrite("prod_pn", &sensor_info::prod_pn, "Prod pn")
+        .def_readwrite("status", &sensor_info::status, "sensor status")
+        .def_readwrite("cal", &sensor_info::cal, "sensor calibration")
+        .def_readwrite("config", &sensor_info::config, "sensor config")
         .def_static("from_default", &sensor::default_sensor_info, R"(
         Create gen-1 OS-1-64 SensorInfo populated with design values.
         )")
+        .def("original_string", &sensor_info::original_string, R"( Return original string that initialized sensor_info"
+        )")
+        .def("updated_metadata_string", &sensor_info::updated_metadata_string, R"( Return metadata string made from updated entries"
+        )")
+        .def("has_fields_equal", &sensor_info::has_fields_equal, R"(Compare public fields")")
+        // only uncomment for debugging purposes!! story for general use and output is not filled
+        //.def("__str__", [](const sensor_info& i) { return to_string(i); })
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__repr__", [](const sensor_info& self) {
             const auto mode = self.mode ? to_string(self.mode) : std::to_string(self.format.fps) + "fps";
