@@ -7,6 +7,8 @@
 
 import requests
 from ouster.cli.plugins.discover import service_info_as_text_str
+import socket
+from zeroconf import DNSAddress
 
 
 FAKESERVER = 'fakeserver.'
@@ -17,8 +19,20 @@ class FakeInfo:
         self.fake_server = fake_server
         self.fake_addresses = fake_addresses
 
-    def parsed_scoped_addresses(self):
-        return self.fake_addresses
+    def dns_addresses(self):
+        _type = 0  # not important to us
+        _class = 0  # not important to us
+        _ttl = 0  # not important to us
+        return [
+            DNSAddress(
+                self.fake_server,
+                _type,
+                _class,
+                _ttl,
+                socket.inet_pton(socket.AF_INET6 if ':' in address else socket.AF_INET, address)
+            )
+            for address in self.fake_addresses
+        ]
 
     @property
     def server(self):

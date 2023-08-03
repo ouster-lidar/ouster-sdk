@@ -6,6 +6,7 @@ Tom Slankard <tom.slankard@ouster.io>
 This is a POC adapted from zeroconf's async_browser.py example.
 """
 
+import socket
 from typing import Optional
 import requests
 import time
@@ -72,9 +73,16 @@ def async_on_service_state_change(
     asyncio.ensure_future(async_display_service_info(zeroconf, service_type, name))
 
 
+def address_bytes_to_ip_str(b: bytes) -> str:
+    return socket.inet_ntop(
+        socket.AF_INET6 if len(b) == 16 else socket.AF_INET, b
+    )
+
+
 def service_info_as_text_str(info) -> str:
-    addresses = ["%s" % (addr,) for addr in info.parsed_scoped_addresses()]
-    first_address = '-'
+    # print([dir(addr) for addr in info.dns_addresses()])
+    addresses = info.dns_addresses()
+    ip_addr_string = '-'
     prod_line = '-'
     udp_dest = '-'
     udp_port_lidar = '-'
@@ -82,11 +90,12 @@ def service_info_as_text_str(info) -> str:
     if addresses:
         first_address = addresses[0]
         try:
-            url = f"http://{first_address}/api/v1/sensor/metadata/sensor_info"
+            ip_addr_string = address_bytes_to_ip_str(first_address.address)
+            url = f"http://{first_address.name}/api/v1/sensor/metadata/sensor_info"
             response = requests.get(url)
             response_json = response.json()
             prod_line = response_json.get('prod_line', prod_line)
-            config = get_config(first_address)
+            config = get_config(first_address.name)
             if config:
                 if config.udp_dest:
                     udp_dest = config.udp_dest
@@ -100,7 +109,7 @@ def service_info_as_text_str(info) -> str:
     color = 'white'
     if udp_dest in host_addresses:
         color = 'green'
-    strs = [info.server, first_address, prod_line, udp_dest, udp_port_lidar, udp_port_imu]
+    strs = [info.server, ip_addr_string, prod_line, udp_dest, udp_port_lidar, udp_port_imu]
     for i in range(len(strs)):
         strs[i] = strs[i].ljust(text_column_widths[i])
     return ''.join(strs), color
