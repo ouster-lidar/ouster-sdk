@@ -1220,7 +1220,7 @@ const packet_format& get_format(const sensor_info& info);
 template <int packet_size = 65536>
 struct Packet {
     uint64_t host_timestamp;
-    std::array<uint8_t, packet_size> buf;
+    std::array<uint8_t, packet_size> buf{};
 
     template <typename PacketType>
     PacketType& as() {

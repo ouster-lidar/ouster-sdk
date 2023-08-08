@@ -370,7 +370,8 @@ TEST(LidarScan, host_timestamp_2) {
     // ScanBatcher::operator() should throw
     // if the host timestamp header index exceeds the header size in the
     // LidarScan
-    auto scan = ouster::LidarScan(32, 32);
+    int h = 32;
+    auto scan = ouster::LidarScan(32, h);
     EXPECT_EQ(scan.host_timestamp().rows(),
               scan.w / DEFAULT_COLUMNS_PER_PACKET);
     EXPECT_TRUE((scan.host_timestamp() == 0).all());
@@ -380,6 +381,7 @@ TEST(LidarScan, host_timestamp_2) {
 
     ouster::sensor::sensor_info info;
     info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
+    info.format.pixels_per_column = h;
     info.format.columns_per_packet =
         1;  // not enough columns per packet according to the measurement id
     auto pf = ouster::sensor::get_format(info);
@@ -420,6 +422,7 @@ TEST(LidarScan, host_timestamp_3) {
 
     ouster::sensor::sensor_info info;
     info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
+    info.format.pixels_per_column = h;
     info.format.columns_per_packet =
         DEFAULT_COLUMNS_PER_PACKET;  // not enough columns per packet according
                                      // to the measurement id
