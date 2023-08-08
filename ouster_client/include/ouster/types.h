@@ -918,6 +918,10 @@ class packet_format final {
     template <typename T>
     T px_field(const uint8_t* px_buf, ChanField i) const;
 
+    template <typename T, typename SRC, int N>
+    void block_field_impl(Eigen::Ref<img_t<T>> field, ChanField i,
+                          const uint8_t* packet_buf) const;
+
     struct Impl;
     std::shared_ptr<const Impl> impl_;
 
@@ -1108,6 +1112,30 @@ class packet_format final {
               typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
     void col_field(const uint8_t* col_buf, ChanField f, T* dst,
                    int dst_stride = 1) const;
+
+    /**
+     * Returns maximum available size of parsing block usable with block_field
+     *
+     * if packet format does not allow for block parsing, returns 0
+     */
+    int block_parsable() const;
+
+    /**
+     * Copy the specified channel field out of a packet measurement block.
+     * Faster traversal than col_field, but has to copy the entire packet all at
+     * once.
+     *
+     * @tparam T T should be an unsigned integer type large enough to store
+     * values of the specified field. Otherwise, data will be truncated.
+     *
+     * @param[out] field destination eigen array
+     * @param[in] f the channel field to copy.
+     * @param[in] lidar_buf the lidar buffer.
+     */
+    template <typename T, int BlockDim,
+              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
+    void block_field(Eigen::Ref<img_t<T>> field, ChanField f,
+                     const uint8_t* lidar_buf) const;
 
     // Per-pixel channel data block accessors
     /**

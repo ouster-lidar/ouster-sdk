@@ -441,7 +441,7 @@ namespace {
 struct zero_field_cols {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, ChanField, std::ptrdiff_t start,
-                    std::ptrdiff_t end) {
+                    std::ptrdiff_t end) const {
         field.block(0, start, field.rows(), end - start).setZero();
     }
 };
@@ -462,7 +462,7 @@ void zero_header_cols(LidarScan& ls, std::ptrdiff_t start, std::ptrdiff_t end) {
 struct parse_field_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, ChanField f, uint16_t m_id,
-                    const sensor::packet_format& pf, const uint8_t* col_buf) {
+                    const sensor::packet_format& pf, const uint8_t* col_buf) const {
         // user defined fields that we shouldn't change
         if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
 
@@ -525,7 +525,7 @@ struct pack_raw_headers_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> rh_field, ChanField,
                     const sensor::packet_format& pf, uint16_t col_idx,
-                    const uint8_t* packet_buf) {
+                    const uint8_t* packet_buf) const {
         const uint8_t* col_buf = pf.nth_col(col_idx, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
 
@@ -563,6 +563,123 @@ struct pack_raw_headers_col {
 };
 
 }  // namespace
+
+void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
+    const bool raw_headers = raw_headers_enabled(pf, ls);
+    for (int icol = 0; icol < pf.columns_per_packet; icol++) {
+        const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
+        const uint16_t m_id = pf.col_measurement_id(col_buf);
+        const uint64_t ts = pf.col_timestamp(col_buf);
+        const uint32_t status = pf.col_status(col_buf);
+        const bool valid = (status & 0x01);
+
+        // drop out-of-bounds data in case of misconfiguration
+        if (m_id >= w) continue;
+
+        if (raw_headers) {
+            // zero out missing columns if we jumped forward
+            if (m_id >= next_headers_m_id) {
+                impl::visit_field(ls, ChanField::RAW_HEADERS, zero_field_cols(),
+                                  ChanField::RAW_HEADERS, next_headers_m_id,
+                                  m_id);
+                next_headers_m_id = m_id + 1;
+            }
+
+            impl::visit_field(ls, ChanField::RAW_HEADERS,
+                              pack_raw_headers_col(), ChanField::RAW_HEADERS,
+                              pf, icol, packet_buf);
+        }
+
+        // drop invalid
+        if (!valid) continue;
+
+        // zero out missing columns if we jumped forward
+        if (m_id >= next_valid_m_id) {
+            for (const auto& field_type : ls) {
+                if (field_type.first == ChanField::RAW_HEADERS) continue;
+                if (field_type.first >= ChanField::CUSTOM0 &&
+                    field_type.first <= ChanField::CUSTOM9) continue;
+                impl::visit_field(ls, field_type.first, zero_field_cols(),
+                                  field_type.first, next_valid_m_id, m_id);
+            }
+            zero_header_cols(ls, next_valid_m_id, m_id);
+            // zero host timestamp separately, since it's a different width based on columns_per_packet
+            ls.host_timestamp().segment(
+                next_valid_m_id/pf.columns_per_packet,
+                m_id/pf.columns_per_packet - next_valid_m_id/pf.columns_per_packet
+            ).setZero();
+            next_valid_m_id = m_id + 1;
+        }
+
+        // write new header values
+        ls.timestamp()[m_id] = ts;
+        ls.measurement_id()[m_id] = m_id;
+        ls.status()[m_id] = status;
+
+        impl::foreach_field(ls, parse_field_col(), m_id, pf, col_buf);
+    }
+}
+
+/*
+ * Faster version of parse_field_col that works by blocks instead and skips extra checks
+ */
+template <int BlockDim>
+struct parse_field_block {
+    template <typename T>
+    void operator()(Eigen::Ref<img_t<T>> field, ChanField f,
+                    const sensor::packet_format& pf, const uint8_t* packet_buf) const {
+        // user defined fields that we shouldn't change
+        if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
+
+        pf.block_field<T, BlockDim>(field, f, packet_buf);
+    }
+};
+
+void ScanBatcher::_parse_by_block(const uint8_t* packet_buf, LidarScan& ls) {
+    // zero out missing columns if we jumped forward
+    const uint16_t first_m_id = pf.col_measurement_id(pf.nth_col(0, packet_buf));
+    if (first_m_id >= next_valid_m_id) {
+        for (const auto& field_type : ls) {
+            if (field_type.first >= ChanField::CUSTOM0 &&
+                field_type.first <= ChanField::CUSTOM9) continue;
+            impl::visit_field(ls, field_type.first, zero_field_cols(),
+                              field_type.first, next_valid_m_id, first_m_id);
+        }
+        zero_header_cols(ls, next_valid_m_id, first_m_id);
+        // zero host timestamp separately, since it's a different width based on columns_per_packet
+        ls.host_timestamp().segment(
+            next_valid_m_id/pf.columns_per_packet,
+            first_m_id/pf.columns_per_packet - next_valid_m_id/pf.columns_per_packet
+        ).setZero();
+        next_valid_m_id = first_m_id + pf.columns_per_packet;
+    }
+
+    // write new header values
+    for (int icol = 0; icol < pf.columns_per_packet; icol++) {
+        const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
+        const uint16_t m_id = pf.col_measurement_id(col_buf);
+        const uint64_t ts = pf.col_timestamp(col_buf);
+        const uint32_t status = pf.col_status(col_buf);
+
+        ls.timestamp()[m_id] = ts;
+        ls.measurement_id()[m_id] = m_id;
+        ls.status()[m_id] = status;
+    }
+
+    switch (pf.block_parsable()) {
+    case 16:
+        impl::foreach_field(ls, parse_field_block<16>{}, pf, packet_buf);
+        break;
+    case 8:
+        impl::foreach_field(ls, parse_field_block<8>{}, pf, packet_buf);
+        break;
+    case 4:
+        impl::foreach_field(ls, parse_field_block<4>{}, pf, packet_buf);
+        break;
+    default:
+        throw std::invalid_argument("Invalid block dim for packet format");
+    }
+}
 
 bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
     if (ls.w != w || ls.h != h)
@@ -619,56 +736,27 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
         return true;
     }
 
-    // parse measurement blocks
+    bool happy_packet = true;
+    uint16_t prev_id = 0;
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
-        const uint64_t ts = pf.col_timestamp(col_buf);
         const uint32_t status = pf.col_status(col_buf);
         const bool valid = (status & 0x01);
 
-        // drop out-of-bounds data in case of misconfiguration
-        if (m_id >= w) continue;
+        const bool matches_previous = (icol == 0) || (m_id == prev_id + 1);
+        prev_id = m_id;
 
-        if (raw_headers) {
-            // zero out missing columns if we jumped forward
-            if (m_id >= next_headers_m_id) {
-                impl::visit_field(ls, ChanField::RAW_HEADERS, zero_field_cols(),
-                                  ChanField::RAW_HEADERS, next_headers_m_id,
-                                  m_id);
-                next_headers_m_id = m_id + 1;
-            }
-
-            impl::visit_field(ls, ChanField::RAW_HEADERS,
-                              pack_raw_headers_col(), ChanField::RAW_HEADERS,
-                              pf, icol, packet_buf);
+        if (!valid || m_id >= w || !matches_previous) {
+            happy_packet = false;
+            break;
         }
+    }
 
-        // drop invalid
-        if (!valid) continue;
-
-        // zero out missing columns if we jumped forward
-        if (m_id >= next_valid_m_id) {
-            for (const auto& field_type : ls) {
-                if (field_type.first == ChanField::RAW_HEADERS) continue;
-                impl::visit_field(ls, field_type.first, zero_field_cols(),
-                                  field_type.first, next_valid_m_id, m_id);
-            }
-            zero_header_cols(ls, next_valid_m_id, m_id);
-            // zero host timestamp separately, since it's a different width based on columns_per_packet
-            ls.host_timestamp().segment(
-                next_valid_m_id/pf.columns_per_packet,
-                m_id/pf.columns_per_packet - next_valid_m_id/pf.columns_per_packet
-            ).setZero();
-            next_valid_m_id = m_id + 1;
-        }
-
-        // write new header values
-        ls.timestamp()[m_id] = ts;
-        ls.measurement_id()[m_id] = m_id;
-        ls.status()[m_id] = status;
-
-        impl::foreach_field(ls, parse_field_col(), m_id, pf, col_buf);
+    if (pf.block_parsable() && happy_packet && !raw_headers) {
+        _parse_by_block(packet_buf, ls);
+    } else {
+        _parse_by_col(packet_buf, ls);
     }
 
     return false;

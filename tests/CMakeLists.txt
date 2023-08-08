@@ -50,7 +50,7 @@ set_tests_properties(
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
 
-add_executable(cartesian_test cartesian_test.cpp)
+add_executable(cartesian_test cartesian_test.cpp util.h)
 
 target_link_libraries(cartesian_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
 
@@ -104,3 +104,15 @@ set_tests_properties(
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
 )
 
+add_executable(parsing_benchmark_test parsing_benchmark_test.cpp util.h)
+
+target_link_libraries(parsing_benchmark_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME parsing_benchmark_test COMMAND parsing_benchmark_test --gtest_output=xml:parsing_benchmark_test.xml)
+
+set_tests_properties(
+    parsing_benchmark_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)

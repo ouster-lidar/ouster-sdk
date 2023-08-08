@@ -484,6 +484,9 @@ class ScanBatcher {
     std::vector<uint8_t> cache;
     bool cached_packet = false;
 
+    void _parse_by_col(const uint8_t* packet_buf, LidarScan& ls);
+    void _parse_by_block(const uint8_t* packet_buf, LidarScan& ls);
+
    public:
     sensor::packet_format pf;  ///< The packet format object used for decoding
 
