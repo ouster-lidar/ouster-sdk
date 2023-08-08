@@ -341,7 +341,9 @@ TEST(LidarScan, CustomUserFields) {
 }
 
 TEST(LidarScan, host_timestamp) {
-    auto scan = ouster::LidarScan(32, 32);
+    int w = 32;
+    int h = 32;
+    auto scan = ouster::LidarScan(w, h);
     // host timestamp header should have w/columns-per-packet entries
     // (default DEFAULT_COLUMNS_PER_PACKET is 16)
     EXPECT_EQ(scan.host_timestamp().rows(), 2);
@@ -349,6 +351,9 @@ TEST(LidarScan, host_timestamp) {
 
     LidarPacket packet;
     ouster::sensor::sensor_info info;
+    info.format.columns_per_frame = w;
+    info.format.columns_per_packet = 0;
+    info.format.pixels_per_column = h;
     info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
 
     ouster::ScanBatcher scan_batcher(info);
@@ -427,12 +432,14 @@ TEST(LidarScan, host_timestamp_3) {
         DEFAULT_COLUMNS_PER_PACKET;  // not enough columns per packet according
                                      // to the measurement id
     info.format.columns_per_frame = w;
+    info.format.columns_per_packet = DEFAULT_COLUMNS_PER_PACKET;
     info.format.pixels_per_column = h;
     auto pf = ouster::sensor::get_format(info);
 
     uint8_t* col_buf = const_cast<uint8_t*>(pf.nth_col(0, packet.buf.data()));
     uint16_t bogus_measurement_id = 0;
-    reinterpret_cast<uint16_t*>(col_buf + 8)[0] = bogus_measurement_id;
+    std::memcpy(col_buf + 8, &bogus_measurement_id,
+                sizeof(bogus_measurement_id));
     const uint16_t m_id = pf.col_measurement_id(col_buf);
     ASSERT_EQ(m_id, bogus_measurement_id);
 
