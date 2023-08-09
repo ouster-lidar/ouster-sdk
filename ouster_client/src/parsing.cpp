@@ -408,8 +408,7 @@ uint32_t packet_format::frame_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar ==
         UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
         uint32_t res = 0;
-        std::memcpy(&res, lidar_buf + 4,
-                    sizeof(res));
+        std::memcpy(&res, lidar_buf + 4, sizeof(res));
         return res;
     } else {
         uint16_t res = 0;
