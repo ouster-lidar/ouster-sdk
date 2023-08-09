@@ -433,7 +433,6 @@ class Scans:
                 return
 
             if isinstance(packet, LidarPacket):
-                print("Columns per packet, w ", columns_per_packet, w)
                 ls_write = ls_write or LidarScan(h, w, self._fields, columns_per_packet)
 
                 if batch(packet._data, ls_write):

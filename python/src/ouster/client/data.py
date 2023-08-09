@@ -141,7 +141,7 @@ class LidarPacketValidator:
     def __init__(self, metadata: SensorInfo, checks=['id_and_sn_valid', 'packet_size_valid']):
         self._metadata = metadata
         self._metadata_init_id = metadata.init_id
-        self._metadata_sn = int(metadata.sn)
+        self._metadata_sn = int(metadata.sn) if metadata.sn else 0
         self._pf = _client.PacketFormat.from_info(metadata)
         self._checks = [getattr(self, check) for check in checks]
 
@@ -212,7 +212,7 @@ class LidarPacket:
                                    count=self._pf.lidar_packet_size)
         self.capture_timestamp = timestamp
         self._metadata_init_id = info.init_id
-        self._metadata_sn = int(info.sn)
+        self._metadata_sn = int(info.sn) if info.sn else 0
 
         # check that metadata came from the same sensor initialization as data
         if self.id_error:
