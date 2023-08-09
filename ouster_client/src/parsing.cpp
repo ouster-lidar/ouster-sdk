@@ -403,17 +403,19 @@ uint32_t packet_format::frame_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
         return col_frame_id(nth_col(0, lidar_buf));
     }
-    uint16_t res = 0;
 
-    // TODO FIXME
+    // eUDP frame id is 16 bits, but FUSA frame id is 32 bits
     if (udp_profile_lidar ==
         UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        uint32_t res = 0;
         std::memcpy(&res, lidar_buf + 4,
-                    sizeof(uint16_t));  // FIXME FuSa frame_id is 32 bits!
+                    sizeof(res));
+        return res;
     } else {
-        std::memcpy(&res, lidar_buf + 2, sizeof(uint16_t));
+        uint16_t res = 0;
+        std::memcpy(&res, lidar_buf + 2, sizeof(res));
+        return res;
     }
-    return res;
 }
 
 uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
