@@ -30,6 +30,7 @@ RUN set -xe \
  python3-dev \
  python3-pip \
  python3-venv \
+ ccache \
 # Install any additional available cpython versions for testing
  'python3.(7|8|9|10)-dev' \
  wget \

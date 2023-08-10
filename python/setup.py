@@ -65,8 +65,10 @@ class CMakeBuild(build_ext):
         cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
         build_args = ['--config', cfg]
 
+        env = os.environ.copy()
         if platform.system() == "Windows":
-            build_args += ['--', '/m']
+            build_args += ['--', '-j2']
+            cmake_args += ['-GNinja']
         else:
             build_args += ['--', '-j2']
 
@@ -74,19 +76,20 @@ class CMakeBuild(build_ext):
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
 
         # specify additional cmake args
-        env = os.environ.copy()
         extra_args = env.get('OUSTER_SDK_CMAKE_ARGS')
         if extra_args:
             cmake_args += shlex.split(extra_args)
-
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
-        output1 = subprocess.run(['cmake', ext.sourcedir] + cmake_args,
+
+        print("Running: ")
+        run = ['cmake', ext.sourcedir] + cmake_args
+        print(run)
+        output1 = subprocess.run(run,
                                  cwd=self.build_temp,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
                                  env=env, text=True)
-
         print("CMAKE CONFIG OUTPUT")
         print(output1.stdout)
         if output1.returncode != 0:

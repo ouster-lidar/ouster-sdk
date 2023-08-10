@@ -100,7 +100,7 @@ The currently tested vcpkg tag is ``2023.02.24``. After that, using a developer 
    PS > $env:CMAKE_GENERATOR="Visual Studio 15 2017"
 
    # install pybind11
-   PS > py -m pip install pybind11
+   PS > py -m pip install pybind11 ninja
    
    # then, build an installable "wheel" package
    PS > py -m pip wheel --no-deps "$env:OUSTER_SDK_PATH\python"
