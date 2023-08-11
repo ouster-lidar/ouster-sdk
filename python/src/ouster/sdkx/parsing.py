@@ -60,9 +60,20 @@ _five_word_pixel_fields: Dict[ChanField, FieldDType] = {
     ChanField.RAW32_WORD5: np.uint32,
 }
 
+_fusa_two_word_pixel_fields: Dict[ChanField, FieldDType] = {
+    ChanField.RANGE: np.uint16,
+    ChanField.REFLECTIVITY: np.uint8,
+    ChanField.NEAR_IR: np.uint8,
+    ChanField.RANGE2: np.uint16,
+    ChanField.REFLECTIVITY2: np.uint8,
+    ChanField.RAW32_WORD1: np.uint32,
+    ChanField.RAW32_WORD2: np.uint32,
+}
 
 # TODO[pb]: This method should be removed and replaced with smth that matches
 #           the states of the profiles in C++
+
+
 def default_scan_fields(
         profile: UDPProfileLidar,
         flags: bool = False,
@@ -91,7 +102,9 @@ def default_scan_fields(
         UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
         _dual_scan_fields,
         UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL:
-        _five_word_pixel_fields
+        _five_word_pixel_fields,
+        UDPProfileLidar.PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL:
+        _fusa_two_word_pixel_fields,
     }
 
     # bail if it's some new added custom profile
@@ -270,6 +283,7 @@ class PacketFormat(ABC):
             DualFormat,
             UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16: SingleFormat,
             UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8: LBFormat,
+            UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL: FusaDualFormat,
         }
         return formats[profile](pixels_per_column, columns_per_packet)
 
@@ -434,6 +448,47 @@ class DualFormat(EUDPFormat):
         super().__init__(pixels_per_column=pixels_per_column,
                          columns_per_packet=columns_per_packet,
                          channel_data_size=16)
+
+
+class FusaDualFormat(EUDPFormat):
+    """PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL"""
+
+    _FIELDS: ClassVar[Dict[ChanField, FieldDescr]] = {
+        ChanField.RANGE: FieldDescr(0, np.uint16, mask=0x0007fff, shift=-3),
+        ChanField.REFLECTIVITY: FieldDescr(2, np.uint8, mask=0xff),
+        ChanField.NEAR_IR: FieldDescr(3, np.uint8, mask=0xff),
+        ChanField.RANGE2: FieldDescr(4, np.uint16, mask=0x0007fff, shift=-3),
+        ChanField.REFLECTIVITY2: FieldDescr(6, np.uint8, mask=0xff),
+    }
+
+    def __init__(self, pixels_per_column: int, columns_per_packet) -> None:
+        super().__init__(pixels_per_column=pixels_per_column,
+                         columns_per_packet=columns_per_packet,
+                         channel_data_size=8)
+
+    def packet_type(self, data: np.ndarray) -> int:
+        return int.from_bytes(data[0:1].tobytes(), byteorder='little')
+
+    def set_packet_type(self, data: np.ndarray, val: int) -> None:
+        data[0:1] = memoryview(val.to_bytes(2, byteorder='little'))
+
+    def frame_id(self, data: np.ndarray) -> int:
+        return int.from_bytes(data[4:8].tobytes(), byteorder='little')
+
+    def set_frame_id(self, data: np.ndarray, val: int) -> None:
+        data[4:8] = memoryview(val.to_bytes(2, byteorder='little'))
+
+    def init_id(self, data: np.ndarray) -> int:
+        return int.from_bytes(data[1:4].tobytes(), byteorder='little')
+
+    def set_init_id(self, data: np.ndarray, val: int) -> None:
+        data[1:4] = memoryview(val.to_bytes(3, byteorder='little'))
+
+    def prod_sn(self, data: np.ndarray) -> int:
+        return int.from_bytes(data[11:16].tobytes(), byteorder='little')
+
+    def set_prod_sn(self, data: np.ndarray, val: int) -> None:
+        data[11:16] = memoryview(val.to_bytes(5, byteorder='little'))
 
 
 def tohex(data: client.BufferT) -> str:
