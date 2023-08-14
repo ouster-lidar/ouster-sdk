@@ -53,7 +53,7 @@ Json::Value to_json(const sensor_config& config);
 namespace {
 
 // default udp receive buffer size on windows is very low -- use 256K
-const int RCVBUF_SIZE = 256 * 1024;
+const int RCVBUF_SIZE = 512 * 1024;
 
 int32_t get_sock_port(SOCKET sock_fd) {
     struct sockaddr_storage ss;
