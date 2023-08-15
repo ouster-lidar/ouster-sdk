@@ -51,7 +51,7 @@ class LidarScan {
 
    private:
     Header<uint64_t> timestamp_;
-    Header<uint64_t> host_timestamp_;
+    Header<uint64_t> packet_timestamp_;
     Header<uint16_t> measurement_id_;
     Header<uint32_t> status_;
     std::vector<mat4d> pose_;
@@ -226,18 +226,18 @@ class LidarScan {
     Eigen::Ref<const Header<uint64_t>> timestamp() const;
 
     /**
-     * Access the host timestamp headers.
+     * Access the packet timestamp headers (usually host time).
      *
      * @return a view of timestamp as a w-element vector.
      */
-    Eigen::Ref<Header<uint64_t>> host_timestamp();
+    Eigen::Ref<Header<uint64_t>> packet_timestamp();
 
     /**
-     * Access the host timestamp headers.
+     * Access the host timestamp headers (usually host time).
      *
      * @return a view of timestamp as a w-element vector.
      */
-    Eigen::Ref<const Header<uint64_t>> host_timestamp() const;
+    Eigen::Ref<const Header<uint64_t>> packet_timestamp() const;
 
     /**
      * Access the measurement id headers.
@@ -482,6 +482,7 @@ class ScanBatcher {
     uint16_t next_valid_m_id;
     uint16_t next_headers_m_id;
     std::vector<uint8_t> cache;
+    uint64_t cache_packet_ts;
     bool cached_packet = false;
 
     void _parse_by_col(const uint8_t* packet_buf, LidarScan& ls);
@@ -529,6 +530,19 @@ class ScanBatcher {
      * @return true when the provided lidar scan is ready to use.
      */
     bool operator()(const ouster::sensor::LidarPacket& packet, LidarScan& ls);
+
+    /**
+     * Add a packet to the scan.
+     *
+     * @param[in] packet_buf a buffer containing raw bytes from a lidar packet.
+     * @param[in] packet_ts timestamp of the packet (usually HOST time on
+     * receive).
+     * @param[in] ls lidar scan to populate.
+     *
+     * @return true when the provided lidar scan is ready to use.
+     */
+    bool operator()(const uint8_t* packet_buf, uint64_t packet_ts,
+                    LidarScan& ls);
 };
 
 }  // namespace ouster

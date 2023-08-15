@@ -103,7 +103,7 @@ def default_scan_fields(
         _dual_scan_fields,
         UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL:
         _five_word_pixel_fields,
-        UDPProfileLidar.PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL:
+        UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL:
         _fusa_two_word_pixel_fields,
     }
 
@@ -115,7 +115,10 @@ def default_scan_fields(
 
     if flags:
         fields.update({ChanField.FLAGS: np.uint8})
-        if profile == UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
+        if profile in [
+                UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL,
+                UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL
+        ]:
             fields.update({ChanField.FLAGS2: np.uint8})
 
     if raw_headers:
@@ -476,7 +479,7 @@ class FusaDualFormat(EUDPFormat):
         return int.from_bytes(data[4:8].tobytes(), byteorder='little')
 
     def set_frame_id(self, data: np.ndarray, val: int) -> None:
-        data[4:8] = memoryview(val.to_bytes(2, byteorder='little'))
+        data[4:8] = memoryview(val.to_bytes(4, byteorder='little'))
 
     def init_id(self, data: np.ndarray) -> int:
         return int.from_bytes(data[1:4].tobytes(), byteorder='little')
@@ -824,14 +827,18 @@ def terminator_buffer(info: client.SensorInfo,
 def buffers_to_scan(
         lidar_bufs: List[client.BufferT],
         info: client.SensorInfo,
+        *,
         fields: Optional[Dict[ChanField,
-                              FieldDType]] = None) -> client.LidarScan:
+                              FieldDType]] = None,
+        packets_ts: Optional[List[int]] = None) -> client.LidarScan:
     """Batch buffers that belongs to a single scan into a LidarScan object.
 
     Errors if lidar_bufs buffers do not belong to a single LidarScan. Typically
     incosistent measurement_ids or frame_ids in buffers is an error, as well
     as more buffers then a single LidarScan of a specified PacketFormat can take.
     """
+    if packets_ts is not None:
+        assert len(packets_ts) == len(lidar_bufs)
     w = info.format.columns_per_frame
     h = info.format.pixels_per_column
     _fields = fields if fields is not None else default_scan_fields(
@@ -840,12 +847,13 @@ def buffers_to_scan(
     pf = client._client.PacketFormat.from_info(info)
     batch = client._client.ScanBatcher(w, pf)
     for idx, buf in enumerate(lidar_bufs):
-        assert not batch(buf, ls), "lidar_bufs buffers should belong to a " \
+        host_ts = packets_ts[idx] if packets_ts is not None else 0
+        assert not batch(buf, host_ts, ls), "lidar_bufs buffers should belong to a " \
             f"single LidarScan, but {idx} of {len(lidar_bufs)} buffers already " \
             "cut a LidarScan"
 
     if lidar_bufs:
-        assert batch(terminator_buffer(info, lidar_bufs[-1]),
+        assert batch(terminator_buffer(info, lidar_bufs[-1]), 0,
                      ls), "Terminator buffer should cause a cut of LidarScan"
 
     # if all expected lidar buffers constraints are satisfied we have a batched

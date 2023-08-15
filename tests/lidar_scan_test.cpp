@@ -340,14 +340,14 @@ TEST(LidarScan, CustomUserFields) {
     zero_check_fields(user_scan);
 }
 
-TEST(LidarScan, host_timestamp) {
+TEST(LidarScan, packet_timestamp) {
     int w = 32;
     int h = 32;
     auto scan = ouster::LidarScan(w, h);
     // host timestamp header should have w/columns-per-packet entries
     // (default DEFAULT_COLUMNS_PER_PACKET is 16)
-    EXPECT_EQ(scan.host_timestamp().rows(), 2);
-    EXPECT_TRUE((scan.host_timestamp() == 0).all());
+    EXPECT_EQ(scan.packet_timestamp().rows(), 2);
+    EXPECT_TRUE((scan.packet_timestamp() == 0).all());
 
     LidarPacket packet;
     ouster::sensor::sensor_info info;
@@ -362,24 +362,22 @@ TEST(LidarScan, host_timestamp) {
             try {
                 scan_batcher(packet, scan);
             } catch (std::invalid_argument& e) {
-                EXPECT_STREQ(e.what(),
-                             "ScanBatcher::operator(): packet format has an "
-                             "invalid number of columns per packet.");
+                EXPECT_STREQ(e.what(), "unexpected scan columns_per_packet: 0");
                 throw;
             }
         },
         std::invalid_argument);
 }
 
-TEST(LidarScan, host_timestamp_2) {
+TEST(LidarScan, packet_timestamp_2) {
     // ScanBatcher::operator() should throw
-    // if the host timestamp header index exceeds the header size in the
+    // if the packet timestamp header index exceeds the header size in the
     // LidarScan
     int h = 32;
     auto scan = ouster::LidarScan(32, h);
-    EXPECT_EQ(scan.host_timestamp().rows(),
+    EXPECT_EQ(scan.packet_timestamp().rows(),
               scan.w / DEFAULT_COLUMNS_PER_PACKET);
-    EXPECT_TRUE((scan.host_timestamp() == 0).all());
+    EXPECT_TRUE((scan.packet_timestamp() == 0).all());
 
     LidarPacket packet;
     packet.host_timestamp = 123;
@@ -387,8 +385,8 @@ TEST(LidarScan, host_timestamp_2) {
     ouster::sensor::sensor_info info;
     info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
     info.format.pixels_per_column = h;
-    info.format.columns_per_packet =
-        1;  // not enough columns per packet according to the measurement id
+    // not enough columns per packet according to the measurement id
+    info.format.columns_per_packet = 1;
     auto pf = ouster::sensor::get_format(info);
 
     uint8_t* col_buf = const_cast<uint8_t*>(pf.nth_col(0, packet.buf.data()));
@@ -403,24 +401,22 @@ TEST(LidarScan, host_timestamp_2) {
         {
             try {
                 scan_batcher(packet, scan);
-            } catch (std::runtime_error& e) {
-                EXPECT_STREQ(e.what(),
-                             "ScanBatcher::operator(): host timestamp index "
-                             "exceeded header size.");
+            } catch (std::invalid_argument& e) {
+                EXPECT_STREQ(e.what(), "unexpected scan dimensions");
                 throw;
             }
         },
-        std::runtime_error);
+        std::invalid_argument);
 }
 
-TEST(LidarScan, host_timestamp_3) {
-    // ScanBatcher::operator() should update the host timestamp header
+TEST(LidarScan, packet_timestamp_3) {
+    // ScanBatcher::operator() should update the packet timestamp header
     // in the LidarScan if a LidarPacket is provided
     int w = 32;
     int h = 32;
     auto scan = ouster::LidarScan(w, h);
-    EXPECT_EQ(scan.host_timestamp().rows(), w / DEFAULT_COLUMNS_PER_PACKET);
-    EXPECT_TRUE((scan.host_timestamp() == 0).all());
+    EXPECT_EQ(scan.packet_timestamp().rows(), w / DEFAULT_COLUMNS_PER_PACKET);
+    EXPECT_TRUE((scan.packet_timestamp() == 0).all());
 
     LidarPacket packet;
     packet.host_timestamp = 123;
@@ -445,6 +441,6 @@ TEST(LidarScan, host_timestamp_3) {
 
     ouster::ScanBatcher scan_batcher(info.format.columns_per_frame, pf);
     scan_batcher(packet, scan);
-    EXPECT_EQ(scan.host_timestamp()[0], packet.host_timestamp);
-    EXPECT_EQ(scan.host_timestamp()[1], 0);
+    EXPECT_EQ(scan.packet_timestamp()[0], packet.host_timestamp);
+    EXPECT_EQ(scan.packet_timestamp()[1], 0);
 }

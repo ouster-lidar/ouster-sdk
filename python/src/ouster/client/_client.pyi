@@ -670,7 +670,7 @@ class LidarScan:
         ...
 
     @property
-    def host_timestamp(self) -> ndarray:
+    def packet_timestamp(self) -> ndarray:
         ...
 
     def field(self, field: ChanField) -> ndarray:
@@ -766,7 +766,12 @@ class ScanBatcher:
     def __init__(self, info: SensorInfo) -> None:
         ...
 
+    @overload
     def __call__(self, buf: BufferT, ls: LidarScan) -> bool:
+        ...
+
+    @overload
+    def __call__(self, buf: BufferT, packet_ts: int, ls: LidarScan) -> bool:
         ...
 
 

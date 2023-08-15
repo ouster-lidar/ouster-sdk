@@ -61,7 +61,7 @@ class SLAMOSFWriter:
 def slam_scans_generator(scan_source, slam, osf_writer):
     for scan in scan_source:
         scan_slam = slam.update(scan)
-        scan_ts = client.first_valid_column_ts(scan_slam)
+        scan_ts = client.first_valid_packet_ts(scan_slam)
         osf_writer.write_scan(scan_ts, scan_slam)
         yield scan_slam
 

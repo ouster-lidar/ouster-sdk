@@ -979,11 +979,11 @@ PYBIND11_MODULE(_client, m) {
             },
             "The measurement timestamp header as a W-element numpy array.")
         .def_property_readonly(
-            "host_timestamp",
+            "packet_timestamp",
             [](LidarScan& self) {
-                return py::array(py::dtype::of<uint64_t>(),
-                                 self.host_timestamp().rows(),
-                                 self.host_timestamp().data(), py::cast(self));
+                return py::array(
+                    py::dtype::of<uint64_t>(), self.packet_timestamp().rows(),
+                    self.packet_timestamp().data(), py::cast(self));
             },
             "The host timestamp header as a numpy array with "
             "W/columns-per-packet entries.")
@@ -1053,9 +1053,15 @@ PYBIND11_MODULE(_client, m) {
     py::class_<ScanBatcher>(m, "ScanBatcher")
         .def(py::init<int, packet_format>())
         .def(py::init<sensor_info>())
-        .def("__call__", [](ScanBatcher& self, py::buffer& buf, LidarScan& ls) {
+        .def("__call__",
+             [](ScanBatcher& self, py::buffer& buf, LidarScan& ls) {
+                 uint8_t* ptr = getptr(self.pf.lidar_packet_size, buf);
+                 return self(ptr, 0, ls);
+             })
+        .def("__call__", [](ScanBatcher& self, py::buffer& buf, uint64_t ts,
+                            LidarScan& ls) {
             uint8_t* ptr = getptr(self.pf.lidar_packet_size, buf);
-            return self(ptr, ls);
+            return self(ptr, ts, ls);
         });
 
     // XYZ Projection

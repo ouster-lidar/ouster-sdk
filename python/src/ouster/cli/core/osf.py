@@ -67,6 +67,7 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
     """
     try:
         from ouster import client
+        from ouster.client import valid_packet_idxs
         import ouster.osf as osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
@@ -122,9 +123,11 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
                             ls_buffers = scan_to_buffers(ls, sinfo)
 
                             # recovered lidar scan
+                            bufs_ts = ls.packet_timestamp[valid_packet_idxs(ls)]
                             ls_rec = buffers_to_scan(ls_buffers,
                                                      sinfo,
-                                                     fields={})
+                                                     fields={},
+                                                     packets_ts=bufs_ts)
 
                             assert ls_rec == ls_no_fields, "LidarScan should be" \
                                 " equal when recontructed from RAW_HEADERS fields" \

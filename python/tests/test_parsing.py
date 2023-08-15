@@ -2,9 +2,12 @@
 import os
 import numpy as np
 import ouster.pcap._pcap as _pcap
-from ouster.client import LidarMode, SensorInfo, UDPProfileLidar
-from ouster.sdkx.parsing import FusaDualFormat, PacketFormat
+from ouster.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField
+import ouster.client as client
+import ouster.pcap as pcap
+from ouster.sdkx.parsing import FusaDualFormat, PacketFormat, default_scan_fields
 from tests.conftest import PCAPS_DATA_DIR
+from ouster.sdk.util import resolve_metadata
 
 
 def test_fusa_parsing_profile():
@@ -68,3 +71,20 @@ def test_fusa_fields():
     for col in range(si.format.columns_per_packet):
         pass
     '''
+
+
+def test_fusa_reading_pcap():
+    """Check that we can read pcap with FLAGS included."""
+    dataset_name = 'OS-1-128_767798045_1024x10_20230712_120049'
+    pcap_name = os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.pcap')
+    meta = open(resolve_metadata(pcap_name)).read()
+    si = SensorInfo(meta)
+    source = pcap.Pcap(pcap_name, si)
+    field_types = default_scan_fields(source.metadata.format.udp_profile_lidar,
+                                      flags=True)
+    scans = list(client.Scans(source, fields=field_types))
+    assert len(scans) == 1
+
+    ls = scans[0]
+    assert np.count_nonzero(ls.field(ChanField.FLAGS)) == 8
+    assert np.count_nonzero(ls.field(ChanField.FLAGS2)) == 0

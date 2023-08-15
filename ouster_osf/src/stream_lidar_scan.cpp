@@ -59,6 +59,7 @@ LidarScan slice_with_cast(const LidarScan& ls_src,
     ls_dest.measurement_id() = ls_src.measurement_id();
     ls_dest.status() = ls_src.status();
     ls_dest.pose() = ls_src.pose();
+    ls_dest.packet_timestamp() = ls_src.packet_timestamp();
 
     // Copy fields
     for (const auto& ft : field_types) {
@@ -146,9 +147,12 @@ flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
         pose_off = fbb.CreateVector<double>(ls.pose().data()->data(),
                                             ls.pose().size() * 16);
     }
-    return gen::CreateLidarScanMsg(fbb, channels_off, field_types_off,
-                                   timestamp_off, measurement_id_off,
-                                   status_off, ls.frame_id, pose_off);
+
+    auto packet_timestamp_id_off = fbb.CreateVector<uint64_t>(
+        ls.packet_timestamp().data(), ls.packet_timestamp().size());
+    return gen::CreateLidarScanMsg(
+        fbb, channels_off, field_types_off, timestamp_off, measurement_id_off,
+        status_off, ls.frame_id, pose_off, packet_timestamp_id_off);
 }
 
 std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
@@ -222,6 +226,42 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
         }
     }
 
+    // Set poses per column
+    auto pose_vec = ls_msg->pose();
+    if (pose_vec) {
+        if (static_cast<uint32_t>(ls->pose().size() * 16) == pose_vec->size()) {
+            for (uint32_t i = 0; i < static_cast<uint32_t>(ls->pose().size());
+                 ++i) {
+                for (uint32_t el = 0; el < 16; ++el) {
+                    *(ls->pose()[i].data() + el) = pose_vec->Get(i * 16 + el);
+                }
+            }
+        } else if (pose_vec->size() != 0) {
+            std::cout << "ERROR: LidarScanMsg has pose of length: "
+                      << pose_vec->size()
+                      << ", expected: " << (ls->pose().size() * 16)
+                      << std::endl;
+            return nullptr;
+        }
+    }
+
+    // Set packet timestamp per lidar packet
+    auto packet_ts_vec = ls_msg->packet_timestamp();
+    if (packet_ts_vec) {
+        if (static_cast<uint32_t>(ls->packet_timestamp().size()) ==
+            packet_ts_vec->size()) {
+            for (uint32_t i = 0; i < packet_ts_vec->size(); ++i) {
+                ls->packet_timestamp()[i] = packet_ts_vec->Get(i);
+            }
+        } else if (packet_ts_vec->size() != 0) {
+            std::cout << "ERROR: LidarScanMsg has packet_timestamp of length: "
+                      << packet_ts_vec->size()
+                      << ", expected: " << ls->packet_timestamp().size()
+                      << std::endl;
+            return nullptr;
+        }
+    }
+
     // Fill Scan Data with scan channels
     auto msg_scan_vec = ls_msg->channels();
     if (!msg_scan_vec || !msg_scan_vec->size()) {
@@ -235,25 +275,6 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
         scan_data.emplace_back(channel_buffer->begin(), channel_buffer->end());
     }
 
-    // Set poses per column
-    auto pose_vec = ls_msg->pose();
-    // clang-format off
-    if (pose_vec) {
-        if (static_cast<uint32_t>(ls->pose().size() * 16) == pose_vec->size()) {
-            for (uint32_t i = 0; i < static_cast<uint32_t>(ls->pose().size()); ++i) {
-                for (uint32_t el = 0; el < 16; ++el) {
-                    *(ls->pose()[i].data() + el) = pose_vec->Get(i * 16 + el);
-                }
-            }
-        } else if (pose_vec->size() != 0) {
-            std::cout << "ERROR: LidarScanMsg has pose of length: "
-                      << pose_vec->size()
-                      << ", expected: " << (ls->pose().size() * 16)
-                      << std::endl;
-            return nullptr;
-        }
-    }
-    // clang-format on
     // Decode PNGs data to LidarScan
     if (scanDecode(*ls, scan_data, info.format.pixel_shift_by_row)) {
         return nullptr;

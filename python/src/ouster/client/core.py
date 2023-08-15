@@ -18,7 +18,7 @@ from typing_extensions import Protocol
 from . import _client
 from ._client import (SensorInfo, LidarScan, UDPProfileLidar)
 from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet,
-                   PacketIdError)
+                   PacketIdError, packet_ts)
 import numpy as np
 
 
@@ -435,7 +435,7 @@ class Scans:
             if isinstance(packet, LidarPacket):
                 ls_write = ls_write or LidarScan(h, w, self._fields, columns_per_packet)
 
-                if batch(packet._data, ls_write):
+                if batch(packet._data, packet_ts(packet), ls_write):
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write
@@ -557,6 +557,12 @@ def first_valid_column_ts(scan: LidarScan) -> int:
     return scan.timestamp[first_valid_column(scan)]
 
 
+def first_valid_packet_ts(scan: LidarScan) -> int:
+    """Return first valid packet timestamp of a LidarScan"""
+    columns_per_packet = scan.w // scan.packet_timestamp.shape[0]
+    return scan.packet_timestamp[first_valid_column(scan) // columns_per_packet]
+
+
 def last_valid_column_ts(scan: LidarScan) -> int:
     """Return last valid column timestamp of a LidarScan"""
     return scan.timestamp[last_valid_column(scan)]
@@ -570,3 +576,10 @@ def first_valid_column_pose(scan: LidarScan) -> np.ndarray:
 def last_valid_column_pose(scan: LidarScan) -> np.ndarray:
     """Return last valid column pose of a LidarScan"""
     return scan.pose[last_valid_column(scan)]
+
+
+def valid_packet_idxs(scan: LidarScan) -> np.ndarray:
+    """Checks for any valid column in the packets index and collect packet idxs"""
+    valid_cols = scan.status & 0x1
+    sp = np.split(valid_cols, scan.packet_timestamp.shape[0])
+    return np.nonzero(np.any(sp, axis=1))[0]
