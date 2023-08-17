@@ -356,13 +356,12 @@ TEST(LidarScan, packet_timestamp) {
     info.format.pixels_per_column = h;
     info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
 
-    ouster::ScanBatcher scan_batcher(info);
     EXPECT_THROW(
         {
             try {
-                scan_batcher(packet, scan);
+                ouster::ScanBatcher scan_batcher(info);
             } catch (std::invalid_argument& e) {
-                EXPECT_STREQ(e.what(), "unexpected scan columns_per_packet: 0");
+                EXPECT_STREQ(e.what(), "unexpected columns_per_packet: 0");
                 throw;
             }
         },

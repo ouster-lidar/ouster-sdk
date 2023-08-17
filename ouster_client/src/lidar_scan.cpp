@@ -436,9 +436,13 @@ ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
       h(pf.pixels_per_column),
       next_valid_m_id(0),
       next_headers_m_id(0),
+      next_valid_packet_id(0),
       cache(pf.lidar_packet_size),
       cache_packet_ts(0),
-      pf(pf) {}
+      pf(pf) {
+    if (pf.columns_per_packet == 0)
+        throw std::invalid_argument("unexpected columns_per_packet: 0");
+}
 
 ScanBatcher::ScanBatcher(const sensor::sensor_info& info)
     : ScanBatcher(info.format.columns_per_frame, sensor::get_format(info)) {}
@@ -615,13 +619,6 @@ void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
                                   field_type.first, next_valid_m_id, m_id);
             }
             zero_header_cols(ls, next_valid_m_id, m_id);
-            // zero host timestamp separately, since it's a different width
-            // based on columns_per_packet
-            ls.packet_timestamp()
-                .segment(next_valid_m_id / pf.columns_per_packet,
-                         m_id / pf.columns_per_packet -
-                             next_valid_m_id / pf.columns_per_packet)
-                .setZero();
             next_valid_m_id = m_id + 1;
         }
 
@@ -664,13 +661,6 @@ void ScanBatcher::_parse_by_block(const uint8_t* packet_buf, LidarScan& ls) {
                               field_type.first, next_valid_m_id, first_m_id);
         }
         zero_header_cols(ls, next_valid_m_id, first_m_id);
-        // zero host timestamp separately, since it's a different width based on
-        // columns_per_packet
-        ls.packet_timestamp()
-            .segment(next_valid_m_id / pf.columns_per_packet,
-                     first_m_id / pf.columns_per_packet -
-                         next_valid_m_id / pf.columns_per_packet)
-            .setZero();
         next_valid_m_id = first_m_id + pf.columns_per_packet;
     }
 
@@ -714,8 +704,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
                              LidarScan& ls) {
     if (ls.w != w || ls.h != h)
         throw std::invalid_argument("unexpected scan dimensions");
-    if (pf.columns_per_packet == 0 ||
-        ls.packet_timestamp().rows() != ls.w / pf.columns_per_packet)
+    if (ls.packet_timestamp().rows() != ls.w / pf.columns_per_packet)
         throw std::invalid_argument("unexpected scan columns_per_packet: " +
                                     std::to_string(pf.columns_per_packet));
 
@@ -734,6 +723,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         // expecting to start batching a new scan
         next_valid_m_id = 0;
         next_headers_m_id = 0;
+        next_valid_packet_id = 0;
         ls.frame_id = f_id;
 
         const uint8_t f_thermal_shutdown = pf.thermal_shutdown(packet_buf);
@@ -756,12 +746,10 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
 
         zero_header_cols(ls, next_valid_m_id, w);
 
-        // zero host timestamp separately, since it's a different width based on
-        // columns_per_packet
+        // zero packet timestamp separately, since it's packet level data
         ls.packet_timestamp()
-            .segment(next_valid_m_id / pf.columns_per_packet,
-                     w / pf.columns_per_packet -
-                         next_valid_m_id / pf.columns_per_packet)
+            .segment(next_valid_packet_id,
+                     ls.packet_timestamp().rows() - next_valid_packet_id)
             .setZero();
 
         // store packet buf and ts data to the cache for later processing
@@ -772,6 +760,22 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         return true;
     }
 
+    // handling packet level data: packet_timestamp
+    const uint8_t* col0_buf = pf.nth_col(0, packet_buf);
+    const uint16_t packet_id =
+        pf.col_measurement_id(col0_buf) / pf.columns_per_packet;
+    if (packet_id < ls.packet_timestamp().rows()) {
+        if (packet_id > next_valid_packet_id) {
+            // zeroing skipped packets timestamps
+            ls.packet_timestamp()
+                .segment(next_valid_packet_id, packet_id - next_valid_packet_id)
+                .setZero();
+        }
+        ls.packet_timestamp()[packet_id] = packet_ts;
+        next_valid_packet_id = packet_id + 1;
+    }
+
+    // handling column and pixel level data
     bool happy_packet = true;
     uint16_t prev_id = 0;
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
@@ -787,13 +791,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
             happy_packet = false;
             break;
         }
-    }
-
-    // re-using prev_id, because it doesn't matter what
-    // measurement id we use to calculate packet idx
-    int packet_ts_idx = prev_id / pf.columns_per_packet;
-    if (packet_ts_idx < ls.packet_timestamp().rows()) {
-        ls.packet_timestamp()[packet_ts_idx] = packet_ts;
     }
 
     if (pf.block_parsable() && happy_packet && !raw_headers) {

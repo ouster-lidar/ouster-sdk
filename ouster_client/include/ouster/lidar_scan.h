@@ -481,6 +481,7 @@ class ScanBatcher {
     std::ptrdiff_t h;
     uint16_t next_valid_m_id;
     uint16_t next_headers_m_id;
+    uint16_t next_valid_packet_id;
     std::vector<uint8_t> cache;
     uint64_t cache_packet_ts;
     bool cached_packet = false;

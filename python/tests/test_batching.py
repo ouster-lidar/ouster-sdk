@@ -1,3 +1,4 @@
+# type: ignore
 """
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
@@ -12,6 +13,7 @@ import pytest
 
 from ouster import client
 from ouster.client._client import ScanBatcher
+from ouster.sdkx.parsing import PacketFormat, ColHeader
 
 
 def _patch_frame_id(packet: client.LidarPacket, fid: int) -> None:
@@ -98,6 +100,19 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
     # packet indices to drop
     drop_inds = [10, 20, 63]
 
+    # column indexes should be in [0, info.format.columns_per_packet - 1] range
+    # columns_per_packet in these tests is 16, as defined byt the seed pcap + json
+    drop_columns = {
+        2: [0, 1, 2],
+        3: [12, 13, 14, 15],
+        5: [15],
+        13: range(15),
+        26: range(16)
+    }
+    drop_columns_num = sum([len(set(v)) for v in drop_columns.values()])
+
+    pformat = PacketFormat.from_metadata(info)
+
     # number of scans we want to get from packets
     num_scans = 3
 
@@ -109,7 +124,15 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
         # reusing the same lidar scan object over and over
         nonlocal ls
         for ind, p in enumerate(packets):
-            if (ind % packets_per_frame) not in drop_inds:
+            packet_ind = ind % packets_per_frame
+            if packet_ind not in drop_inds:
+                if packet_ind in drop_columns:
+                    # invalidating columns
+                    # column is invalid if first bit of status != 1
+                    pformat.header(
+                        p._data,
+                        ColHeader.STATUS)[drop_columns[packet_ind]] = 0
+
                 if batch(p._data, client.packet_ts(p), ls):
                     # when batch returns True it means
                     # that the outstanding and missed packets
@@ -124,8 +147,8 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
     n = info.format.columns_per_packet
 
     for scan in scans():
-        assert np.count_nonzero(
-            scan.status) == info.format.columns_per_frame - n * len(drop_inds)
+        assert (np.count_nonzero(scan.status) == info.format.columns_per_frame -
+                n * len(drop_inds) - drop_columns_num)
 
         for i in drop_inds:
             assert (scan.timestamp[i * n:(i + 1) * n] == 0).all()

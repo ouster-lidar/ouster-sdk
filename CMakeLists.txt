@@ -18,7 +18,7 @@ include(VcpkgEnv)
 project(ouster_example VERSION 20230710)
 
 # generate version header
-set(OusterSDK_VERSION_STRING 0.9.1.dev3)
+set(OusterSDK_VERSION_STRING 0.9.1.dev4)
 include(VersionGen)
 
 # ==== Options ====
