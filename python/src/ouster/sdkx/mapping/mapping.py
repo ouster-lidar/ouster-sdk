@@ -26,10 +26,13 @@ def mapping_group() -> None:
 
 class SLAMOSFWriter:
 
-    def __init__(self, source: str, output_path: str, chunk_size: int, lidar_port: int, imu_port: int):
+    def __init__(self, source: str, output_path: str, chunk_size: int, lidar_port: int, imu_port: int, meta: str):
         source_ext = Path(source).suffix
         if source_ext == ".pcap":
-            meta_data = resolve_metadata(source)
+            if meta:
+                meta_data = meta
+            else:
+                meta_data = resolve_metadata(source)
             if not meta_data:
                 raise Exception("File not found, please specify a metadata file with `-f`")
             with open(Path(meta_data)) as meta_file:
@@ -91,6 +94,16 @@ def run_slam(
     Run with a sensor or a pcap file to produce an OSF containing the lidar data and SLAM poses.
     To turn on visualizer, append 'viz' or 'visualizer' to the command, case insensitive.
     """
+    run_slam_impl(source, viz, meta, slam_name, lidar_port, imu_port, output)
+
+def run_slam_impl(
+    source: str,
+    viz: str=None,
+    meta: str=None,
+    slam_name: str="kiss_slam",
+    lidar_port: int=7502,
+    imu_port: int=7503,
+    output: str=None) -> None:
 
     data_source = util.Source(source, meta = meta)
 
@@ -105,14 +118,14 @@ def run_slam(
         raise ValueError("Only support KISS-ICP SLAM for now")
 
     chunk_size = 0
-    osf_writer = SLAMOSFWriter(source, output, chunk_size, lidar_port, imu_port)
+    osf_writer = SLAMOSFWriter(source, output, chunk_size, lidar_port, imu_port, meta)
 
     print(f"Running {slam_name} SLAM and start writing LidarScan and Traj into {output}\nhit ctrl-c to exit")
 
     start_time = time.time()
     slam_scan_gen = slam_scans_generator(data_source, slam, osf_writer)
 
-    if viz.lower() in ['viz', 'visualizer']:
+    if viz and viz.lower() in ['viz', 'visualizer']:
         simple_viz = SimpleViz(data_source.metadata)
         simple_viz.run(slam_scan_gen)
     else:
@@ -312,8 +325,8 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
         # to remove near points
         row_index = scan.field(client.ChanField.RANGE) > (min_dist * 1000)
         zero_row_index = scan.field(client.ChanField.RANGE) == 0
-        dewarpped_points = pu.dewarp(points, column_poses=column_poses)
-        filtered_points = dewarpped_points[row_index]
+        dewarped_points = pu.dewarp(points, column_poses=column_poses)
+        filtered_points = dewarped_points[row_index]
         filtered_keys = keys[row_index]
 
         curr_scan_points = row_index.shape[0] * row_index.shape[1]
