@@ -740,6 +740,9 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
             if (raw_headers && field_type.first == ChanField::RAW_HEADERS) {
                 end_m_id = next_headers_m_id;
             }
+            if (field_type.first >= ChanField::CUSTOM0 &&
+                field_type.first <= ChanField::CUSTOM9)
+                continue;
             impl::visit_field(ls, field_type.first, zero_field_cols(),
                               field_type.first, end_m_id, w);
         }

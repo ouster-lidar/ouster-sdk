@@ -160,8 +160,8 @@ struct packet_format::Impl {
 
     std::map<ChanField, impl::FieldInfo> fields;
 
-    Impl(UDPProfileLidar profile, int pixels_per_column,
-         int columns_per_packet) {
+    Impl(UDPProfileLidar profile, size_t pixels_per_column,
+         size_t columns_per_packet) {
         bool legacy = (profile == UDPProfileLidar::PROFILE_LIDAR_LEGACY);
 
         const auto& entry = impl::lookup_profile_entry(profile);
@@ -177,6 +177,10 @@ struct packet_format::Impl {
         lidar_packet_size = packet_header_size + columns_per_packet * col_size +
                             packet_footer_size;
 
+        if (lidar_packet_size > 65535)
+            throw std::invalid_argument(
+                "lidar_packet_size cannot exceed 65535");
+
         fields = {entry.fields, entry.fields + entry.n_fields};
 
         timestamp_offset = 0;
@@ -185,15 +189,16 @@ struct packet_format::Impl {
     }
 };
 
-packet_format::packet_format(const sensor_info& info)
-    : impl_{std::make_shared<Impl>(info.format.udp_profile_lidar,
-                                   info.format.pixels_per_column,
-                                   info.format.columns_per_packet)},
-      udp_profile_lidar{info.format.udp_profile_lidar},
+packet_format::packet_format(UDPProfileLidar udp_profile_lidar,
+                             size_t pixels_per_column,
+                             size_t columns_per_packet)
+    : impl_{std::make_shared<Impl>(udp_profile_lidar, pixels_per_column,
+                                   columns_per_packet)},
+      udp_profile_lidar{udp_profile_lidar},
       lidar_packet_size{impl_->lidar_packet_size},
       imu_packet_size{impl::imu_packet_size},
-      columns_per_packet(info.format.columns_per_packet),
-      pixels_per_column(info.format.pixels_per_column),
+      columns_per_packet(columns_per_packet),
+      pixels_per_column(pixels_per_column),
       packet_header_size{impl_->packet_header_size},
       col_header_size{impl_->col_header_size},
       col_footer_size{impl_->col_footer_size},
@@ -203,6 +208,11 @@ packet_format::packet_format(const sensor_info& info)
         field_types_.push_back({kv.first, kv.second.ty_tag});
     }
 }
+
+packet_format::packet_format(const sensor_info& info)
+    : packet_format(info.format.udp_profile_lidar,
+                    info.format.pixels_per_column,
+                    info.format.columns_per_packet) {}
 
 template <typename T, typename SRC, int N>
 void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field, ChanField chan,

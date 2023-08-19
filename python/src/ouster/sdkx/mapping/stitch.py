@@ -1,7 +1,6 @@
+# type: ignore
 import sys
-import itertools
 import os
-import glob
 import open3d
 import math
 import logging
@@ -9,7 +8,6 @@ import numpy as np
 from pathlib import Path
 from ouster.cli.core.pcap import pcap_slice_impl
 import ouster.pcap as pcap
-from ouster.client import _client
 import ouster.osf as osf
 import ouster.sdk.pose_util as pu
 from ouster.sdk.util import resolve_metadata
@@ -279,9 +277,9 @@ def process_files(pcap_path: PathSource, meta: Meta,
     logger.info("Start to process {} pcap files".format(len(pcap_files)))
 
     file_wo_ext = str(output.stem)
-    for idx, pcap in enumerate(sorted_pcap_files):
+    for idx, _pcap in enumerate(sorted_pcap_files):
         osf_output_file = os.path.join(output.parent, file_wo_ext + str(idx) + '.osf')
-        mapping.run_slam_impl(pcap, meta=meta, output=osf_output_file)
+        mapping.run_slam_impl(_pcap, meta=meta, output=osf_output_file)
 
 
 def split_pcap(file_path: PathSource, meta: Meta,
@@ -356,7 +354,7 @@ def combine_pcap_files(input_path: PathSource, output_file: str):
         pcap_files = list(files_path.glob("*.pcap"))
 
         if not pcap_files:
-            logger.error("No PCAP files found in {}".format(pcap_path))
+            logger.error("No PCAP files found in {}".format(input_path))
             return
     else:
         logger.error("Expect a directory which contains PCAP files")

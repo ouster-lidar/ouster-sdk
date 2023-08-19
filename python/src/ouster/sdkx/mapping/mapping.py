@@ -96,14 +96,15 @@ def run_slam(
     """
     run_slam_impl(source, viz, meta, slam_name, lidar_port, imu_port, output)
 
+
 def run_slam_impl(
     source: str,
-    viz: str=None,
-    meta: str=None,
-    slam_name: str="kiss_slam",
-    lidar_port: int=7502,
-    imu_port: int=7503,
-    output: str=None) -> None:
+    viz: str = None,
+    meta: str = None,
+    slam_name: str = "kiss_slam",
+    lidar_port: int = 7502,
+    imu_port: int = 7503,
+    output: str = None) -> None:
 
     data_source = util.Source(source, meta = meta)
 

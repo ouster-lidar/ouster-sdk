@@ -772,10 +772,11 @@ sensor_info metadata_from_json(const std::string& json_file,
  *
  * @return a debug string in json format
  */
-[
-    [deprecated("This is a debug function. Use original_string() or "
-                "updated_metadata_string()")]] std::string
+// clang-format off
+[[deprecated("This is a debug function. Use original_string() or "
+              "updated_metadata_string()")]] std::string
 to_string(const sensor_info& info);
+// clang-format on
 
 /**
  * Parse config text blob from the sensor into a sensor_config struct.
@@ -929,6 +930,9 @@ class packet_format final {
         field_types_;
 
    public:
+    packet_format(UDPProfileLidar udp_profile_lidar, size_t pixels_per_column,
+                  size_t columns_per_packet);
+
     packet_format(
         const sensor_info& info);  //< create packet_format from sensor_info
 

@@ -116,3 +116,16 @@ set_tests_properties(
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
 )
+
+add_executable(scan_batcher_test scan_batcher_test.cpp util.h)
+
+target_link_libraries(scan_batcher_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME scan_batcher_test COMMAND scan_batcher_test --gtest_output=xml:parsing_benchmark_test.xml)
+
+set_tests_properties(
+    scan_batcher_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)
