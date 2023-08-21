@@ -770,29 +770,25 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
     const uint16_t packet_id =
         pf.col_measurement_id(col0_buf) / pf.columns_per_packet;
     if (packet_id < ls.packet_timestamp().rows()) {
-        if (packet_id > next_valid_packet_id) {
+        if (packet_id >= next_valid_packet_id) {
             // zeroing skipped packets timestamps
             ls.packet_timestamp()
                 .segment(next_valid_packet_id, packet_id - next_valid_packet_id)
                 .setZero();
+            next_valid_packet_id = packet_id + 1;
         }
         ls.packet_timestamp()[packet_id] = packet_ts;
-        next_valid_packet_id = packet_id + 1;
     }
 
     // handling column and pixel level data
     bool happy_packet = true;
-    uint16_t prev_id = 0;
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
         const uint32_t status = pf.col_status(col_buf);
         const bool valid = (status & 0x01);
 
-        const bool matches_previous = (icol == 0) || (m_id == prev_id + 1);
-        prev_id = m_id;
-
-        if (!valid || m_id >= w || !matches_previous) {
+        if (!valid || m_id >= w) {
             happy_packet = false;
             break;
         }

@@ -238,19 +238,16 @@ void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field, ChanField chan,
 
         uint16_t m_id = col_measurement_id(col_buf[0]);
 
-        for (int px = 0; px < pixels_per_column; px += N) {
+        for (int px = 0; px < pixels_per_column; ++px) {
             std::ptrdiff_t f_offset = cols * px + m_id;
-            for (int y = 0; y < N; ++y) {
-                for (int x = 0; x < N; ++x) {
-                    auto px_src = col_buf[x] + col_header_size +
-                                  ((px + y) * channel_data_size);
-                    T dst = *reinterpret_cast<const SRC*>(px_src + offset);
-                    if (mask) dst &= mask;
-                    if (shift > 0) dst >>= shift;
-                    if (shift < 0) dst <<= std::abs(shift);
-                    *(data + f_offset + x) = dst;
-                }
-                f_offset += cols;
+            for (int x = 0; x < N; ++x) {
+                auto px_src =
+                    col_buf[x] + col_header_size + (px * channel_data_size);
+                T dst = *reinterpret_cast<const SRC*>(px_src + offset);
+                if (mask) dst &= mask;
+                if (shift > 0) dst >>= shift;
+                if (shift < 0) dst <<= std::abs(shift);
+                *(data + f_offset + x) = dst;
             }
         }
     }

@@ -295,23 +295,20 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
     size_t pixels_per_column = std::get<2>(param);
     size_t columns_per_packet = std::get<3>(param);
 
-    auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
-                        columns_per_packet);
-
-    {  // pre-fill lidar scan so we know which fields/headers are changed
-        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
-        ouster::impl::foreach_field(ls, fill);
-        ls.packet_timestamp() = 2000;
-        ls.timestamp() = 100;
-        ls.status() = 0x0f;
-        ls.measurement_id() = 10000;
-    }
-
     auto packets = random_frame(profile, columns_per_frame, pixels_per_column,
                                 columns_per_packet);
 
     packet_format pf(profile, pixels_per_column, columns_per_packet);
     packet_writer pw(pf);
+
+    auto reference = LidarScan(columns_per_frame, pixels_per_column, profile,
+                               columns_per_packet);
+    {
+        ScanBatcher batcher(columns_per_frame, pf);
+        for (const auto& p : packets) {
+            EXPECT_FALSE(batcher(p, reference));
+        }
+    }
 
     uint32_t frame_id = pf.frame_id(packets[0].buf.data());
 
@@ -371,6 +368,26 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
             pw.set_col_status(col_buf, 0);
         }
     }
+    // swap two packets
+    std::swap(packets[4], packets[5]);
+
+    std::set<uint16_t> valid_m_ids;
+    for (uint16_t m_id = 0; m_id < columns_per_frame; ++m_id) {
+        if (!invalid_m_ids.count(m_id) && !dropped_m_ids.count(m_id))
+            valid_m_ids.insert(m_id);
+    }
+
+    auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
+                        columns_per_packet);
+
+    {  // pre-fill lidar scan so we know which fields/headers are changed
+        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
+        ouster::impl::foreach_field(ls, fill);
+        ls.packet_timestamp() = 2000;
+        ls.timestamp() = 100;
+        ls.status() = 0x0f;
+        ls.measurement_id() = 10000;
+    }
 
     ScanBatcher batcher(columns_per_frame, pf);
     for (const auto& p : packets) {
@@ -393,30 +410,52 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
             EXPECT_TRUE((ref_field.col(m_id) == 0).all());
         }
 
-        if (chan == ChanField::RAW_HEADERS) return;
+        if (chan == ChanField::RAW_HEADERS) {
+            for (auto& m_id : valid_m_ids) {
+                EXPECT_FALSE((ref_field.col(m_id) == 0).all());
+            }
+            return;
+        }
+
+        using T = typename decltype(ref_field)::Scalar;
+        const auto& f = reference.field<T>(chan);
+        for (auto& m_id : valid_m_ids) {
+            EXPECT_TRUE((ref_field.col(m_id) == f.col(m_id)).all());
+        }
 
         // these should be zero unless RAW_HEADERS
         for (auto& m_id : invalid_m_ids) {
             EXPECT_TRUE((ref_field.col(m_id) == 0).all());
         }
     };
+
+    auto test_headers = [&](const LidarScan& scan) {
+        for (auto& m_id : dropped_m_ids) {
+            EXPECT_EQ(scan.timestamp()[m_id], 0);
+            EXPECT_EQ(scan.status()[m_id], 0);
+            EXPECT_EQ(scan.measurement_id()[m_id], 0);
+        }
+
+        for (auto& m_id : invalid_m_ids) {
+            EXPECT_EQ(scan.timestamp()[m_id], 0);
+            EXPECT_EQ(scan.status()[m_id], 0);
+            EXPECT_EQ(scan.measurement_id()[m_id], 0);
+        }
+
+        for (auto& m_id : valid_m_ids) {
+            EXPECT_NE(scan.timestamp()[m_id], 0);
+            EXPECT_NE(scan.status()[m_id], 0);
+            EXPECT_EQ(scan.measurement_id()[m_id], m_id);
+        }
+
+        for (const auto& p_id : dropped_packets)
+            EXPECT_EQ(scan.packet_timestamp()[p_id], 0);
+        EXPECT_EQ((scan.packet_timestamp() == 0).count(),
+                  dropped_packets.size());
+    };
+
     ouster::impl::foreach_field(ls, test_skipped_fields);
-
-    for (auto& m_id : dropped_m_ids) {
-        EXPECT_EQ(ls.timestamp()[m_id], 0);
-        EXPECT_EQ(ls.status()[m_id], 0);
-        EXPECT_EQ(ls.measurement_id()[m_id], 0);
-    }
-
-    for (auto& m_id : invalid_m_ids) {
-        EXPECT_EQ(ls.timestamp()[m_id], 0);
-        EXPECT_EQ(ls.status()[m_id], 0);
-        EXPECT_EQ(ls.measurement_id()[m_id], 0);
-    }
-
-    for (const auto& p_id : dropped_packets)
-        EXPECT_EQ(ls.packet_timestamp()[p_id], 0);
-    EXPECT_EQ((ls.packet_timestamp() == 0).count(), dropped_packets.size());
+    test_headers(ls);
 
     // now repeat for RAW_HEADERS and CUSTOM fields
     LidarScanFieldTypes rh_types(ls.begin(), ls.end());
@@ -458,24 +497,160 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
             EXPECT_TRUE((ref_field == 1).all());
         }
     };
+
     ouster::impl::foreach_field(rh_ls, test_custom_fields);
     ouster::impl::foreach_field(rh_ls, test_skipped_fields);
+    test_headers(rh_ls);
+}
 
-    for (auto& m_id : dropped_m_ids) {
-        EXPECT_EQ(ls.timestamp()[m_id], 0);
-        EXPECT_EQ(ls.status()[m_id], 0);
-        EXPECT_EQ(ls.measurement_id()[m_id], 0);
+/**
+ * repeat the above test for block traversal case (no invalid m_ids in packets)
+ */
+TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
+    auto param = GetParam();
+    UDPProfileLidar profile = std::get<0>(param);
+    size_t columns_per_frame = std::get<1>(param);
+    size_t pixels_per_column = std::get<2>(param);
+    size_t columns_per_packet = std::get<3>(param);
+
+    auto packets = random_frame(profile, columns_per_frame, pixels_per_column,
+                                columns_per_packet);
+
+    packet_format pf(profile, pixels_per_column, columns_per_packet);
+    packet_writer pw(pf);
+
+    auto reference = LidarScan(columns_per_frame, pixels_per_column, profile,
+                               columns_per_packet);
+    {
+        ScanBatcher batcher(columns_per_frame, pf);
+        for (const auto& p : packets) {
+            EXPECT_FALSE(batcher(p, reference));
+        }
     }
 
-    for (auto& m_id : invalid_m_ids) {
-        EXPECT_EQ(ls.timestamp()[m_id], 0);
-        EXPECT_EQ(ls.status()[m_id], 0);
-        EXPECT_EQ(ls.measurement_id()[m_id], 0);
+    uint32_t frame_id = pf.frame_id(packets[0].buf.data());
+
+    auto next_frame_packet = std::make_unique<LidarPacket>();
+    pw.set_frame_id(next_frame_packet->buf.data(), frame_id + 1);
+
+    // dropping in reverse order for easier erase
+    std::vector<size_t> dropped_packets = {packets.size() - 1,
+                                           packets.size() / 2, 0};
+    std::set<uint16_t> dropped_m_ids;
+    for (const auto& p_id : dropped_packets) {
+        auto& packet = packets[p_id];
+        for (size_t icol = 0; icol < columns_per_packet; ++icol) {
+            const uint8_t* col_buf = pf.nth_col(icol, packet.buf.data());
+            dropped_m_ids.insert(pf.col_measurement_id(col_buf));
+        }
+        packets.erase(packets.begin() + p_id);
+    }
+    // swap two packets
+    std::swap(packets[4], packets[5]);
+
+    std::set<uint16_t> valid_m_ids;
+    for (uint16_t m_id = 0; m_id < columns_per_frame; ++m_id) {
+        if (!dropped_m_ids.count(m_id)) valid_m_ids.insert(m_id);
     }
 
-    for (const auto& p_id : dropped_packets)
-        EXPECT_EQ(rh_ls.packet_timestamp()[p_id], 0);
-    EXPECT_EQ((rh_ls.packet_timestamp() == 0).count(), dropped_packets.size());
+    auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
+                        columns_per_packet);
+
+    {  // pre-fill lidar scan so we know which fields/headers are changed
+        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
+        ouster::impl::foreach_field(ls, fill);
+        ls.packet_timestamp() = 2000;
+        ls.timestamp() = 100;
+        ls.status() = 0x0f;
+        ls.measurement_id() = 10000;
+    }
+
+    ScanBatcher batcher(columns_per_frame, pf);
+    for (const auto& p : packets) {
+        EXPECT_FALSE(batcher(p, ls));
+    }
+    EXPECT_TRUE(batcher(*next_frame_packet, ls));
+
+    auto test_skipped_fields = [&](auto ref_field, ChanField chan) {
+        // custom fields are never touched
+        if (chan >= ChanField::CUSTOM0 && chan <= ChanField::CUSTOM9) return;
+
+        // dropped frames should all be zero, RAW_HEADERS or not
+        for (auto& m_id : dropped_m_ids) {
+            EXPECT_TRUE((ref_field.col(m_id) == 0).all());
+        }
+
+        using T = typename decltype(ref_field)::Scalar;
+        const auto& f = reference.field<T>(chan);
+        for (auto& m_id : valid_m_ids) {
+            EXPECT_TRUE((ref_field.col(m_id) == f.col(m_id)).all());
+        }
+    };
+
+    auto test_headers = [&](const LidarScan& scan) {
+        for (auto& m_id : dropped_m_ids) {
+            EXPECT_EQ(scan.timestamp()[m_id], 0);
+            EXPECT_EQ(scan.status()[m_id], 0);
+            EXPECT_EQ(scan.measurement_id()[m_id], 0);
+        }
+
+        for (auto& m_id : valid_m_ids) {
+            EXPECT_NE(scan.timestamp()[m_id], 0);
+            EXPECT_NE(scan.status()[m_id], 0);
+            EXPECT_EQ(scan.measurement_id()[m_id], m_id);
+        }
+
+        for (const auto& p_id : dropped_packets)
+            EXPECT_EQ(scan.packet_timestamp()[p_id], 0);
+        EXPECT_EQ((scan.packet_timestamp() == 0).count(),
+                  dropped_packets.size());
+    };
+
+    ouster::impl::foreach_field(ls, test_skipped_fields);
+    test_headers(ls);
+
+    // now repeat for RAW_HEADERS and CUSTOM fields
+    LidarScanFieldTypes custom_types(ls.begin(), ls.end());
+    custom_types.emplace_back(ChanField::CUSTOM0, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM1, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM2, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM3, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM4, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM5, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM6, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM7, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM8, ChanFieldType::UINT32);
+    custom_types.emplace_back(ChanField::CUSTOM9, ChanFieldType::UINT32);
+    auto custom_ls =
+        LidarScan(columns_per_frame, pixels_per_column, custom_types.begin(),
+                  custom_types.end(), columns_per_packet);
+
+    {  // pre-fill lidar scan so we know which fields/headers are changed
+        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
+        ouster::impl::foreach_field(custom_ls, fill);
+        custom_ls.packet_timestamp() = 2000;
+        custom_ls.timestamp() = 100;
+        custom_ls.status() = 0x0f;
+        custom_ls.measurement_id() = 10000;
+    }
+
+    ScanBatcher custom_batcher(columns_per_frame, pf);
+    for (const auto& p : packets) {
+        EXPECT_FALSE(custom_batcher(p, custom_ls));
+    }
+    EXPECT_TRUE(custom_batcher(*next_frame_packet, custom_ls));
+
+    EXPECT_EQ(custom_ls.frame_id, frame_id);
+
+    auto test_custom_fields = [](auto ref_field, ChanField chan) {
+        if (chan >= ChanField::CUSTOM0 && chan <= ChanField::CUSTOM9) {
+            EXPECT_TRUE((ref_field == 1).all());
+        }
+    };
+
+    ouster::impl::foreach_field(custom_ls, test_custom_fields);
+    ouster::impl::foreach_field(custom_ls, test_skipped_fields);
+    test_headers(custom_ls);
 }
 
 TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
