@@ -59,8 +59,8 @@ TEST(FusaProfileTest, fields) {
 
     // check field widths
     int expected_cols = 16;
-    ASSERT_EQ(pf.field_type(ouster::sensor::RANGE), ouster::sensor::UINT16);
-    ASSERT_EQ(pf.field_type(ouster::sensor::RANGE2), ouster::sensor::UINT16);
+    ASSERT_EQ(pf.field_type(ouster::sensor::RANGE), ouster::sensor::UINT32);
+    ASSERT_EQ(pf.field_type(ouster::sensor::RANGE2), ouster::sensor::UINT32);
     ASSERT_EQ(pf.columns_per_packet, expected_cols);
 
     // check packet header values
@@ -98,13 +98,13 @@ TEST(FusaProfileTest, fields) {
     int test_col_idx = 4;
     int pixels_to_test = 16;
     const uint8_t* col = pf.nth_col(test_col_idx, pcap.current_data());
-    uint16_t expected_range[] = {0,    2328, 2328, 2320, 3096, 2312,
+    uint32_t expected_range[] = {0,    2328, 2328, 2320, 3096, 2312,
                                  2304, 2280, 3056, 2296, 2264, 2256,
                                  3000, 2272, 2240, 2240};
-    uint16_t expected_range2[] = {0,   0, 0, 0, 0,   0, 0, 0,
+    uint32_t expected_range2[] = {0,   0, 0, 0, 0,   0, 0, 0,
                                   480, 0, 0, 0, 448, 0, 0, 0};
 
-    uint16_t range_array[pixels_per_column];
+    uint32_t range_array[pixels_per_column];
     pf.col_field(col, ouster::sensor::RANGE, range_array);
     for (int range_idx = 0; range_idx < pixels_to_test; range_idx++) {
         EXPECT_EQ(range_array[range_idx], expected_range[range_idx]);
@@ -114,9 +114,9 @@ TEST(FusaProfileTest, fields) {
         EXPECT_EQ(range_array[range_idx], expected_range2[range_idx]);
     }
 
-    uint8_t expected_nearir[] = {20, 34, 33, 31, 25, 29, 31, 35,
-                                 23, 32, 40, 40, 25, 42, 43, 38};
-    uint8_t nearir_array[pixels_per_column];
+    uint16_t expected_nearir[] = {320, 544, 528, 496, 400, 464, 496, 560,
+                                  368, 512, 640, 640, 400, 672, 688, 608};
+    uint16_t nearir_array[pixels_per_column];
     pf.col_field(col, ouster::sensor::NEAR_IR, nearir_array);
     for (int nearir_idx = 0; nearir_idx < pixels_to_test; nearir_idx++) {
         EXPECT_EQ(nearir_array[nearir_idx], expected_nearir[nearir_idx]);

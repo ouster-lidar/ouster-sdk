@@ -52,10 +52,10 @@ static const Table<ChanField, FieldInfo, 8> legacy_field_info{{
 }};
 
 static const Table<ChanField, FieldInfo, 5> lb_field_info{{
-    {ChanField::RANGE, {UINT16, 0, 0x7fff, -3}},
+    {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},
     {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
     {ChanField::REFLECTIVITY, {UINT8, 2, 0, 0}},
-    {ChanField::NEAR_IR, {UINT8, 3, 0, -4}},
+    {ChanField::NEAR_IR, {UINT16, 2, 0xff00, 4}},
     {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
 }};
 
@@ -104,11 +104,11 @@ static const Table<ChanField, FieldInfo, 14> five_word_pixel_info{{
 }};
 
 static const Table<ChanField, FieldInfo, 9> fusa_two_word_pixel_info{{
-    {ChanField::RANGE, {UINT16, 0, 0x7fff, -3}},
+    {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},
     {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
     {ChanField::REFLECTIVITY, {UINT8, 2, 0xff, 0}},
-    {ChanField::NEAR_IR, {UINT8, 3, 0xff, 0}},
-    {ChanField::RANGE2, {UINT16, 4, 0x7fff, -3}},
+    {ChanField::NEAR_IR, {UINT16, 3, 0xff, -4}},
+    {ChanField::RANGE2, {UINT32, 4, 0x7fff, -3}},
     {ChanField::FLAGS2, {UINT8, 5, 0b10000000, 7}},
     {ChanField::REFLECTIVITY2, {UINT8, 6, 0xff, 0}},
     {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},

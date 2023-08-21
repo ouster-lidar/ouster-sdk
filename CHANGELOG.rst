@@ -26,6 +26,7 @@ ouster-cli
 ouster.sdk
 ----------
 
+
 * [BREAKING] change the ``ouster.sdk.viz`` location to the ``ouster.viz``
   package, please update the references if you used ``ouster.sdk.viz`` module
 
@@ -46,9 +47,12 @@ ouster_client
 * Add ``LidarScan.pose`` with poses per column
 * Add ``_client.IndexedPcapReader`` and ``_client.PcapIndex`` to enable random
   pcap file access by frame number
+
 * [BREAKING] remove ``ouster::Imu`` object
 * [BREAKING] change the return type of ``ouster::packet_format::frame_id`` from ``uint16_t`` to ``uint32_t``
 * [BREAKING] remove methods ``px_range``, ``px_reflectivity``, ``px_signal``, and ``px_ambient`` from ``ouster::packet_format``
+* [BREAKING] change RANGE field in low data rate profile from 16-bit to 32-bit
+* [BREAKING] change NEAR_IR field in low data rate profile from 8-bit to 16-bit
 * Add ``get_field_types`` function for ``LidarScan``, from ``sensor_info``
 * bugfix: return metadata regardless of ``sensor_info`` status field
 * Make timeout on curl more configurable

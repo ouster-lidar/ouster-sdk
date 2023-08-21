@@ -90,7 +90,7 @@ static const Table<ChanField, ChanFieldType, 5> five_word_slots{{
 static const Table<ChanField, ChanFieldType, 7> fusa_two_word_slots{{
     {ChanField::RANGE, ChanFieldType::UINT32},
     {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
-    {ChanField::NEAR_IR, ChanFieldType::UINT8},
+    {ChanField::NEAR_IR, ChanFieldType::UINT16},
     {ChanField::RANGE2, ChanFieldType::UINT32},
     {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
     {ChanField::RAW32_WORD1, ChanFieldType::UINT32},
