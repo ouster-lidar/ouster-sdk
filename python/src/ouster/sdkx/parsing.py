@@ -404,7 +404,7 @@ class LBFormat(EUDPFormat):
     _FIELDS: ClassVar[Dict[ChanField, FieldDescr]] = {
         ChanField.RANGE: FieldDescr(0, np.uint16, mask=0x7fff, shift=-3),
         ChanField.REFLECTIVITY: FieldDescr(2, np.uint8),
-        ChanField.NEAR_IR: FieldDescr(3, np.uint16, shift=-4),
+        ChanField.NEAR_IR: FieldDescr(3, np.uint16, mask=0xff00, shift=4),
     }
 
     def __init__(self, pixels_per_column: int,
@@ -459,7 +459,7 @@ class FusaDualFormat(EUDPFormat):
     _FIELDS: ClassVar[Dict[ChanField, FieldDescr]] = {
         ChanField.RANGE: FieldDescr(0, np.uint16, mask=0x0007fff, shift=-3),
         ChanField.REFLECTIVITY: FieldDescr(2, np.uint8, mask=0xff),
-        ChanField.NEAR_IR: FieldDescr(3, np.uint16, mask=0xff),
+        ChanField.NEAR_IR: FieldDescr(3, np.uint16, mask=0xff, shift=-4),
         ChanField.RANGE2: FieldDescr(4, np.uint16, mask=0x0007fff, shift=-3),
         ChanField.REFLECTIVITY2: FieldDescr(6, np.uint8, mask=0xff),
     }
