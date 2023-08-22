@@ -428,7 +428,9 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
     auto reshaped = Eigen::Map<const Eigen::Array<uint32_t, -1, 1>>(
         range.data(), range.cols() * range.rows());
     auto nooffset = lut.direction.colwise() * reshaped.cast<double>();
-    return (nooffset.array() == 0.0).select(nooffset, nooffset + lut.offset);
+    return (reshaped == 0)
+        .replicate<1, 3>()
+        .select(nooffset, nooffset + lut.offset);
 }
 
 ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
