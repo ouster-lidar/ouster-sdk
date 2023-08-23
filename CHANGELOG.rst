@@ -2,11 +2,14 @@
 Changelog
 =========
 
+unreleased
+==========
+* Increase client RECV_BUFF to 1 MB.
+
 20230710
 ========
 
 * Update vcpkg ref of build to 2023-02-24
-* 
 
 ouster_osf
 ----------
