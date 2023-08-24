@@ -332,6 +332,9 @@ PYBIND11_MODULE(_client, m) {
         .def_readonly("col_size", &packet_format::col_size)
         .def_readonly("packet_footer_size", &packet_format::packet_footer_size)
 
+        .def("field_value_mask", &packet_format::field_value_mask)
+        .def("field_bitness", &packet_format::field_bitness)
+
         .def("packet_type", [](packet_format& pf, py::buffer buf) {
             return pf.packet_type(getptr(pf.lidar_packet_size, buf));
         })

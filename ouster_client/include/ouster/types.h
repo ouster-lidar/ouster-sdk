@@ -915,7 +915,8 @@ std::string to_string(ChanFieldType ft);
  * Use imu_la_{x,y,z} to access the acceleration in the corresponding
  * direction. Use imu_av_{x,y,z} to read the angular velocity.
  */
-class packet_format final {
+class packet_format {
+   protected:
     template <typename T>
     T px_field(const uint8_t* px_buf, ChanField i) const;
 
@@ -1235,6 +1236,24 @@ class packet_format final {
 
     /** Declare get_format as friend. */
     friend const packet_format& get_format(const sensor_info&);
+
+    /**
+     * Get the mask of possible values that can be parsed by the channel field
+     *
+     * @param[in] f the channel field
+     *
+     * @return mask of possible values
+     */
+    uint64_t field_value_mask(ChanField f) const;
+
+    /**
+     * Get number of bits in the channel field
+     *
+     * @param[in] f the channel field
+     *
+     * @return number of bits
+     */
+    int field_bitness(ChanField f) const;
 };
 
 /**

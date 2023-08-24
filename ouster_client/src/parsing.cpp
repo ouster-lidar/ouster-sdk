@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "ouster/impl/packet_writer.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -140,6 +141,35 @@ static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
         throw std::invalid_argument("Unknown lidar udp profile");
 
     return it->second;
+}
+
+static int count_set_bits(uint64_t value) {
+    int count = 0;
+    while (value) {
+        count += value & 1;
+        value >>= 1;
+    }
+    return count;
+};
+
+// TODO: move this out to some generalised FieldInfo utils
+uint64_t get_value_mask(const FieldInfo& f) {
+    // first get type mask
+    uint64_t type_mask = (uint64_t{1} << (field_type_size(f.ty_tag) * 8)) - 1;
+
+    uint64_t mask = f.mask;
+    if (mask == 0) mask = type_mask;
+    if (f.shift > 0) mask >>= f.shift;
+    if (f.shift < 0) mask <<= std::abs(f.shift);
+    // final type *may* cut the resultant mask still
+    mask &= type_mask;
+
+    return mask;
+}
+
+// TODO: move this out to some generalised FieldInfo utils
+int get_bitness(const FieldInfo& f) {
+    return count_set_bits(get_value_mask(f));
 }
 
 }  // namespace impl
@@ -659,5 +689,153 @@ const packet_format& get_format(const sensor_info& info) {
     return *cache.at(k);
 }
 
+uint64_t packet_format::field_value_mask(ChanField i) const {
+    const auto& f = impl_->fields.at(i);
+    return get_value_mask(f);
+}
+
+int packet_format::field_bitness(ChanField i) const {
+    const auto& f = impl_->fields.at(i);
+    return get_bitness(f);
+}
+
+/* packet_writer implementation */
+namespace impl {
+
+uint8_t* packet_writer::nth_col(int n, uint8_t* lidar_buf) const {
+    return const_cast<uint8_t*>(packet_format::nth_col(n, lidar_buf));
+}
+
+uint8_t* packet_writer::nth_px(int n, uint8_t* col_buf) const {
+    return const_cast<uint8_t*>(packet_format::nth_px(n, col_buf));
+}
+
+void packet_writer::set_col_status(uint8_t* col_buf, uint32_t status) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        std::memcpy(col_buf + impl_->status_offset, &status, sizeof(uint32_t));
+    } else {
+        uint16_t s = status & 0xffff;
+        std::memcpy(col_buf + impl_->status_offset, &s, sizeof(uint16_t));
+    }
+}
+
+void packet_writer::set_col_timestamp(uint8_t* col_buf, uint64_t ts) const {
+    std::memcpy(col_buf + impl_->timestamp_offset, &ts, sizeof(ts));
+}
+
+void packet_writer::set_col_measurement_id(uint8_t* col_buf,
+                                           uint16_t m_id) const {
+    std::memcpy(col_buf + impl_->measurement_id_offset, &m_id, sizeof(m_id));
+}
+
+void packet_writer::set_frame_id(uint8_t* lidar_buf, uint32_t frame_id) const {
+    // eUDP frame id is 16 bits, but FUSA frame id is 32 bits
+    if (udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        std::memcpy(lidar_buf + 4, &frame_id, sizeof(frame_id));
+        return;
+    }
+
+    uint16_t f_id = static_cast<uint16_t>(frame_id);
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        std::memcpy(nth_col(0, lidar_buf) + 10, &f_id, sizeof(f_id));
+        return;
+    }
+
+    std::memcpy(lidar_buf + 2, &f_id, sizeof(f_id));
+}
+
+template <typename T>
+void packet_writer::set_px(uint8_t* px_buf, ChanField i, T value) const {
+    const auto& f = impl_->fields.at(i);
+
+    if (f.shift > 0) value <<= f.shift;
+    if (f.shift < 0) value >>= std::abs(f.shift);
+    if (f.mask) value &= f.mask;
+    T* ptr = reinterpret_cast<T*>(px_buf + f.offset);
+    *ptr &= ~f.mask;
+    *ptr |= value;
+}
+
+template void packet_writer::set_px(uint8_t*, ChanField, uint8_t) const;
+template void packet_writer::set_px(uint8_t*, ChanField, uint16_t) const;
+template void packet_writer::set_px(uint8_t*, ChanField, uint32_t) const;
+template void packet_writer::set_px(uint8_t*, ChanField, uint64_t) const;
+
+template <typename T, typename DST>
+void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
+                                   ChanField chan, uint8_t* lidar_buf) const {
+    if (sizeof(T) < sizeof(DST))
+        throw std::invalid_argument("Dest type too small for specified field");
+
+    constexpr int N = 32;
+    if (columns_per_packet > N)
+        throw std::runtime_error("Recompile set_block_impl with larger N");
+
+    const auto& f = impl_->fields.at(chan);
+
+    size_t offset = f.offset;
+    uint64_t mask = f.mask;
+    int shift = f.shift;
+    size_t channel_data_size = impl_->channel_data_size;
+
+    int cols = field.cols();
+    const T* data = field.data();
+    std::array<uint8_t*, N> col_buf;
+    for (int i = 0; i < columns_per_packet; ++i) {
+        col_buf[i] = nth_col(i, lidar_buf);
+    }
+    uint16_t m_id = col_measurement_id(col_buf[0]);
+
+    for (int px = 0; px < pixels_per_column; ++px) {
+        std::ptrdiff_t f_offset = cols * px + m_id;
+        for (int x = 0; x < columns_per_packet; ++x) {
+            auto px_dst =
+                col_buf[x] + col_header_size + (px * channel_data_size);
+
+            T value = *(data + f_offset + x);
+            if (shift > 0) value <<= shift;
+            if (shift < 0) value >>= std::abs(shift);
+            if (mask) value &= mask;
+            T* ptr = reinterpret_cast<T*>(px_dst + offset);
+            *ptr &= ~mask;
+            *ptr |= value;
+        }
+    }
+}
+
+template <typename T>
+void packet_writer::set_block(Eigen::Ref<const img_t<T>> field, ChanField i,
+                              uint8_t* lidar_buf) const {
+    const auto& f = impl_->fields.at(i);
+
+    switch (f.ty_tag) {
+        case UINT8:
+            set_block_impl<T, uint8_t>(field, i, lidar_buf);
+            break;
+        case UINT16:
+            set_block_impl<T, uint16_t>(field, i, lidar_buf);
+            break;
+        case UINT32:
+            set_block_impl<T, uint32_t>(field, i, lidar_buf);
+            break;
+        case UINT64:
+            set_block_impl<T, uint64_t>(field, i, lidar_buf);
+            break;
+        default:
+            throw std::invalid_argument("Invalid field for packet format");
+    }
+}
+
+template void packet_writer::set_block(Eigen::Ref<const img_t<uint8_t>> field,
+                                       ChanField i, uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<uint16_t>> field,
+                                       ChanField i, uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<uint32_t>> field,
+                                       ChanField i, uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<uint64_t>> field,
+                                       ChanField i, uint8_t* lidar_buf) const;
+
+}  // namespace impl
 }  // namespace sensor
 }  // namespace ouster

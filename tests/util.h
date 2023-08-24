@@ -5,7 +5,10 @@
 
 #include <chrono>
 #include <map>
+#include <random>
 #include <string>
+
+#include "ouster/impl/packet_writer.h"
 
 class Timer {
    public:
@@ -57,4 +60,32 @@ std::map<std::string, std::string> term_styles() {
         {"magenta", "\033[0;35m"}, {"cyan", "\033[0;36m"},
         {"bold", "\033[1m"},       {"reset", "\033[0m"}};
     // clang-format on
+}
+
+/**
+ * randomize field with values conforming to value_mask
+ *
+ * seeded version for consistent replication
+ */
+template <typename T>
+void randomize_field(Eigen::Ref<ouster::img_t<T>> field, uint64_t value_mask,
+                     size_t seed) {
+    auto g = std::mt19937(seed);
+    auto d = std::uniform_int_distribution<uint64_t>(0, value_mask);
+
+    T* data = field.data();
+    for (int i = 0; i < field.size(); ++i) {
+        uint64_t word = d(g);
+        word &= value_mask;
+        *(data + i) = static_cast<T>(word);
+    }
+}
+
+/**
+ * randomize field with values conforming to value_mask
+ */
+template <typename T>
+void randomize_field(Eigen::Ref<ouster::img_t<T>> field, uint64_t value_mask) {
+    std::random_device rd;
+    randomize_field(field, value_mask, rd());
 }

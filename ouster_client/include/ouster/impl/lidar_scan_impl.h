@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include "ouster/impl/packet_writer.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
 
@@ -310,6 +311,61 @@ struct copy_and_cast {
         visit_field(ls_source, ls_source_field, read_and_cast(), field_dest);
     }
 };
+
+/**
+ * OutputItT - STL compatible output iterator over LidarPacket value type
+ */
+template <typename OutputItT>
+void scan_to_packets(const LidarScan& ls,
+                     const ouster::sensor::impl::packet_writer& pw,
+                     OutputItT iter) {
+    int total_packets = ls.packet_timestamp().size();
+    auto columns_per_packet = pw.columns_per_packet;
+
+    if (ls.w / columns_per_packet != total_packets) {
+        std::string err =
+            "Mismatch between expected number of packets and "
+            "packet_writer.columns_per_frame";
+        throw std::invalid_argument(err);
+    }
+
+    using ouster::sensor::ChanField;
+    using ouster::sensor::LidarPacket;
+
+    auto pack_field = [&](auto ref_field, ChanField i, LidarPacket& packet) {
+        // skip over RAW_HEADERS, RAW32_WORD* and CUSTOM* fields
+        if (i >= ChanField::RAW_HEADERS && i <= ChanField::CHAN_FIELD_MAX)
+            return;
+
+        pw.set_block(ref_field, i, packet.buf.data());
+    };
+
+    auto frame_id = ls.frame_id;
+    LidarPacket packet;
+
+    for (int p_id = 0; p_id < total_packets; ++p_id) {
+        uint8_t* lidar_buf = packet.buf.data();
+        std::memset(packet.buf.data(), 0, packet.buf.size());
+        packet.host_timestamp = ls.packet_timestamp()[p_id];
+
+        pw.set_frame_id(lidar_buf, frame_id);
+
+        for (int icol = 0; icol < columns_per_packet; ++icol) {
+            uint8_t* col_buf = pw.nth_col(icol, lidar_buf);
+
+            auto id = p_id * columns_per_packet + icol;
+
+            pw.set_col_status(col_buf, ls.status()[id]);
+            pw.set_col_measurement_id(col_buf, ls.measurement_id()[id]);
+            pw.set_col_timestamp(col_buf, ls.timestamp()[id]);
+        }
+
+        ouster::impl::foreach_field(ls, pack_field, packet);
+
+        *iter++ = packet;
+    }
+}
+
 }  // namespace impl
 
 template <typename T>
