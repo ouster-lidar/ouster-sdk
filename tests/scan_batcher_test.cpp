@@ -98,7 +98,7 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
     // produce a reordered packet from "previous frame" with data from one of
     // the dropped packets, therefore we will know if it gets parsed
     auto reordered_packet = std::make_unique<LidarPacket>();
-    std::memcpy(reordered_packet.get(), &packets.back(), sizeof(LidarPacket));
+    *reordered_packet = packets.back();
     pw.set_frame_id(reordered_packet->buf.data(), frame_id - 1);
 
     std::set<uint16_t> invalid_m_ids;

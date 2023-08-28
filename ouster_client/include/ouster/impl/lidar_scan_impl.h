@@ -341,7 +341,7 @@ void scan_to_packets(const LidarScan& ls,
     };
 
     auto frame_id = ls.frame_id;
-    LidarPacket packet;
+    LidarPacket packet(pw.lidar_packet_size);
 
     for (int p_id = 0; p_id < total_packets; ++p_id) {
         uint8_t* lidar_buf = packet.buf.data();

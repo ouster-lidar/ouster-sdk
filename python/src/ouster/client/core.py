@@ -18,7 +18,7 @@ from typing_extensions import Protocol
 from . import _client
 from ._client import (SensorInfo, LidarScan, UDPProfileLidar)
 from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet,
-                   PacketIdError, packet_ts)
+                   PacketIdError)
 import numpy as np
 
 
@@ -435,7 +435,7 @@ class Scans:
             if isinstance(packet, LidarPacket):
                 ls_write = ls_write or LidarScan(h, w, self._fields, columns_per_packet)
 
-                if batch(packet._data, packet_ts(packet), ls_write):
+                if batch(packet, ls_write):
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write

@@ -25,6 +25,9 @@ from ._client import get_config
 from ._client import set_config
 from ._client import LidarScan
 from ._client import get_field_types
+from ._client import _Packet
+from ._client import _LidarPacket
+from ._client import _ImuPacket
 
 from .data import BufferT
 from .data import FieldDType

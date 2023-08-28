@@ -763,6 +763,26 @@ def destagger_double(field: ndarray, shifts: List[int],
     ...
 
 
+class _Packet:
+    _host_timestamp: int
+    capture_timestamp: Optional[float]
+
+    def __init__(self, size: int) -> None:
+        ...
+
+    @property
+    def _data(self) -> ndarray:
+        ...
+
+
+class _LidarPacket(_Packet):
+    pass
+
+
+class _ImuPacket(_Packet):
+    pass
+
+
 class ScanBatcher:
     @overload
     def __init__(self, w: int, pf: PacketFormat) -> None:
@@ -778,6 +798,10 @@ class ScanBatcher:
 
     @overload
     def __call__(self, buf: BufferT, packet_ts: int, ls: LidarScan) -> bool:
+        ...
+
+    @overload
+    def __call__(self, packet: _LidarPacket, ls: LidarScan) -> bool:
         ...
 
 
@@ -816,6 +840,7 @@ class BeamUniformityCorrector:
 
     def __call__(self, image: ndarray) -> None:
         ...
+
 
 class FieldInfo:
     @property

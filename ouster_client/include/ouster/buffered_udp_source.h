@@ -50,7 +50,7 @@ class BufferedUDPSource {
 
     // internal packet buffer
     size_t capacity_{0};
-    using entry = std::pair<client_state, ouster::sensor::Packet<packet_size>>;
+    using entry = std::pair<client_state, ouster::sensor::Packet>;
     std::vector<entry> bufs_;
 
     explicit BufferedUDPSource(size_t buf_size);

@@ -36,8 +36,7 @@ using fsec = std::chrono::duration<float>;
 BufferedUDPSource::BufferedUDPSource(size_t buf_size)
     : capacity_{buf_size + 1} {
     std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
-        return std::make_pair(client_state::CLIENT_ERROR,
-                              Packet<packet_size>());
+        return std::make_pair(client_state::CLIENT_ERROR, Packet());
     });
 }
 

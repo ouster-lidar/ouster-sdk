@@ -1268,10 +1268,11 @@ const packet_format& get_format(const sensor_info& info);
 /**
  * Encapsulate a packet buffer and attributes associated with it.
  */
-template <int packet_size = 65536>
 struct Packet {
     uint64_t host_timestamp;
-    std::array<uint8_t, packet_size> buf{};
+    std::vector<uint8_t> buf;
+
+    Packet(int size = 65536) : host_timestamp{0}, buf(size) {}
 
     template <typename PacketType>
     PacketType& as() {
@@ -1282,12 +1283,16 @@ struct Packet {
 /**
  * Encapsulate a lidar packet buffer and attributes associated with it.
  */
-struct LidarPacket : public Packet<> {};
+struct LidarPacket : public Packet {
+    using Packet::Packet;
+};
 
 /**
  * Encapsulate an imu packet buffer and attributes associated with it.
  */
-struct ImuPacket : public Packet<> {};
+struct ImuPacket : public Packet {
+    using Packet::Packet;
+};
 
 namespace impl {
 

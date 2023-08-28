@@ -20,7 +20,7 @@ def test_create_field_info() -> None:
 
 
 def test_add_custom_profile() -> None:
-    profile_nr = 100
+    profile_nr = 1000
     profile_name = "CUSTOM_PROF"
     fields = [
         (0, FieldInfo(np.uint16, 0, 0xdeadbeef, 0)),
@@ -30,7 +30,7 @@ def test_add_custom_profile() -> None:
 
     _client.add_custom_profile(profile_nr, profile_name, fields, chan_data_size)
 
-    assert str(_client.UDPProfileLidar(100)) == profile_name
+    assert str(_client.UDPProfileLidar(1000)) == profile_name
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])

@@ -54,6 +54,8 @@ using spdlog::sinks::base_sink;
 
 using ouster::sensor::calibration_status;
 using ouster::sensor::data_format;
+using ouster::sensor::ImuPacket;
+using ouster::sensor::LidarPacket;
 using ouster::sensor::packet_format;
 using ouster::sensor::sensor_config;
 using ouster::sensor::sensor_info;
@@ -974,6 +976,7 @@ PYBIND11_MODULE(_client, m) {
              "The frame shot limiting status.")
         .def("thermal_shutdown", &LidarScan::thermal_shutdown,
              "The frame thermal shutdown status.")
+        // NOTE: returned array is writeable, but not reassignable
         .def_property_readonly(
             "timestamp",
             [](LidarScan& self) {
@@ -981,6 +984,7 @@ PYBIND11_MODULE(_client, m) {
                                  self.timestamp().data(), py::cast(self));
             },
             "The measurement timestamp header as a W-element numpy array.")
+        // NOTE: returned array is writeable, but not reassignable
         .def_property_readonly(
             "packet_timestamp",
             [](LidarScan& self) {
@@ -990,6 +994,7 @@ PYBIND11_MODULE(_client, m) {
             },
             "The host timestamp header as a numpy array with "
             "W/columns-per-packet entries.")
+        // NOTE: returned array is writeable, but not reassignable
         .def_property_readonly(
             "measurement_id",
             [](LidarScan& self) {
@@ -997,6 +1002,7 @@ PYBIND11_MODULE(_client, m) {
                                  self.measurement_id().data(), py::cast(self));
             },
             "The measurement id header as a W-element numpy array.")
+        // NOTE: returned array is writeable, but not reassignable
         .def_property_readonly(
             "status",
             [](LidarScan& self) {
@@ -1004,6 +1010,7 @@ PYBIND11_MODULE(_client, m) {
                                  self.status().data(), py::cast(self));
             },
             "The measurement status header as a W-element numpy array.")
+        // NOTE: returned array is writeable, but not reassignable
         .def_property_readonly(
             "pose",
             [](LidarScan& self) {
@@ -1061,11 +1068,14 @@ PYBIND11_MODULE(_client, m) {
                  uint8_t* ptr = getptr(self.pf.lidar_packet_size, buf);
                  return self(ptr, 0, ls);
              })
-        .def("__call__", [](ScanBatcher& self, py::buffer& buf, uint64_t ts,
-                            LidarScan& ls) {
-            uint8_t* ptr = getptr(self.pf.lidar_packet_size, buf);
-            return self(ptr, ts, ls);
-        });
+        .def(
+            "__call__",
+            [](ScanBatcher& self, py::buffer& buf, uint64_t ts, LidarScan& ls) {
+                uint8_t* ptr = getptr(self.pf.lidar_packet_size, buf);
+                return self(ptr, ts, ls);
+            })
+        .def("__call__", [](ScanBatcher& self, LidarPacket& packet,
+                            LidarScan& ls) { return self(packet, ls); });
 
     // XYZ Projection
     py::class_<XYZLut>(m, "XYZLut")
@@ -1163,6 +1173,47 @@ PYBIND11_MODULE(_client, m) {
             returns field types
             )",
         py::arg("lidar_scan"));
+
+    using ouster::sensor::Packet;
+    py::class_<Packet>(m, "_Packet")
+        .def(py::init<int>(), py::arg("size") = 65536)
+        // direct access to timestamp field
+        .def_readwrite("_host_timestamp", &Packet::host_timestamp)
+        // access via seconds
+        .def_property(
+            "capture_timestamp",
+            [](Packet& self) -> nonstd::optional<double> {
+                if (self.host_timestamp) {
+                    return self.host_timestamp / 1e9;
+                } else {
+                    return nonstd::nullopt;
+                }
+            },
+            [](Packet& self, nonstd::optional<double> v) {
+                if (v) {
+                    self.host_timestamp = static_cast<uint64_t>(*v * 1e9);
+                } else {
+                    self.host_timestamp = 0;
+                }
+            })
+        // NOTE: returned array is writeable, but not reassignable
+        .def_property_readonly(
+            "_data",
+            // we have to use cpp_function here because py::keep_alive
+            // does not work with pybind11 def_property methods due to a bug:
+            // https://github.com/pybind/pybind11/issues/4236
+            py::cpp_function(
+                [](Packet& self) {
+                    return py::array(py::dtype::of<uint8_t>(), self.buf.size(),
+                                     self.buf.data(), py::cast(self));
+                },
+                py::keep_alive<0, 1>()));
+
+    py::class_<LidarPacket, Packet>(m, "_LidarPacket")
+        .def(py::init<int>(), py::arg("size") = 65536);
+
+    py::class_<ImuPacket, Packet>(m, "_ImuPacket")
+        .def(py::init<int>(), py::arg("size") = 65536);
 
     using ouster::sensor::impl::FieldInfo;
     py::class_<FieldInfo>(m, "FieldInfo")
