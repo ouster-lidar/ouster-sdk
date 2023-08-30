@@ -33,7 +33,7 @@ class ImuPacket(_client._ImuPacket):
     _pf: _client.PacketFormat
 
     def __init__(self,
-                 data: BufferT,
+                 data: Optional[BufferT] = None,
                  info: Optional[SensorInfo] = None,
                  timestamp: Optional[float] = None,
                  *,
@@ -59,7 +59,8 @@ class ImuPacket(_client._ImuPacket):
 
         n = self._pf.imu_packet_size
         super().__init__(size=n)
-        self._data[:] = np.frombuffer(data, dtype=np.uint8, count=n)
+        if data is not None:
+            self._data[:] = np.frombuffer(data, dtype=np.uint8, count=n)
         self.capture_timestamp = timestamp
 
     def __deepcopy__(self, memo) -> 'ImuPacket':
@@ -183,7 +184,7 @@ class LidarPacket(_client._LidarPacket):
     _metadata_sn: int
 
     def __init__(self,
-                 data: BufferT,
+                 data: Optional[BufferT] = None,
                  info: Optional[SensorInfo] = None,
                  timestamp: Optional[float] = None,
                  *,
@@ -212,7 +213,8 @@ class LidarPacket(_client._LidarPacket):
 
         n = self._pf.lidar_packet_size
         super().__init__(size=n)
-        self._data[:] = np.frombuffer(data, dtype=np.uint8, count=n)
+        if data is not None:
+            self._data[:] = np.frombuffer(data, dtype=np.uint8, count=n)
         self.capture_timestamp = timestamp
 
         if info:

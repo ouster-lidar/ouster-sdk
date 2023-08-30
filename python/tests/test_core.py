@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from ouster import client
-from ouster.client import ChanField
+from ouster.client import ChanField, _LidarPacket, _ImuPacket
 
 pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
@@ -59,7 +59,7 @@ def test_sensor_port_in_use(default_meta: client.SensorInfo) -> None:
 
 
 def test_sensor_packet(default_meta: client.SensorInfo) -> None:
-    """Check that the client will read single properly-sized LEGACY packet."""
+    """Check that the client will read single properly-sized IMU/LIDAR packet."""
     with closing(
             client.Sensor("",
                           0,
@@ -67,13 +67,24 @@ def test_sensor_packet(default_meta: client.SensorInfo) -> None:
                           metadata=default_meta,
                           timeout=5.0,
                           _flush_before_read=False)) as source:
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
         data = np.random.randint(255,
                                  size=source._pf.lidar_packet_size,
                                  dtype=np.uint8)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto(data.tobytes(), ("localhost", source._cli.lidar_port))
         packet = next(iter(source))
         assert (packet._data == data).all()
+        assert isinstance(packet, _LidarPacket)
+
+        data = np.random.randint(255,
+                                 size=source._pf.imu_packet_size,
+                                 dtype=np.uint8)
+        sock.sendto(data.tobytes(), ("localhost", source._cli.imu_port))
+        packet = next(iter(source))
+        assert (packet._data == data).all()
+        assert isinstance(packet, _ImuPacket)
 
 
 def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:

@@ -20,6 +20,26 @@ from typing import (ClassVar, Dict, Iterator, List, Optional, overload, Tuple)
 from .data import (BufferT, ColHeader, FieldDType, FieldTypes)
 
 
+class _Packet:
+    _host_timestamp: int
+    capture_timestamp: Optional[float]
+
+    def __init__(self, size: int) -> None:
+        ...
+
+    @property
+    def _data(self) -> ndarray:
+        ...
+
+
+class _LidarPacket(_Packet):
+    pass
+
+
+class _ImuPacket(_Packet):
+    pass
+
+
 class Client:
     @overload
     def __init__(self,
@@ -47,7 +67,10 @@ class Client:
     def shutdown(self) -> None:
         ...
 
-    def consume(self, buf: bytearray, timeout_sec: float) -> ClientState:
+    def consume(self,
+                lidarp: _LidarPacket,
+                imup: _ImuPacket,
+                timeout_sec: float) -> ClientState:
         ...
 
     def produce(self, pf: PacketFormat) -> None:
@@ -761,26 +784,6 @@ def destagger_float(field: ndarray, shifts: List[int],
 def destagger_double(field: ndarray, shifts: List[int],
                      inverse: bool) -> ndarray:
     ...
-
-
-class _Packet:
-    _host_timestamp: int
-    capture_timestamp: Optional[float]
-
-    def __init__(self, size: int) -> None:
-        ...
-
-    @property
-    def _data(self) -> ndarray:
-        ...
-
-
-class _LidarPacket(_Packet):
-    pass
-
-
-class _ImuPacket(_Packet):
-    pass
 
 
 class ScanBatcher:

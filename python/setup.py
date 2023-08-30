@@ -66,11 +66,11 @@ class CMakeBuild(build_ext):
         build_args = ['--config', cfg]
 
         env = os.environ.copy()
+        jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', 2)
+        build_args += ['--', f'-j{jobs}']
+
         if platform.system() == "Windows":
-            build_args += ['--', '-j2']
             cmake_args += ['-GNinja']
-        else:
-            build_args += ['--', '-j2']
 
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]

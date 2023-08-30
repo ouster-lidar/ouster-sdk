@@ -139,6 +139,44 @@ client_state BufferedUDPSource::consume(uint8_t* buf, size_t buf_sz,
     return e.first;
 }
 
+client_state BufferedUDPSource::consume(LidarPacket& lidarp, ImuPacket& imup,
+                                        float timeout_sec) {
+    // wait for producer to wake us up if the queue is empty
+    {
+        std::unique_lock<std::mutex> lock{cv_mtx_};
+        bool timeout = !cv_.wait_for(lock, fsec{timeout_sec}, [this] {
+            return stop_ || write_ind_ != read_ind_;
+        });
+        if (timeout)
+            return client_state::TIMEOUT;
+        else if (stop_)
+            return client_state::EXIT;
+    }
+
+    // read data into buffer
+    auto& e = bufs_[read_ind_];
+
+    auto write_packet = [&e](auto& packet) {
+        auto sz = std::min<size_t>(packet.buf.size(), packet_size);
+        std::memcpy(packet.buf.data(), e.second.buf.data(), sz);
+        packet.host_timestamp = e.second.host_timestamp;
+    };
+
+    if (e.first & client_state::LIDAR_DATA) {
+        write_packet(lidarp);
+    } else if (e.first & client_state::IMU_DATA) {
+        write_packet(imup);
+    }
+
+    // advance read ind and unblock producer, if necessary
+    {
+        std::unique_lock<std::mutex> lock{cv_mtx_};
+        read_ind_ = (read_ind_ + 1) % capacity_;
+    }
+    cv_.notify_one();
+    return e.first;
+}
+
 /*
  * Hold the client mutex to protect client state and prevent multiple
  * producers from running concurrently.

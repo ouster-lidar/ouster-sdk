@@ -122,7 +122,9 @@ class Sensor(PacketSource):
     _metadata: SensorInfo
     _pf: _client.PacketFormat
     _producer: Thread
-    _cache: Optional[Tuple[_client.ClientState, bytearray]]
+    _cache: Optional[_client.ClientState]
+    _lidarbuf: LidarPacket
+    _imubuf: ImuPacket
 
     def __init__(self,
                  hostname: str,
@@ -180,6 +182,10 @@ class Sensor(PacketSource):
             self._fetch_metadata()
             self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
+        self._lidarbuf = LidarPacket(None,
+                                     self._metadata,
+                                     _raise_on_id_check=not self._soft_id_check)
+        self._imubuf = ImuPacket(packet_format=self._pf)
 
         # Use args to avoid capturing self causing circular reference
         self._producer = Thread(target=lambda cli, pf: cli.produce(pf),
@@ -211,20 +217,17 @@ class Sensor(PacketSource):
         return self._metadata
 
     def _next_packet(self) -> Optional[Packet]:
-        st, buf = self._peek()
+        st = self._peek()
         self._cache = None
 
         if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
         if st & _client.ClientState.LIDAR_DATA:
-            lp = LidarPacket(buf,
-                             self._metadata,
-                             _raise_on_id_check=not self._soft_id_check)
-            if lp.id_error:
+            if self._lidarbuf.id_error:
                 self._id_error_count += 1
-            return lp
+            return self._lidarbuf
         elif st & _client.ClientState.IMU_DATA:
-            return ImuPacket(buf, self._metadata)
+            return self._imubuf
         elif st == _client.ClientState.TIMEOUT:
             raise ClientTimeout(f"No packets received within {self._timeout}s")
         elif st & _client.ClientState.ERROR:
@@ -234,13 +237,12 @@ class Sensor(PacketSource):
 
         raise AssertionError("Should be unreachable")
 
-    def _peek(self) -> Tuple[_client.ClientState, bytearray]:
+    def _peek(self) -> _client.ClientState:
         if self._cache is None:
-            # Lidar packets are bigger than IMU: wastes some space but is simple
-            buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(
-                buf, -1 if self._timeout is None else self._timeout)
-            self._cache = (st, buf)
+            st = self._cli.consume(self._lidarbuf,
+                                   self._imubuf,
+                                   -1 if self._timeout is None else self._timeout)
+            self._cache = st
         return self._cache
 
     def __iter__(self) -> Iterator[Packet]:
@@ -248,7 +250,10 @@ class Sensor(PacketSource):
 
         Reading may block waiting for network data for up to the specified
         timeout. Failing to consume this iterator faster than the data rate of
-        the sensor may cause packets to be dropped.
+        the sensor may cause packets to be dropped. Returned packet is meant to
+        be consumed prior to incrementing the iterator, and storing the returned
+        packet in a container may result in the contents being invalidated. If
+        such behaviour is necessary, deepcopy the packets upon retrieval.
 
         Raises:
             ClientTimeout: if no packets are received within the configured
@@ -305,9 +310,9 @@ class Sensor(PacketSource):
         last_ts = time.monotonic()
         while True:
             # check next packet to see if it's the start of a new frame
-            st, buf = self._peek()
+            st = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = self._pf.frame_id(buf)
+                frame = self._pf.frame_id(self._lidarbuf._data)
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1

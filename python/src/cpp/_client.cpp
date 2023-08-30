@@ -810,10 +810,9 @@ PYBIND11_MODULE(_client, m) {
              py::arg("timeout_sec") = 10, py::arg("legacy") = true)
         .def("shutdown", &BufferedUDPSource::shutdown)
         .def("consume",
-             [](BufferedUDPSource& self, py::buffer buf, float timeout_sec) {
+             [](BufferedUDPSource& self, LidarPacket& lp, ImuPacket& ip,
+                float timeout_sec) {
                  using fsec = chrono::duration<float>;
-
-                 auto info = buf.request();
 
                  // timeout_sec == 0 means nonblocking, < 0 means forever
                  auto timeout_time =
@@ -828,8 +827,7 @@ PYBIND11_MODULE(_client, m) {
                  // allow interrupting timeout from Python by polling
                  sensor::client_state res = sensor::client_state::TIMEOUT;
                  do {
-                     res = self.consume(static_cast<uint8_t*>(info.ptr),
-                                        info.size, poll_interval);
+                     res = self.consume(lp, ip, poll_interval);
                      if (res != sensor::client_state::TIMEOUT) break;
 
                      if (PyErr_CheckSignals() != 0)
