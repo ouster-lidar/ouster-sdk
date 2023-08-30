@@ -4,6 +4,7 @@
  */
 
 #include <chrono>
+#include <cstdlib>
 #include <map>
 #include <random>
 #include <string>
@@ -88,4 +89,9 @@ template <typename T>
 void randomize_field(Eigen::Ref<ouster::img_t<T>> field, uint64_t value_mask) {
     std::random_device rd;
     randomize_field(field, value_mask, rd());
+}
+
+inline std::string getenvs(const std::string& var) {
+    char* res = std::getenv(var.c_str());
+    return res ? std::string{res} : std::string{};
 }

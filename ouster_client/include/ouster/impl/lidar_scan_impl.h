@@ -313,6 +313,14 @@ struct copy_and_cast {
 };
 
 /**
+ * Checks whether RAW_HEADERS field is present and can be used to store headers.
+ *
+ * @param[in] pf packet format
+ * @param[in] ls lidar scan to check for RAW_HEADERS field presence.
+ */
+bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls);
+
+/**
  * OutputItT - STL compatible output iterator over LidarPacket value type
  */
 template <typename OutputItT>
@@ -332,12 +340,16 @@ void scan_to_packets(const LidarScan& ls,
     using ouster::sensor::ChanField;
     using ouster::sensor::LidarPacket;
 
-    auto pack_field = [&](auto ref_field, ChanField i, LidarPacket& packet) {
+    auto pack_field = [&pw](auto ref_field, ChanField i, LidarPacket& packet) {
         // skip over RAW_HEADERS, RAW32_WORD* and CUSTOM* fields
         if (i >= ChanField::RAW_HEADERS && i <= ChanField::CHAN_FIELD_MAX)
             return;
 
         pw.set_block(ref_field, i, packet.buf.data());
+    };
+
+    auto unpack_raw_headers = [&pw](auto ref_field, LidarPacket& packet) {
+        pw.unpack_raw_headers(ref_field, packet.buf.data());
     };
 
     auto frame_id = ls.frame_id;
@@ -350,17 +362,32 @@ void scan_to_packets(const LidarScan& ls,
 
         pw.set_frame_id(lidar_buf, frame_id);
 
+        bool any_valid = false;
         for (int icol = 0; icol < columns_per_packet; ++icol) {
             uint8_t* col_buf = pw.nth_col(icol, lidar_buf);
 
             auto id = p_id * columns_per_packet + icol;
 
             pw.set_col_status(col_buf, ls.status()[id]);
-            pw.set_col_measurement_id(col_buf, ls.measurement_id()[id]);
+            pw.set_col_measurement_id(col_buf, id);
             pw.set_col_timestamp(col_buf, ls.timestamp()[id]);
+
+            any_valid |= (ls.status()[id] & 0x01);
         }
 
-        ouster::impl::foreach_field(ls, pack_field, packet);
+        // do not emit packet if ts == 0 and none of the columns are valid
+        if (!any_valid && !packet.host_timestamp) continue;
+
+        foreach_field(ls, pack_field, packet);
+
+        if (raw_headers_enabled(pw, ls)) {
+            visit_field(ls, ChanField::RAW_HEADERS, unpack_raw_headers, packet);
+        } else if (pw.udp_profile_lidar !=
+                   ouster::sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+            uint32_t* ptr = reinterpret_cast<uint32_t*>(packet.buf.data() +
+                                                        packet.buf.size() - 4);
+            *ptr = 0xdeadbeef;  // eUDP packets end in 0xdeadbeef
+        }
 
         *iter++ = packet;
     }

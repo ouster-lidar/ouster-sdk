@@ -6,72 +6,14 @@ view of packet data for testing and development.
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import (Callable, ClassVar, Dict, Type, Union, List, Iterator,
-                    Optional)
+from typing import (Callable, ClassVar, Dict, Type, Union, List, Optional)
 
 import numpy as np
 
 import ouster.client as client
 from ouster.client import (ChanField, ColHeader, FieldDType, SensorInfo,
-                           UDPProfileLidar)
-
-_legacy_scan_fields: Dict[ChanField, FieldDType] = {
-    ChanField.RANGE: np.uint32,
-    ChanField.SIGNAL: np.uint32,
-    ChanField.NEAR_IR: np.uint32,
-    ChanField.REFLECTIVITY: np.uint32,
-}
-
-_lb_scan_fields: Dict[ChanField, FieldDType] = {
-    ChanField.RANGE: np.uint32,
-    ChanField.REFLECTIVITY: np.uint16,
-    ChanField.NEAR_IR: np.uint16,
-}
-
-_single_scan_fields: Dict[ChanField, FieldDType] = {
-    ChanField.RANGE: np.uint32,
-    ChanField.SIGNAL: np.uint16,
-    ChanField.NEAR_IR: np.uint16,
-    ChanField.REFLECTIVITY: np.uint16,
-}
-
-_dual_scan_fields: Dict[ChanField, FieldDType] = {
-    ChanField.RANGE: np.uint32,
-    ChanField.RANGE2: np.uint32,
-    ChanField.SIGNAL: np.uint16,
-    ChanField.SIGNAL2: np.uint16,
-    ChanField.REFLECTIVITY: np.uint16,
-    ChanField.REFLECTIVITY2: np.uint16,
-    ChanField.NEAR_IR: np.uint16,
-}
-
-_five_word_pixel_fields: Dict[ChanField, FieldDType] = {
-    ChanField.RANGE: np.uint32,
-    ChanField.RANGE2: np.uint32,
-    ChanField.SIGNAL: np.uint16,
-    ChanField.SIGNAL2: np.uint16,
-    ChanField.REFLECTIVITY: np.uint16,
-    ChanField.REFLECTIVITY2: np.uint16,
-    ChanField.NEAR_IR: np.uint16,
-    ChanField.RAW32_WORD1: np.uint32,
-    ChanField.RAW32_WORD2: np.uint32,
-    ChanField.RAW32_WORD3: np.uint32,
-    ChanField.RAW32_WORD4: np.uint32,
-    ChanField.RAW32_WORD5: np.uint32,
-}
-
-_fusa_two_word_pixel_fields: Dict[ChanField, FieldDType] = {
-    ChanField.RANGE: np.uint32,
-    ChanField.REFLECTIVITY: np.uint8,
-    ChanField.NEAR_IR: np.uint16,
-    ChanField.RANGE2: np.uint32,
-    ChanField.REFLECTIVITY2: np.uint8,
-    ChanField.RAW32_WORD1: np.uint32,
-    ChanField.RAW32_WORD2: np.uint32,
-}
-
-# TODO[pb]: This method should be removed and replaced with smth that matches
-#           the states of the profiles in C++
+                           UDPProfileLidar, LidarPacket)
+from ouster.client._client import PacketWriter, get_field_types
 
 
 def default_scan_fields(
@@ -92,26 +34,8 @@ def default_scan_fields(
         A field configuration that can be passed to `client.Scans`. or None for
         custom added UDPProfileLidar
     """
-    profile_fields = {
-        UDPProfileLidar.PROFILE_LIDAR_LEGACY:
-        _legacy_scan_fields,
-        UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8:
-        _lb_scan_fields,
-        UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16:
-        _single_scan_fields,
-        UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL:
-        _dual_scan_fields,
-        UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL:
-        _five_word_pixel_fields,
-        UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL:
-        _fusa_two_word_pixel_fields,
-    }
 
-    # bail if it's some new added custom profile
-    if profile not in profile_fields:
-        return None
-
-    fields = profile_fields[profile]
+    fields = get_field_types(profile)
 
     if flags:
         fields.update({ChanField.FLAGS: np.uint8})
@@ -588,7 +512,7 @@ class RawHeadersFormat:
               faster way and there is a know speed issues with such accessors.
 
               Better alternative would be to implement accessors and
-              ``scan_to_buffers`` operations in C++ with a corresponding
+              ``scan_to_packets`` operations in C++ with a corresponding
               bindings, maybe sometime later when there will be asks ...
     """
 
@@ -635,149 +559,24 @@ class RawHeadersFormat:
             return np.frombuffer(col_buf, dtype=np.uint8)
 
 
-def gen_scan_buffers_fast(ls: client.LidarScan,
-                          info: client.SensorInfo) -> Iterator[bytearray]:
-    """Reconstruct lidar packets from a LidarScan (RAW_HEADERS field required).
-
-    `fast` version means that it's a more ugly implementation with all offsets
-    caluation done in a loop. Faster 2-3x if compared with a
-    ``gen_scan_buffers_nice()`` version.
-
-    NOTE: Currently only headers and footers of the packets and headers and
-    footers of the columns are put into buffers.
+def scan_to_packets(ls: client.LidarScan,
+                    info: client.SensorInfo) -> List[LidarPacket]:
+    """Converts LidarScar to a lidar_packet buffers
 
     Args:
-        ls: LidarScan with RAW_HEADERS field. If it doesn't have RAW_HEADERS
-            the result is empty []
-        info: metadata of the `ls` scan
-
-    Returns:
-        A generator of lidar packets that will produce the same LidarScan if
-        passed through the ScanBatcher again (less fields data).
-    """
-
-    if client.ChanField.RAW_HEADERS not in ls.fields:
-        return []
-
-    field_rh = ls.field(client.ChanField.RAW_HEADERS)
-    pf = client._client.PacketFormat.from_info(info)
-
-    buf_view_isize = field_rh.itemsize
-    packet_header_size = int(pf.packet_header_size / buf_view_isize)
-    col_header_size = int(pf.col_header_size / buf_view_isize)
-    col_footer_size = int(pf.col_footer_size / buf_view_isize)
-    col_size = int(pf.col_size / buf_view_isize)
-    packet_footer_size = int(pf.packet_footer_size / buf_view_isize)
-
-    for pi in range(0, ls.w, pf.columns_per_packet):
-        col0_buf = field_rh[:, pi]
-
-        if not np.any(col0_buf):
-            continue
-
-        buf = bytearray(pf.lidar_packet_size)
-        buf_view = np.frombuffer(buf, dtype=field_rh.dtype)
-
-        buf_view[0:packet_header_size] = col0_buf[
-            col_header_size + col_footer_size:col_header_size +
-            col_footer_size + packet_header_size]
-
-        buf_view[packet_header_size + pf.columns_per_packet *
-                 col_size:] = col0_buf[col_header_size + col_footer_size +
-                                      packet_header_size:col_header_size +
-                                      col_footer_size + packet_header_size +
-                                      packet_footer_size]
-
-        for pc in range(0, pf.columns_per_packet):
-            # copy columns headers for (pi + pc) column
-            col_offset = packet_header_size + pc * col_size
-            buf_view[col_offset:col_offset +
-                     col_header_size] = field_rh[:col_header_size,
-                                                 pi + pc]
-            buf_view[col_offset + col_size - col_footer_size:col_offset +
-                     col_size] = field_rh[col_header_size:col_header_size +
-                                          col_footer_size,
-                                          pi + pc]
-        yield buf
-
-
-def gen_scan_buffers_nice(ls: client.LidarScan,
-                          info: client.SensorInfo) -> Iterator[bytearray]:
-    """Reconstruct lidar packets from a LidarScan (RAW_HEADERS field required).
-
-    `nice` version means that it's a more structured accessors that are
-    easy to use and reason about, but slower in execution (2-3x slower).
-
-    NOTE: Currently only headers and footers of the packets and headers and
-    footers of the columns are put into buffers.
-
-    Args:
-        ls: LidarScan with RAW_HEADERS field. If it doesn't have RAW_HEADERS
-            the result is empty []
-        info: metadata of the `ls` scan
-
-    Returns:
-        A generator of lidar packets that will produce the same LidarScan if
-        passed through the ScanBatcher again (less fields data).
-    """
-
-    if client.ChanField.RAW_HEADERS not in ls.fields:
-        return
-
-    field_rh = ls.field(client.ChanField.RAW_HEADERS)
-    pf = client._client.PacketFormat.from_info(info)
-
-    lph = LidarPacketHeaders(pf)
-    rhf = RawHeadersFormat(pf)
-
-    # iteraring by packet index (pi) in lidar scan columns
-    for pi in range(0, ls.w, pf.columns_per_packet):
-        if not np.any(field_rh[:, pi]):
-            continue
-        buf = bytearray(pf.lidar_packet_size)
-        lph.packet_header(buf)[:] = rhf.packet_header(field_rh[:, pi])
-        lph.packet_footer(buf)[:] = rhf.packet_footer(field_rh[:, pi])
-
-        for pc in range(0, pf.columns_per_packet):
-            # copy columns headers: pi + pc
-            lph.col_header(buf, pc)[:] = rhf.col_header(field_rh[:, pi + pc])
-            lph.col_footer(buf, pc)[:] = rhf.col_footer(field_rh[:, pi + pc])
-
-        yield buf
-
-
-def gen_scan_buffers(ls: client.LidarScan,
-                     info: client.SensorInfo) -> Iterator[bytearray]:
-    """Reconstruct lidar packets from a LidarScan (RAW_HEADERS field required).
-
-    NOTE: Currently only headers and footers of the packets and headers and
-    footers of the columns are put into buffers.
-
-    """
-    return gen_scan_buffers_fast(ls, info)
-
-
-def scan_to_buffers(ls: client.LidarScan,
-                    info: client.SensorInfo) -> List[bytearray]:
-    """Converts LidarScar to a lidar_packet buffers (only headers data inside)
-
-    NOTE: Currently only headers and footers of the packets and headers and
-    footers of the columns are put into buffers.
-
-    Args:
-        ls: LidarScan with RAW_HEADERS field. If it doesn't have RAW_HEADERS
-            the result is empty []
+        ls: LidarScan; if LidarScan has RAW_HEADERS field, packet headers
+            are recreated to how they were in the original packets
         info: metadata of the `ls` scan
 
     Returns:
         A set of lidar packets that will produce the same LidarScan if passed
         through the ScanBatcher again (less fields data)
     """
-    return list(gen_scan_buffers(ls, info))
+    return client._client.scan_to_packets(ls, PacketWriter.from_info(info))
 
 
-def terminator_buffer(info: client.SensorInfo,
-                      last_buf: client.BufferT) -> bytearray:
+def terminator_packet(info: client.SensorInfo,
+                      last_packet: LidarPacket) -> LidarPacket:
     """Makes a next after the last lidar packet buffer that finishes LidarScan.
 
     Main mechanism is to set the next frame_id (``frame_id + 1``) in uint16
@@ -802,43 +601,38 @@ def terminator_buffer(info: client.SensorInfo,
 
     # get frame_id using client.PacketFormat
     pf = client._client.PacketFormat.from_info(info)
-    curr_fid = pf.frame_id(last_buf)
+    curr_fid = pf.frame_id(last_packet._data)
 
-    pformat = PacketFormat.from_metadata(info)
-    last_buf_view = np.frombuffer(last_buf,
+    pw = PacketWriter.from_info(info)
+    last_buf_view = np.frombuffer(last_packet._data,
                                   dtype=np.uint8,
                                   count=pf.lidar_packet_size)
 
     # get frame_id using parsing.py PacketFormat and compare with client result
-    assert pformat.frame_id(last_buf_view) == curr_fid, "_client.PacketFormat " \
+    assert pw.frame_id(last_buf_view) == curr_fid, "_client.PacketFormat " \
         "and parsing.py PacketFormat should get the same frame_id value from buffer"
 
     # making a dummy data for the terminal lidar_packet
-    tbuf = bytearray([0xfe for _ in range(pf.lidar_packet_size)])
-    tbuf_view = np.frombuffer(tbuf, dtype=np.uint8, count=pf.lidar_packet_size)
+    tpacket = LidarPacket(packet_format=pw)
 
     # update the frame_id so it causes the LidarScan finishing routine
     # NOTE: frame_id is uint16 datatype so we need to properly wrap it on +1
-    pformat.set_frame_id(tbuf_view, (curr_fid + 1) % 0xffff)
+    pw.set_frame_id(tpacket, (curr_fid + 1) % 0xffff)
 
-    return tbuf
+    return tpacket
 
 
-def buffers_to_scan(
-        lidar_bufs: List[client.BufferT],
+def packets_to_scan(
+        lidar_packets: List[LidarPacket],
         info: client.SensorInfo,
         *,
-        fields: Optional[Dict[ChanField,
-                              FieldDType]] = None,
-        packets_ts: Optional[List[int]] = None) -> client.LidarScan:
+        fields: Optional[Dict[ChanField, FieldDType]] = None) -> client.LidarScan:
     """Batch buffers that belongs to a single scan into a LidarScan object.
 
-    Errors if lidar_bufs buffers do not belong to a single LidarScan. Typically
+    Errors if lidar_packets buffers do not belong to a single LidarScan. Typically
     incosistent measurement_ids or frame_ids in buffers is an error, as well
     as more buffers then a single LidarScan of a specified PacketFormat can take.
     """
-    if packets_ts is not None:
-        assert len(packets_ts) == len(lidar_bufs)
     w = info.format.columns_per_frame
     h = info.format.pixels_per_column
     _fields = fields if fields is not None else default_scan_fields(
@@ -846,16 +640,33 @@ def buffers_to_scan(
     ls = client._client.LidarScan(h, w, _fields)
     pf = client._client.PacketFormat.from_info(info)
     batch = client._client.ScanBatcher(w, pf)
-    for idx, buf in enumerate(lidar_bufs):
-        host_ts = packets_ts[idx] if packets_ts is not None else 0
-        assert not batch(buf, host_ts, ls), "lidar_bufs buffers should belong to a " \
-            f"single LidarScan, but {idx} of {len(lidar_bufs)} buffers already " \
+    for idx, packet in enumerate(lidar_packets):
+        assert not batch(packet, ls), "lidar_packets buffers should belong to a " \
+            f"single LidarScan, but {idx} of {len(lidar_packets)} buffers already " \
             "cut a LidarScan"
 
-    if lidar_bufs:
-        assert batch(terminator_buffer(info, lidar_bufs[-1]), 0,
+    if lidar_packets:
+        assert batch(terminator_packet(info, lidar_packets[-1]),
                      ls), "Terminator buffer should cause a cut of LidarScan"
 
     # if all expected lidar buffers constraints are satisfied we have a batched
     # lidar scan at the end
     return ls
+
+
+def cut_raw32_words(ls: client.LidarScan) -> client.LidarScan:
+    cut_chans = [
+        client.ChanField.RAW32_WORD1,
+        client.ChanField.RAW32_WORD2,
+        client.ChanField.RAW32_WORD3,
+        client.ChanField.RAW32_WORD4,
+        client.ChanField.RAW32_WORD5,
+        client.ChanField.RAW32_WORD6,
+        client.ChanField.RAW32_WORD7,
+        client.ChanField.RAW32_WORD8,
+        client.ChanField.RAW32_WORD9
+    ]
+
+    import ouster.osf as osf
+    new_fields = {c: ls.field(c).dtype for c in ls.fields if c not in cut_chans}
+    return osf.slice_and_cast(ls, new_fields)

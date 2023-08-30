@@ -550,11 +550,6 @@ struct matrix_hash {
     }
 };
 
-inline std::string getenvs(const std::string& var) {
-    char* res = std::getenv(var.c_str());
-    return res ? std::string{res} : std::string{};
-}
-
 using namespace ouster::sensor_utils;
 
 TEST_P(ScanBatcherSnapshotTest, snapshot_test) {

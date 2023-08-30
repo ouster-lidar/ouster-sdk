@@ -11,6 +11,7 @@
 #include <numeric>
 
 #include "ouster/lidar_scan.h"
+#include "ouster/pcap.h"
 #include "util.h"
 
 using namespace ouster;
@@ -184,7 +185,7 @@ TEST_P(PacketWriterTest, packet_writer_headers_test) {
 
     LidarPacket p;
     packet_format pf(profile, pixels_per_column, columns_per_packet);
-    packet_writer pw(profile, pixels_per_column, columns_per_packet);
+    packet_writer pw{pf};
 
     pw.set_col_status(pw.nth_col(9, p.buf.data()), 123);
     EXPECT_EQ(pf.col_status(pf.nth_col(9, p.buf.data())), 123);
@@ -207,7 +208,7 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     size_t columns_per_packet = std::get<3>(param);
 
     packet_format pf(profile, pixels_per_column, columns_per_packet);
-    packet_writer pw(profile, pixels_per_column, columns_per_packet);
+    packet_writer pw{pf};
 
     // create randomised lidar scan
     auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
@@ -258,7 +259,7 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     auto packets = std::vector<LidarPacket>{};
     ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets));
 
-    EXPECT_EQ(packets.size(), 64);
+    ASSERT_EQ(packets.size(), 64);
 
     auto ls2 = LidarScan(columns_per_frame, pixels_per_column, profile,
                          columns_per_packet);
@@ -272,4 +273,179 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     EXPECT_TRUE((ls.measurement_id() == ls2.measurement_id()).all());
 
     ouster::impl::foreach_field(ls2, cmp_field{ls});
+}
+
+TEST_P(PacketWriterTest, scans_to_packets_skips_dropped_packets_test) {
+    auto param = GetParam();
+    UDPProfileLidar profile = std::get<0>(param);
+    size_t columns_per_frame = std::get<1>(param);
+    size_t pixels_per_column = std::get<2>(param);
+    size_t columns_per_packet = std::get<3>(param);
+
+    packet_format pf(profile, pixels_per_column, columns_per_packet);
+    packet_writer pw{pf};
+
+    // create randomised lidar scan
+    auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
+                        columns_per_packet);
+    std::iota(ls.measurement_id().begin(), ls.measurement_id().end(), 0);
+    std::iota(ls.packet_timestamp().begin(), ls.packet_timestamp().end(), 10);
+    std::iota(ls.timestamp().begin(), ls.timestamp().end(), 1000);
+    std::fill(ls.status().begin(), ls.status().end(), 0x1);
+    ls.frame_id = 700;
+
+    auto randomise = [&](auto ref_field, ChanField i) {
+        // need this to skip RAW32_WORD*
+        if (i >= ChanField::RAW_HEADERS) return;
+
+        // use static seed so that the test does not flake some day and
+        // collectively piss off a bunch of angry developers
+        randomize_field(ref_field, pw.field_value_mask(i), 0xdeadbeef);
+    };
+    ouster::impl::foreach_field(ls, randomise);
+
+    auto packets_orig = std::vector<LidarPacket>{};
+    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets_orig));
+
+    ASSERT_EQ(packets_orig.size(), 64);
+
+    // drop one packet
+    packets_orig.erase(packets_orig.begin() + 14);
+
+    // disable every second column in first packet
+    for (size_t icol = 0; icol < columns_per_packet; ++icol) {
+        auto& p = packets_orig[0];
+        if (icol % 2 == 0) pw.set_col_status(pw.nth_col(icol, p.buf.data()), 0);
+    }
+
+    auto ls_repr = LidarScan(columns_per_frame, pixels_per_column, profile,
+                             columns_per_packet);
+    ScanBatcher batcher(columns_per_frame, pf);
+    for (const auto& p : packets_orig) {
+        EXPECT_FALSE(batcher(p, ls_repr));
+    }
+
+    auto packets_repr = std::vector<LidarPacket>{};
+    ouster::impl::scan_to_packets(ls_repr, pw,
+                                  std::back_inserter(packets_repr));
+    EXPECT_EQ(packets_repr.size(), 63);
+    EXPECT_EQ(packets_repr[14].host_timestamp, 25);
+
+    // check disabled column channel data blocks are completely empty
+    for (size_t icol = 0; icol < columns_per_packet; ++icol) {
+        auto& p = packets_repr[0];
+        uint8_t* col_buf = pw.nth_col(icol, p.buf.data());
+        if (icol % 2 == 0) {
+            const uint8_t* begin = pw.nth_px(0, col_buf);
+            const uint8_t* end = pw.nth_col(icol + 1, p.buf.data());
+            EXPECT_TRUE(
+                std::all_of(begin, end, [](uint8_t v) { return v == 0; }));
+        }
+    }
+}
+
+using data_param = std::tuple<std::string, std::string>;
+class PacketWriterDataTest : public ::testing::TestWithParam<data_param> {};
+
+// clang-format off
+INSTANTIATE_TEST_CASE_P(
+    PacketWriterDataTests,
+    PacketWriterDataTest,
+    ::testing::Values(
+        // low bandwidth
+        data_param{"OS-0-128-U1_v2.3.0_1024x10.pcap",
+                   "OS-0-128-U1_v2.3.0_1024x10.json"},
+        // dual return
+        data_param{"OS-0-32-U1_v2.2.0_1024x10.pcap",
+                   "OS-0-32-U1_v2.2.0_1024x10.json"},
+        // fusa dual return
+        data_param{"OS-1-128_767798045_1024x10_20230712_120049.pcap",
+                   "OS-1-128_767798045_1024x10_20230712_120049.json"},
+        // single return
+        data_param{"OS-2-128-U1_v2.3.0_1024x10.pcap",
+                   "OS-2-128-U1_v2.3.0_1024x10.json"},
+        // legacy
+        data_param{"OS-2-32-U0_v2.0.0_1024x10.pcap",
+                   "OS-2-32-U0_v2.0.0_1024x10.json"}));
+// clang-format on
+
+using namespace ouster::sensor_utils;
+
+TEST_P(PacketWriterDataTest, packet_writer_data_repr_test) {
+    auto data_dir = getenvs("DATA_DIR");
+    const auto test_params = GetParam();
+
+    auto info = metadata_from_json(data_dir + "/" + std::get<1>(test_params));
+
+    auto pw = packet_writer(info);
+
+    auto ls_orig =
+        LidarScan(info.format.columns_per_frame, pw.pixels_per_column,
+                  pw.udp_profile_lidar, pw.columns_per_packet);
+
+    PcapReader pcap(data_dir + "/" + std::get<0>(test_params));
+    ScanBatcher batcher(info.format.columns_per_frame, pw);
+    int n_packets = 0;
+    while (pcap.next_packet())
+        if (pcap.current_info().dst_port == 7502) {
+            ASSERT_FALSE(batcher(pcap.current_data(), 0, ls_orig));
+            ++n_packets;
+        }
+
+    // produced and re-parsed fields should match
+    auto packets = std::vector<LidarPacket>{};
+    ouster::impl::scan_to_packets(ls_orig, pw, std::back_inserter(packets));
+    ASSERT_EQ(packets.size(), n_packets);
+
+    auto ls_repr =
+        LidarScan(info.format.columns_per_frame, pw.pixels_per_column,
+                  pw.udp_profile_lidar, pw.columns_per_packet);
+    ScanBatcher repr_batcher(info.format.columns_per_frame, pw);
+    for (auto& p : packets) {
+        ASSERT_FALSE(repr_batcher(p, ls_repr));
+    }
+
+    ouster::impl::foreach_field(ls_repr, cmp_field{ls_orig});
+}
+
+TEST_P(PacketWriterDataTest, packet_writer_raw_headers_match_test) {
+    auto data_dir = getenvs("DATA_DIR");
+    const auto test_params = GetParam();
+
+    auto info = metadata_from_json(data_dir + "/" + std::get<1>(test_params));
+
+    auto pw = packet_writer(info);
+
+    auto rh_types = get_field_types(info);
+    rh_types.emplace_back(ChanField::RAW_HEADERS, ChanFieldType::UINT32);
+
+    auto rh_ls_orig =
+        LidarScan(info.format.columns_per_frame, pw.pixels_per_column,
+                  rh_types.begin(), rh_types.end(), pw.columns_per_packet);
+
+    PcapReader pcap(data_dir + "/" + std::get<0>(test_params));
+    ScanBatcher batcher(info.format.columns_per_frame, pw);
+    int n_packets = 0;
+    while (pcap.next_packet())
+        if (pcap.current_info().dst_port == 7502) {
+            ASSERT_FALSE(batcher(pcap.current_data(), 0, rh_ls_orig));
+            ++n_packets;
+        }
+
+    // produced and re-parsed RAW_HEADERS fields should match
+    auto packets = std::vector<LidarPacket>{};
+    ouster::impl::scan_to_packets(rh_ls_orig, pw, std::back_inserter(packets));
+    ASSERT_EQ(packets.size(), n_packets);
+
+    auto rh_ls_repr =
+        LidarScan(info.format.columns_per_frame, pw.pixels_per_column,
+                  rh_types.begin(), rh_types.end(), pw.columns_per_packet);
+    ScanBatcher repr_batcher(info.format.columns_per_frame, pw);
+    for (auto& p : packets) {
+        ASSERT_FALSE(repr_batcher(p, rh_ls_repr));
+    }
+
+    auto rh_orig = rh_ls_orig.field<uint32_t>(ChanField::RAW_HEADERS);
+    auto rh_repr = rh_ls_repr.field<uint32_t>(ChanField::RAW_HEADERS);
+    EXPECT_TRUE((rh_orig == rh_repr).all());
 }

@@ -297,6 +297,15 @@ std::string to_string(const LidarScanFieldTypes& field_types);
 LidarScanFieldTypes get_field_types(const LidarScan& ls);
 
 /**
+ * Get the lidar scan field types from lidar profile
+ *
+ * @param[in] udp_profile_lidar lidar profile
+ *
+ * @return The lidar scan field types
+ */
+LidarScanFieldTypes get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
+
+/**
  * Get the lidar scan field types from sensor info
  *
  * @param[in] info The sensor info to get the lidar scan field types from.

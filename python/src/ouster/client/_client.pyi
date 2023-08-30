@@ -199,6 +199,10 @@ class PacketFormat:
         ...
 
     @property
+    def udp_profile_lidar(self) -> UDPProfileLidar:
+        ...
+
+    @property
     def columns_per_packet(self) -> int:
         ...
 
@@ -296,6 +300,46 @@ class PacketFormat:
     @staticmethod
     def from_info(info: SensorInfo) -> PacketFormat:
         ...
+
+    @staticmethod
+    def from_profile(udp_profile_lidar: UDPProfileLidar,
+                     pixels_per_column: int,
+                     columns_per_packet: int) -> PacketFormat:
+        ...
+
+
+class PacketWriter(PacketFormat):
+    @staticmethod
+    def from_info(info: SensorInfo) -> PacketWriter:
+        ...
+
+    @staticmethod
+    def from_profile(udp_profile_lidar: UDPProfileLidar,
+                     pixels_per_column: int,
+                     columns_per_packet: int) -> PacketWriter:
+        ...
+
+    def set_col_timestamp(self, packet: _LidarPacket, col_idx: int, ts: int) -> None:
+        ...
+
+    def set_col_measurement_id(self,
+                               packet: _LidarPacket,
+                               col_idx: int,
+                               m_id: int) -> None:
+        ...
+
+    def set_col_status(self, packet: _LidarPacket, col_idx: int, status: int) -> None:
+        ...
+
+    def set_frame_id(self, packet: _LidarPacket, frame_id: int) -> None:
+        ...
+
+    def set_field(self, packet: _LidarPacket, chan: ChanField, field: ndarray) -> None:
+        ...
+
+
+def scan_to_packets(ls: LidarScan, pw: PacketWriter) -> List[_LidarPacket]:
+    ...
 
 
 class LidarMode:
@@ -868,3 +912,6 @@ def get_field_types(scan: LidarScan) -> FieldTypes: ...
 
 @overload
 def get_field_types(info: SensorInfo) -> FieldTypes: ...
+
+@overload
+def get_field_types(udp_profile_lidar: UDPProfileLidar) -> FieldTypes: ...

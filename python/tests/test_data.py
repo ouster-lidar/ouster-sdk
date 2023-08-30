@@ -619,3 +619,59 @@ def test_lidar_packet_validator_4() -> None:
     assert type(errors[1]) is client.PacketSizeError
     assert str(errors[1]) == 'Expected a packet of size 1280 but got a buffer of size 8448'
     _pcap.replay_uninitialize(pcap_handle)
+
+
+def test_packet_writer_bindings(meta: client.SensorInfo) -> None:
+    pf = _client.PacketFormat.from_info(meta)
+    packet = client.LidarPacket(packet_format=pf)
+
+    pw = _client.PacketWriter.from_info(meta)
+    pw.set_frame_id(packet, 700)
+    assert pf.frame_id(packet._data) == 700
+
+    with pytest.raises(ValueError):
+        pw.set_col_timestamp(packet, pw.columns_per_packet, 100)
+    with pytest.raises(ValueError):
+        pw.set_col_measurement_id(packet, pw.columns_per_packet, 100)
+    with pytest.raises(ValueError):
+        pw.set_col_status(packet, pw.columns_per_packet, 0x1)
+
+    try:
+        for i in range(pw.columns_per_packet):
+            pw.set_col_timestamp(packet, i, 100)
+            pw.set_col_status(packet, i, 0x1)
+            pw.set_col_measurement_id(packet, i, 100)
+    except ValueError:
+        assert False, "setting cols up to columns_per_packet should not raise"
+
+    for dt in [np.uint8, np.uint16, np.uint32, np.uint64]:
+        p = client.LidarPacket(packet_format=pf)
+        for chan in p.fields:
+            if chan in [_client.ChanField.RAW32_WORD1,
+                        _client.ChanField.RAW32_WORD2,
+                        _client.ChanField.RAW32_WORD3,
+                        _client.ChanField.RAW32_WORD4]:
+                continue
+            # mypy is going nuts with mask notation
+            value_mask = pw.field_value_mask(chan) & np.iinfo(dt).max  # type: ignore
+            shape = (pw.pixels_per_column, pw.columns_per_packet)
+            assert value_mask > 0
+            _max = max(value_mask, value_mask + 1)
+            field = np.random.randint(_max, size=shape, dtype=dt)  # type: ignore
+            field = field & value_mask  # type: ignore
+            s = hex(value_mask)
+            assert np.any(field > 0), f"{chan}, {dt}, {s}"
+            pw.set_field(p, chan, field)
+            assert np.all(pw.packet_field(chan, p._data) == field), f"{chan}, {dt}, {s}"
+
+    columns_per_frame = meta.format.columns_per_frame
+    ls = client.LidarScan(pf.pixels_per_column, columns_per_frame,
+                          pf.udp_profile_lidar, pf.columns_per_packet)
+    # all fields are invalid, expect zero packets
+    packets = _client.scan_to_packets(ls, pw)
+    assert len(packets) == 0
+
+    expected_packets = columns_per_frame / pf.columns_per_packet
+    ls.status[:] = 0x1
+    packets = _client.scan_to_packets(ls, pw)
+    assert len(packets) == expected_packets

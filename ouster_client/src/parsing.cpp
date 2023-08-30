@@ -674,16 +674,24 @@ int packet_format::block_parsable() const {
 }
 
 const packet_format& get_format(const sensor_info& info) {
-    using key = std::tuple<int, int, UDPProfileLidar>;
+    return get_format(info.format.udp_profile_lidar,
+                      info.format.pixels_per_column,
+                      info.format.columns_per_packet);
+}
+
+const packet_format& get_format(UDPProfileLidar udp_profile_lidar,
+                                size_t pixels_per_column,
+                                size_t columns_per_packet) {
+    using key = std::tuple<size_t, size_t, UDPProfileLidar>;
     static std::map<key, std::unique_ptr<packet_format>> cache{};
     static std::mutex cache_mx{};
 
-    key k{info.format.pixels_per_column, info.format.columns_per_packet,
-          info.format.udp_profile_lidar};
+    key k{pixels_per_column, columns_per_packet, udp_profile_lidar};
 
     std::lock_guard<std::mutex> lk{cache_mx};
     if (!cache.count(k)) {
-        cache[k] = std::make_unique<packet_format>(info);
+        cache[k] = std::make_unique<packet_format>(
+            udp_profile_lidar, pixels_per_column, columns_per_packet);
     }
 
     return *cache.at(k);
@@ -708,6 +716,10 @@ uint8_t* packet_writer::nth_col(int n, uint8_t* lidar_buf) const {
 
 uint8_t* packet_writer::nth_px(int n, uint8_t* col_buf) const {
     return const_cast<uint8_t*>(packet_format::nth_px(n, col_buf));
+}
+
+uint8_t* packet_writer::footer(uint8_t* lidar_buf) const {
+    return const_cast<uint8_t*>(packet_format::footer(lidar_buf));
 }
 
 void packet_writer::set_col_status(uint8_t* col_buf, uint32_t status) const {
@@ -765,9 +777,6 @@ template void packet_writer::set_px(uint8_t*, ChanField, uint64_t) const;
 template <typename T, typename DST>
 void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
                                    ChanField chan, uint8_t* lidar_buf) const {
-    if (sizeof(T) < sizeof(DST))
-        throw std::invalid_argument("Dest type too small for specified field");
-
     constexpr int N = 32;
     if (columns_per_packet > N)
         throw std::runtime_error("Recompile set_block_impl with larger N");
@@ -782,22 +791,26 @@ void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
     int cols = field.cols();
     const T* data = field.data();
     std::array<uint8_t*, N> col_buf;
+    std::array<bool, N> valid;
     for (int i = 0; i < columns_per_packet; ++i) {
         col_buf[i] = nth_col(i, lidar_buf);
+        valid[i] = col_status(col_buf[i]) & 0x01;
     }
     uint16_t m_id = col_measurement_id(col_buf[0]);
 
     for (int px = 0; px < pixels_per_column; ++px) {
         std::ptrdiff_t f_offset = cols * px + m_id;
         for (int x = 0; x < columns_per_packet; ++x) {
+            if (!valid[x]) continue;
+
             auto px_dst =
                 col_buf[x] + col_header_size + (px * channel_data_size);
 
-            T value = *(data + f_offset + x);
+            uint64_t value = *(data + f_offset + x);
             if (shift > 0) value <<= shift;
             if (shift < 0) value >>= std::abs(shift);
             if (mask) value &= mask;
-            T* ptr = reinterpret_cast<T*>(px_dst + offset);
+            DST* ptr = reinterpret_cast<DST*>(px_dst + offset);
             *ptr &= ~mask;
             *ptr |= value;
         }
@@ -835,6 +848,58 @@ template void packet_writer::set_block(Eigen::Ref<const img_t<uint32_t>> field,
                                        ChanField i, uint8_t* lidar_buf) const;
 template void packet_writer::set_block(Eigen::Ref<const img_t<uint64_t>> field,
                                        ChanField i, uint8_t* lidar_buf) const;
+
+template <typename T>
+void packet_writer::unpack_raw_headers(Eigen::Ref<const img_t<T>> field,
+                                       uint8_t* lidar_buf) const {
+    using ColMajorView = Eigen::Map<Eigen::Array<T, -1, 1, Eigen::ColMajor>>;
+
+    if (sizeof(T) > 4)
+        throw std::invalid_argument(
+            "RAW_HEADERS field should be of type"
+            "uint32_t or smaller to work correctly");
+
+    uint8_t* col_zero = nth_col(0, lidar_buf);
+    uint16_t m_id = col_measurement_id(col_zero);
+
+    size_t ch_size = col_header_size / sizeof(T);
+    size_t cf_size = col_footer_size / sizeof(T);
+    size_t ph_size = packet_header_size / sizeof(T);
+    size_t pf_size = packet_footer_size / sizeof(T);
+
+    size_t ch_offset = 0;
+    size_t cf_offset = ch_offset + ch_size;
+    size_t ph_offset = cf_offset + cf_size;
+    size_t pf_offset = ph_offset + ph_size;
+
+    // fill in header and footer, col0 is sufficient for that
+    ColMajorView ph_view(reinterpret_cast<T*>(lidar_buf), ph_size);
+    ColMajorView pf_view(reinterpret_cast<T*>(footer(lidar_buf)), pf_size);
+    ph_view = field.block(ph_offset, m_id, ph_size, 1);
+    pf_view = field.block(pf_offset, m_id, pf_size, 1);
+
+    for (int icol = 0; icol < columns_per_packet; ++icol) {
+        uint8_t* col_buf = nth_col(icol, lidar_buf);
+        uint8_t* colf_ptr = col_buf + col_size - col_footer_size;
+
+        ColMajorView colh_view(reinterpret_cast<T*>(col_buf), ch_size);
+        ColMajorView colf_view(reinterpret_cast<T*>(colf_ptr), cf_size);
+
+        m_id = col_measurement_id(col_buf);
+
+        colh_view = field.block(ch_offset, m_id, ch_size, 1);
+        colf_view = field.block(cf_offset, m_id, cf_size, 1);
+    }
+}
+
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<uint8_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<uint16_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<uint32_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<uint64_t>> field, uint8_t* lidar_buf) const;
 
 }  // namespace impl
 }  // namespace sensor

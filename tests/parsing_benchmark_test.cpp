@@ -40,11 +40,6 @@ INSTANTIATE_TEST_CASE_P(
 namespace ouster {
 namespace sensor_utils {
 
-inline std::string getenvs(const std::string& var) {
-    char* res = std::getenv(var.c_str());
-    return res ? std::string{res} : std::string{};
-}
-
 struct parse_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, ChanField f,

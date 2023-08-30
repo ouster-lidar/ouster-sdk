@@ -44,6 +44,7 @@
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
 #include "ouster/impl/build.h"
+#include "ouster/impl/packet_writer.h"
 #include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
@@ -53,6 +54,7 @@ namespace chrono = std::chrono;
 using spdlog::sinks::base_sink;
 
 using ouster::sensor::calibration_status;
+using ouster::sensor::ChanField;
 using ouster::sensor::data_format;
 using ouster::sensor::ImuPacket;
 using ouster::sensor::LidarPacket;
@@ -60,6 +62,7 @@ using ouster::sensor::packet_format;
 using ouster::sensor::sensor_config;
 using ouster::sensor::sensor_info;
 using ouster::sensor::impl::BufferedUDPSource;
+using ouster::sensor::impl::packet_writer;
 using namespace ouster;
 
 namespace pybind11 {
@@ -228,6 +231,75 @@ static py::dtype dtype_of_field_type(const sensor::ChanFieldType& ftype) {
     return py::dtype();  // unreachable ...
 }
 
+template <typename Fn>
+struct lambda_iter {
+    Fn lambda;
+
+    // generative output iterators return themselves
+    lambda_iter& operator*() { return *this; }
+    // prefix
+    lambda_iter& operator++() { return *this; }
+    // postfix
+    lambda_iter& operator++(int) { return *this; }
+
+    template <typename T>
+    lambda_iter& operator=(T&& item) {
+        lambda(item);
+        return *this;
+    }
+};
+
+template <typename Fn>
+lambda_iter<Fn> make_lambda_iter(Fn&& f) {
+    return lambda_iter<Fn>{f};
+}
+
+template <typename T>
+struct set_field {
+    using Field = py::array_t<T, py::array::c_style | py::array::forcecast>;
+
+    void operator()(const packet_writer& self, LidarPacket& p, ChanField i,
+                    Field field) {
+        if (field.ndim() != 2 || field.shape(0) != self.pixels_per_column ||
+            field.shape(1) != self.columns_per_packet)
+            throw std::invalid_argument("field dimension mismatch");
+
+        /**
+         * It is a bit weird to be setting these back and forth to work around
+         * packet_writer::set_block logic that is intended for lidarscan usage
+         * but I do think it is better than keeping two versions of the same.
+         *
+         * This is intended for python users, which will expect it to work out
+         * of the box without any extra fiddling.
+         */
+        std::vector<uint16_t> m_ids(self.columns_per_packet);
+        std::vector<uint32_t> statuses(self.columns_per_packet);
+
+        for (int icol = 0; icol < self.columns_per_packet; ++icol) {
+            uint8_t* col_buf = self.nth_col(icol, p.buf.data());
+            // store for later reassignment
+            m_ids[icol] = self.col_measurement_id(col_buf);
+            statuses[icol] = self.col_status(col_buf);
+            // overwrite with 0..columns_per_packet
+            self.set_col_measurement_id(col_buf, icol);
+            self.set_col_status(col_buf, 0x1);
+        }
+
+        Eigen::Map<const img_t<T>> field_map(field.data(), field.shape(0),
+                                             field.shape(1));
+        // eigen is trash; this extra step is extra annoying
+        Eigen::Ref<const img_t<T>> ref = field_map;
+        self.set_block(ref, i, p.buf.data());
+
+        // restore m_ids and statuses
+        for (int icol = 0; icol < self.columns_per_packet; ++icol) {
+            uint8_t* col_buf = self.nth_col(icol, p.buf.data());
+            self.set_col_measurement_id(col_buf, m_ids[icol]);
+            self.set_col_status(col_buf, statuses[icol]);
+        }
+    }
+};
+
 #if (SPDLOG_VER_MAJOR >= 1)  // don't include for spdlog < 1.x.x
 
 /*
@@ -321,11 +393,20 @@ PYBIND11_MODULE(_client, m) {
 
     // Packet Format
     py::class_<packet_format>(m, "PacketFormat")
-        .def_static("from_info", [](const sensor_info& info) -> const packet_format& {
-            return sensor::get_format(info);
-        }, py::return_value_policy::reference)
+        .def_static("from_info",
+                    [](const sensor_info& info) -> const packet_format& {
+                        return sensor::get_format(info);
+                    }, py::return_value_policy::reference)
+        .def_static("from_profile",
+                    [](sensor::UDPProfileLidar profile,
+                       size_t pixels_per_column,
+                       size_t columns_per_packet) -> const packet_format& {
+                        return sensor::get_format(profile, pixels_per_column,
+                                                  columns_per_packet);
+                    }, py::return_value_policy::reference)
         .def_readonly("lidar_packet_size", &packet_format::lidar_packet_size)
         .def_readonly("imu_packet_size", &packet_format::imu_packet_size)
+        .def_readonly("udp_profile_lidar", &packet_format::udp_profile_lidar)
         .def_readonly("columns_per_packet", &packet_format::columns_per_packet)
         .def_readonly("pixels_per_column", &packet_format::pixels_per_column)
         .def_readonly("packet_header_size", &packet_format::packet_header_size)
@@ -450,6 +531,79 @@ PYBIND11_MODULE(_client, m) {
         .def("imu_la_x", [](packet_format& pf, py::buffer buf) { return pf.imu_la_x(getptr(pf.imu_packet_size, buf)); })
         .def("imu_la_y", [](packet_format& pf, py::buffer buf) { return pf.imu_la_y(getptr(pf.imu_packet_size, buf)); })
         .def("imu_la_z", [](packet_format& pf, py::buffer buf) { return pf.imu_la_z(getptr(pf.imu_packet_size, buf)); });
+
+    // PacketWriter
+    py::class_<packet_writer, packet_format>(m, "PacketWriter")
+        // this is safe so long as packet_writer does not carry any extra state
+        .def_static("from_info",
+                    [](const sensor_info& info) -> const packet_writer& {
+                        const auto& pf = sensor::get_format(info);
+                        return static_cast<const packet_writer&>(pf);
+                    }, py::return_value_policy::reference)
+        .def_static("from_profile",
+                    [](sensor::UDPProfileLidar profile,
+                       size_t pixels_per_column,
+                       size_t columns_per_packet) -> const packet_writer& {
+                        const auto& pf = sensor::get_format(profile,
+                                                            pixels_per_column,
+                                                            columns_per_packet);
+                        return static_cast<const packet_writer&>(pf);
+                    }, py::return_value_policy::reference)
+        .def("set_col_status",
+              [](const packet_writer& self, LidarPacket& p, int col_idx,
+                 uint32_t status) {
+                  if (col_idx >= self.columns_per_packet)
+                      throw std::invalid_argument("col_idx out of bounds");
+                  uint8_t* col_buf = self.nth_col(col_idx, p.buf.data());
+                  self.set_col_status(col_buf, status);
+              })
+        .def("set_col_timestamp",
+              [](const packet_writer& self, LidarPacket& p, int col_idx,
+                 uint64_t ts) {
+                  if (col_idx >= self.columns_per_packet)
+                      throw std::invalid_argument("col_idx out of bounds");
+                  uint8_t* col_buf = self.nth_col(col_idx, p.buf.data());
+                  self.set_col_timestamp(col_buf, ts);
+              })
+        .def("set_col_measurement_id",
+              [](const packet_writer& self, LidarPacket& p, int col_idx,
+                 uint16_t m_id) {
+                  if (col_idx >= self.columns_per_packet)
+                      throw std::invalid_argument("col_idx out of bounds");
+                  uint8_t* col_buf = self.nth_col(col_idx, p.buf.data());
+                  self.set_col_measurement_id(col_buf, m_id);
+              })
+        .def("set_frame_id",
+              [](const packet_writer& self, LidarPacket& p, uint32_t frame_id) {
+                  self.set_frame_id(p.buf.data(), frame_id);
+              })
+        .def("set_field", set_field<uint8_t>{})
+        .def("set_field", set_field<uint16_t>{})
+        .def("set_field", set_field<uint32_t>{})
+        .def("set_field", set_field<uint64_t>{});
+
+    m.def("scan_to_packets",
+          [](const LidarScan& ls, const packet_writer& pw) -> py::list {
+              py::list packets;
+              py::object class_type =
+                  py::module::import("ouster.client").attr("LidarPacket");
+
+              auto append_pypacket = [&](const LidarPacket& packet) {
+                  py::object pypacket = class_type(py::arg("packet_format") = pw);
+                  // next couple lines should not fail unless someone messes with
+                  // ouster.client.LidarPacket implementation
+                  LidarPacket* p_ptr = pypacket.cast<LidarPacket*>();
+                  if (p_ptr->buf.size() != packet.buf.size())
+                      throw std::invalid_argument("packet sizes don't match");
+                  p_ptr->host_timestamp = packet.host_timestamp;
+                  std::memcpy(p_ptr->buf.data(), packet.buf.data(), packet.buf.size());
+                  packets.append(pypacket);
+              };
+
+              auto iter = make_lambda_iter(append_pypacket);
+              impl::scan_to_packets(ls, pw, iter);
+              return packets;
+          });
 
     // Data Format
     py::class_<data_format>(m, "DataFormat")
@@ -883,7 +1037,7 @@ PYBIND11_MODULE(_client, m) {
                 new (&self) LidarScan(w, h, profile, columns_per_packet);
             },
             R"(
-        
+
         Initialize a scan with the default fields for a particular udp profile
 
         Args:
@@ -920,8 +1074,6 @@ PYBIND11_MODULE(_client, m) {
 
         Returns:
             New LidarScan of specified dimensions expecting fields specified by dict
-            
-
 
          )",
             py::arg("w"), py::arg("h"), py::arg("field_types"),
@@ -1171,6 +1323,28 @@ PYBIND11_MODULE(_client, m) {
             returns field types
             )",
         py::arg("lidar_scan"));
+
+    m.def(
+        "get_field_types",
+        [](sensor::UDPProfileLidar profile) {
+            auto field_types = ouster::get_field_types(profile);
+            std::map<sensor::ChanField, py::dtype> field_types_res{};
+            for (const auto& f : field_types) {
+                auto dtype = dtype_of_field_type(f.second);
+                field_types_res.emplace(f.first, dtype);
+            }
+            return field_types_res;
+        },
+        R"(
+        Extracts LidarScan fields with types for a given ``udp_profile_lidar``
+
+        Args:
+            udp_profile_lidar: lidar profile from which to get field types
+
+        Returns:
+            returns field types
+            )",
+        py::arg("udp_profile_lidar"));
 
     using ouster::sensor::Packet;
     py::class_<Packet>(m, "_Packet")

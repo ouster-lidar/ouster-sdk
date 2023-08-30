@@ -67,13 +67,13 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
     """
     try:
         from ouster import client
-        from ouster.client import valid_packet_idxs
         import ouster.osf as osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
     # NOTE[pb]: Mypy quirks or some of our Python packages structure quirks, idk :(
-    from ouster.sdkx.parsing import scan_to_buffers, buffers_to_scan  # type: ignore
+    from ouster.client._client import get_field_types
+    from ouster.sdkx.parsing import scan_to_packets, packets_to_scan, cut_raw32_words  # type: ignore
 
     reader = osf.Reader(file)
 
@@ -117,21 +117,19 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
                         if client.ChanField.RAW_HEADERS in ls.fields:
                             sinfo = scan_stream_sensor[m.id].info
 
-                            ls_no_fields = osf.slice_and_cast(ls, {})
-
-                            # roundtrip: LidarScan -> buffers -> LidarScan
-                            ls_buffers = scan_to_buffers(ls, sinfo)
+                            # roundtrip: LidarScan -> packets -> LidarScan
+                            packets = scan_to_packets(ls, sinfo)
 
                             # recovered lidar scan
-                            bufs_ts = ls.packet_timestamp[valid_packet_idxs(ls)]
-                            ls_rec = buffers_to_scan(ls_buffers,
-                                                     sinfo,
-                                                     fields={},
-                                                     packets_ts=bufs_ts)
+                            field_types = get_field_types(ls)
+                            ls_rec = packets_to_scan(packets, sinfo, fields=field_types)
 
-                            assert ls_rec == ls_no_fields, "LidarScan should be" \
+                            ls_no_raw32 = cut_raw32_words(ls)
+                            ls_rec_no_raw32 = cut_raw32_words(ls_rec)
+
+                            assert ls_rec_no_raw32 == ls_no_raw32, "LidarScan should be" \
                                 " equal when recontructed from RAW_HEADERS fields" \
-                                " buffers back (no fields included)"
+                                " packets back"
 
                             d += "[RAW_HEADERS: OK]"
                         else:

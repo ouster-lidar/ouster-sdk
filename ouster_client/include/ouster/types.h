@@ -1234,9 +1234,6 @@ class packet_format {
      */
     float imu_av_z(const uint8_t* imu_buf) const;
 
-    /** Declare get_format as friend. */
-    friend const packet_format& get_format(const sensor_info&);
-
     /**
      * Get the mask of possible values that can be parsed by the channel field
      *
@@ -1264,6 +1261,19 @@ class packet_format {
  * @return a packet_format suitable for parsing UDP packets sent by the sensor.
  */
 const packet_format& get_format(const sensor_info& info);
+
+/**
+ * Get a packet parser for a particular data format.
+ *
+ * @param[in] udp_profile_lidar   lidar profile
+ * @param[in] pixels_per_column   pixels per column
+ * @param[in] columns_per_packet  columns per packet
+ *
+ * @return a packet_format suitable for parsing UDP packets sent by the sensor.
+ */
+const packet_format& get_format(UDPProfileLidar udp_profile_lidar,
+                                size_t pixels_per_column,
+                                size_t columns_per_packet);
 
 /**
  * Encapsulate a packet buffer and attributes associated with it.

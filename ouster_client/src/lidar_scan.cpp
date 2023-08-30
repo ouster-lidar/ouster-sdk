@@ -134,6 +134,26 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
     return {entry.fields, entry.fields + entry.n_fields};
 }
 
+bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls) {
+    using ouster::sensor::logger;
+    ChanFieldType raw_headers_ft = ls.field_type(ChanField::RAW_HEADERS);
+    if (!raw_headers_ft) {
+        return false;
+    }
+    // ensure that we can pack headers into the size of a single RAW_HEADERS
+    // column
+    if (pf.pixels_per_column * sensor::field_type_size(raw_headers_ft) <
+        (pf.packet_header_size + pf.col_header_size + pf.col_footer_size +
+         pf.packet_footer_size)) {
+        logger().debug(
+            "WARNING: Can't fit RAW_HEADERS into a column of {} {} "
+            "values",
+            pf.pixels_per_column, to_string(raw_headers_ft));
+        return false;
+    }
+    return true;
+}
+
 }  // namespace impl
 
 // specify sensor:: namespace for doxygen matching
@@ -270,9 +290,14 @@ LidarScanFieldTypes get_field_types(const LidarScan& ls) {
     return {ls.begin(), ls.end()};
 }
 
+LidarScanFieldTypes get_field_types(UDPProfileLidar udp_profile_lidar) {
+    // Get typical LidarScan to obtain field types
+    return impl::lookup_scan_fields(udp_profile_lidar);
+}
+
 LidarScanFieldTypes get_field_types(const sensor::sensor_info& info) {
     // Get typical LidarScan to obtain field types
-    return impl::lookup_scan_fields(info.format.udp_profile_lidar);
+    return get_field_types(info.format.udp_profile_lidar);
 }
 
 std::string to_string(const LidarScanFieldTypes& field_types) {
@@ -510,32 +535,6 @@ uint64_t frame_status(const uint8_t thermal_shutdown,
 }
 
 /**
- * Checks whether RAW_HEADERS field is present and can be used to store headers.
- *
- * @param[in] pf packet format
- * @param[in] ls lidar scan to check for RAW_HEADERS field presence.
- */
-bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls) {
-    using ouster::sensor::logger;
-    ChanFieldType raw_headers_ft = ls.field_type(ChanField::RAW_HEADERS);
-    if (!raw_headers_ft) {
-        return false;
-    }
-    // ensure that we can pack headers into the size of a single RAW_HEADERS
-    // column
-    if (pf.pixels_per_column * sensor::field_type_size(raw_headers_ft) <
-        (pf.packet_header_size + pf.col_header_size + pf.col_footer_size +
-         pf.packet_footer_size)) {
-        logger().debug(
-            "WARNING: Can't fit RAW_HEADERS into a column of {} {} "
-            "values",
-            pf.pixels_per_column, to_string(raw_headers_ft));
-        return false;
-    }
-    return true;
-}
-
-/**
  * Pack the lidar packet and column headers and footer into a RAW_HEADERS field.
  */
 struct pack_raw_headers_col {
@@ -582,7 +581,7 @@ struct pack_raw_headers_col {
 }  // namespace
 
 void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
-    const bool raw_headers = raw_headers_enabled(pf, ls);
+    const bool raw_headers = impl::raw_headers_enabled(pf, ls);
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
         const uint16_t m_id = pf.col_measurement_id(col_buf);
@@ -719,7 +718,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
 
     const uint16_t f_id = pf.frame_id(packet_buf);
 
-    const bool raw_headers = raw_headers_enabled(pf, ls);
+    const bool raw_headers = impl::raw_headers_enabled(pf, ls);
 
     if (ls.frame_id == -1) {
         // expecting to start batching a new scan

@@ -132,6 +132,13 @@ set_tests_properties(
 
 add_executable(packet_writer_test packet_writer_test.cpp util.h)
 
-target_link_libraries(packet_writer_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
+target_link_libraries(packet_writer_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
 
 add_test(NAME packet_writer_test COMMAND packet_writer_test --gtest_output=xml:parsing_benchmark_test.xml)
+
+set_tests_properties(
+    packet_writer_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)
