@@ -210,9 +210,8 @@ void BufferedUDPSource::produce(const packet_format& pf) {
             LidarPacket& packet = e.second.as<LidarPacket>();
             if (!read_lidar_packet(*cli_, packet, pf)) continue;
         } else if (st & IMU_DATA) {
-            // TODO: accept ImuPacket& and set timestamp, for symmetry if for no
-            // other reason
-            if (!read_imu_packet(*cli_, e.second.buf.data(), pf)) continue;
+            ImuPacket& packet = e.second.as<ImuPacket>();
+            if (!read_imu_packet(*cli_, packet, pf)) continue;
         }
         if (overflow) st = client_state(st | CLIENT_OVERFLOW);
         e.first = st;
