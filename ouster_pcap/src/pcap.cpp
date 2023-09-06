@@ -14,6 +14,9 @@
 
 #if defined _WIN32
 #include <winsock2.h>
+#define FTELL _ftelli64
+#define FSEEK _fseeki64
+#elif defined __EMSCRIPTEN__
 #define FTELL ftell
 #define FSEEK fseek
 #else
