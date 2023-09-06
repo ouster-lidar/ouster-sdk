@@ -80,7 +80,7 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install --triplet=x64-windows eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog libpng flatbuffers
+   PS > vcpkg install --triplet=x64-windows curl eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog libpng flatbuffers
 
 The currently tested vcpkg tag is ``2023.02.24``. After that, using a developer powershell prompt:
 
