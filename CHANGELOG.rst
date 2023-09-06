@@ -12,8 +12,10 @@ ouster_client
     * original string accessible via original_string()
     * updated_metadata_string available for write-out
     * to_string debug marked as deprecated
-* [BREAKING] change RANGE field in low data rate profile from 16-bit to 32-bit
-* [BREAKING] change NEAR_IR field in low data rate profile from 8-bit to 16-bit
+* [BREAKING] The RANGE field defined in `parsing.cpp`, for the low data rate profile, is now 32 bits wide (originally 16 bits.)
+    * Please note this fixes a SDK bug. The underlying UDP format is unchanged.
+* [BREAKING] The NEAR_IR field defined in `parsing.cpp`, for the low data rate profile, is now 16 bits wide (originally 8 bits.)
+    * Plase note this fixes a SDK bug. The underlying UDP format is unchanged.
 
 ouster-cli
 ----------
