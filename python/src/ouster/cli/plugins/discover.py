@@ -31,9 +31,11 @@ host_addresses = [
             ]
 
 text_columns = ["HOSTNAME", "ADDRESS", "MODEL", "UDP DESTINATION", "DEST. LIDAR PORT", "DEST. IMU PORT"]
-text_column_widths = [28, 20, 16, 20, 20, 20]
-mdns_services = ["_roger._tcp.local."]
+text_column_widths = [30, 20, 16, 45, 20, 20]
+mdns_services = ["_roger._tcp.local.", "_ouster-lidar._tcp.local."]
 rethrow_exceptions = False
+processed_hostnames = []
+lock = asyncio.Lock()
 
 
 class AsyncServiceDiscovery:
@@ -80,32 +82,36 @@ def address_bytes_to_ip_str(b: bytes) -> str:
 
 
 def service_info_as_text_str(info) -> str:
-    # print([dir(addr) for addr in info.dns_addresses()])
     addresses = info.dns_addresses()
     ip_addr_string = '-'
     prod_line = '-'
     udp_dest = '-'
     udp_port_lidar = '-'
     udp_port_imu = '-'
-    if addresses:
-        first_address = addresses[0]
+
+    try:
+        ip_addr_string = '-'
         try:
+            first_address = addresses[0]
             ip_addr_string = address_bytes_to_ip_str(first_address.address)
-            url = f"http://{first_address.name}/api/v1/sensor/metadata/sensor_info"
-            response = requests.get(url)
-            response_json = response.json()
-            prod_line = response_json.get('prod_line', prod_line)
-            config = get_config(first_address.name)
-            if config:
-                if config.udp_dest:
-                    udp_dest = config.udp_dest
-                udp_port_lidar = str(config.udp_port_lidar)
-                udp_port_imu = str(config.udp_port_imu)
-        except Exception as e:
-            if rethrow_exceptions:
-                raise
-            else:
-                click.echo(click.style(e, fg='yellow'))
+        except IndexError:
+            pass
+        url = f"http://{info.server}/api/v1/sensor/metadata/sensor_info"
+        response = requests.get(url)
+        response_json = response.json()
+        prod_line = response_json.get('prod_line', prod_line)
+        config = get_config(info.server)
+        if config:
+            if config.udp_dest:
+                udp_dest = config.udp_dest
+            udp_port_lidar = str(config.udp_port_lidar)
+            udp_port_imu = str(config.udp_port_imu)
+    except Exception as e:
+        if rethrow_exceptions:
+            raise
+        else:
+            click.echo(click.style(e, fg='yellow'))
+
     color = 'white'
     if udp_dest in host_addresses:
         color = 'green'
@@ -119,8 +125,11 @@ async def async_display_service_info(zeroconf: Zeroconf, service_type: str, name
     info = AsyncServiceInfo(service_type, name)
     await info.async_request(zeroconf, 1000)
     if info and info.server:
-        strs, color = service_info_as_text_str(info)
-        click.echo(click.style(''.join(strs), fg=color))
+        async with lock:
+            if info.server not in processed_hostnames:
+                processed_hostnames.append(info.server)
+                strs, color = service_info_as_text_str(info)
+                click.echo(click.style(''.join(strs), fg=color))
 
 
 @cli.command()
