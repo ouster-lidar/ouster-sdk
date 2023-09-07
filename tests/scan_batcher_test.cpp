@@ -50,10 +50,13 @@ std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
                         columns_per_packet);
 
     ls.frame_id = 700;
-    std::iota(ls.measurement_id().begin(), ls.measurement_id().end(), 0);
-    std::iota(ls.packet_timestamp().begin(), ls.packet_timestamp().end(), 10);
-    std::iota(ls.timestamp().begin(), ls.timestamp().end(), 1000);
-    std::fill(ls.status().begin(), ls.status().end(), 0x1);
+    std::iota(ls.measurement_id().data(),
+              ls.measurement_id().data() + ls.measurement_id().size(), 0);
+    std::iota(ls.packet_timestamp().data(),
+              ls.packet_timestamp().data() + ls.packet_timestamp().size(), 10);
+    std::iota(ls.timestamp().data(),
+              ls.timestamp().data() + ls.timestamp().size(), 1000);
+    std::fill(ls.status().data(), ls.status().data() + ls.status().size(), 0x1);
 
     auto randomise = [&](auto ref_field, ChanField i) {
         if (i >= ChanField::RAW_HEADERS) return;

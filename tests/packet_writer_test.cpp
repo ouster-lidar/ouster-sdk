@@ -213,10 +213,13 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     // create randomised lidar scan
     auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
                         columns_per_packet);
-    std::iota(ls.measurement_id().begin(), ls.measurement_id().end(), 0);
-    std::iota(ls.packet_timestamp().begin(), ls.packet_timestamp().end(), 10);
-    std::iota(ls.timestamp().begin(), ls.timestamp().end(), 1000);
-    std::fill(ls.status().begin(), ls.status().end(), 0x1);
+    std::iota(ls.measurement_id().data(),
+              ls.measurement_id().data() + ls.measurement_id().size(), 0);
+    std::iota(ls.packet_timestamp().data(),
+              ls.packet_timestamp().data() + ls.packet_timestamp().size(), 10);
+    std::iota(ls.timestamp().data(),
+              ls.timestamp().data() + ls.timestamp().size(), 1000);
+    std::fill(ls.status().data(), ls.status().data() + ls.status().size(), 0x1);
     ls.frame_id = 700;
 
     auto randomise = [&](auto ref_field, ChanField i) {
@@ -288,10 +291,13 @@ TEST_P(PacketWriterTest, scans_to_packets_skips_dropped_packets_test) {
     // create randomised lidar scan
     auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
                         columns_per_packet);
-    std::iota(ls.measurement_id().begin(), ls.measurement_id().end(), 0);
-    std::iota(ls.packet_timestamp().begin(), ls.packet_timestamp().end(), 10);
-    std::iota(ls.timestamp().begin(), ls.timestamp().end(), 1000);
-    std::fill(ls.status().begin(), ls.status().end(), 0x1);
+    std::iota(ls.measurement_id().data(),
+              ls.measurement_id().data() + ls.measurement_id().size(), 0);
+    std::iota(ls.packet_timestamp().data(),
+              ls.packet_timestamp().data() + ls.packet_timestamp().size(), 10);
+    std::iota(ls.timestamp().data(),
+              ls.timestamp().data() + ls.timestamp().size(), 1000);
+    std::fill(ls.status().data(), ls.status().data() + ls.status().size(), 0x1);
     ls.frame_id = 700;
 
     auto randomise = [&](auto ref_field, ChanField i) {
