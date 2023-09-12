@@ -34,7 +34,7 @@ class SLAMOSFWriter:
             else:
                 meta_data = resolve_metadata(source)
             if not meta_data:
-                raise Exception("File not found, please specify a metadata file with `-f`")
+                raise Exception("File not found, please specify a metadata file with `-m`")
             with open(Path(meta_data)) as meta_file:
                 meta_json = meta_file.read()
                 lidar_sensor_meta = osf.LidarSensor(meta_json)

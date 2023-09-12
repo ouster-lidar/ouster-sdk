@@ -313,7 +313,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
         meta = resolve_metadata(file, meta)
         if not meta:
             raise click.ClickException(
-                "File not found, please specify a metadata file with `-f`")
+                "File not found, please specify a metadata file with `-m`")
         with open(meta) as json:
             click.echo(f"Reading metadata from: {meta}")
             info = client.SensorInfo(json.read())
@@ -460,7 +460,7 @@ def pcap_slice_impl(file: str, start_frame: int, num_frames: int,
     meta = resolve_metadata(file, meta)
     if not meta:
         raise click.ClickException(
-            "File not found, please specify a metadata file with `-f`")
+            "File not found, please specify a metadata file with `-m`")
     with open(meta) as json:
         click.echo(f"Reading metadata from: {meta}")
         info = client.SensorInfo(json.read())
@@ -539,7 +539,7 @@ def pcap_to_bag_impl(file: str, meta: Optional[str], lidar_port: Optional[int],
         meta = resolve_metadata(file, meta)
         if not meta:
             raise click.ClickException(
-                "File not found, please specify a metadata file with `-f`")
+                "File not found, please specify a metadata file with `-m`")
         with open(meta) as json:
             click.echo(f"Reading metadata from: {meta}")
             info = client.SensorInfo(json.read())
@@ -609,7 +609,7 @@ def pcap_to_bag_impl(file: str, meta: Optional[str], lidar_port: Optional[int],
 
 @pcap_group.command(name="from_bag")
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file,
+@click.option('-m', '--meta', required=False, type=click_ro_file,
         help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-topic', default="", help="Topic with lidar data")
 @click.option('-i', '--imu-topic', default="", help="Topic with imu data")
@@ -635,7 +635,7 @@ def bag_to_pcap(file: str, meta: Optional[str], lidar_topic: str,
     meta = resolve_metadata(file, meta)
     if not meta:
         raise click.ClickException(
-            "File not found, please specify a metadata file with `-f`")
+            "File not found, please specify a metadata file with `-m`")
     with open(meta) as json:
         click.echo(f"Reading metadata from: {meta}")
         info = client.SensorInfo(json.read())
@@ -753,7 +753,7 @@ def pcap_to_csv_impl(file: str,
     metadata_path = resolve_metadata(file, meta)
     if not metadata_path:
         raise click.ClickException(
-            "File not found, please specify a metadata file with `-f`")
+            "File not found, please specify a metadata file with `-m`")
     with open(metadata_path) as json:
         click.echo(f"Reading metadata from: {metadata_path}")
         metadata = client.SensorInfo(json.read())
