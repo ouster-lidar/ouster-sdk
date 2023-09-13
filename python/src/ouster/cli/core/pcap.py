@@ -850,6 +850,8 @@ def pcap_to_csv_impl(file: str,
             frame = np.dstack(tuple(map(lambda x: x.astype(object),
                 (frame, xyz_destaggered))))
 
+        frame_colmajor = np.swapaxes(frame, 0, 1)
+
         # write csv out to file
         csv_path = output_names[idx]
         print(f'write frame index #{idx + start_index}, to file: {csv_path}')
@@ -857,7 +859,7 @@ def pcap_to_csv_impl(file: str,
         header = '\n'.join([f'frame num: {idx}', field_names])
 
         np.savetxt(csv_path,
-                   frame.reshape(-1, frame.shape[2]),
+                   frame_colmajor.reshape(-1, frame.shape[2]),
                    fmt=field_fmts,
                    delimiter=',',
                    header=header)
