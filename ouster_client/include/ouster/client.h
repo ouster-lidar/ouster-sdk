@@ -105,8 +105,8 @@ std::shared_ptr<client> init_client(
  *
  * @param[in] hostname hostname or ip of the sensor.
  * @param[in] config sensor config to set on sensor.
- * @param[in] mtp_dest_host multicast ip address where the sensor should send
- * data.
+ * @param[in] mtp_dest_host the address of the host network interface that
+ * should join the multicast group; if empty, use any appropriate interface.
  * @param[in] main a flag that indicates this is the main connection to the
  * sensor in an multicast setup.
  * @param[in] timeout_sec how long to wait for the sensor to initialize.
