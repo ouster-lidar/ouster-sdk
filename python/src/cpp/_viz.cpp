@@ -357,7 +357,7 @@ PYBIND11_MODULE(_viz, m) {
                 Eigen::Array<float, Eigen::Dynamic, 3> direction =
                     xyz_lut.direction.cast<float>();
                 Eigen::Array<float, Eigen::Dynamic, 3> offset =
-                    xyz_lut.direction.cast<float>();
+                    xyz_lut.offset.cast<float>();
 
                 viz::mat4d extrinsica;
                 std::copy(info.extrinsic.data(), info.extrinsic.data() + 16,
