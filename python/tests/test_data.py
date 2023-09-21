@@ -154,6 +154,17 @@ def test_read_single_return_packet(packet: client.LidarPacket) -> None:
     assert np.all(packet.status == 0x01)
 
 
+def test_lidarscan_init() -> None:
+    """If kwargs are used, they should set the scan shape correctly."""
+    w, h = 1024, 128
+    assert client.LidarScan(h, w).w == w
+    assert client.LidarScan(h, w).h == h
+    assert client.LidarScan(w=w, h=h).w == w
+    assert client.LidarScan(w=w, h=h).h == h
+    assert client.LidarScan(h=h, w=w).w == w
+    assert client.LidarScan(h=h, w=w).h == h
+
+
 def test_scan_writeable() -> None:
     """Check that a native scan is a writeable view of data."""
     ls = client.LidarScan(1024, 32)

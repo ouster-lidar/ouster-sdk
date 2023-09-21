@@ -1029,7 +1029,7 @@ PYBIND11_MODULE(_client, m) {
             New LidarScan of 0x0 expecting fields of the LEGACY profile
 
         )",
-            py::arg("w"), py::arg("h"))
+            py::arg("h"), py::arg("w"))
         .def(
             "__init__",
             [](LidarScan& self, size_t h, size_t w,
