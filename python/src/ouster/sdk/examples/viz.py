@@ -295,7 +295,7 @@ def main():
     ls_viz = viz.LidarScanViz(meta, point_viz)
 
     # adding scan to the lidar scan viz
-    ls_viz.scan = scan
+    ls_viz.update(scan)
 
     # refresh viz data
     ls_viz.draw()

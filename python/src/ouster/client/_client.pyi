@@ -623,6 +623,67 @@ class UDPProfileIMU:
     def from_string(cls, s: str) -> UDPProfileIMU:
         ...
 
+
+class ShotLimitingStatus:
+    SHOT_LIMITING_NORMAL: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_IMMINENT: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_0_10: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_10_20: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_20_30: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_30_40: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_40_50: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_50_60: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_60_70: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_70_75: ClassVar[ShotLimitingStatus]
+
+    __members__: ClassVar[Dict[str, ShotLimitingStatus]]
+    values: ClassVar[Iterator[ShotLimitingStatus]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> ShotLimitingStatus:
+        ...
+
+
+class ThermalShutdownStatus:
+    THERMAL_SHUTDOWN_NORMAL: ClassVar[ThermalShutdownStatus]
+    THERMAL_SHUTDOWN_IMMINENT: ClassVar[ThermalShutdownStatus]
+
+    __members__: ClassVar[Dict[str, ThermalShutdownStatus]]
+    values: ClassVar[Iterator[ThermalShutdownStatus]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> ThermalShutdownStatus:
+        ...
+
+
 class SensorCalibration:
     reflectivity_status: Optional[bool]
     reflectivity_timestamp: Optional[str]

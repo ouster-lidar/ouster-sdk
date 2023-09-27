@@ -311,6 +311,15 @@ class PointViz {
      */
     int window_height() const;
 
+    /**
+     * Get frames per second (FPS) value, updated every second
+     *
+     * Updated every second in the draw() function
+     *
+     * @return fps value,
+     */
+    double fps() const;
+
    private:
     std::unique_ptr<Impl> pimpl;
     void draw();

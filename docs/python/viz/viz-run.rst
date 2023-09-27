@@ -38,6 +38,7 @@ Keyboard controls:
     ``o``           Toggle on-screen display
     ``p/P``         Increase/decrease point size
     ``m``           Cycle point cloud coloring mode
+    ``f``           Cycle point cloud color palette
     ``b``           Cycle top 2D image
     ``n``           Cycle bottom 2D image
     ``R``           Reset camera

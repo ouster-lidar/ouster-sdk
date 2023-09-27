@@ -57,6 +57,23 @@ source.commands[OusterIoType.OSF]['convert'].conversions[OusterIoType.LAS] = con
 @click.option('-l', '--lidar_port', default=7502, help="Lidar port")
 @click.option('-i', '--imu_port', default=7503, help="IMU port")
 @click.option('-o', '--output', required=False, help="OSF output filename")
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 @click.pass_context
 def run_slam(ctx, *args, **kwargs) -> None:
     """

@@ -206,7 +206,11 @@ PYBIND11_MODULE(_viz, m) {
         .def("remove", py::overload_cast<const std::shared_ptr<viz::Label>&>(
                            &viz::PointViz::remove))
         .def("remove", py::overload_cast<const std::shared_ptr<viz::Image>&>(
-                           &viz::PointViz::remove));
+                           &viz::PointViz::remove))
+
+        .def_property_readonly(
+            "fps", &viz::PointViz::fps,
+            "Frames per second, updated every second in the draw() func");
 
     m.def(
         "add_default_controls",
@@ -405,6 +409,9 @@ PYBIND11_MODULE(_viz, m) {
                         return;
                     }
                 }
+
+                // TODO[pb]: Make it to accept 2 dims for unstructured point
+                // cloud case
 
                 check_array(key, 0, 3, 'C');
 

@@ -596,3 +596,8 @@ def valid_packet_idxs(scan: LidarScan) -> np.ndarray:
     #     but with all other headers in place
     valid_packets = np.logical_or(np.any(sp, axis=1), valid_packet_ts)
     return np.nonzero(valid_packets)[0]
+
+
+def poses_present(scan: LidarScan) -> bool:
+    """Check whether any of scan.pose in not identity"""
+    return not np.allclose(np.eye(4), scan.pose)

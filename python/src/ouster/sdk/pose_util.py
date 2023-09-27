@@ -643,32 +643,35 @@ def dewarp(xyz: np.ndarray, *, scan_pose: Optional[PoseH] = None,
         and other functions that expect this specific layout.
     """
 
-    if scan_pose is None and column_poses is None:
-        return xyz
-
     if xyz.ndim != 3 or xyz.shape[2] != 3:
         raise ValueError("Expects xyz to be (H, W, 3) in dewarp")
 
     h, w = xyz.shape[0], xyz.shape[1]
 
-    xyz_1 = np.append(xyz, np.ones((h, w, 1)), axis=2)
-
     if column_poses is not None:
-        if not (column_poses.shape[0] == xyz.shape[1] and
-                column_poses.shape[1] == 4 and column_poses.shape[2] == 4):
+        if not (column_poses.shape[0] == xyz.shape[1]
+                and column_poses.shape[1] == 4 and column_poses.shape[2] == 4):
             raise ValueError("Expects column_poses to be (W, 4, 4) in dewarp")
         if scan_pose is not None:
             xyz_poses = np.einsum('ij,ljk->lik', scan_pose, column_poses)
         else:
             xyz_poses = column_poses
-        xyz_1 = np.einsum('ijk,lik->lij', xyz_poses, xyz_1)
-        xyz_res = np.asfortranarray(xyz_1[:, :, :3].reshape((-1, 3)))
+
+        # Angus's version: This one is correct for sure
+        xyz_res = np.transpose(
+            np.matmul(xyz_poses[:, :3, :3], np.transpose(xyz, axes=(1, 2, 0))),
+            axes=(2, 0, 1)) + xyz_poses[np.newaxis, :, :3, -1]
+        xyz_res = np.asfortranarray(xyz_res.reshape((-1, 3)))
         return xyz_res.reshape((h, w, -1))
 
     if scan_pose is None:
         return xyz
-    xyz_1 = np.einsum('ij,lkj->lki', scan_pose, xyz_1)
-    xyz_res = np.asfortranarray(xyz_1[:, :, :3].reshape((-1, 3)))
+
+    # Angus's version
+    xyz_res = np.transpose(np.matmul(scan_pose[np.newaxis, :3, :3],
+                                     np.transpose(xyz, axes=(1, 2, 0))),
+                           axes=(2, 0, 1)) + scan_pose[np.newaxis, :3, -1]
+    xyz_res = np.asfortranarray(xyz_res.reshape((-1, 3)))
     return xyz_res.reshape((h, w, -1))
 
 
@@ -733,3 +736,73 @@ def make_kiss_traj_poses(poses: Union[Sequence[Pose], np.ndarray]) -> TrajPoses:
     """
     traj_poses = list([(0.5 + i, p) for i, p in enumerate(poses)])
     return traj_poses
+
+
+def pose_scans_from_kitti(
+    source,
+    kitti_poses: str
+):
+    """Add poses to LidarScans stream using the previously saved per scan poses.
+
+    Every pose is considered to be in the middle of the scan. We assume that
+    very first scan starts at t = 0 and ends at t = 1, thus the first pose
+    is timestamped as 0.5, second pose is timestamped at 1.5 (middle of the
+    second scan), and so on ... to the very last pose N which timestamped at
+    N + 0.5 for the last N scan.
+
+    Args:
+        source: one of:
+            - Sequence[client.LidarScan] - single scan sources
+            - Sequence[List[Optional[client.LidarScan]]] - multi scans sources
+        kitti_poses: path to the file with in kitti poses format, i.e. every
+                     line contains 12 floats of 4x4 homogeneous transformation
+                     matrix (``[:3, :]`` in numpy notation, row-major serialized)
+    """
+
+    # load one pose per scan
+    poses = load_kitti_poses(kitti_poses)
+
+    # make time indexed poses starting from 0.5
+    traj_poses = make_kiss_traj_poses(poses)
+    traj_eval = TrajectoryEvaluator(traj_poses, time_bounds=1.5)
+
+    norm_col_ts: Optional[np.ndarray]
+    norm_col_ts = None
+
+    scan_idx = -1
+
+    start_scan_frame_id = -1
+    start_scan_ts = -1
+
+    for obj in source:
+        if isinstance(obj, client.LidarScan):
+            # Iterator[client.LidarScan]
+            scan = obj
+
+            # checking for the source looping (if frame_id and scan_ts was seen)
+            if start_scan_frame_id < 0:
+                start_scan_frame_id = scan.frame_id
+                start_scan_ts = client.first_valid_column_ts(scan)
+            elif (start_scan_frame_id == scan.frame_id and
+                  start_scan_ts == client.first_valid_column_ts(scan)):
+                # loop detected, reset scan_idx
+                scan_idx = -1
+
+            scan_idx += 1
+            if norm_col_ts is None:
+                norm_col_ts = np.linspace(0, 1.0, scan.w, endpoint=False)
+            idx_ts = scan_idx + norm_col_ts
+
+            traj_eval(scan, col_ts=idx_ts)
+            yield scan
+
+        elif isinstance(obj, list):
+            # collated scans: List[Optional[LidarScan]]
+            # TODO[pb]: Make it for multi scan sources when we have stable
+            #           multi source interfaces
+            raise ValueError("Multi scan sources not yet implemented. Got: ",
+                             type(obj))
+        else:
+            raise ValueError(
+                "Expected one of types: LidarScan, Tuple[Optional[LidarScan]]"
+                "elements. But got:", type(obj))

@@ -28,6 +28,9 @@ Core
 .. autoclass:: SimpleViz
    :members:
 
+.. autoclass:: ScansAccumulator
+   :members:
+
 .. autoattribute:: ouster.viz.spezia_palette
    :annotation: = spezia colors
 
@@ -72,8 +75,16 @@ Visual Primitives
 .. autoclass:: TargetDisplay
    :members:
 
+
 Events ``WindowCtx``
 ====================
 
 .. autoclass:: WindowCtx
+   :members:
+
+
+Viz Utils
+=========
+
+.. autoclass:: AxisWithLabel
    :members:

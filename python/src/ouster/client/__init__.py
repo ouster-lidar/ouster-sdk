@@ -19,6 +19,8 @@ from ._client import UDPProfileLidar
 from ._client import UDPProfileIMU
 from ._client import SensorConfig
 from ._client import SensorCalibration
+from ._client import ShotLimitingStatus
+from ._client import ThermalShutdownStatus
 from ._client import init_logger
 from ._client import convert_to_legacy
 from ._client import get_config
@@ -58,3 +60,4 @@ from .core import last_valid_column_ts
 from .core import first_valid_column_pose
 from .core import last_valid_column_pose
 from .core import valid_packet_idxs
+from .core import poses_present

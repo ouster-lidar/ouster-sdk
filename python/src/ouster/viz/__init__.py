@@ -24,10 +24,13 @@ from ._viz import magma_palette
 from .core import push_point_viz_handler
 from .core import LidarScanViz
 from .core import SimpleViz
-from .core import ImageMode
-from .core import CloudMode
-from .core import ImageCloudMode
+from .core import scans_accum_for_cli
+from .view_mode import ImageMode
+from .view_mode import CloudMode
+from .view_mode import ImageCloudMode
 from .core import CloudPaletteItem
 from .core import VizExtraMode
 
 from .util import AxisWithLabel
+
+from .scans_accum import ScansAccumulator

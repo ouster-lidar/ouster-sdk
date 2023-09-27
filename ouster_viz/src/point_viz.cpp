@@ -138,6 +138,10 @@ struct PointViz::Impl {
     // temp storage for frame_buffer_handlers
     std::vector<uint8_t> frame_buffer_data_{};
 
+    double fps_last_time_{0};
+    uint64_t fps_frame_counter_{0};
+    double fps_{0};
+
     Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
 };
 
@@ -265,6 +269,16 @@ void PointViz::draw() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glBindVertexArray(pimpl->vao);
 
+    // fps counting
+    ++pimpl->fps_frame_counter_;
+    double now_t = glfwGetTime();
+    if (pimpl->fps_last_time_ == 0 || now_t - pimpl->fps_last_time_ >= 1.0) {
+        pimpl->fps_ =
+            pimpl->fps_frame_counter_ / (now_t - pimpl->fps_last_time_);
+        pimpl->fps_last_time_ = now_t;
+        pimpl->fps_frame_counter_ = 0;
+    }
+
     // draw images
     {
         std::lock_guard<std::mutex> guard{pimpl->update_mx};
@@ -321,6 +335,8 @@ void PointViz::draw() {
 
     glfwSwapBuffers(pimpl->glfw->window);
 }
+
+double PointViz::fps() const { return pimpl->fps_; }
 
 /*
  * Input handling

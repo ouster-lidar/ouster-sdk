@@ -232,16 +232,36 @@ def configure_sensor(hostname: str, lidar_port: int,
               help="Do not reinitialize (by default it will reinitialize if needed)")
 @click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
               help="Do not automatically set udp_dest (by default it will auto set udp_dest")
-def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool, buf_size: int,
-        verbose: bool, timeout: float, extrinsics: Optional[List[float]], soft_id_check: bool,
-        do_not_reinitialize: bool, no_auto_udp_dest: bool) -> None:
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
+def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool,
+        buf_size: int, verbose: bool, timeout: float,
+        extrinsics: Optional[List[float]], soft_id_check: bool,
+        do_not_reinitialize: bool, no_auto_udp_dest: bool, accum_num: int,
+        accum_every: Optional[int], accum_every_m: Optional[float],
+        accum_map: bool, accum_map_ratio: float) -> None:
     """Listen for data on the specified ports and run the visualizer.
 
     Note: Please pay attention to your firewall and networking configuration. You
     may have to disable your firewall for packets to reach the visualizer/client.
     """
     try:
-        from ouster.viz import SimpleViz, LidarScanViz
+        from ouster.viz import SimpleViz, scans_accum_for_cli
         from ouster.sdkx.parsing import default_scan_fields
     except ImportError as e:
         raise click.ClickException(str(e))
@@ -290,8 +310,14 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool, buf_s
             scans.metadata.extrinsic = np.array(extrinsics).reshape((4, 4))
             click.echo(f"Using sensor extrinsics:\n{scans.metadata.extrinsic}")
 
-        ls_viz = LidarScanViz(scans.metadata)
-        SimpleViz(ls_viz).run(scans)
+        scans_accum = scans_accum_for_cli(scans.metadata,
+                                          accum_num=accum_num,
+                                          accum_every=accum_every,
+                                          accum_every_m=accum_every_m,
+                                          accum_map=accum_map,
+                                          accum_map_ratio=accum_map_ratio)
+
+        SimpleViz(scans.metadata, scans_accum=scans_accum).run(scans)
 
     finally:
         if scans._timed_out:

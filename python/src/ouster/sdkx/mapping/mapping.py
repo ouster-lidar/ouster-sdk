@@ -12,7 +12,7 @@ from pathlib import Path
 import ouster.osf as osf
 from ouster.sdkx.mapping.slam import KissBackend
 import ouster.sdkx.mapping.util as util
-from ouster.viz import SimpleViz
+from ouster.viz import SimpleViz, scans_accum_for_cli
 from ouster.sdkx.parsing import default_scan_fields
 from datetime import datetime
 import time
@@ -80,6 +80,23 @@ def slam_scans_generator(scan_source, slam, osf_writer):
 @click.option('-l', '--lidar_port', default=7502, help="Lidar port")
 @click.option('-i', '--imu_port', default=7503, help="IMU port")
 @click.option('-o', '--output', required=False, help="OSF output filename")
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 def run_slam(
     source: str,
     viz: str,
@@ -87,24 +104,35 @@ def run_slam(
     slam_name: str,
     lidar_port: int,
     imu_port: int,
-    output: Optional[str]) -> None:
+    output: Optional[str],
+    accum_num: int,
+    accum_every: Optional[int],
+    accum_every_m: Optional[float],
+    accum_map: bool,
+    accum_map_ratio: float) -> None:
     """
     Run SLAM algorithm with an optional visualizer
 
     Run with a sensor or a pcap file to produce an OSF containing the lidar data and SLAM poses.
     To turn on visualizer, append 'viz' or 'visualizer' to the command, case insensitive.
     """
-    run_slam_impl(source, viz, meta, slam_name, lidar_port, imu_port, output)
+    run_slam_impl(source, viz, meta, slam_name, lidar_port, imu_port, output,
+                  accum_num, accum_every, accum_every_m, accum_map,
+                  accum_map_ratio)
 
 
-def run_slam_impl(
-    source: str,
-    viz: str = None,
-    meta: str = None,
-    slam_name: str = "kiss_slam",
-    lidar_port: int = 7502,
-    imu_port: int = 7503,
-    output: str = None) -> None:
+def run_slam_impl(source: str,
+                  viz: str = None,
+                  meta: str = None,
+                  slam_name: str = "kiss_slam",
+                  lidar_port: int = 7502,
+                  imu_port: int = 7503,
+                  output: str = None,
+                  accum_num: int = 0,
+                  accum_every: Optional[int] = None,
+                  accum_every_m: Optional[float] = None,
+                  accum_map: bool = False,
+                  accum_map_ratio: float = 0.001) -> None:
 
     data_source = util.Source(source, meta = meta)
 
@@ -127,7 +155,13 @@ def run_slam_impl(
     slam_scan_gen = slam_scans_generator(data_source, slam, osf_writer)
 
     if viz and viz.lower() in ['viz', 'visualizer']:
-        simple_viz = SimpleViz(data_source.metadata)
+        scans_accum = scans_accum_for_cli(data_source.metadata,
+                                          accum_num=accum_num,
+                                          accum_every=accum_every,
+                                          accum_every_m=accum_every_m,
+                                          accum_map=accum_map,
+                                          accum_map_ratio=accum_map_ratio)
+        simple_viz = SimpleViz(data_source.metadata, scans_accum=scans_accum)
         simple_viz.run(slam_scan_gen)
     else:
         for _ in slam_scan_gen:

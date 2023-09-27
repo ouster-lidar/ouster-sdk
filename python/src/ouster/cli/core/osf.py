@@ -109,6 +109,8 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
                 if m.of(osf.LidarScanStream):
                     ls = cast(client.LidarScan, obj)
 
+                    d = d + (" [poses: YES]" if client.poses_present(ls) else "")
+
                     if verbose:
                         verbose_str += f"{ls}"
 
