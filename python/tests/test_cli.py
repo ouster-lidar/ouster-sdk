@@ -418,9 +418,7 @@ def test_source_osf(runner) -> None:
     with tempfile.NamedTemporaryFile(suffix='.osf') as temp_osf:
         result = runner.invoke(core.cli, ['source', temp_osf.name])
         assert result.exit_code == 0
-        # TODO: uncomment when viz is exposed
-        # assert read_commands_from_help_text(result.output) == ['convert', 'info', 'viz']
-        assert read_commands_from_help_text(result.output) == ['convert', 'info']
+        assert read_commands_from_help_text(result.output) == ['convert', 'info', 'viz']
 
 
 def test_source_osf_info(test_osf_file, runner):
