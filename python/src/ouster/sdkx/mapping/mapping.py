@@ -10,9 +10,7 @@ from ouster.sdk.util import resolve_metadata
 from ouster import client
 from pathlib import Path
 import ouster.osf as osf
-from ouster.sdkx.mapping.slam import KissBackend
 import ouster.sdkx.mapping.util as util
-from ouster.viz import SimpleViz, scans_accum_for_cli
 from ouster.sdkx.parsing import default_scan_fields
 from datetime import datetime
 import time
@@ -142,6 +140,10 @@ def run_slam_impl(source: str,
         output = f"{metadata.prod_line}_{metadata.sn}_{metadata.fw_rev}_{metadata.mode}_{date_time}_slam_output.osf"
 
     if slam_name == "kiss_slam":
+        try:
+            from ouster.sdkx.mapping.slam import KissBackend
+        except ImportError as e:
+            raise click.ClickException("kiss_icp is not installed. Please run pip install kiss-icp. Error: " + str(e))
         slam = KissBackend(info=data_source.metadata)
     else:
         raise ValueError("Only support KISS-ICP SLAM for now")
@@ -155,6 +157,10 @@ def run_slam_impl(source: str,
     slam_scan_gen = slam_scans_generator(data_source, slam, osf_writer)
 
     if viz and viz.lower() in ['viz', 'visualizer']:
+        try:
+            from ouster.viz import SimpleViz, scans_accum_for_cli
+        except ImportError as e:
+            raise click.ClickException("Error: " + str(e))
         scans_accum = scans_accum_for_cli(data_source.metadata,
                                           accum_num=accum_num,
                                           accum_every=accum_every,

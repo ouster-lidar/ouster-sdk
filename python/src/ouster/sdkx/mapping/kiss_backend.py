@@ -22,6 +22,7 @@ class KissBackend(SLAMBackend):
             from kiss_icp.kiss_icp import KissICP
         except ImportError:
             print("kiss_icp is not installed. Please run pip install kiss-icp")
+            raise
         import kiss_icp.config
         super().__init__(info, use_extrinsics)
         config = kiss_icp.config.KISSConfig(config_file=None)
