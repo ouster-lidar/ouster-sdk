@@ -357,7 +357,7 @@ class Sensor(PacketSource):
         self.close()
 
 
-class Scans:
+class Scans(ScanSource):
     """An iterable stream of scans batched from a PacketSource.
 
     Batching will emit a scan every time the frame_id increments (i.e. on
