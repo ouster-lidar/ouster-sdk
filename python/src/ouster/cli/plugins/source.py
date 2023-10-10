@@ -369,7 +369,7 @@ class BagConvertCommand(SourceConvertCommand):
     """Implements
     ouster-cli source <sourcefile>.bag convert <otherfile>
 
-    This method delegates to the approrpiate command depending on the file
+    This method delegates to the appropriate command depending on the file
     extension of the output file argument.
     """
     conversions = {

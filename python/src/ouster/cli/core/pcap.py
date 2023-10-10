@@ -169,7 +169,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     """Record lidar and IMU packets from a sensor to a pcap file.
 
     Note: this will currently not configure the sensor or query the sensor for
-    the port to listen on. You will need to set the sensor port and distination
+    the port to listen on. You will need to set the sensor port and destination
     settings separately.
     """
     try:

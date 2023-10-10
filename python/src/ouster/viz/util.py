@@ -146,7 +146,7 @@ class AxisWithLabel:
             self._enabled = False
 
     def toggle(self) -> bool:
-        """Toggle the label visbility (i.e. presence in the viz)"""
+        """Toggle the label visibility (i.e. presence in the viz)"""
         if not self._enabled:
             self.enable()
         else:

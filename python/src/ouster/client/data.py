@@ -29,7 +29,7 @@ logger = logging.getLogger("ouster.client.data")
 
 
 class ImuPacket(_client._ImuPacket):
-    """Read IMU Packet data from a bufer."""
+    """Read IMU Packet data from a buffer."""
     _pf: _client.PacketFormat
 
     def __init__(self,
@@ -195,7 +195,7 @@ class LidarPacket(_client._LidarPacket):
             data: Buffer containing the packet payload
             info: Metadata associated with the sensor packet stream
             timestamp: A capture timestamp, in seconds
-            _raise_on_id_check: raise PacketIdError if matadata
+            _raise_on_id_check: raise PacketIdError if metadata
                 init_id/sn doesn't match packet init_id/sn.
 
         Raises:

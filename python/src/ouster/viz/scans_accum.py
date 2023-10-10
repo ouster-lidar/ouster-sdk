@@ -60,7 +60,7 @@ if ACCUM_DEBUG:
 class ScansAccumulator:
     """Accumulate scans, track poses and overall map view
 
-    Could be used with or without ``PointViz`` immediate visualiaztion. With
+    Could be used with or without ``PointViz`` immediate visualization. With
     ``PointViz`` it acts similarly to ``LidarScanViz`` and can be as a first
     argument passed to ``SimpleViz`` (or as a separate ``scans_accum`` parameter)
 
@@ -108,7 +108,7 @@ class ScansAccumulator:
               between accumulated (ACCUM) key frames
             accum_min_dist_num: aka, ``--accum-every``, the minimum distance in
               scans between accumulated (ACCUM) key frames
-            map_enabled: enable overall map accumulataion (MAP) (``--accum-map``)
+            map_enabled: enable overall map accumulation (MAP) (``--accum-map``)
             map_select_ratio: percent of points to select from the scans to the
               overall map (MAP), default 0.001
             map_max_points: maximum number of points to keep in overall map (MAP)
@@ -645,7 +645,7 @@ class ScansAccumulator:
         return True
 
     def osd_text(self) -> str:
-        """Prepate OSD text for use in draw_osd or elsewhere."""
+        """Prepare OSD text for use in draw_osd or elsewhere."""
         osd_text = ""
 
         def append_with_nl(s1: str, s2: str):
@@ -962,7 +962,7 @@ class ScansAccumulator:
     @property
     @no_type_check
     def key_frames_idxs(self) -> Iterable[int]:
-        """Indices of accumualted frames (ACCUM) in ScanRecords list"""
+        """Indices of accumulated frames (ACCUM) in ScanRecords list"""
         if self._key_frames_head >= self._key_frames_tail:
             return self._key_frames[self._key_frames_tail:self.
                                     _key_frames_head]
@@ -977,12 +977,12 @@ class ScansAccumulator:
 
     @property
     def accum_visible(self) -> bool:
-        """Whteher accumulated key frames (ACCUM) is visible"""
+        """Whether accumulated key frames (ACCUM) is visible"""
         return self._accum_mode_accum
 
     @property
     def map_visible(self) -> bool:
-        """Whteher overall map (MAP) is visible"""
+        """Whether overall map (MAP) is visible"""
         return self._accum_mode_map
 
     @property

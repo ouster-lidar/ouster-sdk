@@ -172,7 +172,7 @@ def configure_sensor(hostname: str, lidar_port: int,
 
         if orig_config.operating_mode == client.OperatingMode.OPERATING_STANDBY:
             raise click.ClickException("Your sensor is in STANDBY mode but you have disallowed "
-                                       "reinitialization. Drop -x to allow reinitialiation or "
+                                       "reinitialization. Drop -x to allow reinitialization or "
                                        "change your sensor's operating mode.")
 
         if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:

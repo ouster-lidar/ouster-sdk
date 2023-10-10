@@ -587,8 +587,8 @@ def terminator_packet(info: client.SensorInfo,
     arrived which is critical if used in a way when LidarScan object is reused.)
 
     NOTE[pb]: in Python it's almost always the new LidarScan is created from
-              scretch and used as a receiver of lidar packet in the batching
-              implmentation, thus finalization with zeros and a proper cut can
+              scratch and used as a receiver of lidar packet in the batching
+              implementation, thus finalization with zeros and a proper cut can
               be skipped, however it's a huge difference from C++ batching loop
               impl and it's important to keep things closer to C++ and also have
               a normal way to cut the very last LidarScan in a streams.
@@ -630,7 +630,7 @@ def packets_to_scan(
     """Batch buffers that belongs to a single scan into a LidarScan object.
 
     Errors if lidar_packets buffers do not belong to a single LidarScan. Typically
-    incosistent measurement_ids or frame_ids in buffers is an error, as well
+    inconsistent measurement_ids or frame_ids in buffers is an error, as well
     as more buffers then a single LidarScan of a specified PacketFormat can take.
     """
     w = info.format.columns_per_frame

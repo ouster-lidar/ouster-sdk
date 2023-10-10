@@ -26,7 +26,7 @@ def no_scipy() -> bool:
         if _no_scipy_warned:
             logger = logging.getLogger("ouster-sdk-pose-util")
             logger.warning("No scipy module is found. Please install scipy for "
-                           "faster poses caclculations: pip3 install scipy.")
+                           "faster poses calculations: pip3 install scipy.")
             _no_scipy_warned = True
         return True
     else:
@@ -35,13 +35,13 @@ def no_scipy() -> bool:
 
 Numeric = Union[int, float, np.number]
 
-# 3D pose (rotation + translation) reprensented by 6 elements
-# of se3 Lie algebra (i.e. exponential coordidates):
+# 3D pose (rotation + translation) represented by 6 elements
+# of se3 Lie algebra (i.e. exponential coordinates):
 #   [wx, wy, wz, x, y, z]
 Pose6 = np.ndarray
 
-# 3D pose (rotation + translation) reprensented by 4x4 matrix
-# of SE3 manifold (i.e. homogenenous matrix):
+# 3D pose (rotation + translation) represented by 4x4 matrix
+# of SE3 manifold (i.e. homogeneous matrix):
 #   4x4 matrix: [R | T]
 #               [0 | 1]
 #   where: R is 3x3 rotation matrix SO3
@@ -52,7 +52,7 @@ Pose = Union[Pose6, PoseH]
 
 TrajPoses = Sequence[Tuple[Numeric, Pose]]
 
-# List of pairs (ts, Pose6), where 6 element pose in exponential coordidate.
+# List of pairs (ts, Pose6), where 6 element pose in exponential coordinates.
 #   pose : [wx, wy, wz, x, y, z]
 PosesList = List[Tuple[int, Pose6]]
 
@@ -227,7 +227,7 @@ def log_rot_mat(rm: np.ndarray) -> np.ndarray:
     Args:
         rm: rotation matrix [3, 3] or matrices [N, 3, 3]
     Return:
-        so3 coordinate rotatino vector [3] or [N, 3]
+        so3 coordinate rotation vector [3] or [N, 3]
     """
     if no_scipy():
         return _no_scipy_log_rot_mat(rm)
@@ -419,7 +419,7 @@ class Poser(Protocol):
 
 
 class TrajectoryEvaluator(Poser):
-    """Interpolates trajecotry for a set of timestamps from knot poses.
+    """Interpolates trajectory for a set of timestamps from knot poses.
 
     TODO[pb]: Add function to add/remove knot poses from traj eval.
 
@@ -433,7 +433,7 @@ class TrajectoryEvaluator(Poser):
                    tuple (ts, pose).
             time_bounds: whether to restrict the pose interpolation to the timestamp
                          range within the poses list:
-                         None - no restriction at all on the timetamps that can
+                         None - no restriction at all on the timestamps that can
                                 be used to get pose from the trajectory
                          0    - strict bounds on the timestamp range in the
                                 poses list
@@ -469,7 +469,7 @@ class TrajectoryEvaluator(Poser):
             self._poses_mat = poses_arr if is_pose_hom else exp_pose6(
                 poses_arr)
 
-            # precaclucating deltas betweenn adjacent poses
+            # precalculating deltas between adjacent poses
             deltas_mat = np.matmul(np.linalg.inv(self._poses_mat[:-1]),
                                    self._poses_mat[1:])
             # we only need vec6 form for deltas to do interpolations

@@ -749,7 +749,7 @@ def _save_fb_to_png(fb_data: List,
 
 # TODO: Make/Define a better ScanViz interface
 # not a best way to describe interface, yeah duck typing danger, etc ...
-# but ScanViz object shoud have a write property 'scan' and underlying
+# but ScanViz object should have a write property 'scan' and underlying
 # Point viz member at '_viz'
 AnyScanViz = Union[LidarScanViz, Any]
 
@@ -776,7 +776,7 @@ class SimpleViz:
                  LidarScanViz instance to use.
             rate: Playback rate. One of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0 or
                   None for "live" playback (the default).
-            pause_at: scan number to pause at, dafault (-1) - no auto pause, to
+            pause_at: scan number to pause at, default (-1) - no auto pause, to
                       stop after the very first scan use 0
 
         Raises:
@@ -1058,7 +1058,7 @@ class SimpleViz:
     def run(self, scans: Iterable[client.LidarScan]) -> None:
         """Start reading scans and visualizing the stream.
 
-        Must be called from the main thread on macos. Will close the provided
+        Must be called from the main thread on macOS. Will close the provided
         scan source before returning.
 
         Args:

@@ -55,7 +55,7 @@ class Pcap(PacketSource):
         """Read a single sensor data stream from a packet capture.
 
         Packet captures can contain arbitrary network traffic or even multiple
-        valid sensor data streans. To avoid passing invalid data to the user,
+        valid sensor data streams. To avoid passing invalid data to the user,
         this class assumes that lidar and/or imu packets are associated with
         distinct destination ports, which may be recorded in the sensor metadata
         or specified explicitly.
@@ -260,7 +260,7 @@ def record(packets: Iterable[Packet],
         dst_ip: Destination IP to use for all packets
         lidar_port: Src/dst port to use for lidar packets
         imu_port: Src/dst port to use for imu packets
-        use_sll_encapsulation: Use sll encapsulaiton
+        use_sll_encapsulation: Use sll encapsulation
 
     Returns:
         Number of packets captured

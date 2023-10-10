@@ -590,7 +590,7 @@ def valid_packet_idxs(scan: LidarScan) -> np.ndarray:
     sp = np.split(valid_cols, scan.packet_timestamp.shape[0])
     # here we consider the packet is valid when either one is true:
     #   - any columns in the packet has a valid status
-    #   - packet_timestmap is not zero, which may occur even when
+    #   - packet_timestamp is not zero, which may occur even when
     #     all columns/px data in invalid state within the packet.
     #     It means that we received the packet without per px data
     #     but with all other headers in place

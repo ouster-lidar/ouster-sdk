@@ -1,5 +1,5 @@
 #  type: ignore
-"""Miscellaneous utilites.
+"""Miscellaneous utilities.
 
 TODO:
 - bench util:
@@ -54,7 +54,7 @@ def get_system_info() -> dict:
         import cpuinfo  # type: ignore
     except ModuleNotFoundError:
         click.echo(
-            "This command requires the py-cpuinfo packgage. Try running "
+            "This command requires the py-cpuinfo package. Try running "
             "`pip3 install py-cpuinfo` first.")
         exit(1)
 
