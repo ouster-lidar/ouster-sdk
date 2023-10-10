@@ -17,6 +17,14 @@ pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
 
 
+_has_mapping = False
+try:
+    from ouster.cli.plugins import cli_mapping  # type: ignore # noqa: F401 # yes... it has to be in this order.
+    _has_mapping = True
+except ImportError:
+    pass
+
+
 # boilerplate for selecting / deslecting interactive tests
 def pytest_addoption(parser):
     parser.addoption("--interactive",
@@ -166,3 +174,8 @@ def metadata_key(request) -> str:
 @pytest.fixture
 def metadata_base_name(metadata_key: str) -> str:
     return METADATAS[metadata_key]
+
+
+@pytest.fixture
+def has_mapping() -> bool:
+    return _has_mapping

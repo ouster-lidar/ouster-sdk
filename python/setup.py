@@ -179,6 +179,7 @@ setup(
         'typing-extensions >=3.7.4.3',
         'Pillow >=9.2',
         'packaging',
+        'ouster-mapping>=0.0.1.dev3; python_version >= "3.8" and (platform_system == "Windows" or platform_system == "Darwin" or platform_machine != "arm64")',
     ],
     extras_require={
         'test': [
@@ -201,11 +202,6 @@ setup(
             'opencv-python',
             'laspy',
             'PyQt5; platform_system=="Windows"',
-        ],
-        'mapping': [
-            'kiss-icp >=0.2.10, <1',
-            'open3d >=0, <1',
-            'laspy >=2.0, <3',
         ],
     },
     entry_points={'console_scripts':
