@@ -581,8 +581,8 @@ class LidarScanViz:
         if self._osd_enabled:
             osd_str = f"image [B, N]: {img_modes[self._img_ind[0]].name}, {img_modes[self._img_ind[1]].name}\n" \
                       f"cloud {cloud_idxs_str}: {cloud_states_str}\n"
-            osd_str += f"        mode [F]: {cloud_modes[self._cloud_mode_ind].name}\n" \
-                       f"        palette [M]: {self._cloud_palette_name}\n" \
+            osd_str += f"        mode [M]: {cloud_modes[self._cloud_mode_ind].name}\n" \
+                       f"        palette [F]: {self._cloud_palette_name}\n" \
                        f"        point size [P]: {int(self._cloud_pt_size)}\n"
             osd_str += f"{osd_str_extra}" \
                        f"axes [9]: {'ON' if self._scan_axis.enabled else 'OFF'}\n" \
