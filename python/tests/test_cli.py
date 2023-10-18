@@ -429,14 +429,17 @@ def test_match_metadata_with_data_stream(test_pcap_file, test_metadata_file):
     assert matched_stream.dst_port == 7502
 
 
-def test_source_osf(runner) -> None:
+def test_source_osf(runner, has_mapping) -> None:
     """It should list the correct commands
     in the help depending on source type."""
     # osf
     with tempfile.NamedTemporaryFile(suffix='.osf') as temp_osf:
         result = runner.invoke(core.cli, ['source', temp_osf.name])
         assert result.exit_code == 0
-        assert read_commands_from_help_text(result.output) == ['convert', 'info', 'viz']
+        expected_commands = ['convert', 'info', 'viz']
+        if has_mapping:
+            expected_commands.append('slam')
+        assert read_commands_from_help_text(result.output) == expected_commands
 
 
 def test_source_osf_info(test_osf_file, runner):
