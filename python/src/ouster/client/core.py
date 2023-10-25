@@ -7,7 +7,8 @@ This module contains more idiomatic wrappers around the lower-level module
 generated using pybind11.
 """
 from contextlib import closing
-from typing import cast, Dict, Iterable, Iterator, List, Optional, Tuple, Union
+from typing import (cast, Dict, Iterable, Iterator, List, Optional, Tuple,
+                    Union, Callable)
 from threading import Thread
 import time
 from math import ceil
@@ -155,6 +156,7 @@ class Sensor(PacketSource):
             timeout: seconds to wait for packets before signaling error or None
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
+            _flush_frames: the number of frames to skip/flush on start of a new iter
             _legacy_format: if True, use legacy metadata format
             _soft_id_check: if True, don't skip lidar packets buffers on,
             id mismatch (init_id/sn pair),
@@ -346,6 +348,7 @@ class Sensor(PacketSource):
 
         return n_dropped
 
+    @property
     def buf_use(self) -> int:
         return self._cli.size
 
@@ -463,7 +466,7 @@ class Scans(ScanSource):
                     # Drop data along frame boundaries to maintain _max_latency and
                     # clear out already-batched first packet of next frame
                     if self._max_latency and sensor is not None:
-                        buf_frames = sensor.buf_use() // packets_per_frame
+                        buf_frames = sensor.buf_use // packets_per_frame
                         drop_frames = buf_frames - self._max_latency + 1
 
                         if drop_frames > 0:
@@ -557,6 +560,29 @@ class Scans(ScanSource):
                    complete=complete,
                    fields=fields,
                    _max_latency=2)
+
+
+class FrameBorder:
+    """Create callable helper that indicates the cross frames packets."""
+
+    def __init__(self, pred: Callable[[Packet], bool] = lambda _: True):
+        self._last_f_id = -1
+        self._last_packet_ts = None
+        self._last_packet_res = False
+        self._pred = pred
+
+    def __call__(self, packet: Packet) -> bool:
+        if isinstance(packet, LidarPacket):
+            # don't examine packets again
+            if (self._last_packet_ts and packet.capture_timestamp and
+                    self._last_packet_ts == packet.capture_timestamp):
+                return self._last_packet_res
+            f_id = packet.frame_id
+            changed = (self._last_f_id != -1 and f_id != self._last_f_id)
+            self._last_packet_res = changed and self._pred(packet)
+            self._last_f_id = f_id
+            return self._last_packet_res
+        return False
 
 
 def first_valid_column(scan: LidarScan) -> int:

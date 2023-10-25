@@ -2,7 +2,6 @@
 from datetime import datetime
 import itertools
 import os
-import logging
 from typing import Optional, List, Tuple
 
 import numpy as np
@@ -21,15 +20,9 @@ from ouster.sdkx.parsing import default_scan_fields
 from ouster.sdkx.util import resolve_extrinsics
 from .util import (click_ro_file, import_rosbag_modules)
 
-
-HAS_MULTI = False
-try:
-    from ouster.sdk.util import resolve_metadata_multi
-    from ouster.sdkx.multi import PcapMulti, ScansMulti, collate_scans
-    from ouster.sdkx.multi_viz import MultiLidarScanViz
-    HAS_MULTI = True
-except ImportError as e:
-    logging.debug(e)
+from ouster.sdk.util import resolve_metadata_multi
+from ouster.sdkx.multi import PcapMulti, ScansMulti, collate_scans
+from ouster.sdkx.multi_viz import MultiLidarScanViz
 
 
 @click.group(name="pcap", hidden=True)
@@ -185,7 +178,10 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     else:
         message += ", hit ctrl-c to exit"
 
-    config = configure_sensor(hostname, lidar_port, do_not_reinitialize, no_auto_udp_dest)
+    config = configure_sensor(hostname,
+                              lidar_port,
+                              do_not_reinitialize=do_not_reinitialize,
+                              no_auto_udp_dest=no_auto_udp_dest)
 
     click.echo(f"Initializing connection to sensor {hostname} on "
                f"lidar port {config.udp_port_lidar} with udp dest '{config.udp_dest}'...")
@@ -284,7 +280,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
               help="Lidar Scan number to pause")
 @click.option('--multi',
               is_flag=True,
-              hidden=not HAS_MULTI,
+              hidden=False,
               help='Turn on multi sensor pcap handling and metadata resolutions')
 @click.option('--timeout',
               type=float,
@@ -340,9 +336,6 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libGL is installed. Error: " + str(e))
-
-    if not HAS_MULTI and multi:
-        raise click.ClickException("--multi is not supported in this version.")
 
     if pause and pause_at == -1:
         pause_at = 0
@@ -407,7 +400,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
         else:
             scans = iter(scans_source)
 
-    elif HAS_MULTI and multi:
+    else:
         # Multi sensor pcap handling
 
         metadata_paths = resolve_metadata_multi(file)

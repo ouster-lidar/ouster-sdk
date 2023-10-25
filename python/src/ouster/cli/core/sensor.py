@@ -137,8 +137,11 @@ def auto_detected_udp_dest(hostname: str) -> int:
     return udp_auto_config.udp_dest
 
 
-def configure_sensor(hostname: str, lidar_port: int,
-        do_not_reinitialize: bool, no_auto_udp_dest) -> SensorConfig:
+def configure_sensor(hostname: str,
+                     lidar_port: Optional[int] = None,
+                     imu_port: Optional[int] = None,
+                     do_not_reinitialize: bool = False,
+                     no_auto_udp_dest: bool = False) -> SensorConfig:
     """Depending on the args do_not_reinitialize, no_auto_udp_dest,
     possibly reconfigure the sensor. Then, return the configuration that is used."""
 
@@ -175,21 +178,34 @@ def configure_sensor(hostname: str, lidar_port: int,
                                        "reinitialization. Drop -x to allow reinitialization or "
                                        "change your sensor's operating mode.")
 
-        if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:
-            raise click.ClickException(f"Sensor's lidar port {orig_config.udp_port_lidar} does "
-                                       f"not match provided lidar port but you have disallowed "
-                                       f"reinitialization. Drop -x to allow reinitialization or "
-                                       f"change your specified lidar_port {lidar_port}")
+        if lidar_port and orig_config.udp_port_lidar != lidar_port:
+            raise click.ClickException(
+                f"Sensor's lidar port {orig_config.udp_port_lidar} does "
+                f"not match provided lidar port but you have disallowed "
+                f"reinitialization. Drop -x to allow reinitialization or "
+                f"change your specified lidar_port {lidar_port}")
         return orig_config
 
     new_config = copy(orig_config)
-    if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:
-        new_config.udp_port_lidar = lidar_port
-        click.echo((f"Will change lidar port from {orig_config.udp_port_lidar} to "
-                    f"{new_config.udp_port_lidar}..."))
-    else:
-        # lidar port from arguments is None
-        lidar_port = orig_config.udp_port_lidar
+
+    lidar_port_change = (lidar_port and
+                         orig_config.udp_port_lidar != lidar_port)
+    imu_port_change = (imu_port and orig_config.udp_port_imu != imu_port)
+    port_changes = []
+    if (lidar_port_change or imu_port_change):
+        new_config.udp_port_lidar = lidar_port or orig_config.udp_port_lidar
+        new_config.udp_port_imu = imu_port or orig_config.udp_port_imu
+
+        if lidar_port_change:
+            port_changes.append(f"lidar port from {orig_config.udp_port_lidar} "
+                                f"to {new_config.udp_port_lidar}")
+
+        if imu_port_change:
+            port_changes.append(f"imu port from {orig_config.udp_port_imu} "
+                                f"to {new_config.udp_port_imu}")
+
+        port_changes_str = " and ".join(port_changes)
+        click.echo(f"Will change {port_changes_str} ...")
 
     if not no_auto_udp_dest and auto_config_udp_dest and orig_config.udp_dest != auto_config_udp_dest:
         click.echo((f"Will change udp_dest from '{orig_config.udp_dest}' to automatically "
@@ -266,7 +282,10 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool,
     except ImportError as e:
         raise click.ClickException(str(e))
 
-    config = configure_sensor(hostname, lidar_port, do_not_reinitialize, no_auto_udp_dest)
+    config = configure_sensor(hostname,
+                              lidar_port,
+                              do_not_reinitialize=do_not_reinitialize,
+                              no_auto_udp_dest=no_auto_udp_dest)
 
     click.echo(f"Initializing connection to sensor {hostname} on "
                f"lidar port {config.udp_port_lidar} with udp dest '{config.udp_dest}'...")

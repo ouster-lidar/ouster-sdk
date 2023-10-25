@@ -52,6 +52,7 @@ from .core import ScanSource
 from .core import Packets
 from .core import Sensor
 from .core import Scans
+from .core import FrameBorder
 from .core import first_valid_column
 from .core import last_valid_column
 from .core import first_valid_column_ts

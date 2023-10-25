@@ -146,7 +146,7 @@ class sdk_bdist_wheel(bdist_wheel):
 
 
 def install_requires():
-    install_requires=[
+    install_requires = [
         'psutil >=5.9.5, <6',
         'zeroconf ==0.58.2',
         'click >=8.1.3, <9',
@@ -168,7 +168,8 @@ def install_requires():
         install_requires.append('ouster-mapping>=0.0.1.dev10; python_version >= "3.8"')
 
     return install_requires
-    
+
+
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',

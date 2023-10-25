@@ -2,17 +2,10 @@ import click
 
 from typing import Iterator, Dict, cast, Optional, List, Union
 import numpy as np
-import logging
 
-
-HAS_MULTI = False
-try:
-    from ouster.sdkx.multi import collate_scans  # type: ignore
-    from ouster.sdkx.osf.multi import ScansMultiReader  # type: ignore
-    from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
-    HAS_MULTI = True
-except ImportError as e:
-    logging.debug(e)
+from ouster.sdkx.multi import collate_scans  # type: ignore
+from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
+from ouster.osf.multi import ScansMultiReader  # type: ignore
 
 
 @click.group(name="osf", hidden=True)
@@ -250,9 +243,6 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
     if rate not in SimpleViz._playback_rates:
         raise click.ClickException("Invalid rate specified")
 
-    if not HAS_MULTI and multi:
-        raise click.ClickException("--multi is not supported in this version.")
-
     # TODO[pb]: Switch to aligned Protocol/Interfaces that we
     # should get after some refactoring/designing
     scans_source: Union[osf.Scans, ScansMultiReader]
@@ -267,20 +257,18 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
         # overwrite extrinsics of a sensor stored in OSF if --extrinsics arg is
         # provided
         if extrinsics and not skip_extrinsics:
-            scans_source.metadata.extrinsic = np.array(extrinsics).reshape((4, 4))
-            print(f"Overwriting sensor extrinsics to:\n"
-                  f"{scans_source.metadata.extrinsic}")
+            scans_source.metadata.extrinsic = np.array(extrinsics).reshape((4, 4))  # type: ignore
+            print(f"Overwriting sensor extrinsics to:\n{scans_source.metadata.extrinsic}")  # type: ignore
 
         if skip_extrinsics:
-            scans_source.metadata.extrinsic = np.eye(4)
-            print(f"Setting all sensor extrinsics to "
-                  f"Identity:\n{scans_source.metadata.extrinsic}")
+            scans_source.metadata.extrinsic = np.eye(4)  # type: ignore
+            print(f"Setting all sensor extrinsics to Identity:\n{scans_source.metadata.extrinsic}")  # type: ignore
 
-        ls_viz = LidarScanViz(scans_source.metadata)
+        ls_viz = LidarScanViz(scans_source.metadata)  # type: ignore
 
         scans = scans_source
 
-    elif HAS_MULTI:
+    else:
         # Multi sensor viz
         reader = osf.Reader(file)
         scans_source = ScansMultiReader(reader,

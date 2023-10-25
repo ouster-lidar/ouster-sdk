@@ -5,7 +5,8 @@ from typing import Callable, Iterable, Iterator, TypeVar, Optional
 
 from more_itertools import consume
 
-from ouster.client import Packet, LidarPacket, ImuPacket, PacketSource, SensorInfo
+from ouster.client import (Packet, LidarPacket, ImuPacket, PacketSource,
+                           SensorInfo, FrameBorder)
 from ouster.pcap.pcap import MTU_SIZE
 import ouster.pcap._pcap as _pcap
 
@@ -61,18 +62,7 @@ def ichunked_framed(
                    bool] = lambda _: True) -> Iterator[Iterator[Packet]]:
     """Delimit a packets when the frame id changes and pred is true."""
 
-    last_f_id = -1
-
-    def frame_boundary(p: Packet) -> bool:
-        nonlocal last_f_id
-        if isinstance(p, LidarPacket):
-            f_id = p.frame_id
-            changed = last_f_id != -1 and f_id != last_f_id
-            last_f_id = f_id
-            return changed and pred(p)
-        return False
-
-    return ichunked_before(packets, frame_boundary)
+    return ichunked_before(packets, FrameBorder(pred))
 
 
 def n_frames(packets: Iterable[Packet], n: int) -> Iterator[Packet]:
@@ -126,17 +116,7 @@ class RecordingPacketSource:
         file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         metadata = self.source.metadata
         base_name = f"{self.prefix}{metadata.prod_line}_{metadata.fw_rev}_{metadata.mode}_{file_timestamp}"
-
-        last_f_id = -1
-
-        def frame_boundary(p: Packet) -> bool:
-            nonlocal last_f_id
-            if isinstance(p, LidarPacket):
-                f_id = p.frame_id
-                changed = last_f_id != -1 and f_id != last_f_id
-                last_f_id = f_id
-                return changed
-            return False
+        frame_bound = FrameBorder()
 
         try:
             start_time = time.time()
@@ -162,7 +142,7 @@ class RecordingPacketSource:
 
                 ts = packet.capture_timestamp or time.time()
                 _pcap.record_packet(handle, self.src_ip, self.dst_ip, src_port, dst_port, packet._data, ts)
-                if frame_boundary(packet):
+                if frame_bound(packet):
                     num_frames += 1
                     if self.chunk_size and os.path.getsize(pcap_path) > self.chunk_size * 2**20:
                         # file size exceeds chunk size; create a new chunk

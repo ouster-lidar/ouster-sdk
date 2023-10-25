@@ -88,7 +88,9 @@ def _parse_extrinsics_json(json_data: str,
     """Parsing extrinsics json and looking for sensor names transforms."""
     try:
         extrinsics_data = json.loads(json_data)
-    except Exception:
+    except Exception as e:
+        # TODO[pb]: Use logging
+        print("ERROR: Can't parse extrinsics_parameters.json file: ", str(e))
         return []
 
     if "transforms" not in extrinsics_data:
@@ -130,9 +132,10 @@ def resolve_extrinsics(
               `extrinsics.json` files when it will be fully defined.
     """
     snames = sensor_names or [info.sn for info in infos]
-    if os.path.splitext(data_path)[1] == ".pcap":
-        ext_file = os.path.join(os.path.dirname(data_path),
-                                "extrinsic_parameters.json")
+    if os.path.splitext(data_path)[1] == ".pcap" or os.path.isdir(data_path):
+        ext_file = os.path.join(
+            os.path.dirname(data_path) if not os.path.isdir(data_path) else
+            data_path, "extrinsic_parameters.json")
         if os.path.exists(ext_file):
             # Found perception extrinsics file
             return _parse_extrinsics_file(ext_file,
