@@ -1,5 +1,5 @@
 #  type: ignore
-"""Miscellaneous utilites."""
+"""Miscellaneous utilities."""
 
 import os
 import json
@@ -71,7 +71,7 @@ def _parse_extrinsics_file(ext_file: str,
                            sensor_names: List[str],
                            destination_frame: str = "world"
                            ) -> List[Optional[Tuple[np.ndarray, str]]]:
-    """Partsing extrinsics file and looking for sensor names transforms."""
+    """Parsing extrinsics file and looking for sensor names transforms."""
     with open(ext_file) as json_file:
         return _parse_extrinsics_json(json_file.read(),
                                       sensor_names,
@@ -85,7 +85,7 @@ def _parse_extrinsics_json(json_data: str,
                            *,
                            ext_source: str = ""
                            ) -> List[Optional[Tuple[np.ndarray, str]]]:
-    """Partsing extrinsics json and looking for sensor names transforms."""
+    """Parsing extrinsics json and looking for sensor names transforms."""
     try:
         extrinsics_data = json.loads(json_data)
     except Exception:

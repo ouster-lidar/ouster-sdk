@@ -48,12 +48,12 @@ struct client {
 };
 
 // defined in types.cpp
-Json::Value to_json(const sensor_config& config);
+Json::Value config_to_json(const sensor_config& config);
 
 namespace {
 
 // default udp receive buffer size on windows is very low -- use 256K
-const int RCVBUF_SIZE = 256 * 1024;
+const int RCVBUF_SIZE = 1024 * 1024;
 
 int32_t get_sock_port(SOCKET sock_fd) {
     struct sockaddr_storage ss;
@@ -257,8 +257,8 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
     do {
         if (chrono::steady_clock::now() >= timeout_time) {
             throw std::runtime_error(
-                "A timeout occurred while waiting for the sensor to initialize."
-            );
+                "A timeout occurred while waiting for the sensor to "
+                "initialize.");
         }
         std::this_thread::sleep_for(1s);
         status = sensor_http->sensor_info()["status"].asString();
@@ -266,8 +266,10 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
 
     try {
         auto metadata = sensor_http->metadata();
-        // merge extra info into metadata
-        metadata["client_version"] = client_version();
+
+        metadata["ouster-sdk"]["client_version"] = client_version();
+        metadata["ouster-sdk"]["output_source"] = "collect_metadata";
+
         return metadata;
     } catch (const std::runtime_error& e) {
         throw std::runtime_error(
@@ -279,8 +281,8 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
 
 }  // namespace
 
-bool get_config(const std::string& hostname, sensor_config& config,
-                bool active, int timeout_sec) {
+bool get_config(const std::string& hostname, sensor_config& config, bool active,
+                int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto res = sensor_http->get_config_params(active);
     config = parse_config(res);
@@ -296,7 +298,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     Json::Value config_params_copy = config_params;
 
     // set all desired config parameters
-    Json::Value config_json = to_json(config);
+    Json::Value config_json = config_to_json(config);
     for (const auto& key : config_json.getMemberNames()) {
         config_params[key] = config_json[key];
     }
@@ -422,8 +424,10 @@ bool init_logger(const std::string& log_level, const std::string& log_file_path,
 
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
-    logger().info("initializing sensor: {} with lidar port/imu port: {}/{}",
-                  hostname, lidar_port, imu_port);
+    logger().info(
+        "initializing sensor client: {} expecting lidar port/imu port: {}/{} "
+        "(0 means a random port will be chosen)",
+        hostname, lidar_port, imu_port);
 
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
@@ -485,7 +489,8 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
                                         const std::string& mtp_dest_host,
                                         bool main, int timeout_sec) {
     logger().info(
-        "initializing sensor client: {} with ports: {}/{}, multicast group: {}",
+        "initializing sensor client: {} expecting ports: {}/{}, multicast "
+        "group: {} (0 means a random port will be chosen)",
         hostname, config.udp_port_lidar.value(), config.udp_port_imu.value(),
         config.udp_dest.value());
 
@@ -578,8 +583,28 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
     return recv_fixed(cli.lidar_fd, buf, pf.lidar_packet_size);
 }
 
+bool read_lidar_packet(const client& cli, LidarPacket& packet,
+                       const packet_format& pf) {
+    auto now = std::chrono::high_resolution_clock::now();
+    packet.host_timestamp =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch())
+            .count();
+    return read_lidar_packet(cli, packet.buf.data(), pf);
+}
+
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
     return recv_fixed(cli.imu_fd, buf, pf.imu_packet_size);
+}
+
+bool read_imu_packet(const client& cli, ImuPacket& packet,
+                     const packet_format& pf) {
+    auto now = std::chrono::high_resolution_clock::now();
+    packet.host_timestamp =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch())
+            .count();
+    return read_imu_packet(cli, packet.buf.data(), pf);
 }
 
 int get_lidar_port(client& cli) { return get_sock_port(cli.lidar_fd); }

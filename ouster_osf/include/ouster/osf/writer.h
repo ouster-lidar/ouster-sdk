@@ -32,10 +32,10 @@ class ChunksWriter {
 /**
  * %OSF Writer provides the base universal interface to store the collection
  * of metadata entries, streams and corresponding objects.
- * 
+ *
  * Examples:
  *  @ref writer_test.cpp, writer_custom_test.cpp
- * 
+ *
  */
 class Writer {
    public:
@@ -44,15 +44,13 @@ class Writer {
     Writer(const std::string& file_name, const std::string& metadata_id,
            uint32_t chunk_size = 0);
 
-    template<typename MetaType, typename ...MetaParams>
-    uint32_t addMetadata(MetaParams&& ...params) {
+    template <typename MetaType, typename... MetaParams>
+    uint32_t addMetadata(MetaParams&&... params) {
         MetaType entry(std::forward<MetaParams>(params)...);
         return meta_store_.add(entry);
     }
 
-    uint32_t addMetadata(MetadataEntry&& entry) {
-        return addMetadata(entry);
-    }
+    uint32_t addMetadata(MetadataEntry&& entry) { return addMetadata(entry); }
 
     uint32_t addMetadata(MetadataEntry& entry) {
         return meta_store_.add(entry);
@@ -73,12 +71,12 @@ class Writer {
      * Creating streams by passing itself as first argument of the ctor and
      * following the all other parameters.
      */
-    template<typename Stream, typename ...StreamParams>
-    Stream createStream(StreamParams&& ...params) {
+    template <typename Stream, typename... StreamParams>
+    Stream createStream(StreamParams&&... params) {
         return Stream(*this, std::forward<StreamParams>(params)...);
     }
 
-    /** 
+    /**
      * %Writer accepts messages in the form of bytes buffers with linked meta_id
      * and timestamp.
      * @todo [pb]: It should be hidden into private/protected, but I don't see
@@ -94,7 +92,7 @@ class Writer {
 
     const std::string& filename() const { return file_name_; }
 
-    ChunksLayout chunks_layout() const {return chunks_layout_; }
+    ChunksLayout chunks_layout() const { return chunks_layout_; }
     uint32_t chunk_size() const;
 
     // writes buf to the file with CRC32 appended and return the number of
@@ -116,7 +114,6 @@ class Writer {
     Writer& operator=(Writer&&) = delete;
 
    private:
-
     // helper to construct the Metadata OSF Block at the end of writing
     std::vector<uint8_t> make_metadata() const;
 

@@ -3,7 +3,6 @@ Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
 """
 
-from copy import deepcopy
 from enum import Enum
 from typing import Callable, Iterator, Type, List, Optional, Union, Dict
 import logging
@@ -29,20 +28,17 @@ FieldTypes = Dict[ChanField, FieldDType]
 logger = logging.getLogger("ouster.client.data")
 
 
-class ImuPacket:
-    """Read IMU Packet data from a bufer."""
+class ImuPacket(_client._ImuPacket):
+    """Read IMU Packet data from a buffer."""
     _pf: _client.PacketFormat
-    _data: np.ndarray
-    capture_timestamp: Optional[float]
 
     def __init__(self,
-                 data: BufferT,
-                 info: SensorInfo,
-                 timestamp: Optional[float] = None) -> None:
+                 data: Optional[BufferT] = None,
+                 info: Optional[SensorInfo] = None,
+                 timestamp: Optional[float] = None,
+                 *,
+                 packet_format: Optional[_client.PacketFormat] = None) -> None:
         """
-        This will always alias the supplied buffer-like object. Pass in a copy
-        to avoid unintentional aliasing.
-
         Args:
             data: Buffer containing the packet payload
             info: Metadata associated with the sensor packet stream
@@ -52,21 +48,25 @@ class ImuPacket:
             ValueError: If the buffer is smaller than the size specified by the
                 packet format
         """
+        if packet_format:
+            self._pf = packet_format
+        elif info:
+            # TODO: we should deprecate this, constructing a full PacketFormat
+            # for every single packet seems like an antipattern -- Tim T.
+            self._pf = _client.PacketFormat.from_info(info)
+        else:
+            raise ValueError("either packet_format or info should be specified")
 
-        self._pf = _client.PacketFormat.from_info(info)
-        self._data = np.frombuffer(data,
-                                   dtype=np.uint8,
-                                   count=self._pf.imu_packet_size)
-
+        n = self._pf.imu_packet_size
+        super().__init__(size=n)
+        if data is not None:
+            self._data[:] = np.frombuffer(data, dtype=np.uint8, count=n)
         self.capture_timestamp = timestamp
 
     def __deepcopy__(self, memo) -> 'ImuPacket':
         cls = type(self)
-        cpy = cls.__new__(cls)
-        # don't copy packet format, which is intended to be shared
-        cpy._pf = self._pf
-        cpy._data = deepcopy(self._data, memo)
-        cpy.capture_timestamp = self.capture_timestamp
+        cpy = cls(self._data, packet_format=self._pf)
+        cpy._host_timestamp = self._host_timestamp
         return cpy
 
     @property
@@ -120,7 +120,7 @@ class ColHeader(Enum):
 
 class PacketValidationFailure(Exception):
     def __eq__(self, other):
-        return type(self) == type(other) and self.args == other.args
+        return type(self) is type(other) and self.args == other.args
 
     def __hash__(self):
         return hash((type(self), self.args))
@@ -141,7 +141,7 @@ class LidarPacketValidator:
     def __init__(self, metadata: SensorInfo, checks=['id_and_sn_valid', 'packet_size_valid']):
         self._metadata = metadata
         self._metadata_init_id = metadata.init_id
-        self._metadata_sn = int(metadata.sn)
+        self._metadata_sn = int(metadata.sn) if metadata.sn else 0
         self._pf = _client.PacketFormat.from_info(metadata)
         self._checks = [getattr(self, check) for check in checks]
 
@@ -171,7 +171,7 @@ class LidarPacketValidator:
         return None
 
 
-class LidarPacket:
+class LidarPacket(_client._LidarPacket):
     """Read lidar packet data as numpy arrays.
 
     The dimensions of returned arrays depend on the sensor product line and
@@ -180,42 +180,49 @@ class LidarPacket:
     arrays of size ``pixels_per_column`` by ``columns_per_packet``.
     """
     _pf: _client.PacketFormat
-    _data: np.ndarray
     _metadata_init_id: int
     _metadata_sn: int
-    capture_timestamp: Optional[float]
 
     def __init__(self,
-                 data: BufferT,
-                 info: SensorInfo,
+                 data: Optional[BufferT] = None,
+                 info: Optional[SensorInfo] = None,
                  timestamp: Optional[float] = None,
                  *,
+                 packet_format: Optional[_client.PacketFormat] = None,
                  _raise_on_id_check: bool = True) -> None:
         """
-        This will always alias the supplied buffer-like object. Pass in a copy
-        to avoid unintentional aliasing.
-
         Args:
             data: Buffer containing the packet payload
             info: Metadata associated with the sensor packet stream
             timestamp: A capture timestamp, in seconds
-            _raise_on_id_check: raise PacketIdError if matadata
+            _raise_on_id_check: raise PacketIdError if metadata
                 init_id/sn doesn't match packet init_id/sn.
 
         Raises:
             ValueError: If the buffer is smaller than the size specified by the
                 packet format, or if the init_id doesn't match the metadata
         """
-        self._pf = _client.PacketFormat.from_info(info)
-        self._data = np.frombuffer(data,
-                                   dtype=np.uint8,
-                                   count=self._pf.lidar_packet_size)
+        if packet_format:
+            self._pf = packet_format
+        elif info:
+            # TODO: we should deprecate this, constructing a full PacketFormat
+            # for every single packet seems like an antipattern -- Tim T.
+            self._pf = _client.PacketFormat.from_info(info)
+        else:
+            raise ValueError("either packet_format or info should be specified")
+
+        n = self._pf.lidar_packet_size
+        super().__init__(size=n)
+        if data is not None:
+            self._data[:] = np.frombuffer(data, dtype=np.uint8, count=n)
         self.capture_timestamp = timestamp
-        self._metadata_init_id = info.init_id
-        self._metadata_sn = int(info.sn)
+
+        if info:
+            self._metadata_init_id = info.init_id
+            self._metadata_sn = int(info.sn) if info.sn else 0
 
         # check that metadata came from the same sensor initialization as data
-        if self.id_error:
+        if info and self.id_error:
             error_msg = f"Metadata init_id/sn does not match: " \
                 f"expected by metadata - {info.init_id}/{info.sn}, " \
                 f"but got from packet buffer - {self.init_id}/{self.prod_sn}"
@@ -229,11 +236,8 @@ class LidarPacket:
 
     def __deepcopy__(self, memo) -> 'LidarPacket':
         cls = type(self)
-        cpy = cls.__new__(cls)
-        # don't copy packet format, which is intended to be shared
-        cpy._pf = self._pf
-        cpy._data = deepcopy(self._data, memo)
-        cpy.capture_timestamp = self.capture_timestamp
+        cpy = cls(self._data, packet_format=self._pf)
+        cpy._host_timestamp = self._host_timestamp
         return cpy
 
     @property

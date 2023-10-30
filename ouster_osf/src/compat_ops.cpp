@@ -9,15 +9,16 @@
 #include <string>
 
 #ifdef _WIN32
-#include <windows.h>
-#include <tchar.h>
-#include <shlwapi.h>
 #include <direct.h>
+#include <shlwapi.h>
+#include <tchar.h>
+#include <windows.h>
 #else
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
 #include <cstring>
 #endif
 
@@ -60,7 +61,7 @@ std::string LastErrorMessageStr() {
 }
 #endif
 
-}  // anonym namespace
+}  // namespace
 
 /// Get the last system error and return it in a string
 std::string get_last_error() {
@@ -95,7 +96,8 @@ bool is_dir(const std::string& path) {
 /// Check path existence on the system
 bool path_exists(const std::string& path) {
 #ifdef _WIN32
-    // taken from here: https://devblogs.microsoft.com/oldnewthing/20071023-00/?p=24713
+    // taken from here:
+    // https://devblogs.microsoft.com/oldnewthing/20071023-00/?p=24713
     DWORD attrs = GetFileAttributesA(path.c_str());
     return (attrs != INVALID_FILE_ATTRIBUTES);
 #else
@@ -104,9 +106,7 @@ bool path_exists(const std::string& path) {
 #endif
 }
 
-bool is_file_sep(char c) {
-    return (FILE_SEPS.find(c) != std::string::npos);
-}
+bool is_file_sep(char c) { return (FILE_SEPS.find(c) != std::string::npos); }
 
 /// Path concatenation with OS specific path separator
 // NOTE: Trying not to be too smart here ... and it's impossible function
@@ -258,8 +258,8 @@ uint8_t* mmap_open(const std::string& path) {
         return NULL;
     }
 
-    pBuf = static_cast<uint8_t*>(
-        MapViewOfFile(hFileMap, FILE_MAP_READ, 0, 0, 0));
+    pBuf =
+        static_cast<uint8_t*>(MapViewOfFile(hFileMap, FILE_MAP_READ, 0, 0, 0));
 
     // TODO: check errors?
     CloseHandle(hFileMap);
@@ -296,14 +296,11 @@ uint8_t* mmap_open(const std::string& path) {
 bool mmap_close(uint8_t* file_buf, const uint64_t file_size) {
     if (file_buf == nullptr || file_size == 0) return false;
 #ifdef _WIN32
-     return (UnmapViewOfFile(file_buf) != 0);
+    return (UnmapViewOfFile(file_buf) != 0);
 #else
     return (munmap(static_cast<void*>(file_buf), file_size) >= 0);
 #endif
 }
-
-
-
 
 }  // namespace osf
 }  // namespace ouster

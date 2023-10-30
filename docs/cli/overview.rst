@@ -1,9 +1,9 @@
-============================
-Ouster Sensor Tools Overview
-============================
+===================
+Ouster CLI Overview
+===================
 
-The Ouster Sensor Tools CLI provides users features and tools for
-interacting with sensor hardware and sensor data, including:
+The Ouster CLI, available via ``ouster-cli`` provides users features and tools for interacting with
+sensor hardware and sensor data, including:
 
 - benchmarking performance from the command line
 - collecting metadata from the command line

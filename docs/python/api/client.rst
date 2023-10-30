@@ -46,6 +46,9 @@ Metadata
    :members:
    :undoc-members:
 
+.. autoclass:: DataFormat
+   :members:
+
 .. autoclass:: SensorConfig
    :members:
    :undoc-members:

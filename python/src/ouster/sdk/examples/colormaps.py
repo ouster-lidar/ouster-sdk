@@ -31,7 +31,7 @@ def normalize(data: np.ndarray, percentile: float = 0.05):
 
     Args:
         data: array of data to be transformed for visualization
-        percentile: values in the bottom/top percentile are clambed to 0 and 1
+        percentile: values in the bottom/top percentile are clamped to 0 and 1
 
     Returns:
         An array of doubles with the same shape as ``image`` with values

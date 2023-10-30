@@ -5,7 +5,7 @@ import numpy as np
 from typing import cast, Iterator, Union, Tuple, List
 
 
-class Scans:
+class Scans(client.ScanSource):
     """An iterable stream of ``LidarScan`` read from OSF file (for the first available sensor)."""
 
     def __init__(self,
@@ -94,11 +94,6 @@ class Scans:
     def metadata(self) -> client.SensorInfo:
         """Return metadata of a Lidar Sensor used."""
         return self._sensor.info
-
-    @property
-    def metadata_json(self) -> str:
-        """Return metadata JSON string of a Lidar Sensor used."""
-        return self._sensor.metadata
 
 
 def resolve_field_types(

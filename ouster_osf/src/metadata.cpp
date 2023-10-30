@@ -4,6 +4,7 @@
  */
 
 #include "ouster/osf/metadata.h"
+
 #include "fb_utils.h"
 
 namespace ouster {
@@ -29,8 +30,8 @@ std::string MetadataEntry::to_string() const {
 flatbuffers::Offset<ouster::osf::gen::MetadataEntry> MetadataEntry::make_entry(
     flatbuffers::FlatBufferBuilder& fbb) const {
     auto buf = this->buffer();
-    return ouster::osf::gen::CreateMetadataEntryDirect(
-            fbb, id(), type().c_str(), &buf);
+    return ouster::osf::gen::CreateMetadataEntryDirect(fbb, id(),
+                                                       type().c_str(), &buf);
 }
 
 std::unique_ptr<MetadataEntry> MetadataEntry::from_buffer(

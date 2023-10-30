@@ -260,7 +260,7 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
             vis.update_renderer()
 
     finally:
-        # open3d 0.13.0 segfaults on macos during teardown without this
+        # open3d 0.13.0 segfaults on macOS during teardown without this
         o3d.visualization.Visualizer.clear_geometries(vis)
         vis.destroy_window()
 

@@ -20,6 +20,26 @@ from typing import (ClassVar, Dict, Iterator, List, Optional, overload, Tuple)
 from .data import (BufferT, ColHeader, FieldDType, FieldTypes)
 
 
+class _Packet:
+    _host_timestamp: int
+    capture_timestamp: Optional[float]
+
+    def __init__(self, size: int) -> None:
+        ...
+
+    @property
+    def _data(self) -> ndarray:
+        ...
+
+
+class _LidarPacket(_Packet):
+    pass
+
+
+class _ImuPacket(_Packet):
+    pass
+
+
 class Client:
     @overload
     def __init__(self,
@@ -47,7 +67,10 @@ class Client:
     def shutdown(self) -> None:
         ...
 
-    def consume(self, buf: bytearray, timeout_sec: float) -> ClientState:
+    def consume(self,
+                lidarp: _LidarPacket,
+                imup: _ImuPacket,
+                timeout_sec: float) -> ClientState:
         ...
 
     def produce(self, pf: PacketFormat) -> None:
@@ -119,9 +142,27 @@ class SensorInfo:
     init_id: int
     udp_port_lidar: int
     udp_port_imu: int
+    build_date: str
+    image_rev: str
+    prod_pn: str
+    status: str
+    cal: SensorCalibration
+    config: SensorConfig
 
     @classmethod
     def from_default(cls, mode: LidarMode) -> SensorInfo:
+        ...
+
+    @classmethod
+    def original_string(cls) -> str:
+        ...
+
+    @classmethod
+    def updated_metadata_string(cls) -> str:
+        ...
+
+    @classmethod
+    def has_fields_equal(self, info: SensorInfo) -> bool:
         ...
 
     @overload
@@ -155,6 +196,10 @@ class PacketFormat:
 
     @property
     def imu_packet_size(self) -> int:
+        ...
+
+    @property
+    def udp_profile_lidar(self) -> UDPProfileLidar:
         ...
 
     @property
@@ -213,6 +258,12 @@ class PacketFormat:
     def fields(self) -> Iterator[ChanField]:
         ...
 
+    def field_value_mask(self, field: ChanField) -> int:
+        ...
+
+    def field_bitness(self, field: ChanField) -> int:
+        ...
+
     def packet_field(self, field: ChanField, buf: BufferT) -> ndarray:
         ...
 
@@ -249,6 +300,46 @@ class PacketFormat:
     @staticmethod
     def from_info(info: SensorInfo) -> PacketFormat:
         ...
+
+    @staticmethod
+    def from_profile(udp_profile_lidar: UDPProfileLidar,
+                     pixels_per_column: int,
+                     columns_per_packet: int) -> PacketFormat:
+        ...
+
+
+class PacketWriter(PacketFormat):
+    @staticmethod
+    def from_info(info: SensorInfo) -> PacketWriter:
+        ...
+
+    @staticmethod
+    def from_profile(udp_profile_lidar: UDPProfileLidar,
+                     pixels_per_column: int,
+                     columns_per_packet: int) -> PacketWriter:
+        ...
+
+    def set_col_timestamp(self, packet: _LidarPacket, col_idx: int, ts: int) -> None:
+        ...
+
+    def set_col_measurement_id(self,
+                               packet: _LidarPacket,
+                               col_idx: int,
+                               m_id: int) -> None:
+        ...
+
+    def set_col_status(self, packet: _LidarPacket, col_idx: int, status: int) -> None:
+        ...
+
+    def set_frame_id(self, packet: _LidarPacket, frame_id: int) -> None:
+        ...
+
+    def set_field(self, packet: _LidarPacket, chan: ChanField, field: ndarray) -> None:
+        ...
+
+
+def scan_to_packets(ls: LidarScan, pw: PacketWriter) -> List[_LidarPacket]:
+    ...
 
 
 class LidarMode:
@@ -533,6 +624,70 @@ class UDPProfileIMU:
         ...
 
 
+class ShotLimitingStatus:
+    SHOT_LIMITING_NORMAL: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_IMMINENT: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_0_10: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_10_20: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_20_30: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_30_40: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_40_50: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_50_60: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_60_70: ClassVar[ShotLimitingStatus]
+    SHOT_LIMITING_REDUCTION_70_75: ClassVar[ShotLimitingStatus]
+
+    __members__: ClassVar[Dict[str, ShotLimitingStatus]]
+    values: ClassVar[Iterator[ShotLimitingStatus]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> ShotLimitingStatus:
+        ...
+
+
+class ThermalShutdownStatus:
+    THERMAL_SHUTDOWN_NORMAL: ClassVar[ThermalShutdownStatus]
+    THERMAL_SHUTDOWN_IMMINENT: ClassVar[ThermalShutdownStatus]
+
+    __members__: ClassVar[Dict[str, ThermalShutdownStatus]]
+    values: ClassVar[Iterator[ThermalShutdownStatus]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> ThermalShutdownStatus:
+        ...
+
+
+class SensorCalibration:
+    reflectivity_status: Optional[bool]
+    reflectivity_timestamp: Optional[str]
+
 class SensorConfig:
     udp_dest: Optional[str]
     udp_port_lidar: Optional[int]
@@ -621,8 +776,16 @@ class LidarScan:
         ...
 
     @overload
+    def __init__(self, h: int, w: int, profile: UDPProfileLidar, columns_per_packet: int) -> None:
+        ...
+
+    @overload
     def __init__(self, h: int, w: int, fields: Dict[ChanField,
                                                     FieldDType]) -> None:
+        ...
+
+    @overload
+    def __init__(self, w: int, h: int, fields: Dict[ChanField, FieldDType], columns_per_packet: int) -> None:
         ...
 
     @property
@@ -638,6 +801,10 @@ class LidarScan:
         ...
 
     def shot_limiting(self) -> int:
+        ...
+
+    @property
+    def packet_timestamp(self) -> ndarray:
         ...
 
     def field(self, field: ChanField) -> ndarray:
@@ -733,7 +900,16 @@ class ScanBatcher:
     def __init__(self, info: SensorInfo) -> None:
         ...
 
+    @overload
     def __call__(self, buf: BufferT, ls: LidarScan) -> bool:
+        ...
+
+    @overload
+    def __call__(self, buf: BufferT, packet_ts: int, ls: LidarScan) -> bool:
+        ...
+
+    @overload
+    def __call__(self, packet: _LidarPacket, ls: LidarScan) -> bool:
         ...
 
 
@@ -773,6 +949,7 @@ class BeamUniformityCorrector:
     def __call__(self, image: ndarray) -> None:
         ...
 
+
 class FieldInfo:
     @property
     def ty_tag(self) -> FieldDType:
@@ -796,3 +973,6 @@ def get_field_types(scan: LidarScan) -> FieldTypes: ...
 
 @overload
 def get_field_types(info: SensorInfo) -> FieldTypes: ...
+
+@overload
+def get_field_types(udp_profile_lidar: UDPProfileLidar) -> FieldTypes: ...

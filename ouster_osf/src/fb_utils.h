@@ -4,10 +4,10 @@
  */
 
 #pragma once
-
 #include "chunk_generated.h"
 #include "header_generated.h"
 #include "metadata_generated.h"
+#include "ouster/osf/basics.h"
 
 // OSF v2 basic types for LidarSensor and LidarScan/Imu Streams
 #include "os_sensor/lidar_scan_stream_generated.h"

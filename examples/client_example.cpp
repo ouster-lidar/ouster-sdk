@@ -17,7 +17,6 @@
 using namespace ouster;
 
 const size_t N_SCANS = 5;
-const size_t UDP_BUF_SIZE = 65536;
 
 void FATAL(const char* msg) {
     std::cerr << msg << std::endl;
@@ -66,7 +65,7 @@ int main(int argc, char* argv[]) {
      * accurate point clouds.
      */
     std::cerr << "Gathering metadata..." << std::endl;
-    auto metadata = sensor::get_metadata(*handle);
+    auto metadata = sensor::get_metadata(*handle, 10, false);
 
     // Raw metadata can be parsed into a `sensor_info` struct
     sensor::sensor_info info = sensor::parse_metadata(metadata);
@@ -100,7 +99,8 @@ int main(int argc, char* argv[]) {
     std::cerr << "Capturing points... ";
 
     // buffer to store raw packet data
-    auto packet_buf = std::make_unique<uint8_t[]>(UDP_BUF_SIZE);
+    auto lidar_packet = sensor::LidarPacket();
+    auto imu_packet = sensor::ImuPacket();
 
     for (size_t i = 0; i < N_SCANS;) {
         // wait until sensor data is available
@@ -112,12 +112,12 @@ int main(int argc, char* argv[]) {
 
         // check for lidar data, read a packet and add it to the current batch
         if (st & sensor::LIDAR_DATA) {
-            if (!sensor::read_lidar_packet(*handle, packet_buf.get(), pf)) {
+            if (!sensor::read_lidar_packet(*handle, lidar_packet, pf)) {
                 FATAL("Failed to read a packet of the expected size!");
             }
 
             // batcher will return "true" when the current scan is complete
-            if (batch_to_scan(packet_buf.get(), scans[i])) {
+            if (batch_to_scan(lidar_packet, scans[i])) {
                 // retry until we receive a full set of valid measurements
                 // (accounting for azimuth_window settings if any)
                 if (scans[i].complete(info.format.column_window)) i++;
@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
 
         // check if IMU data is available (but don't do anything with it)
         if (st & sensor::IMU_DATA) {
-            sensor::read_imu_packet(*handle, packet_buf.get(), pf);
+            sensor::read_imu_packet(*handle, imu_packet, pf);
         }
     }
     std::cerr << "ok" << std::endl;

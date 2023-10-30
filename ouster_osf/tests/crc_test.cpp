@@ -6,15 +6,12 @@
 #include <gtest/gtest.h>
 #include <zlib.h>
 
-#include <string>
-
 #include <chrono>
-
-#include <vector>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "ouster/osf/crc32.h"
-
 
 namespace ouster {
 namespace osf {

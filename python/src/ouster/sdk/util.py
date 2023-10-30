@@ -46,7 +46,7 @@ def resolve_metadata(data_path: str,
                      meta_path: Optional[str] = None) -> Optional[str]:
     """Look for a metadata file based on the data path if needed.
 
-    Convenient to use in CLI tools when --meta param can be ommited
+    Convenient to use in CLI tools when --meta param can be omitted
     in lots of trivial cases when pcap filename has the same prefix
     as the metadata json filename.
 

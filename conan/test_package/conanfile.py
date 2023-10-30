@@ -30,5 +30,10 @@ class OusterSDKTestConan(ConanFile):
             exec_path = f"{os.sep}{self.settings.build_type}" if self.settings.os == "Windows" else ""
             self.run(f".{exec_path}{os.sep}client_example")
 
+            # List files + ldd for verbosity
+            if self.settings.os == "Linux":
+                self.run(f"ls -al .{exec_path}{os.sep}")
+                self.run(f"ldd .{exec_path}{os.sep}osf_reader_example")
+
             # Smoke test OSF lib
             self.run(f".{exec_path}{os.sep}osf_reader_example")

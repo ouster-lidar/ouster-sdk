@@ -122,7 +122,9 @@ class Sensor(PacketSource):
     _metadata: SensorInfo
     _pf: _client.PacketFormat
     _producer: Thread
-    _cache: Optional[Tuple[_client.ClientState, bytearray]]
+    _cache: Optional[_client.ClientState]
+    _lidarbuf: LidarPacket
+    _imubuf: ImuPacket
 
     def __init__(self,
                  hostname: str,
@@ -180,6 +182,10 @@ class Sensor(PacketSource):
             self._fetch_metadata()
             self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
+        self._lidarbuf = LidarPacket(None,
+                                     self._metadata,
+                                     _raise_on_id_check=not self._soft_id_check)
+        self._imubuf = ImuPacket(packet_format=self._pf)
 
         # Use args to avoid capturing self causing circular reference
         self._producer = Thread(target=lambda cli, pf: cli.produce(pf),
@@ -211,20 +217,17 @@ class Sensor(PacketSource):
         return self._metadata
 
     def _next_packet(self) -> Optional[Packet]:
-        st, buf = self._peek()
+        st = self._peek()
         self._cache = None
 
         if self._overflow_err and st & _client.ClientState.OVERFLOW:
             raise ClientOverflow()
         if st & _client.ClientState.LIDAR_DATA:
-            lp = LidarPacket(buf,
-                             self._metadata,
-                             _raise_on_id_check=not self._soft_id_check)
-            if lp.id_error:
+            if self._lidarbuf.id_error:
                 self._id_error_count += 1
-            return lp
+            return self._lidarbuf
         elif st & _client.ClientState.IMU_DATA:
-            return ImuPacket(buf, self._metadata)
+            return self._imubuf
         elif st == _client.ClientState.TIMEOUT:
             raise ClientTimeout(f"No packets received within {self._timeout}s")
         elif st & _client.ClientState.ERROR:
@@ -234,13 +237,12 @@ class Sensor(PacketSource):
 
         raise AssertionError("Should be unreachable")
 
-    def _peek(self) -> Tuple[_client.ClientState, bytearray]:
+    def _peek(self) -> _client.ClientState:
         if self._cache is None:
-            # Lidar packets are bigger than IMU: wastes some space but is simple
-            buf = bytearray(self._pf.lidar_packet_size)
-            st = self._cli.consume(
-                buf, -1 if self._timeout is None else self._timeout)
-            self._cache = (st, buf)
+            st = self._cli.consume(self._lidarbuf,
+                                   self._imubuf,
+                                   -1 if self._timeout is None else self._timeout)
+            self._cache = st
         return self._cache
 
     def __iter__(self) -> Iterator[Packet]:
@@ -248,7 +250,10 @@ class Sensor(PacketSource):
 
         Reading may block waiting for network data for up to the specified
         timeout. Failing to consume this iterator faster than the data rate of
-        the sensor may cause packets to be dropped.
+        the sensor may cause packets to be dropped. Returned packet is meant to
+        be consumed prior to incrementing the iterator, and storing the returned
+        packet in a container may result in the contents being invalidated. If
+        such behaviour is necessary, deepcopy the packets upon retrieval.
 
         Raises:
             ClientTimeout: if no packets are received within the configured
@@ -305,9 +310,9 @@ class Sensor(PacketSource):
         last_ts = time.monotonic()
         while True:
             # check next packet to see if it's the start of a new frame
-            st, buf = self._peek()
+            st = self._peek()
             if st & _client.ClientState.LIDAR_DATA:
-                frame = self._pf.frame_id(buf)
+                frame = self._pf.frame_id(self._lidarbuf._data)
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1
@@ -352,7 +357,7 @@ class Sensor(PacketSource):
         self.close()
 
 
-class Scans:
+class Scans(ScanSource):
     """An iterable stream of scans batched from a PacketSource.
 
     Batching will emit a scan every time the frame_id increments (i.e. on
@@ -396,7 +401,8 @@ class Scans:
 
         w = self._source.metadata.format.columns_per_frame
         h = self._source.metadata.format.pixels_per_column
-        packets_per_frame = w // self._source.metadata.format.columns_per_packet
+        columns_per_packet = self._source.metadata.format.columns_per_packet
+        packets_per_frame = w // columns_per_packet
         column_window = self._source.metadata.format.column_window
 
         # If source is a sensor, make a type-specialized reference available
@@ -432,9 +438,9 @@ class Scans:
                 return
 
             if isinstance(packet, LidarPacket):
-                ls_write = ls_write or LidarScan(h, w, self._fields)
+                ls_write = ls_write or LidarScan(h, w, self._fields, columns_per_packet)
 
-                if batch(packet._data, ls_write):
+                if batch(packet, ls_write):
                     # Got a new frame, return it and start another
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write
@@ -556,6 +562,12 @@ def first_valid_column_ts(scan: LidarScan) -> int:
     return scan.timestamp[first_valid_column(scan)]
 
 
+def first_valid_packet_ts(scan: LidarScan) -> int:
+    """Return first valid packet timestamp of a LidarScan"""
+    columns_per_packet = scan.w // scan.packet_timestamp.shape[0]
+    return scan.packet_timestamp[first_valid_column(scan) // columns_per_packet]
+
+
 def last_valid_column_ts(scan: LidarScan) -> int:
     """Return last valid column timestamp of a LidarScan"""
     return scan.timestamp[last_valid_column(scan)]
@@ -569,3 +581,23 @@ def first_valid_column_pose(scan: LidarScan) -> np.ndarray:
 def last_valid_column_pose(scan: LidarScan) -> np.ndarray:
     """Return last valid column pose of a LidarScan"""
     return scan.pose[last_valid_column(scan)]
+
+
+def valid_packet_idxs(scan: LidarScan) -> np.ndarray:
+    """Checks for valid packets that was used in in the scan construction"""
+    valid_cols = scan.status & 0x1
+    valid_packet_ts = scan.packet_timestamp != 0
+    sp = np.split(valid_cols, scan.packet_timestamp.shape[0])
+    # here we consider the packet is valid when either one is true:
+    #   - any columns in the packet has a valid status
+    #   - packet_timestamp is not zero, which may occur even when
+    #     all columns/px data in invalid state within the packet.
+    #     It means that we received the packet without per px data
+    #     but with all other headers in place
+    valid_packets = np.logical_or(np.any(sp, axis=1), valid_packet_ts)
+    return np.nonzero(valid_packets)[0]
+
+
+def poses_present(scan: LidarScan) -> bool:
+    """Check whether any of scan.pose in not identity"""
+    return not np.allclose(np.eye(4), scan.pose)

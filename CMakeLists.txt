@@ -1,4 +1,12 @@
-cmake_minimum_required(VERSION 3.10...3.22)
+if(DEFINED CMAKE_CXX_COMPILER_LAUNCHER )
+  cmake_minimum_required(VERSION 3.17...3.22)
+  message("Using CXX Launcher: ${CMAKE_CXX_COMPILER_LAUNCHER}")
+  if( DEFINED ENV{CCACHE_DIR} )
+    message("Using CCACHE_DIR: $ENV{CCACHE_DIR}")
+  endif()
+else()
+  cmake_minimum_required(VERSION 3.10...3.22)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(DefaultBuildType)
@@ -7,10 +15,10 @@ include(DefaultBuildType)
 include(VcpkgEnv)
 
 # ==== Project Name ====
-project(ouster_example VERSION 20230710)
+project(ouster_example VERSION 20231031)
 
 # generate version header
-set(OusterSDK_VERSION_STRING 0.9.0)
+set(OusterSDK_VERSION_STRING 0.10.0)
 include(VersionGen)
 
 # ==== Options ====
@@ -112,6 +120,13 @@ configure_file(cmake/OusterSDKConfig.cmake.in OusterSDKConfig.cmake @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
   DESTINATION lib/cmake/OusterSDK)
+if(BUILD_PCAP)
+  # Install the findpcap cmake file for install targets.
+  # For some reason it only works if you rename it to PcapConfig.cmake
+  install(FILES "cmake/FindPcap.cmake"
+    DESTINATION lib/cmake/OusterSDK
+    RENAME PcapConfig.cmake)
+endif()
 
 install(FILES LICENSE LICENSE-bin
   DESTINATION share)

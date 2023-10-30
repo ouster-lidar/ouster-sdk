@@ -16,6 +16,9 @@ import ouster.pcap as pcap
 from ouster.sdk.util import resolve_metadata
 import ouster.sdk.pose_util as pu
 
+from ouster.viz import grey_palette
+from ouster.viz.scans_accum import ScansAccumulator
+
 try:
     from scipy.spatial.transform import Rotation as R
     _no_scipy = False
@@ -27,10 +30,9 @@ from .test_viz import point_viz as point_viz_plain  # noqa: F401
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
 if TYPE_CHECKING:
-    from ouster.sdk import viz, viz_util as vizu
+    import ouster.viz as viz
 else:
-    viz = pytest.importorskip('ouster.sdk.viz')
-    vizu = pytest.importorskip('ouster.sdk.viz_util')
+    viz = pytest.importorskip('ouster.viz')
 
 # Loose vector type
 Vector = Union[List, Tuple, np.ndarray]
@@ -104,11 +106,11 @@ def spin(pviz: viz.PointViz,
 def test_viz_util_axes(point_viz: viz.PointViz) -> None:
     """Test displaying a full-window image."""
 
-    vizu.AxisWithLabel(point_viz,
-                       label="O",
-                       thickness=3,
-                       label_scale=1,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      label="O",
+                      thickness=3,
+                      label_scale=1,
+                      enabled=True)
 
     point_viz.update()
     point_viz.run()
@@ -116,11 +118,11 @@ def test_viz_util_axes(point_viz: viz.PointViz) -> None:
 
 def test_viz_util_spin(point_viz: viz.PointViz) -> None:
     """Test displaying a spin and axis movement."""
-    axis = vizu.AxisWithLabel(point_viz,
-                              label="O",
-                              thickness=3,
-                              label_scale=1,
-                              enabled=True)
+    axis = viz.AxisWithLabel(point_viz,
+                             label="O",
+                             thickness=3,
+                             label_scale=1,
+                             enabled=True)
 
     def on_update(_, tick_ts) -> None:
         axis.pose[0, 3] += 0.1
@@ -133,38 +135,38 @@ def test_viz_util_spin(point_viz: viz.PointViz) -> None:
 @pytest.mark.skipif(_no_scipy, reason="didn't have the scipy.")
 def test_viz_util_one_arc(point_viz: viz.PointViz) -> None:
     """Test moving along the arc."""
-    axis_a = vizu.AxisWithLabel(point_viz,
-                              label="A",
-                              thickness=5,
-                              length=1.0,
-                              label_scale=0.3)
+    axis_a = viz.AxisWithLabel(point_viz,
+                               label="A",
+                               thickness=5,
+                               length=1.0,
+                               label_scale=0.3)
 
-    axis_b = vizu.AxisWithLabel(point_viz,
-                              label="B",
-                              thickness=5,
-                              length=0.5,
-                              label_scale=0.3)
+    axis_b = viz.AxisWithLabel(point_viz,
+                               label="B",
+                               thickness=5,
+                               length=0.5,
+                               label_scale=0.3)
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=pose_from_tr([0, 0, 0], [0, 0, 0]),
-                       label="O",
-                       thickness=10,
-                       length=0.3,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=pose_from_tr([0, 0, 0], [0, 0, 0]),
+                      label="O",
+                      thickness=10,
+                      length=0.3,
+                      enabled=True)
 
-    point_z = vizu.AxisWithLabel(point_viz,
-                                 pose=pose_from_tr([0, 0, 3], [90, 0, 0]),
-                                 label="X",
-                                 thickness=10,
-                                 length=0.1,
-                                 enabled=True)
+    point_z = viz.AxisWithLabel(point_viz,
+                                pose=pose_from_tr([0, 0, 3], [90, 0, 0]),
+                                label="X",
+                                thickness=10,
+                                length=0.1,
+                                enabled=True)
 
-    point_y = vizu.AxisWithLabel(point_viz,
-                                 pose=pose_from_tr([0, 3, 0], [90, 90, 0]),
-                                 label="Y",
-                                 length=0.1,
-                                 thickness=10,
-                                 enabled=True)
+    point_y = viz.AxisWithLabel(point_viz,
+                                pose=pose_from_tr([0, 3, 0], [90, 90, 0]),
+                                label="Y",
+                                length=0.1,
+                                thickness=10,
+                                enabled=True)
 
     period_t = 0.1
     total_t = 2
@@ -216,27 +218,27 @@ def test_viz_util_traj_eval(point_viz: viz.PointViz) -> None:
     traj_poses = list([(i * time_dil, p) for i, p in enumerate(poses6)])
     traj_eval = pu.TrajectoryEvaluator(traj_poses)
 
-    axis_a = vizu.AxisWithLabel(point_viz,
-                                pose=traj_eval.pose_at(0),
-                                label="A",
-                                thickness=5,
-                                length=1.0,
-                                label_scale=0.3)
+    axis_a = viz.AxisWithLabel(point_viz,
+                               pose=traj_eval.pose_at(0),
+                               label="A",
+                               thickness=5,
+                               length=1.0,
+                               label_scale=0.3)
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=np.eye(4),
-                       label="O",
-                       thickness=10,
-                       length=0.3,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=10,
+                      length=0.3,
+                      enabled=True)
 
     for i, p in enumerate(poses6):
-        vizu.AxisWithLabel(point_viz,
-                           pose=pu.exp_pose6(p),
-                           label=f"P{i}",
-                           thickness=10,
-                           length=0.1,
-                           enabled=True)
+        viz.AxisWithLabel(point_viz,
+                          pose=pu.exp_pose6(p),
+                          label=f"P{i}",
+                          thickness=10,
+                          length=0.1,
+                          enabled=True)
 
     period_t = 0.1
     total_t = 3 * time_dil * len(poses6)
@@ -271,28 +273,28 @@ def test_viz_util_traj_eval_kitti(kitti_poses_file, point_viz: viz.PointViz) -> 
     traj_poses = pu.make_kiss_traj_poses(poses)
     traj_eval = pu.TrajectoryEvaluator(traj_poses, time_bounds=1.0)
 
-    axis_a = vizu.AxisWithLabel(point_viz,
-                                pose=traj_eval.pose_at(0),
-                                label="A",
-                                thickness=5,
-                                length=0.2,
-                                label_scale=0.3)
+    axis_a = viz.AxisWithLabel(point_viz,
+                               pose=traj_eval.pose_at(0),
+                               label="A",
+                               thickness=5,
+                               length=0.2,
+                               label_scale=0.3)
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=np.eye(4),
-                       label="O",
-                       thickness=10,
-                       length=0.1,
-                       label_scale=0.3,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=10,
+                      length=0.1,
+                      label_scale=0.3,
+                      enabled=True)
 
     for i, p in enumerate(poses):
-        vizu.AxisWithLabel(point_viz,
-                           pose=p,
-                           thickness=10,
-                           length=0.1,
-                           label_scale=0.3,
-                           enabled=True)
+        viz.AxisWithLabel(point_viz,
+                          pose=p,
+                          thickness=10,
+                          length=0.1,
+                          label_scale=0.3,
+                          enabled=True)
 
     loops = 1
     period_t = 0.01
@@ -364,22 +366,22 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
 
     point_viz.update()
 
-    vizu.AxisWithLabel(point_viz,
-                       pose=np.eye(4),
-                       label="O",
-                       thickness=5,
-                       length=1,
-                       label_scale=1,
-                       enabled=True)
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=5,
+                      length=1,
+                      label_scale=1,
+                      enabled=True)
 
     for i, p in enumerate(poses):
-        vizu.AxisWithLabel(point_viz,
-                           pose=p,
-                           label=f"{i}",
-                           thickness=2,
-                           length=0.3,
-                           label_scale=0.3,
-                           enabled=True)
+        viz.AxisWithLabel(point_viz,
+                          pose=p,
+                          label=f"{i}",
+                          thickness=2,
+                          length=0.3,
+                          label_scale=0.3,
+                          enabled=True)
 
     total_traj_t = 2
 
@@ -405,3 +407,129 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
          total=total_t,
          title=f"Trajectory Interpolation: move along the path (kitti poses) "
          f"with scans. Dewarp: {'YES' if use_dewarp else 'NO'}")
+
+
+def test_viz_util_scans_accum_poses(test_data_dir,
+                                    point_viz: viz.PointViz) -> None:
+    """Test to draw 3 scans with poses using ScansAccumulator."""
+    pcap_file = str(test_data_dir / "pcaps" /
+                    "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
+
+    poses_file = str(test_data_dir / "pcaps" /
+                     "OS-1-128_v2.3.0_1024x10_lb_n3_poses_kitti.txt")
+
+    meta = client.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
+    packets = pcap.Pcap(pcap_file, meta)
+    scans = client.Scans(packets)
+    scans_w_poses = pu.pose_scans_from_kitti(scans, poses_file)
+
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=5,
+                      length=1,
+                      label_scale=1,
+                      enabled=True)
+
+    scans_acc = ScansAccumulator(meta,
+                                 point_viz=point_viz,
+                                 accum_max_num=10,
+                                 accum_min_dist_num=1,
+                                 map_enabled=True,
+                                 map_select_ratio=0.5)
+
+    for scan in scans_w_poses:
+        scans_acc.update(scan)
+
+    scans_acc.draw(update=True)
+
+    total_traj_t = 2
+
+    # some camera movement along 3 scan point cloud
+    cam_traj_eval = pu.TrajectoryEvaluator([
+        (0, np.array([0, 0, 0, -15, 0, 0])),
+        (total_traj_t, np.array([0, 0, - math.pi / 12, 1, 0, 0]))
+    ])
+
+    point_viz.target_display.enable_rings(False)
+
+    period_t = 0.01
+    total_t = 0.95 * total_traj_t  # stop a little bit early
+
+    def on_update(pviz, tick_ts) -> None:
+        t = tick_ts % total_traj_t
+        # add some camera movement
+        pviz.camera.set_target(np.linalg.inv(cam_traj_eval.pose_at(t)))
+
+    spin(point_viz,
+         on_update,
+         period=period_t,
+         total=total_t,
+         title="ScansAccumulator as scan viz.")
+
+
+def test_viz_util_scans_accum_no_viz(test_data_dir,
+                                     point_viz: viz.PointViz) -> None:
+    """Test to draw 3 scans with poses using ScansAccumulator (without viz)"""
+    pcap_file = str(test_data_dir / "pcaps" /
+                    "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
+
+    poses_file = str(test_data_dir / "pcaps" /
+                     "OS-1-128_v2.3.0_1024x10_lb_n3_poses_kitti.txt")
+
+    meta = client.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
+    packets = pcap.Pcap(pcap_file, meta)
+    scans = client.Scans(packets)
+    scans_w_poses = pu.pose_scans_from_kitti(scans, poses_file)
+
+    viz.AxisWithLabel(point_viz,
+                      pose=np.eye(4),
+                      label="O",
+                      thickness=5,
+                      length=1,
+                      label_scale=1,
+                      enabled=True)
+
+    # create scans accum without PointViz
+    scans_acc = ScansAccumulator(meta,
+                                 map_enabled=True,
+                                 map_select_ratio=0.5)
+
+    # processing doesn't require viz presence in scans accum
+    for scan in scans_w_poses:
+        scans_acc.update(scan)
+
+    # draw the cloud manually to the viz using ScansAccumulator MAP data
+    # TODO[pb]: make the real interfaces to get the data from
+    #           ScansAccumulator back instead of tapping into
+    #           internals.
+    cloud_map = viz.Cloud(scans_acc._map_xyz.shape[0])
+    cloud_map.set_xyz(scans_acc._map_xyz)
+    cloud_map.set_key(scans_acc._map_keys["NEAR_IR"])
+    cloud_map.set_palette(grey_palette)
+    cloud_map.set_point_size(1)
+    point_viz.add(cloud_map)
+
+    total_traj_t = 2
+
+    # some camera movement along 3 scan point cloud
+    cam_traj_eval = pu.TrajectoryEvaluator([
+        (0, np.array([0, 0, 0, -15, 0, 0])),
+        (total_traj_t, np.array([0, 0, - math.pi / 12, 1, 0, 0]))
+    ])
+
+    point_viz.target_display.enable_rings(False)
+
+    period_t = 0.01
+    total_t = 0.95 * total_traj_t  # stop a little bit early
+
+    def on_update(pviz, tick_ts) -> None:
+        t = tick_ts % total_traj_t
+        # add some camera movement
+        pviz.camera.set_target(np.linalg.inv(cam_traj_eval.pose_at(t)))
+
+    spin(point_viz,
+         on_update,
+         period=period_t,
+         total=total_t,
+         title="ScansAccumulator without viz, draw map manually")

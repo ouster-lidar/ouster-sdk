@@ -2,11 +2,82 @@
 Changelog
 =========
 
+[20231031] [0.10.0]
+============
+
+Important notes
+---------------
+
+* This will be the last release that supports Python 3.7.
+* This will be the last release that supports macOS 10.15.
+
+ouster_viz
+----------
+
+* Added point cloud accumulation support
+* Added an ``PointViz::fps()`` method to return the operating frame rate as a ``double``
+
+ouster_client
+-------------
+
+* [BREAKING] Updates to ``sensor_info`` include:
+    * new fields added: ``build_date``, ``image_rev``, ``prod_pn``, ``status``, ``cal`` (representing the value stored in the ``calibration_status`` metadata JSON key), ``config`` (representing the value of the ``sensor_config`` metadata JSON key)
+    * the original JSON string is accessible via the ``original_string()`` method
+    * The ``updated_metadata_string()`` now returns a JSON string reflecting any modifications to ``sensor_info``
+    * ``to_string`` is now marked as deprecated
+* [BREAKING] The RANGE field defined in `parsing.cpp`, for the low data rate profile, is now 32 bits wide (originally 16 bits.)
+    * Please note this fixes a SDK bug. The underlying UDP format is unchanged.
+* [BREAKING] The NEAR_IR field defined in `parsing.cpp`, for the low data rate profile, is now 16 bits wide (originally 8 bits.)
+    * Plase note this fixes a SDK bug. The underlying UDP format is unchanged.
+* [BREAKING] changed frame_id return size to 32 bits from 16 bits
+* An array of per-packet timestamps (called ``packet_timestamp``) is added to ``LidarScan``
+* The client now retries failed requests to an Ouster sensor's HTTP API
+* Increased the default timeout for HTTP requests to 40s
+* Added FuSA UDP profile to support Ouster FW 3.1+
+* Improved ``ScanBatcher`` performance by roughly 3x (depending on hardware)
+* Receive buffer size increased from 256KB to 1MB
+* [bugfix] Fixed an issue that caused incorrect Cartesian point computation in the ``viz.Cloud`` Python class
+* [bugfix] Fixed an issue that resulted in some ``packet_format`` methods returning an uninitialized value
+* [bugfix] Fixed a libpcap-related linking issue
+* [bugfix] Fixed an eigen 3.3-related linking issue
+* [bugfix] Fixed a zero beam angle calculation issue
+* [bugfix] Fixed dropped columns issue with 4096x5 and 2048x10
+
+ouster-cli
+----------
+
+* Added ``source <FILE> slam`` and ``source <FILE> slam viz`` commands
+* All metadata CLI options are changed to ``-m/--metadata``
+* Added discovery for FW 3.1+ sensors
+* Set signal multiplier by default in sensor/SOURCE sensor config
+* use ``PYBIND11_MODULE`` instead of deprecated module constructor
+* remove deprecated == in pybind for ``.is()``
+* [bugfix] Fix report of fragmentation for ouster-cli pcap/SOURCE pcap info
+* [bugfix] Fixed issue regarding windows mDNS in discovery
+* [bugfix] Fixed cli pcap recording timestamp issue
+* [BREAKING] CSV output ordering switched
+
+ouster.sdk
+----------
+
+* ``ouster-mapping`` is now a required dependency
+* [BREAKING] change the ``ouster.sdk.viz`` location to the ``ouster.viz``
+  package, please update the references if you used ``ouster.sdk.viz`` module
+* [bugfix] Fixed Windows pcap support for files larger than 2GB
+* [bugfix] Fixed the order of ``LidarScan``'s ``w`` and ``h`` keyword arguments
+* [bugfix] Fixed an issue with ``LidarPacket`` when using data recorded with older versions of Ouster Studio
+
+Known issues
+------------
+
+* The dependency specifier for ``scipy`` is invalid per PEP-440
+* ``get_config`` always returns true
+* Repeated CTRL-C can cause a segmentation fault while visualizing a point cloud
+
 20230710
 ========
 
 * Update vcpkg ref of build to 2023-02-24
-* 
 
 ouster_osf
 ----------
@@ -19,10 +90,14 @@ ouster_client
 * Add ``LidarScan.pose`` with poses per column
 * Add ``_client.IndexedPcapReader`` and ``_client.PcapIndex`` to enable random
   pcap file access by frame number
+
 * [BREAKING] remove ``ouster::Imu`` object
-* Add get_field_types function for LidarScan, from sensor_info
-* bugfix: return metadata regardless of sensor_info status field
+* [BREAKING] change the return type of ``ouster::packet_format::frame_id`` from ``uint16_t`` to ``uint32_t``
+* [BREAKING] remove methods ``px_range``, ``px_reflectivity``, ``px_signal``, and ``px_ambient`` from ``ouster::packet_format``
+* Add ``get_field_types`` function for ``LidarScan``, from ``sensor_info``
+* bugfix: return metadata regardless of ``sensor_info`` status field
 * Make timeout on curl more configurable
+* [BREAKING] remove encoder_ticks_per_rev (deprecated)
 
 ouster_viz
 ----------

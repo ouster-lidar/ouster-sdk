@@ -53,7 +53,8 @@ std::unique_ptr<MetadataEntry> Extrinsics::from_buffer(
 
 std::string Extrinsics::repr() const {
     std::stringstream ss;
-    ss << "ExtrinsicsMeta: ref_id = " << ref_meta_id_ << ", name = " << name_ << ", extrinsics =";
+    ss << "ExtrinsicsMeta: ref_id = " << ref_meta_id_ << ", name = " << name_
+       << ", extrinsics =";
     for (size_t i = 0; i < 4; ++i) {
         for (size_t j = 0; j < 4; ++j) {
             ss << " " << extrinsics_(i, j);

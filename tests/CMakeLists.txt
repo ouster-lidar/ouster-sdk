@@ -6,9 +6,10 @@ else()
 endif()
 
 find_package(GTest REQUIRED)
+find_package(jsoncpp REQUIRED)
 
 add_executable(bcompat_meta_json_test
-  bcompat_meta_json_test.cpp bcompat_sensor_info_data.h)
+  bcompat_meta_json_test.cpp)
 
 target_link_libraries(bcompat_meta_json_test
   OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
@@ -20,6 +21,22 @@ set_tests_properties(
         PROPERTIES
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/)
+
+
+add_executable(metadata_test metadata_test.cpp)
+target_link_libraries(metadata_test
+    PUBLIC
+        OusterSDK::ouster_client GTest::gtest GTest::gtest_main
+    PRIVATE
+        jsoncpp_lib)
+add_test(NAME metadata_test COMMAND metadata_test --gtest_output=xml:metadata_test.xml)
+set_tests_properties(
+    metadata_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
+)
+
 
 add_executable(lidar_scan_test lidar_scan_test.cpp)
 
@@ -33,7 +50,7 @@ set_tests_properties(
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
 
-add_executable(cartesian_test cartesian_test.cpp)
+add_executable(cartesian_test cartesian_test.cpp util.h)
 
 target_link_libraries(cartesian_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
 
@@ -74,3 +91,54 @@ add_executable(profile_extension_test profile_extension_test.cpp)
 target_link_libraries(profile_extension_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
 
 add_test(NAME profile_extension_test COMMAND profile_extension_test --gtest_output=xml:profile_extension_test.xml)
+
+add_executable(fusa_profile_test fusa_profile_test.cpp)
+
+target_link_libraries(fusa_profile_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME fusa_profile_test COMMAND fusa_profile_test --gtest_output=xml:fusa_profile_test.xml)
+set_tests_properties(
+    fusa_profile_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)
+
+add_executable(parsing_benchmark_test parsing_benchmark_test.cpp util.h)
+
+target_link_libraries(parsing_benchmark_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME parsing_benchmark_test COMMAND parsing_benchmark_test --gtest_output=xml:parsing_benchmark_test.xml)
+
+set_tests_properties(
+    parsing_benchmark_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)
+
+add_executable(scan_batcher_test scan_batcher_test.cpp util.h)
+
+target_link_libraries(scan_batcher_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME scan_batcher_test COMMAND scan_batcher_test --gtest_output=xml:parsing_benchmark_test.xml)
+
+set_tests_properties(
+    scan_batcher_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)
+
+add_executable(packet_writer_test packet_writer_test.cpp util.h)
+
+target_link_libraries(packet_writer_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME packet_writer_test COMMAND packet_writer_test --gtest_output=xml:parsing_benchmark_test.xml)
+
+set_tests_properties(
+    packet_writer_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)

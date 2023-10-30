@@ -12,9 +12,9 @@
 #include <iostream>
 #include <sstream>
 
-#include "ouster/osf/crc32.h"
 #include "compat_ops.h"
 #include "fb_utils.h"
+#include "ouster/osf/crc32.h"
 
 namespace ouster {
 namespace osf {
@@ -30,7 +30,7 @@ inline void print_error(const std::string& filename, const std::string& msg) {
 #define print_error(a, b) ((void)0)
 #endif
 
-}
+}  // namespace
 
 // ======== Construction ============
 
@@ -132,9 +132,7 @@ bool OsfFile::valid() {
         get_prefixed_size(get_header_chunk_ptr()) + FLATBUFFERS_PREFIX_LENGTH;
 
     // Check flatbuffers osfHeader validity
-    if (!verify_osf_header_buf(
-            get_header_chunk_ptr(),
-            header_size)) {
+    if (!verify_osf_header_buf(get_header_chunk_ptr(), header_size)) {
         print_error(filename_, "OSF header verification has failed.");
         return false;
     }
@@ -225,9 +223,7 @@ const uint8_t* OsfFile::buf(const uint64_t offset) const {
     return file_buf_ + offset;
 }
 
-bool OsfFile::is_memory_mapped() const {
-    return file_buf_ != nullptr;
-}
+bool OsfFile::is_memory_mapped() const { return file_buf_ != nullptr; }
 
 // ======= Helpers =============
 
@@ -375,5 +371,5 @@ uint8_t* OsfFile::get_metadata_chunk_ptr() {
     return metadata_chunk_->data();
 }
 
-}  // namespace OSF
+}  // namespace osf
 }  // namespace ouster

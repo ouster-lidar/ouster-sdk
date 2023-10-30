@@ -136,18 +136,17 @@ struct ChunksIter {
     friend class ChunksRange;
 };  // ChunksIter
 
-
 /**
  * Chunks range
  */
 class ChunksRange {
-    public:
+   public:
     ChunksIter begin() const;
     ChunksIter end() const;
 
     std::string to_string() const;
 
-    private:
+   private:
     ChunksRange(const uint64_t begin_addr, const uint64_t end_addr,
                 Reader* reader);
 
@@ -216,7 +215,7 @@ struct MessagesStandardIter {
 
 /**
  * %OSF Reader that simply reads sequentially messages from the OSF file.
- * 
+ *
  * @todo Add filtered reads, and other nice things...
  */
 class Reader {
@@ -293,9 +292,8 @@ class Reader {
     bool has_stream_info() const;
 
    private:
-
     void read_metadata();
-    void read_chunks_info(); // i.e. StreamingInfo.chunks[] information
+    void read_chunks_info();  // i.e. StreamingInfo.chunks[] information
 
     void print_metadata_entries();
 
@@ -356,20 +354,18 @@ class MessageRef {
     std::string to_string() const;
 
     /** Checks whether the message belongs to the specified Stream type */
-    template<typename Stream>
+    template <typename Stream>
     bool is() const {
-        auto meta =
-            meta_provider_.get<typename Stream::meta_type>(id());
+        auto meta = meta_provider_.get<typename Stream::meta_type>(id());
         return (meta != nullptr);
     }
 
     bool is(const std::string& type_str) const;
 
     /** Reconstructs the underlying data to the class (copies data) */
-    template<typename Stream>
+    template <typename Stream>
     std::unique_ptr<typename Stream::obj_type> decode_msg() const {
-        auto meta =
-            meta_provider_.get<typename Stream::meta_type>(id());
+        auto meta = meta_provider_.get<typename Stream::meta_type>(id());
 
         if (meta == nullptr) {
             // Stream and metadata entry id is inconsistent
@@ -395,7 +391,7 @@ class MessageRef {
  * Thin interface class that holds the pointer to the chunk and hides the
  * messages reading routines. It expects that Chunk was "verified" before
  * creating a ChunkRef.
- * 
+ *
  */
 class ChunkRef {
    public:
@@ -442,7 +438,6 @@ class ChunkRef {
     std::shared_ptr<ChunkBuffer> chunk_buf_;
 };  // ChunkRef
 
-
 /**
  * Convenienv iterator over all messages in a chunk.
  */
@@ -477,7 +472,6 @@ struct MessagesChunkIter {
     size_t msg_idx_;
     friend class ChunkRef;
 };  // MessagesChunkIter
-
 
 class MessagesStreamingRange {
    public:

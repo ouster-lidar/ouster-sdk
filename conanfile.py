@@ -60,6 +60,11 @@ class OusterSDKConan(ConanFile):
             del self.options.fPIC
 
     def requirements(self):
+         # not required directly here but because boost and openssl pulling
+         # slightly different versions of zlib we need to set it
+         # here explicitly
+        self.requires("zlib/1.3")
+
         self.requires("eigen/3.4.0")
         self.requires("jsoncpp/1.9.5")
         self.requires("spdlog/1.11.0")

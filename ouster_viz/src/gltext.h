@@ -74,7 +74,8 @@ extern "C" {
 #define _GLT_STRINGIFY_TOKEN(str) _GLT_STRINGIFY(str)
 
 #define GLT_STRINGIFY_VERSION(major, minor, patch) \
-    _GLT_STRINGIFY(major) "." _GLT_STRINGIFY(minor) "." _GLT_STRINGIFY(patch)
+    _GLT_STRINGIFY(major)                          \
+    "." _GLT_STRINGIFY(minor) "." _GLT_STRINGIFY(patch)
 
 #define GLT_NAME "glText"
 
@@ -958,6 +959,7 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
     return GL_TRUE;
 }
 
+// clang-format off
 static const uint64_t _gltFontGlyphRects[_gltFontGlyphCount] = {
     0x1100040000, 0x304090004, 0x30209000D, 0x304090016, 0x30209001F,
     0x304090028,  0x302090031, 0x409003A,   0x302090043, 0x30109004C,
@@ -1072,6 +1074,7 @@ static const _GLT_FONT_GLYPH_DATA_TYPE
         0x555515555AA45690, 0x6905A516955AA455, 0x416905A416905A41,
         0x55556A95A556905A, 0xA5A5696915555554, 0x5555155555,
 };
+// clang-format on
 
 GLT_API GLboolean _gltCreateText2DFontTexture(void) {
     /* if (gltInitialized) return GL_TRUE; */

@@ -5,13 +5,11 @@
 
 #include "ouster/osf/writer.h"
 
-#include "ouster/osf/crc32.h"
+#include "fb_utils.h"
 #include "ouster/osf/basics.h"
-
+#include "ouster/osf/crc32.h"
 #include "ouster/osf/layout_standard.h"
 #include "ouster/osf/layout_streaming.h"
-
-#include "fb_utils.h"
 
 constexpr size_t MAX_CHUNK_SIZE = 500 * 1024 * 1024;
 
@@ -28,9 +26,9 @@ Writer::Writer(const std::string& filename, const std::string& metadata_id,
     // chunks STREAMING_LAYOUT
     chunks_writer_ = std::make_shared<StreamingLayoutCW>(*this, chunk_size);
 
-    // or chunks STANDARD_LAYOUT (left for now to show the mechanisms of switching
-    // layout strategies)
-    // chunks_writer_ = std::make_shared<StandardLayoutCW>(*this, chunk_size);
+    // or chunks STANDARD_LAYOUT (left for now to show the mechanisms of
+    // switching layout strategies) chunks_writer_ =
+    // std::make_shared<StandardLayoutCW>(*this, chunk_size);
 
     // TODO[pb]: Check if file exists, add flag overwrite/not overwrite, etc
 
@@ -66,7 +64,6 @@ uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
 
 void Writer::saveMessage(const uint32_t stream_id, const ts_t ts,
                          const std::vector<uint8_t>& msg_buf) {
-
     if (!meta_store_.get(stream_id)) {
         std::cerr << "ERROR: Attempt to save the non existent stream: id = "
                   << stream_id << std::endl;
@@ -78,7 +75,7 @@ void Writer::saveMessage(const uint32_t stream_id, const ts_t ts,
 }
 
 uint64_t Writer::emit_chunk(const ts_t chunk_start_ts, const ts_t chunk_end_ts,
-                        const std::vector<uint8_t>& chunk_buf) {
+                            const std::vector<uint8_t>& chunk_buf) {
     uint64_t saved_bytes = append(chunk_buf.data(), chunk_buf.size());
     uint64_t res_chunk_offset{0};
     if (saved_bytes && saved_bytes == chunk_buf.size() + CRC_BYTES_SIZE) {
@@ -90,8 +87,8 @@ uint64_t Writer::emit_chunk(const ts_t chunk_start_ts, const ts_t chunk_end_ts,
         next_chunk_offset_ += saved_bytes;
         started_ = true;
     } else {
-        std::cerr << "ERROR: Can't save to file. saved_bytes = "
-                  << saved_bytes << std::endl;
+        std::cerr << "ERROR: Can't save to file. saved_bytes = " << saved_bytes
+                  << std::endl;
         std::abort();
     }
     return res_chunk_offset;
@@ -100,7 +97,6 @@ uint64_t Writer::emit_chunk(const ts_t chunk_start_ts, const ts_t chunk_end_ts,
 // < < < ================== Chunk Emiter operations ======================
 
 std::vector<uint8_t> Writer::make_metadata() const {
-    
     auto metadata_fbb = flatbuffers::FlatBufferBuilder(32768);
 
     std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>> entries =
@@ -160,9 +156,7 @@ uint32_t Writer::chunk_size() const {
     return 0;
 }
 
-Writer::~Writer() {
-    close();
-}
+Writer::~Writer() { close(); }
 
 // ================================================================
 
@@ -174,18 +168,18 @@ void ChunkBuilder::saveMessage(const uint32_t stream_id, const ts_t ts,
             << std::endl;
         return;
     }
-    
+
     if (fbb_.GetSize() + msg_buf.size() > MAX_CHUNK_SIZE) {
         std::cerr << "ERROR: reached max possible chunk size MAX_SIZE"
                   << std::endl;
         std::abort();
     }
-    
+
     update_start_end(ts);
 
     // wrap the buffer into StampedMessage
-    auto stamped_msg = gen::CreateStampedMessageDirect(fbb_, ts.count(),
-                                                       stream_id, &msg_buf);
+    auto stamped_msg =
+        gen::CreateStampedMessageDirect(fbb_, ts.count(), stream_id, &msg_buf);
     messages_.push_back(stamped_msg);
 }
 
@@ -197,9 +191,7 @@ void ChunkBuilder::reset() {
     finished_ = false;
 }
 
-uint32_t ChunkBuilder::size() const {
-    return fbb_.GetSize();
-}
+uint32_t ChunkBuilder::size() const { return fbb_.GetSize(); }
 
 uint32_t ChunkBuilder::messages_count() const {
     return static_cast<uint32_t>(messages_.size());
@@ -220,7 +212,7 @@ std::vector<uint8_t> ChunkBuilder::finish() {
         auto chunk = gen::CreateChunkDirect(fbb_, &messages_);
         fbb_.FinishSizePrefixed(chunk, gen::ChunkIdentifier());
         finished_ = true;
-    }    
+    }
 
     const uint8_t* buf = fbb_.GetBufferPointer();
     uint32_t size = fbb_.GetSize();
