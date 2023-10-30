@@ -178,8 +178,9 @@ static Eigen::Array<T, -1, 1> compute_dark_count(
     const size_t image_h = image.rows();
     const size_t image_w = image.cols();
 
-    Eigen::Array<T, -1, 1> tmp{image_w};
-    Eigen::Array<T, -1, 1> new_dark_count{image_h};
+    Eigen::Array<T, -1, 1> tmp = Eigen::Array<T, -1, 1>::Zero(image_w);
+    Eigen::Array<T, -1, 1> new_dark_count =
+        Eigen::Array<T, -1, 1>::Zero(image_h);
 
     // probably computed lazily when used below?
     auto row_diffs = image.bottomRows(image_h - 1) - image.topRows(image_h - 1);
@@ -190,7 +191,6 @@ static Eigen::Array<T, -1, 1> compute_dark_count(
     const size_t n_cols = col_mask.count();
 
     if (n_cols == 0) {
-        new_dark_count.setZero(image_h);
         return new_dark_count;
     }
 

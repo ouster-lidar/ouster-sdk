@@ -90,7 +90,7 @@ migration guide (whichever is relevant).
 
   Timestamps are now available through ``timestamp()``, also returning a ``Header``; and the information
   contained in ``encoder`` is available through ``measurement_id()`` (see the next line item for the
-   conversion).
+  conversion).
 
 - ``encoder``: Encoder counts were part of the LEGACY UDP profile, representing the azimuth angle as
   a raw encoder count starting from 0 to a max value of 90111. It thus incremented 44 ticks per

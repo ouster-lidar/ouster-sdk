@@ -156,7 +156,8 @@ void GLImage::initialize() {
     GLImage::image_id = glGetUniformLocation(GLImage::program_id, "image");
     GLImage::mask_id = glGetUniformLocation(GLImage::program_id, "mask");
     GLImage::palette_id = glGetUniformLocation(GLImage::program_id, "palette");
-    GLImage::use_palette_id = glGetUniformLocation(GLImage::program_id, "use_palette");
+    GLImage::use_palette_id =
+        glGetUniformLocation(GLImage::program_id, "use_palette");
     GLImage::initialized = true;
 }
 

@@ -3,23 +3,22 @@
  * All rights reserved.
  */
 
-#include <cstdlib>
+#include "png_tools.h"
+
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 
 #include <Eigen/Eigen>
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
-
-#include "ouster/types.h"
-#include "ouster/lidar_scan.h"
 
 #include "common.h"
 #include "osf_test.h"
-
-#include "png_tools.h"
+#include "ouster/lidar_scan.h"
 #include "ouster/osf/basics.h"
+#include "ouster/types.h"
 
 namespace ouster {
 namespace osf {
@@ -27,8 +26,8 @@ namespace {
 
 class OsfPngToolsTest : public OsfTestWithDataAndFiles {};
 
-using ouster::sensor::sensor_info;
 using ouster::sensor::lidar_mode;
+using ouster::sensor::sensor_info;
 
 size_t field_size(LidarScan& ls, sensor::ChanField f) {
     switch (ls.field_type(f)) {
@@ -57,8 +56,7 @@ TEST_F(OsfPngToolsTest, MakesLidarScan) {
 
     LidarScan ls = get_random_lidar_scan(si);
 
-    const auto n =
-        si.format.columns_per_frame * si.format.pixels_per_column;
+    const auto n = si.format.columns_per_frame * si.format.pixels_per_column;
 
     EXPECT_EQ(ls.w, si.format.columns_per_frame);
     EXPECT_EQ(ls.h, si.format.pixels_per_column);
@@ -123,7 +121,7 @@ TEST_F(OsfPngToolsTest, ImageCoders) {
     auto px_offset = si.format.pixel_shift_by_row;
 
     // ======== 8bit ==========
-    
+
     EXPECT_TRUE(test8bitImageCoders<uint8_t>().to<uint8_t>(ls, px_offset, 8));
     EXPECT_TRUE(test8bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 8));
     EXPECT_TRUE(test8bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 8));
@@ -144,8 +142,8 @@ TEST_F(OsfPngToolsTest, ImageCoders) {
     EXPECT_TRUE(test8bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 8));
     EXPECT_TRUE(test8bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 8));
 
-    // ======== 16bit ====== 
-
+    // ======== 16bit ======
+    // clang-format off
     EXPECT_TRUE(test16bitImageCoders<uint8_t>().to<uint8_t>(ls, px_offset, 16));
     EXPECT_TRUE(test16bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 16));
     EXPECT_TRUE(test16bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 16));
@@ -165,75 +163,120 @@ TEST_F(OsfPngToolsTest, ImageCoders) {
     EXPECT_TRUE(test16bitImageCoders<uint64_t>().to<uint16_t>(ls, px_offset, 16));
     EXPECT_TRUE(test16bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 16));
     EXPECT_TRUE(test16bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 16));
+    // clang-format on
 
-    // ======== 24bit ====== 
+    // ======== 24bit ======
 
     EXPECT_TRUE(test24bitImageCoders<uint8_t>().to<uint8_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint8_t>().to<uint64_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint8_t>().to<uint64_t>(ls, px_offset, 24));
 
-    EXPECT_FALSE(test24bitImageCoders<uint16_t>().to<uint8_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint16_t>().to<uint16_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint16_t>().to<uint32_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint16_t>().to<uint64_t>(ls, px_offset, 24));
+    EXPECT_FALSE(
+        test24bitImageCoders<uint16_t>().to<uint8_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint16_t>().to<uint16_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint16_t>().to<uint32_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint16_t>().to<uint64_t>(ls, px_offset, 24));
 
-    EXPECT_FALSE(test24bitImageCoders<uint32_t>().to<uint8_t>(ls, px_offset, 24));
-    EXPECT_FALSE(test24bitImageCoders<uint32_t>().to<uint16_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint32_t>().to<uint32_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint32_t>().to<uint64_t>(ls, px_offset, 24));
+    EXPECT_FALSE(
+        test24bitImageCoders<uint32_t>().to<uint8_t>(ls, px_offset, 24));
+    EXPECT_FALSE(
+        test24bitImageCoders<uint32_t>().to<uint16_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint32_t>().to<uint32_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint32_t>().to<uint64_t>(ls, px_offset, 24));
 
-    EXPECT_FALSE(test24bitImageCoders<uint64_t>().to<uint8_t>(ls, px_offset, 24));
-    EXPECT_FALSE(test24bitImageCoders<uint64_t>().to<uint16_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 24));
-    EXPECT_TRUE(test24bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 24));
+    EXPECT_FALSE(
+        test24bitImageCoders<uint64_t>().to<uint8_t>(ls, px_offset, 24));
+    EXPECT_FALSE(
+        test24bitImageCoders<uint64_t>().to<uint16_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 24));
+    EXPECT_TRUE(
+        test24bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 24));
 
-    // ======== 32bit ====== 
+    // ======== 32bit ======
 
     EXPECT_TRUE(test32bitImageCoders<uint8_t>().to<uint8_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint8_t>().to<uint64_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint8_t>().to<uint64_t>(ls, px_offset, 32));
 
-    EXPECT_FALSE(test32bitImageCoders<uint16_t>().to<uint8_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint16_t>().to<uint16_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint16_t>().to<uint32_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint16_t>().to<uint64_t>(ls, px_offset, 32));
+    EXPECT_FALSE(
+        test32bitImageCoders<uint16_t>().to<uint8_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint16_t>().to<uint16_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint16_t>().to<uint32_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint16_t>().to<uint64_t>(ls, px_offset, 32));
 
-    EXPECT_FALSE(test32bitImageCoders<uint32_t>().to<uint8_t>(ls, px_offset, 32));
-    EXPECT_FALSE(test32bitImageCoders<uint32_t>().to<uint16_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint32_t>().to<uint32_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint32_t>().to<uint64_t>(ls, px_offset, 32));
+    EXPECT_FALSE(
+        test32bitImageCoders<uint32_t>().to<uint8_t>(ls, px_offset, 32));
+    EXPECT_FALSE(
+        test32bitImageCoders<uint32_t>().to<uint16_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint32_t>().to<uint32_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint32_t>().to<uint64_t>(ls, px_offset, 32));
 
-    EXPECT_FALSE(test32bitImageCoders<uint64_t>().to<uint8_t>(ls, px_offset, 32));
-    EXPECT_FALSE(test32bitImageCoders<uint64_t>().to<uint16_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 32));
-    EXPECT_TRUE(test32bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 32));
+    EXPECT_FALSE(
+        test32bitImageCoders<uint64_t>().to<uint8_t>(ls, px_offset, 32));
+    EXPECT_FALSE(
+        test32bitImageCoders<uint64_t>().to<uint16_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 32));
+    EXPECT_TRUE(
+        test32bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 32));
 
     // ======== 64bit ======
 
     EXPECT_TRUE(test64bitImageCoders<uint8_t>().to<uint8_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint8_t>().to<uint64_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint8_t>().to<uint16_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint8_t>().to<uint32_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint8_t>().to<uint64_t>(ls, px_offset, 64));
 
-    EXPECT_FALSE(test64bitImageCoders<uint16_t>().to<uint8_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint16_t>().to<uint16_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint16_t>().to<uint32_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint16_t>().to<uint64_t>(ls, px_offset, 64));
+    EXPECT_FALSE(
+        test64bitImageCoders<uint16_t>().to<uint8_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint16_t>().to<uint16_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint16_t>().to<uint32_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint16_t>().to<uint64_t>(ls, px_offset, 64));
 
-    EXPECT_FALSE(test64bitImageCoders<uint32_t>().to<uint8_t>(ls, px_offset, 64));
-    EXPECT_FALSE(test64bitImageCoders<uint32_t>().to<uint16_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint32_t>().to<uint32_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint32_t>().to<uint64_t>(ls, px_offset, 64));
+    EXPECT_FALSE(
+        test64bitImageCoders<uint32_t>().to<uint8_t>(ls, px_offset, 64));
+    EXPECT_FALSE(
+        test64bitImageCoders<uint32_t>().to<uint16_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint32_t>().to<uint32_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint32_t>().to<uint64_t>(ls, px_offset, 64));
 
-    EXPECT_FALSE(test64bitImageCoders<uint64_t>().to<uint8_t>(ls, px_offset, 64));
-    EXPECT_FALSE(test64bitImageCoders<uint64_t>().to<uint16_t>(ls, px_offset, 64));
-    EXPECT_FALSE(test64bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 64));
-    EXPECT_TRUE(test64bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 64));
-
+    EXPECT_FALSE(
+        test64bitImageCoders<uint64_t>().to<uint8_t>(ls, px_offset, 64));
+    EXPECT_FALSE(
+        test64bitImageCoders<uint64_t>().to<uint16_t>(ls, px_offset, 64));
+    EXPECT_FALSE(
+        test64bitImageCoders<uint64_t>().to<uint32_t>(ls, px_offset, 64));
+    EXPECT_TRUE(
+        test64bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 64));
 }
 
 }  // namespace
-}  // namespace OSF
+}  // namespace osf
 }  // namespace ouster

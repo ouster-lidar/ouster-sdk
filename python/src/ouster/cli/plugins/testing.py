@@ -62,7 +62,8 @@ def testing_time(pcap_file: str, json: IO) -> None:
 
 @testing_group.command(name="digest")
 @click.argument('file', type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click.Path(exists=True))
+@click.option('-m', '--meta', required=False, type=click.Path(exists=True),
+        help="Metadata file for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=0, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=0, help="Dest. port of imu data")
 @click.option('-c',

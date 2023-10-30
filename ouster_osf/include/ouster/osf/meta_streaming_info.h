@@ -8,11 +8,11 @@
  */
 #pragma once
 
-#include <memory>
 #include <iostream>
+#include <memory>
 
-#include "ouster/types.h"
 #include "ouster/osf/metadata.h"
+#include "ouster/types.h"
 
 namespace ouster {
 namespace osf {
@@ -52,23 +52,22 @@ std::string to_string(const StreamStats& stream_stats);
 
 /**
  * Metadata entry to store StreamingInfo, to support StreamingLayout (RFC 0018)
- * 
+ *
  * @verbatim
  * Fields:
  *   chunks_info: chunk -> stream_id map
  *   stream_stats: stream statistics of messages in file
- * 
+ *
  * OSF type:
  *   ouster/v1/streaming/StreamingInfo
- *  
+ *
  * Flatbuffer definition file:
  *   fb/streaming/streaming_info.fbs
  * @endverbatim
- *  
+ *
  */
 class StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
    public:
-
     StreamingInfo() {}
 
     StreamingInfo(

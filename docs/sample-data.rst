@@ -5,10 +5,11 @@ Download Recorded Sample Data
 If you haven't downloaded the ``ouster-sdk``, please follow the :ref:`Python Installation
 <installation-python>` instructions.
 
-Download Data
-=============
 
 .. _sample-data-download:
+
+Download Data
+=============
 
 ..
    [start-download-instructions]
@@ -38,14 +39,14 @@ Visualize It!
 If you've installed the ``ouster-sdk`` (see :ref:`Python Installation <installation-python>`) then
 you're all set to visualize with::
         
-   $ simple-viz --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH
+   $ ouster-cli source $SAMPLE_DATA_PCAP_PATH [--meta $SAMPLE_DATA_JSON_PATH] viz
        
 You should get a view similar to:
 
-.. figure:: /images/simple-viz.png
+.. figure:: /images/ouster-viz.png
     :align: center
 
-    Ouster ``simple-viz`` visualization of OS1 128 Rev 6 sample data
+    Ouster SDK CLI ``ouster-cli source <sensor | pcap | osf> viz`` visualization of OS1 128 sample data
 
 You can control your visualizer with mouse and keyboard:
 
@@ -55,4 +56,4 @@ You can control your visualizer with mouse and keyboard:
 
 Congratulations! You've installed and visualized with the Ouster Python SDK!
 
-For more on ``simple-viz``, please see :doc:`python/viz/viz-run`
+For more on Ouster SDK CLI viz, please see :doc:`python/viz/viz-run`

@@ -10,9 +10,7 @@ from ouster.sdk.util import resolve_metadata
 from ouster import client
 from pathlib import Path
 import ouster.osf as osf
-from ouster.sdkx.mapping.slam import KissBackend
 import ouster.sdkx.mapping.util as util
-from ouster.sdk.viz import SimpleViz
 from ouster.sdkx.parsing import default_scan_fields
 from datetime import datetime
 import time
@@ -26,12 +24,15 @@ def mapping_group() -> None:
 
 class SLAMOSFWriter:
 
-    def __init__(self, source: str, output_path: str, chunk_size: int, lidar_port: int, imu_port: int):
+    def __init__(self, source: str, output_path: str, chunk_size: int, lidar_port: int, imu_port: int, meta: str):
         source_ext = Path(source).suffix
         if source_ext == ".pcap":
-            meta_data = resolve_metadata(source)
+            if meta:
+                meta_data = meta
+            else:
+                meta_data = resolve_metadata(source)
             if not meta_data:
-                raise Exception("File not found, please specify a metadata file with `-f`")
+                raise Exception("File not found, please specify a metadata file with `-m`")
             with open(Path(meta_data)) as meta_file:
                 meta_json = meta_file.read()
                 lidar_sensor_meta = osf.LidarSensor(meta_json)
@@ -61,7 +62,7 @@ class SLAMOSFWriter:
 def slam_scans_generator(scan_source, slam, osf_writer):
     for scan in scan_source:
         scan_slam = slam.update(scan)
-        scan_ts = client.first_valid_column_ts(scan_slam)
+        scan_ts = client.first_valid_packet_ts(scan_slam)
         osf_writer.write_scan(scan_ts, scan_slam)
         yield scan_slam
 
@@ -77,6 +78,23 @@ def slam_scans_generator(scan_source, slam, osf_writer):
 @click.option('-l', '--lidar_port', default=7502, help="Lidar port")
 @click.option('-i', '--imu_port', default=7503, help="IMU port")
 @click.option('-o', '--output', required=False, help="OSF output filename")
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 def run_slam(
     source: str,
     viz: str,
@@ -84,13 +102,35 @@ def run_slam(
     slam_name: str,
     lidar_port: int,
     imu_port: int,
-    output: Optional[str]) -> None:
+    output: Optional[str],
+    accum_num: int,
+    accum_every: Optional[int],
+    accum_every_m: Optional[float],
+    accum_map: bool,
+    accum_map_ratio: float) -> None:
     """
     Run SLAM algorithm with an optional visualizer
 
     Run with a sensor or a pcap file to produce an OSF containing the lidar data and SLAM poses.
     To turn on visualizer, append 'viz' or 'visualizer' to the command, case insensitive.
     """
+    run_slam_impl(source, viz, meta, slam_name, lidar_port, imu_port, output,
+                  accum_num, accum_every, accum_every_m, accum_map,
+                  accum_map_ratio)
+
+
+def run_slam_impl(source: str,
+                  viz: str = None,
+                  meta: str = None,
+                  slam_name: str = "kiss_slam",
+                  lidar_port: int = 7502,
+                  imu_port: int = 7503,
+                  output: str = None,
+                  accum_num: int = 0,
+                  accum_every: Optional[int] = None,
+                  accum_every_m: Optional[float] = None,
+                  accum_map: bool = False,
+                  accum_map_ratio: float = 0.001) -> None:
 
     data_source = util.Source(source, meta = meta)
 
@@ -100,20 +140,34 @@ def run_slam(
         output = f"{metadata.prod_line}_{metadata.sn}_{metadata.fw_rev}_{metadata.mode}_{date_time}_slam_output.osf"
 
     if slam_name == "kiss_slam":
+        try:
+            from ouster.sdkx.mapping.slam import KissBackend
+        except ImportError as e:
+            raise click.ClickException("kiss_icp is not installed. Please run pip install kiss-icp. Error: " + str(e))
         slam = KissBackend(info=data_source.metadata)
     else:
         raise ValueError("Only support KISS-ICP SLAM for now")
 
     chunk_size = 0
-    osf_writer = SLAMOSFWriter(source, output, chunk_size, lidar_port, imu_port)
+    osf_writer = SLAMOSFWriter(source, output, chunk_size, lidar_port, imu_port, meta)
 
     print(f"Running {slam_name} SLAM and start writing LidarScan and Traj into {output}\nhit ctrl-c to exit")
 
     start_time = time.time()
     slam_scan_gen = slam_scans_generator(data_source, slam, osf_writer)
 
-    if viz.lower() in ['viz', 'visualizer']:
-        simple_viz = SimpleViz(data_source.metadata)
+    if viz and viz.lower() in ['viz', 'visualizer']:
+        try:
+            from ouster.viz import SimpleViz, scans_accum_for_cli
+        except ImportError as e:
+            raise click.ClickException("Error: " + str(e))
+        scans_accum = scans_accum_for_cli(data_source.metadata,
+                                          accum_num=accum_num,
+                                          accum_every=accum_every,
+                                          accum_every_m=accum_every_m,
+                                          accum_map=accum_map,
+                                          accum_map_ratio=accum_map_ratio)
+        simple_viz = SimpleViz(data_source.metadata, scans_accum=scans_accum)
         simple_viz.run(slam_scan_gen)
     else:
         for _ in slam_scan_gen:
@@ -286,7 +340,7 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
             f"{points_sum} points accumulated during this period,\n{near_minus_zero} "
             f"near points are removed [{near_removed_pernt:.2f} %],\n{points_down_removed} "
             f"down sampling points are removed [{down_removed_pernt:.2f} %],\n{points_zero} "
-            f"zero range points are removed [{zero_pernt:.2f} %],\n{points_saved} points"
+            f"zero range points are removed [{zero_pernt:.2f} %],\n{points_saved} points "
             f"are saved [{save_pernt:.2f} %].")
         points_sum = 0
         points_zero = 0
@@ -312,8 +366,8 @@ def point_cloud_convert(input_file: str, output_file: str, min_dist: float,
         # to remove near points
         row_index = scan.field(client.ChanField.RANGE) > (min_dist * 1000)
         zero_row_index = scan.field(client.ChanField.RANGE) == 0
-        dewarpped_points = pu.dewarp(points, column_poses=column_poses)
-        filtered_points = dewarpped_points[row_index]
+        dewarped_points = pu.dewarp(points, column_poses=column_poses)
+        filtered_points = dewarped_points[row_index]
         filtered_keys = keys[row_index]
 
         curr_scan_points = row_index.shape[0] * row_index.shape[1]

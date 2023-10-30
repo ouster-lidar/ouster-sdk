@@ -1,4 +1,2 @@
-# type: ignore
-
-from .slam_backend import SLAMBackend  # noqa: F401
-from .kiss_backend import KissBackend  # noqa: F401
+raise RuntimeError("The ouster.sdkx.mapping package has been replaced by the ouster.mapping "
+"package provided by the ouster-sdk[mapping] optional package.")

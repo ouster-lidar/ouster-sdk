@@ -16,9 +16,9 @@ from ouster import client
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
 if TYPE_CHECKING:
-    from ouster.sdk import viz
+    import ouster.viz as viz
 else:
-    viz = pytest.importorskip('ouster.sdk.viz')
+    viz = pytest.importorskip('ouster.viz')
 
 # mark all tests in this module so they only run with the --interactive flag
 pytestmark = pytest.mark.interactive
@@ -143,10 +143,7 @@ def test_point_viz_rgb_image(point_viz: viz.PointViz) -> None:
     show_viz()
 
 
-@pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_point_viz_image_palette(meta: client.SensorInfo,
-                                 scan: client.LidarScan,
-                                 point_viz: viz.PointViz) -> None:
+def test_point_viz_image_palette(point_viz: viz.PointViz) -> None:
     """Test displaying a full-window image."""
 
     palettes = [
@@ -506,7 +503,7 @@ def test_viz_multiple_instances(meta: client.SensorInfo,
 
     ls_viz = viz.LidarScanViz(meta, point_viz)
 
-    ls_viz.scan = scan
+    ls_viz.update(scan)
     ls_viz.draw()
     point_viz.run()
 
@@ -516,7 +513,7 @@ def test_scan_viz_smoke(meta: client.SensorInfo,
     """Smoke test LidarScan visualization."""
     ls_viz = viz.LidarScanViz(meta)
 
-    ls_viz.scan = scan
+    ls_viz.update(scan)
     ls_viz.draw()
     ls_viz.run()
 
@@ -544,7 +541,7 @@ def test_scan_viz_extras(meta: client.SensorInfo,
     point_viz.add(cube1)
     point_viz.add(cube2)
 
-    ls_viz.scan = scan
+    ls_viz.update(scan)
 
     point_viz.camera.dolly(150)
     ls_viz.draw()
@@ -646,6 +643,6 @@ def test_simple_viz_with_callbacks(meta: client.SensorInfo,
                                        pre_draw_callback=pre_draw,
                                        post_draw_callback=post_draw)
 
-    viz.SimpleViz(ls_viz, 1.0).run(scans)
+    viz.SimpleViz(ls_viz, rate=1.0).run(scans)
 
     print("Done")

@@ -131,8 +131,11 @@ inline void random_lidar_scan_data(LidarScan& ls) {
 
     ls.frame_id = 5;
 
+    const int32_t columns_per_packet = ls.w / ls.packet_timestamp().size();
     const int64_t t_start = 100;
+    const int64_t t_start_p = 100000000000;
     const int64_t dt = 100 * 1000 / (ls.w - 1);
+    const int64_t dt_p = 100 * 1000 / (ls.packet_timestamp().size() - 1);
     for (ptrdiff_t i = 0; i < ls.w; ++i) {
         if (i == 0)
             ls.timestamp()[i] = t_start;
@@ -143,6 +146,12 @@ inline void random_lidar_scan_data(LidarScan& ls) {
         ls.measurement_id()[i] = static_cast<uint16_t>(
             (std::numeric_limits<uint16_t>::max() / ls.w) * i);
         ls.pose()[i] = ouster::mat4d::Random();
+
+        const int32_t pi = i / columns_per_packet;
+        if (pi == 0)
+            ls.packet_timestamp()[pi] = t_start_p;
+        else
+            ls.packet_timestamp()[pi] = ls.packet_timestamp()[pi - 1] + dt_p;
     }
 }
 

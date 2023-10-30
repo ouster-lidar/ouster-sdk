@@ -7,8 +7,8 @@
 
 #include <vector>
 
-#include "ouster/osf/writer.h"
 #include "ouster/osf/meta_streaming_info.h"
+#include "ouster/osf/writer.h"
 
 namespace ouster {
 namespace osf {
@@ -26,7 +26,7 @@ void StreamingLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
     auto chunk_builder = chunk_builders_[stream_id];
 
     // checking non-decreasing invariant of chunks and messages
-    if (chunk_builder->end_ts() > ts ) {
+    if (chunk_builder->end_ts() > ts) {
         std::stringstream err;
         err << "ERROR: Can't write wirh a decreasing timestamp: " << ts.count()
             << " for stream_id: " << stream_id
@@ -34,7 +34,7 @@ void StreamingLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
             << chunk_builder->end_ts().count() << ")";
         throw std::logic_error(err.str());
     }
-    
+
     if (chunk_builder->size() + msg_buf.size() > chunk_size_) {
         finish_chunk(stream_id, chunk_builder);
     }

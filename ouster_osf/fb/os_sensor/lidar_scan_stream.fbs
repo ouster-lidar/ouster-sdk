@@ -70,6 +70,7 @@ table LidarScanMsg {
     // elements in a vector should be 16 x timestamp.size()), every 4x4 matrix
     // has a col-major storage
     pose:[double];
+    packet_timestamp:[uint64];
 }
 
 // Scan data from a lidar sensor. One scan is a sweep of a sensor (360 degree).

@@ -72,7 +72,7 @@ def pcap_3d_one_scan(source: client.PacketSource,
     ctr.set_up([1, 0, 0])
 
     # run visualizer main loop
-    print("Press Q or Excape to exit")
+    print("Press Q or Escape to exit")
     vis.run()
     vis.destroy_window()
 

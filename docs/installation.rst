@@ -51,7 +51,7 @@ Ubuntu 18.04, the default Python 3 version is is 3.6, so you'll have to install 
     1.1.1 or newer. In either case, installing OusterSDK into a Python 3
     virtual enviroment is still recommended.
 
-If you're using an unsupported platform like a non-glibc-based linux distribution, or wish to modify
+If you're using an unsupported platform like a non-glibc-based Linux distribution, or wish to modify
 the Ouster Python SDK, you will need to build from source. See the `build instructions`_ for
 requirements needed to build from a source distribution or from a clone of the repository.
 

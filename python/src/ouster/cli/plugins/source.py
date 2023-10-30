@@ -86,6 +86,23 @@ def sensor_info(ctx, *args, **kwargs) -> None:
               help="Do not reinitialize (by default it will reinitialize if needed)")
 @click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
               help="Do not automatically set udp_dest (by default it will auto set udp_dest")
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 @click.pass_context
 def sensor_record(ctx, *args, **kwargs) -> None:
     """Record a sensor data stream as PCAP"""  # Implements ouster-cli source <hostname> record
@@ -99,7 +116,7 @@ def sensor_record(ctx, *args, **kwargs) -> None:
 @click.option('-b', '--buf-size', default=256, hidden=True, help="Max packets to buffer")
 @click.option('-e', '--extrinsics', type=float, nargs=16,
               help='Lidar sensor extrinsics to use in viz')
-@click.option('-f', '--meta', help="Provide separate metadata to use with sensor",
+@click.option('-m', '--meta', help="Provide separate metadata to use with sensor",
         type=click_ro_file, hidden=True)
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
 @click.option('-l', '--lidar-port', type=int, default=None, help="Lidar port")
@@ -120,6 +137,23 @@ def sensor_record(ctx, *args, **kwargs) -> None:
               is_flag=True,
               hidden=True,
               help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 @click.pass_context
 def sensor_viz(ctx, *args, **kwargs) -> None:
     """Visualize the sensor data in a 3D viewer"""  # Implements ouster-cli source <hostname> viz
@@ -131,7 +165,8 @@ def sensor_viz(ctx, *args, **kwargs) -> None:
 
 @click.command
 @click.argument(_output_file_arg_name, required=True)
-@click.option('-m', '--meta', required=False)  # TWS 20230426: changed from -f to -m
+@click.option('-m', '--meta', required=False,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=None, type=int, help="Dest port of lidar data")
 @click.option('-i', '--imu-port', default=None, type=int, help="Dest port of imu data")
 @click.option('-o', '--output', required=False, help="BAG output filename")
@@ -148,7 +183,8 @@ def bag_from_pcap(ctx, output_file, meta, lidar_port, imu_port, output, soft_id_
 
 @click.command
 @click.argument(_output_file_arg_name, required=True)
-@click.option('-f', '--meta', type=click_ro_file)
+@click.option('-m', '--meta', type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('--start-index', default=0, help="index of scan to start outputting")
 @click.option('--num-scans', default=1, help="number of scans to save from pcap to csv files")
 @click.pass_context
@@ -161,7 +197,8 @@ def csv_from_pcap(ctx,
 
     source = ctx.obj.get(_source_arg_name)
     if num_scans is not None and num_scans > 1:
-        click.echo("INFO: You've selected to output multiple scans. Your output CSV names will be suffixed with index.")
+        click.echo("INFO: You've selected to output multiple scans. "
+                   "Your output CSV names will be suffixed with index.")
         csv_base = output_file[0:-4]
         output_paths = [f'{csv_base}_{idx:06d}.csv' for idx in range(0, num_scans)]
     else:
@@ -246,7 +283,8 @@ def pcap_info(ctx, *args, **kwargs) -> None:
 @click.argument('output')
 @click.option('-s', '--start-frame', default=0, help="Start frame index")
 @click.option('-n', '--num-frames', default=10, help="Number of frames")
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=None,
               type=int, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', type=int, default=None, help="Dest. port of imu data")
@@ -262,7 +300,8 @@ def pcap_slice(ctx, *args, **kwargs) -> None:
 
 
 @click.command
-@click.option('-m', '--meta', required=False, type=click_ro_file)  # TWS 20230426: changed this to `-m` from `-f`.
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 # TWS 20230627: '--cycle' is a deprecated option and only hidden to prevent breaking scripts that may be using it
 @click.option('-c', '--cycle', is_flag=True, help="Loop playback", hidden=True)
 @click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
@@ -290,6 +329,33 @@ def pcap_slice(ctx, *args, **kwargs) -> None:
 @click.option('--multi',
               is_flag=True,
               help='Turn on multi sensor pcap handling and metadata resolutions')
+@click.option('--timeout',
+              type=float,
+              default=10.0,
+              help="Timeout in seconds, after which the script will terminate "
+              "if no lidar data is encountered in the PCAP file")
+@click.option('--kitti-poses',
+              required=False,
+              type=click_ro_file,
+              help="Poses file in Kitti format, one pose per scan "
+              "(can be generated by kiss-icp)")
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 @click.pass_context
 def pcap_viz(ctx, *args, **kwargs) -> None:
     """Visualize the PCAP data in a 3D viewer"""
@@ -303,7 +369,7 @@ class BagConvertCommand(SourceConvertCommand):
     """Implements
     ouster-cli source <sourcefile>.bag convert <otherfile>
 
-    This method delegates to the approrpiate command depending on the file
+    This method delegates to the appropriate command depending on the file
     extension of the output file argument.
     """
     conversions = {

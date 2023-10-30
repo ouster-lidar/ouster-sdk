@@ -46,7 +46,7 @@
    Getting Started <cli/getting-started>
    Sample Sessions <cli/sample-sessions>
    Common Use Cases <cli/common-use-cases>
-   Changelog <cli/changelog>
+   Mapping Sessions <cli/mapping-sessions>
 
 .. toctree::
    :caption: Migration Guides

@@ -3,15 +3,15 @@
  * All rights reserved.
  */
 
+#include "ouster/osf/basics.h"
+
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 
-#include "ouster/osf/basics.h"
-#include "ouster/osf/crc32.h"
-
 #include "nonstd/optional.hpp"
+#include "ouster/osf/crc32.h"
 
 namespace ouster {
 namespace osf {

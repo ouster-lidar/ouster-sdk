@@ -13,16 +13,19 @@ Quick links
 * :doc:`cpp/building`
 * `Ouster ROS 1 driver`_
 * :doc:`python/viz/index`
-  :doc:`cli/getting-started`
-.. figure:: /images/simple-viz.png
+* :doc:`cli/getting-started`
+
+
+.. figure:: /images/ouster-viz.png
     :align: center
 
+    Ouster SDK CLI visualization of OS1 128 Rev 7 sample data
 
 Compatibility with FW
 ---------------------
 
 The Ouster SDK currently provides backwards compatibility with any FW 2.0 and later for all
-releases. Older SDK versions are not, however, generally forward-compatible with later FW relesaes,
+releases. Older SDK versions are not, however, generally forward-compatible with later FW releases,
 e.g., the SDK version 20210608 (ouster-sdk 0.2.0) is not compatible with FW 3.0.
 
 .. note::
@@ -35,6 +38,7 @@ The following table indicates the compatibility of each released SDK version and
 ==================================== ======= ======= ======= ======= ======= ======= ======= =======
 SDK Tag (Release) / Python SDK       FW 1.13 FW 2.0  FW 2.1  FW 2.2  FW 2.3  FW 2.4  FW 3.0  FW 2.5
 ==================================== ======= ======= ======= ======= ======= ======= ======= =======
+C++ SDK 20230710 /  Python SDK 0.9.0 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20230403 /  Python SDK 0.8.1 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20230114 /  Python SDK 0.7.1 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20220927 /  Python SDK 0.5.2 no      **yes** **yes** **yes** **yes** **yes** no      no
@@ -49,6 +53,13 @@ C++ SDK v1.13.0  /    n/a            **yes** no      no      no      no      no 
 
 If you are a C++ SDK user who has upgraded to the latest FW but requires an older SDK version,
 please contact our customer support or the Field Applications Engineer who works with you.
+
+See the following section regarding when we will drop support for various FWs.
+
+Supported Platforms and Deprecations
+------------------------------------
+
+Upcoming deprecations/dropped support can be found at our GH announcement of `Lifecycle Policies`_
 
 
 Status and Contact Info
@@ -68,3 +79,4 @@ announcements`_
 .. _Ouster Github announcements: https://github.com/ouster-lidar/ouster_example/discussions/categories/announcements
 .. _Changelog: https://github.com/ouster-lidar/ouster_example/blob/master/CHANGELOG.rst
 .. _Ouster ROS 1 driver: https://github.com/ouster-lidar/ouster-ros
+.. _Lifecycle Policies: https://github.com/ouster-lidar/ouster_example/discussions/532

@@ -96,9 +96,7 @@ TEST_F(FileOpsTest, PathConcats) {
 #endif
 }
 
-TEST_F(FileOpsTest, TestDataDirCheck) {
-    EXPECT_TRUE(is_dir(test_data_dir()));
-}
+TEST_F(FileOpsTest, TestDataDirCheck) { EXPECT_TRUE(is_dir(test_data_dir())); }
 
 TEST_F(FileOpsTest, TestFileSize) {
     // TODO[pb]: Change to file creation later ...

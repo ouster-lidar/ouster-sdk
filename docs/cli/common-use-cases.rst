@@ -4,10 +4,10 @@
 Common Use Cases
 ----------------
 
-One of the goals of the Ouster Sensor Tools package is to easily allow the most common sensor and
-recorded data interactions. We cover some common use cases here, listed alphabetically. Please note
-that wherever <SENSOR_HOSTNAME> is used, you are expected to substitute in your sensor's hostname,
-e.g., ``os1-991913000010.local``.
+One of the goals of ``ouster-cli`` is to easily allow the most common sensor and recorded data
+interactions. We cover some common use cases here, listed alphabetically. Please note that wherever
+<SENSOR_HOSTNAME> is used, you are expected to substitute in your sensor's hostname or IP, e.g.,
+``os1-991913000010.local``.
 
 
 Benchmarking
@@ -30,7 +30,7 @@ Discovering sensors on local network
 ++++++++++++++++++++++++++++++++++++
 
 Sensors announce their presence on the network using Multicast Domain Name Service (mDNS). Use
-helper utility command ``discover`` to list names and IPs af all available sensors on the local
+helper utility command ``discover`` to list names and IPs of all available sensors on the local
 network:
 
 .. code:: bash

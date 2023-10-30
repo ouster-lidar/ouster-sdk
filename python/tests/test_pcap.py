@@ -1,3 +1,4 @@
+#  type: ignore
 """
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
@@ -634,3 +635,13 @@ def test_validation():
 123/122150000150, but got from packet buffer - 5431292/122150000150'): 64,
         client.PacketSizeError('Expected a packet of size 41216 but got a buffer of size 8448'): 64
     }
+
+
+def test_legacy_reduced_json_data():
+    """PCAP data with the legacy reduced metadata json should work."""
+    meta_file_path = path.join(PCAPS_DATA_DIR, 'OS-1-64_sensor_config_reduced.json')
+    pcap_file_path = path.join(PCAPS_DATA_DIR, 'OS-1-64_1024x10_fw20.pcap')
+    metadata = client.SensorInfo(open(meta_file_path).read())
+    packet_source = pcap.Pcap(pcap_file_path, metadata)
+    scans = client.Scans(packet_source)
+    assert 1 == sum(1 for _ in scans)

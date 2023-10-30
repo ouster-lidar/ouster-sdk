@@ -70,7 +70,7 @@ Dropped Support
 +++++++++++++++
 
 Python
-~~~~~~
+------
 Python 3.7 reaches its end of life on June 27th, 2023. We will likely stop producing Python 3.7
 ``ouster-sdk`` wheels by November 2023.
 
@@ -89,7 +89,7 @@ available Python wheels on your system if you so choose.
 
 
 ROS
-~~~
+---
 As already announced in the ouster-ros repo, there will no longer be ROS melodic support past its
 End of Life in May 2023.
 
@@ -114,17 +114,17 @@ change your sensor default via its configuration webpage or the HTTP or TCP APIs
 
 
 Future
-~~~~~~
+------
 
 We will discuss future FW removals and deprecations and their impact if you are a user of the SDK.
 
 TCP API
-.......
+~~~~~~~
 The planned removal of the TCP API in future firmwares should not affect SDK users who communciate
 with the sensor only through SDK APIs, as we have already updated our code to use the HTTP API where
 it is available.
 
 LEGACY Profile
-..............
+~~~~~~~~~~~~~~
 The planned removal of the LEGACY profile in future firmwares also should not affect SDK users, as
 it will just be a code pathway not used.
