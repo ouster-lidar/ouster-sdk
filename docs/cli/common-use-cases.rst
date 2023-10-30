@@ -30,7 +30,7 @@ Discovering sensors on local network
 ++++++++++++++++++++++++++++++++++++
 
 Sensors announce their presence on the network using Multicast Domain Name Service (mDNS). Use
-helper utility command ``discover`` to list names and IPs af all available sensors on the local
+helper utility command ``discover`` to list names and IPs of all available sensors on the local
 network:
 
 .. code:: bash

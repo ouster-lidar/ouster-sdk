@@ -125,6 +125,7 @@ change. For a local debug build, you can also add the ``-g`` flag.
 The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To run:
 
 .. code:: console
+
    # install pybind11
    $ python3 -m pip install pybind11
    

@@ -47,7 +47,6 @@
    Sample Sessions <cli/sample-sessions>
    Common Use Cases <cli/common-use-cases>
    Mapping Sessions <cli/mapping-sessions>
-   Changelog <cli/changelog>
 
 .. toctree::
    :caption: Migration Guides

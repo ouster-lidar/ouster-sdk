@@ -179,7 +179,7 @@ setup(
         'typing-extensions >=3.7.4.3',
         'Pillow >=9.2',
         'packaging',
-        'ouster-mapping>=0.0.1.dev10; python_version >= "3.8"',
+        'ouster-mapping>=0.1.0.dev3; python_version >= "3.8"',
     ],
     extras_require={
         'test': [

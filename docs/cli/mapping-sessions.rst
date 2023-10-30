@@ -7,38 +7,38 @@ Installation
 The Ouster CLI mapping functionality is a part of the Ouster SDK Python
 package.
 
-To install the Ouster SDK with the necessary dependencies for running the mapping capabilities:
+To install the Ouster SDK with the mapping capabilities:
 
 .. tabs::
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 install ouster-sdk[mapping]
+        $ python3 install ouster-sdk
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 install ouster-sdk[mapping]
+        PS > py -3 install ouster-sdk
 
 
 Mapping Tools
 -------------
 
 After installing the Ouster SDK and mapping dependencies, you can explore various mapping tools
-using a connected Ouster sensor or a recorded PCAP file.
+using a connected Ouster sensor or a PCAP/OSF file.
 
 Use ``ouster-cli`` to view the available commands and options you can use ``--help``. Try the
 following command:
 
 .. code:: bash
 
-        ouster-cli mapping --help
+        ouster-cli source HOSTNAME / FILENAME --help
 
 Currently, there are two main commands: ``slam`` and ``convert``. You can further explore each
 command by accessing their respective submenus using the ``--help`` flag. For example:
 
 .. code:: bash
 
-        ouster-cli mapping slam --help
+        ouster-cli source HOSTNAME / FILENAME slam --help
 
 SLAM
 ----
@@ -48,7 +48,7 @@ The Ouster SDK slam command writes lidar scans with per-column poses into an OSF
 custom file format for which Ouster provides conversion capabilities, allowing for the
 reconstruction of a detailed and precise map later.
 
-Connect to a sensor or use a `Sample PCAP`_
+Connect to a sensor or use a PCAP/OSF file :ref:`Download Sample PCAP File <sample-data-download>`
 
 .. note::
 
@@ -59,7 +59,7 @@ Then execute the following command:
 
 .. code:: bash
 
-        ouster-cli mapping slam HOSTNAME / PCAP_FILENAME -o sample.osf viz
+        ouster-cli source HOSTNAME / FILENAME slam viz -o sample.osf
 
 .. note::
 
@@ -70,8 +70,9 @@ Then execute the following command:
 The terminal will display details such as the output filename and the processing duration. The
 output filename must have the .osf extension in order to be used by the convert command.
 
-You can modify settings like point size, color, switching 2D images, or pause playing in the
-visualizer. More details can be found at the `Ouster Visualizer`_.
+You can modify settings like point size, color, switching 2D images, pause playing in the
+visualizer and display accumulated scans. More details can be found at the
+:ref:`Ouster Visualizer <viz-run>` and :ref:`Scans Accumulator <viz-scans-accum>`
 
 
 Convert
@@ -83,7 +84,7 @@ it to a PLY file:
 
 .. code:: bash
 
-        ouster-cli mapping convert sample.osf output.ply
+        ouster-cli source sample.osf convert output.ply
 
 The convert command automatically splits and downsamples the trajectory-adjusted point cloud into
 several files to prevent exporting a huge size file. The terminal will display details, and you will
@@ -105,29 +106,10 @@ You can use an open source software `CloudCompare`_ to import and view the gener
 data files.
 
 
-Mapping tools under specific sources
-------------------------------------
-
-The same functionality described above in ``slam`` and ``convert`` are available from the source
-menu in ``ouster-cli source``.
-
-To run the slam command under the (Sensor and PCAP) sources, use the following command:
-
-.. code:: bash
-
-        ouster-cli source HOSTNAME / PCAP_FILENAME slam -o sample.osf viz
-
-To run the convert command under the (OSF) source and save it as a LAS file, use the following
-command:
-
 .. code:: bash
 
         ouster-cli source sample.osf convert output.las
 
-
-.. _Sample Pcap: https://static.ouster.dev/sensor-docs/#sample-data
-
-.. _Ouster Visualizer: https://static.ouster.dev/sdk-docs/python/viz/viz-run.html
 
 .. _Networking Guide: https://static.ouster.dev/sensor-docs/image_route1/image_route3/networking_guide/networking_guide.html
 

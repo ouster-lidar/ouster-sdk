@@ -518,9 +518,7 @@ INSTANTIATE_TEST_CASE_P(
                         {ChanField::RANGE2, 0x87288b444ddb9c9e},
                         {ChanField::REFLECTIVITY, 0x6912ca3fa04b0d1f},
                         {ChanField::REFLECTIVITY2, 0xf58aa5594d9749dc},
-                        {ChanField::NEAR_IR, 0xc99384623c5d9feb},
-                        {ChanField::RAW32_WORD1, 0x1d53499b615d3702},
-                        {ChanField::RAW32_WORD2, 0x8b8d857f5ddec68d}}},
+                        {ChanField::NEAR_IR, 0xc99384623c5d9feb}}},
         // single return
         snapshot_param{"OS-2-128-U1_v2.3.0_1024x10.pcap",
                        "OS-2-128-U1_v2.3.0_1024x10.json",
@@ -607,8 +605,6 @@ static const Fields fusa_info{
     {ChanField::NEAR_IR, {UINT16, 3, 0xff, -4}},
     {ChanField::RANGE2, {UINT32, 4, 0x7fff, -3}},  // uint16 => uint32
     {ChanField::REFLECTIVITY2, {UINT8, 6, 0xff, 0}},
-    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
-    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
 };
 
 int add_profiles() {

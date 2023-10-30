@@ -12,20 +12,20 @@ introduced briefly below.
 .. _ex-ouster-viz:
 
 
-Visualization with Ouster's ``simple-viz``
-===========================================
+Visualization with Ouster's SDK CLI ``ouster-cli``
+==================================================
 
 Ouster's OpenGL-based visualizer allows for easy visualization from pcaps and sensors on all
 platforms the Ouster SDK supports.
 
-The default Ouster ``simple-viz`` visualizer view includes two 2D range images atop which can be
-cycled through the available fields, and a 3D point cloud on the bottom. For dual returns sensors,
-both returns are displayed by default.
+The default Ouster SDK CLI ``ouster-cli source <sensor | pcap | osf> viz`` visualizer view includes
+two 2D range images atop which can be cycled through the available fields, and a 3D point cloud on
+the bottom. For dual returns sensors, both returns are displayed by default.
 
-.. figure:: /images/simple-viz.png
+.. figure:: /images/ouster-viz.png
     :align: center
 
-    Ouster ``simple-viz`` visualization of OS1 128 Rev 6 sample data
+    Ouster SDK CLI ``ouster-cli source <sensor | pcap | osf> viz`` visualization of OS1 128 Rev 7 sample data
 
 The visualizer can be controlled with mouse and keyboard:
 
@@ -35,14 +35,14 @@ The visualizer can be controlled with mouse and keyboard:
 
 To run the visualizer with a sensor::
 
-    $ simple-viz --sensor $SENSOR_HOSTNAME
+    $ ouster-cli source $SENSOR_HOSTNAME viz
 
 This will auto-configure the udp destination of the sensor while leaving the lidar port as
 previously set on the sensor.
 
 To run the visualizer with a pcap::
 
-    $ simple-viz --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH
+    $ ouster-cli source $SAMPLE_DATA_PCAP_PATH [--meta $SAMPLE_DATA_JSON_PATH] viz
 
 
 Visualization with Ouster's :class:`.viz.PointViz`
@@ -75,8 +75,7 @@ visualizer is implemented in the :func:`.examples.open3d.viewer_3d` function.
 
 .. note::
 
-   You'll have to install the `Open3d package`_ from PyPI to run this example. Note that as of
-   version ``0.13.0``, binaries are not yet provided for Python 3.9 or ARM systems.
+   You'll have to install the `Open3d package`_ from PyPI to run this example.
 
 
 As an example, you can view frame ``84`` from the sample data by running the following command:

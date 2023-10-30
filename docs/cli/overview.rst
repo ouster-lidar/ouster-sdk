@@ -2,7 +2,7 @@
 Ouster CLI Overview
 ===================
 
-The Ouster CLI, availalbe via ``ouster-cli`` provides users features and tools for interacting with
+The Ouster CLI, available via ``ouster-cli`` provides users features and tools for interacting with
 sensor hardware and sensor data, including:
 
 - benchmarking performance from the command line

@@ -16,15 +16,16 @@ Quick links
 * :doc:`cli/getting-started`
 
 
-.. figure:: /images/simple-viz.png
+.. figure:: /images/ouster-viz.png
     :align: center
 
+    Ouster SDK CLI visualization of OS1 128 Rev 7 sample data
 
 Compatibility with FW
 ---------------------
 
 The Ouster SDK currently provides backwards compatibility with any FW 2.0 and later for all
-releases. Older SDK versions are not, however, generally forward-compatible with later FW relesaes,
+releases. Older SDK versions are not, however, generally forward-compatible with later FW releases,
 e.g., the SDK version 20210608 (ouster-sdk 0.2.0) is not compatible with FW 3.0.
 
 .. note::
