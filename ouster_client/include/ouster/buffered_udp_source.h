@@ -30,6 +30,9 @@ namespace ouster {
 namespace sensor {
 namespace impl {
 
+// 64 big enough for any UDP packet
+constexpr size_t packet_size = 65536;
+
 class BufferedUDPSource {
     // client handle
     std::mutex cli_mtx_;
@@ -47,7 +50,7 @@ class BufferedUDPSource {
 
     // internal packet buffer
     size_t capacity_{0};
-    using entry = std::pair<client_state, std::unique_ptr<uint8_t[]>>;
+    using entry = std::pair<client_state, ouster::sensor::Packet>;
     std::vector<entry> bufs_;
 
     explicit BufferedUDPSource(size_t buf_size);
@@ -134,7 +137,28 @@ class BufferedUDPSource {
      * @param[in] timeout_sec maximum time to wait for data.
      * @return client status, see sensor::poll_client().
      */
-    client_state consume(uint8_t* buf, size_t buf_sz, float timeout_sec);
+    [[deprecated]] client_state consume(uint8_t* buf, size_t buf_sz,
+                                        float timeout_sec);
+
+    /**
+     * Read next available packet in the buffer.
+     *
+     * If client_state returns LIDAR_DATA, submitted lidar packet will be
+     * populated, similarly if client_state returns IMU_DATA, submitted
+     * imu packet will be populated instead.
+     *
+     * Blocks if the queue is empty for up to `timeout_sec` (zero means wait
+     * forever). Should only be called by the consumer thread. If reading from
+     * the network was blocked because the buffer was full, the the
+     * CLIENT_OVERFLOW flag will be set on the next returned status.
+     *
+     * @param[in] lidarp lidar packet to read into
+     * @param[in] imu imu packet to read into
+     * @param[in] timeout_sec maximum time to wait for data.
+     * @return client status, see sensor::poll_client().
+     */
+    client_state consume(LidarPacket& lidarp, ImuPacket& imup,
+                         float timeout_sec);
 
     /**
      * Write data from the network into the circular buffer.

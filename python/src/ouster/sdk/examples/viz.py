@@ -9,8 +9,8 @@ Intended to run with `python -m ouster.sdk.examples.viz`
 """
 
 import argparse
-from ouster import client, pcap
-from ouster.sdk import viz
+from ouster import client, pcap, viz
+from ouster.sdk.util import resolve_metadata
 import os
 import sys
 import numpy as np
@@ -55,6 +55,9 @@ def main():
 
     pcap_path = os.getenv("SAMPLE_DATA_PCAP_PATH", args.pcap_path)
     meta_path = os.getenv("SAMPLE_DATA_JSON_PATH", args.meta_path)
+
+    # try to find the metadata json file near the pcap file by common prefix
+    meta_path = resolve_metadata(pcap_path, meta_path)
 
     if not pcap_path or not meta_path:
         print(
@@ -292,7 +295,7 @@ def main():
     ls_viz = viz.LidarScanViz(meta, point_viz)
 
     # adding scan to the lidar scan viz
-    ls_viz.scan = scan
+    ls_viz.update(scan)
 
     # refresh viz data
     ls_viz.draw()

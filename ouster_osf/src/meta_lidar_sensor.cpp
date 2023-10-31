@@ -5,11 +5,10 @@
 
 #include "ouster/osf/meta_lidar_sensor.h"
 
-#include "flatbuffers/flatbuffers.h"
-#include "ouster/osf/basics.h"
-
-#include "json_utils.h"
 #include "fb_utils.h"
+#include "flatbuffers/flatbuffers.h"
+#include "json_utils.h"
+#include "ouster/osf/basics.h"
 
 namespace ouster {
 namespace osf {
@@ -28,7 +27,8 @@ std::unique_ptr<std::string> restore_lidar_sensor(
     auto lidar_sensor = v2::GetSizePrefixedLidarSensor(buf.data());
 
     std::string sensor_metadata{};
-    if (lidar_sensor->metadata()) sensor_metadata = lidar_sensor->metadata()->str();
+    if (lidar_sensor->metadata())
+        sensor_metadata = lidar_sensor->metadata()->str();
 
     return std::make_unique<std::string>(sensor_metadata);
 }
@@ -36,7 +36,8 @@ std::unique_ptr<std::string> restore_lidar_sensor(
 std::vector<uint8_t> LidarSensor::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(32768);
     auto ls_offset = create_lidar_sensor(fbb, metadata_);
-    fbb.FinishSizePrefixed(ls_offset, ouster::osf::gen::LidarSensorIdentifier());
+    fbb.FinishSizePrefixed(ls_offset,
+                           ouster::osf::gen::LidarSensorIdentifier());
     const uint8_t* buf = fbb.GetBufferPointer();
     const uint32_t size = fbb.GetSize();
     return {buf, buf + size};

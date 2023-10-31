@@ -6,19 +6,18 @@
 
 #include "ouster/os_pcap.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <exception>
+#include <fstream>
 #include <memory>
 #include <ostream>
 #include <thread>
-#include <algorithm>
 #include <vector>
 
-#include <fstream>
-
-#include "ouster/pcap.h"
 #include "ouster/indexed_pcap_reader.h"
+#include "ouster/pcap.h"
 
 namespace ouster {
 namespace sensor_utils {
@@ -62,11 +61,9 @@ std::ostream& operator<<(std::ostream& stream_in, const packet_info& data) {
     return stream_in;
 }
 
-bool stream_key::operator==(const struct stream_key &other) const {
-    return dst_ip == other.dst_ip &&
-        src_ip == other.src_ip &&
-        src_port == other.src_port &&
-        dst_port == other.dst_port;
+bool stream_key::operator==(const struct stream_key& other) const {
+    return dst_ip == other.dst_ip && src_ip == other.src_ip &&
+           src_port == other.src_port && dst_port == other.dst_port;
 }
 
 std::ostream& operator<<(std::ostream& stream_in, const stream_key& data) {
@@ -80,32 +77,34 @@ std::ostream& operator<<(std::ostream& stream_in, const stream_key& data) {
 std::ostream& operator<<(std::ostream& stream_in, const stream_data& data) {
     stream_in << "Count: " << data.count << " ";
     stream_in << "Payload Sizes: " << std::endl;
-    for(auto const& it :  data.payload_size_counts) {
-        stream_in << "Size: " << it.first << " Count: " << it.second << std::endl;
+    for (auto const& it : data.payload_size_counts) {
+        stream_in << "Size: " << it.first << " Count: " << it.second
+                  << std::endl;
     }
 
     stream_in << "Fragments In Packets: " << std::endl;
-    for(auto const& it :  data.fragment_counts) {
-        stream_in << "Number of Fragments: "<< it.first << " Count: " << it.second << std::endl;
+    for (auto const& it : data.fragment_counts) {
+        stream_in << "Number of Fragments: " << it.first
+                  << " Count: " << it.second << std::endl;
     }
 
     stream_in << "IP Versions: " << std::endl;
-    for(auto const& it :  data.ip_version_counts) {
-        stream_in << "IP Version: " << it.first << " Count: " << it.second << std::endl;
+    for (auto const& it : data.ip_version_counts) {
+        stream_in << "IP Version: " << it.first << " Count: " << it.second
+                  << std::endl;
     }
 
     return stream_in;
 }
 
-std::ostream& operator<<(std::ostream& stream_in, const stream_info& data)
-{
+std::ostream& operator<<(std::ostream& stream_in, const stream_info& data) {
     stream_in << "Total Packets: " << data.total_packets << std::endl;
-    stream_in << "Encapsultion Protocol: " << data.encapsulation_protocol << std::endl;
+    stream_in << "Encapsultion Protocol: " << data.encapsulation_protocol
+              << std::endl;
     stream_in << "Max Timestamp: " << data.timestamp_max.count() << std::endl;
     stream_in << "Min Timestamp: " << data.timestamp_min.count() << std::endl;
 
-    for(auto it : data.udp_streams)
-    {
+    for (auto it : data.udp_streams) {
         stream_in << "Key: " << std::endl << it.first << std::endl;
         stream_in << "Data: " << std::endl << it.second << std::endl;
         stream_in << std::endl << std::endl << std::endl;
@@ -170,10 +169,10 @@ void record_packet(record_handle& handle, const std::string& src_ip,
 }
 
 // TODO: make a member of `PcapReader` ?
-std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
-                                             std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
-                                             int packets_per_callback,
-                                             int packets_to_process) {
+std::shared_ptr<stream_info> get_stream_info(
+    PcapReader& pcap_reader,
+    std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
+    int packets_per_callback, int packets_to_process) {
     uint64_t fileSize = pcap_reader.file_size();
     std::shared_ptr<stream_info> result = std::make_shared<stream_info>();
 
@@ -185,9 +184,9 @@ std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
     packet_info info;
     bool first = true;
     uint64_t prev_location = 0;
-    while(((packets_to_process <= 0) || (i < packets_to_process))
-          && pcap_reader.next_packet())
-    {
+
+    while (((packets_to_process <= 0) || (i < packets_to_process)) &&
+           pcap_reader.next_packet()) {
         info = pcap_reader.current_info();
 
         // TODO: if `pcap_reader` is an IndexedPcapReader,
@@ -195,13 +194,13 @@ std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
         // and the `packet_format` from the `sensor_info`
         // and possibly use a `ScanBatcher` (one for each sensor stream)
         // to determine if a scan boundary has been found
-        if(IndexedPcapReader* indexed_pcap_reader_ptr = dynamic_cast<IndexedPcapReader*>(&pcap_reader)) {
+        if (IndexedPcapReader* indexed_pcap_reader_ptr =
+                dynamic_cast<IndexedPcapReader*>(&pcap_reader)) {
             indexed_pcap_reader_ptr->update_index_for_current_packet();
         }
 
         callback_count++;
-        if(first)
-        {
+        if (first) {
             first = false;
             result->encapsulation_protocol = info.encapsulation_protocol;
             result->timestamp_max = info.timestamp;
@@ -209,8 +208,10 @@ std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
         }
         result->total_packets++;
 
-        if(info.timestamp < result->timestamp_min) result->timestamp_min = info.timestamp;
-        if(info.timestamp > result->timestamp_max) result->timestamp_max = info.timestamp;
+        if (info.timestamp < result->timestamp_min)
+            result->timestamp_min = info.timestamp;
+        if (info.timestamp > result->timestamp_max)
+            result->timestamp_max = info.timestamp;
 
         stream_key key;
 
@@ -228,9 +229,8 @@ std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
         diff_acc += (info.file_offset - prev_location);
         last_current = info.file_offset;
 
-        if( callback_count > packets_per_callback
-            && packets_per_callback >= 0)
-        {
+        if (callback_count > packets_per_callback &&
+            packets_per_callback >= 0) {
             progress_callback(info.file_offset, diff_acc, fileSize);
             diff_acc = 0;
             callback_count = 0;
@@ -238,8 +238,7 @@ std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
         prev_location = info.file_offset;
         i++;
     }
-    if( diff_acc > 0 && packets_per_callback >= 0)
-    {
+    if (diff_acc > 0 && packets_per_callback >= 0) {
         progress_callback(last_current, diff_acc, fileSize);
     }
     pcap_reader.reset();
@@ -247,42 +246,35 @@ std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
     return result;
 }
 
-std::shared_ptr<stream_info> get_stream_info(const std::string& file,
-                                             std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
-                                             int packets_per_callback,
-                                             int packets_to_process)
-{
+std::shared_ptr<stream_info> get_stream_info(
+    const std::string& file,
+    std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
+    int packets_per_callback, int packets_to_process) {
     auto handle = replay_initialize(file);
-    if(handle) {
-        return get_stream_info(
-            *(handle->pcap),
-            progress_callback,
-            packets_per_callback,
-            packets_to_process
-         );
-     }
-     return std::make_shared<stream_info>();
+    if (handle) {
+        return get_stream_info(*(handle->pcap), progress_callback,
+                               packets_per_callback, packets_to_process);
+    }
+    return std::make_shared<stream_info>();
 }
 
-std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process) 
-{
-    return get_stream_info(file, 
-                           [] (uint64_t, uint64_t, uint64_t) {},
-                           -1,
-                           packets_to_process);
+std::shared_ptr<stream_info> get_stream_info(const std::string& file,
+                                             int packets_to_process) {
+    return get_stream_info(
+        file, [](uint64_t, uint64_t, uint64_t) {}, -1, packets_to_process);
 }
 /*
-          The current approach is roughly: 1) treat each unique source / destination
-    port and IP as a single logical 'stream' of data, 2) filter out streams that
-    don't match the expected packet sizes specified by the metadata, 3) pair up
-    any potential lidar/imu streams that appear to be coming from the same
-    sensor (have matching source IPs) 4) and finally, filter out the pairs that
-    contradict any ports specified in the metadata.
+          The current approach is roughly: 1) treat each unique source /
+   destination port and IP as a single logical 'stream' of data, 2) filter out
+   streams that don't match the expected packet sizes specified by the metadata,
+   3) pair up any potential lidar/imu streams that appear to be coming from the
+   same sensor (have matching source IPs) 4) and finally, filter out the pairs
+   that contradict any ports specified in the metadata.
 */
-std::vector<guessed_ports> guess_ports(stream_info &info, 
-                                       int lidar_packet_sizes, int imu_packet_sizes,
-                                       int lidar_spec, int imu_spec)
-{
+std::vector<guessed_ports> guess_ports(stream_info& info,
+                                       int lidar_packet_sizes,
+                                       int imu_packet_sizes, int lidar_spec,
+                                       int imu_spec) {
     std::vector<guessed_ports> temp_result;
     std::vector<guessed_ports> lidar_result;
     std::vector<guessed_ports> imu_result;
@@ -293,29 +285,23 @@ std::vector<guessed_ports> guess_ports(stream_info &info,
     std::vector<std::string> lidar_src_ips;
     std::vector<std::string> imu_src_ips;
 
-    for(auto it : info.udp_streams)
-    {
-        if(it.second.payload_size_counts.count(lidar_packet_sizes) > 0)
-        {
+    for (auto it : info.udp_streams) {
+        if (it.second.payload_size_counts.count(lidar_packet_sizes) > 0) {
             lidar_keys.push_back(it.first);
             lidar_src_ips.push_back(it.first.src_ip);
         }
-        if(it.second.payload_size_counts.count(imu_packet_sizes) > 0)
-        {
+        if (it.second.payload_size_counts.count(imu_packet_sizes) > 0) {
             imu_keys.push_back(it.first);
             imu_src_ips.push_back(it.first.src_ip);
         }
     }
 
     // Full join on lidar and IMU
-    for(auto lidar_it : lidar_keys)
-    {
+    for (auto lidar_it : lidar_keys) {
         bool imu_processed = false;
-        for(auto imu_it : imu_keys)
-        {
+        for (auto imu_it : imu_keys) {
             // This case runs for when we have both Lidar and IMU data
-            if(lidar_it.src_ip == imu_it.src_ip)
-            {
+            if (lidar_it.src_ip == imu_it.src_ip) {
                 guessed_ports ports;
                 ports.lidar = lidar_it.dst_port;
                 ports.imu = imu_it.dst_port;
@@ -323,9 +309,8 @@ std::vector<guessed_ports> guess_ports(stream_info &info,
                 temp_result.push_back(ports);
             }
             // This case runs if we just have an IMU unmatched with the lidar
-            else if(std::find(lidar_src_ips.begin(), lidar_src_ips.end(), 
-                              imu_it.src_ip) == lidar_src_ips.end())
-            {
+            else if (std::find(lidar_src_ips.begin(), lidar_src_ips.end(),
+                               imu_it.src_ip) == lidar_src_ips.end()) {
                 guessed_ports ports;
                 ports.lidar = 0;
                 ports.imu = imu_it.dst_port;
@@ -333,9 +318,8 @@ std::vector<guessed_ports> guess_ports(stream_info &info,
             }
         }
         // This case runs if we just have Lidar data
-        if(!imu_processed && std::find(imu_src_ips.begin(), imu_src_ips.end(), 
-                                       lidar_it.src_ip) == imu_src_ips.end())
-        {
+        if (!imu_processed && std::find(imu_src_ips.begin(), imu_src_ips.end(),
+                                        lidar_it.src_ip) == imu_src_ips.end()) {
             guessed_ports ports;
             ports.lidar = lidar_it.dst_port;
             ports.imu = 0;
@@ -343,10 +327,8 @@ std::vector<guessed_ports> guess_ports(stream_info &info,
         }
     }
     // This case runs if we just have IMU data
-    if(lidar_keys.empty())
-    {
-        for(auto imu_it : imu_keys)
-        {
+    if (lidar_keys.empty()) {
+        for (auto imu_it : imu_keys) {
             guessed_ports ports;
             ports.lidar = 0;
             ports.imu = imu_it.dst_port;
@@ -354,14 +336,14 @@ std::vector<guessed_ports> guess_ports(stream_info &info,
         }
     }
 
-    temp_result.insert(temp_result.end(), lidar_result.begin(), lidar_result.end());
+    temp_result.insert(temp_result.end(), lidar_result.begin(),
+                       lidar_result.end());
     temp_result.insert(temp_result.end(), imu_result.begin(), imu_result.end());
-    
-    for(auto it : temp_result) 
-    {
-        if(((it.lidar == lidar_spec) || (lidar_spec == 0) || (it.lidar == 0)) &&
-             ((it.imu == imu_spec) || (imu_spec == 0) || (it.imu == 0)))
-        {
+
+    for (auto it : temp_result) {
+        if (((it.lidar == lidar_spec) || (lidar_spec == 0) ||
+             (it.lidar == 0)) &&
+            ((it.imu == imu_spec) || (imu_spec == 0) || (it.imu == 0))) {
             result.push_back(it);
         }
     }

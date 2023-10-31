@@ -12,8 +12,8 @@
 #include <cassert>
 #include <iostream>
 
-#include "ouster/impl/build.h"
 #include "ouster/client.h"
+#include "ouster/impl/build.h"
 
 using namespace ouster;
 

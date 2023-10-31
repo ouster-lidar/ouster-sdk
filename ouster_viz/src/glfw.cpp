@@ -39,7 +39,8 @@ void handle_key_press(GLFWwindow* window, int key, int /*scancode*/, int action,
 /*
  * Callback for resizing viewport (i.e. framebuffer)
  */
-void handle_framebuffer_resize(GLFWwindow* window, int fb_width, int fb_height) {
+void handle_framebuffer_resize(GLFWwindow* window, int fb_width,
+                               int fb_height) {
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     ctx->window_context.viewport_width = fb_width;
     ctx->window_context.viewport_height = fb_height;

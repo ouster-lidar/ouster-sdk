@@ -203,10 +203,9 @@ ScanData scanEncodeFields(const LidarScan& lidar_scan,
         }
         // Start an encoder thread with selected fields and corresponding
         // indices list
-        coders.emplace_back(
-            std::thread{fieldEncodeMulti, std::cref(lidar_scan),
-                        thread_fields, std::cref(px_offset),
-                        std::ref(fields_data), thread_idxs});
+        coders.emplace_back(std::thread{fieldEncodeMulti, std::cref(lidar_scan),
+                                        thread_fields, std::cref(px_offset),
+                                        std::ref(fields_data), thread_idxs});
     }
 
     for (auto& t : coders) t.join();
@@ -222,8 +221,8 @@ bool encode8bitImage(ScanChannelData& res_buf,
 }
 
 template bool encode8bitImage<uint8_t>(ScanChannelData&,
-                                        const Eigen::Ref<const img_t<uint8_t>>&,
-                                        const std::vector<int>&);
+                                       const Eigen::Ref<const img_t<uint8_t>>&,
+                                       const std::vector<int>&);
 template bool encode8bitImage<uint16_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint16_t>>&,
     const std::vector<int>&);
@@ -280,8 +279,8 @@ bool encode8bitImage(ScanChannelData& res_buf,
     return false;  // SUCCESS
 }
 
-template bool encode8bitImage<uint8_t>(
-    ScanChannelData&, const Eigen::Ref<const img_t<uint8_t>>&);
+template bool encode8bitImage<uint8_t>(ScanChannelData&,
+                                       const Eigen::Ref<const img_t<uint8_t>>&);
 template bool encode8bitImage<uint16_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint16_t>>&);
 template bool encode8bitImage<uint32_t>(
@@ -289,8 +288,7 @@ template bool encode8bitImage<uint32_t>(
 template bool encode8bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&);
 
-
-template<typename T>
+template <typename T>
 bool encode16bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img) {
     const uint32_t width = static_cast<uint32_t>(img.cols());
@@ -352,7 +350,6 @@ template bool encode16bitImage<uint32_t>(
 template bool encode16bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&);
 
-
 template <typename T>
 bool encode16bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img,
@@ -393,7 +390,7 @@ template bool encode24bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&,
     const std::vector<int>&);
 
-template<typename T>
+template <typename T>
 bool encode24bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img) {
     const uint32_t width = static_cast<uint32_t>(img.cols());
@@ -452,7 +449,7 @@ template bool encode24bitImage<uint32_t>(
 template bool encode24bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&);
 
-template<typename T>
+template <typename T>
 bool encode32bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img,
                       const std::vector<int>& px_offset) {
@@ -472,7 +469,7 @@ template bool encode32bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&,
     const std::vector<int>&);
 
-template<typename T>
+template <typename T>
 bool encode32bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img) {
     const uint32_t width = static_cast<uint32_t>(img.cols());
@@ -532,8 +529,7 @@ template bool encode32bitImage<uint32_t>(
 template bool encode32bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&);
 
-
-template<typename T>
+template <typename T>
 bool encode64bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img,
                       const std::vector<int>& px_offset) {
@@ -553,8 +549,7 @@ template bool encode64bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&,
     const std::vector<int>&);
 
-
-template<typename T>
+template <typename T>
 bool encode64bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img) {
     const uint32_t width = static_cast<uint32_t>(img.cols());
@@ -622,12 +617,10 @@ template bool encode64bitImage<uint32_t>(
 template bool encode64bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&);
 
-
-bool fieldEncodeMulti(
-    const LidarScan& lidar_scan,
-    const LidarScanFieldTypes& field_types,
-    const std::vector<int>& px_offset,
-    ScanData& scan_data, const std::vector<size_t>& scan_idxs) {
+bool fieldEncodeMulti(const LidarScan& lidar_scan,
+                      const LidarScanFieldTypes& field_types,
+                      const std::vector<int>& px_offset, ScanData& scan_data,
+                      const std::vector<size_t>& scan_idxs) {
     if (field_types.size() != scan_idxs.size()) {
         std::cerr << "ERROR: in fieldEncodeMulti field_types.size() should "
                      "match scan_idxs.size()"
@@ -653,8 +646,7 @@ bool fieldEncodeMulti(
 bool fieldEncode(
     const LidarScan& lidar_scan,
     const std::pair<sensor::ChanField, sensor::ChanFieldType> field_type,
-    const std::vector<int>& px_offset,
-    ScanData& scan_data, size_t scan_idx) {
+    const std::vector<int>& px_offset, ScanData& scan_data, size_t scan_idx) {
     if (scan_idx >= scan_data.size()) {
         std::cerr << "ERROR: scan_data size is not sufficient to hold idx: "
                   << scan_idx << std::endl;
@@ -902,10 +894,9 @@ bool decode24bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout
-            << "ERROR: img contains data of incompatible size: "
-            << width << "x" << height << ", expected: " << img.cols() << "x"
-            << img.rows() << std::endl;
+        std::cout << "ERROR: img contains data of incompatible size: " << width
+                  << "x" << height << ", expected: " << img.cols() << "x"
+                  << img.rows() << std::endl;
         return true;
     }
 
@@ -1012,10 +1003,9 @@ bool decode32bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout
-            << "ERROR: img contains data of incompatible size: "
-            << width << "x" << height << ", expected: " << img.cols() << "x"
-            << img.rows() << std::endl;
+        std::cout << "ERROR: img contains data of incompatible size: " << width
+                  << "x" << height << ", expected: " << img.cols() << "x"
+                  << img.rows() << std::endl;
         return true;
     }
 
@@ -1123,10 +1113,9 @@ bool decode64bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout
-            << "ERROR: img contains data of incompatible size: "
-            << width << "x" << height << ", expected: " << img.cols() << "x"
-            << img.rows() << std::endl;
+        std::cout << "ERROR: img contains data of incompatible size: " << width
+                  << "x" << height << ", expected: " << img.cols() << "x"
+                  << img.rows() << std::endl;
         return true;
     }
 
@@ -1240,10 +1229,9 @@ bool decode16bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout
-            << "ERROR: img contains data of incompatible size: "
-            << width << "x" << height << ", expected: " << img.cols() << "x"
-            << img.rows() << std::endl;
+        std::cout << "ERROR: img contains data of incompatible size: " << width
+                  << "x" << height << ", expected: " << img.cols() << "x"
+                  << img.rows() << std::endl;
         return true;
     }
 
@@ -1345,10 +1333,9 @@ bool decode8bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout
-            << "ERROR: img contains data of incompatible size: "
-            << width << "x" << height << ", expected: " << img.cols() << "x"
-            << img.rows() << std::endl;
+        std::cout << "ERROR: img contains data of incompatible size: " << width
+                  << "x" << height << ", expected: " << img.cols() << "x"
+                  << img.rows() << std::endl;
         return true;
     }
 
@@ -1407,5 +1394,5 @@ bool saveScanChannel(const ScanChannelData& channel_buf,
     return true;  // FAILURE
 }
 
-}  // namespace OSF
+}  // namespace osf
 }  // namespace ouster

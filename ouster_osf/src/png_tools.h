@@ -8,12 +8,11 @@
 #include <memory>
 #include <vector>
 
-#include "ouster/lidar_scan.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
+#include "ouster/lidar_scan.h"
 
 namespace ouster {
 namespace osf {
-
 
 // Encoded single PNG buffer
 using ScanChannelData = std::vector<uint8_t>;
@@ -80,11 +79,11 @@ bool fieldDecode(
  *                   decoding
  * @param scan_data  PNG buffers to decode, sequentially in the order of
  *                   field_types
- * @param scan_idxs  a vector of indices in `scan_data` of the beginning of field
- *                   buffers that will be decoded.
- *                  `field_types.size()` should be equal to `scan_idxs.size()`
- *                  i.e. we need to provide the index for every field type
- *                  in field_types where it's encoded data located.
+ * @param scan_idxs  a vector of indices in `scan_data` of the beginning of
+ *                   field buffers that will be decoded. `field_types.size()`
+ *                   should be equal to `scan_idxs.size()` i.e. we need to
+ *                   provide the index for every field type in
+ *                   field_types where it's encoded data located
  * @param field_types a vector of filed_types of lidar scan to decode
  * @param px_offset  pixel shift per row used to reconstruct staggered range
  *                   image form
@@ -143,7 +142,6 @@ bool decode24bitImage(Eigen::Ref<img_t<T>> img,
 template <typename T>
 bool decode24bitImage(Eigen::Ref<img_t<T>> img,
                       const ScanChannelData& channel_buf);
-
 
 /**
  * Decode single PNG buffer (channel_buf) of 32 bit RGBA (8 bit) encoding into
@@ -239,12 +237,11 @@ ScanData scanEncodeFields(const LidarScan& lidar_scan,
 bool fieldEncode(
     const LidarScan& lidar_scan,
     const std::pair<sensor::ChanField, sensor::ChanFieldType> field_type,
-    const std::vector<int>& px_offset,
-    ScanData& scan_data, size_t scan_idx);
+    const std::vector<int>& px_offset, ScanData& scan_data, size_t scan_idx);
 
 /**
- * Encode multiple lidar scan fields to PNGs channel buffers and insert them to a
- * specified places `scan_idxs` in `scan_data`.
+ * Encode multiple lidar scan fields to PNGs channel buffers and insert them to
+ * a specified places `scan_idxs` in `scan_data`.
  *
  * @param lidar_scan a lidar scan object to encode
  * @param field_types a vector of filed_types of lidar scan to encode
@@ -256,11 +253,10 @@ bool fieldEncode(
  *                 `field_types.size()` should be equal to `scan_idxs.size()`
  * @return false (0) if operation is successful true (1) if error occured
  */
-bool fieldEncodeMulti(
-    const LidarScan& lidar_scan,
-    const LidarScanFieldTypes& field_types,
-    const std::vector<int>& px_offset,
-    ScanData& scan_data, const std::vector<size_t>& scan_idxs);
+bool fieldEncodeMulti(const LidarScan& lidar_scan,
+                      const LidarScanFieldTypes& field_types,
+                      const std::vector<int>& px_offset, ScanData& scan_data,
+                      const std::vector<size_t>& scan_idxs);
 
 template <typename T>
 bool encode8bitImage(ScanChannelData& res_buf,
@@ -292,7 +288,7 @@ bool encode16bitImage(ScanChannelData& res_buf,
  * @param img        2D image or a single LidarScan field data
  * @return false (0) if operation is successful, true (1) if error occured
  */
-template<typename T>
+template <typename T>
 bool encode16bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img);
 
@@ -305,12 +301,12 @@ bool encode16bitImage(ScanChannelData& res_buf,
  * @param px_offset  pixel shift per row used to destagger img data
  * @return false (0) if operation is successful, true (1) if error occured
  */
-template<typename T>
+template <typename T>
 bool encode32bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img,
                       const std::vector<int>& px_offset);
 
-template<typename T>
+template <typename T>
 bool encode32bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img);
 
@@ -323,12 +319,12 @@ bool encode32bitImage(ScanChannelData& res_buf,
  * @param px_offset  pixel shift per row used to destagger img data
  * @return false (0) if operation is successful, true (1) if error occured
  */
-template<typename T>
+template <typename T>
 bool encode24bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img,
                       const std::vector<int>& px_offset);
 
-template<typename T>
+template <typename T>
 bool encode24bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img);
 
@@ -341,12 +337,12 @@ bool encode24bitImage(ScanChannelData& res_buf,
  * @param px_offset  pixel shift per row used to destagger img data
  * @return false (0) if operation is successful, true (1) if error occured
  */
-template<typename T>
+template <typename T>
 bool encode64bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img,
                       const std::vector<int>& px_offset);
 
-template<typename T>
+template <typename T>
 bool encode64bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img);
 

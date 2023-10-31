@@ -120,9 +120,7 @@ void Camera::set_yaw(float degrees) {
     yaw_ = (360_deg + dd(degrees)) % 360_deg;
 }
 
-float Camera::get_yaw() const {
-    return static_cast<float>(yaw_) / 10.0;
-}
+float Camera::get_yaw() const { return static_cast<float>(yaw_) / 10.0; }
 
 // down positive, up negative
 void Camera::pitch(float degrees) {
@@ -133,9 +131,7 @@ void Camera::set_pitch(float degrees) {
     pitch_ = std::max(-180_deg, std::min(0, dd(degrees)));
 }
 
-float Camera::get_pitch() const {
-    return static_cast<float>(pitch_) / 10.0;
-}
+float Camera::get_pitch() const { return static_cast<float>(pitch_) / 10.0; }
 
 // in is positive, out is negative
 void Camera::dolly(double amount) {
@@ -148,9 +144,7 @@ void Camera::set_dolly(double log_distance) {
         std::max(log_distance_min, std::min(log_distance_max, log_distance));
 }
 
-double Camera::get_dolly() const {
-    return log_distance_;
-}
+double Camera::get_dolly() const { return log_distance_; }
 
 void Camera::dolly_xy(double x, double y) {
     // OpenGL y goes from top to bottom
@@ -170,9 +164,7 @@ void Camera::set_view_offset(const vec3d& view_offset) {
     view_offset_ = view_offset;
 }
 
-vec3d Camera::get_view_offset() const {
-    return view_offset_;
-}
+vec3d Camera::get_view_offset() const { return view_offset_; }
 
 void Camera::set_fov(float degrees) {
     fov_ = std::max(0.0_deg, std::min(360.0_deg, dd(degrees)));

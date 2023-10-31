@@ -15,10 +15,12 @@ from textwrap import indent
 from ouster import client
 from ouster.cli.core.sensor import configure_sensor
 from ouster.sdk.util import resolve_metadata
+import ouster.sdk.pose_util as pu
 from ouster.sdkx import packet_iter
 from ouster.sdkx.parsing import default_scan_fields
 from ouster.sdkx.util import resolve_extrinsics
 from .util import (click_ro_file, import_rosbag_modules)
+
 
 HAS_MULTI = False
 try:
@@ -55,7 +57,7 @@ def print_stream_table(all_infos):
         return (list(k)[0].dst_ip, list(k)[0].src_ip, list(k)[0].dst_port)
 
     for k, v in sorted(all_infos.udp_streams.items(), key=stream_sort):
-        frag = 'No' if [k for k, v in v.fragment_counts.items()] else 'Yes'
+        frag = 'No' if (len(v.fragment_counts) == 1) and (1 in v.fragment_counts) else 'Yes'
 
         first = True
         af_count = len(v.payload_size_counts.items())
@@ -79,7 +81,7 @@ def print_stream_table(all_infos):
 
 @pcap_group.command(name='info')
 @click.argument('file', required=True, type=click_ro_file)
-@click.option('-n', type=int, default=0, help="Read only INTEGER packets.")
+@click.option('-n', type=int, default=-1, help="Read only INTEGER packets.")
 def pcap_info(file: str, n: int) -> None:
     """Print information about a pcap file to stdout."""
     try:
@@ -140,14 +142,34 @@ def pcap_info(file: str, n: int) -> None:
               help="Do not reinitialize (by default it will reinitialize if needed)")
 @click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
               help="Do not automatically set udp_dest (by default it will auto set udp_dest")
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
                 filter: bool, n_frames: Optional[int], n_seconds: float,
                 chunk_size: int, buf_size: int, timeout: float, prefix: str,
-                viz: bool, legacy: bool, do_not_reinitialize: bool, no_auto_udp_dest: bool) -> None:
+                viz: bool, legacy: bool, do_not_reinitialize: bool,
+                no_auto_udp_dest: bool, accum_num: int,
+                accum_every: Optional[int], accum_every_m: Optional[float],
+                accum_map: bool, accum_map_ratio: float) -> None:
     """Record lidar and IMU packets from a sensor to a pcap file.
 
     Note: this will currently not configure the sensor or query the sensor for
-    the port to listen on. You will need to set the sensor port and distination
+    the port to listen on. You will need to set the sensor port and destination
     settings separately.
     """
     try:
@@ -195,7 +217,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
         click.echo(message)
         if viz:
             try:
-                from ouster.sdk.viz import SimpleViz, LidarScanViz
+                from ouster.viz import SimpleViz, scans_accum_for_cli
             except ImportError as e:
                 raise click.ClickException(
                     "Please verify that libGL is installed. Error: " + str(e))
@@ -208,9 +230,14 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
                                         fields=field_types,
                                         complete=filter)
 
-            ls_viz = LidarScanViz(scans_source.metadata)
-            SimpleViz(ls_viz, rate=1.0, pause_at=-1,
-                      _buflen=0).run(scans_source)
+            scans_accum = scans_accum_for_cli(scans_source.metadata,
+                                              accum_num=accum_num,
+                                              accum_every=accum_every,
+                                              accum_every_m=accum_every_m,
+                                              accum_map=accum_map,
+                                              accum_map_ratio=accum_map_ratio)
+            SimpleViz(scans_source.metadata, _buflen=0,
+                      scans_accum=scans_accum).run(scans_source)
 
         else:
             consume(packets)
@@ -228,7 +255,8 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 
 @pcap_group.command(name="viz")
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 # TWS 20230627: '--cycle' is a deprecated option and only hidden to prevent breaking scripts that may be using it
 @click.option('-c', '--cycle', is_flag=True, help="Loop playback", hidden=True)
 @click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
@@ -236,11 +264,11 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 @click.option('-l', '--lidar-port', default=None, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
-@click.option('-b', '--buf', default=50, help="Scans to buffer for stepping.")
+@click.option('-b', '--buf', default=50, help="Scans to buffer for stepping")
 @click.option('-r',
               '--rate',
               default=1.0,
-              help="Playback rate. One of 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0")
+              help="Playback rate. One of 0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0")
 @click.option('--extrinsics',
               type=float,
               required=False,
@@ -263,11 +291,35 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
               default=10.0,
               help="Timeout in seconds, after which the script will terminate "
               "if no lidar data is encountered in the PCAP file")
+@click.option('--kitti-poses',
+              required=False,
+              type=click_ro_file,
+              help="Poses file in Kitti format, one pose per scan "
+              "(can be generated by kiss-icp)")
+@click.option("--accum-num",
+              default=0,
+              help="Integer number of scans to accumulate")
+@click.option("--accum-every",
+              default=None,
+              type=float,
+              help="Accumulate every Nth scan")
+@click.option("--accum-every-m",
+              default=None,
+              type=float,
+              help="Accumulate scan every M meters traveled")
+@click.option("--accum-map",
+              is_flag=True,
+              help="Enable the overall map accumulation mode")
+@click.option("--accum-map-ratio",
+              default=0.001,
+              help="Ratio of random points of every scan to add to an overall map")
 def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
              lidar_port: Optional[int], imu_port: Optional[int], filter: bool,
              buf: int, rate: float, extrinsics: Optional[List[float]],
-             soft_id_check: bool, pause: bool, pause_at: int,
-             multi: bool, timeout: float) -> None:
+             soft_id_check: bool, pause: bool, pause_at: int, multi: bool,
+             timeout: float, kitti_poses: Optional[str], accum_num: int,
+             accum_every: Optional[int], accum_every_m: Optional[float],
+             accum_map: bool, accum_map_ratio: float) -> None:
     """Visualize data from a pcap file.
 
     To correctly visualize a pcap containing multiple UDP streams, you must
@@ -284,7 +336,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
             "Please verify that libpcap is installed. Error: " + str(e))
 
     try:
-        from ouster.sdk.viz import SimpleViz, LidarScanViz
+        from ouster.viz import SimpleViz, LidarScanViz, scans_accum_for_cli
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libGL is installed. Error: " + str(e))
@@ -312,7 +364,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
         meta = resolve_metadata(file, meta)
         if not meta:
             raise click.ClickException(
-                "File not found, please specify a metadata file with `-f`")
+                "File not found, please specify a metadata file with `-m`")
         with open(meta) as json:
             click.echo(f"Reading metadata from: {meta}")
             info = client.SensorInfo(json.read())
@@ -350,6 +402,11 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
 
         ls_viz = LidarScanViz(scans_source.metadata)
 
+        if kitti_poses:
+            scans = pu.pose_scans_from_kitti(scans_source, kitti_poses)
+        else:
+            scans = iter(scans_source)
+
     elif HAS_MULTI and multi:
         # Multi sensor pcap handling
 
@@ -383,16 +440,23 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
 
         ls_viz = MultiLidarScanViz(source.metadata, source_name=file)
 
-        lidar_source = ScansMulti(source,
+        scans_source = ScansMulti(source,
                                   fields=field_types,
                                   complete=filter)
 
-        scans_source = collate_scans(lidar_source, use_unsynced=True)
+        scans = collate_scans(scans_source, use_unsynced=True)
+
+    scans_accum = scans_accum_for_cli(scans_source.metadata,
+                                      accum_num=accum_num,
+                                      accum_every=accum_every,
+                                      accum_every_m=accum_every_m,
+                                      accum_map=accum_map,
+                                      accum_map_ratio=accum_map_ratio)
 
     SimpleViz(ls_viz, rate=rate, pause_at=pause_at, on_eof=on_eof,
-              _buflen=buf).run(scans_source)
+              _buflen=buf, scans_accum=scans_accum).run(scans)
 
-    if type(scans_source) == client.Scans and (scans_source._timed_out or scans_source._scans_produced == 0):
+    if type(scans_source) is client.Scans and (scans_source._timed_out or scans_source._scans_produced == 0):
         click.echo(click.style(
             f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.",
             fg='yellow'
@@ -424,7 +488,8 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
 @click.argument('file', type=click_ro_file)
 @click.option('-s', '--start-frame', default=0, help="Start frame index")
 @click.option('-n', '--num-frames', default=10, help="Number of frames")
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l',
               '--lidar-port',
               type=int,
@@ -440,6 +505,14 @@ def pcap_slice(file: str, start_frame: int, num_frames: int,
                meta: Optional[str], lidar_port: Optional[int],
                imu_port: Optional[int], output: Optional[str],
                soft_id_check: bool) -> None:
+    pcap_slice_impl(file, start_frame, num_frames, meta, lidar_port,
+                    imu_port, output, soft_id_check)
+
+
+def pcap_slice_impl(file: str, start_frame: int, num_frames: int,
+                    meta: Optional[str], lidar_port: Optional[int],
+                    imu_port: Optional[int], output: Optional[str],
+                    soft_id_check: bool) -> None:
     """Truncate a pcap file to the specified frames."""
 
     try:
@@ -450,7 +523,7 @@ def pcap_slice(file: str, start_frame: int, num_frames: int,
     meta = resolve_metadata(file, meta)
     if not meta:
         raise click.ClickException(
-            "File not found, please specify a metadata file with `-f`")
+            "File not found, please specify a metadata file with `-m`")
     with open(meta) as json:
         click.echo(f"Reading metadata from: {meta}")
         info = client.SensorInfo(json.read())
@@ -488,7 +561,8 @@ def pcap_slice(file: str, start_frame: int, num_frames: int,
 
 @pcap_group.command(name="to_bag")
 @click.argument('file', required=True)
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=None, type=int, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, type=int, help="Dest. port of imu data")
 @click.option('-o', '--output', required=False, help="BAG output filename")
@@ -528,7 +602,7 @@ def pcap_to_bag_impl(file: str, meta: Optional[str], lidar_port: Optional[int],
         meta = resolve_metadata(file, meta)
         if not meta:
             raise click.ClickException(
-                "File not found, please specify a metadata file with `-f`")
+                "File not found, please specify a metadata file with `-m`")
         with open(meta) as json:
             click.echo(f"Reading metadata from: {meta}")
             info = client.SensorInfo(json.read())
@@ -598,7 +672,8 @@ def pcap_to_bag_impl(file: str, meta: Optional[str], lidar_port: Optional[int],
 
 @pcap_group.command(name="from_bag")
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-topic', default="", help="Topic with lidar data")
 @click.option('-i', '--imu-topic', default="", help="Topic with imu data")
 @click.option('-o', '--output', required=False, help="BAG output filename")
@@ -623,7 +698,7 @@ def bag_to_pcap(file: str, meta: Optional[str], lidar_topic: str,
     meta = resolve_metadata(file, meta)
     if not meta:
         raise click.ClickException(
-            "File not found, please specify a metadata file with `-f`")
+            "File not found, please specify a metadata file with `-m`")
     with open(meta) as json:
         click.echo(f"Reading metadata from: {meta}")
         info = client.SensorInfo(json.read())
@@ -686,7 +761,8 @@ def bag_to_pcap(file: str, meta: Optional[str], lidar_topic: str,
 
 @pcap_group.command(name="to_csv")
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('--csv-dir', default=".", help="path to the directory to save csv files")
 @click.option('--csv-base', default="csv_out", help="base filename string for pcap output")
 @click.option('--csv-ext', default='csv', help="file extension to use, 'csv' by default.")
@@ -740,7 +816,7 @@ def pcap_to_csv_impl(file: str,
     metadata_path = resolve_metadata(file, meta)
     if not metadata_path:
         raise click.ClickException(
-            "File not found, please specify a metadata file with `-f`")
+            "File not found, please specify a metadata file with `-m`")
     with open(metadata_path) as json:
         click.echo(f"Reading metadata from: {metadata_path}")
         metadata = client.SensorInfo(json.read())
@@ -837,6 +913,8 @@ def pcap_to_csv_impl(file: str,
             frame = np.dstack(tuple(map(lambda x: x.astype(object),
                 (frame, xyz_destaggered))))
 
+        frame_colmajor = np.swapaxes(frame, 0, 1)
+
         # write csv out to file
         csv_path = output_names[idx]
         print(f'write frame index #{idx + start_index}, to file: {csv_path}')
@@ -844,7 +922,7 @@ def pcap_to_csv_impl(file: str,
         header = '\n'.join([f'frame num: {idx}', field_names])
 
         np.savetxt(csv_path,
-                   frame.reshape(-1, frame.shape[2]),
+                   frame_colmajor.reshape(-1, frame.shape[2]),
                    fmt=field_fmts,
                    delimiter=',',
                    header=header)
@@ -856,7 +934,8 @@ def pcap_to_csv_impl(file: str,
 
 @pcap_group.command(hidden=True)
 @click.argument('file', required=True, type=click.Path(exists=True))
-@click.option('-f', '--meta', required=False, type=click_ro_file)
+@click.option('-m', '--meta', required=False, type=click_ro_file,
+        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-c', '--cycle', is_flag=True, required=False, type=bool, help='Loop playback')
 @click.option('-h', '--host', required=False, type=str, default='127.0.1.1', help='Dest. host of UDP packets')
 @click.option('--lidar-port', required=False, type=int, default=7502, help='Dest. port of lidar data')

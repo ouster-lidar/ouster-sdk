@@ -304,6 +304,14 @@ class PointViz:
     def viewport_height(self) -> int:
         ...
 
+    @property
+    def window_width(self) -> int:
+        ...
+
+    @property
+    def window_height(self) -> int:
+        ...
+
     @overload
     def add(self, cloud: Cloud) -> None:
         ...
@@ -334,6 +342,10 @@ class PointViz:
 
     @overload
     def remove(self, label: Label) -> bool:
+        ...
+
+    @property
+    def fps(self) -> float:
         ...
 
 

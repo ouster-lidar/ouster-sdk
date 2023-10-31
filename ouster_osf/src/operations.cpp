@@ -228,4 +228,3 @@ bool pcap_to_osf(const std::string& pcap_filename,
 
 }  // namespace osf
 }  // namespace ouster
-

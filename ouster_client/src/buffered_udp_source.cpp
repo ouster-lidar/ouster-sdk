@@ -27,9 +27,6 @@ namespace impl {
 
 using fsec = std::chrono::duration<float>;
 
-// 64 big enough for any UDP packet
-constexpr size_t packet_size = 65536;
-
 /*
  * Initialize the internal circular buffer.
  *
@@ -39,8 +36,7 @@ constexpr size_t packet_size = 65536;
 BufferedUDPSource::BufferedUDPSource(size_t buf_size)
     : capacity_{buf_size + 1} {
     std::generate_n(std::back_inserter(bufs_), capacity_, [&] {
-        return std::make_pair(client_state::CLIENT_ERROR,
-                              std::make_unique<uint8_t[]>(packet_size));
+        return std::make_pair(client_state::CLIENT_ERROR, Packet());
     });
 }
 
@@ -132,7 +128,45 @@ client_state BufferedUDPSource::consume(uint8_t* buf, size_t buf_sz,
     // read data into buffer
     auto sz = std::min<size_t>(buf_sz, packet_size);
     auto& e = bufs_[read_ind_];
-    std::memcpy(buf, e.second.get(), sz);
+    std::memcpy(buf, e.second.buf.data(), sz);  // TODO: Law of Demeter
+
+    // advance read ind and unblock producer, if necessary
+    {
+        std::unique_lock<std::mutex> lock{cv_mtx_};
+        read_ind_ = (read_ind_ + 1) % capacity_;
+    }
+    cv_.notify_one();
+    return e.first;
+}
+
+client_state BufferedUDPSource::consume(LidarPacket& lidarp, ImuPacket& imup,
+                                        float timeout_sec) {
+    // wait for producer to wake us up if the queue is empty
+    {
+        std::unique_lock<std::mutex> lock{cv_mtx_};
+        bool timeout = !cv_.wait_for(lock, fsec{timeout_sec}, [this] {
+            return stop_ || write_ind_ != read_ind_;
+        });
+        if (timeout)
+            return client_state::TIMEOUT;
+        else if (stop_)
+            return client_state::EXIT;
+    }
+
+    // read data into buffer
+    auto& e = bufs_[read_ind_];
+
+    auto write_packet = [&e](auto& packet) {
+        auto sz = std::min<size_t>(packet.buf.size(), packet_size);
+        std::memcpy(packet.buf.data(), e.second.buf.data(), sz);
+        packet.host_timestamp = e.second.host_timestamp;
+    };
+
+    if (e.first & client_state::LIDAR_DATA) {
+        write_packet(lidarp);
+    } else if (e.first & client_state::IMU_DATA) {
+        write_packet(imup);
+    }
 
     // advance read ind and unblock producer, if necessary
     {
@@ -173,9 +207,11 @@ void BufferedUDPSource::produce(const packet_format& pf) {
 
         auto& e = bufs_[write_ind_];
         if (st & LIDAR_DATA) {
-            if (!read_lidar_packet(*cli_, e.second.get(), pf)) continue;
+            LidarPacket& packet = e.second.as<LidarPacket>();
+            if (!read_lidar_packet(*cli_, packet, pf)) continue;
         } else if (st & IMU_DATA) {
-            if (!read_imu_packet(*cli_, e.second.get(), pf)) continue;
+            ImuPacket& packet = e.second.as<ImuPacket>();
+            if (!read_imu_packet(*cli_, packet, pf)) continue;
         }
         if (overflow) st = client_state(st | CLIENT_OVERFLOW);
         e.first = st;

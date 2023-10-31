@@ -8,6 +8,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -16,7 +17,6 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
-#include <iostream>
 
 #include "camera.h"
 #include "cloud.h"
@@ -137,6 +137,10 @@ struct PointViz::Impl {
 
     // temp storage for frame_buffer_handlers
     std::vector<uint8_t> frame_buffer_data_{};
+
+    double fps_last_time_{0};
+    uint64_t fps_frame_counter_{0};
+    double fps_{0};
 
     Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
 };
@@ -265,6 +269,16 @@ void PointViz::draw() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glBindVertexArray(pimpl->vao);
 
+    // fps counting
+    ++pimpl->fps_frame_counter_;
+    double now_t = glfwGetTime();
+    if (pimpl->fps_last_time_ == 0 || now_t - pimpl->fps_last_time_ >= 1.0) {
+        pimpl->fps_ =
+            pimpl->fps_frame_counter_ / (now_t - pimpl->fps_last_time_);
+        pimpl->fps_last_time_ = now_t;
+        pimpl->fps_frame_counter_ = 0;
+    }
+
     // draw images
     {
         std::lock_guard<std::mutex> guard{pimpl->update_mx};
@@ -321,6 +335,8 @@ void PointViz::draw() {
 
     glfwSwapBuffers(pimpl->glfw->window);
 }
+
+double PointViz::fps() const { return pimpl->fps_; }
 
 /*
  * Input handling
@@ -509,7 +525,7 @@ void Cloud::set_key_alpha(const float* key_alpha_data) {
     const float* end = key_alpha_data + n_;
     float* dst = key_data_.data();
     while (key_alpha_data != end) {
-        *(dst + 3) = *(key_alpha_data++); // 4th component is alpha
+        *(dst + 3) = *(key_alpha_data++);  // 4th component is alpha
         dst += 4;
     }
     key_changed_ = true;
@@ -524,7 +540,7 @@ void Cloud::set_key_rgb(const float* key_rgb_data) {
         *(dst++) = *(key_rgb_data++);
         *(dst++) = *(key_rgb_data++);
         *(dst++) = *(key_rgb_data++);
-        dst++; // alpha left untouched
+        dst++;  // alpha left untouched
     }
     key_changed_ = true;
     mono_ = false;
@@ -633,14 +649,15 @@ void Image::set_image(size_t width, size_t height, const float* image_data) {
     float* dst = image_data_.data();
     while (image_data != end) {
         *(dst + 0) = *(image_data++);
-        *(dst + 3) = 1.0; // alpha
+        *(dst + 3) = 1.0;  // alpha
         dst += 4;
     }
     image_changed_ = true;
     mono_ = true;
 }
 
-void Image::set_image_rgb(size_t width, size_t height, const float* image_data_rgb) {
+void Image::set_image_rgb(size_t width, size_t height,
+                          const float* image_data_rgb) {
     const size_t n = width * height;
     image_data_.resize(4 * n);
     image_width_ = width;
@@ -651,13 +668,14 @@ void Image::set_image_rgb(size_t width, size_t height, const float* image_data_r
         *(dst++) = *(image_data_rgb++);
         *(dst++) = *(image_data_rgb++);
         *(dst++) = *(image_data_rgb++);
-        *(dst++) = 1.0; // alpha
+        *(dst++) = 1.0;  // alpha
     }
     image_changed_ = true;
     mono_ = false;
 }
 
-void Image::set_image_rgba(size_t width, size_t height, const float* image_data_rgba) {
+void Image::set_image_rgba(size_t width, size_t height,
+                           const float* image_data_rgba) {
     const size_t n = width * height;
     image_data_.resize(4 * n);
     image_width_ = width;
@@ -783,7 +801,9 @@ void Label::set_rgba(const std::array<float, 4>& rgba) {
 void TargetDisplay::enable_rings(bool state) { rings_enabled_ = state; }
 
 void TargetDisplay::set_ring_size(int n) { ring_size_ = n; }
-void TargetDisplay::set_ring_line_width(int line_width) { ring_line_width_ = line_width; }
+void TargetDisplay::set_ring_line_width(int line_width) {
+    ring_line_width_ = line_width;
+}
 
 void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
     bool orthographic = false;

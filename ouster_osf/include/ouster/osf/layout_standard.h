@@ -13,7 +13,8 @@
 namespace ouster {
 namespace osf {
 
-constexpr uint32_t STANDARD_DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024; // not strict ...
+constexpr uint32_t STANDARD_DEFAULT_CHUNK_SIZE =
+    5 * 1024 * 1024;  // not strict ...
 
 /**
  * Standard Layout chunking strategy
@@ -38,9 +39,8 @@ class StandardLayoutCW : public ChunksWriter {
 
     const uint32_t chunk_size_;
     ChunkBuilder chunk_builder_{};
-    
+
     Writer& writer_;
-    
 };
 
 }  // namespace osf

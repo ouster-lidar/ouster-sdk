@@ -8,16 +8,22 @@ consists of the following:
 - ``simple-viz`` (:class:`.viz.SimpleViz`): the default Python application visualizer, which can
   also be used as an entrypoint for more sophisticated custom point cloud visualizations
 - ``ouster_viz``: the core C++ library 
-- :mod:`ouster.sdk.viz`: the Python module for the bindings
+- :mod:`ouster.viz`: the Python module for the bindings
 
-``simple-viz`` is a fastest way to visualize data from a connected sensor or a recorded ``pcap``:
+.. todo::
 
-.. figure:: /images/simple-viz.png
+    Update all ``simple-viz`` CLI command mentions to a proper new CLI command + update the
+    screenshots to the current looking version
+
+Using ``ouster-cli`` is a fastest way to visualize data from a connected sensor, recorded ``pcap``
+or OSF files with SLAM poses:
+
+.. figure:: /images/ouster-viz.png
     :align: center
 
-    Ouster ``simple-viz`` visualization of OS1 128 sample data
+    Ouster SDK CLI ``ouster-cli source OS-1-128.pcap viz`` visualization of OS1 128 sample data
 
-How to use ``simple-viz`` you can learn in :doc:`viz-run`
+How to use ``ouster-cli`` for visualizations you can learn in :doc:`viz-run`
 
 .. toctree::
    :hidden:
@@ -36,5 +42,6 @@ below:
 
 .. toctree::
 
+   Visualize SLAM Poses <viz-scans-accum>
    viz-api-tutorial
 

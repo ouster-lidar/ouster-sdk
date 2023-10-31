@@ -143,9 +143,13 @@ def test_help(runner) -> None:
     result = runner.invoke(core.cli, ['--sdk-log-level', 'debug', 'osf'])
     assert result.exit_code == 0
 
-    # TODO: move to mapping package when it is its own
+
+def test_mapping_help(runner, has_mapping):
     result = runner.invoke(core.cli, ['mapping', '--help'])
-    assert result.exit_code == 0
+    if has_mapping:
+        assert result.exit_code == 0
+    else:
+        assert result.exit_code == 2
 
 
 def test_source_help(runner) -> None:
@@ -168,21 +172,32 @@ def test_source_no_args(runner) -> None:
     assert result.exit_code == 2
 
 
-def test_source(runner) -> None:
+def test_source_sensor(runner, has_mapping) -> None:
     """It should list the correct commands
     in the help depending on source type."""
 
     # sensor
     result = runner.invoke(core.cli, ['source', '127.0.0.1'])
     assert result.exit_code == 0
-    assert read_commands_from_help_text(result.output) == ['config', 'metadata', 'record', 'viz', 'slam']
+    expected_commands = ['config', 'metadata', 'record', 'viz']
+    if has_mapping:
+        expected_commands.append('slam')
+    assert read_commands_from_help_text(result.output) == expected_commands
 
+
+def test_source_pcap(runner, has_mapping) -> None:
     # pcap
+    expected_commands = ['convert', 'info', 'slice', 'viz']
+    if has_mapping:
+        expected_commands.append('slam')
     with tempfile.NamedTemporaryFile(suffix='.pcap') as temp_pcap:
         result = runner.invoke(core.cli, ['source', temp_pcap.name])
         assert result.exit_code == 0
-        assert read_commands_from_help_text(result.output) == ['convert', 'info', 'slice', 'viz', 'slam']
+        assert read_commands_from_help_text(result.output) == expected_commands
 
+
+@pytest.mark.skip
+def test_source_rosbag() -> None:
     # TODO FLEETSW-4407: not MVP
     # rosbag
     # with tempfile.NamedTemporaryFile(suffix='.bag') as temp_pcap:
@@ -190,7 +205,10 @@ def test_source(runner) -> None:
     #    assert result.exit_code == 0
     #    commands = result.output.split("Commands:")[1].split()
     #    assert commands == ['convert']
+    pass
 
+
+def test_source_invald(runner) -> None:
     # invalid file type
     with tempfile.NamedTemporaryFile(suffix='.invalid') as temp_pcap:
         result = runner.invoke(core.cli, ['source', temp_pcap.name])
@@ -411,16 +429,17 @@ def test_match_metadata_with_data_stream(test_pcap_file, test_metadata_file):
     assert matched_stream.dst_port == 7502
 
 
-def test_source_osf(runner) -> None:
+def test_source_osf(runner, has_mapping) -> None:
     """It should list the correct commands
     in the help depending on source type."""
     # osf
     with tempfile.NamedTemporaryFile(suffix='.osf') as temp_osf:
         result = runner.invoke(core.cli, ['source', temp_osf.name])
         assert result.exit_code == 0
-        # TODO: uncomment when viz is exposed
-        # assert read_commands_from_help_text(result.output) == ['convert', 'info', 'viz']
-        assert read_commands_from_help_text(result.output) == ['convert', 'info']
+        expected_commands = ['convert', 'info', 'viz']
+        if has_mapping:
+            expected_commands.append('slam')
+        assert read_commands_from_help_text(result.output) == expected_commands
 
 
 def test_source_osf_info(test_osf_file, runner):

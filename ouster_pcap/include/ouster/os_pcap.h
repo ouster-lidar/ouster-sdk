@@ -10,33 +10,35 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <memory>
 #include <string>
-#include <map>
 #include <unordered_map>
 #include <vector>
-#include <functional>
 
-#include "ouster/types.h"
 #include "ouster/pcap.h"
+#include "ouster/types.h"
 namespace ouster {
 namespace sensor_utils {
 /**
  * Structure representing a hash key/sorting key for a udp stream
  */
 struct stream_key {
-    std::string dst_ip;          ///< The destination IP
-    std::string src_ip;          ///< The source IP
-    int src_port;                ///< The src port
-    int dst_port;                ///< The destination port
+    std::string dst_ip;  ///< The destination IP
+    std::string src_ip;  ///< The source IP
+    int src_port;        ///< The src port
+    int dst_port;        ///< The destination port
 
-    bool operator==(const struct stream_key &other) const;
+    bool operator==(const struct stream_key& other) const;
 };
-}}
+}  // namespace sensor_utils
+}  // namespace ouster
 
-template<>
+template <>
 struct std::hash<ouster::sensor_utils::stream_key> {
-    std::size_t operator()(const ouster::sensor_utils::stream_key& key) const noexcept {
+    std::size_t operator()(
+        const ouster::sensor_utils::stream_key& key) const noexcept {
         return std::hash<std::string>{}(key.src_ip) ^
                (std::hash<std::string>{}(key.src_ip) << 1) ^
                (std::hash<int>{}(key.src_port << 2)) ^
@@ -59,14 +61,12 @@ using ts = std::chrono::microseconds;  ///< Microsecond timestamp
  */
 std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
 
-
-
 /**
  * Structure representing a hash key/sorting key for a udp stream
  */
 struct guessed_ports {
-    int lidar;                   ///< Guessed lidar port
-    int imu;                     ///< Guessed imu port
+    int lidar;  ///< Guessed lidar port
+    int imu;    ///< Guessed imu port
 };
 
 /**
@@ -80,16 +80,19 @@ struct guessed_ports {
 std::ostream& operator<<(std::ostream& stream_in, const stream_key& data);
 
 struct stream_data {
-    uint64_t count;                                   ///< Number of packets in a specified stream
-    std::map<uint64_t, uint64_t> payload_size_counts; ///< Packet sizes detected in a specified stream
-                                                      ///< Key: Packet Size
-                                                      ///< Value: Count of a specific packet size
-    std::map<uint64_t, uint64_t> fragment_counts;     ///< Fragments detected in a specified stream
-                                                      ///< Key: Number of fragments
-                                                      ///< Value: Count of a specific number of packets
-    std::map<uint64_t, uint64_t> ip_version_counts;   ///< IP version detected in a specified stream
-                                                      ///< Key: IP Version
-                                                      ///< Value: Count of the specific ip version
+    uint64_t count;  ///< Number of packets in a specified stream
+    std::map<uint64_t, uint64_t>
+        payload_size_counts;  ///< Packet sizes detected in a specified stream
+                              ///< Key: Packet Size
+                              ///< Value: Count of a specific packet size
+    std::map<uint64_t, uint64_t>
+        fragment_counts;  ///< Fragments detected in a specified stream
+                          ///< Key: Number of fragments
+                          ///< Value: Count of a specific number of packets
+    std::map<uint64_t, uint64_t>
+        ip_version_counts;  ///< IP version detected in a specified stream
+                            ///< Key: IP Version
+                            ///< Value: Count of the specific ip version
 };
 
 /**
@@ -106,13 +109,16 @@ std::ostream& operator<<(std::ostream& stream_in, const stream_data& data);
  * Structure representing the information about network streams in a pcap file
  */
 struct stream_info {
-    uint64_t total_packets;             ///< The total number of packets detected
-    uint32_t encapsulation_protocol;    ///< The encapsulation protocol for the pcap file
+    uint64_t total_packets;           ///< The total number of packets detected
+    uint32_t encapsulation_protocol;  ///< The encapsulation protocol for the
+                                      ///< pcap file
 
-    ts timestamp_max;                   ///< The latest timestamp detected
-    ts timestamp_min;                   ///< The earliest timestamp detected
+    ts timestamp_max;  ///< The latest timestamp detected
+    ts timestamp_min;  ///< The earliest timestamp detected
 
-    std::unordered_map<stream_key, stream_data> udp_streams; ///< Datastructure containing info on all of the different streams
+    std::unordered_map<stream_key, stream_data>
+        udp_streams;  ///< Datastructure containing info on all of the different
+                      ///< streams
 };
 
 /**
@@ -229,60 +235,69 @@ void record_packet(record_handle& handle, const packet_info& info,
  * Return the information about network streams in a pcap file.
  *
  * @param[in] file The pcap file to read.
- * @param[in] packets_to_process Number of packets to process < 0 for all of them
+ * @param[in] packets_to_process Number of packets to process < 0 for all of
+ * them
  *
  * @return A pointer to the resulting stream_info
  */
-std::shared_ptr<stream_info> get_stream_info(const std::string& file, int packets_to_process=-1);
+std::shared_ptr<stream_info> get_stream_info(const std::string& file,
+                                             int packets_to_process = -1);
 
 /**
  * Return the information about network streams in a pcap file.
  *
  * @param[in] file The pcap file to read.
- * @param[in] progress_callback A callback to invoke after each packet is scanned
- *                              current: The current file offset
- *                              delta: The delta in file offset
+ * @param[in] progress_callback A callback to invoke after each packet is
+ * scanned current: The current file offset delta: The delta in file offset
  *                              total: The total size of the file
  * @param[in] packets_per_callback Callback every n packets
- * @param[in] packets_to_process Number of packets to process < 0 for all of them
+ * @param[in] packets_to_process Number of packets to process < 0 for all of
+ * them
  *
  * @return A pointer to the resulting stream_info
  */
-std::shared_ptr<stream_info> get_stream_info(const std::string& file, 
-                                             std::function<void(uint64_t current, uint64_t delta, uint64_t total)> progress_callback,
-                                             int packets_per_callback,
-                                             int packets_to_process=-1);
+std::shared_ptr<stream_info> get_stream_info(
+    const std::string& file,
+    std::function<void(uint64_t current, uint64_t delta, uint64_t total)>
+        progress_callback,
+    int packets_per_callback, int packets_to_process = -1);
 
 /**
- * Return the information about network streams in a PcapReader and generate indicies (if the PcapReader is an IndexedPcapReader).
+ * Return the information about network streams in a PcapReader and generate
+ * indicies (if the PcapReader is an IndexedPcapReader).
  *
  * @param[in] pcap_reader The PcapReader
- * @param[in] sensor_info a set of sensor_info used to parse packets contained in the file
- * @param[in] progress_callback A callback to invoke after each packet is scanned
- *                              current: The current file offset
- *                              delta: The delta in file offset
+ * @param[in] sensor_info a set of sensor_info used to parse packets contained
+ * in the file
+ * @param[in] progress_callback A callback to invoke after each packet is
+ * scanned current: The current file offset delta: The delta in file offset
  *                              total: The total size of the file
  * @param[in] packets_per_callback Callback every n packets
- * @param[in] packets_to_process Number of packets to process < 0 for all of them
+ * @param[in] packets_to_process Number of packets to process < 0 for all of
+ * them
  *
  * @return A pointer to the resulting stream_info
  */
-std::shared_ptr<stream_info> get_stream_info(PcapReader& pcap_reader,
-                                             std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
-                                             int packets_per_callback,
-                                             int packets_to_process=-1);
+std::shared_ptr<stream_info> get_stream_info(
+    PcapReader& pcap_reader,
+    std::function<void(uint64_t, uint64_t, uint64_t)> progress_callback,
+    int packets_per_callback, int packets_to_process = -1);
 /**
  * Return a guess of the correct ports located in a pcap file.
  *
  * @param[in] info The stream_info structure generated from a specific pcap file
  * @param[in] lidar_packet_sizes The size of the lidar packets
  * @param[in] imu_packet_sizes The size of the imu packets
- * @param[in] lidar_spec The expected lidar port from the metadata(pass 0 for unknown)
- * @param[in] imu_spec The expected imu port from the metadata(pass 0 for unknown)
+ * @param[in] lidar_spec The expected lidar port from the metadata(pass 0 for
+ * unknown)
+ * @param[in] imu_spec The expected imu port from the metadata(pass 0 for
+ * unknown)
  *
  * @return A vector (sorted by most likely to least likely) of the guessed ports
  */
-std::vector<guessed_ports> guess_ports(stream_info &info, int lidar_packet_size, int imu_packet_size,
-                                       int expected_lidar_port, int expected_imu_port);
+std::vector<guessed_ports> guess_ports(stream_info& info, int lidar_packet_size,
+                                       int imu_packet_size,
+                                       int expected_lidar_port,
+                                       int expected_imu_port);
 }  // namespace sensor_utils
 }  // namespace ouster

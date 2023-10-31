@@ -17,7 +17,7 @@ StandardLayoutCW::StandardLayoutCW(Writer& writer, uint32_t chunk_size)
       writer_{writer} {}
 
 void StandardLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
-                                  const std::vector<uint8_t>& msg_buf) {
+                                   const std::vector<uint8_t>& msg_buf) {
     if (chunk_builder_.size() + msg_buf.size() > chunk_size_) {
         finish_chunk();
     }
@@ -36,9 +36,7 @@ void StandardLayoutCW::finish_chunk() {
     chunk_builder_.reset();
 }
 
-void StandardLayoutCW::finish() {
-    finish_chunk();
-}
+void StandardLayoutCW::finish() { finish_chunk(); }
 
 }  // namespace osf
 }  // namespace ouster

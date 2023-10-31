@@ -5,10 +5,11 @@ find_package(CURL REQUIRED)
 find_package(spdlog REQUIRED)
 
 # ==== Libraries ====
-add_library(ouster_client src/client.cpp src/types.cpp src/netcompat.cpp src/lidar_scan.cpp
+add_library(ouster_client src/client.cpp src/types.cpp src/sensor_info.cpp src/netcompat.cpp src/lidar_scan.cpp
   src/image_processing.cpp src/buffered_udp_source.cpp src/parsing.cpp
   src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_tcp_imp.cpp src/logging.cpp
-  src/profile_extension.cpp)
+  src/profile_extension.cpp
+  src/util.cpp)
 target_link_libraries(ouster_client
   PUBLIC
     Eigen3::Eigen

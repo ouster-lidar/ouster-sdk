@@ -9,8 +9,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <stdexcept>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "camera.h"
 #include "common.h"
@@ -22,8 +22,8 @@ namespace viz {
 namespace impl {
 
 struct CloudIds {
-    GLuint xyz_id, off_id, range_id, key_id, mask_id, model_id,
-        proj_view_id, mono_id, palette_id, transformation_id, trans_index_id;
+    GLuint xyz_id, off_id, range_id, key_id, mask_id, model_id, proj_view_id,
+        mono_id, palette_id, transformation_id, trans_index_id;
     CloudIds() {}
 
     /**
@@ -79,7 +79,7 @@ GLCloud::~GLCloud() {
 
 /**
  * @brief Makes a key from the pair of (n, w) for use in maps.
- * 
+ *
  * @param n total cloud size
  * @param w columns number
  * @return size_t hash of the pair (n, w) to use as a map key
@@ -182,7 +182,7 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
                      cloud.range_data_.data(), GL_DYNAMIC_DRAW);
         cloud.range_changed_ = false;
     }
-    
+
     if (cloud.key_changed_) {
         mono = cloud.mono_;
         glBindBuffer(GL_ARRAY_BUFFER, key_buffer);
@@ -281,9 +281,7 @@ void GLCloud::beginDraw() {
     glUseProgram(GLCloud::program_id);
 }
 
-void GLCloud::endDraw() {
-    glDisable(GL_BLEND);
-}
+void GLCloud::endDraw() { glDisable(GL_BLEND); }
 
 }  // namespace impl
 }  // namespace viz

@@ -52,6 +52,5 @@ bool mmap_close(uint8_t* file_buf, const uint64_t file_size);
 /// Get the last system error and return it in a string (not wide string)
 std::string get_last_error();
 
-
 }  // namespace osf
 }  // namespace ouster

@@ -7,6 +7,9 @@ python/**/*.so
 python/**/*.dll
 python/**/*.pyd
 
+/build
+python/artifacts/
+
 # visual studio
 .vs/
 out/

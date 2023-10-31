@@ -6,53 +6,11 @@
 #include <gtest/gtest.h>
 
 #include <Eigen/Eigen>
-#include <chrono>
 #include <numeric>
 #include <random>
 
 #include "ouster/lidar_scan.h"
-
-class Timer {
-   public:
-    void start() { t_start = std::chrono::system_clock::now(); }
-
-    void stop() { t_end = std::chrono::system_clock::now(); }
-
-    int64_t elapsed_microseconds() {
-        using namespace std::chrono;
-        return duration_cast<microseconds>(t_end - t_start).count();
-    }
-
-   private:
-    std::chrono::time_point<std::chrono::system_clock> t_start;
-    std::chrono::time_point<std::chrono::system_clock> t_end;
-};
-
-template <typename T, typename Total, size_t N>
-class MovingAverage {
-   public:
-    MovingAverage& operator()(T sample) {
-        total_sum += sample;
-        if (samples_count < N)
-            samples[samples_count++] = sample;
-        else {
-            T& oldest = samples[samples_count++ % N];
-            total_sum -= oldest;
-            oldest = sample;
-        }
-        return *this;
-    }
-
-    operator double() const {
-        return static_cast<double>(total_sum) /
-               static_cast<double>(std::min(samples_count, N));
-    }
-
-   private:
-    T samples[N];
-    size_t samples_count{0};
-    Total total_sum{0};
-};
+#include "util.h"
 
 using namespace ouster;
 
@@ -67,22 +25,21 @@ PointsF cartesian_f(const Eigen::Ref<const img_t<uint32_t>>& range,
     return (nooffset.array() == 0.0).select(nooffset, nooffset + offset);
 }
 
-
-class CarteianParamterizedTestFixture
+class CartesianParametrisedTestFixture
     : public ::testing::TestWithParam<std::pair<int, int>> {
    protected:
     int scan_width;
     int scan_height;
 };
 
-INSTANTIATE_TEST_CASE_P(CarteianParamterizedTests,
-                        CarteianParamterizedTestFixture,
+INSTANTIATE_TEST_CASE_P(CartesianParametrisedTests,
+                        CartesianParametrisedTestFixture,
                         ::testing::Values(std::pair<int, int>{512, 128},
                                           std::pair<int, int>{1024, 128},
                                           std::pair<int, int>{2048, 128},
                                           std::pair<int, int>{4096, 128}));
 
-TEST(CarteianParamterizedTestFixture, CartesianFunctionsMatch) {
+TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
     const auto WIDTH = 512;
     const auto HEIGHT = 64;
     const auto ROWS = WIDTH * HEIGHT;
@@ -104,7 +61,7 @@ TEST(CarteianParamterizedTestFixture, CartesianFunctionsMatch) {
     EXPECT_TRUE(points.isApprox(points0));
 }
 
-TEST(CarteianParamterizedTestFixture, CartesianFunctionsMatchF) {
+TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatchF) {
     const auto WIDTH = 512;
     const auto HEIGHT = 64;
     const auto ROWS = WIDTH * HEIGHT;
@@ -130,12 +87,8 @@ TEST(CarteianParamterizedTestFixture, CartesianFunctionsMatchF) {
     EXPECT_TRUE(pointsF.isApprox(points0F));
 }
 
-TEST_P(CarteianParamterizedTestFixture, SpeedCheck) {
-    std::map<std::string, std::string> styles = {
-        {"red", "\033[0;31m"},     {"green", "\033[0;32m"},
-        {"yellow", "\033[0;33m"},  {"blue", "\033[0;34m"},
-        {"magenta", "\033[0;35m"}, {"cyan", "\033[0;36m"},
-        {"bold", "\033[1m"},       {"reset", "\033[0m"}};
+TEST_P(CartesianParametrisedTestFixture, SpeedCheck) {
+    std::map<std::string, std::string> styles = term_styles();
 
     const auto test_params = GetParam();
     const auto WIDTH = test_params.first;

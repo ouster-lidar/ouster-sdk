@@ -9,10 +9,9 @@
 #pragma once
 
 #include "ouster/osf/basics.h"
+#include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/writer.h"
-
-#include "ouster/osf/meta_lidar_sensor.h"
 
 namespace ouster {
 namespace osf {
@@ -34,24 +33,23 @@ struct zero_field {
 /**
  * Metadata entry for LidarScanStream to store reference to a sensor and
  * field_types
- * 
+ *
  * @verbatim
  * Fields:
  *   sensor_meta_id: metadata_ref - reference to LidarSensor metadata that
  *                                  describes the sensor configuration.
  *   field_types: LidarScan fields specs
- * 
+ *
  * OSF type:
  *   ouster/v1/os_sensor/LidarScanStream
- *  
+ *
  * Flatbuffer definition file:
  *   fb/os_sensor/lidar_scan_stream.fbs
  * @endverbatim
- *  
+ *
  */
 class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
    public:
-
     LidarScanStreamMeta(const uint32_t sensor_meta_id,
                         const LidarScanFieldTypes field_types = {})
         : sensor_meta_id_{sensor_meta_id},
@@ -86,15 +84,15 @@ struct MetadataTraits<LidarScanStreamMeta> {
 
 /**
  * LidarScanStream that encodes LidarScan objects into the messages.
- * 
+ *
  * @verbatim
  * Object type: ouster::sensor::LidarScan
  * Meta type: LidarScanStreamMeta (sensor_meta_id, field_types)
- * 
+ *
  * Flatbuffer definition file:
  *   fb/os_sensor/lidar_scan_stream.fbs
  * @endverbatim
- * 
+ *
  */
 class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
    public:
@@ -102,10 +100,10 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
                     const LidarScanFieldTypes& field_types = {});
 
     /**
-     * Saves the object to the writer applying the coding/serizlization algorithm
-     * defined in make_msg() function. The function is the same for all streams
-     * types ...
-     * 
+     * Saves the object to the writer applying the coding/serizlization
+     * algorithm defined in make_msg() function. The function is the same for
+     * all streams types ...
+     *
      * @todo [pb]: Probably should be abstracted/extracted from all streams
      * we also might want to have the corresponding function to read back
      * sequentially from Stream that doesn't seem like fit into this model...
@@ -124,20 +122,19 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
     static std::unique_ptr<obj_type> decode_msg(
         const std::vector<uint8_t>& buf, const meta_type& meta,
         const MetadataStore& meta_provider);
-    
+
     const meta_type& meta() const { return meta_; }
 
    private:
     Writer& writer_;
-    
+
     meta_type meta_;
 
     uint32_t stream_meta_id_{0};
 
     uint32_t sensor_meta_id_{0};
-    
-    sensor::sensor_info sensor_info_{};
 
+    sensor::sensor_info sensor_info_;
 };
 
 }  // namespace osf

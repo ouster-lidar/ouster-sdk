@@ -2,7 +2,7 @@
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
 
-Utilities for hashing and comparing lidardata.
+Utilities for hashing and comparing lidar data.
 """
 from collections import defaultdict
 from dataclasses import dataclass

@@ -6,7 +6,8 @@ using std::string;
 using namespace ouster::sensor::impl;
 
 SensorHttpImp::SensorHttpImp(const string& hostname, int timeout_sec)
-    : http_client(std::make_unique<CurlClient>("http://" + hostname, timeout_sec)) {}
+    : http_client(
+          std::make_unique<CurlClient>("http://" + hostname, timeout_sec)) {}
 
 SensorHttpImp::~SensorHttpImp() = default;
 

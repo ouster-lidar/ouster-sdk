@@ -65,28 +65,31 @@ class CMakeBuild(build_ext):
         cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
         build_args = ['--config', cfg]
 
+        env = os.environ.copy()
+        jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', 2)
+        build_args += ['--', f'-j{jobs}']
+
         if platform.system() == "Windows":
-            build_args += ['--', '/m']
-        else:
-            build_args += ['--', '-j2']
+            cmake_args += ['-GNinja']
 
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
 
         # specify additional cmake args
-        env = os.environ.copy()
         extra_args = env.get('OUSTER_SDK_CMAKE_ARGS')
         if extra_args:
             cmake_args += shlex.split(extra_args)
-
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
-        output1 = subprocess.run(['cmake', ext.sourcedir] + cmake_args,
+
+        print("Running: ")
+        run = ['cmake', ext.sourcedir] + cmake_args
+        print(run)
+        output1 = subprocess.run(run,
                                  cwd=self.build_temp,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
                                  env=env, text=True)
-
         print("CMAKE CONFIG OUTPUT")
         print(output1.stdout)
         if output1.returncode != 0:
@@ -144,7 +147,7 @@ setup(
         'ouster.client': ['py.typed', '_client.pyi'],
         'ouster.pcap': ['py.typed', '_pcap.pyi'],
         'ouster.osf': ['py.typed', '_osf.pyi'],
-        'ouster.sdk': ['py.typed', '_viz.pyi'],
+        'ouster.viz': ['py.typed', '_viz.pyi'],
         'ouster.sdkx': ['py.typed'],
     },
     author='Ouster Sensor SDK Developers',
@@ -176,6 +179,7 @@ setup(
         'typing-extensions >=3.7.4.3',
         'Pillow >=9.2',
         'packaging',
+        'ouster-mapping>=0.1.0.dev3; python_version >= "3.8"',
     ],
     extras_require={
         'test': [
@@ -190,18 +194,14 @@ setup(
             'sphinx-copybutton ==0.5.0',
             'docutils <0.18',
             'sphinx-tabs ==3.3.1',
-            'breathe ==4.33.1'
+            'breathe ==4.33.1',
+            'sphinx-rtd-size'
         ],
         'examples': [
             'matplotlib',
             'opencv-python',
             'laspy',
             'PyQt5; platform_system=="Windows"',
-        ],
-        'mapping': [
-            'kiss-icp >=0.2.10, <1',
-            'open3d >=0, <1',
-            'laspy >=2.0, <3',
         ],
     },
     entry_points={'console_scripts':

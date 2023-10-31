@@ -5,13 +5,13 @@
 
 #include "ouster/osf/crc32.h"
 
+#include <zlib.h>
+
 #include <algorithm>
-#include <iostream>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
-#include <cctype>
-
-#include <zlib.h>
+#include <iostream>
 
 namespace ouster {
 namespace osf {

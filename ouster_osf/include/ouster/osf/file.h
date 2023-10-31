@@ -8,8 +8,8 @@
  */
 #pragma once
 
-#include <string>
 #include <fstream>
+#include <string>
 
 #include "ouster/osf/basics.h"
 
@@ -76,7 +76,7 @@ class OsfFile {
     /**
      * Read from file (in current mmap mode it's copying data from
      * mmap address to the 'buf' address).
-     * 
+     *
      * @todo Handle errors in future and get the way to read them back
      * with FileState etc.
      */

@@ -1,5 +1,5 @@
 #  type: ignore
-"""Miscellaneous utilites.
+"""Miscellaneous utilities.
 
 TODO:
 - bench util:
@@ -23,6 +23,9 @@ import time
 from typing import Optional, Tuple
 import tempfile
 import zipfile
+import numpy as np
+
+from copy import deepcopy
 
 from ouster import client
 from ouster.sdk.util import resolve_metadata
@@ -51,7 +54,7 @@ def get_system_info() -> dict:
         import cpuinfo  # type: ignore
     except ModuleNotFoundError:
         click.echo(
-            "This command requires the py-cpuinfo packgage. Try running "
+            "This command requires the py-cpuinfo package. Try running "
             "`pip3 install py-cpuinfo` first.")
         exit(1)
 
@@ -186,10 +189,11 @@ def system_info() -> None:
 
 @util_group.command()
 @click.argument('file', required=False, type=click.Path(exists=True))
-@click.option('-f',
+@click.option('-m',
               '--meta',
               required=False,
-              type=click.Path(exists=True, dir_okay=False, readable=True))
+              type=click.Path(exists=True, dir_okay=False, readable=True),
+              help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-u', '--url', required=False)
 def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     """Run a quick set of benchmarks and record results.
@@ -207,8 +211,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     workdir = os.path.join(os.getcwd(), "ouster-bench")
     if not os.path.exists(workdir):
         os.mkdir(workdir)
-    os.chdir(workdir)
-    click.echo(f"Working directory: {workdir}")
+    click.echo(f"Will write output to: {workdir}")
 
     if file is None:
         file, meta = download_sample_data(url or DEFAULT_SAMPLE_URL, workdir)
@@ -307,7 +310,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     report['times']['cartesian'] = dur
 
     # name report based on file hash, hostname, python version, and sdk version
-    report_file = (f"report-{hash[:7]}"
+    report_file = (f"{workdir}/report-{hash[:7]}"
                    f"-{sys_info['platform']['node']}"
                    f"-py{sys_info['platform']['python_version']}"
                    f"-sdk{sys_info['packages']['ouster-sdk']}.json")
@@ -338,3 +341,244 @@ def convert_metadata_to_legacy(meta: str, output_path: Optional[str]) -> None:
             click.echo(f"Reading metadata from: {meta} and outputting converted legacy metadata to: {output_path}")
             with open(output_path, "w") as outfile:
                 outfile.write(output)
+
+
+@util_group.command(name="benchmark-sensor")
+@click.argument('hostname', required=True, type=str)
+@click.option('-l', '--lidar-port', default=None, help="Lidar port")
+@click.option('-n',
+              '--n-frames',
+              type=int,
+              help="Number of lidar frames to process")
+@click.option('-s',
+              '--n-seconds',
+              default=20.0,
+              help="Max time process, default 20.s")
+@click.option('-b', '--buf-size', default=1280, help="Max packets to buffer")
+@click.option('-t', '--timeout', default=2.0, help="Seconds to wait for data")
+@click.option('--short',
+              required=False,
+              is_flag=True,
+              help="Short output, less prints & no viz")
+@click.option('--only-range-refl',
+              required=False,
+              is_flag=True,
+              help="Extract only RANGE and REFLECTIVITY fields to LidarScan")
+@click.option('--copy-data',
+              required=False,
+              is_flag=True,
+              help="Make deep copy of every packet or scan")
+@click.option('--scan-batch',
+              required=False,
+              is_flag=True,
+              help="Do scan batching")
+@click.option('--xyz',
+              required=False,
+              is_flag=True,
+              help="Transform scans"
+              "to XYZ points (enables --scan-batch is set)")
+@click.option('--xyz-mean',
+              required=False,
+              is_flag=True,
+              help="Calculates "
+              "centroid for XYZ points (enables --xyz if set)")
+@click.option('--no-viz',
+              required=False,
+              is_flag=True,
+              help="Don't show scan statuses")
+def benchmark_sensor(hostname: str, lidar_port: int, n_frames: Optional[int],
+                     n_seconds: float, buf_size: int, timeout: float,
+                     short: bool, only_range_refl: bool, copy_data: bool,
+                     scan_batch: bool, xyz: bool, xyz_mean: bool,
+                     no_viz: bool) -> None:
+    """Reads from the sensor and measure packet drops, cpu load etc."""
+
+    from ouster.cli.core.sensor import configure_sensor
+    import psutil as psu
+
+    config = configure_sensor(hostname, lidar_port, False, False)
+
+    click.echo(f"Initializing connection to sensor {hostname} on "
+               f"lidar port {config.udp_port_lidar} with udp dest "
+               f"'{config.udp_dest}'...")
+
+    source = client.Sensor(hostname,
+                           config.udp_port_lidar,
+                           config.udp_port_imu,
+                           buf_size=buf_size,
+                           timeout=timeout if timeout > 0 else None)
+
+    info = source.metadata
+
+    packets_per_frame = (info.format.columns_per_frame /
+                         info.format.columns_per_packet)
+    columns_per_packet = info.format.columns_per_packet
+
+    xyzlut = client.XYZLut(info)
+
+    fields = None
+    scan_batch_flag = "S"
+    if only_range_refl:
+        # only minimal fields to use in LidarScan and parse in ScanBatch
+        fields = {
+            client.ChanField.RANGE: np.uint32,
+            client.ChanField.REFLECTIVITY: np.uint8
+        }
+        scan_batch_flag = "SRR"
+
+    flags = "N" if not copy_data else "C"
+    if scan_batch or xyz or xyz_mean:
+        data_source = client.Scans(source, fields=fields)
+        flags = f"{scan_batch_flag}" if not copy_data else f"C {scan_batch_flag}"
+        if xyz_mean:
+            flags += " XYZ M"
+        elif xyz:
+            flags += " XYZ"
+    else:
+        data_source = source
+
+    # TODO[pb]: This frame_boundry() may need to be extracted because we already
+    # use it in multiple places.
+    last_f_id = -1
+
+    def frame_boundary(p: client.Packet) -> bool:
+        nonlocal last_f_id
+        if isinstance(p, client.LidarPacket):
+            f_id = p.frame_id
+            changed = last_f_id != -1 and f_id != last_f_id
+            last_f_id = f_id
+            return changed
+        return False
+
+    last_scan_ts = time.monotonic()
+    start_ts = last_scan_ts
+
+    status_line = ""
+    status_line_init = ""
+
+    frames_cnt = 0
+    total_packets = 0
+    total_packets_in_buf = 0
+    missed_packets = 0
+
+    total_avg_cpu = 0
+    total_max_cpu = 0
+
+    click.echo(
+        f"Receiving data: {info.prod_line}, {info.mode}, "
+        f"{info.format.udp_profile_lidar}, {info.format.column_window}, "
+        f"[{flags}] ...")
+
+    # first point from which to measure CPU usage
+    psu.cpu_percent()
+
+    try:
+
+        for obj in data_source:
+
+            # imu_packets are not accounted
+            if not (isinstance(obj, client.LidarPacket)
+                    or isinstance(obj, client.LidarScan)):
+                continue
+
+            if isinstance(obj, client.LidarPacket):
+                # no scan batching branch
+                packet = obj if not copy_data else deepcopy(obj)
+                packet_num = int(packet.measurement_id[0] / columns_per_packet)
+                total_packets += 1
+                if not frame_boundary(packet):
+                    missed_packets += int(packet_num - len(status_line))
+                    status_line += " " * int(packet_num - len(status_line)) + "="
+                    continue
+                else:
+                    missed_packets += int(packets_per_frame - len(status_line))
+                    status_line += " " * int(packets_per_frame - len(status_line))
+                    status_line_init = " " * packet_num + "="
+
+            elif isinstance(obj, client.LidarScan):
+                # scan batching + xyz + mean branch
+                scan = obj if not copy_data else deepcopy(obj)
+
+                status = scan.status & 0x1
+                status_split = np.array(np.split(status, packets_per_frame))
+                # any valid column from a packet means that we received the packet
+                status_per_packet = np.any(status_split, axis=1)
+                status_line = "".join(
+                    ["=" if s else " " for s in status_per_packet])
+
+                valid_packets = np.sum(status_per_packet)
+                total_packets += valid_packets
+                missed_packets += int(packets_per_frame - valid_packets)
+
+                if xyz or xyz_mean:
+                    xyz_points = xyzlut(scan)
+                    if xyz_mean:
+                        np.mean(xyz_points.reshape((-1, 3)), axis=0)
+
+            now = time.monotonic()
+            scan_t = now - last_scan_ts
+
+            cpu_percents = psu.cpu_percent(percpu=True)
+            max_cpu_percent = np.max(cpu_percents)
+            cpu_percent = np.mean(cpu_percents)
+            total_avg_cpu += cpu_percent
+            total_max_cpu += max_cpu_percent
+
+            total_packets_in_buf += source._cli.size
+
+            if not no_viz and not short:
+                click.echo(f"{status_line} [{flags}] "
+                           f"{source._cli.size:04d}/{source._cli.capacity} "
+                           f"cpu:{cpu_percent:02.0f} ({max_cpu_percent:02.0f}) "
+                           f"t:{scan_t:.04f}s")
+
+            status_line = status_line_init
+
+            last_scan_ts = now
+            frames_cnt += 1
+
+            if ((n_frames and frames_cnt >= n_frames)
+                    or (n_seconds and now - start_ts >= n_seconds)):
+                break
+    except KeyboardInterrupt:
+        click.echo("\nInterrupted")
+    finally:
+        missed_packets_percent = 0
+        if total_packets + missed_packets:
+            missed_packets_percent = 100 * missed_packets / (total_packets +
+                                                             missed_packets)
+        avg_cpu_load = 0
+        avg_max_cpu_load = 0
+        avg_packets_in_buf = 0
+        if frames_cnt:
+            avg_cpu_load = total_avg_cpu / frames_cnt
+            avg_max_cpu_load = total_max_cpu / frames_cnt
+            avg_packets_in_buf = total_packets_in_buf / frames_cnt
+
+        if not short:
+            click.echo(f"Summary: {info.prod_line}, {info.mode}, "
+                       f"{info.format.udp_profile_lidar}, "
+                       f"{info.format.column_window}, [{flags}]:")
+            click.echo(f"  lidar_packets received: {total_packets}")
+            click.echo(f"  lidar_packets missed  : {missed_packets} "
+                       f"({missed_packets_percent:.02f}%)")
+            click.echo(f"  total frames          : {frames_cnt}")
+            click.echo(f"  avg packets in buf    : {avg_packets_in_buf:.02f}"
+                       f"/ {source._cli.capacity}")
+            click.echo(f"  avg CPU loads         : {avg_cpu_load:.02f}% "
+                       f"({avg_max_cpu_load:.02f}%)")
+
+        # one line summary for spreadsheets use
+        click.echo(f"-,{info.prod_line},{info.mode},"
+                   f"{info.format.udp_profile_lidar},"
+                   f"{flags},"
+                   f"{total_packets},"
+                   f"{missed_packets},"
+                   f"{missed_packets_percent:.02f},"
+                   f"{frames_cnt},"
+                   f"{avg_packets_in_buf:.02f},"
+                   f"{source._cli.capacity},"
+                   f"{avg_cpu_load:.02f},"
+                   f"{avg_max_cpu_load:.02f}")
+
+        data_source.close()

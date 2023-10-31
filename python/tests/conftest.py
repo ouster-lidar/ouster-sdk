@@ -17,6 +17,14 @@ pytest.register_assert_rewrite('ouster.client._digest')
 import ouster.client._digest as digest  # noqa
 
 
+_has_mapping = False
+try:
+    from ouster.cli.plugins import cli_mapping  # type: ignore # noqa: F401 # yes... it has to be in this order.
+    _has_mapping = True
+except ImportError:
+    pass
+
+
 # boilerplate for selecting / deslecting interactive tests
 def pytest_addoption(parser):
     parser.addoption("--interactive",
@@ -132,3 +140,42 @@ def scan(packets: client.PacketSource) -> client.LidarScan:
 @pytest.fixture(scope="package")
 def test_data_dir():
     return Path(path.dirname(path.abspath(__file__))) / ".." / ".." / "tests"
+
+
+METADATAS = {
+        '1_12': '1_12_os1-991913000010-64.json',
+        '1_12_legacy': '1_12_os1-991937000062-64_legacy.json',
+        '1_13': '1_13_os1-991913000010-64.json',
+        '1_13_legacy': '1_13_os1-991937000062-32A02_legacy.json',
+        '1_14_128_legacy': '1_14_6cccd_os-882002000138-128_legacy.json',
+        '2_0': '2_0_0_os1-991913000010-64.json',
+        '2_0_legacy': '2_0_0_os1-992008000494-128_col_win_legacy.json',
+        '2_1': '2_1_2_os1-991913000010-64.json',
+        '2_1_legacy': '2_1_2_os1-991913000010-64_legacy.json',
+        '2_2': '2_2_os-992119000444-128.json',
+        '2_2_legacy': '2_2_os-992119000444-128_legacy.json',
+        '2_3': '2_3_1_os-992146000760-128.json',
+        '2_3_legacy': '2_3_1_os-992146000760-128_legacy.json',
+        '2_4': '2_4_0_os-992146000760-128.json',
+        '2_4_legacy': '2_4_0_os-992146000760-128_legacy.json',
+        '2_5': '2_5_0_os-992146000760-128.json',
+        '2_5_legacy': '2_5_0_os-992146000760-128_legacy.json',
+        '3_0': '3_0_1_os-122246000293-128.json',
+        '3_0_legacy': '3_0_1_os-122246000293-128_legacy.json',
+        'ouster-studio-reduced': 'ouster-studio-reduced-config-v1.json',
+}
+
+
+@pytest.fixture(scope='module', params=METADATAS.keys())
+def metadata_key(request) -> str:
+    return request.param
+
+
+@pytest.fixture
+def metadata_base_name(metadata_key: str) -> str:
+    return METADATAS[metadata_key]
+
+
+@pytest.fixture
+def has_mapping() -> bool:
+    return _has_mapping

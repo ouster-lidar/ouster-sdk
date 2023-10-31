@@ -17,7 +17,8 @@ namespace {
 
 class OsfPcapSourceTest : public OsfTestWithData {};
 
-// TODO[pb]: Remove this test and PcapRawSource since it's not matching of what we have in the Python
+// TODO[pb]: Remove this test and PcapRawSource since it's not matching of what
+// we have in the Python
 TEST_F(OsfPcapSourceTest, ReadLidarScansAndImus) {
     std::string pcap_file = path_concat(
         test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10_lb_n3.pcap");

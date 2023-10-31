@@ -12,7 +12,9 @@ Sample sensor session
 ---------------------
 
 Connect a sensor via Ethernet to the system with Ouster SDK installed.
+
 .. note::
+
    Bear in mind that following the steps below will modify the sensor's configuration.
 
 First we configure the sensor with standard ports, azimuth window, operating mode, and auto udp
@@ -78,6 +80,7 @@ Let's take a look at your pcap:
 This should output something that looks like:
 
 .. code:: bash
+
           Reading pcap:  [####################################]  100%          
           File size:     2247.16M
           Packets read:  85085
