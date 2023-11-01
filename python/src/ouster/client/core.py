@@ -117,6 +117,7 @@ class Sensor(PacketSource):
         thread (like any other non-daemonized Python thread).
     """
 
+    _connection: _client.SensorConnection
     _cli: _client.Client
     _timeout: Optional[float]
     _metadata: SensorInfo
@@ -162,7 +163,7 @@ class Sensor(PacketSource):
         Raises:
             ClientError: If initializing the client fails.
         """
-        self._cli = _client.Client(hostname, lidar_port, imu_port, buf_size)
+        self._connection = _client.SensorConnection(hostname, lidar_port, imu_port)
         self._timeout = timeout
         self._overflow_err = _overflow_err
         self._flush_before_read = _flush_before_read
@@ -182,22 +183,31 @@ class Sensor(PacketSource):
             self._fetch_metadata()
             self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
+        self._cli = _client.Client(self._connection, buf_size, self._pf.lidar_packet_size,
+                                   buf_size, self._pf.imu_packet_size)
         self._lidarbuf = LidarPacket(None,
                                      self._metadata,
                                      _raise_on_id_check=not self._soft_id_check)
         self._imubuf = ImuPacket(packet_format=self._pf)
 
         # Use args to avoid capturing self causing circular reference
-        self._producer = Thread(target=lambda cli, pf: cli.produce(pf),
-                                args=(self._cli, self._pf))
+        self._producer = Thread(target=self._cli.produce)
         self._producer.start()
+
+    @property
+    def lidar_port(self) -> int:
+        return self._connection.lidar_port
+
+    @property
+    def imu_port(self) -> int:
+        return self._connection.imu_port
 
     def _fetch_metadata(self, timeout: Optional[float] = None) -> None:
         timeout_sec = 45
         if timeout:
             timeout_sec = ceil(timeout)
         if not self._fetched_meta:
-            self._fetched_meta = self._cli.get_metadata(
+            self._fetched_meta = self._connection.get_metadata(
                 legacy=self._legacy_format, timeout_sec = timeout_sec)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
@@ -352,6 +362,8 @@ class Sensor(PacketSource):
             self._cli.shutdown()
         if hasattr(self, '_producer'):
             self._producer.join()
+        if hasattr(self, '_connection'):
+            self._connection.shutdown()
 
     def __del__(self) -> None:
         self.close()

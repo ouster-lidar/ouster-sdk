@@ -128,7 +128,7 @@ std::shared_ptr<client> mtp_init_client(
  * Block for up to timeout_sec until either data is ready or an error occurs.
  *
  * NOTE: will return immediately if LIDAR_DATA or IMU_DATA are set and not
- * cleared by read_lidar_data() and read_imu_data() before the next call.
+ * cleared by read_lidar_packet() and read_imu_packet() before the next call.
  *
  * @param[in] cli client returned by init_client associated with the connection.
  * @param[in] timeout_sec seconds to block while waiting for data.
@@ -156,14 +156,37 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
  * Read lidar data from the sensor. Will not block.
  *
  * @param[in] cli client returned by init_client associated with the connection.
- * @param[out] packet A LidarPacket to store lidar data read from a sensor. In
- * addition, the LidarPacket's host_timestamp attribute is also set.
- * @param[in] pf The packet format.
+ * @param[out] buf buffer to which to write lidar data. Must be at least
+ * `bytes + 1` bytes.
+ * @param[in] bytes expected number of bytes in the packet
  *
  * @return true if a lidar packet was successfully read.
  */
-bool read_lidar_packet(const client& cli, LidarPacket& packet,
-                       const packet_format& pf);
+bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes);
+
+/**
+ * Read lidar data from the sensor. Will not block.
+ *
+ * @param[in] cli client returned by init_client associated with the connection.
+ * @param[out] packet A LidarPacket to store lidar data read from a sensor.
+ * Expects the packet to have *correct* number of bytes allocated for the
+ * packet. In addition, the LidarPacket's host_timestamp attribute is also set.
+ *
+ * @return true if a lidar packet was successfully read.
+ */
+bool read_lidar_packet(const client& cli, LidarPacket& packet);
+
+/**
+ * Read imu data from the sensor. Will not block.
+ *
+ * @param[in] cli client returned by init_client associated with the connection.
+ * @param[out] buf buffer to which to write lidar data. Must be at least
+ * `bytes + 1` bytes.
+ * @param[in] bytes expected number of bytes in the packet
+ *
+ * @return true if a lidar packet was successfully read.
+ */
+bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes);
 
 /**
  * Read imu data from the sensor. Will not block.
@@ -181,15 +204,13 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  * Read imu data from the sensor. Will not block.
  *
  * @param[in] cli client returned by init_client associated with the connection.
- * @param[out] packet An ImuPacket to store imu data read from a sensor. In
+ * @param[out] packet An ImuPacket to store imu data read from a sensor. Expects
+ * the packet to have *correct* number of bytes allocated for the packet. In
  * addition, the ImuPacket's host_timestamp attribute is also set.
- * imu_packet_bytes + 1 bytes.
- * @param[in] pf The packet format.
  *
  * @return true if an imu packet was successfully read.
  */
-bool read_imu_packet(const client& cli, ImuPacket& packet,
-                     const packet_format& pf);
+bool read_imu_packet(const client& cli, ImuPacket& packet);
 
 /**
  * Get metadata text blob from the sensor.
@@ -263,7 +284,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
  *
  * @return the port number.
  */
-int get_lidar_port(client& cli);
+int get_lidar_port(const client& cli);
 
 /**
  * Return the port used to listen for imu UDP data.
@@ -272,7 +293,7 @@ int get_lidar_port(client& cli);
  *
  * @return the port number.
  */
-int get_imu_port(client& cli);
+int get_imu_port(const client& cli);
 
 /**
  * Check if ip address in multicast range.

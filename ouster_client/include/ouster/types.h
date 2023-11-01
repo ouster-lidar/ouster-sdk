@@ -1282,7 +1282,12 @@ struct Packet {
     uint64_t host_timestamp;
     std::vector<uint8_t> buf;
 
-    Packet(int size = 65536) : host_timestamp{0}, buf(size) {}
+    Packet(int size = 65536) : host_timestamp{0} {
+        // this is necessary due to how client works - it may read size() + 1
+        // bytes into the packet in case of rogue packet coming through
+        buf.reserve(size + 1);
+        buf.resize(size, 0);
+    }
 
     template <typename PacketType>
     PacketType& as() {

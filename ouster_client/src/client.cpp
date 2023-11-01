@@ -24,7 +24,8 @@
 #include <vector>
 
 #include "logging.h"
-#include "netcompat.h"
+#include "ouster/impl/client_poller.h"
+#include "ouster/impl/netcompat.h"
 #include "ouster/sensor_http.h"
 #include "ouster/types.h"
 
@@ -534,33 +535,76 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
     return cli;
 }
 
-client_state poll_client(const client& c, const int timeout_sec) {
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(c.lidar_fd, &rfds);
-    FD_SET(c.imu_fd, &rfds);
+namespace impl {
 
+struct client_poller {
+    fd_set rfds;
+    SOCKET max_fd;
+    client_state err;
+};
+
+std::shared_ptr<client_poller> make_poller() {
+    return std::make_unique<client_poller>();
+}
+
+void reset_poll(client_poller& poller) {
+    FD_ZERO(&poller.rfds);
+    poller.max_fd = 0;
+    poller.err = client_state::TIMEOUT;
+}
+
+void set_poll(client_poller& poller, const client& c) {
+    FD_SET(c.lidar_fd, &poller.rfds);
+    FD_SET(c.imu_fd, &poller.rfds);
+    poller.max_fd = std::max({poller.max_fd, c.lidar_fd, c.imu_fd});
+}
+
+int poll(client_poller& poller, int timeout_sec) {
     timeval tv;
     tv.tv_sec = timeout_sec;
     tv.tv_usec = 0;
 
-    SOCKET max_fd = std::max(c.lidar_fd, c.imu_fd);
+    SOCKET retval =
+        select((int)poller.max_fd + 1, &poller.rfds, NULL, NULL, &tv);
 
-    SOCKET retval = select((int)max_fd + 1, &rfds, NULL, NULL, &tv);
+    if (!impl::socket_valid(retval)) {
+        if (impl::socket_exit()) {
+            poller.err = client_state::EXIT;
+        } else {
+            logger().error("select: {}", impl::socket_get_error());
+            poller.err = client_state::CLIENT_ERROR;
+        }
 
-    client_state res = client_state(0);
-
-    if (!impl::socket_valid(retval) && impl::socket_exit()) {
-        res = EXIT;
-    } else if (!impl::socket_valid(retval)) {
-        logger().error("select: {}", impl::socket_get_error());
-        res = client_state(res | CLIENT_ERROR);
-    } else if (retval) {
-        if (FD_ISSET(c.lidar_fd, &rfds)) res = client_state(res | LIDAR_DATA);
-        if (FD_ISSET(c.imu_fd, &rfds)) res = client_state(res | IMU_DATA);
+        return -1;
     }
 
-    return res;
+    return (int)retval;
+}
+
+client_state get_error(const client_poller& poller) { return poller.err; }
+
+client_state get_poll(const client_poller& poller, const client& c) {
+    client_state s = client_state(0);
+
+    if (FD_ISSET(c.lidar_fd, &poller.rfds)) s = client_state(s | LIDAR_DATA);
+    if (FD_ISSET(c.imu_fd, &poller.rfds)) s = client_state(s | IMU_DATA);
+
+    return s;
+}
+
+}  // namespace impl
+
+client_state poll_client(const client& c, const int timeout_sec) {
+    impl::client_poller poller;
+    impl::reset_poll(poller);
+    impl::set_poll(poller, c);
+    int res = impl::poll(poller, timeout_sec);
+    if (res <= 0) {
+        // covers TIMEOUT and error states
+        return impl::get_error(poller);
+    } else {
+        return impl::get_poll(poller, c);
+    }
 }
 
 static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
@@ -578,38 +622,44 @@ static bool recv_fixed(SOCKET fd, void* buf, int64_t len) {
     return false;
 }
 
-bool read_lidar_packet(const client& cli, uint8_t* buf,
-                       const packet_format& pf) {
-    return recv_fixed(cli.lidar_fd, buf, pf.lidar_packet_size);
+bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes) {
+    return recv_fixed(cli.lidar_fd, buf, bytes);
 }
 
-bool read_lidar_packet(const client& cli, LidarPacket& packet,
+bool read_lidar_packet(const client& cli, uint8_t* buf,
                        const packet_format& pf) {
+    return read_lidar_packet(cli, buf, pf.lidar_packet_size);
+}
+
+bool read_lidar_packet(const client& cli, LidarPacket& packet) {
     auto now = std::chrono::high_resolution_clock::now();
     packet.host_timestamp =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             now.time_since_epoch())
             .count();
-    return read_lidar_packet(cli, packet.buf.data(), pf);
+    return read_lidar_packet(cli, packet.buf.data(), packet.buf.size());
+}
+
+bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes) {
+    return recv_fixed(cli.imu_fd, buf, bytes);
 }
 
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf) {
-    return recv_fixed(cli.imu_fd, buf, pf.imu_packet_size);
+    return read_imu_packet(cli, buf, pf.imu_packet_size);
 }
 
-bool read_imu_packet(const client& cli, ImuPacket& packet,
-                     const packet_format& pf) {
+bool read_imu_packet(const client& cli, ImuPacket& packet) {
     auto now = std::chrono::high_resolution_clock::now();
     packet.host_timestamp =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             now.time_since_epoch())
             .count();
-    return read_imu_packet(cli, packet.buf.data(), pf);
+    return read_imu_packet(cli, packet.buf.data(), packet.buf.size());
 }
 
-int get_lidar_port(client& cli) { return get_sock_port(cli.lidar_fd); }
+int get_lidar_port(const client& cli) { return get_sock_port(cli.lidar_fd); }
 
-int get_imu_port(client& cli) { return get_sock_port(cli.imu_fd); }
+int get_imu_port(const client& cli) { return get_sock_port(cli.imu_fd); }
 
 bool in_multicast(const std::string& addr) {
     return IN_MULTICAST(ntohl(inet_addr(addr.c_str())));

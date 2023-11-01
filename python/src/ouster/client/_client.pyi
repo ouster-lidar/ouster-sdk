@@ -40,51 +40,40 @@ class _ImuPacket(_Packet):
     pass
 
 
-class Client:
+class Event:
+    source: int
+    state: ClientState
+
+    def __init__(self, source: int, state: ClientState) -> None:
+        ...
+
+
+class SensorConnection:
     @overload
     def __init__(self,
                  hostname: str = ...,
                  lidar_port: int = ...,
-                 imu_port: int = ...,
-                 capacity: int = ...) -> None:
+                 imu_port: int = ...) -> None:
         ...
 
     @overload
     def __init__(self,
-                 hostname: str,
-                 udp_dest_host: str,
+                 hostname: str = ...,
+                 udp_dest_host: str = ...,
                  mode: LidarMode = ...,
                  timestamp_mode: TimestampMode = ...,
                  lidar_port: int = ...,
                  imu_port: int = ...,
-                 timeout_sec: int = ...,
-                 capacity: int = ...) -> None:
+                 timeout_sec: int = ...,) -> None:
         ...
 
-    def get_metadata(self, timeout_sec: int = ..., legacy: bool = ...) -> str:
+    def poll(self, timeout_sec: int) -> ClientState:
         ...
 
-    def shutdown(self) -> None:
+    def read_lidar_packet(self, packet: _LidarPacket, pf: PacketFormat) -> bool:
         ...
 
-    def consume(self,
-                lidarp: _LidarPacket,
-                imup: _ImuPacket,
-                timeout_sec: float) -> ClientState:
-        ...
-
-    def produce(self, pf: PacketFormat) -> None:
-        ...
-
-    def flush(self, n_packets: int = ...) -> None:
-        ...
-
-    @property
-    def capacity(self) -> int:
-        ...
-
-    @property
-    def size(self) -> int:
+    def read_imu_packet(self, packet: _ImuPacket, pf: PacketFormat) -> bool:
         ...
 
     @property
@@ -93,6 +82,109 @@ class Client:
 
     @property
     def imu_port(self) -> int:
+        ...
+
+    def get_metadata(self, timeout_sec: int, legacy: bool) -> str:
+        ...
+
+    def shutdown(self) -> None:
+        ...
+
+
+class UDPPacketSource:
+    def __init__(self) -> None:
+        ...
+
+    @overload
+    def add_client(self,
+                   connection: SensorConnection,
+                   lidar_buf_size: int,
+                   lidar_packet_size: int,
+                   imu_buf_size: int,
+                   imu_packet_size: int) -> None:
+        ...
+
+    @overload
+    def add_client(self,
+                   connection: SensorConnection,
+                   metadata: SensorInfo,
+                   seconds_to_buffer: float) -> None:
+        ...
+
+    def shutdown(self) -> None:
+        ...
+
+    def pop(self, timeout_sec: float) -> Event:
+        ...
+
+    def packet(self, e: Event) -> _Packet:
+        ...
+
+    def advance(self, e: Event) -> None:
+        ...
+
+    def produce(self) -> None:
+        ...
+
+    def flush(self) -> None:
+        ...
+
+    @property
+    def size(self) -> int:
+        ...
+
+    @property
+    def capacity(self) -> int:
+        ...
+
+
+class Client:
+    @overload
+    def __init__(self,
+                 connection: SensorConnection,
+                 lidar_buf_size: int,
+                 lidar_packet_size: int,
+                 imu_buf_size: int,
+                 imu_packet_size: int) -> None:
+        ...
+
+    @overload
+    def __init__(self,
+                 connection: SensorConnection,
+                 metadata: SensorInfo,
+                 seconds_to_buffer: float) -> None:
+        ...
+
+    def shutdown(self) -> None:
+        ...
+
+    def pop(self, timeout_sec: float) -> ClientState:
+        ...
+
+    def packet(self, st: ClientState) -> _Packet:
+        ...
+
+    def advance(self, st: ClientState) -> None:
+        ...
+
+    def consume(self,
+                lidarp: _LidarPacket,
+                imup: _ImuPacket,
+                timeout_sec: float) -> ClientState:
+        ...
+
+    def produce(self) -> None:
+        ...
+
+    def flush(self) -> None:
+        ...
+
+    @property
+    def size(self) -> int:
+        ...
+
+    @property
+    def capacity(self) -> int:
         ...
 
 

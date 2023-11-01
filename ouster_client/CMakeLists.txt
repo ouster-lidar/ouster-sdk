@@ -6,7 +6,7 @@ find_package(spdlog REQUIRED)
 
 # ==== Libraries ====
 add_library(ouster_client src/client.cpp src/types.cpp src/sensor_info.cpp src/netcompat.cpp src/lidar_scan.cpp
-  src/image_processing.cpp src/buffered_udp_source.cpp src/parsing.cpp
+  src/image_processing.cpp src/udp_packet_source.cpp src/parsing.cpp
   src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_tcp_imp.cpp src/logging.cpp
   src/profile_extension.cpp
   src/util.cpp)

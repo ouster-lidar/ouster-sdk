@@ -142,3 +142,16 @@ set_tests_properties(
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
 )
+
+add_executable(udp_queue_test udp_queue_test.cpp)
+
+target_link_libraries(udp_queue_test OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
+
+add_test(NAME udp_queue_test COMMAND udp_queue_test --gtest_output=xml:udp_queue_test.xml)
+
+set_tests_properties(
+    udp_queue_test
+        PROPERTIES
+        ENVIRONMENT
+        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+)
