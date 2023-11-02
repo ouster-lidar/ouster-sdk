@@ -18,6 +18,27 @@ from .data import (LidarPacket, LidarScan, ColHeader)
 from .core import (Packets, PacketSource, Scans)
 
 
+# NOTE[pb]: Extracted from LidarPacket for keeping tests based on digests working
+#           this method is deprecated along with ColHeader and should be cleaned
+#           fully eventually.
+def _get_packet_header(packet: LidarPacket, header: ColHeader) -> np.ndarray:
+    """Create a view of the specified column header.
+
+    This method is deprecated. Use the ``timestamp``, ``measurement_id`` or
+    ``status`` properties instead.
+
+    Args:
+        header: The column header to parse
+
+    Returns:
+        A numpy array containing a copy of the specified header values
+    """
+
+    res = packet._pf.packet_header(header, packet._data)
+    res.flags.writeable = False
+    return res
+
+
 def _md5(a: np.ndarray) -> str:
     """Get md5 hash of a numpy array."""
     return hashlib.md5(a.tobytes()).hexdigest()
@@ -59,7 +80,7 @@ class FieldDigest:
         for idx, packet in enumerate(packets):
             # TODO: add packet headers
             for h in ColHeader:
-                hashes[h.name].update(packet.header(h).tobytes())
+                hashes[h.name].update(_get_packet_header(packet, h).tobytes())
             for f in packet.fields:
                 hashes[f.name].update(packet.field(f).tobytes())
 

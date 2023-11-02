@@ -6,7 +6,6 @@ All rights reserved.
 from enum import Enum
 from typing import Callable, Iterator, Type, List, Optional, Union, Dict
 import logging
-import warnings
 
 import numpy as np
 
@@ -301,24 +300,6 @@ class LidarPacket(_client._LidarPacket):
             A numpy array containing a copy of the specified field values
         """
         res = self._pf.packet_field(field, self._data)
-        res.flags.writeable = False
-        return res
-
-    def header(self, header: ColHeader) -> np.ndarray:
-        """Create a view of the specified column header.
-
-        This method is deprecated. Use the ``timestamp``, ``measurement_id`` or
-        ``status`` properties instead.
-
-        Args:
-            header: The column header to parse
-
-        Returns:
-            A numpy array containing a copy of the specified header values
-        """
-        warnings.warn("LidarPacket.header is deprecated", DeprecationWarning)
-
-        res = self._pf.packet_header(header, self._data)
         res.flags.writeable = False
         return res
 

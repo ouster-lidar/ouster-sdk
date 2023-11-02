@@ -80,15 +80,8 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
 
     assert len(
         client.ColHeader.__members__) == 5, "Don't forget to update tests!"
-    assert np.array_equal(p.header(client.ColHeader.TIMESTAMP), np.zeros(w))
     assert np.array_equal(p.timestamp, np.zeros(w))
-    assert np.array_equal(p.header(client.ColHeader.FRAME_ID), np.zeros(w))
-    assert np.array_equal(p.header(client.ColHeader.MEASUREMENT_ID),
-                          np.zeros(w))
     assert np.array_equal(p.measurement_id, np.zeros(w))
-    assert np.array_equal(p.header(client.ColHeader.ENCODER_COUNT),
-                          np.zeros(w))
-    assert np.array_equal(p.header(client.ColHeader.STATUS), np.zeros(w))
     assert np.array_equal(p.status, np.zeros(w))
 
     assert p.frame_id == 0
@@ -98,7 +91,7 @@ def test_lidar_packet(meta: client.SensorInfo) -> None:
         p.field(client.ChanField.REFLECTIVITY)[0] = 1
 
     with pytest.raises(ValueError):
-        p.header(client.ColHeader.MEASUREMENT_ID)[0] = 1
+        p.measurement_id[0] = 1
 
     with pytest.raises(ValueError):
         p.status[:] = 1
@@ -115,8 +108,6 @@ def test_read_legacy_packet(packet: client.LidarPacket) -> None:
     assert packet.field(client.ChanField.SIGNAL)[-1, 0] == 6
     assert packet.field(client.ChanField.NEAR_IR)[-1, 0] == 13
 
-    assert np.all(np.diff(packet.header(client.ColHeader.FRAME_ID)) == 0)
-    assert np.all(np.diff(packet.header(client.ColHeader.MEASUREMENT_ID)) == 1)
     assert np.all(np.diff(packet.timestamp) > 0)
     assert np.all(np.diff(packet.measurement_id) == 1)
     assert packet.packet_type == 0
@@ -126,7 +117,6 @@ def test_read_legacy_packet(packet: client.LidarPacket) -> None:
     assert packet.shot_limiting == 0
     assert packet.thermal_shutdown == 0
     # in 1024xN mode, the angle between measurements is exactly 88 encoder ticks
-    assert np.all(np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 88)
     assert np.all(packet.status == 0xffffffff)
 
 
@@ -138,8 +128,6 @@ def test_read_single_return_packet(packet: client.LidarPacket) -> None:
     assert packet.field(client.ChanField.SIGNAL)[-1, 0] == 34
     assert packet.field(client.ChanField.NEAR_IR)[-1, 0] == 393
 
-    assert np.all(np.diff(packet.header(client.ColHeader.FRAME_ID)) == 0)
-    assert np.all(np.diff(packet.header(client.ColHeader.MEASUREMENT_ID)) == 1)
     assert np.all(np.diff(packet.timestamp) > 0)
     assert np.all(np.diff(packet.measurement_id) == 1)
     assert packet.packet_type == 1
@@ -150,7 +138,6 @@ def test_read_single_return_packet(packet: client.LidarPacket) -> None:
     assert packet.thermal_shutdown == 0
 
     # Changes from LEGACY
-    assert np.all(np.diff(packet.header(client.ColHeader.ENCODER_COUNT)) == 0)
     assert np.all(packet.status == 0x01)
 
 
