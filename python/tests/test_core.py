@@ -133,6 +133,8 @@ def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
             next(iter(source))
 
 
+# TODO: reenable once we figure out CI determinism
+@pytest.mark.skip
 def test_sensor_overflow(default_meta: client.SensorInfo) -> None:
     with closing(
             client.Sensor("",

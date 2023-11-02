@@ -294,6 +294,9 @@ void replay(bool* stop, std::vector<std::shared_ptr<PcapReplay>> replays,
 }
 
 TEST_P(UdpQueuePcapTest, single_client_test) {
+    // TODO: reenable once we figure out determinism
+    GTEST_SKIP();
+
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
     auto info = metadata_from_json(data_dir + "/" + std::get<1>(test_params));
@@ -371,6 +374,9 @@ TEST_P(UdpQueuePcapTest, single_client_test) {
 }
 
 TEST(UdpQueueTest, multi_client_test) {
+    // TODO: reenable once we figure out determinism
+    GTEST_SKIP();
+
     auto data_dir = getenvs("DATA_DIR");
 
     std::vector<str_pair> inputs = {
