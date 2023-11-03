@@ -82,16 +82,25 @@ class CMakeBuild(build_ext):
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
 
-        print("Running: ")
+        def cmake_log(message):
+            env = os.environ.copy()
+            log_file = env.get('OUSTER_SDK_CMAKE_LOG_FILE')
+            if log_file:
+                if os.path.exists(os.path.dirname(log_file)):
+                    with open(log_file, 'a') as f:
+                        f.write(str(message))
+            print(message)
+
+        cmake_log("Running: ")
         run = ['cmake', ext.sourcedir] + cmake_args
-        print(run)
+        cmake_log(run)
         output1 = subprocess.run(run,
                                  cwd=self.build_temp,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
                                  env=env, text=True)
-        print("CMAKE CONFIG OUTPUT")
-        print(output1.stdout)
+        cmake_log("CMAKE CONFIG OUTPUT")
+        cmake_log(output1.stdout)
         if output1.returncode != 0:
             raise "Error running cmake"
 
@@ -100,8 +109,8 @@ class CMakeBuild(build_ext):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
                                  env=env, text=True)
-        print("CMAKE BUILD OUTPUT")
-        print(output2.stdout)
+        cmake_log("CMAKE BUILD OUTPUT")
+        cmake_log(output2.stdout)
         if output2.returncode != 0:
             raise "Error running cmake --build"
 
@@ -136,6 +145,30 @@ class sdk_bdist_wheel(bdist_wheel):
                     os.remove(file)
 
 
+def install_requires():
+    install_requires=[
+        'psutil >=5.9.5, <6',
+        'zeroconf ==0.58.2',
+        'click >=8.1.3, <9',
+        'python-magic ==0.4.27',
+        'importlib_metadata ==6.6.0',
+        'prettytable >= 2.1.0',
+        'requests >=2.0, <3',
+        'more-itertools >=8.6',
+        'numpy >=1.19, <2, !=1.19.4',
+        # scipy is not supported on Mac M1 with Mac OS < 12.0
+        'scipy >=1.7, <2;platform_system != "Darwin" or platform_machine != "arm64" or platform_version >= "21.0.0"',
+        'typing-extensions >=3.7.4.3',
+        'Pillow >=9.2',
+        'packaging'
+    ]
+    env = os.environ.copy()
+    skip_mapping = env.get('OUSTER_SDK_SKIP_MAPPING')
+    if not skip_mapping:
+        install_requires.append('ouster-mapping>=0.0.1.dev10; python_version >= "3.8"')
+
+    return install_requires
+    
 setup(
     name='ouster-sdk',
     url='https://github.com/ouster-lidar/ouster_example',
@@ -164,23 +197,7 @@ setup(
     },
     zip_safe=False,
     python_requires='>=3.7, <4',
-    install_requires=[
-        'psutil >=5.9.5, <6',
-        'zeroconf ==0.58.2',
-        'click >=8.1.3, <9',
-        'python-magic ==0.4.27',
-        'importlib_metadata ==6.6.0',
-        'prettytable >= 2.1.0',
-        'requests >=2.0, <3',
-        'more-itertools >=8.6',
-        'numpy >=1.19, <2, !=1.19.4',
-        # scipy is not supported on Mac M1 with Mac OS < 12.0
-        'scipy >=1.7, <2;platform_system != "Darwin" or platform_machine != "arm64" or platform_version >= "21.0.0"',
-        'typing-extensions >=3.7.4.3',
-        'Pillow >=9.2',
-        'packaging',
-        'ouster-mapping>=0.1.0.dev3; python_version >= "3.8"',
-    ],
+    install_requires=install_requires(),
     extras_require={
         'test': [
             'pytest >=7.0, <8',
