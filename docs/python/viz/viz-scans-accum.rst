@@ -159,7 +159,7 @@ Alternatively with a ``PointViz`` it can be used as a canvas to draw the final s
        scans_acc.update(scan)
 
    scans_acc.draw(update=True)
-   point_viz.upadte()
+   point_viz.update()
    point_viz.run()
 
 
