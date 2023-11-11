@@ -122,7 +122,7 @@ Programmatic use with (and without) PointViz
 With ``point_viz: PointViz`` object the ``ScansAccumulator`` can be used as a regular
 ``LidarScanViz`` and passed directly to ``SimpleViz``::
 
-   from ouster.viz import PointViz, add_default_controls, ScansAccumulator
+   from ouster.viz import PointViz, add_default_controls, ScansAccumulator, SimpleViz
 
    point_viz = PointViz("SimpleViz usecase")
    add_default_controls(point_viz)
