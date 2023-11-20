@@ -25,6 +25,7 @@ Similarly, ``$SENSOR_HOSTNAME`` is used for your sensor's hostname.
    udp-packets
    lidar-scan
    record-stream
+   slam-api-example
    visualizations
    conversion
 

@@ -31,17 +31,18 @@ following command:
 
 .. code:: bash
 
-        ouster-cli source HOSTNAME / FILENAME --help
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> --help
 
 Currently, there are two main commands: ``slam`` and ``convert``. You can further explore each
 command by accessing their respective submenus using the ``--help`` flag. For example:
 
 .. code:: bash
 
-        ouster-cli source HOSTNAME / FILENAME slam --help
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam --help
 
-SLAM
-----
+
+SLAM Command
+------------
 Simultaneous localization and mapping (SLAM) is a technique that enables a system to construct
 a map of its surroundings while simultaneously determining its own position on that map.
 The Ouster SDK slam command writes lidar scans with per-column poses into an OSF file, an open-source
@@ -59,12 +60,12 @@ Then execute the following command:
 
 .. code:: bash
 
-        ouster-cli source HOSTNAME / FILENAME slam viz -o sample.osf
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz -o sample.osf
 
 .. note::
 
         Please replace <HOSTNAME> with the corresponding hostname or IP of your sensor, and replace
-        <PCAP_FILENAME> with the actual file path and name of the pcap file. Similarly, make the
+        <FILENAME> with the actual file path and name of the PCAP/OSF file. Similarly, make the
         necessary substitutions in the subsequent commands.
 
 The terminal will display details such as the output filename and the processing duration. The
@@ -75,8 +76,8 @@ visualizer and display accumulated scans. More details can be found at the
 :ref:`Ouster Visualizer <viz-run>` and :ref:`Scans Accumulator <viz-scans-accum>`
 
 
-Convert
--------
+Convert Command
+---------------
 The convert command converts the SLAM-generated OSF file to a point cloud data file
 format such as LAS (.las), PLY (.ply), or PCD (.pcd). The output file format depends on the
 extension of the output filename. Let's use the OSF file generated from the SLAM command and convert
