@@ -3,7 +3,6 @@ import click
 from typing import Iterator, Dict, cast, Optional, List, Union
 import numpy as np
 
-from ouster.sdkx.multi import collate_scans  # type: ignore
 from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
 from ouster.osf.multi import ScansMultiReader  # type: ignore
 
@@ -280,7 +279,7 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
 
         ls_viz = MultiLidarScanViz(scans_source.metadata, source_name=file)
 
-        scans = collate_scans(scans_source)  # type: ignore
+        scans = iter(scans_source)  # type: ignore
 
     scans_accum = scans_accum_for_cli(scans_source.metadata,
                                       accum_num=accum_num,

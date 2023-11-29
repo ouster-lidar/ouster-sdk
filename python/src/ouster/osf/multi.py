@@ -1,9 +1,9 @@
 from ouster import client
 import ouster.osf as osf
 
-from ouster.sdkx.multi import ScanMultiSource, ScanMultiItem  # type: ignore
+from ouster.sdkx.multi import ScanMultiSource, collate_scans  # type: ignore
 
-from typing import cast, Iterator, Dict, Optional, List
+from typing import cast, Iterator, Dict, Optional, List, Tuple
 
 
 class ScansMultiReader(ScanMultiSource):
@@ -52,7 +52,7 @@ class ScansMultiReader(ScanMultiSource):
                 self._stream_sensor_idx[stream_id] = self._sensor_idx[
                     stream_meta.sensor_meta_id]
 
-    def __iter__(self) -> Iterator[ScanMultiItem]:
+    def _async_iter(self) -> Iterator[Tuple[int, client.LidarScan]]:
         while True:
             for msg in self._reader.messages(self._start_ts,
                                              self._reader.end_ts):
@@ -63,6 +63,9 @@ class ScansMultiReader(ScanMultiSource):
                         yield sidx, cast(client.LidarScan, ls)
             if not self._cycle:
                 break
+
+    def __iter__(self) -> Iterator[List[Optional[client.LidarScan]]]:
+        return collate_scans(self._async_iter(), self.metadata)
 
     @property
     def metadata(self) -> List[client.SensorInfo]:

@@ -53,15 +53,11 @@ class PacketMultiSource(Protocol):
         ...
 
 
-ScanMultiItem = Tuple[int, client.LidarScan]
-"""Scan with a sensor index: (idx, LidarScan)"""
-
-
 class ScanMultiSource(Protocol):
     """Multi sensor data source"""
 
-    def __iter__(self) -> Iterator[ScanMultiItem]:
-        """A ScanMultiSource supports ``Iterable[ScanMultiItem]``.
+    def __iter__(self) -> Iterator[List[Optional[client.LidarScan]]]:
+        """A ScanMultiSource supports ``Iterable[List[Optional[LidarScan]]]``.
 
         Currently defined explicitly due to:
         https://github.com/python/typing/issues/561
@@ -306,9 +302,9 @@ class ScansMultiWrapper(ScanMultiSource):
                  source: Union[client.ScanSource, ScanMultiSource]) -> None:
         self._source = source
 
-    def __iter__(self) -> Iterator[ScanMultiItem]:
+    def __iter__(self) -> Iterator[List[Optional[client.LidarScan]]]:
         for scan in self._source:
-            yield (0, scan) if isinstance(scan, client.LidarScan) else scan
+            yield [scan] if isinstance(scan, client.LidarScan) else scan
 
     @property
     def metadata(self) -> List[SensorInfo]:
@@ -545,16 +541,36 @@ class ScansMulti(ScanMultiSource):
         self,
         source: PacketMultiSource,
         *,
+        dt: int = 10**8,
+        unsynced: bool = False,
         complete: bool = False,
         fields: Optional[List[client.FieldTypes]] = None
     ) -> None:
+        """
+        Args:
+            source: packet multi source
+            dt: max time difference between scans in the collated scan (i.e.
+                time period at which every new collated scan is released/cut),
+                default is 0.1s
+            unsynced: set to True if sensor streams are not synced, in this
+                      case the resulting scans in collate will be combined
+                      disregarding the time and packed using FIFO
+            complete: set to True to only release complete scans
+            fields: specify which channel fields to populate on LidarScans
+        """
         self._source = source
         self._complete = complete
         self._fields = fields or [
             client.get_field_types(sinfo) for sinfo in self._source.metadata
         ]
+        self._dt = dt
+        self._unsynced = unsynced
 
-    def __iter__(self) -> Iterator[ScanMultiItem]:
+    def __iter__(self) -> Iterator[List[Optional[client.LidarScan]]]:
+        return collate_scans(self._async_iter(), self.metadata, dt=self._dt,
+                             use_unsynced=self._unsynced)
+
+    def _async_iter(self) -> Iterator[Tuple[int, client.LidarScan]]:
         w = [sinfo.format.columns_per_frame for sinfo in self._source.metadata]
         h = [sinfo.format.pixels_per_column for sinfo in self._source.metadata]
         col_window = [
@@ -598,7 +614,8 @@ class ScansMulti(ScanMultiSource):
 
 
 def collate_scans(
-    source: ScanMultiSource,
+    source: Iterator[Tuple[int, client.LidarScan]],
+    metadata: List[client.SensorInfo],
     *,
     dt: int = 10**8,
     use_unsynced: bool = False
@@ -622,7 +639,7 @@ def collate_scans(
     Returns:
         List of LidarScans elements
     """
-    sensors_num = len(source.metadata)
+    sensors_num = len(metadata)
     min_ts = -1
     max_ts = -1
     collated = [None] * sensors_num

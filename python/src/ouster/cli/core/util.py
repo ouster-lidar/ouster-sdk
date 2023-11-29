@@ -468,12 +468,11 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     # TODO[pb]: Left here commented for quick test of MultiViz while we don't have
     #           `ouster-cli sensor viz --multi` implemented
-    # from ouster.sdkx.multi import collate_scans
     # from ouster.viz import SimpleViz
     # from ouster.sdkx.multi_viz import MultiLidarScanViz
     # scan_source = ScansMulti(packet_source)
     # ls_viz = MultiLidarScanViz(scan_source.metadata, source_name=str(hostnames))
-    # scans = collate_scans(scan_source)
+    # scans = iter(scan_source)
     # SimpleViz(ls_viz, _buflen=100).run(scans)
     # scan_source.close()
     # return

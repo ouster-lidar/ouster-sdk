@@ -21,7 +21,7 @@ from ouster.sdkx.util import resolve_extrinsics
 from .util import (click_ro_file, import_rosbag_modules)
 
 from ouster.sdk.util import resolve_metadata_multi
-from ouster.sdkx.multi import PcapMulti, ScansMulti, collate_scans
+from ouster.sdkx.multi import PcapMulti, ScansMulti
 from ouster.sdkx.multi_viz import MultiLidarScanViz
 
 
@@ -437,7 +437,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
                                   fields=field_types,
                                   complete=filter)
 
-        scans = collate_scans(scans_source, use_unsynced=True)
+        scans = iter(scans_source)
 
     scans_accum = scans_accum_for_cli(scans_source.metadata,
                                       accum_num=accum_num,
