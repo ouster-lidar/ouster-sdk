@@ -1,11 +1,146 @@
 import click
+import os
+from pprint import pprint
 
 from typing import Iterator, Dict, cast, Optional, List, Union
 import numpy as np
 
-from ouster.sdkx.multi import collate_scans  # type: ignore
+from ouster.sdk.util import resolve_metadata, resolve_metadata_multi
+from ouster.sdkx.multi import collate_scans, PcapMulti, ScansMulti  # type: ignore
 from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
 from ouster.osf.multi import ScansMultiReader  # type: ignore
+
+
+def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
+                       chunk_size: int, flags: bool, raw_headers: bool,
+                       raw_fields: bool, extrinsics: Optional[List[float]],
+                       multi: bool, soft_id_check: bool) -> None:
+    """
+    Convert PCAP file to OSF.
+    """
+    try:
+        from ouster import client
+        import ouster.osf as osf
+    except ImportError as e:
+        raise click.ClickException("Error: " + str(e))
+
+    metadata_paths: List[str] = []
+
+    if not multi:
+        temp_path = resolve_metadata(file, meta)
+        if temp_path is not None:
+            metadata_paths.append(temp_path)
+    else:
+        metadata_paths = resolve_metadata_multi(file)
+
+    if not output:
+        output = os.path.splitext(os.path.basename(file))[0] + '.osf'
+
+    print("Converting: ")
+    print(f"  PCAP file: {file}")
+    print(f"  with json files: {metadata_paths}")
+    print(f"  to OSF file: {output}")
+    print("  chunks_layout: STREAMING, chunks_size: ",
+          chunk_size if chunk_size else "DEFAULT",
+          f", FLAGS: {flags}, RAW fields: {raw_fields}")
+
+    print()
+
+    source = PcapMulti(file,
+                       metadata_paths=metadata_paths,
+                       _soft_id_check=soft_id_check,
+                       _resolve_extrinsics=True)
+
+    if extrinsics and len(source) == 1:
+        source.metadata[0].extrinsic = np.array(extrinsics).reshape((4, 4))
+        source.extrinsics_source[0] = "osf_from_pcap_param"
+
+    # if any extrinsics were found, print them
+    for ext_source, m in zip(source.extrinsics_source, source._metadata):
+        if ext_source:
+            print(f"Extrinsics set for {m.sn} "
+                  f"(from {ext_source}):\n{m.extrinsic}")
+
+    # Using osf.Writer to save pcap to OSF
+    writer = osf.Writer(output, "from_pcap pythonic", chunk_size)
+
+    # sensor idx in multi source mapped to meta ids in OSF
+    sensor_id = dict()
+
+    print("\nUsing sensors data:")
+    for idx, sinfo in enumerate(source.metadata):
+        lidar_sensor_meta = osf.LidarSensor(sinfo.original_string())
+        sensor_id[idx] = writer.addMetadata(lidar_sensor_meta)
+        print(f"  [{idx};{sinfo.sn}->{sensor_id[idx]}]: "
+              f"lidar_port = {sinfo.udp_port_lidar}")
+
+    print()
+
+    for idx, ext_source in enumerate(source.extrinsics_source):
+
+        if ext_source is None:
+            # skip extrinsics if they weren't explicitly set during previous
+            # steps
+            continue
+
+        # add Extrinsics to OSF for a corresponding sensor
+        sinfo = source.metadata[idx]
+        extrinsics_meta = osf.Extrinsics(sinfo.extrinsic, sensor_id[idx],
+                                         ext_source)
+        writer.addMetadata(extrinsics_meta)
+        print(f"Adding extrinsics for [{idx};{sinfo.sn}->{sensor_id[idx]}]: "
+              f"from: {ext_source}:\n"
+              f"{sinfo.extrinsic}")
+
+    # get the field types per sensor with flags/raw_fields if specified
+    field_types = osf.resolve_field_types(source.metadata,
+                                          flags=flags,
+                                          raw_headers=raw_headers,
+                                          raw_fields=raw_fields)
+
+    print()
+
+    for idx, sinfo in enumerate(source.metadata):
+        print(f"LidarScan resolved field_types for [{idx};{sinfo.sn}]:")
+        pprint(list(field_types)[idx], indent=4)
+
+    # OSF stream writers by type and sensor idx in multi source
+    lidar_stream = {}
+
+    for idx in range(len(source)):
+        lidar_stream[idx] = osf.LidarScanStream(writer, sensor_id[idx],
+                                                list(field_types)[idx])
+
+    # running counts of saved messages to OSF
+    ls_cnt: Dict[int, int] = {}
+    for idx, _ in enumerate(list(field_types)):
+        ls_cnt[idx] = 0
+    print("\nConverting PCAP to OSF ... ")
+    try:
+        # ask datasource to use custom fields for LidarScans thus
+        # enabling FLAGS fields if they were requested via `--flags` param
+        for idx, scan in ScansMulti(source, fields=list(field_types)):
+            ts = client.first_valid_packet_ts(scan)
+            lidar_stream[idx].save(ts, scan)
+            ls_cnt[idx] += 1
+
+    except KeyboardInterrupt:
+        print("Interrupted! Finishing up ...")
+    finally:
+
+        print(f"\nSaved to OSF file: {output}")
+        print("  Lidar Scan messages:")
+        pprint(ls_cnt)
+        writer.close()
+
+        # checking for bad init_ids
+        if source.id_error_count:
+            print(f"WARNING: {source.id_error_count} lidar_packets with "
+                  "mismatched init_id/sn were detected.")
+            if not soft_id_check:
+                print("NOTE: To disable strict init_id/sn checking use "
+                      "--soft-id-check option (may lead to parsing "
+                      "errors)")
 
 
 @click.group(name="osf", hidden=True)
