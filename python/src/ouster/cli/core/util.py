@@ -560,9 +560,12 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     psu.cpu_percent()
 
     try:
+        # this is a bit hacky, but benchmark logic works well with Tuple[int, LidarScan] iterator
+        # TODO: rework with proper iterator instead
+        it = data_source._async_iter() if is_scan_source else iter(data_source)
 
-        # TODO: fix, broken with list of scans on scan_batch option -- Tim T.
-        for idx, obj in data_source:
+        while True:
+            idx, obj = next(it)
 
             # imu_packets are not accounted
             if not (isinstance(obj, client.LidarPacket)
