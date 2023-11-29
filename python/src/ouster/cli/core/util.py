@@ -561,6 +561,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     try:
 
+        # TODO: fix, broken with list of scans on scan_batch option -- Tim T.
         for idx, obj in data_source:
 
             # imu_packets are not accounted
