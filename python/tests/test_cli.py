@@ -196,6 +196,14 @@ def test_source_pcap(runner, has_mapping) -> None:
         assert read_commands_from_help_text(result.output) == expected_commands
 
 
+def test_source_pcap_convert_text(runner) -> None:
+    with tempfile.NamedTemporaryFile(suffix='.pcap') as temp_pcap:
+        result = runner.invoke(core.cli, ['source', temp_pcap.name])
+        assert result.exit_code == 0
+        line = [line.strip() for line in result.output.splitlines() if line.startswith('  convert')][0]
+        assert line == 'convert  Convert from PCAP to .csv or .osf'
+
+
 @pytest.mark.skip
 def test_source_rosbag() -> None:
     # TODO FLEETSW-4407: not MVP

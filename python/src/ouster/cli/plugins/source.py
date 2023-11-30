@@ -5,7 +5,7 @@ from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
 import ouster.cli.core.pcap
 import ouster.cli.core.sensor
-from typing import List, Optional
+from typing import List, Optional, Callable
 from .io_type import extension_from_io_type, io_type_from_extension, io_type, OusterIoType
 
 
@@ -210,6 +210,7 @@ def csv_from_pcap(ctx,
 class SourceConvertCommand(click.Command):
     """Generalizes ouster-cli source <sourcefile> convert <outputfile>
     """
+
     def __init__(self, *args, **kwargs):
         kwargs['add_help_option'] = False
         super().__init__(*args, **kwargs)
@@ -219,9 +220,6 @@ class SourceConvertCommand(click.Command):
         exts = sorted(
             [extension_from_io_type(source_type) for source_type in self.conversions.keys()]
         )
-        # TODO: hack remove with OSF is allowed
-        if '.osf' in exts:
-            exts.remove('.osf')
         return _join_with_conjunction(exts)
 
     def invoke(self, ctx):
@@ -259,14 +257,23 @@ class SourceConvertCommand(click.Command):
 class PcapConvertCommand(SourceConvertCommand):
     """Implements ouster-cli source <sourcefile>.pcap convert <otherfile>,
     """
+
     def __init__(self, *args, **kwargs):
-        kwargs['help'] = f"Convert from PCAP to {self.get_output_type_file_extensions_str()}"
+        self.update_help()
         super().__init__(*args, **kwargs)
     # this is a map from output type to a conversion function
     conversions = {
         # OusterIoType.ROSBAG: bag_from_pcap,
         OusterIoType.CSV: csv_from_pcap,
     }
+
+    def add_conversion(self, io_type: OusterIoType, fn: Callable):
+        """To the 'source *.pcap convert' subcommand, add a conversion to `io_type`."""
+        self.conversions[io_type] = fn
+        self.update_help()
+
+    def update_help(self):
+        self.help = f"Convert from PCAP to {self.get_output_type_file_extensions_str()}"
 
 
 @click.command
@@ -432,7 +439,7 @@ class SourceMultiCommand(click.MultiCommand):
             # which should be a " f"sensor hostname, or a {file_extensions_str} file.")
             command_dict_list = []
             for source_type in self.commands.keys():
-                command_dict_list = command_dict_list + [{ f"{str(source_type)} {inner_command}":self.commands[source_type][inner_command]  # noqa
+                command_dict_list = command_dict_list + [{f"{str(source_type)} {inner_command}": self.commands[source_type][inner_command]  # noqa
                         for inner_command in self.commands[source_type].keys()}]
 
             all_command_dict = {}

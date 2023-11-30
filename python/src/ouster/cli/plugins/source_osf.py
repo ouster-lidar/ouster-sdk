@@ -147,5 +147,4 @@ source.commands[OusterIoType.OSF] = {
 
 
 #  add conversions to OSF from other formats
-# TODO[pb]: To be added later
-source.commands[OusterIoType.PCAP]['convert'].conversions[OusterIoType.OSF] = osf_from_pcap
+source.commands[OusterIoType.PCAP]['convert'].add_conversion(OusterIoType.OSF, osf_from_pcap)
