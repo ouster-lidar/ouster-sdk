@@ -13,6 +13,7 @@
 
    Developer Quick Start <python/quickstart>
    Examples <python/examples/index>
+   SLAM Quickstart <python/slam-api-example>
    Point Cloud Visualizer <python/viz/index>
    Developing <python/devel>
 
