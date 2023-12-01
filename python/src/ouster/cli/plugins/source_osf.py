@@ -41,13 +41,13 @@ from .source import source, _source_arg_name, _output_file_arg_name, SourceConve
 def osf_from_pcap(ctx, *args, **kwargs) -> None:
     """Convert the source PCAP to OSF"""
     # Implements ouster-cli source <sourcefile>.pcap convert <destfile>.osf
-    pass
-    # source = ctx.obj.get(_source_arg_name)
-    # osf_cli.osf_from_pcap_impl(
-    #     source, meta, output_file,
-    #     chunk_size, flags, raw_headers,
-    #     raw_fields, extrinsics,
-    #     multi, soft_id_check)
+    source = ctx.obj.get(_source_arg_name)
+
+    osf_cli.osf_from_pcap_impl(
+        source, kwargs["meta"], kwargs["output_file"],
+        kwargs["chunk_size"], kwargs["flags"], kwargs["raw_headers"],
+        kwargs["raw_fields"], kwargs["extrinsics"],
+        kwargs["multi"], kwargs["soft_id_check"])
 
 
 @click.command
