@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include <string>
 #include <cstdint>
+#include <string>
 
 namespace ouster {
 namespace osf {
