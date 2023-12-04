@@ -485,7 +485,7 @@ class SensorMulti(PacketMultiSource):
         frames_cnt = [n_frames] * len(self.metadata)
         sensor_flushed = [False] * len(self.metadata)
 
-        frame_bound = [client.FrameBounder() for _ in self.metadata]
+        frame_bound = [client.FrameBorder() for _ in self.metadata]
 
         def flush_impl(p: Tuple[int, client.Packet]) -> bool:
             nonlocal frame_bound
