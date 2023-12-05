@@ -119,11 +119,11 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
     try:
         # ask datasource to use custom fields for LidarScans thus
         # enabling FLAGS fields if they were requested via `--flags` param
-        for idx, scan in ScansMulti(source, fields=list(field_types)):
-            ts = client.first_valid_packet_ts(scan)
-            lidar_stream[idx].save(ts, scan)
-            ls_cnt[idx] += 1
-
+        for scan in ScansMulti(source, fields=list(field_types)):
+            for idx in range(len(scan)):
+                ts = client.first_valid_packet_ts(scan[idx])
+                lidar_stream[idx].save(ts, scan[idx])
+                ls_cnt[idx] += 1
     except KeyboardInterrupt:
         print("Interrupted! Finishing up ...")
     finally:
