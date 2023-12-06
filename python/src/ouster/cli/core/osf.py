@@ -378,48 +378,59 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
     if rate not in SimpleViz._playback_rates:
         raise click.ClickException("Invalid rate specified")
 
-    # TODO[pb]: Switch to aligned Protocol/Interfaces that we
-    # should get after some refactoring/designing
-    scans_source: Union[osf.Scans, ScansMultiReader]
-    ls_viz: Union[LidarScanViz, MultiLidarScanViz]
-
-    if not multi:
+    def single_viz(file: str, on_eof: str,
+                   extrinsics: Optional[List[float]], skip_extrinsics: bool,
+                   start_ts: int, sensor_id: int) -> [osf.Scans, LidarScanViz]:
+        scans_source: osf.Scans
         scans_source = osf.Scans(file,
                                  cycle=(on_eof == 'loop'),
                                  start_ts=start_ts,
                                  sensor_id=sensor_id)
-
         # overwrite extrinsics of a sensor stored in OSF if --extrinsics arg is
         # provided
         if extrinsics and not skip_extrinsics:
-            scans_source.metadata.extrinsic = np.array(  # type: ignore
+            scans_source.metadata.extrinsic = np.array(
                 extrinsics).reshape((4, 4))
-            click.echo(  # type: ignore
+            click.echo(
                 f"Overwriting sensor extrinsics to:\n"
                 f"{scans_source.metadata.extrinsic}")
         if skip_extrinsics:
-            scans_source.metadata.extrinsic = np.eye(4)  # type: ignore
-            click.echo(  # type: ignore
+            scans_source.metadata.extrinsic = np.eye(4)
+            click.echo(
                 f"Setting all sensor extrinsics to Identity:\n"
                 f"{scans_source.metadata.extrinsic}")
 
-        ls_viz = LidarScanViz(scans_source.metadata)  # type: ignore
+        ls_viz: LidarScanViz
+        ls_viz = LidarScanViz(scans_source.metadata)
+        return [scans_source, ls_viz]
 
-        scans = scans_source
-
-    else:
+    def multi_viz(file: str, on_eof: str, start_ts: int) -> [ScansMultiReader, MultiLidarScanViz]:
         # Multi sensor viz
+        scans_source: ScansMultiReader
         reader = osf.Reader(file)
         scans_source = ScansMultiReader(reader,
                                         cycle=(on_eof == 'loop'),
                                         start_ts=start_ts)
 
         for idx, (sid, _) in enumerate(scans_source._sensors):
-            scans_source .metadata[idx].hostname = f"sensorid: {sid}"
+            scans_source.metadata[idx].hostname = f"sensorid: {sid}"
 
+        ls_viz: MultiLidarScanViz
         ls_viz = MultiLidarScanViz(scans_source.metadata, source_name=file)
+        return [scans_source, ls_viz]
 
-        scans = iter(scans_source)  # type: ignore
+    # TODO[pb]: Switch to aligned Protocol/Interfaces that we
+    # should get after some refactoring/designing
+    scans_source: Union[osf.Scans, ScansMultiReader]
+    ls_viz: Union[LidarScanViz, MultiLidarScanViz]
+
+    if not multi:
+        scans_source, ls_viz = single_viz(file, on_eof, extrinsics,
+                                          skip_extrinsics, start_ts, sensor_id)
+        scans = scans_source
+    else:
+        scans_source, ls_viz = multi_viz(file, on_eof, start_ts)
+        scans = iter(scans_source)
 
     scans_accum = scans_accum_for_cli(scans_source.metadata,
                                       accum_num=accum_num,
