@@ -2,7 +2,7 @@ import click
 import os
 from pprint import pprint
 
-from typing import Iterator, Dict, cast, Optional, List, Union
+from typing import Iterator, Dict, cast, Optional, List, Tuple, Union
 import numpy as np
 
 from ouster.sdk.util import resolve_metadata, resolve_metadata_multi
@@ -380,7 +380,7 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
 
     def single_viz(file: str, on_eof: str,
                    extrinsics: Optional[List[float]], skip_extrinsics: bool,
-                   start_ts: int, sensor_id: int) -> [osf.Scans, LidarScanViz]:
+                   start_ts: int, sensor_id: int) -> Tuple[osf.Scans, LidarScanViz]:
         scans_source: osf.Scans
         scans_source = osf.Scans(file,
                                  cycle=(on_eof == 'loop'),
@@ -404,7 +404,7 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
         ls_viz = LidarScanViz(scans_source.metadata)
         return [scans_source, ls_viz]
 
-    def multi_viz(file: str, on_eof: str, start_ts: int) -> [ScansMultiReader, MultiLidarScanViz]:
+    def multi_viz(file: str, on_eof: str, start_ts: int) -> Tuple[ScansMultiReader, MultiLidarScanViz]:
         # Multi sensor viz
         scans_source: ScansMultiReader
         reader = osf.Reader(file)
@@ -430,7 +430,7 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
         scans = scans_source
     else:
         scans_source, ls_viz = multi_viz(file, on_eof, start_ts)
-        scans = iter(scans_source)
+        scans = iter(scans_source)  # type: ignore
 
     scans_accum = scans_accum_for_cli(scans_source.metadata,
                                       accum_num=accum_num,
