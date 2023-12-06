@@ -392,15 +392,14 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
         # overwrite extrinsics of a sensor stored in OSF if --extrinsics arg is
         # provided
         if extrinsics and not skip_extrinsics:
-            scans_source.metadata.extrinsic = np.array(
-                extrinsics).reshape((4, 4))  # type: ignore
-            click.echo(
-                f"Overwriting sensor extrinsics to:\n{scans_source.metadata.extrinsic}")
-
+            scans_source.metadata.extrinsic = np.array( # type: ignore
+                extrinsics).reshape((4, 4))
+            click.echo(f"Overwriting sensor extrinsics to:\n"
+                       f"{scans_source.metadata.extrinsic}")    # type: ignore
         if skip_extrinsics:
             scans_source.metadata.extrinsic = np.eye(4)  # type: ignore
-            click.echo(
-                f"Setting all sensor extrinsics to Identity:\n{scans_source.metadata.extrinsic}")
+            click.echo(f"Setting all sensor extrinsics to Identity:\n"
+                       f"{scans_source.metadata.extrinsic}")    # type: ignore
 
         ls_viz = LidarScanViz(scans_source.metadata)  # type: ignore
 
