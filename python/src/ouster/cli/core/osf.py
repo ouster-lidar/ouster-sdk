@@ -402,7 +402,7 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
 
         ls_viz: LidarScanViz
         ls_viz = LidarScanViz(scans_source.metadata)
-        return [scans_source, ls_viz]
+        return scans_source, ls_viz
 
     def multi_viz(file: str, on_eof: str, start_ts: int) -> Tuple[ScansMultiReader, MultiLidarScanViz]:
         # Multi sensor viz
@@ -417,7 +417,7 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
 
         ls_viz: MultiLidarScanViz
         ls_viz = MultiLidarScanViz(scans_source.metadata, source_name=file)
-        return [scans_source, ls_viz]
+        return scans_source, ls_viz
 
     # TODO[pb]: Switch to aligned Protocol/Interfaces that we
     # should get after some refactoring/designing
