@@ -11,6 +11,8 @@ SLAM Quickstart
 This guide provides examples of using the SLAM API for development purposes.
 Users can run SLAM with an OS sensor's hostname or IP for real-time processing, or with a recorded PCAP/OSF file for offline processing.
 
+.. warning::
+   Due to missing upstream dependency support on python3.12, slam does not work on python3.12.
 
 Extract Scans and Metadata
 ==========================

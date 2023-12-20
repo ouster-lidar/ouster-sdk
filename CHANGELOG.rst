@@ -2,8 +2,29 @@
 Changelog
 =========
 
+[unreleased] [0.11.0-dev]
+=========================
+
+Important notes
+---------------
+
+* Dropped support for python3.7
+* Dropped support macOS 10.15
+* This will be the last release that supports Ubuntu 18.04.
+
+Python SDK
+----------
+
+* Add support for python 3.12, including wheels on pypi
+* Updated VCPKG libraries to 2023.10.19
+
+Known issues
+------------
+
+* Slam does not work for python 3.12 due to missing upstream dependency support
+
 [20231031] [0.10.0]
-============
+===================
 
 Important notes
 ---------------
