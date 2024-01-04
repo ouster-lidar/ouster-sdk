@@ -165,7 +165,8 @@ def install_requires():
     env = os.environ.copy()
     skip_mapping = env.get('OUSTER_SDK_SKIP_MAPPING')
     if not skip_mapping:
-        install_requires.append('ouster-mapping>=0.2.0.dev3; python_version >= "3.8"')
+        # Once ouster metapackage is done, remove the less than 3.12
+        install_requires.append('ouster-mapping>=0.0.1.dev10; python_version >= "3.8" and python_version < "3.12"')
 
     return install_requires
 
