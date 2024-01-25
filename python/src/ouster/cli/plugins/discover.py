@@ -17,6 +17,7 @@ from ouster.cli.core import cli
 from ouster.client import get_config
 from zeroconf import IPVersion, ServiceStateChange, Zeroconf
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import zeroconf
 from zeroconf.asyncio import (
     AsyncServiceBrowser,
     AsyncServiceInfo,
@@ -44,10 +45,16 @@ def _get_config(server):
 
 
 class AsyncServiceDiscovery:
-    def __init__(self, ip_version: IPVersion, timeout: int, continuous: bool, pool_size: int = 10) -> None:
+    def __init__(self, interfaces, ip_version: IPVersion, timeout: int,
+        continuous: bool, pool_size: int = 10, socket_timeout: int = 2) -> None:
+
+        self.interfaces = interfaces
+        if type(interfaces) is not zeroconf.InterfaceChoice:
+            self.interfaces = list(interfaces)
         self.ip_version = ip_version
         self.timeout = timeout
         self.continuous = continuous
+        self.socket_timeout = socket_timeout
         self.aiobrowser: Optional[AsyncServiceBrowser] = None
         self.aiozc: Optional[AsyncZeroconf] = None
         self.start_time = time.time()
@@ -58,7 +65,7 @@ class AsyncServiceDiscovery:
         self._lock = asyncio.Lock()
 
     async def async_run(self) -> None:
-        self.aiozc = AsyncZeroconf(ip_version=self.ip_version)
+        self.aiozc = AsyncZeroconf(interfaces=self.interfaces, ip_version=self.ip_version)
 
         self.aiobrowser = AsyncServiceBrowser(
             self.aiozc.zeroconf, mdns_services, handlers=[self.async_on_service_state_change]
@@ -73,7 +80,7 @@ class AsyncServiceDiscovery:
                 strs, color, error = future.result()
                 if error is not None:
                     click.echo(error)
-                click.echo(click.style(''.join(strs), fg=color))
+                click.secho(''.join(strs), fg=color)
             self._futures = []
 
             if not self.continuous and self.timeout:
@@ -105,7 +112,7 @@ class AsyncServiceDiscovery:
             async with self._lock:
                 if info.server not in self._processed_hostnames:
                     self._processed_hostnames.append(info.server)
-                    f = self._executor.submit(service_info_as_text_str, info)
+                    f = self._executor.submit(service_info_as_text_str, info, self.socket_timeout)
                     self._futures_shadow.append(f)
 
 
@@ -115,7 +122,7 @@ def address_bytes_to_ip_str(b: bytes) -> str:
     )
 
 
-def get_address(info) -> str:
+def get_address(info, socket_timeout) -> str:
     addresses = []
     for address in info.dns_addresses():
         address = address.address
@@ -131,25 +138,27 @@ def get_address(info) -> str:
 
     for addr_string, addr_type in addresses:
         s = socket.socket(addr_type, socket.SOCK_STREAM)
-        result = -1
+        s.settimeout(socket_timeout)
         try:
             if addr_type == socket.AF_INET6:
-                result = s.connect_ex((addr_string, 80, 0, 0))
+                s.connect((addr_string, 80, 0, 0))
                 addr_string = f"[{addr_string}]"
             else:
-                result = s.connect_ex((addr_string, 80))
+                s.connect((addr_string, 80))
+            return addr_string
         except socket.gaierror:
             pass
+        except TimeoutError as e:
+            click.secho(f"Could not connect to {info.server} via {addr_string}: {e}", fg='yellow')
         finally:
             s.close()
 
-        if not result:
-            return addr_string
-
+    click.secho(f"Error: the sensor {info.server} could not be reached at any of its\
+ configured IP addresses. This may indicate a problem with the host's network configuration.", fg='yellow')
     return None
 
 
-def service_info_as_text_str(info) -> str:
+def service_info_as_text_str(info, socket_timeout) -> str:
     addresses = info.dns_addresses()
     ip_addr_string = '-'
     prod_line = '-'
@@ -166,12 +175,12 @@ def service_info_as_text_str(info) -> str:
             ip_addr_string = address_bytes_to_ip_str(first_address.address)
         except IndexError:
             pass
-        server_addr = get_address(info)
+        server_addr = get_address(info, socket_timeout)
         if server_addr is None:
-            color = 'bright_yellow'
-            raise Exception(f"Can't Connect To Sensor: Hostname: {info.server} Addresses: {addresses}")
+            color = 'yellow'
+            raise RuntimeError(f"Can't Connect To Sensor: Hostname: {info.server} Addresses: {addresses}")
         url = f"http://{server_addr}/api/v1/sensor/metadata/sensor_info"
-        response = requests.get(url)
+        response = requests.get(url, timeout=socket_timeout)
         response_json = response.json()
         prod_line = response_json.get('prod_line', prod_line)
         config = _get_config(server_addr)
@@ -180,7 +189,7 @@ def service_info_as_text_str(info) -> str:
                 udp_dest = config.udp_dest
             udp_port_lidar = str(config.udp_port_lidar)
             udp_port_imu = str(config.udp_port_imu)
-    except Exception as e:
+    except RuntimeError as e:
         if rethrow_exceptions:
             raise
         else:
@@ -197,8 +206,10 @@ def service_info_as_text_str(info) -> str:
 @cli.command()
 @click.option('-t', '--timeout', help='Run for the specified number of seconds', default=5, type=int)
 @click.option('-c', '--continuous', help='Run continuously', is_flag=True, default=False)
+@click.option('--http-timeout', help='The timeout for HTTP requests for sensor info', default=2, type=int)
+@click.option('--interface', help="Address(es) of interface(s) to listen for mDNS services.", default=[], multiple=True)
 @click.pass_context
-def discover(ctx, timeout, continuous):
+def discover(ctx, timeout, continuous, http_timeout, interface):
     """Perform a one-time or continuous network search for Ouster sensors.
     """
     global rethrow_exceptions
@@ -209,7 +220,9 @@ def discover(ctx, timeout, continuous):
         strs[i] = strs[i].ljust(text_column_widths[i])
     click.echo(''.join(strs))
     loop = asyncio.get_event_loop()
-    runner = AsyncServiceDiscovery(IPVersion.V4Only, timeout, continuous)
+    if not interface:
+        interface = zeroconf.InterfaceChoice.All
+    runner = AsyncServiceDiscovery(interface, IPVersion.V4Only, timeout, continuous, socket_timeout=http_timeout)
     try:
         loop.run_until_complete(runner.async_run())
     except KeyboardInterrupt:

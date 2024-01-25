@@ -12,6 +12,7 @@ import socket
 from zeroconf import DNSAddress
 
 
+SOCKET_TIMEOUT = 2
 FAKESERVER = 'fakeserver.'
 
 
@@ -40,34 +41,41 @@ class FakeInfo:
         return self.fake_server
 
 
+class MockSocket:
+    def __init__(self, af=None, sock_type=None):
+        print(f"Constructed MockSocket with {af}, {sock_type}")
+
+    def connect(self, *args):
+        print(f"Called connect with {args}")
+
+    def settimeout(self, timeout):
+        print(f"Called settimeout with {timeout}")
+
+    def close(self):
+        pass
+
+
+def mock_socket(addr_family, sock_type):  # NOQA
+    return MockSocket(addr_family, mock_socket)
+
+
 def test_service_info_as_text_str(monkeypatch):
     """It should format correctly even with no addresses in the info."""
-    def mock_get(_):
+    def mock_get(_, **kwargs):
         raise RuntimeError("err")
-    def mock_connect(foo, bar):  # NOQA
-        class MockSocket:
-            def __init__(self, af=None, sock_type=None):  # NOQA
-                pass
-
-            def connect_ex(self, *arg):  # NOQA
-                return 1
-
-            def close(self):
-                pass
-        return MockSocket()
 
     with monkeypatch.context() as m:
         m.setattr(requests, "get", mock_get)
-        m.setattr(socket, "socket", mock_connect)
+        m.setattr(socket, "socket", mock_socket)
 
-        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, []))
+        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, []), SOCKET_TIMEOUT)
         server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == '-'
         assert prod_line == '-'
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
-        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses), SOCKET_TIMEOUT)
         server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
@@ -76,25 +84,15 @@ def test_service_info_as_text_str(monkeypatch):
 
 def test_service_info_as_text_str_2(monkeypatch):
     """It should format correctly even when sensor metadata can't be retrieved."""
-    def mock_get(_):
+    def mock_get(_, **kwargs):
         raise RuntimeError("err")
-    def mock_connect(foo, bar):  # NOQA
-        class MockSocket:
-            def __init__(self, af=None, sock_type=None):  # NOQA
-                pass
 
-            def connect_ex(self, *arg):  # NOQA
-                return 1
-
-            def close(self):
-                pass
-        return MockSocket()
     with monkeypatch.context() as m:
         m.setattr(requests, "get", mock_get)
-        m.setattr(socket, "socket", mock_connect)
+        m.setattr(socket, "socket", mock_socket)
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
-        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses), SOCKET_TIMEOUT)
         server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
@@ -103,34 +101,23 @@ def test_service_info_as_text_str_2(monkeypatch):
 
 def test_service_info_as_text_str_3(monkeypatch):
     """It should set prod_line when the HTTP response contains it."""
-    def mock_get(url):
+    def mock_get(url, **kwargs):
         class MockResponse:
             def json(self):
                 return {'prod_line': 'fake_prod_line'}
         return MockResponse()
-    def mock_connect(foo, bar):  # NOQA
-        class MockSocket:
-            def __init__(self, af=None, sock_type=None):  # NOQA
-                pass
-
-            def connect_ex(self, *arg):  # NOQA
-                return 0
-
-            def close(self):
-                pass
-        return MockSocket()
 
     def mock_config(self, *arg):  # NOQA
         return None
 
     with monkeypatch.context() as m:
+        m.setattr("socket.socket", mock_socket)
         m.setattr(requests, "get", mock_get)
-        m.setattr(socket, "socket", mock_connect)
         m.setattr(ouster.cli.plugins.discover, "_get_config", mock_config)
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
 
-        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses), SOCKET_TIMEOUT)
         server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
@@ -139,33 +126,22 @@ def test_service_info_as_text_str_3(monkeypatch):
 
 def test_service_info_as_text_str_4(monkeypatch):
     """It should not set prod_line when the HTTP response does not contain it."""
-    def mock_get(url):
+    def mock_get(url, **kwargs):
         class MockResponse:
             def json(self):
                 return {}
         return MockResponse()
-    def mock_connect(foo, bar):  # NOQA
-        class MockSocket:
-            def __init__(self, af=None, sock_type=None):  # NOQA
-                pass
-
-            def connect_ex(self, *arg):
-                return 0
-
-            def close(self):
-                pass
-        return MockSocket()
 
     def mock_config(self, *arg):  # NOQA
         return None
 
     with monkeypatch.context() as m:
         m.setattr(requests, "get", mock_get)
-        m.setattr(socket, "socket", mock_connect)
+        m.setattr(socket, "socket", mock_socket)
         m.setattr(ouster.cli.plugins.discover, "_get_config", mock_config)
 
         fake_addresses = ["192.168.100.200", "200a:aa8::8a2e:370:1337"]
-        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        text, color, error = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses), SOCKET_TIMEOUT)
         server, address, prod_line, dest_ip, lidar_port, imu_port = text.split()
         assert FAKESERVER == server
         assert address == fake_addresses[0]
@@ -177,33 +153,21 @@ def test_ipv6_url(monkeypatch):
     test_ipv6_address = "200a:aa8::8a2e:370:1337"
     test_url = f"http://[{test_ipv6_address}]/api/v1/sensor/metadata/sensor_info"
 
-    def mock_get(url):
+    def mock_get(url, **kwargs):
         class MockResponse:
             def json(self):
                 assert test_url == url
-                return None
+                return {}
 
         return MockResponse()
-
-    def mock_connect(foo, bar):  # NOQA
-        class MockSocket:
-            def __init__(self, af=None, sock_type=None):  # NOQA
-                pass
-
-            def connect_ex(self, *arg):
-                return 0
-
-            def close(self):
-                pass
-        return MockSocket()
 
     def mock_config(self, *arg):  # NOQA
         return None
 
     with monkeypatch.context() as m:
         m.setattr(requests, "get", mock_get)
-        m.setattr(socket, "socket", mock_connect)
+        m.setattr(socket, "socket", mock_socket)
         m.setattr(ouster.cli.plugins.discover, "_get_config", mock_config)
 
         fake_addresses = [test_ipv6_address]
-        _, _, _ = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses))
+        _, _, _ = service_info_as_text_str(FakeInfo(FAKESERVER, fake_addresses), SOCKET_TIMEOUT)
