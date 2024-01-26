@@ -36,13 +36,16 @@ class FakeInfo:
             for address in self.fake_addresses
         ]
 
+    def parsed_scoped_addresses(self):
+        return self.fake_addresses
+
     @property
     def server(self):
         return self.fake_server
 
 
 class MockSocket:
-    def __init__(self, af=None, sock_type=None):
+    def __init__(self, af, sock_type, proto):
         print(f"Constructed MockSocket with {af}, {sock_type}")
 
     def connect(self, *args):
@@ -55,8 +58,8 @@ class MockSocket:
         pass
 
 
-def mock_socket(addr_family, sock_type):  # NOQA
-    return MockSocket(addr_family, mock_socket)
+def mock_socket(addr_family, sock_type, proto):
+    return MockSocket(addr_family, mock_socket, proto)
 
 
 def test_service_info_as_text_str(monkeypatch):

@@ -148,7 +148,7 @@ class sdk_bdist_wheel(bdist_wheel):
 def install_requires():
     install_requires = [
         'psutil >=5.9.5, <6',
-        'zeroconf ==0.58.2',
+        'zeroconf >=0.58.2',
         'click >=8.1.3, <9',
         'python-magic ==0.4.27',
         'importlib_metadata ==6.6.0',

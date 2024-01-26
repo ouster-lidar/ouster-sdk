@@ -6,6 +6,7 @@ Chris Bayruns <chris.bayruns@ouster.io>
 This is adapted from zeroconf's async_browser.py example.
 """
 
+import logging
 import socket
 from typing import Optional
 import requests
@@ -34,7 +35,7 @@ host_addresses = [
             ]
 
 text_columns = ["HOSTNAME", "ADDRESS", "MODEL", "UDP DESTINATION", "DEST. LIDAR PORT", "DEST. IMU PORT"]
-text_column_widths = [30, 20, 16, 45, 20, 20]
+text_column_widths = [32, 40, 16, 45, 20, 20]
 mdns_services = ["_roger._tcp.local.", "_ouster-lidar._tcp.local."]
 rethrow_exceptions = False
 
@@ -123,35 +124,30 @@ def address_bytes_to_ip_str(b: bytes) -> str:
 
 
 def get_address(info, socket_timeout) -> str:
-    addresses = []
-    for address in info.dns_addresses():
-        address = address.address
+    addresses = info.parsed_scoped_addresses()
+    addresses.append(info.server)
+    for address in addresses:
+        s = None
         try:
-            addr_type = socket.AF_INET6 if len(address) == 16 else socket.AF_INET
-
-            addr_string = socket.inet_ntop(addr_type, address)
-            addresses.append((addr_string, addr_type))
-        except IndexError:
-            pass
-
-    addresses.append((info.server, socket.AF_INET))
-
-    for addr_string, addr_type in addresses:
-        s = socket.socket(addr_type, socket.SOCK_STREAM)
-        s.settimeout(socket_timeout)
-        try:
-            if addr_type == socket.AF_INET6:
-                s.connect((addr_string, 80, 0, 0))
-                addr_string = f"[{addr_string}]"
-            else:
-                s.connect((addr_string, 80))
-            return addr_string
+            port = 80
+            addrinfo = socket.getaddrinfo(address, port)
+            (family, socktype, proto, canonname, sockaddr) = addrinfo[0]
+            s = socket.socket(family, socktype, proto)
+            s.settimeout(socket_timeout)
+            s.connect(sockaddr)
+            if family == socket.AF_INET6:
+                address = f"[{address}]"
+            return address
         except socket.gaierror:
             pass
-        except TimeoutError as e:
-            click.secho(f"Could not connect to {info.server} via {addr_string}: {e}", fg='yellow')
+        except (OSError, TimeoutError) as e:
+            # Note, scoped IPv6 addresses are not available in zeroconf
+            # for Python < 3.9. Also, there was a bug fix for missing scope ids very recently:
+            # https://github.com/python-zeroconf/python-zeroconf/pull/1322/files
+            click.secho(f"Could not connect to {info.server} via {address}: {e}", fg='yellow')
         finally:
-            s.close()
+            if s:
+                s.close()
 
     click.secho(f"Error: the sensor {info.server} could not be reached at any of its\
  configured IP addresses. This may indicate a problem with the host's network configuration.", fg='yellow')
@@ -222,7 +218,8 @@ def discover(ctx, timeout, continuous, http_timeout, interface):
     loop = asyncio.get_event_loop()
     if not interface:
         interface = zeroconf.InterfaceChoice.All
-    runner = AsyncServiceDiscovery(interface, IPVersion.V4Only, timeout, continuous, socket_timeout=http_timeout)
+    logging.getLogger('zeroconf').propagate = False
+    runner = AsyncServiceDiscovery(interface, IPVersion.All, timeout, continuous, socket_timeout=http_timeout)
     try:
         loop.run_until_complete(runner.async_run())
     except KeyboardInterrupt:
