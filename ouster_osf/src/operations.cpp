@@ -9,6 +9,7 @@
 #include <csignal>
 #include <iostream>
 
+#include "compat_ops.h"
 #include "fb_utils.h"
 #include "json/json.h"
 #include "json_utils.h"
@@ -142,6 +143,101 @@ void parse_and_print(const std::string& file, bool with_decoding) {
     std::cout << "\nSUMMARY (OSF v2): \n";
     std::cout << "  lidar_scan     (Ls)     count = " << ls_c << std::endl;
     std::cout << "  other (NOT IMPLEMENTED) count = " << other_c << std::endl;
+}
+
+int64_t backup_osf_file_metablob(const std::string& osf_file_name,
+                                 const std::string& backup_file_name) {
+    uint64_t metadata_offset = 0;
+    {
+        OsfFile osf_file{osf_file_name};
+        metadata_offset = osf_file.metadata_offset();
+    }
+
+    // Backup the current metadata blob
+    return copy_file_trailing_bytes(osf_file_name, backup_file_name,
+                                    metadata_offset);
+}
+
+int64_t restore_osf_file_metablob(const std::string& osf_file_name,
+                                  const std::string& backup_file_name) {
+    uint64_t metadata_offset = 0;
+    {
+        OsfFile osf_file{osf_file_name};
+        metadata_offset = osf_file.metadata_offset();
+    }
+    truncate_file(osf_file_name, metadata_offset);
+    return append_binary_file(osf_file_name, backup_file_name);
+}
+
+flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
+    const std::string& file_name,
+    const ouster::sensor::sensor_info& new_metadata) {
+    auto metadata_fbb = flatbuffers::FlatBufferBuilder(32768);
+    Reader reader(file_name);
+
+    std::string metadata_id = reader.id();
+    ts_t start_ts = reader.start_ts();
+    ts_t end_ts = reader.end_ts();
+
+    /// @todo on OsfFile refactor, make a copy constructor for MetadataStore
+    MetadataStore new_meta_store;
+    new_meta_store.add(LidarSensor(new_metadata));
+
+    std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>> entries =
+        new_meta_store.make_entries(metadata_fbb);
+
+    std::vector<ouster::osf::gen::ChunkOffset> chunks{};
+    for (const auto& entry : reader.chunks()) {
+        chunks.emplace_back(entry.start_ts().count(), entry.end_ts().count(),
+                            entry.offset());
+    }
+
+    auto metadata = ouster::osf::gen::CreateMetadataDirect(
+        metadata_fbb, metadata_id.c_str(),
+        !chunks.empty() ? start_ts.count() : 0,
+        !chunks.empty() ? end_ts.count() : 0, &chunks, &entries);
+
+    metadata_fbb.FinishSizePrefixed(metadata,
+                                    ouster::osf::gen::MetadataIdentifier());
+    return metadata_fbb;
+}
+
+int64_t osf_file_modify_metadata(
+    const std::string& file_name,
+    const ouster::sensor::sensor_info& new_metadata) {
+    std::string temp_dir;
+    std::string temp_path;
+    int64_t saved_bytes = -2;
+    uint64_t metadata_offset = 0;
+
+    if (make_tmp_dir(temp_dir)) {
+        temp_path = path_concat(temp_dir, "temp_binary");
+        // Scope the reading portion so that we dont run into read write file
+        // locks
+        {
+            OsfFile osf_file{file_name};
+            metadata_offset = osf_file.metadata_offset();
+        }
+
+        // Backup the current metadata blob
+        if (copy_file_trailing_bytes(file_name, temp_path, metadata_offset) <=
+            0) {
+            // Cant backup current metadata blob, error out
+            return -1;
+        }
+
+        auto metadata_fbb =
+            _generate_modify_metadata_fbb(file_name, new_metadata);
+
+        truncate_file(file_name, metadata_offset);
+        saved_bytes = builder_to_file(metadata_fbb, file_name, true);
+        finish_osf_file(file_name, metadata_offset, saved_bytes);
+
+        unlink_path(temp_path);
+        unlink_path(temp_dir);
+    }
+
+    return saved_bytes;
 }
 
 bool pcap_to_osf(const std::string& pcap_filename,

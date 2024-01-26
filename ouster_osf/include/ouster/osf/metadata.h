@@ -18,6 +18,8 @@
 #include "flatbuffers/flatbuffers.h"
 #include "ouster/osf/basics.h"
 
+/// @todo fix api docs in this file
+/// @todo add equality operators
 namespace ouster {
 namespace osf {
 

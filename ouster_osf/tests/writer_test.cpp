@@ -56,8 +56,7 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
 
     auto sensor_meta_id = writer.addMetadata<LidarSensor>(sinfo_str);
 
-    EXPECT_THROW({ writer.addMetadata<LidarSensor>(sinfo); },
-                 std::invalid_argument);
+    writer.addMetadata<LidarSensor>(sinfo);
 
     auto ls_stream = writer.createStream<LidarScanStream>(
         sensor_meta_id, get_field_types(sinfo));
@@ -82,7 +81,7 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
 
     // Map of all MetadataEntries of type LidarSensor
     auto sensors = reader.meta_store().find<LidarSensor>();
-    EXPECT_EQ(sensors.size(), 1);
+    EXPECT_EQ(sensors.size(), 2);
 
     // Use first sensor and get its sensor_info
     auto sinfo_recovered = sensors.begin()->second->info();

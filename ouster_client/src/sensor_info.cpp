@@ -685,7 +685,7 @@ Json::Value info_to_nested_json(const sensor_info& info) {
 }
 
 // TODO refactor for performance since we're parsing
-std::string sensor_info::updated_metadata_string() {
+std::string sensor_info::updated_metadata_string() const {
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
     builder["precision"] = 6;

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.1.0)
 
 find_package(GTest REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # Each test file should be in a format "<test_name>_test.cpp"
 set(OSF_TESTS_SOURCES png_tools_test.cpp
@@ -25,7 +26,10 @@ foreach(TEST_FULL_NAME ${OSF_TESTS_SOURCES})
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
   target_include_directories(osf_${TEST_FILENAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../src)
   target_link_libraries(osf_${TEST_FILENAME} ouster_osf
-                                             GTest::gtest GTest::gtest_main)
+      GTest::gtest
+      GTest::gtest_main
+      OpenSSL::Crypto
+  )
   add_test(NAME osf_${TEST_FILENAME}
            COMMAND osf_${TEST_FILENAME} --gtest_output=xml:osf_${TEST_FILENAME}.xml)
   set_tests_properties(

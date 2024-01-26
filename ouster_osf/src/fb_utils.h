@@ -74,7 +74,7 @@ std::vector<T> vector_from_fb_vector(const flatbuffers::Vector<T>* fb_vec);
  * @param filename full path to the file
  * @param append if true appends the content to the end of the file,
  *               otherwise - overwrite the file with the current buffer.
- * @return number of bytes actuallt written to the file. Successfull write is
+ * @return number of bytes actually written to the file. Successfull write is
  *         size + 4 bytes (4 bytes for CRC field)
  *
  */
@@ -115,6 +115,7 @@ uint64_t finish_osf_file(const std::string& filename,
                          const uint64_t metadata_offset,
                          const uint32_t metadata_size);
 
+/// @todo fix the api comments
 /** Debug method to print Flatbuffers Metadata buffer */
 void print_metadata_buf(const uint8_t* buf, const uint32_t buf_size);
 

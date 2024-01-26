@@ -438,7 +438,7 @@ struct sensor_info {
     /* Return an updated version of the metadata string reflecting any
      * changes to the sensor_info.
      * Errors out if changes are incompatible but does not check for validity */
-    std::string updated_metadata_string();
+    std::string updated_metadata_string() const;
 
     bool has_fields_equal(const sensor_info& other) const;
 

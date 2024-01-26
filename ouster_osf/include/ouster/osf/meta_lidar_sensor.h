@@ -36,23 +36,8 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
     using sensor_info = ouster::sensor::sensor_info;
 
    public:
-    /// TODO]pb]: This is soft DEPRECATED until we have an updated sensor_info,
-    ///           since we are not encouraging storing the serialized metadata
     explicit LidarSensor(const sensor_info& si)
-        : sensor_info_(si), metadata_(si.original_string()) {
-        throw std::invalid_argument(
-            "\nERROR: `osf::LidarSensor()` constructor accepts only "
-            "metadata_json "
-            "(full string of the file metadata.json or what was received from "
-            "sensor) and not a `sensor::sensor_info` object.\n\n"
-            "We are so sorry that we deprecated it's so hardly but the thing "
-            "is that `sensor::sensor_info` object doesn't equal the original "
-            "metadata.json file (or string) that we used to construct it.\n"
-            "However, Data App when tries to get metadata from OSF looks for "
-            "fields (like `image_rev`) that only present in metadata.json but "
-            "not `sensor::sensor_info` which effectively leads to OSF that "
-            "couldn't be uploaded to Data App.\n");
-    }
+        : sensor_info_(si), metadata_(si.updated_metadata_string()) {}
 
     explicit LidarSensor(const std::string& sensor_metadata)
         : sensor_info_(sensor::parse_metadata(sensor_metadata)),
