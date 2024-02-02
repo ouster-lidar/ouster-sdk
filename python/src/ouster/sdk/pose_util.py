@@ -426,6 +426,7 @@ class TrajectoryEvaluator(Poser):
     TODO: Optionally, we may want to implement these calculations in C++ and
           use bindings to make it faster.
     """
+
     def __init__(self, poses: TrajPoses, *, time_bounds: Optional[float] = 0):
         """
         Args:
@@ -642,37 +643,31 @@ def dewarp(xyz: np.ndarray, *, scan_pose: Optional[PoseH] = None,
         returned by call `client.XYZLut` so it can further used with PointViz
         and other functions that expect this specific layout.
     """
-
     if xyz.ndim != 3 or xyz.shape[2] != 3:
-        raise ValueError("Expects xyz to be (H, W, 3) in dewarp")
+        raise ValueError("Expect xyz to be (H, W, 3) shape")
 
-    h, w = xyz.shape[0], xyz.shape[1]
+    if scan_pose is not None and scan_pose.shape != (4, 4):
+        raise ValueError("Expect scan_pose to be (4, 4) shape")
 
     if column_poses is not None:
         if not (column_poses.shape[0] == xyz.shape[1]
                 and column_poses.shape[1] == 4 and column_poses.shape[2] == 4):
-            raise ValueError("Expects column_poses to be (W, 4, 4) in dewarp")
-        if scan_pose is not None:
-            xyz_poses = np.einsum('ij,ljk->lik', scan_pose, column_poses)
-        else:
-            xyz_poses = column_poses
+            raise ValueError("Expect column_poses to be (W, 4, 4) shape")
 
-        # Angus's version: This one is correct for sure
-        xyz_res = np.transpose(
-            np.matmul(xyz_poses[:, :3, :3], np.transpose(xyz, axes=(1, 2, 0))),
-            axes=(2, 0, 1)) + xyz_poses[np.newaxis, :, :3, -1]
-        xyz_res = np.asfortranarray(xyz_res.reshape((-1, 3)))
-        return xyz_res.reshape((h, w, -1))
+    # Apply transformations
+    if column_poses is not None:
+        xyz_poses = np.matmul(scan_pose, column_poses) if scan_pose is not None else column_poses
 
-    if scan_pose is None:
-        return xyz
+        xyz_transformed = np.transpose(np.matmul(xyz_poses[:, :3, :3], np.transpose(xyz, axes=(1, 2, 0))),
+                                       axes=(2, 0, 1)) + xyz_poses[np.newaxis, :, :3, -1]
+    elif scan_pose is not None:
+        xyz_transformed = np.transpose(np.matmul(scan_pose[np.newaxis, :3, :3],
+                                                 np.transpose(xyz, axes=(1, 2, 0))),
+                                       axes=(2, 0, 1)) + scan_pose[np.newaxis, :3, -1]
+    else:
+        xyz_transformed = xyz
 
-    # Angus's version
-    xyz_res = np.transpose(np.matmul(scan_pose[np.newaxis, :3, :3],
-                                     np.transpose(xyz, axes=(1, 2, 0))),
-                           axes=(2, 0, 1)) + scan_pose[np.newaxis, :3, -1]
-    xyz_res = np.asfortranarray(xyz_res.reshape((-1, 3)))
-    return xyz_res.reshape((h, w, -1))
+    return xyz_transformed
 
 
 ScansIterable = Union[Iterable[client.LidarScan],
