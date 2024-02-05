@@ -12,6 +12,7 @@ find_package(PNG REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(jsoncpp REQUIRED)
 find_package(spdlog REQUIRED)
+include(Coverage)
 
 # TODO: Extract to a separate FindFlatbuffers cmake file
 # Flatbuffers flatc resolution and different search name 'flatbuffers` with Conan
@@ -105,6 +106,8 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/fb_utils.cpp
                               src/pcap_source.cpp
 )
+
+CodeCoverageFunctionality(ouster_osf)
 
 if (OUSTER_OSF_NO_MMAP)
   target_compile_definitions(ouster_osf PRIVATE OUSTER_OSF_NO_MMAP)

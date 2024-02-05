@@ -3,6 +3,7 @@ find_package(Eigen3 REQUIRED)
 find_package(jsoncpp REQUIRED)
 find_package(CURL REQUIRED)
 find_package(spdlog REQUIRED)
+include(Coverage)
 
 # ==== Libraries ====
 add_library(ouster_client src/client.cpp src/types.cpp src/sensor_info.cpp src/netcompat.cpp src/lidar_scan.cpp
@@ -19,6 +20,8 @@ target_link_libraries(ouster_client
     jsoncpp_lib
     spdlog::spdlog)
 target_compile_definitions(ouster_client PRIVATE EIGEN_MPL2_ONLY)
+CodeCoverageFunctionality(ouster_client)
+
 add_library(OusterSDK::ouster_client ALIAS ouster_client)
 
 # If ouster_client is built as >=c++17, the nonstd::optional backport

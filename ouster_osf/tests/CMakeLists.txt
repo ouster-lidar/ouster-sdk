@@ -24,12 +24,13 @@ foreach(TEST_FULL_NAME ${OSF_TESTS_SOURCES})
   add_executable(osf_${TEST_FILENAME} ${TEST_FULL_NAME})
   set_target_properties(osf_${TEST_FILENAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
   target_include_directories(osf_${TEST_FILENAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../src)
-  target_link_libraries(osf_${TEST_FILENAME} ouster_osf
+  target_link_libraries(osf_${TEST_FILENAME} PRIVATE ouster_osf
       GTest::gtest
       GTest::gtest_main
-      OpenSSL::Crypto
-  )
+      OpenSSL::Crypto)
+  CodeCoverageFunctionality(osf_${TEST_FILENAME})
   add_test(NAME osf_${TEST_FILENAME}
            COMMAND osf_${TEST_FILENAME} --gtest_output=xml:osf_${TEST_FILENAME}.xml)
   set_tests_properties(

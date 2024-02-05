@@ -1,6 +1,7 @@
 # ==== Requirements ====
 set(OpenGL_GL_PREFERENCE LEGACY)
 find_package(OpenGL REQUIRED)
+include(Coverage)
 
 # default to glad, if found. Note: this can be overridden from the command line
 find_package(glad QUIET)
@@ -27,6 +28,7 @@ add_library(ouster_viz src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.
   src/gltext.cpp src/misc.cpp src/glfw.cpp)
 target_link_libraries(ouster_viz
   PRIVATE Eigen3::Eigen glfw ${GL_LOADER} OpenGL::GL ouster_client)
+CodeCoverageFunctionality(ouster_viz)
 
 target_include_directories(ouster_viz PUBLIC
   $<INSTALL_INTERFACE:include>
