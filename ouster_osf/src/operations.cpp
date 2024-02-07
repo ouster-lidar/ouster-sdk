@@ -171,7 +171,7 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
 
 flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
     const std::string& file_name,
-    const ouster::sensor::sensor_info& new_metadata) {
+    const std::vector<ouster::sensor::sensor_info>& new_metadata) {
     auto metadata_fbb = flatbuffers::FlatBufferBuilder(32768);
     Reader reader(file_name);
 
@@ -181,7 +181,23 @@ flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
 
     /// @todo on OsfFile refactor, make a copy constructor for MetadataStore
     MetadataStore new_meta_store;
-    new_meta_store.add(LidarSensor(new_metadata));
+    auto old_meta_store = reader.meta_store();
+    std::cout << "Looking for non sensor info metadata in old metastore"
+              << std::endl;
+    for (const auto& entry : old_meta_store.entries()) {
+        std::cout << "Found: " << entry.second->type() << " ";
+        /// @todo figure out why there isnt an easy def for this
+        if (entry.second->type() != "ouster/v1/os_sensor/LidarSensor") {
+            new_meta_store.add(*entry.second);
+            std::cout << "Is non sensor_info, adding" << std::endl;
+        } else {
+            std::cout << std::endl;
+        }
+    }
+
+    for (const auto& entry : new_metadata) {
+        new_meta_store.add(LidarSensor(entry));
+    }
 
     std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>> entries =
         new_meta_store.make_entries(metadata_fbb);
@@ -204,7 +220,7 @@ flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
 
 int64_t osf_file_modify_metadata(
     const std::string& file_name,
-    const ouster::sensor::sensor_info& new_metadata) {
+    const std::vector<ouster::sensor::sensor_info>& new_metadata) {
     std::string temp_dir;
     std::string temp_path;
     int64_t saved_bytes = -2;

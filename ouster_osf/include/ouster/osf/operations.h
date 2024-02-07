@@ -69,7 +69,7 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
  */
 int64_t osf_file_modify_metadata(
     const std::string& file_name,
-    const ouster::sensor::sensor_info& new_metadata);
+    const std::vector<ouster::sensor::sensor_info>& new_metadata);
 
 /**
  * Convert pcap with a single sensor stream to OSF.

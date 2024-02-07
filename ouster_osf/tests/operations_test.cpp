@@ -225,7 +225,7 @@ bool _parse_json(const std::string& json, Json::Value& root) {
                        &error);
 }
 
-ouster::sensor::sensor_info _gen_new_metadata() {
+ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
     ouster::sensor::sensor_info new_metadata;
     new_metadata.name = "Foobar";
     new_metadata.sn = "DEADBEEF";
@@ -234,21 +234,29 @@ ouster::sensor::sensor_info _gen_new_metadata() {
     new_metadata.prod_line = "LEEROY JENKINS";
 
     new_metadata.format.pixels_per_column = 5;
-    new_metadata.format.columns_per_packet = 2;
-    new_metadata.format.columns_per_frame = 3;
-    new_metadata.format.pixel_shift_by_row = {4, 5, 6, 7, 8};
-    new_metadata.format.column_window = {9, 10};
+    new_metadata.format.columns_per_packet = 2 + start_number;
+    new_metadata.format.columns_per_frame = 3 + start_number;
+    new_metadata.format.pixel_shift_by_row = {
+        4 + start_number, 5 + start_number, 6 + start_number, 7 + start_number,
+        8 + start_number};
+    new_metadata.format.column_window = {9 + start_number, 10 + start_number};
     new_metadata.format.udp_profile_lidar =
         ouster::sensor::PROFILE_RNG15_RFL8_NIR8;
     new_metadata.format.udp_profile_imu = ouster::sensor::PROFILE_IMU_LEGACY;
-    new_metadata.format.fps = 11;
-    new_metadata.beam_azimuth_angles = {12, 13, 14, 15, 16};
-    new_metadata.beam_altitude_angles = {17, 18, 19, 20, 21};
-    new_metadata.lidar_origin_to_beam_origin_mm = 22;
+    new_metadata.format.fps = 11 + start_number;
+    new_metadata.beam_azimuth_angles = {
+        12. + (double)start_number, 13. + (double)start_number,
+        14. + (double)start_number, 15. + (double)start_number,
+        16. + (double)start_number};
+    new_metadata.beam_altitude_angles = {
+        17. + (double)start_number, 18. + (double)start_number,
+        19. + (double)start_number, 20. + (double)start_number,
+        21. + (double)start_number};
+    new_metadata.lidar_origin_to_beam_origin_mm = 22 + start_number;
 
-    new_metadata.init_id = 23;
-    new_metadata.udp_port_lidar = 24;
-    new_metadata.udp_port_imu = 25;
+    new_metadata.init_id = 23 + start_number;
+    new_metadata.udp_port_lidar = 24 + start_number;
+    new_metadata.udp_port_imu = 25 + start_number;
 
     new_metadata.build_date = "Made in SAN FRANCISCO";
     new_metadata.image_rev = "IDK, ask someone else";
@@ -258,17 +266,21 @@ ouster::sensor::sensor_info _gen_new_metadata() {
     return new_metadata;
 }
 
-TEST_F(OperationsTest, MetadataRewriteTestSimple) {
-    std::string temp_dir;
-    EXPECT_TRUE(make_tmp_dir(temp_dir));
-    std::string temp_file = path_concat(temp_dir, "temp.osf");
-    auto header_size = start_osf_file(temp_file);
+void _verify_empty_metadata(Json::Value& test_root, int entry_count = 0) {
+    EXPECT_EQ(test_root["metadata"]["chunks"].size(), 0);
+    EXPECT_EQ(test_root["metadata"]["entries"].size(), entry_count);
+    EXPECT_EQ(test_root["metadata"]["end_ts"], 0);
+    EXPECT_EQ(test_root["metadata"]["start_ts"], 0);
+    EXPECT_EQ(test_root["metadata"]["id"], "");
+}
 
+void _write_init_metadata(std::string& temp_file, uint64_t header_size,
+                          MetadataStore meta_store_ = {}) {
     // Copied and modified from writer.cpp under osf/src
-    auto metadata_fbb = flatbuffers::FlatBufferBuilder(32768);
+    flatbuffers::FlatBufferBuilder metadata_fbb =
+        flatbuffers::FlatBufferBuilder(32768);
 
     std::vector<ouster::osf::gen::ChunkOffset> chunks_{};
-    MetadataStore meta_store_{};
 
     std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>> entries =
         meta_store_.make_entries(metadata_fbb);
@@ -289,19 +301,25 @@ TEST_F(OperationsTest, MetadataRewriteTestSimple) {
                 metadata_saved_size == metadata_size + CRC_BYTES_SIZE);
     EXPECT_TRUE(finish_osf_file(temp_file, metadata_offset,
                                 metadata_saved_size) == header_size);
+}
+
+TEST_F(OperationsTest, MetadataRewriteTestSimple) {
+    std::string temp_dir;
+    EXPECT_TRUE(make_tmp_dir(temp_dir));
+    std::string temp_file = path_concat(temp_dir, "temp.osf");
+    uint64_t header_size = start_osf_file(temp_file);
+
+    _write_init_metadata(temp_file, header_size);
 
     std::string metadata_json = dump_metadata(temp_file, true);
     Json::Value test_root{};
     EXPECT_TRUE(_parse_json(metadata_json, test_root));
 
-    EXPECT_EQ(test_root["metadata"]["chunks"].size(), 0);
-    EXPECT_EQ(test_root["metadata"]["entries"].size(), 0);
-    EXPECT_EQ(test_root["metadata"]["end_ts"], 0);
-    EXPECT_EQ(test_root["metadata"]["start_ts"], 0);
-    EXPECT_EQ(test_root["metadata"]["id"], "");
+    _verify_empty_metadata(test_root);
 
-    ouster::sensor::sensor_info new_metadata = _gen_new_metadata();
-    osf_file_modify_metadata(temp_file, new_metadata);
+    ouster::sensor::sensor_info new_metadata = _gen_new_metadata(100);
+
+    osf_file_modify_metadata(temp_file, {new_metadata});
     std::string output_metadata_json = dump_metadata(temp_file, true);
     Json::Value output_root{};
     EXPECT_TRUE(_parse_json(output_metadata_json, output_root));
@@ -312,6 +330,82 @@ TEST_F(OperationsTest, MetadataRewriteTestSimple) {
 
     EXPECT_EQ(new_root,
               output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
+    unlink_path(temp_file);
+}
+
+TEST_F(OperationsTest, MetadataRewriteTestMulti) {
+    std::string temp_dir;
+    EXPECT_TRUE(make_tmp_dir(temp_dir));
+    std::string temp_file = path_concat(temp_dir, "temp.osf");
+    uint64_t header_size = start_osf_file(temp_file);
+
+    _write_init_metadata(temp_file, header_size);
+
+    std::string metadata_json = dump_metadata(temp_file, true);
+    Json::Value test_root{};
+    EXPECT_TRUE(_parse_json(metadata_json, test_root));
+
+    _verify_empty_metadata(test_root);
+
+    ouster::sensor::sensor_info new_metadata = _gen_new_metadata(100);
+    ouster::sensor::sensor_info new_metadata2 = _gen_new_metadata(200);
+
+    osf_file_modify_metadata(temp_file, {new_metadata, new_metadata2});
+    std::string output_metadata_json = dump_metadata(temp_file, true);
+    Json::Value output_root{};
+    EXPECT_TRUE(_parse_json(output_metadata_json, output_root));
+    EXPECT_NE(test_root, output_root);
+
+    Json::Value new_root{};
+    EXPECT_TRUE(_parse_json(new_metadata.updated_metadata_string(), new_root));
+    Json::Value new_root2{};
+    auto temp_string = new_metadata2.updated_metadata_string();
+    EXPECT_TRUE(_parse_json(temp_string, new_root2));
+
+    EXPECT_EQ(new_root,
+              output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
+    EXPECT_EQ(new_root2,
+              output_root["metadata"]["entries"][1]["buffer"]["sensor_info"]);
+    unlink_path(temp_file);
+}
+
+TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
+    std::string temp_dir;
+    EXPECT_TRUE(make_tmp_dir(temp_dir));
+    std::string temp_file = path_concat(temp_dir, "temp.osf");
+    uint64_t header_size = start_osf_file(temp_file);
+    MetadataStore meta_store_ = {};
+    LidarScanStreamMeta pre_existing_data(12345678, {});
+    meta_store_.add(pre_existing_data);
+    _write_init_metadata(temp_file, header_size, meta_store_);
+
+    std::string metadata_json = dump_metadata(temp_file, true);
+    Json::Value test_root{};
+    EXPECT_TRUE(_parse_json(metadata_json, test_root));
+
+    _verify_empty_metadata(test_root, 1);
+
+    EXPECT_EQ(test_root["metadata"]["entries"][0]["type"],
+              "ouster/v1/os_sensor/LidarScanStream");
+    EXPECT_EQ(test_root["metadata"]["entries"][0]["buffer"],
+              "LidarScanStreamMeta: sensor_id = 12345678, field_types = {}");
+
+    ouster::sensor::sensor_info new_metadata = _gen_new_metadata(100);
+
+    osf_file_modify_metadata(temp_file, {new_metadata});
+    std::string output_metadata_json = dump_metadata(temp_file, true);
+    Json::Value output_root{};
+    EXPECT_TRUE(_parse_json(output_metadata_json, output_root));
+    EXPECT_NE(test_root, output_root);
+
+    Json::Value new_root{};
+    EXPECT_TRUE(_parse_json(new_metadata.updated_metadata_string(), new_root));
+
+    EXPECT_EQ(output_root["metadata"]["entries"][0]["buffer"],
+              "LidarScanStreamMeta: sensor_id = 12345678, field_types = {}");
+    EXPECT_EQ(new_root,
+              output_root["metadata"]["entries"][1]["buffer"]["sensor_info"]);
+    EXPECT_EQ(output_root["metadata"]["entries"].size(), 2);
     unlink_path(temp_file);
 }
 
