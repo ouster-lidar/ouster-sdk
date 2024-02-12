@@ -26,7 +26,8 @@ Python SDK
 Known issues
 ------------
 
-* Slam does not work for python 3.12 due to missing upstream dependency support
+* Slam does not work for python 3.12 due to missing upstream dependency support.
+* ouster-cli discover may not provide info for sensors using IPv6 link-local networks on Python 3.8 or with older versions of zeroconf.
 
 [20231031] [0.10.0]
 ===================
