@@ -131,6 +131,9 @@ TEST_F(WriterTest, WriteLidarSensorWithExtrinsics) {
 
     auto extrinsics = reader.meta_store().find<Extrinsics>();
     EXPECT_EQ(extrinsics.size(), 1);
+    EXPECT_EQ(extrinsics.begin()->second->repr(),
+              "ExtrinsicsMeta: ref_id = 1, name = , extrinsics = 0 0.756 0 10 "
+              "0.756 1 0 0 0 0 1 0 0 0 0 1");
 
     auto ext_mat_recovered = extrinsics.begin()->second->extrinsics();
     EXPECT_EQ(sinfo.extrinsic, ext_mat_recovered);
@@ -540,6 +543,12 @@ TEST_F(WriterTest, WriteExample) {
     EXPECT_FALSE(msg_ts_no_stream2);
 
     ReadExample(output_osf_filename);
+}
+
+TEST_F(WriterTest, FileNameOnlyWriterTest) {
+    osf::Writer writer("FOOBARBAT");
+    EXPECT_EQ(writer.filename(), "FOOBARBAT");
+    EXPECT_EQ(writer.metadata_id(), "");
 }
 
 }  // namespace

@@ -83,11 +83,9 @@ void png_osf_read_data(png_structp png_ptr, png_bytep bytes,
     vec_read->read(bytes, bytes_len);
 };
 
-// void user_read_data(png_structp png_ptr, png_bytep data, png_size_t length);
-
 /**
  * It's needed for custom png IO operations... but I've never seen it's called.
- * And also there are no need to flush writer to std::vector buufer in our case.
+ * And also there are no need to flush writer to std::vector buffer in our case.
  */
 void png_osf_flush_data(png_structp){};
 
@@ -154,7 +152,7 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 }
 
 // ========== Encode Functions ===================================
-
+#ifdef OUSTER_OSF_NO_THREADING
 ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
                                       const std::vector<int>& px_offset,
                                       const LidarScanFieldTypes& field_types) {
@@ -170,7 +168,7 @@ ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
 
     return fields_data;
 }
-
+#else
 ScanData scanEncodeFields(const LidarScan& lidar_scan,
                           const std::vector<int>& px_offset,
                           const LidarScanFieldTypes& field_types) {
@@ -212,6 +210,7 @@ ScanData scanEncodeFields(const LidarScan& lidar_scan,
 
     return fields_data;
 }
+#endif
 
 template <typename T>
 bool encode8bitImage(ScanChannelData& res_buf,
@@ -762,7 +761,7 @@ bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
     }
     return res_err;
 }
-
+#ifdef OUSTER_OSF_NO_THREADING
 bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
                                   const ScanData& scan_data,
                                   const std::vector<int>& px_offset) {
@@ -784,7 +783,7 @@ bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
     }
     return false;
 }
-
+#else
 bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
                       const std::vector<int>& px_offset) {
     LidarScanFieldTypes field_types(lidar_scan.begin(), lidar_scan.end());
@@ -832,6 +831,7 @@ bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
 
     return false;
 }
+#endif
 
 template <typename T>
 bool decode24bitImage(Eigen::Ref<img_t<T>> img,
@@ -1374,25 +1374,6 @@ template bool decode8bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
                                         const ScanChannelData&);
 template bool decode8bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
                                         const ScanChannelData&);
-
-// =================== Save to File Functions ====================
-
-bool saveScanChannel(const ScanChannelData& channel_buf,
-                     const std::string& filename) {
-    std::fstream file(filename, std::ios_base::out | std::ios_base::binary);
-
-    if (file.good()) {
-        file.write(reinterpret_cast<const char*>(channel_buf.data()),
-                   channel_buf.size());
-        if (file.good()) {
-            file.close();
-            return false;  // SUCCESS
-        }
-    }
-
-    file.close();
-    return true;  // FAILURE
-}
 
 }  // namespace osf
 }  // namespace ouster

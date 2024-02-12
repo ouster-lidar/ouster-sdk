@@ -63,9 +63,6 @@ class ChunksPile {
 
     ChunkState* first();
 
-    ChunkStateIter begin();
-    ChunkStateIter end();
-
     size_t size() const;
 
     bool has_info() const;
@@ -116,7 +113,6 @@ struct ChunksIter {
     const ChunkRef operator*() const;
     const std::unique_ptr<ChunkRef> operator->() const;
     ChunksIter& operator++();
-    ChunksIter operator++(int);
     bool operator==(const ChunksIter& other) const;
     bool operator!=(const ChunksIter& other) const;
 
@@ -192,7 +188,6 @@ struct MessagesStandardIter {
     const MessageRef operator*() const;
     std::unique_ptr<const MessageRef> operator->() const;
     MessagesStandardIter& operator++();
-    MessagesStandardIter operator++(int);
     bool operator==(const MessagesStandardIter& other) const;
     bool operator!=(const MessagesStandardIter& other) const;
 
@@ -294,8 +289,6 @@ class Reader {
    private:
     void read_metadata();
     void read_chunks_info();  // i.e. StreamingInfo.chunks[] information
-
-    void print_metadata_entries();
 
     // Checks the flatbuffers validity of a chunk by chunk offset.
     bool verify_chunk(uint64_t chunk_offset);
@@ -521,13 +514,10 @@ struct MessagesStreamingIter {
     const MessageRef operator*() const;
     std::unique_ptr<const MessageRef> operator->() const;
     MessagesStreamingIter& operator++();
-    MessagesStreamingIter operator++(int);
     bool operator==(const MessagesStreamingIter& other) const;
     bool operator!=(const MessagesStreamingIter& other) const;
 
     std::string to_string() const;
-
-    void print_and_finish();
 
    private:
     // using range [start_ts, end_ts) <---- not inclusive .... !!!

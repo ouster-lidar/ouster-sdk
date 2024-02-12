@@ -44,15 +44,17 @@ using LidarScanFieldTypes =
 bool scanDecode(LidarScan& lidar_scan, const ScanData& scan_data,
                 const std::vector<int>& px_offset);
 
+#ifdef OUSTER_OSF_NO_THREADING
 /// Decoding eUDP LidarScan
 // TODO[pb]: Make decoding of just some fields from scan data?? Not now ...
 bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
                                   const ScanData& scan_data,
                                   const std::vector<int>& px_offset);
-
+#else
 /// Decoding eUDP LidarScan, multithreaded version
 bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
                       const std::vector<int>& px_offset);
+#endif
 
 /**
  * Decode a single field to lidar_scan
@@ -195,6 +197,7 @@ bool decode64bitImage(Eigen::Ref<img_t<T>> img,
 ScanData scanEncode(const LidarScan& lidar_scan,
                     const std::vector<int>& px_offset);
 
+#ifdef OUSTER_OSF_NO_THREADING
 /**
  * Encode the lidar scan fields to PNGs channel buffers (ScanData).
  * Single-threaded implementation.
@@ -207,7 +210,7 @@ ScanData scanEncode(const LidarScan& lidar_scan,
 ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
                                       const std::vector<int>& px_offset,
                                       const LidarScanFieldTypes& field_types);
-
+#else
 /**
  * Encode the lidar scan fields to PNGs channel buffers (ScanData).
  * Multi-threaded implementation.
@@ -220,7 +223,7 @@ ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
 ScanData scanEncodeFields(const LidarScan& lidar_scan,
                           const std::vector<int>& px_offset,
                           const LidarScanFieldTypes& field_types);
-
+#endif
 /**
  * Encode a single lidar scan field to PNGs channel buffer and place it to a
  * specified `scan_data[scan_idx]` place
@@ -345,18 +348,6 @@ bool encode64bitImage(ScanChannelData& res_buf,
 template <typename T>
 bool encode64bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img);
-
-// =================== Save to File Functions ====================
-
-/**
- * Save PNG encoded scan channel buffer to the PNG file.
- *
- * @param channel_buf single PNG buffer to decode
- * @param filename    file name of output PNG image
- * @return false (0) if operation is successful, true (1) if error occured
- */
-bool saveScanChannel(const ScanChannelData& channel_buf,
-                     const std::string& filename);
 
 }  // namespace osf
 }  // namespace ouster

@@ -29,6 +29,11 @@ TEST_F(CrcTest, SmokeSanityCheck) {
     EXPECT_EQ(0xa1509ef8, crc_rev);
 }
 
+TEST_F(CrcTest, SmokeSanityCheckAltInit) {
+    const std::vector<uint8_t> data = {0, 1, 2, 3, 4, 5, 6, 7};
+    const uint32_t crc = osf::crc32(0L, data.data(), data.size());
+    EXPECT_EQ(0x88aa689f, crc);
+}
 }  // namespace
 }  // namespace osf
 }  // namespace ouster

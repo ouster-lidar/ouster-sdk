@@ -120,10 +120,6 @@ ChunkState* ChunksPile::next_by_stream(uint64_t offset) {
 
 ChunkState* ChunksPile::first() { return get(0); }
 
-ChunksPile::ChunkStateIter ChunksPile::begin() { return pile_.begin(); }
-
-ChunksPile::ChunkStateIter ChunksPile::end() { return pile_.end(); }
-
 size_t ChunksPile::size() const { return pile_.size(); }
 
 bool ChunksPile::has_info() const {
@@ -238,12 +234,6 @@ ChunksIter& ChunksIter::operator++() {
     return *this;
 }
 
-ChunksIter ChunksIter::operator++(int) {
-    auto res = *this;
-    this->next();
-    return res;
-}
-
 void ChunksIter::next() {
     if (current_addr_ == end_addr_) return;
     next_any();
@@ -333,12 +323,6 @@ std::unique_ptr<const MessageRef> MessagesStandardIter::operator->() const {
 MessagesStandardIter& MessagesStandardIter::operator++() {
     this->next();
     return *this;
-}
-
-MessagesStandardIter MessagesStandardIter::operator++(int) {
-    auto res = *this;
-    this->next();
-    return res;
 }
 
 void MessagesStandardIter::next() {
@@ -599,14 +583,6 @@ void Reader::read_chunks_info() {
 }
 
 // TODO[pb]: MetadataStore to_string() ?
-void Reader::print_metadata_entries() {
-    std::cout << "Reader::print_metadata_entries:\n";
-    int i = 0;
-    for (const auto& me : meta_store_.entries()) {
-        std::cout << "    entry[" << i++ << "] = " << me.second->to_string()
-                  << std::endl;
-    }
-}
 
 std::string Reader::id() const {
     if (auto metadata = get_osf_metadata_from_buf(metadata_buf_.data())) {
@@ -990,12 +966,6 @@ MessagesStreamingIter& MessagesStreamingIter::operator++() {
     return *this;
 }
 
-MessagesStreamingIter MessagesStreamingIter::operator++(int) {
-    auto res = *this;
-    this->next();
-    return res;
-}
-
 void MessagesStreamingIter::next() {
     if (curr_ts_ >= end_ts_) return;
 
@@ -1054,18 +1024,6 @@ void MessagesStreamingIter::next() {
         curr_ts_ = next_ts;
     } else {
         curr_ts_ = end_ts_;
-    }
-}
-
-/// NOTE: Debug function, will be removed after some time ...
-void MessagesStreamingIter::print_and_finish() {
-    while (!curr_chunks_.empty()) {
-        auto& top = curr_chunks_.top();
-        std::cout << "(( ts = " << top.first[top.second].ts().count()
-                  << ", id = " << top.first[top.second].id()
-                  << ", msg_idx = " << top.second
-                  << ", cref = " << top.first.to_string() << std::endl;
-        curr_chunks_.pop();
     }
 }
 

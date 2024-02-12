@@ -97,7 +97,6 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/meta_extrinsics.cpp
                               src/meta_streaming_info.cpp
                               src/stream_lidar_scan.cpp
-                              src/layout_standard.cpp
                               src/layout_streaming.cpp
                               src/file.cpp
                               src/reader.cpp

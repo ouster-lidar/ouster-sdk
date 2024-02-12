@@ -57,6 +57,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
         const std::vector<uint8_t>& buf);
 
     std::string repr() const override;
+    std::string to_string() const override;
 
    private:
     sensor_info sensor_info_;

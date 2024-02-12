@@ -8,7 +8,6 @@
 #include "fb_utils.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
-#include "ouster/osf/layout_standard.h"
 #include "ouster/osf/layout_streaming.h"
 
 constexpr size_t MAX_CHUNK_SIZE = 500 * 1024 * 1024;
@@ -149,12 +148,7 @@ void Writer::close() {
     }
 }
 
-uint32_t Writer::chunk_size() const {
-    if (chunks_writer_) {
-        return static_cast<uint32_t>(chunks_writer_->chunk_size());
-    }
-    return 0;
-}
+uint32_t Writer::chunk_size() const { return chunks_writer_->chunk_size(); }
 
 Writer::~Writer() { close(); }
 

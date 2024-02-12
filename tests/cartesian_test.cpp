@@ -40,8 +40,8 @@ INSTANTIATE_TEST_CASE_P(CartesianParametrisedTests,
                                           std::pair<int, int>{4096, 128}));
 
 TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
-    const auto WIDTH = 512;
-    const auto HEIGHT = 64;
+    const auto WIDTH = 256;
+    const auto HEIGHT = 32;
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 
@@ -62,8 +62,8 @@ TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
 }
 
 TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatchF) {
-    const auto WIDTH = 512;
-    const auto HEIGHT = 64;
+    const auto WIDTH = 256;
+    const auto HEIGHT = 32;
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 

@@ -116,17 +116,13 @@ std::function<void(const osf::ts_t, const uint8_t*)> make_build_ls(
     const LidarScanFieldTypes& ls_field_types, ResultHandler&& handler) {
     const auto w = info.format.columns_per_frame;
     const auto h = info.format.pixels_per_column;
-
+    auto temp_ls_field_types = ls_field_types;
     std::shared_ptr<LidarScan> ls(nullptr);
-    if (ls_field_types.empty()) {
-        auto default_ls_field_types = get_field_types(info);
-        ls = std::make_shared<LidarScan>(w, h, default_ls_field_types.begin(),
-                                         default_ls_field_types.end());
-
-    } else {
-        ls = std::make_shared<LidarScan>(w, h, ls_field_types.begin(),
-                                         ls_field_types.end());
+    if (temp_ls_field_types.empty()) {
+        temp_ls_field_types = get_field_types(info);
     }
+    ls = std::make_shared<LidarScan>(w, h, temp_ls_field_types.begin(),
+                                     temp_ls_field_types.end());
 
     auto pf = ouster::sensor::get_format(info);
     auto build_ls_imp = ScanBatcher(w, pf);

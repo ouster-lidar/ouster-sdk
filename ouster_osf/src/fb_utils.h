@@ -114,10 +114,5 @@ uint64_t start_osf_file(const std::string& filename);
 uint64_t finish_osf_file(const std::string& filename,
                          const uint64_t metadata_offset,
                          const uint32_t metadata_size);
-
-/// @todo fix the api comments
-/** Debug method to print Flatbuffers Metadata buffer */
-void print_metadata_buf(const uint8_t* buf, const uint32_t buf_size);
-
 }  // namespace osf
 }  // namespace ouster

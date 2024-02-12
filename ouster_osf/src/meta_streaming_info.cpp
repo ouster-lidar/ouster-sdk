@@ -16,7 +16,7 @@
 namespace ouster {
 namespace osf {
 
-std::string to_string(ChunkInfo chunk_info) {
+std::string to_string(const ChunkInfo& chunk_info) {
     std::stringstream ss;
     ss << "{offset = " << chunk_info.offset
        << ", stream_id = " << chunk_info.stream_id

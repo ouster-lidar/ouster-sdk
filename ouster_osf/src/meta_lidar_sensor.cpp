@@ -65,5 +65,7 @@ std::string LidarSensor::repr() const {
     return json_string(lidar_sensor_obj);
 };
 
+std::string LidarSensor::to_string() const { return repr(); };
+
 }  // namespace osf
 }  // namespace ouster

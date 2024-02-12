@@ -409,6 +409,21 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
     unlink_path(temp_file);
 }
 
+/// @todo make a metadata specific testing file
+TEST_F(OperationsTest, TestDupeMetadata) {
+    MetadataStore meta_store_ = {};
+    LidarScanStreamMeta data(1011121314, {});
+    EXPECT_EQ(meta_store_.add(data), 1);
+
+    std::stringstream output_stream;
+    std::streambuf* old_output_stream = std::cout.rdbuf();
+    std::cout.rdbuf(output_stream.rdbuf());
+    EXPECT_EQ(meta_store_.add(data), 1);
+    std::cout.rdbuf(old_output_stream);
+    EXPECT_EQ(output_stream.str(),
+              "WARNING: MetadataStore:"
+              " ENTRY EXISTS! id = 1\n");
+}
 }  // namespace
 
 }  // namespace osf
