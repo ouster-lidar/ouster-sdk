@@ -130,8 +130,8 @@ class MetadataEntry {
      */
     virtual std::string to_string() const;
 
-    void setId(uint32_t id) { id_ = id; }
-    uint32_t id() const { return id_; }
+    void setId(uint32_t id);
+    uint32_t id() const;
 
     /**
      * Casting of the base class to concrete derived metadata entry type.
@@ -273,21 +273,11 @@ class MetadataEntryRef : public MetadataEntry {
      * Creates the metadata reference from Flatbuffers v2::MetadataEntry buffer.
      * No copy involved.
      */
-    explicit MetadataEntryRef(const uint8_t* buf) : buf_{buf} {
-        const gen::MetadataEntry* meta_entry =
-            reinterpret_cast<const gen::MetadataEntry*>(buf_);
-        buf_type_ = meta_entry->type()->str();
-        setId(meta_entry->id());
-    }
+    explicit MetadataEntryRef(const uint8_t* buf);
+    std::string type() const override;
+    std::string static_type() const override;
 
-    std::string type() const override { return buf_type_; }
-    std::string static_type() const override {
-        return metadata_type<MetadataEntryRef>();
-    }
-
-    std::unique_ptr<MetadataEntry> clone() const override {
-        return std::make_unique<MetadataEntryRef>(*this);
-    }
+    std::unique_ptr<MetadataEntry> clone() const override;
 
     std::vector<uint8_t> buffer() const final;
 
@@ -299,7 +289,7 @@ class MetadataEntryRef : public MetadataEntry {
     std::unique_ptr<MetadataEntry> as_type() const;
 
    private:
-    void setId(uint32_t id) { MetadataEntry::setId(id); }
+    void setId(uint32_t id);
     const uint8_t* buf_;
     std::string buf_type_{};
 };
@@ -329,32 +319,9 @@ class MetadataStore {
    public:
     using key_type = MetadataEntriesMap::key_type;
 
-    uint32_t add(MetadataEntry&& entry) { return add(entry); }
+    uint32_t add(MetadataEntry&& entry);
 
-    uint32_t add(MetadataEntry& entry) {
-        if (entry.id() == 0) {
-            /// @todo [pb]: Figure out the whole sequence of ids in addMetas in
-            /// the Reader case
-            assignId(entry);
-        } else if (metadata_entries_.find(entry.id()) !=
-                   metadata_entries_.end()) {
-            std::cout << "WARNING: MetadataStore: ENTRY EXISTS! id = "
-                      << entry.id() << std::endl;
-            return entry.id();
-        } else if (next_meta_id_ == entry.id()) {
-            // Find next available next_meta_id_ so we avoid id collisions
-            ++next_meta_id_;
-            auto next_it = metadata_entries_.lower_bound(next_meta_id_);
-            while (next_it != metadata_entries_.end() &&
-                   next_it->first == next_meta_id_) {
-                ++next_meta_id_;
-                next_it = metadata_entries_.lower_bound(next_meta_id_);
-            }
-        }
-
-        metadata_entries_.emplace(entry.id(), entry.clone());
-        return entry.id();
-    }
+    uint32_t add(MetadataEntry& entry);
 
     template <class MetadataEntryClass>
     std::shared_ptr<MetadataEntryClass> get() const {
@@ -405,15 +372,15 @@ class MetadataStore {
         return res;
     }
 
-    size_t size() const { return metadata_entries_.size(); }
+    size_t size() const;
 
-    const MetadataEntriesMap& entries() const { return metadata_entries_; }
+    const MetadataEntriesMap& entries() const;
 
     std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>>
     make_entries(flatbuffers::FlatBufferBuilder& fbb) const;
 
    private:
-    void assignId(MetadataEntry& entry) { entry.setId(next_meta_id_++); }
+    void assignId(MetadataEntry& entry);
 
     uint32_t next_meta_id_{1};
     MetadataEntriesMap metadata_entries_{};

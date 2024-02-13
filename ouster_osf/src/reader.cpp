@@ -16,6 +16,9 @@
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
 
+using StreamChunksMap =
+    std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
+
 namespace ouster {
 namespace osf {
 
@@ -30,6 +33,7 @@ inline const ouster::osf::v2::Chunk* get_chunk_from_buf(const uint8_t* buf) {
 // =======================================================
 // =========== ChunksPile ================================
 // =======================================================
+ChunksPile::ChunksPile() {}
 
 void ChunksPile::add(uint64_t offset, ts_t start_ts, ts_t end_ts) {
     ChunkState cs{};
@@ -134,6 +138,8 @@ bool ChunksPile::has_message_idx() const {
     // file
     return has_info() && pile_info_.begin()->second.message_count > 0;
 }
+
+StreamChunksMap& ChunksPile::stream_chunks() { return stream_chunks_; }
 
 void ChunksPile::link_stream_chunks() {
     // This function does a couple of things:
@@ -469,6 +475,8 @@ nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id,
     return nonstd::nullopt;
 }
 
+bool Reader::has_message_idx() const { return chunks_.has_message_idx(); };
+
 MessagesStandardRange Reader::messages_standard() {
     return MessagesStandardRange(chunks().begin(), chunks().end());
 }
@@ -607,6 +615,8 @@ ts_t Reader::end_ts() const {
     return ts_t{};
 }
 
+const MetadataStore& Reader::meta_store() const { return meta_store_; }
+
 bool Reader::has_stream_info() const { return chunks_.has_info(); }
 
 bool Reader::verify_chunk(uint64_t chunk_offset) {
@@ -625,6 +635,12 @@ bool Reader::verify_chunk(uint64_t chunk_offset) {
 // =========================================================
 // ========= MessageRef ====================================
 // =========================================================
+MessageRef::MessageRef(const uint8_t* buf, const MetadataStore& meta_provider)
+    : buf_(buf), meta_provider_(meta_provider), chunk_buf_{nullptr} {}
+
+MessageRef::MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
+                       std::shared_ptr<std::vector<uint8_t>> chunk_buf)
+    : buf_(buf), meta_provider_(meta_provider), chunk_buf_{chunk_buf} {}
 
 uint32_t MessageRef::id() const {
     const ouster::osf::v2::StampedMessage* sm =
@@ -637,6 +653,8 @@ MessageRef::ts_t MessageRef::ts() const {
         reinterpret_cast<const ouster::osf::v2::StampedMessage*>(buf_);
     return ts_t(sm->ts());
 }
+
+const uint8_t* MessageRef::buf() const { return buf_; }
 
 bool MessageRef::is(const std::string& type_str) const {
     auto meta = meta_provider_.get(id());
@@ -697,6 +715,20 @@ ChunkRef::ChunkRef(const uint64_t offset, Reader* reader)
            ChunkValidity::UNKNOWN);
 }
 
+ChunkState* ChunkRef::state() { return reader_->chunks_.get(chunk_offset_); }
+
+const ChunkState* ChunkRef::state() const {
+    return reader_->chunks_.get(chunk_offset_);
+}
+
+ChunkInfoNode* ChunkRef::info() {
+    return reader_->chunks_.get_info(chunk_offset_);
+}
+
+const ChunkInfoNode* ChunkRef::info() const {
+    return reader_->chunks_.get_info(chunk_offset_);
+}
+
 size_t ChunkRef::size() const {
     if (!valid()) return 0;
     const ouster::osf::v2::Chunk* chunk = get_chunk_from_buf(get_chunk_ptr());
@@ -755,6 +787,12 @@ std::string ChunkRef::to_string() const {
        << "]";
     return ss.str();
 }
+
+uint64_t ChunkRef::offset() const { return chunk_offset_; }
+
+ts_t ChunkRef::start_ts() const { return state()->start_ts; }
+
+ts_t ChunkRef::end_ts() const { return state()->end_ts; }
 
 const uint8_t* ChunkRef::get_chunk_ptr() const {
     if (reader_->file_.is_memory_mapped()) {
@@ -850,6 +888,11 @@ uint32_t calc_stream_ids_hash(const std::vector<uint32_t>& stream_ids) {
         a *= b;
     }
     return hash;
+}
+
+bool MessagesStreamingIter::greater_chunk_type::operator()(
+    const opened_chunk_type& a, const opened_chunk_type& b) {
+    return a.first[a.second].ts() > b.first[b.second].ts();
 }
 
 MessagesStreamingIter::MessagesStreamingIter()

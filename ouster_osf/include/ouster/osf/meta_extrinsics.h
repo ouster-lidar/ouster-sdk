@@ -42,11 +42,10 @@ namespace osf {
 class Extrinsics : public MetadataEntryHelper<Extrinsics> {
    public:
     explicit Extrinsics(const mat4d& extrinsics, uint32_t ref_meta_id = 0,
-                        const std::string& name = "")
-        : extrinsics_(extrinsics), ref_meta_id_{ref_meta_id}, name_{name} {}
-    const mat4d& extrinsics() const { return extrinsics_; }
-    const std::string& name() const { return name_; }
-    uint32_t ref_meta_id() const { return ref_meta_id_; }
+                        const std::string& name = "");
+    const mat4d& extrinsics() const;
+    const std::string& name() const;
+    uint32_t ref_meta_id() const;
 
     std::vector<uint8_t> buffer() const final;
 

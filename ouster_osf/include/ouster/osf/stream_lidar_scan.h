@@ -51,13 +51,11 @@ struct zero_field {
 class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
    public:
     LidarScanStreamMeta(const uint32_t sensor_meta_id,
-                        const LidarScanFieldTypes field_types = {})
-        : sensor_meta_id_{sensor_meta_id},
-          field_types_{field_types.begin(), field_types.end()} {}
+                        const LidarScanFieldTypes field_types = {});
 
-    uint32_t sensor_meta_id() const { return sensor_meta_id_; }
+    uint32_t sensor_meta_id() const;
 
-    const LidarScanFieldTypes& field_types() const { return field_types_; }
+    const LidarScanFieldTypes& field_types() const;
 
     // Simplified with MetadataEntryHelper<LidarScanStreamMeta>: type()+clone()
     // std::string type() const override;
@@ -123,7 +121,8 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
         const std::vector<uint8_t>& buf, const meta_type& meta,
         const MetadataStore& meta_provider);
 
-    const meta_type& meta() const { return meta_; }
+    // This has templated types
+    const meta_type& meta() const { return meta_; };
 
    private:
     Writer& writer_;

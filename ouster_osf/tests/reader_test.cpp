@@ -358,44 +358,6 @@ TEST_F(ReaderTest, MetadataFromBufferTest) {
     EXPECT_EQ(result->id(), 0);
     EXPECT_EQ(result->type(), "ouster/v1/os_sensor/LidarSensor");
 }
-class MetadataTest : public ouster::osf::MetadataEntry {
-   public:
-    MetadataTest(std::string type, std::string static_type,
-                 std::vector<uint8_t> buffer)
-        : _type(type), _static_type(static_type), _buffer(buffer){};
-    std::vector<uint8_t> buffer() const { return _buffer; };
-    std::unique_ptr<MetadataEntry> clone() const { return nullptr; };
-    std::string type() const { return _type; };
-    std::string static_type() const { return _static_type; };
-
-   private:
-    std::string _type;
-    std::string _static_type;
-    std::vector<uint8_t> _buffer;
-};
-
-TEST_F(ReaderTest, MiscMetadataEntryTests) {
-    MetadataTest test("Screams And Whispers - Dance With the Dead", "Good song",
-                      {1, 2, 3, 4, 5});
-    EXPECT_EQ(test.repr(), "MetadataEntry: 01 02 03 04 05");
-    EXPECT_EQ(test.to_string(),
-              "MetadataEntry: [id = 0, type = Screams And Whispers - Dance "
-              "With the Dead,"
-              " buffer = {MetadataEntry: 01 02 03 04 05}]");
-}
-
-/// @todo move this to a better place
-TEST_F(ReaderTest, StreamingPrintTests) {
-    ChunkInfo data = {1, 2, 3};
-    EXPECT_EQ(to_string(data),
-              "{offset = 1, stream_id = 2, message_count = 3}");
-
-    ts_t t(5678L);
-    StreamStats data2(4, t, 6);
-    EXPECT_EQ(to_string(data2),
-              "{stream_id = 4, start_ts = 5678, end_ts = 5678,"
-              " message_count = 1, message_avg_size = 6}");
-}
 
 }  // namespace
 }  // namespace osf

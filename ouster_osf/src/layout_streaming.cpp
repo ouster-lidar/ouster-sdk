@@ -80,5 +80,6 @@ void StreamingLayoutCW::finish() {
         chunk_stream_id_, {stream_stats_.begin(), stream_stats_.end()}});
 }
 
+uint32_t StreamingLayoutCW::chunk_size() const { return chunk_size_; }
 }  // namespace osf
 }  // namespace ouster

@@ -41,6 +41,19 @@ Writer::Writer(const std::string& filename, const std::string& metadata_id,
     }
 }
 
+uint32_t Writer::addMetadata(MetadataEntry&& entry) {
+    return addMetadata(entry);
+}
+
+uint32_t Writer::addMetadata(MetadataEntry& entry) {
+    return meta_store_.add(entry);
+}
+
+std::shared_ptr<MetadataEntry> Writer::getMetadata(
+    const uint32_t metadata_id) const {
+    return meta_store_.get(metadata_id);
+}
+
 uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
     if (pos_ < 0) {
         std::cerr << "ERROR: Writer is not ready (not started?)\n";
@@ -72,6 +85,16 @@ void Writer::saveMessage(const uint32_t stream_id, const ts_t ts,
 
     chunks_writer_->saveMessage(stream_id, ts, msg_buf);
 }
+
+const MetadataStore& Writer::meta_store() const { return meta_store_; }
+
+const std::string& Writer::metadata_id() const { return metadata_id_; }
+
+void Writer::setMetadataId(const std::string& id) { metadata_id_ = id; }
+
+const std::string& Writer::filename() const { return file_name_; }
+
+ChunksLayout Writer::chunks_layout() const { return chunks_layout_; }
 
 uint64_t Writer::emit_chunk(const ts_t chunk_start_ts, const ts_t chunk_end_ts,
                             const std::vector<uint8_t>& chunk_buf) {
@@ -190,6 +213,10 @@ uint32_t ChunkBuilder::size() const { return fbb_.GetSize(); }
 uint32_t ChunkBuilder::messages_count() const {
     return static_cast<uint32_t>(messages_.size());
 }
+
+ts_t ChunkBuilder::start_ts() const { return start_ts_; }
+
+ts_t ChunkBuilder::end_ts() const { return end_ts_; }
 
 void ChunkBuilder::update_start_end(const ts_t ts) {
     if (start_ts_ > ts) start_ts_ = ts;

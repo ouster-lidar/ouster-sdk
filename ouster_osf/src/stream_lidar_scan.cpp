@@ -283,6 +283,17 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
     return ls;
 }
 
+LidarScanStreamMeta::LidarScanStreamMeta(const uint32_t sensor_meta_id,
+                                         const LidarScanFieldTypes field_types)
+    : sensor_meta_id_{sensor_meta_id},
+      field_types_{field_types.begin(), field_types.end()} {}
+
+uint32_t LidarScanStreamMeta::sensor_meta_id() const { return sensor_meta_id_; }
+
+const LidarScanFieldTypes& LidarScanStreamMeta::field_types() const {
+    return field_types_;
+}
+
 std::vector<uint8_t> LidarScanStreamMeta::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(512);
 

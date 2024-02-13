@@ -41,8 +41,8 @@ class OsfFile {
     ~OsfFile();
 
     // Header Info
-    uint64_t size() const { return size_; };
-    std::string filename() const { return filename_; }
+    uint64_t size() const;
+    std::string filename() const;
     OSF_VERSION version();
     uint64_t metadata_offset();
     uint64_t chunks_offset();
@@ -54,17 +54,17 @@ class OsfFile {
      * Get the goodness of the file.
      * @todo Need to have more states here (eod, valid, error, etc)
      */
-    bool good() const { return state_ == FileState::GOOD; }
+    bool good() const;
 
     // Convenience operators
-    bool operator!() const { return !good(); };
-    explicit operator bool() const { return good(); };
+    bool operator!() const;
+    explicit operator bool() const;
 
     /**
      * Sequential access to the file.
      * This is mimicking the regular file access with the offset
      */
-    uint64_t offset() const { return offset_; }
+    uint64_t offset() const;
 
     /**
      * File seek (in mmap mode it's just moving the offset_ pointer

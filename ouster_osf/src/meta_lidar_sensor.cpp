@@ -10,6 +10,8 @@
 #include "json_utils.h"
 #include "ouster/osf/basics.h"
 
+using sensor_info = ouster::sensor::sensor_info;
+
 namespace ouster {
 namespace osf {
 
@@ -32,6 +34,17 @@ std::unique_ptr<std::string> restore_lidar_sensor(
 
     return std::make_unique<std::string>(sensor_metadata);
 }
+
+LidarSensor::LidarSensor(const sensor_info& si)
+    : sensor_info_(si), metadata_(si.updated_metadata_string()) {}
+
+LidarSensor::LidarSensor(const std::string& sensor_metadata)
+    : sensor_info_(sensor::parse_metadata(sensor_metadata)),
+      metadata_(sensor_metadata) {}
+
+const sensor_info& LidarSensor::info() const { return sensor_info_; }
+
+const std::string& LidarSensor::metadata() const { return metadata_; }
 
 std::vector<uint8_t> LidarSensor::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(32768);

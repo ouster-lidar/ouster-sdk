@@ -49,7 +49,7 @@ class ChunksPile {
     using StreamChunksMap =
         std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
 
-    ChunksPile(){};
+    ChunksPile();
 
     void add(uint64_t offset, ts_t start_ts, ts_t end_ts);
     ChunkState* get(uint64_t offset);
@@ -68,7 +68,7 @@ class ChunksPile {
     bool has_info() const;
     bool has_message_idx() const;
 
-    StreamChunksMap& stream_chunks() { return stream_chunks_; }
+    StreamChunksMap& stream_chunks();
 
     // builds internal links between ChunkInfoNode per stream
     void link_stream_chunks();
@@ -260,7 +260,7 @@ class Reader {
      * Message counts was added a bit later to the OSF core
      * (ChunkInfo struct), so this function will be obsolete over time.
      */
-    bool has_message_idx() const { return chunks_.has_message_idx(); };
+    bool has_message_idx() const;
 
     MessagesStandardRange messages_standard();
 
@@ -281,7 +281,7 @@ class Reader {
     ts_t end_ts() const;
 
     /** Metadata store to get access to all metadata entries. */
-    const MetadataStore& meta_store() const { return meta_store_; }
+    const MetadataStore& meta_store() const;
 
     /** if it can be read by stream and in non-decreasing timestamp order. */
     bool has_stream_info() const;
@@ -324,12 +324,10 @@ class MessageRef {
      * @param meta_provider the metadata store that is used in types
      *                      reconstruction
      */
-    MessageRef(const uint8_t* buf, const MetadataStore& meta_provider)
-        : buf_(buf), meta_provider_(meta_provider), chunk_buf_{nullptr} {}
+    MessageRef(const uint8_t* buf, const MetadataStore& meta_provider);
 
     MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
-               std::shared_ptr<std::vector<uint8_t>> chunk_buf)
-        : buf_(buf), meta_provider_(meta_provider), chunk_buf_{chunk_buf} {}
+               std::shared_ptr<std::vector<uint8_t>> chunk_buf);
 
     /** Message stream id */
     uint32_t id() const;
@@ -341,7 +339,7 @@ class MessageRef {
     // std::string stream_type() const;
 
     /** Pointer to the underlying data */
-    const uint8_t* buf() const { return buf_; }
+    const uint8_t* buf() const;
 
     /** Debug string representation */
     std::string to_string() const;
@@ -394,15 +392,11 @@ class ChunkRef {
     bool operator==(const ChunkRef& other) const;
     bool operator!=(const ChunkRef& other) const;
 
-    ChunkState* state() { return reader_->chunks_.get(chunk_offset_); }
-    const ChunkState* state() const {
-        return reader_->chunks_.get(chunk_offset_);
-    }
+    ChunkState* state();
+    const ChunkState* state() const;
 
-    ChunkInfoNode* info() { return reader_->chunks_.get_info(chunk_offset_); }
-    const ChunkInfoNode* info() const {
-        return reader_->chunks_.get_info(chunk_offset_);
-    }
+    ChunkInfoNode* info();
+    const ChunkInfoNode* info() const;
 
     MessagesChunkIter begin() const;
     MessagesChunkIter end() const;
@@ -414,9 +408,9 @@ class ChunkRef {
     /** Debug string representation */
     std::string to_string() const;
 
-    uint64_t offset() const { return chunk_offset_; }
-    ts_t start_ts() const { return state()->start_ts; }
-    ts_t end_ts() const { return state()->end_ts; }
+    uint64_t offset() const;
+    ts_t start_ts() const;
+    ts_t end_ts() const;
 
     size_t size() const;
 
@@ -500,10 +494,7 @@ struct MessagesStreamingIter {
     using opened_chunk_type = std::pair<ChunkRef, uint64_t>;
 
     struct greater_chunk_type {
-        bool operator()(const opened_chunk_type& a,
-                        const opened_chunk_type& b) {
-            return a.first[a.second].ts() > b.first[b.second].ts();
-        }
+        bool operator()(const opened_chunk_type& a, const opened_chunk_type& b);
     };
 
     MessagesStreamingIter();

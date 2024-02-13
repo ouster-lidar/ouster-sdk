@@ -39,7 +39,7 @@ class StreamingLayoutCW : public ChunksWriter {
 
     void finish() override;
 
-    uint32_t chunk_size() const override { return chunk_size_; }
+    uint32_t chunk_size() const override;
 
    private:
     void stats_message(const uint32_t stream_id, const ts_t ts,

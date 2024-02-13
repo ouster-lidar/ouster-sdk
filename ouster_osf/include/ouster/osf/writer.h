@@ -50,11 +50,9 @@ class Writer {
         return meta_store_.add(entry);
     }
 
-    uint32_t addMetadata(MetadataEntry&& entry) { return addMetadata(entry); }
+    uint32_t addMetadata(MetadataEntry&& entry);
 
-    uint32_t addMetadata(MetadataEntry& entry) {
-        return meta_store_.add(entry);
-    }
+    uint32_t addMetadata(MetadataEntry& entry);
 
     template <class MetadataEntryClass>
     std::shared_ptr<MetadataEntryClass> getMetadata(
@@ -63,9 +61,7 @@ class Writer {
     }
 
     std::shared_ptr<MetadataEntry> getMetadata(
-        const uint32_t metadata_id) const {
-        return meta_store_.get(metadata_id);
-    }
+        const uint32_t metadata_id) const;
 
     /**
      * Creating streams by passing itself as first argument of the ctor and
@@ -85,14 +81,14 @@ class Writer {
     void saveMessage(const uint32_t stream_id, const ts_t ts,
                      const std::vector<uint8_t>& buf);
 
-    const MetadataStore& meta_store() const { return meta_store_; }
+    const MetadataStore& meta_store() const;
 
-    const std::string& metadata_id() const { return metadata_id_; }
-    void setMetadataId(const std::string& id) { metadata_id_ = id; }
+    const std::string& metadata_id() const;
+    void setMetadataId(const std::string& id);
 
-    const std::string& filename() const { return file_name_; }
+    const std::string& filename() const;
 
-    ChunksLayout chunks_layout() const { return chunks_layout_; }
+    ChunksLayout chunks_layout() const;
     uint32_t chunk_size() const;
 
     // writes buf to the file with CRC32 appended and return the number of
@@ -148,8 +144,8 @@ class ChunkBuilder {
     std::vector<uint8_t> finish();
     uint32_t size() const;
     uint32_t messages_count() const;
-    ts_t start_ts() const { return start_ts_; }
-    ts_t end_ts() const { return end_ts_; }
+    ts_t start_ts() const;
+    ts_t end_ts() const;
 
    private:
     void update_start_end(const ts_t ts);

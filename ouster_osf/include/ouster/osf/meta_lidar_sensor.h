@@ -36,16 +36,12 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
     using sensor_info = ouster::sensor::sensor_info;
 
    public:
-    explicit LidarSensor(const sensor_info& si)
-        : sensor_info_(si), metadata_(si.updated_metadata_string()) {}
+    explicit LidarSensor(const sensor_info& si);
+    explicit LidarSensor(const std::string& sensor_metadata);
 
-    explicit LidarSensor(const std::string& sensor_metadata)
-        : sensor_info_(sensor::parse_metadata(sensor_metadata)),
-          metadata_(sensor_metadata) {}
+    const sensor_info& info() const;
 
-    const sensor_info& info() const { return sensor_info_; }
-
-    const std::string& metadata() const { return metadata_; }
+    const std::string& metadata() const;
 
     // === Simplified with MetadataEntryHelper<Sensor>: type()+clone()
     // std::string type() const override;
