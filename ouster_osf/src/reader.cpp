@@ -966,6 +966,12 @@ MessagesStreamingIter& MessagesStreamingIter::operator++() {
     return *this;
 }
 
+MessagesStreamingIter MessagesStreamingIter::operator++(int) {
+    auto res = *this;
+    this->next();
+    return res;
+}
+
 void MessagesStreamingIter::next() {
     if (curr_ts_ >= end_ts_) return;
 

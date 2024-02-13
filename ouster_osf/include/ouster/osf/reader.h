@@ -514,6 +514,7 @@ struct MessagesStreamingIter {
     const MessageRef operator*() const;
     std::unique_ptr<const MessageRef> operator->() const;
     MessagesStreamingIter& operator++();
+    MessagesStreamingIter operator++(int);
     bool operator==(const MessagesStreamingIter& other) const;
     bool operator!=(const MessagesStreamingIter& other) const;
 
