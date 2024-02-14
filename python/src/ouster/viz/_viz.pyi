@@ -271,6 +271,14 @@ class PointViz:
     def running(self, state: bool) -> None:
         ...
 
+    @overload
+    def paused(self) -> bool:
+        ...
+
+    @overload
+    def paused(self, state: bool) -> None:
+        ...
+
     def update(self) -> bool:
         ...
 

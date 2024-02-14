@@ -283,7 +283,7 @@ class LidarScanViz:
                         mods: int) -> bool:
             if (key, mods) in key_bindings:
                 key_bindings[key, mods](self)
-                self.draw()
+                self.draw(update=self._viz.paused())
             return True
 
         key_definitions: Dict[str, str] = {
@@ -641,7 +641,6 @@ class LidarScanViz:
                     mask_opacity = (self._scan.field(flag_field) & 0x1) * 1.0
                     self._cloud_masks[i][:, :, 3] = mask_opacity
                     self._clouds[i].set_mask(self._cloud_masks[i])
-
         # set range to zero where first flags bit is set
         elif self._flags_mode == LidarScanViz.FlagsMode.HIDE_BLOOM:
             for i, flag_field, range_field in ((0, ChanField.FLAGS,
@@ -807,6 +806,7 @@ class SimpleViz:
         # pausing and stepping
         self._cv = threading.Condition()
         self._paused = False
+        self._viz.paused(self._paused)
         self._step = 0
         self._proc_exit = False
 
@@ -914,6 +914,7 @@ class SimpleViz:
         """Pause or unpause the visualization."""
         with self._cv:
             self._paused = not self._paused
+            self._viz.paused(self._paused)
             self._update_playback_osd()
             if not self._paused:
                 self._cv.notify()
@@ -922,6 +923,7 @@ class SimpleViz:
         """Seek forward of backwards in the stream."""
         with self._cv:
             self._paused = True
+            self._viz.paused(self._paused)
             self._step = n_frames
             self._update_playback_osd()
             self._cv.notify()
@@ -1020,6 +1022,7 @@ class SimpleViz:
 
                     if self._pause_at == scan_idx:
                         self._paused = True
+                        self._viz.paused(self._paused)
 
                     self._update_playback_osd()
 

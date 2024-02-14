@@ -128,6 +128,20 @@ class PointViz {
     void visible(bool state);
 
     /**
+     * Check if viz set in a paused state
+     *
+     * @return true if the viz is currently paused
+     */
+    bool paused();
+
+    /**
+     * Set viz paused flag.
+     *
+     * @param[in] state new value of the flag
+     */
+    void paused(bool state);
+
+    /**
      * Update visualization state
      *
      * Send state updates to be rendered on the next frame

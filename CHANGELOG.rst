@@ -11,6 +11,8 @@ Important notes
 * Dropped support for python3.7
 * Dropped support macOS 10.15
 * This will be the last release that supports Ubuntu 18.04.
+* [bugfix] Fix potential flickering in Viz
+
 
 Python SDK
 ----------

@@ -126,6 +126,12 @@ PYBIND11_MODULE(_viz, m) {
         .def("visible", &viz::PointViz::visible,
              "Toggle if the PointViz window is visible")
 
+        .def("paused", py::overload_cast<>(&viz::PointViz::paused),
+             "Are we paused.")
+
+        .def("paused", py::overload_cast<bool>(&viz::PointViz::paused),
+             "Set paused state.")
+
         // misc
         .def(
             "push_key_handler",
