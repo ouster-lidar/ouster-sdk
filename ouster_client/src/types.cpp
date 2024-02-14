@@ -12,6 +12,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -28,6 +29,7 @@ namespace ouster {
 using nonstd::make_optional;
 using nonstd::nullopt;
 using nonstd::optional;
+using std::stoul;
 
 namespace sensor {
 
@@ -850,6 +852,22 @@ version version_of_string(const std::string& s) {
         return v;
     else
         return invalid_version;
+}
+
+version version_from_string(const std::string& v) {
+    auto rgx = std::regex(R"(v?(\d+).(\d+)\.(\d+))");
+    std::smatch matches;
+    std::regex_search(v, matches, rgx);
+
+    if (matches.size() < 4) return invalid_version;
+
+    try {
+        return version{static_cast<uint16_t>(stoul(matches[1])),
+                       static_cast<uint16_t>(stoul(matches[2])),
+                       static_cast<uint16_t>(stoul(matches[3]))};
+    } catch (const std::exception&) {
+        return invalid_version;
+    }
 }
 
 }  // namespace util

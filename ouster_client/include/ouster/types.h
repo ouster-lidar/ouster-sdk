@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "nonstd/optional.hpp"
+#include "version.h"
 
 namespace ouster {
 
@@ -828,6 +829,16 @@ std::string to_string(const calibration_status& cal);
  * @return client version string
  */
 std::string client_version();
+
+/**
+ * Get version information from the metadata.
+ *
+ * @param[in] metadata string.
+ *
+ * @return version corresponding to the string, or invalid_version on error.
+ */
+ouster::util::version firmware_version_from_metadata(
+    const std::string& metadata);
 
 // clang-format off
 /** Tag to identitify a paricular value reported in the sensor channel data

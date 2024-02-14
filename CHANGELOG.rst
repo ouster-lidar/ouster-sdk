@@ -12,6 +12,9 @@ Important notes
 * Dropped support macOS 10.15
 * This will be the last release that supports Ubuntu 18.04.
 * [bugfix] Fix potential flickering in Viz
+* The method ``version_of_string`` is marked as deprecated, use ``version_from_string``
+  instead
+* Added a new method ``firmware_version_from_metadata`` which works across firmwares
 
 
 Python SDK

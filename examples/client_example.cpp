@@ -75,7 +75,10 @@ int main(int argc, char* argv[]) {
 
     ouster::sensor::ColumnWindow column_window = info.format.column_window;
 
-    std::cerr << "  Firmware version:  " << info.fw_rev
+    // The dedicated firmware_version_from_metadata API works across firmwares
+    auto fw_ver = sensor::firmware_version_from_metadata(metadata);
+
+    std::cerr << "  Firmware version:  " << to_string(fw_ver)
               << "\n  Serial number:     " << info.sn
               << "\n  Product line:      " << info.prod_line
               << "\n  Scan dimensions:   " << w << " x " << h

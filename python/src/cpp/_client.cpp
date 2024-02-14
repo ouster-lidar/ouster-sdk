@@ -936,7 +936,7 @@ PYBIND11_MODULE(_client, m) {
         .def_readwrite("major", &util::version::major)
         .def_readwrite("minor", &util::version::minor)
         .def_readwrite("patch", &util::version::patch)
-        .def_static("from_string", &util::version_of_string);
+        .def_static("from_string", &util::version_from_string);
 
     m.attr("invalid_version") = util::invalid_version;
 
