@@ -113,7 +113,7 @@ struct PointViz::Impl {
     std::mutex update_mx;
     bool front_changed{false};
 
-    Camera camera_back, camera_front;
+    Camera camera_;
 
     TargetDisplay target;
     impl::GLRings rings;
@@ -241,7 +241,6 @@ bool PointViz::update() {
     if (pimpl->front_changed) return false;
 
     // propagate camera changes
-    pimpl->camera_front = pimpl->camera_back;
 
     pimpl->clouds.swap();
     pimpl->cuboids.swap();
@@ -290,8 +289,7 @@ void PointViz::draw() {
         const auto& ctx = pimpl->glfw->window_context;
 
         // calculate camera matrices
-        auto camera_data =
-            pimpl->camera_front.matrices(impl::window_aspect(ctx));
+        auto camera_data = pimpl->camera_.matrices(impl::window_aspect(ctx));
 
         // draw clouds
         impl::GLCloud::beginDraw();
@@ -390,7 +388,7 @@ void PointViz::pop_frame_buffer_handler() {
 /*
  * Add / remove / access objects in the scene
  */
-Camera& PointViz::camera() { return pimpl->camera_back; }
+Camera& PointViz::camera() { return pimpl->camera_; }
 
 TargetDisplay& PointViz::target_display() { return pimpl->target; }
 
