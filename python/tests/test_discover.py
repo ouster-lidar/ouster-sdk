@@ -90,4 +90,4 @@ def test_get_text_for_oserror():
     if version_info < (3, 9):
         assert "this version of Python does not support scoped link-local IPv6 addresses" in txt
     else:
-        assert txt == "prefix: Invalid Argument"
+        assert txt == "prefix - Invalid Argument"
