@@ -203,6 +203,7 @@ setup(
     extras_require={
         'test': [
             'pytest >=7.0, <8',
+            'pytest-asyncio',
             'flask==2.2.5'
         ],
         'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],

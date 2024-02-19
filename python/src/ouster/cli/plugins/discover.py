@@ -37,13 +37,14 @@ host_addresses = [
                 if address.family == AddressFamily.AF_INET or address.family == AddressFamily.AF_INET6
             ]
 
-mdns_services = ["_roger._tcp.local.", "_ouster-lidar._tcp.local."]
 rethrow_exceptions = False
 
 
 class AsyncServiceDiscovery:
     def __init__(self, interfaces, ip_version: IPVersion, output: str, timeout: int,
-        continuous: bool, show_user_data, pool_size: int = 10, socket_timeout: int = 2) -> None:
+        continuous: bool, show_user_data,
+        service_names=["_roger._tcp.local.", "_ouster-lidar._tcp.local."],
+        pool_size: int = 10, socket_timeout: int = 2) -> None:
 
         self.interfaces = interfaces
         if type(interfaces) is not zeroconf.InterfaceChoice:
@@ -53,6 +54,7 @@ class AsyncServiceDiscovery:
         self.timeout = timeout
         self.continuous = continuous
         self.show_user_data = show_user_data
+        self.service_names = service_names
         self.socket_timeout = socket_timeout
         self.aiobrowser: Optional[AsyncServiceBrowser] = None
         self.aiozc: Optional[AsyncZeroconf] = None
@@ -62,13 +64,15 @@ class AsyncServiceDiscovery:
         self._futures_shadow = []
         self._processed_hostnames = []
         self._lock = asyncio.Lock()
+        # Note - longer than the default of 3s, but it doesn't affect the overall duration.
+        self.async_request_timeout_ms = 10000
         self.shutdown = False
 
     async def async_run(self) -> None:
         self.aiozc = AsyncZeroconf(self.interfaces, False, self.ip_version)
 
         self.aiobrowser = AsyncServiceBrowser(
-            self.aiozc.zeroconf, mdns_services, handlers=[self.async_on_service_state_change]
+            self.aiozc.zeroconf, self.service_names, handlers=[self.async_on_service_state_change]
         )
         results = []
         while not self.shutdown:
@@ -96,6 +100,7 @@ class AsyncServiceDiscovery:
             print(json.dumps(results, indent=2))
 
     async def async_close(self) -> None:
+        self.shutdown = True
         assert self.aiozc is not None
         assert self.aiobrowser is not None
         await self.aiobrowser.async_cancel()
@@ -103,21 +108,25 @@ class AsyncServiceDiscovery:
 
     def async_on_service_state_change(self, zeroconf: Zeroconf, service_type: str,
                                       name: str, state_change: ServiceStateChange) -> None:
-        if state_change is not ServiceStateChange.Added:
+        if self.shutdown or state_change is not ServiceStateChange.Added:
             return
         # TODO: handle other state changes
         asyncio.ensure_future(self.async_display_service_info(zeroconf, service_type, name))
 
+    async def create_future_task_for_info(self, info):
+        async with self._lock:
+            if not self.shutdown and info.server not in self._processed_hostnames:
+                self._processed_hostnames.append(info.server)
+                f = self._executor.submit(get_all_sensor_info, info, self.socket_timeout, self.show_user_data)
+                self._futures_shadow.append(f)
+
     async def async_display_service_info(self, zeroconf: Zeroconf,
                                          service_type: str, name: str) -> None:
+        # try to get service info
         info = AsyncServiceInfo(service_type, name)
-        await info.async_request(zeroconf, 10000)
-        if info and info.server:
-            async with self._lock:
-                if info.server not in self._processed_hostnames:
-                    self._processed_hostnames.append(info.server)
-                    f = self._executor.submit(get_all_sensor_info, info, self.socket_timeout, self.show_user_data)
-                    self._futures_shadow.append(f)
+        await info.async_request(zeroconf, self.async_request_timeout_ms)
+        # submit a task to obtain metadata, etc
+        await self.create_future_task_for_info(info)
 
 
 def parse_scope_id(address: str) -> Tuple[str, Optional[int]]:
@@ -134,8 +143,8 @@ def is_link_local_ipv6_address_and_missing_scope_id(address: str) -> bool:
     return type(ip_addr) is ipaddress.IPv6Address and ip_addr.is_link_local
 
 
-def get_text_for_oserror(error_prefix: str, address: str, e: OSError) -> str:
-    if e.errno == 22 and is_link_local_ipv6_address_and_missing_scope_id(address):
+def get_text_for_oserror(error_prefix: str, address: str, e: Exception) -> str:
+    if "invalid argument" in str(e).lower() and is_link_local_ipv6_address_and_missing_scope_id(address):
         zeroconf_version = packaging.version.parse(importlib.metadata.version('zeroconf'))
         if version_info < (3, 9):
             return f"{error_prefix} - this version of Python does not support scoped \

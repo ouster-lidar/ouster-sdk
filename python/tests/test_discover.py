@@ -5,10 +5,17 @@
  * All rights reserved.
 """
 
+import packaging  # TODO remove
+import importlib  # TODO remove
+from sys import version_info
 import pytest
+import asyncio
+from zeroconf import InterfaceChoice, IPVersion
+from zeroconf.asyncio import AsyncServiceInfo
 from ouster.cli.plugins.discover import\
     parse_scope_id, format_hostname_for_url, \
-    get_output_for_sensor, get_text_for_oserror, is_link_local_ipv6_address_and_missing_scope_id
+    get_output_for_sensor, get_text_for_oserror, is_link_local_ipv6_address_and_missing_scope_id, \
+    AsyncServiceDiscovery
 
 
 def test_format_hostname_for_url():
@@ -79,15 +86,60 @@ def test_text_output():
     assert "* IPv4 DHCP 10.34.26.98/24" in text
 
 
-def test_get_text_for_oserror():
-    e = OSError("Invalid Argument")
-    e.errno = 22
-    with pytest.raises(ValueError):
-        get_text_for_oserror("prefix", "address", e)
+# TODO: remove
+def get_text_for_oserror2(error_prefix: str, address: str, e: Exception) -> str:
+    if "invalid argument" in str(e).lower() and is_link_local_ipv6_address_and_missing_scope_id(address):
+        zeroconf_version = packaging.version.parse(importlib.metadata.version('zeroconf'))
+        if version_info < (3, 9):
+            return f"{error_prefix} - this version of Python does not support scoped \
+link-local IPv6 addresses, which are necessary to retrieve the sensor configuration."
+        elif zeroconf_version < packaging.version.parse('0.131.0'):
+            return f"{error_prefix} - the installed version of zeroconf ({zeroconf_version}) \
+may not be able to provide scoped link-local IPv6 addresses, \
+which are necessary to retrieve the sensor configuration.\n" \
+            + "Please refer to this GitHub pull request for specifics: \
+https://github.com/python-zeroconf/python-zeroconf/pull/1322"
+        else:
+            return f"{error_prefix} - {e}"
+    else:
+        return f"{error_prefix} - {e}"
 
-    txt = get_text_for_oserror("prefix", "fe80::be0f:a7ff:fe00:a992", e)
+
+def test_get_text_for_oserror():
+    from requests.exceptions import ConnectionError
+    e = ConnectionError("Invalid Argument")
+    address = "fe80::be0f:a7ff:fe00:a992"
+    assert "invalid argument" in str(e).lower()
+    assert is_link_local_ipv6_address_and_missing_scope_id(address)
+    txt = get_text_for_oserror("prefix", address, e)
+    txt2 = get_text_for_oserror2("prefix", address, e)
+    assert txt == txt2
     from sys import version_info  # TODO: monkeypatch this or make it a fn parameter
     if version_info < (3, 9):
         assert "this version of Python does not support scoped link-local IPv6 addresses" in txt
     else:
         assert txt == "prefix - Invalid Argument"
+
+
+async def create_future_task_for_info(asd):
+    """a coroutine that creates an AsyncServiceInfo
+    and submits it to the provided AsyncServiceDiscovery."""
+    while not asd.aiozc:
+        await asyncio.sleep(0.5)
+    service_type = '_http._tcp.local.'
+    name = 'bogus_name.local.'
+    info = AsyncServiceInfo(service_type, name)
+    info.server = 'server.local.'
+    await asyncio.sleep(1)
+    await asd.create_future_task_for_info(info)
+
+
+@pytest.mark.asyncio
+async def test_fleetsw_5814():
+    """it doesn't raise a RuntimeError due to a future being submitted after executor shutdown"""
+    timeout = 0.1
+    continuous = False
+    show_user_data = False
+    asd = AsyncServiceDiscovery(InterfaceChoice.All, IPVersion.All, 'json', timeout, continuous, show_user_data, [])
+    asd.async_request_timeout_ms = 0
+    await asyncio.gather(asd.async_run(), create_future_task_for_info(asd))
