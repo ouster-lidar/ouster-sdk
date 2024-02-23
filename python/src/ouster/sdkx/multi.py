@@ -604,7 +604,8 @@ class ScansMulti(client.MultiScanSource):
         dt: int = 10**8,
         complete: bool = False,
         cycle: bool = False,
-        fields: Optional[List[client.FieldTypes]] = None
+        fields: Optional[List[client.FieldTypes]] = None,
+        **_
     ) -> None:
         """
         Args:

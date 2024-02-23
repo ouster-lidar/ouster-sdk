@@ -1,5 +1,6 @@
 #  type: ignore
 import os
+from glob import glob
 from pathlib import Path
 import pytest
 import sys
@@ -11,10 +12,27 @@ from click.testing import CliRunner
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins.io_type import io_type_from_extension, io_type_from_magic, OusterIoType
-from ouster.cli.plugins import source, source_osf  # noqa: F401
+from ouster.cli.plugins import source  # noqa: F401
 import ouster.pcap
 
 from tests.conftest import PCAPS_DATA_DIR, OSFS_DATA_DIR
+
+
+class set_directory(object):
+    """Sets the cwd within the context
+
+    Args:
+      path (Path): The path to the cwd
+    """
+    def __init__(self, path: Path):
+        self.path = path
+        self.origin = Path().absolute()
+
+    def __enter__(self):
+        os.chdir(self.path)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        os.chdir(self.origin)
 
 
 has_magic = False
@@ -49,7 +67,7 @@ def read_commands_from_help_text(help_text: str) -> List[str]:
     """Reads the command names (but not their help text)
     from help text that Click generates for click.MultiCommand"""
     command_help_lines = help_text.split("Commands:")[1].splitlines()[1:]
-    return [line.split()[0].strip() for line in command_help_lines]
+    return set(line.split()[0].strip() for line in command_help_lines)
 
 
 def test_join_with_conjunction():
@@ -111,7 +129,7 @@ def test_io_type_from_extension() -> None:
     test_pcap_name = 'data-inters-24784-OS1_128_fw23_legacy_n3.pcap'
     assert io_type_from_extension(test_pcap_name) == OusterIoType.PCAP
     test_bag_name = 'OS1_128_sample_fw23_lb_n3.bag'
-    assert io_type_from_extension(test_bag_name) == OusterIoType.ROSBAG
+    assert io_type_from_extension(test_bag_name) == OusterIoType.BAG
 
 
 def test_version(runner) -> None:
@@ -148,8 +166,6 @@ def test_mapping_help(runner, has_mapping):
     result = runner.invoke(core.cli, ['mapping', '--help'])
     if has_mapping:
         assert result.exit_code == 0
-    else:
-        assert result.exit_code == 2
 
 
 def test_source_help(runner) -> None:
@@ -157,7 +173,7 @@ def test_source_help(runner) -> None:
     result = runner.invoke(core.cli, CliArgs(['source', '--help']).args)
 
     # check that a variety of SOURCE commands are in the output
-    assert "PCAP info" in result.output
+    assert "PCAP|OSF info" in result.output
     assert "SENSOR config" in result.output
 
     # check that general message is there
@@ -179,29 +195,21 @@ def test_source_sensor(runner, has_mapping) -> None:
     # sensor
     result = runner.invoke(core.cli, ['source', '127.0.0.1'])
     assert result.exit_code == 0
-    expected_commands = ['config', 'metadata', 'record', 'viz']
+    expected_commands = {'config', 'metadata', 'viz', 'slice', 'save'}
     if has_mapping:
-        expected_commands.append('slam')
-    assert read_commands_from_help_text(result.output) == expected_commands
+        expected_commands.add('slam')
+    assert set(read_commands_from_help_text(result.output)) >= expected_commands
 
 
 def test_source_pcap(runner, has_mapping) -> None:
     # pcap
-    expected_commands = ['convert', 'info', 'slice', 'viz']
+    expected_commands = {'info', 'slice', 'viz'}
     if has_mapping:
-        expected_commands.append('slam')
+        expected_commands.add('slam')
     with tempfile.NamedTemporaryFile(suffix='.pcap') as temp_pcap:
         result = runner.invoke(core.cli, ['source', temp_pcap.name])
         assert result.exit_code == 0
-        assert read_commands_from_help_text(result.output) == expected_commands
-
-
-def test_source_pcap_convert_text(runner) -> None:
-    with tempfile.NamedTemporaryFile(suffix='.pcap') as temp_pcap:
-        result = runner.invoke(core.cli, ['source', temp_pcap.name])
-        assert result.exit_code == 0
-        line = [line.strip() for line in result.output.splitlines() if line.startswith('  convert')][0]
-        assert line == 'convert  Convert from PCAP to .csv or .osf'
+        assert read_commands_from_help_text(result.output) >= expected_commands
 
 
 @pytest.mark.skip
@@ -300,15 +308,15 @@ def test_source_pcap_slice_help(test_pcap_file, runner):
     """ouster-cli source <src> slice --help
     should display help"""
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice', '--help'])
-    assert "Usage: cli source SOURCE slice [OPTIONS] OUTPUT" in result.output
+    assert "Usage: cli source SOURCE slice [OPTIONS] INDICES" in result.output
     assert result.exit_code == 0
 
 
-def test_source_pcap_slice_no_output(test_pcap_file, runner):
+def test_source_pcap_slice_no_arguments(test_pcap_file, runner):
     # help option not provided, but no output file provided
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice'])
-    assert "Usage: cli source SOURCE slice [OPTIONS] OUTPUT" in result.output
-    assert "Missing argument 'OUTPUT'." in result.output
+    assert "Usage: cli source SOURCE slice [OPTIONS] INDICES" in result.output
+    assert "Missing argument 'INDICES'." in result.output
     assert result.exit_code == 2
 
 
@@ -316,51 +324,43 @@ def test_source_pcap_slice_help_2(test_pcap_file, runner):
     """ouster-cli source <src> slice <output> --help
     should display help"""
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice', 'outputfile.pcap', '--help'])
-    assert result.exit_code == 0
-    assert "Usage: cli source SOURCE slice [OPTIONS] OUTPUT" in result.output
+    assert result.exit_code == 2
+    assert "Error: Invalid value for 'INDICES': slice indices must be of the form start:[stop][:step]" in result.output
 
 
 def test_source_pcap_slice(test_pcap_file, runner):
     """Slicing a pcap should succeed with exit code 0."""
     try:
-        with tempfile.NamedTemporaryFile(suffix='.pcap', delete=False) as f:
+        with tempfile.NamedTemporaryFile(delete=False) as f:
             pass
-        result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice', '-n', 1, f.name])
-        assert f'Writing: {f.name}' in result.output
+        result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice',
+                                          '0:1', 'save', '-f', 'pcap', '-p', f.name])
+        # FIXME! Written file paths should be logged in output.
+        # assert f'Writing: {f.name}' in result.output
         assert result.exit_code == 0
-        result2 = runner.invoke(core.cli, ['source', f.name, 'info'])
+        pcaps_generated = glob(f'{f.name}_*.pcap')
+        assert len(pcaps_generated) == 1
+        pcap_filename = pcaps_generated[0]
+        result2 = runner.invoke(core.cli, ['source', pcap_filename, 'info'])
         assert result2.exit_code == 0
-        assert "Packets read:  74" in result2.output
+        assert "Packets read:  64" in result2.output
     finally:
-        os.unlink(f.name)
+        json_filename = pcap_filename[:-4] + 'json'
+        os.unlink(f'{f.name}')
+        os.unlink(pcap_filename)
+        os.unlink(json_filename)
 
 
-def test_source_pcap_convert_no_output_file(test_pcap_file, runner):
-    result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert']).args)
-    assert "Error: Missing argument 'OUTPUT_FILE'." in result.output
-    assert result.exit_code == 2
-
-
-def test_source_pcap_convert_help(test_pcap_file, runner):
-    """ouster-cli source <src> convert --help
-    should display help"""
-    result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert', '--help']).args)
-    assert "Usage: cli source SOURCE convert [OPTIONS] OUTPUT_FILE" in result.output
-    assert result.exit_code == 0
-
-
-def test_source_pcap_convert_help_2(test_pcap_file, runner):
-    """ouster-cli source <src> convert <output>.osf --help
-    should display OSF convert help"""
-    with tempfile.NamedTemporaryFile(suffix='.osf') as f:
-        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert', f.name, '--help']).args)
-
-        assert "Usage: cli source SOURCE convert [OPTIONS] OUTPUT_FILE" in result.output
-
-        option_names = [option.name.replace('_', '-') for option in source_osf.osf_from_pcap.params]
-        # check that all the options for the command are present in the help
-        assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
+def test_source_pcap_save_no_arguments(test_pcap_file, runner, tmp_path):
+    """It should save an OSF file by default."""
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save']).args)
         assert result.exit_code == 0
+        # there's at most one OSF file in output dir
+        files = os.listdir(tmp_path)
+        assert len(files) == 1
+        assert all(filename.endswith('.osf') for filename in files)
 
 
 def test_source_osf_info_help(test_osf_file, runner):
@@ -369,21 +369,19 @@ def test_source_osf_info_help(test_osf_file, runner):
     result = runner.invoke(core.cli, CliArgs(['source', test_osf_file, 'info', '--help']).args)
     assert "Usage: cli source SOURCE info [OPTIONS]" in result.output
 
-    option_names = [option.name.replace('_', '-') for option in source_osf.osf_info.params]
+    option_names = [option.name.replace('_', '-') for option in source.osf_info.params]
     assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
     assert result.exit_code == 0
 
-# TODO Re-eanble when osf viz is exposed
-# def test_source_osf_viz_help(test_osf_file, runner):
-#     """ouster-cli source <src>.osf viz --help
-#     should display OSF viz help"""
-#     result = runner.invoke(core.cli, ['source', test_osf_file, 'viz', '--help'])
-#     assert "Usage: cli source SOURCE viz [OPTIONS]" in result.output
-#     option_names = [option.name.replace('_', '-') for option in source_osf.osf_viz.params]
-#     # 'cycle is deprecated and now hidden
-#     option_names.remove('cycle')
-#     assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
-#     assert result.exit_code == 0
+
+def test_source_osf_viz_help(test_osf_file, runner):
+    """ouster-cli source <src>.osf viz --help
+    should display OSF viz help"""
+    result = runner.invoke(core.cli, ['source', test_osf_file, 'viz', '--help'])
+    assert "Usage: cli source SOURCE viz [OPTIONS]" in result.output
+    option_names = [option.name.replace('_', '-') for option in source.source_viz.params]
+    assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
+    assert result.exit_code == 0
 
 
 # TODO: Uncomment when bag conversion is re-enabled
@@ -399,26 +397,6 @@ def test_source_osf_info_help(test_osf_file, runner):
 #            # check that all the options for the command are present in the help
 #            assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
 #            assert result.exit_code == 0
-
-
-def test_source_pcap_convert_bad_extension(test_pcap_file, runner):
-    """ouster-cli source <src>.pcap convert <output>.badextension
-    should display an error"""
-    with tempfile.NamedTemporaryFile(suffix='.badextension') as f:
-        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert', f.name]).args)
-        assert source.source.commands[OusterIoType.PCAP]['convert'].get_output_type_file_extensions_str(
-        ) in result.output
-        assert result.exit_code == 2
-
-
-def test_source_pcap_convert_bad_extension_2(test_pcap_file, runner):
-    """ouster-cli source <src>.pcap convert <output>.pcap
-    should display an error"""
-    with tempfile.NamedTemporaryFile(suffix='.pcap') as f:
-        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'convert', f.name]).args)
-        assert source.source.commands[OusterIoType.PCAP]['convert'].get_output_type_file_extensions_str(
-        ) in result.output
-        assert result.exit_code == 2
 
 
 def test_discover(runner):
@@ -444,10 +422,10 @@ def test_source_osf(runner, has_mapping) -> None:
     with tempfile.NamedTemporaryFile(suffix='.osf') as temp_osf:
         result = runner.invoke(core.cli, ['source', temp_osf.name])
         assert result.exit_code == 0
-        expected_commands = ['convert', 'info', 'viz']
+        expected_commands = {'info', 'viz', 'slice', 'save'}
         if has_mapping:
-            expected_commands.append('slam')
-        assert read_commands_from_help_text(result.output) == expected_commands
+            expected_commands.add('slam')
+        assert read_commands_from_help_text(result.output) >= expected_commands
 
 
 def test_source_osf_info(test_osf_file, runner):

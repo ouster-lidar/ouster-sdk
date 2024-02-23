@@ -8,7 +8,7 @@ class OusterIoType(Enum):
     SENSOR = auto()
     PCAP = auto()
     OSF = auto()
-    ROSBAG = auto()
+    BAG = auto()
     CSV = auto()
     PLY = auto()
     PCD = auto()
@@ -19,7 +19,7 @@ class OusterIoType(Enum):
         return {
             OusterIoType.PCAP: ".pcap",
             OusterIoType.OSF: ".osf",
-            OusterIoType.ROSBAG: ".bag",
+            OusterIoType.BAG: ".bag",
             OusterIoType.CSV: ".csv",
             OusterIoType.PLY: ".ply",
             OusterIoType.PCD: ".pcd",

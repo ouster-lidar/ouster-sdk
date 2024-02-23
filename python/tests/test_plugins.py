@@ -12,9 +12,7 @@ def test_find_plugins(capsys, has_mapping):
 
     built_in_plugins = [
         'ouster.cli.plugins.discover',
-        'ouster.cli.plugins.io_type',
         'ouster.cli.plugins.source',
-        'ouster.cli.plugins.source_osf',
         'ouster.cli.plugins.testing',
         'ouster.cli.plugins.bad_plugin',
     ]

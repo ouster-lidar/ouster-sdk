@@ -60,7 +60,7 @@ class CMakeBuild(build_ext):
 
         # Bug in pybind11 cmake strips symbols with RelWithDebInfo
         # https://github.com/pybind/pybind11/issues/1891
-        cfg = 'Debug'# if self.debug else 'Release'
+        cfg = 'Debug' if self.debug else 'Release'
 
         cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
         build_args = ['--config', cfg]
