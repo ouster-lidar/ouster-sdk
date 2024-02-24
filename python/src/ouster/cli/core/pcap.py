@@ -12,7 +12,7 @@ from prettytable import PrettyTable, PLAIN_COLUMNS  # type: ignore
 from textwrap import indent
 
 from ouster import client
-from ouster.cli.core.sensor import configure_sensor
+from ouster.sdk.sensor_util import configure_sensor
 from ouster.sdk.util import resolve_metadata
 import ouster.sdk.pose_util as pu
 from ouster.sdkx import packet_iter
@@ -20,8 +20,7 @@ from ouster.sdkx.parsing import default_scan_fields
 from ouster.sdkx.util import resolve_extrinsics
 from .util import (click_ro_file, import_rosbag_modules)
 
-from ouster.sdk.util import resolve_metadata_multi
-from ouster.sdkx.multi import PcapMulti, ScansMulti
+from ouster.sdkx.pcap_scan_source import PcapScanSource
 from ouster.sdkx.multi_viz import MultiLidarScanViz
 
 
@@ -199,7 +198,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     base_name = f"{prefix}{metadata.prod_line}_{metadata.fw_rev}_{metadata.mode}_{time}"
     meta_path = os.path.join(dest, base_name) + ".json"
 
-    scans_source = None
+    scan_source = None
 
     try:
         click.echo(f"Writing metadata to {meta_path}")
@@ -222,18 +221,18 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
             field_types = default_scan_fields(
                 source.metadata.format.udp_profile_lidar, flags=True)
 
-            scans_source = client.Scans(packets,
-                                        fields=field_types,
-                                        complete=filter)
+            scan_source = client.Scans(packets,
+                                       fields=field_types,
+                                       complete=filter)
 
-            scans_accum = scans_accum_for_cli(scans_source.metadata,
+            scans_accum = scans_accum_for_cli(scan_source.metadata,
                                               accum_num=accum_num,
                                               accum_every=accum_every,
                                               accum_every_m=accum_every_m,
                                               accum_map=accum_map,
                                               accum_map_ratio=accum_map_ratio)
-            SimpleViz(scans_source.metadata, _buflen=0,
-                      scans_accum=scans_accum).run(scans_source)
+            SimpleViz(scan_source.metadata, _buflen=0,
+                      scans_accum=scans_accum).run(scan_source)
 
         else:
             consume(packets)
@@ -241,7 +240,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     except KeyboardInterrupt:
         click.echo("\nInterrupted")
     finally:
-        if scans_source is not None and scans_source._timed_out:
+        if scan_source is not None and scan_source._timed_out:
             click.echo(f"ERROR: Timed out while awaiting new packets from sensor {hostname} "
                        f"using udp destination {config.udp_dest} on port {config.udp_port_lidar}. "
                        f"Check your firewall settings and/or ensure that the lidar port "
@@ -257,6 +256,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
 @click.option('-c', '--cycle', is_flag=True, help="Loop playback", hidden=True)
 @click.option('-e', '--on-eof', default='loop', type=click.Choice(['loop', 'stop', 'exit']),
     help="Loop, stop, or exit after reaching end of file")
+# TODO: in case of 'multi' How does lidar-port and imu-port get factored?
 @click.option('-l', '--lidar-port', default=None, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
@@ -346,12 +346,12 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
     if not multi:
         # Single sensor pcap handling
 
-        # the only reason why we can't always use PcapMulti is that we still
+        # the only reason why we can't always use PcapMultiPacketReader is that we still
         # want to pass custom lidar_port and imu_port from command line (for
         # now at least)
         # TODO[pb]: Decide when we can remove the custom lidar_port/imu_port
         #           params from command line and switch everything to a
-        #           single PcapMulti source (it will simplify branching in
+        #           single PcapMultiPacketReader source (it will simplify branching in
         #           pcap_viz)
 
         meta = resolve_metadata(file, meta)
@@ -388,58 +388,30 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
         field_types = default_scan_fields(
             source.metadata.format.udp_profile_lidar, flags=True)
 
-        scans_source = client.Scans(source,
-                                    fields=field_types,
-                                    complete=filter,
-                                    timeout=timeout)
+        scan_source = client.Scans(source,
+                                   fields=field_types,
+                                   complete=filter,
+                                   timeout=timeout)
 
-        ls_viz = LidarScanViz(scans_source.metadata)
+        ls_viz = LidarScanViz(scan_source.metadata)
 
         if kitti_poses:
-            scans = pu.pose_scans_from_kitti(scans_source, kitti_poses)
+            scans = pu.pose_scans_from_kitti(scan_source, kitti_poses)
         else:
-            scans = iter(scans_source)
+            scans = iter(scan_source)
 
     else:
         # Multi sensor pcap handling
+        # TODO: handling of timeout, fields, lidar/imu ports
+        scan_source = PcapScanSource(file,
+                                  complete=filter,
+                                  cycle=(on_eof == 'loop'),
+                                  _soft_id_check=soft_id_check)
+        source = scan_source._source
+        scans = iter(scan_source)
+        ls_viz = MultiLidarScanViz(scan_source.metadata, source_name=file)
 
-        metadata_paths = resolve_metadata_multi(file)
-        if not metadata_paths:
-            raise click.ClickException(
-                "Metadata jsons not found. Make sure that metadata json files "
-                "have common prefix with a PCAP file")
-
-        source = PcapMulti(file,
-                           metadata_paths=metadata_paths,
-                           _soft_id_check=soft_id_check,
-                           _resolve_extrinsics=True)
-
-        # print extrinsics if any were found
-        for ext_source, m in zip(source.extrinsics_source,
-                                 source._metadata):
-            if ext_source:
-                print(f"Found extrinsics for {m.sn} "
-                      f"(from {ext_source}):\n{m.extrinsic}")
-
-        # enable parsing flags field
-        field_types = [
-            default_scan_fields(m.format.udp_profile_lidar, flags=True)
-            for m in source.metadata
-        ]
-
-        # set sensor names as idx in the source
-        for idx, m in enumerate(source.metadata):
-            source.metadata[idx].hostname = f"sensoridx: {idx}"
-
-        ls_viz = MultiLidarScanViz(source.metadata, source_name=file)
-
-        scans_source = ScansMulti(source,
-                                  fields=field_types,
-                                  complete=filter)
-
-        scans = iter(scans_source)
-
-    scans_accum = scans_accum_for_cli(scans_source.metadata,
+    scans_accum = scans_accum_for_cli(scan_source.metadata,
                                       accum_num=accum_num,
                                       accum_every=accum_every,
                                       accum_every_m=accum_every_m,
@@ -449,12 +421,12 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
     SimpleViz(ls_viz, rate=rate, pause_at=pause_at, on_eof=on_eof,
               _buflen=buf, scans_accum=scans_accum).run(scans)
 
-    if type(scans_source) is client.Scans and (scans_source._timed_out or scans_source._scans_produced == 0):
+    if type(scan_source) is client.Scans and (scan_source._timed_out or scan_source._scans_produced == 0):
         click.echo(click.style(
             f"\nERROR: no frames matching the provided metadata '{meta}' were found in '{file}'.",
             fg='yellow'
         ))
-        all_infos = pcap._packet_info_stream(file, scans_source._packets_consumed, None, 100)
+        all_infos = pcap._packet_info_stream(file, scan_source._packets_consumed, None, 100)
         matched_stream = match_metadata_with_data_stream(all_infos, source.metadata)
         if not matched_stream:
             click.echo(click.style(

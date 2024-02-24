@@ -1183,7 +1183,7 @@ PYBIND11_MODULE(_client, m) {
             New LidarScan of specified dimensions expecting fields of specified profile
 
          )",
-            py::arg("w"), py::arg("h"), py::arg("profile"),
+            py::arg("h"), py::arg("w"), py::arg("profile"),
             py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
         .def(
             "__init__",

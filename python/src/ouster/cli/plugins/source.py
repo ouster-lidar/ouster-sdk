@@ -454,15 +454,7 @@ class SourceMultiCommand(click.MultiCommand):
             raise click.exceptions.MissingParameter(None, ctx, param=param)
         try:
             return self.commands[io_type(source)].keys()
-        except ValueError as e:  # noqa: F841
-            click.echo(ctx.get_usage())
-            raise click.exceptions.UsageError("Source type expected to be a sensor hostname, "
-                                              f"ip address, or a(n) {file_extensions_str} file. "
-                                              "For a sensor source, please check that you can "
-                                              "ping the sensor hostname/ip address. For a file "
-                                              "source, please check that the file path you have "
-                                              "provided exists.")
-        except KeyError as e:  # noqa: F841
+        except (KeyError, ValueError) as e:  # noqa: F841
             click.echo(ctx.get_usage())
             raise click.exceptions.UsageError("Source type expected to be a sensor hostname, "
                                               f"ip address, or a(n) {file_extensions_str} file. "

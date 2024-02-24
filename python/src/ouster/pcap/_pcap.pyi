@@ -7,7 +7,7 @@ Type annotations for pcap python bindings.
 
 from typing import (overload, List, Callable)
 
-from ..client.data import BufferT
+from ouster.client.data import BufferT
 
 
 class playback_handle:

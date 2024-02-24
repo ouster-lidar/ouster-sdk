@@ -44,11 +44,14 @@ from .data import destagger
 from .data import PacketValidationFailure, PacketIdError, PacketSizeError
 from .data import packet_ts
 
+from .scan_source import ScanSource
+from .multi_scan_source import MultiScanSource
+from .scan_source_adapter import ScanSourceAdapter
+
 from .core import ClientError
 from .core import ClientTimeout
 from .core import ClientOverflow
 from .core import PacketSource
-from .core import ScanSource
 from .core import Packets
 from .core import Sensor
 from .core import Scans

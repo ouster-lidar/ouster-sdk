@@ -17,10 +17,13 @@ from more_itertools import take
 from typing_extensions import Protocol
 
 from . import _client
-from ._client import (SensorInfo, LidarScan, UDPProfileLidar)
-from .data import (ChanField, FieldDType, ImuPacket, LidarPacket, Packet,
-                   PacketIdError)
+from ouster.client._client import SensorInfo, LidarScan
+from ouster import client
+from .data import (ChanField, FieldDType, ImuPacket,
+                   LidarPacket, Packet, PacketIdError)
 import numpy as np
+
+from ouster.client import ScanSource
 
 
 class ClientError(Exception):
@@ -58,25 +61,8 @@ class PacketSource(Protocol):
         """Release the underlying resource, if any."""
         ...
 
-
-class ScanSource(Protocol):
-    """Represents a single-sensor data stream."""
-
-    def __iter__(self) -> Iterator[LidarScan]:
-        """A ScanSource supports ``Iterable[LidarScan]``.
-
-        Currently defined explicitly due to:
-        https://github.com/python/typing/issues/561
-        """
-        ...
-
     @property
-    def metadata(self) -> SensorInfo:
-        """Metadata associated with the scan stream."""
-        ...
-
-    def close(self) -> None:
-        """Release the underlying resource, if any."""
+    def is_live(self):
         ...
 
 
@@ -105,6 +91,10 @@ class Packets(PacketSource):
 
     def close(self) -> None:
         pass
+
+    @property
+    def is_live(self) -> bool:
+        return False
 
 
 class Sensor(PacketSource):
@@ -165,7 +155,8 @@ class Sensor(PacketSource):
         Raises:
             ClientError: If initializing the client fails.
         """
-        self._connection = _client.SensorConnection(hostname, lidar_port, imu_port)
+        self._connection = _client.SensorConnection(
+            hostname, lidar_port, imu_port)
         self._timeout = timeout
         self._overflow_err = _overflow_err
         self._flush_before_read = _flush_before_read
@@ -183,7 +174,8 @@ class Sensor(PacketSource):
             self._metadata = metadata
         else:
             self._fetch_metadata()
-            self._metadata = SensorInfo(self._fetched_meta, self._skip_metadata_beam_validation)
+            self._metadata = SensorInfo(
+                self._fetched_meta, self._skip_metadata_beam_validation)
         self._pf = _client.PacketFormat.from_info(self._metadata)
         self._cli = _client.Client(self._connection, buf_size, self._pf.lidar_packet_size,
                                    buf_size, self._pf.imu_packet_size)
@@ -195,6 +187,10 @@ class Sensor(PacketSource):
         # Use args to avoid capturing self causing circular reference
         self._producer = Thread(target=self._cli.produce)
         self._producer.start()
+
+    @property
+    def is_live(self) -> bool:
+        return True
 
     @property
     def lidar_port(self) -> int:
@@ -210,7 +206,7 @@ class Sensor(PacketSource):
             timeout_sec = ceil(timeout)
         if not self._fetched_meta:
             self._fetched_meta = self._connection.get_metadata(
-                legacy=self._legacy_format, timeout_sec = timeout_sec)
+                legacy=self._legacy_format, timeout_sec=timeout_sec)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 
@@ -407,9 +403,9 @@ class Scans(ScanSource):
         self._timed_out = False
         self._max_latency = _max_latency
         # used to initialize LidarScan
-        self._fields: Union[Dict[ChanField, FieldDType], UDPProfileLidar] = (
+        self._fields: client.FieldTypes = (
             fields if fields is not None else
-            self._source.metadata.format.udp_profile_lidar)
+            client.get_field_types(self._source.metadata.format.udp_profile_lidar))
 
     def __iter__(self) -> Iterator[LidarScan]:
         """Get an iterator."""
@@ -453,7 +449,8 @@ class Scans(ScanSource):
                 return
 
             if isinstance(packet, LidarPacket):
-                ls_write = ls_write or LidarScan(h, w, self._fields, columns_per_packet)
+                ls_write = ls_write or LidarScan(
+                    h, w, self._fields, columns_per_packet)
 
                 if batch(packet, ls_write):
                     # Got a new frame, return it and start another
@@ -481,6 +478,44 @@ class Scans(ScanSource):
     def metadata(self) -> SensorInfo:
         """Return metadata from the underlying PacketSource."""
         return self._source.metadata
+
+    @property
+    def is_live(self) -> bool:
+        return self._source.is_live
+
+    @property
+    def is_seekable(self) -> bool:
+        return False
+
+    @property
+    def is_indexed(self) -> bool:
+        return False
+
+    @property
+    def fields(self) -> client.FieldTypes:
+        return self._fields
+
+    @property
+    def scans_num(self) -> int:
+        return 0
+
+    def __len__(self) -> int:
+        return 0
+
+    def _seek(self, int) -> None:
+        raise RuntimeError(
+            "can not invoke __getitem__ on non-indexed source")
+
+    def __getitem__(self, key: Union[int, slice]
+                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+        raise RuntimeError(
+            "can not invoke __getitem__ on non-indexed source")
+
+    def set_playback_speed(self, int) -> None:
+        pass
+
+    def __del__(self) -> None:
+        pass
 
     @classmethod
     def sample(

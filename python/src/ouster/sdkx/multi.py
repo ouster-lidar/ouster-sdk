@@ -12,13 +12,17 @@ from threading import Lock
 
 import ouster.client as client
 import ouster.client._client as _client
-from ouster.client import (SensorInfo, PacketIdError, packet_ts)
+from ouster.client import (SensorInfo, LidarScan, PacketIdError, packet_ts)
+from ouster.client import ScanSource
 from ouster.client.data import Packet, LidarPacket, ImuPacket
 import ouster.pcap._pcap as _pcap
 
 from functools import partial
 from ouster.pcap.pcap import _guess_ports, _packet_info_stream
 from ouster.sdkx.util import resolve_extrinsics
+
+from ouster.osf._osf import MessageRef
+from ouster.pcap._pcap import PcapIndex
 
 
 logger = logging.getLogger("multi-logger")
@@ -48,33 +52,28 @@ class PacketMultiSource(Protocol):
         """Metadata associated with the packet streams."""
         ...
 
+    @property
+    def is_live(self) -> bool:
+        ...
+
+    @property
+    def is_seekable(self) -> bool:
+        ...
+
+    @property
+    def is_indexed(self) -> bool:
+        ...
+
+    def restart(self) -> None:
+        """Restart playback, only relevant to non-live sources"""
+        ...
+
     def close(self) -> None:
         """Release the underlying resources, if any."""
         ...
 
 
-class ScanMultiSource(Protocol):
-    """Multi sensor data source"""
-
-    def __iter__(self) -> Iterator[List[Optional[client.LidarScan]]]:
-        """A ScanMultiSource supports ``Iterable[List[Optional[LidarScan]]]``.
-
-        Currently defined explicitly due to:
-        https://github.com/python/typing/issues/561
-        """
-        ...
-
-    @property
-    def metadata(self) -> List[client.SensorInfo]:
-        """Metadata associated with the data stream."""
-        ...
-
-    def close(self) -> None:
-        """Release the underlying resource, if any."""
-        ...
-
-
-class PcapMulti(PacketMultiSource):
+class PcapMultiPacketReader(PacketMultiSource):
     """Read a sensors packet streams out of a pcap file as an iterator."""
 
     _metadata: List[SensorInfo]
@@ -88,6 +87,7 @@ class PcapMulti(PacketMultiSource):
                  metadata_paths: List[str],
                  *,
                  rate: float = 0.0,
+                 index: bool = False,
                  _soft_id_check: bool = False,
                  _resolve_extrinsics: bool = False):
         """Read a single sensor data stream from a single packet capture file.
@@ -96,6 +96,7 @@ class PcapMulti(PacketMultiSource):
             metadata_paths: List of sensors metadata files
             pcap_path: File path of recorded pcap
             rate: Output packets in real time, if non-zero
+            index: Should index the source, may take extra time on startup
             _soft_id_check: if True, don't skip lidar packets buffers on
                             init_id mismatch
             _resolve_extrinsics: if True attempts to find the extrinsics source
@@ -103,7 +104,7 @@ class PcapMulti(PacketMultiSource):
         """
         self._metadata = []
         self._metadata_json = []
-
+        self._indexed = index
         self._soft_id_check = _soft_id_check
         self._id_error_count = 0
 
@@ -161,12 +162,14 @@ class PcapMulti(PacketMultiSource):
                     self._extrinsics_source[idx] = f"lookup:{ext_src}"
 
         self._rate = rate
-        self._handle = _pcap.replay_initialize(pcap_path)
+        self._reader = _pcap.IndexedPcapReader(pcap_path, self._metadata)
+        if self._indexed:
+            self._reader.build_index()
         self._lock = Lock()
 
     def __iter__(self) -> Iterator[Tuple[int, Packet]]:
         with self._lock:
-            if self._handle is None:
+            if self._reader is None:
                 raise ValueError("I/O operation on closed packet source")
 
         buf = bytearray(2**16)
@@ -176,13 +179,16 @@ class PcapMulti(PacketMultiSource):
         pcap_start_ts = None
         while True:
             with self._lock:
-                if not (self._handle and
-                        _pcap.next_packet_info(self._handle, packet_info)):
+                if not (self._reader and
+                        self._reader.next_packet()):
                     break
+                packet_info = self._reader.current_info()
                 if packet_info.dst_port not in self._port_info:
                     # not lidar or imu packet that we are interested in
                     continue
-                n = _pcap.read_packet(self._handle, buf)
+                packet_data = self._reader.current_data()
+                n = len(packet_data)
+                buf = packet_data.tobytes()
 
             # if rate is set, read in 'real time' simulating UDP stream
             # TODO: factor out into separate packet iterator utility
@@ -213,29 +219,51 @@ class PcapMulti(PacketMultiSource):
                 # of bad packet size or init_id/sn errors
                 pass
 
-    def __len__(self) -> int:
-        """Number of sensors."""
-        return len(self._metadata)
-
     @property
     def metadata(self) -> List[SensorInfo]:
         """Metadata associated with the packet."""
         return self._metadata
 
     @property
+    def is_live(self) -> bool:
+        return False
+
+    @property
+    def is_seekable(self) -> bool:
+        return self._indexed
+
+    @property
+    def is_indexed(self) -> bool:
+        return self._indexed
+
+    @property
+    def _index(self) -> PcapIndex:
+        with self._lock:
+            return self._reader.get_index() if self._reader else None
+
+    def seek(self, offset: int) -> None:
+        self._reader.seek(offset)
+
+    # diagnostics
+    @property
     def id_error_count(self) -> int:
         return self._id_error_count
 
+    # TODO: Do we need this info
     @property
     def extrinsics_source(self) -> int:
         return self._extrinsics_source
 
+    def restart(self) -> None:
+        """Restart playback, only relevant to non-live sources"""
+        with self._lock:
+            if self._reader:
+                self._reader.reset()
+
     def close(self) -> None:
         """Release Pcap resources. Thread-safe."""
         with self._lock:
-            if self._handle is not None:
-                _pcap.replay_uninitialize(self._handle)
-                self._handle = None
+            self._reader = None
 
 
 def configure_sensor_multi(
@@ -265,6 +293,7 @@ def configure_sensor_multi(
     return configs
 
 
+# TODO: schedule for removal
 class PacketMultiWrapper(PacketMultiSource):
     """Wrap PacketSource to the PacketMultiSource interface"""
 
@@ -295,29 +324,7 @@ class PacketMultiWrapper(PacketMultiSource):
             return -1
 
 
-class ScansMultiWrapper(ScanMultiSource):
-    """Wrap ScanSource to the ScanMultiSource interface"""
-
-    def __init__(self,
-                 source: Union[client.ScanSource, ScanMultiSource]) -> None:
-        self._source = source
-
-    def __iter__(self) -> Iterator[List[Optional[client.LidarScan]]]:
-        for scan in self._source:
-            yield [scan] if isinstance(scan, client.LidarScan) else scan
-
-    @property
-    def metadata(self) -> List[SensorInfo]:
-        """Metadata associated with the packet streams."""
-        meta = self._source.metadata
-        return [meta] if isinstance(meta, client.SensorInfo) else meta
-
-    def close(self) -> None:
-        """Release the underlying resource, if any."""
-        self._source.close()
-
-
-class SensorMulti(PacketMultiSource):
+class SensorMultiPacketReader(PacketMultiSource):
     """Multi sensor packet source"""
 
     def __init__(self,
@@ -405,7 +412,7 @@ class SensorMulti(PacketMultiSource):
             timeout_sec = ceil(timeout)
         if not self._fetched_meta:
             self._fetched_meta = [c.get_metadata(
-                legacy=False, timeout_sec = timeout_sec) for c in self._connections]
+                legacy=False, timeout_sec=timeout_sec) for c in self._connections]
             if not all(self._fetched_meta):
                 raise client.ClientError("Failed to collect metadata. UPS :(")
 
@@ -423,14 +430,17 @@ class SensorMulti(PacketMultiSource):
                     f"raising ValueError, hmmm ...")
             if e.state & _client.ClientState.LIDAR_DATA:
                 p = self._cli.packet(e)
-                packet = LidarPacket(p._data, self._metadata[e.source], p.capture_timestamp)
+                packet = LidarPacket(
+                    p._data, self._metadata[e.source], p.capture_timestamp)
                 return (e.source, packet)
             elif e.state & _client.ClientState.IMU_DATA:
                 p = self._cli.packet(e)
-                packet = ImuPacket(p._data, self._metadata[e.source], p.capture_timestamp)
+                packet = ImuPacket(
+                    p._data, self._metadata[e.source], p.capture_timestamp)
                 return (e.source, packet)
             elif e.state == _client.ClientState.TIMEOUT:
-                raise client.ClientTimeout(f"No packets received within {self._timeout}s")
+                raise client.ClientTimeout(
+                    f"No packets received within {self._timeout}s")
             elif e.state & _client.ClientState.ERROR:
                 raise client.ClientError("Client returned ERROR state")
             elif e.state & _client.ClientState.EXIT:
@@ -454,7 +464,9 @@ class SensorMulti(PacketMultiSource):
         if self._flush_before_read:
             flush = self._flush_impl(self._flush_frames)
         else:
+            # autopep8: off
             flush = lambda _: False
+            # autopep8: on
 
         while True:
             try:
@@ -508,14 +520,21 @@ class SensorMulti(PacketMultiSource):
         return self._metadata
 
     @property
-    def buf_use(self) -> int:
-        """Size of the buffers that is actially used"""
-        return self._cli.size
+    def is_live(self) -> bool:
+        return True
 
     @property
-    def id_error_count(self) -> List[int]:
-        """Number of PacketIdError accumulated per connection/sensor"""
-        return self._id_error_count
+    def is_seekable(self) -> bool:
+        return False
+
+    @property
+    def is_indexed(self) -> bool:
+        return False
+
+    def restart(self) -> None:
+        # NOTE[self]: currently we ignore the call for a live sensor but one
+        #  could interpret this invocation as a sensor "reinit" command
+        pass
 
     def close(self) -> None:
         """Shut down producer thread and close network connections.
@@ -533,136 +552,61 @@ class SensorMulti(PacketMultiSource):
     def __del__(self) -> None:
         self.close()
 
-
-class ScansMulti(ScanMultiSource):
-    """Multi sensor LidarScan source."""
-
-    def __init__(
-        self,
-        source: PacketMultiSource,
-        *,
-        dt: int = 10**8,
-        unsynced: bool = False,
-        complete: bool = False,
-        fields: Optional[List[client.FieldTypes]] = None
-    ) -> None:
-        """
-        Args:
-            source: packet multi source
-            dt: max time difference between scans in the collated scan (i.e.
-                time period at which every new collated scan is released/cut),
-                default is 0.1s
-            unsynced: set to True if sensor streams are not synced, in this
-                      case the resulting scans in collate will be combined
-                      disregarding the time and packed using FIFO
-            complete: set to True to only release complete scans
-            fields: specify which channel fields to populate on LidarScans
-        """
-        self._source = source
-        self._complete = complete
-        self._fields = fields or [
-            client.get_field_types(sinfo) for sinfo in self._source.metadata
-        ]
-        self._dt = dt
-        self._unsynced = unsynced
-
-    def __iter__(self) -> Iterator[List[Optional[client.LidarScan]]]:
-        return collate_scans(self._async_iter(), self.metadata, dt=self._dt,
-                             use_unsynced=self._unsynced)
-
-    def _async_iter(self) -> Iterator[Tuple[int, client.LidarScan]]:
-        w = [sinfo.format.columns_per_frame for sinfo in self._source.metadata]
-        h = [sinfo.format.pixels_per_column for sinfo in self._source.metadata]
-        col_window = [
-            sinfo.format.column_window for sinfo in self._source.metadata
-        ]
-        columns_per_packet = [
-            sinfo.format.columns_per_packet for sinfo in self._source.metadata
-        ]
-
-        ls_write = [None] * len(self._source.metadata)
-
-        pf = [
-            client._client.PacketFormat.from_info(sinfo)
-            for sinfo in self._source.metadata
-        ]
-        batch = [client._client.ScanBatcher(wi, pfi) for wi, pfi in zip(w, pf)]
-
-        for idx, packet in self._source:
-            if isinstance(packet, client.LidarPacket):
-                ls_write[idx] = ls_write[idx] or client._client.LidarScan(
-                    h[idx], w[idx], self._fields[idx], columns_per_packet[idx])
-                if batch[idx](packet._data, packet_ts(packet), ls_write[idx]):
-                    if not self._complete or ls_write[idx].complete(
-                            col_window[idx]):
-                        yield idx, ls_write[idx]
-                    ls_write[idx] = None
-
-        # return the last not fully cut scans in the sensor timestamp order if
-        # they satisfy the completeness criteria
-        last_scans = sorted(
-            [(idx, ls) for idx, ls in enumerate(ls_write) if ls is not None],
-            key=lambda si: client.first_valid_packet_ts(si[1]))
-        while last_scans:
-            idx, ls = last_scans.pop(0)
-            if not self._complete or ls.complete(col_window[idx]):
-                yield idx, ls
+    # these methods are for diagnostics
+    @property
+    def buf_use(self) -> int:
+        """Size of the buffers that is actially used"""
+        return self._cli.size
 
     @property
-    def metadata(self) -> List[client.SensorInfo]:
-        return self._source.metadata
+    def id_error_count(self) -> List[int]:
+        """Number of PacketIdError accumulated per connection/sensor"""
+        return self._id_error_count
 
 
 def collate_scans(
-    source: Iterator[Tuple[int, client.LidarScan]],
-    metadata: List[client.SensorInfo],
+    source: Iterator[Tuple[int, Union[LidarScan, MessageRef]]],
+    sensors_count: int,
+    get_ts: Callable[[Union[LidarScan, MessageRef]], int],
     *,
-    dt: int = 10**8,
-    use_unsynced: bool = False
-) -> Iterator[List[Optional[client.LidarScan]]]:
+    dt: int = 10**8
+) -> Iterator[List[Optional[LidarScan]]]:
     """Collate by sensor idx with a cut every `dt` (ns) time length.
 
     Assuming that multi sensor packets stream are PTP synced, so the sensor
     time of LidarScans don't have huge deltas in time, though some latency
     of packets receiving (up to dt) should be ok.
 
-    If sensors are not time synced then `use_unsynced` should be set to True.
-
     Args:
         source: data stream with scans
+        sensors_count: number of sensors generating the stream of scans
         dt: max time difference between scans in the collated scan (i.e.
             time period at which every new collated scan is released/cut),
             default is 0.1 s
-        use_unsynced: set to True if sensor streams are not synced, in this
-                      case the resulting scans in collate will be combined
-                      disregarding the time and packed using FIFO
     Returns:
         List of LidarScans elements
     """
-    sensors_num = len(metadata)
     min_ts = -1
     max_ts = -1
-    collated = [None] * sensors_num
-    for idx, ls in source:
-        ts = client.first_valid_packet_ts(ls)
-        if min_ts < 0 or max_ts < 0 or (not use_unsynced and
-                                        (ts >= min_ts + dt or
-                                         ts < max_ts - dt)):
+    collated = [None] * sensors_count
+    for idx, m in source:
+        ts = get_ts(m)
+        if min_ts < 0 or max_ts < 0 or (
+                ts >= min_ts + dt or ts < max_ts - dt):
             if any(collated):
                 # process collated (reached dt boundary, if used)
                 yield collated
-                collated = [None] * sensors_num
+                collated = [None] * sensors_count
 
             min_ts = max_ts = ts
 
         if collated[idx]:
             # process collated (reached the existing scan)
             yield collated
-            collated = [None] * sensors_num
-
+            collated = [None] * sensors_count
             min_ts = max_ts = ts
 
-        collated[idx] = ls
+        collated[idx] = m
 
         if ts < min_ts:
             min_ts = ts
@@ -674,3 +618,156 @@ def collate_scans(
     if any(collated):
         # process collated (the very last one, if any)
         yield collated
+
+
+class ScansMulti(client.MultiScanSource):
+    """Multi LidarScan source."""
+
+    def __init__(
+        self,
+        source: PacketMultiSource,
+        *,
+        dt: int = 10**8,
+        complete: bool = False,
+        cycle: bool = False,
+        fields: Optional[List[client.FieldTypes]] = None
+    ) -> None:
+        """
+        Args:
+            source: packet multi source
+            dt: max time difference between scans in the collated scan (i.e.
+                time period at which every new collated scan is released/cut),
+                default is 0.1s
+            complete: set to True to only release complete scans
+            cycle: repeat infinitely after iteration is finished is True.
+                    in case source refers to a live sensor then this parameter
+                    has no effect.
+            fields: specify which channel fields to populate on LidarScans
+        """
+        self._source = source
+        self._dt = dt
+        self._complete = complete
+        self._cycle = cycle
+        # NOTE[self]: this fields override property may need to double checked
+        # for example, what would happen if the length of override doesn't
+        # match with the actual underlying metadata size. Is this a supported
+        # behavior? For now throwing an error if they don't match in size.
+        file_fields = [client.get_field_types(
+            sinfo) for sinfo in self._source.metadata]
+        if fields:
+            if len(fields) != len(file_fields):
+                raise ValueError("Size of Field override doens't match")
+            self._fields = fields
+        else:
+            self._fields = file_fields
+
+    @property
+    def sensors_count(self) -> int:
+        return len(self._source.metadata)
+
+    @property
+    def metadata(self) -> List[client.SensorInfo]:
+        return self._source.metadata
+
+    @property
+    def is_live(self) -> bool:
+        return self._source.is_live
+
+    @property
+    def is_seekable(self) -> bool:
+        return self._source.is_seekable
+
+    @property
+    def is_indexed(self) -> bool:
+        return self._source.is_indexed
+
+    @property
+    def fields(self) -> List[client.FieldTypes]:
+        return self._fields
+
+    @property
+    def scans_num(self) -> List[int]:
+        if self.is_live or not self.is_indexed:
+            return [0] * self.sensors_count
+        raise NotImplementedError
+
+    def __len__(self) -> int:
+        if self.is_live or not self.is_indexed:
+            return 0
+        raise NotImplementedError
+
+    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+        return collate_scans(self._async_iter(True, self._cycle), self.sensors_count,
+                             client.first_valid_packet_ts,
+                             dt=self._dt)
+
+    def _async_iter(self, restart=True, cycle=False) -> Iterator[Tuple[int, LidarScan]]:
+        w = [int] * self.sensors_count
+        h = [int] * self.sensors_count
+        col_window = [int] * self.sensors_count
+        columns_per_packet = [int] * self.sensors_count
+        pf = [None] * self.sensors_count
+        ls_write = [None] * self.sensors_count
+        batch = [None] * self.sensors_count
+
+        for i, sinfo in enumerate(self.metadata):
+            w[i] = sinfo.format.columns_per_frame
+            h[i] = sinfo.format.pixels_per_column
+            col_window[i] = sinfo.format.column_window
+            columns_per_packet[i] = sinfo.format.columns_per_packet
+            pf[i] = client._client.PacketFormat.from_info(sinfo)
+            batch[i] = client._client.ScanBatcher(w[i], pf[i])
+
+        if restart:
+            self._source.restart()  # start from the beginning
+        while True:
+            for idx, packet in self._source:
+                if isinstance(packet, client.LidarPacket):
+                    ls_write[idx] = ls_write[idx] or client._client.LidarScan(
+                        h[idx], w[idx], self._fields[idx], columns_per_packet[idx])
+                    if batch[idx](packet._data, packet_ts(packet), ls_write[idx]):
+                        if self._complete and not ls_write[idx].complete(col_window[idx]):
+                            ls_write[idx] = None
+                        yield idx, ls_write[idx]
+
+            # TODO[UN]: revisit this piece
+            # return the last not fully cut scans in the sensor timestamp order if
+            # they satisfy the completeness criteria
+            last_scans = sorted(
+                [(idx, ls) for idx, ls in enumerate(ls_write) if ls is not None],
+                key=lambda si: client.first_valid_packet_ts(si[1]))
+            while last_scans:
+                idx, ls = last_scans.pop(0)
+                if not self._complete or ls.complete(col_window[idx]):
+                    yield idx, ls
+
+            if cycle:
+                self._source.restart()
+            else:
+                break
+
+    def _seek(self, offset: int) -> None:
+        if not self.is_seekable:
+            raise RuntimeError("can not invoke _seek on non-seekable source")
+        self._source.seek(offset)
+
+    def __getitem__(self, key: Union[int, slice]
+                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+
+        if not self.is_indexed:
+            raise RuntimeError(
+                "can not invoke __getitem__ on non-indexed source")
+        raise NotImplementedError
+
+    def set_playback_speed(self, int) -> None:
+        raise NotImplementedError
+
+    def close(self) -> None:
+        self._source.close()
+
+    def __del__(self) -> None:
+        self.close()
+
+    def single_source(self, stream_idx: int) -> ScanSource:
+        from ouster.client.scan_source_adapter import ScanSourceAdapter
+        return ScanSourceAdapter(self, stream_idx)

@@ -1,32 +1,30 @@
+from typing import List, Optional, Union, cast, Iterator, Tuple
+
 from ouster import client
+from ouster.client.data import FieldTypes
+from ouster.client import ScanSource
+from ouster.client._client import LidarScan
 import ouster.osf as osf
 
-import numpy as np
-from typing import cast, Iterator, Union, Tuple, List
 
-
-class Scans(client.ScanSource):
+class Scans(ScanSource):
     """An iterable stream of ``LidarScan`` read from OSF file (for the first available sensor)."""
 
     def __init__(self,
                  osf_file: str,
                  *,
                  cycle: bool = False,
-                 start_ts: int = 0,
                  sensor_id: int = 0):
         """
         Args:
             osf_file: OSF filename as scans source
             cycle: repeat infinitely after iteration is finished is True
-            start_ts: return lidar scans starting from the specified start_ts
-                      (in nanoseconds)
             sensor_id: id of the sensor which LidarScan stream data to read
             (i.e. id of the metadata entry with ``osf.LidarSensor`` type).
             0 (default) means that first LidarSensor from the OSF is used.
         """
         self._reader = osf.Reader(osf_file)
         self._cycle = cycle
-        self._start_ts = start_ts
         self._sensor_id = sensor_id
 
         if self._sensor_id:
@@ -77,7 +75,7 @@ class Scans(client.ScanSource):
         while True:
             # TODO[pb]: Read only specified _sensor_stream_id stream
             for msg in self._reader.messages([self._sensor_stream_id],
-                                             self._start_ts,
+                                             self._reader.start_ts,
                                              self._reader.end_ts):
                 if msg.id == self._sensor_stream_id:
                     scan = msg.decode()
@@ -95,90 +93,38 @@ class Scans(client.ScanSource):
         """Return metadata of a Lidar Sensor used."""
         return self._sensor.info
 
+    @property
+    def is_live(self) -> bool:
+        return False
 
-def resolve_field_types(
-    metadata: Union[client.SensorInfo, List[client.SensorInfo]],
-    flags: bool = False,
-    raw_headers: bool = False,
-    raw_fields: bool = False
-) -> Union[client.FieldTypes, List[client.FieldTypes]]:
-    """Resolving optimal field types for OSF LidarScanStream encoder
+    @property
+    def is_seekable(self) -> bool:
+        return False
 
-    Shrinks the sizes of the LEGACY UDPLidarProfile fields and extends with
-    FLAGS/FLAGS2 if `flags=True`.
+    @property
+    def is_indexed(self) -> bool:
+        return False    # TODO: for now we just use False no matter what
 
-    Args:
-        metadata: single SensorInfo or a list of SensorInfo used resolve
-                  UDPLidarProfile
-        flags: True if augment the resulting fields with FLAGS/FLAGS2
-        raw_headers: True if RAW_HEADERS field should be included (i.e. all
-                     lidar packet headers and footers will be added during
-                     batching)
-        raw_fields: True if RAW32_WORDx fields should be included
+    @property
+    def fields(self) -> FieldTypes:
+        return client.get_field_types(self.metadata)
 
-    Returns:
-        field types of a typical LidarScan with a requested optional fields.
-    """
+    @property
+    def scans_num(self) -> int:
+        return 0    # TODO: implement
 
-    single_result = False
-    if not isinstance(metadata, list):
-        metadata = [metadata]
-        single_result = True
+    def __len__(self) -> int:
+        return 0    # TODO: implement
 
-    field_types = []
+    def _seek(self, key: int) -> None:
+        pass
 
-    for i, m in enumerate(metadata):
-        ftypes = client.get_field_types(m)
-        profile = m.format.udp_profile_lidar
+    def __getitem__(self, key: Union[int, slice]
+                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+        raise NotImplementedError
 
-        # HACK: Overwrite fields to reduced datatypes for LEGACY (saves ~15% of
-        # space in a file)
-        if profile == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY:
-            ftypes.update(
-                dict({
-                    client.ChanField.RANGE: np.uint32,
-                    client.ChanField.SIGNAL: np.uint16,
-                    client.ChanField.REFLECTIVITY: np.uint16,
-                    client.ChanField.NEAR_IR: np.uint16
-                }))
+    def set_playback_speed(self, int) -> None:
+        pass
 
-        if flags:
-            ftypes.update({client.ChanField.FLAGS: np.uint8})
-            if client.ChanField.RANGE2 in ftypes:
-                ftypes.update({client.ChanField.FLAGS2: np.uint8})
-
-        if raw_fields:
-            ftypes.update({client.ChanField.RAW32_WORD1: np.uint32})
-            if profile != client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8:
-                # not Low Bandwidth
-                ftypes.update(
-                    {client.ChanField.RAW32_WORD2: np.uint32})
-                ftypes.update(
-                    {client.ChanField.RAW32_WORD3: np.uint32})
-            if client.ChanField.RANGE2 in ftypes:
-                ftypes.update(
-                    {client.ChanField.RAW32_WORD4: np.uint32})
-            if profile == client.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL:
-                ftypes.update(
-                    dict({
-                        client.ChanField.RAW32_WORD4: np.uint32,
-                        client.ChanField.RAW32_WORD5: np.uint32
-                    }))
-
-        if raw_headers:
-            # getting the optimal field type for RAW_HEADERS
-            pf = client._client.PacketFormat.from_info(m)
-            h = pf.pixels_per_column
-            raw_headers_space = (pf.packet_header_size +
-                                 pf.packet_footer_size + pf.col_header_size +
-                                 pf.col_footer_size)
-            dtype = [
-                np.uint8,
-                np.uint16,
-                np.uint32
-            ][int(raw_headers_space / h)]
-            ftypes.update({client.ChanField.RAW_HEADERS: dtype})  # type: ignore
-
-        field_types.append(ftypes)
-
-    return field_types[0] if single_result else field_types
+    def __del__(self) -> None:
+        pass

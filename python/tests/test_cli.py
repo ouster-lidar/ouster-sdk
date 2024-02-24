@@ -11,7 +11,7 @@ from click.testing import CliRunner
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins.io_type import io_type_from_extension, io_type_from_magic, OusterIoType
-from ouster.cli.plugins import source, discover, source_osf  # noqa: F401
+from ouster.cli.plugins import source, source_osf  # noqa: F401
 import ouster.pcap
 
 from tests.conftest import PCAPS_DATA_DIR, OSFS_DATA_DIR

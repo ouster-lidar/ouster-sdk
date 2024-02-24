@@ -748,6 +748,9 @@ class ScansAccumulator:
 
         # refine available modes based on the current scan
         ls = self._scan[self._sensor_idx]
+        if ls is None:
+            return
+
         self._available_modes = list(
             filter(lambda midx: self._cloud_modes[midx].enabled(ls),
                    self._available_modes))

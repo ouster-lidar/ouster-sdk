@@ -5,16 +5,16 @@ from pprint import pprint
 from typing import Iterator, Dict, cast, Optional, List, Tuple, Union
 import numpy as np
 
-from ouster.sdk.util import resolve_metadata, resolve_metadata_multi
-from ouster.sdkx.multi import PcapMulti, ScansMulti  # type: ignore
+from ouster.sdkx.pcap_scan_source import PcapScanSource  # type: ignore
 from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
-from ouster.osf.multi import ScansMultiReader  # type: ignore
+from ouster.osf.multi import OsfScanSource  # type: ignore
 
 
 def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
                        chunk_size: int, flags: bool, raw_headers: bool,
                        raw_fields: bool, extrinsics: Optional[List[float]],
                        multi: bool, soft_id_check: bool) -> None:
+    # TODO: deprecate the multi parameter
     """
     Convert PCAP file to OSF.
     """
@@ -24,40 +24,26 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
-    metadata_paths: List[str] = []
-
-    if not multi:
-        temp_path = resolve_metadata(file, meta)
-        if temp_path is not None:
-            metadata_paths.append(temp_path)
-    else:
-        metadata_paths = resolve_metadata_multi(file)
-
     if not output:
         output = os.path.splitext(os.path.basename(file))[0] + '.osf'
 
+    scan_source = PcapScanSource(file,
+                                 flags=flags,
+                                 raw_headers=raw_headers,
+                                 raw_fields=raw_fields,
+                                 _soft_id_check=soft_id_check)
+
     click.echo(f"Converting: \n"
                f"  PCAP file: {file}\n"
-               f"  with json files: {metadata_paths}\n"
+               f"  with json files: {scan_source._metadata_paths}\n"
                f"  to OSF file: {output}\n"
                f"  chunks_layout: STREAMING, chunks_size: "
                f"{chunk_size if chunk_size else 'DEFAULT'},"
                f" FLAGS: {flags}, RAW fields: {raw_fields}\n")
 
-    source = PcapMulti(file,
-                       metadata_paths=metadata_paths,
-                       _soft_id_check=soft_id_check,
-                       _resolve_extrinsics=True)
-
-    if extrinsics and len(source) == 1:
-        source.metadata[0].extrinsic = np.array(extrinsics).reshape((4, 4))
-        source.extrinsics_source[0] = "osf_from_pcap_param"
-
-    # if any extrinsics were found, print them
-    for ext_source, m in zip(source.extrinsics_source, source._metadata):
-        if ext_source:
-            click.echo(f"Extrinsics set for {m.sn} "
-                       f"(from {ext_source}):\n{m.extrinsic}")
+    if extrinsics and scan_source.sensors_count == 1:
+        scan_source._source.metadata[0].extrinsic = np.array(extrinsics).reshape((4, 4))
+        scan_source._source.extrinsics_source[0] = "osf_from_pcap_param"
 
     # Using osf.Writer to save pcap to OSF
     writer = osf.Writer(output, "from_pcap pythonic", chunk_size)
@@ -66,7 +52,7 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
     sensor_id = dict()
 
     click.echo("\nUsing sensors data:")
-    for idx, sinfo in enumerate(source.metadata):
+    for idx, sinfo in enumerate(scan_source.metadata):
         lidar_sensor_meta = osf.LidarSensor(sinfo.original_string())
         sensor_id[idx] = writer.addMetadata(lidar_sensor_meta)
         click.echo(
@@ -75,7 +61,7 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
 
     click.echo()
 
-    for idx, ext_source in enumerate(source.extrinsics_source):
+    for idx, ext_source in enumerate(scan_source._source.extrinsics_source):
 
         if ext_source is None:
             # skip extrinsics if they weren't explicitly set during previous
@@ -83,7 +69,7 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
             continue
 
         # add Extrinsics to OSF for a corresponding sensor
-        sinfo = source.metadata[idx]
+        sinfo = scan_source.metadata[idx]
         extrinsics_meta = osf.Extrinsics(sinfo.extrinsic, sensor_id[idx],
                                          ext_source)
         writer.addMetadata(extrinsics_meta)
@@ -91,38 +77,36 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
             f"Adding extrinsics for [{idx};{sinfo.sn}->{sensor_id[idx]}]: "
             f"from: {ext_source}:\n{sinfo.extrinsic}")
 
-    # get the field types per sensor with flags/raw_fields if specified
-    field_types = osf.resolve_field_types(source.metadata,
-                                          flags=flags,
-                                          raw_headers=raw_headers,
-                                          raw_fields=raw_fields)
-
     click.echo()
 
-    for idx, sinfo in enumerate(source.metadata):
+    for idx, sinfo in enumerate(scan_source.metadata):
         click.echo(f"LidarScan resolved field_types for [{idx};{sinfo.sn}]:")
-        pprint(list(field_types)[idx], indent=4)
+        pprint(list(scan_source.fields)[idx], indent=4)
 
     # OSF stream writers by type and sensor idx in multi source
     lidar_stream = {}
-
-    for idx in range(len(source)):
+    for idx in range(scan_source.sensors_count):
         lidar_stream[idx] = osf.LidarScanStream(writer, sensor_id[idx],
-                                                list(field_types)[idx])
+                                                list(scan_source.fields)[idx])
 
     # running counts of saved messages to OSF
     ls_cnt: Dict[int, int] = {}
-    for idx, _ in enumerate(list(field_types)):
+    for idx, _ in enumerate(list(scan_source.fields)):
         ls_cnt[idx] = 0
     click.echo("\nConverting PCAP to OSF ... ")
     try:
         # ask datasource to use custom fields for LidarScans thus
         # enabling FLAGS fields if they were requested via `--flags` param
-        for scan in ScansMulti(source, fields=list(field_types)):
-            for idx in range(len(scan)):
-                ts = client.first_valid_packet_ts(scan[idx])
-                lidar_stream[idx].save(ts, scan[idx])
-                ls_cnt[idx] += 1
+        for scans in scan_source:
+            for idx, scan in enumerate(scans):
+                if scan:
+                    ts = client.first_valid_packet_ts(scan)
+                    if ts:
+                        lidar_stream[idx].save(ts, scan)
+                        ls_cnt[idx] += 1
+                    else:
+                        click.echo(F"warning: stream[{idx}]/LidarScan[{ls_cnt[idx]}]"
+                                   " has no valid packet timestamp skipping..")
     except KeyboardInterrupt:
         click.echo("Interrupted! Finishing up ...")
     finally:
@@ -132,8 +116,8 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
         writer.close()
 
         # checking for bad init_ids
-        if source.id_error_count:
-            click.echo(f"WARNING: {source.id_error_count} lidar_packets with "
+        if scan_source._source.id_error_count:
+            click.echo(f"WARNING: {scan_source._id_error_count} lidar_packets with "
                        "mismatched init_id/sn were detected.")
             if not soft_id_check:
                 click.echo("NOTE: To disable strict init_id/sn checking use "
@@ -326,12 +310,6 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
 @click.option("--skip-extrinsics",
               is_flag=True,
               help="Don't use any extrinsics (leaves them at Identity)")
-@click.option("-s",
-              "--start-ts",
-              type=int,
-              required=False,
-              default=0,
-              help="Viz from the provided start timestamp (nanosecs)")
 @click.option("--sensor-id",
               type=int,
               required=False,
@@ -359,7 +337,7 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
               help="Ratio of random points of every scan to add to an overall map")
 def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
             extrinsics: Optional[List[float]], skip_extrinsics: bool,
-            start_ts: int, sensor_id: int, multi: bool, accum_num: int,
+            sensor_id: int, multi: bool, accum_num: int,
             accum_every: Optional[int], accum_every_m: Optional[float],
             accum_map: bool, accum_map_ratio: float) -> None:
     """Visualize Lidar Scan Data from an OSF file.
@@ -380,59 +358,57 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
 
     def single_viz(file: str, on_eof: str,
                    extrinsics: Optional[List[float]], skip_extrinsics: bool,
-                   start_ts: int, sensor_id: int) -> Tuple[osf.Scans, LidarScanViz]:
-        scans_source: osf.Scans
-        scans_source = osf.Scans(file,
-                                 cycle=(on_eof == 'loop'),
-                                 start_ts=start_ts,
-                                 sensor_id=sensor_id)
+                   sensor_id: int) -> Tuple[osf.Scans, LidarScanViz]:
+        scan_source: osf.Scans
+        scan_source = osf.Scans(file,
+                                cycle=(on_eof == 'loop'),
+                                sensor_id=sensor_id)
         # overwrite extrinsics of a sensor stored in OSF if --extrinsics arg is
         # provided
         if extrinsics and not skip_extrinsics:
-            scans_source.metadata.extrinsic = np.array(
+            scan_source.metadata.extrinsic = np.array(
                 extrinsics).reshape((4, 4))
             click.echo(
                 f"Overwriting sensor extrinsics to:\n"
-                f"{scans_source.metadata.extrinsic}")
+                f"{scan_source.metadata.extrinsic}")
         if skip_extrinsics:
-            scans_source.metadata.extrinsic = np.eye(4)
+            scan_source.metadata.extrinsic = np.eye(4)
             click.echo(
                 f"Setting all sensor extrinsics to Identity:\n"
-                f"{scans_source.metadata.extrinsic}")
+                f"{scan_source.metadata.extrinsic}")
 
         ls_viz: LidarScanViz
-        ls_viz = LidarScanViz(scans_source.metadata)
-        return scans_source, ls_viz
+        ls_viz = LidarScanViz(scan_source.metadata)
+        return scan_source, ls_viz
 
-    def multi_viz(file: str, on_eof: str, start_ts: int) -> Tuple[ScansMultiReader, MultiLidarScanViz]:
+    def multi_viz(file: str, on_eof: str) -> Tuple[OsfScanSource, MultiLidarScanViz]:
         # Multi sensor viz
-        scans_source: ScansMultiReader
-        reader = osf.Reader(file)
-        scans_source = ScansMultiReader(reader,
-                                        cycle=(on_eof == 'loop'),
-                                        start_ts=start_ts)
+        scan_source: OsfScanSource
+        scan_source = OsfScanSource(file,
+                                    cycle=(on_eof == 'loop'))
 
-        for idx, (sid, _) in enumerate(scans_source._sensors):
-            scans_source.metadata[idx].hostname = f"sensorid: {sid}"
+        # TODO: reconsider this?
+        for idx, (sid, _) in enumerate(scan_source._sensors):
+            scan_source.metadata[idx].hostname = f"sensorid: {sid}"
 
         ls_viz: MultiLidarScanViz
-        ls_viz = MultiLidarScanViz(scans_source.metadata, source_name=file)
-        return scans_source, ls_viz
+        ls_viz = MultiLidarScanViz(scan_source.metadata, source_name=file)
+        return scan_source, ls_viz
 
     # TODO[pb]: Switch to aligned Protocol/Interfaces that we
     # should get after some refactoring/designing
-    scans_source: Union[osf.Scans, ScansMultiReader]
+    scan_source: Union[osf.Scans, OsfScanSource]
     ls_viz: Union[LidarScanViz, MultiLidarScanViz]
 
     if not multi:
-        scans_source, ls_viz = single_viz(file, on_eof, extrinsics,
-                                          skip_extrinsics, start_ts, sensor_id)
-        scans = scans_source
+        scan_source, ls_viz = single_viz(file, on_eof, extrinsics,
+                                         skip_extrinsics, sensor_id)
+        scans = scan_source
     else:
-        scans_source, ls_viz = multi_viz(file, on_eof, start_ts)
-        scans = iter(scans_source)  # type: ignore
+        scan_source, ls_viz = multi_viz(file, on_eof)
+        scans = iter(scan_source)  # type: ignore
 
-    scans_accum = scans_accum_for_cli(scans_source.metadata,
+    scans_accum = scans_accum_for_cli(scan_source.metadata,
                                       accum_num=accum_num,
                                       accum_every=accum_every,
                                       accum_every_m=accum_every_m,

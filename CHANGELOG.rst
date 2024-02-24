@@ -22,6 +22,22 @@ Python SDK
 
 * Add support for python 3.12, including wheels on pypi
 * Updated VCPKG libraries to 2023.10.19
+* Revised python's ScanSource API:
+  * Added new ``MultiScanSource`` that supports streaming and manipulating LidarScan frames
+    from multiple concurrent LidarScan sources
+    * For non-live sources the ``MultiScanSource`` have the option to choose LidarScan(s) by index
+    or choose a subset of scans using slicing operation
+    * The ``MultiScanSource`` interface has the ability to fallback to ``ScanSource`` using the 
+      ``single_source(sensor_idx)``, ``ScanSource`` interface yield a single LidarScan on iteration
+      rather than a List
+    * The ``ScanSource`` interface obtained via ``single_source`` method supports same indexing and
+      and slicing operations as the ``MultiScanSource``
+  * Added a generic ``open_source`` that accepts sensor urls, or a path to a pcap recording
+    or an osf file
+* [BREAKING] moved ``configure_sensor`` method to ``ouster.sdkx.sensor_scan_source`` module
+* [bugfix] SimpleViz complains about missing fields
+* [bugfix] pcap_to_osf aborts when extracting a frame without proper packet timestamp 
+
 
 Known issues
 ------------

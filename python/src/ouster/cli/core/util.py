@@ -32,7 +32,7 @@ from ouster import client
 from ouster.sdk.util import resolve_metadata
 
 
-from ouster.sdkx.multi import (SensorMulti, ScansMulti, configure_sensor_multi,
+from ouster.sdkx.multi import (SensorMultiPacketReader, ScansMulti, configure_sensor_multi,
                                PacketMultiSource, PacketMultiWrapper)
 
 DEFAULT_SAMPLE_URL = 'https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip'
@@ -445,7 +445,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                                buf_size=buf_size,
                                timeout=timeout if timeout > 0 else None)
     else:
-        source = SensorMulti(hostnames,
+        source = SensorMultiPacketReader(hostnames,
                              ports=ports,
                              buf_size_secs=3.0,
                              timeout=timeout if timeout > 0 else None,

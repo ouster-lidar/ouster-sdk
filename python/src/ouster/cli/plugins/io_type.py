@@ -1,77 +1,49 @@
 import socket
 import os
-from enum import Enum
+from enum import Enum, auto
 from typing import Optional
 
 
 class OusterIoType(Enum):
-    SENSOR = 1
-    PCAP = 2
-    OSF = 3
-    ROSBAG = 4
-    CSV = 5
-    PLY = 6
-    PCD = 7
-    LAS = 8
+    SENSOR = auto()
+    PCAP = auto()
+    OSF = auto()
+    ROSBAG = auto()
+    CSV = auto()
+    PLY = auto()
+    PCD = auto()
+    LAS = auto()
 
-    def __str__(self):
-        if self.value == 1:
-            return "SENSOR"
-        if self.value == 2:
-            return "PCAP"
-        if self.value == 3:
-            return "OSF"
-        if self.value == 4:
-            return "ROSBAG"
-        if self.value == 5:
-            return "CSV"
-        if self.value == 6:
-            return "PLY"
-        if self.value == 7:
-            return "PCD"
-        if self.value == 8:
-            return "LAS"
-        return "UNKNOWN"
+    @staticmethod
+    def io_type_2_extension() -> dict:
+        return {
+            OusterIoType.PCAP: ".pcap",
+            OusterIoType.OSF: ".osf",
+            OusterIoType.ROSBAG: ".bag",
+            OusterIoType.CSV: ".csv",
+            OusterIoType.PLY: ".ply",
+            OusterIoType.PCD: ".pcd",
+            OusterIoType.LAS: ".las"
+        }
+
+    @staticmethod
+    def extension_2_io_type() -> dict:
+        return {value: key for key, value in OusterIoType.io_type_2_extension().items()}
 
 
 def extension_from_io_type(source: OusterIoType) -> Optional[str]:
     """Return a file extension for the given source type, if it's a file-based source."""
-    if source == OusterIoType.PCAP:
-        return '.pcap'
-    elif source == OusterIoType.OSF:
-        return '.osf'
-    elif source == OusterIoType.ROSBAG:
-        return '.bag'
-    elif source == OusterIoType.CSV:
-        return '.csv'
-    elif source == OusterIoType.PLY:
-        return '.ply'
-    elif source == OusterIoType.PCD:
-        return '.pcd'
-    elif source == OusterIoType.LAS:
-        return '.las'
-    return None
+    return OusterIoType.io_type_2_extension().get(source)
 
 
 def io_type_from_extension(source: str) -> OusterIoType:
     """Return an OusterIoType given the file extension for the provided file path"""
-    source_lower = source.lower()
-    if source_lower.endswith('.pcap'):
-        return OusterIoType.PCAP
-    elif source_lower.endswith('.osf'):
-        return OusterIoType.OSF
-    elif source_lower.endswith('.bag'):
-        return OusterIoType.ROSBAG
-    elif source_lower.endswith('.csv'):
-        return OusterIoType.CSV
-    elif source_lower.endswith('.ply'):
-        return OusterIoType.PLY
-    elif source_lower.endswith('.pcd'):
-        return OusterIoType.PCD
-    elif source_lower.endswith('.las'):
-        return OusterIoType.LAS
-    else:
-        raise ValueError('Expecting .pcap, .osf, .bag, .ply, .pcd, .las or .csv.')
+    ext = os.path.splitext(source)[1]
+    try:
+        return OusterIoType.extension_2_io_type()[ext.lower()]
+    except KeyError:
+        raise ValueError("Expecting", list(
+            OusterIoType.extension_2_io_type().keys()))
 
 
 def io_type_from_magic(source: str) -> Optional[OusterIoType]:
@@ -100,8 +72,7 @@ def io_type(source: str) -> OusterIoType:
         magic_type = io_type_from_magic(source)
         if magic_type:
             return magic_type
-        io_type = io_type_from_extension(source)
-        return io_type
+        return io_type_from_extension(source)
     try:
         if socket.gethostbyname(source):
             return OusterIoType.SENSOR

@@ -860,7 +860,7 @@ class LidarScan:
     frame_status: int
 
     @overload
-    def __init__(self, w: int, h: int) -> None:
+    def __init__(self, h: int, w: int) -> None:
         ...
 
     @overload
@@ -877,7 +877,7 @@ class LidarScan:
         ...
 
     @overload
-    def __init__(self, w: int, h: int, fields: Dict[ChanField, FieldDType], columns_per_packet: int) -> None:
+    def __init__(self, h: int, w: int, fields: Dict[ChanField, FieldDType], columns_per_packet: int) -> None:
         ...
 
     @property

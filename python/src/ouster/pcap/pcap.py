@@ -170,6 +170,10 @@ class Pcap(PacketSource):
                 pass
 
     @property
+    def is_live(self) -> bool:
+        return False
+
+    @property
     def metadata(self) -> SensorInfo:
         return self._metadata
 

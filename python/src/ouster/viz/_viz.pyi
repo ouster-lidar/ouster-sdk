@@ -9,7 +9,7 @@ from typing import Callable, overload, Tuple, List
 
 import numpy as np
 
-from ..client import SensorInfo
+from ouster.client import SensorInfo
 
 calref_palette: np.ndarray
 spezia_palette: np.ndarray

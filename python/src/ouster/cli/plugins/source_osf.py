@@ -81,12 +81,6 @@ def osf_info(ctx, *args, **kwargs) -> None:
 @click.option("--skip-extrinsics",
               is_flag=True,
               help="Don't use any extrinsics (leaves them at Identity)")
-@click.option("-s",
-              "--start-ts",
-              type=int,
-              required=False,
-              default=0,
-              help="Viz from the provided start timestamp (nanosecs)")
 @click.option("--sensor-id",
               type=int,
               required=False,

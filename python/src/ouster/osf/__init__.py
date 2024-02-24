@@ -22,7 +22,5 @@ from ._osf import Writer
 
 from ._osf import slice_and_cast
 
-from .data import resolve_field_types
-
 from .data import Scans
 

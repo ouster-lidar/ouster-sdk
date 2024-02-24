@@ -4,7 +4,7 @@ from typing_extensions import Protocol, runtime_checkable
 from dataclasses import dataclass
 import numpy as np
 from ouster import client
-from ..client._client import Version
+from ouster.client._client import Version
 from ouster.client import _utils
 
 from ._viz import Cloud, Image
