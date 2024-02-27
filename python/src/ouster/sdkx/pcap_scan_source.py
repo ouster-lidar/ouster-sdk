@@ -1,6 +1,5 @@
 from typing import List, Optional, Union
 
-import copy
 from ouster.sdk.util import resolve_metadata_multi
 from .parsing import resolve_field_types    # type: ignore
 from .multi import PcapMultiPacketReader, collate_scans, ScansMulti     # type: ignore
@@ -67,7 +66,7 @@ class PcapScanSource(ScansMulti):
         if index:
             self._frame_offset = []
             pi = self._source._index
-            scans_itr = collate_scans_itr(self._async_iter(True, False))
+            scans_itr = collate_scans_itr(self._scans_iter(True, False, False))
             for scans in scans_itr:
                 offsets = [pi.frame_id_indices[idx].get(
                     scan.frame_id) for idx, scan in enumerate(scans) if scan]
@@ -98,7 +97,7 @@ class PcapScanSource(ScansMulti):
                 raise IndexError("index is out of range")
             offset = self._frame_offset[key]
             self._source.seek(offset)
-            scans_itr = self._async_iter(False, False)
+            scans_itr = self._scans_iter(False, False, True)
             return next(collate_scans(scans_itr, self.sensors_count,
                                       first_valid_packet_ts, dt=self._dt))
 
@@ -110,12 +109,12 @@ class PcapScanSource(ScansMulti):
                 return []
             offset = self._frame_offset[k.start]
             self._source.seek(offset)
-            scans_itr = collate_scans(self._async_iter(False, False),
+            scans_itr = collate_scans(self._scans_iter(False, False, True),
                                       self.sensors_count,
                                       first_valid_packet_ts,
                                       dt=self._dt)
             result = [msg for idx, msg in ForwardSlicer.slice(
-                enumerate([copy.deepcopy(scans) for scans in scans_itr]), k) if idx < count]
+                enumerate([scans for scans in scans_itr]), k) if idx < count]
             return result if k.step > 0 else list(reversed(result))
 
         raise TypeError(

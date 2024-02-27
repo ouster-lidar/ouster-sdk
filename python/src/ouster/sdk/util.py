@@ -28,8 +28,8 @@ def resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
         return []
     # select all jsons with the longest common prefix of equal size
     sorted_options = sorted(zip(options, option_scores),
-                           key=lambda i: i[1],
-                           reverse=True)
+                            key=lambda i: i[1],
+                            reverse=True)
     best_score = sorted_options[0][1]
     if not best_score:
         # return a single json if there is no files with commonprefix

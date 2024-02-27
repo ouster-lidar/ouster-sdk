@@ -562,7 +562,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     try:
         # this is a bit hacky, but benchmark logic works well with Tuple[int, LidarScan] iterator
         # TODO: rework with proper iterator instead
-        it = data_source._async_iter() if is_scan_source else iter(data_source)
+        it = data_source._scans_iter() if is_scan_source else iter(data_source)
 
         while True:
             idx, obj = next(it)

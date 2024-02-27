@@ -5,6 +5,7 @@ from typing import (Iterator, List, Optional, Tuple, Union, Callable)
 import os
 import time
 import logging
+import copy
 from math import ceil
 
 from threading import Thread
@@ -697,11 +698,18 @@ class ScansMulti(client.MultiScanSource):
         raise NotImplementedError
 
     def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
-        return collate_scans(self._async_iter(True, self._cycle), self.sensors_count,
+        return collate_scans(self._scans_iter(True, self._cycle, True), self.sensors_count,
                              client.first_valid_packet_ts,
                              dt=self._dt)
 
-    def _async_iter(self, restart=True, cycle=False) -> Iterator[Tuple[int, LidarScan]]:
+    def _scans_iter(self, restart=True, cycle=False, deep_copy=False
+                    ) -> Iterator[Tuple[int, LidarScan]]:
+        """
+        Parameters:
+            restart: restart source from beginning if applicable
+            cycle: when reaching end auto restart
+            deep_copy: perform deepcopy when yielding scans
+        """
         w = [int] * self.sensors_count
         h = [int] * self.sensors_count
         col_window = [int] * self.sensors_count
@@ -718,6 +726,12 @@ class ScansMulti(client.MultiScanSource):
             pf[i] = client._client.PacketFormat.from_info(sinfo)
             batch[i] = client._client.ScanBatcher(w[i], pf[i])
 
+        # autopep8: off
+        scan_shallow_yield = lambda x: x
+        scan_deep_yield = lambda x: copy.deepcopy(x)
+        scan_yield_op = scan_deep_yield if deep_copy else scan_shallow_yield
+        # autopep8: on
+
         if restart:
             self._source.restart()  # start from the beginning
         while True:
@@ -728,7 +742,7 @@ class ScansMulti(client.MultiScanSource):
                     if batch[idx](packet._data, packet_ts(packet), ls_write[idx]):
                         if self._complete and not ls_write[idx].complete(col_window[idx]):
                             ls_write[idx] = None
-                        yield idx, ls_write[idx]
+                        yield idx, scan_yield_op(ls_write[idx])
 
             # TODO[UN]: revisit this piece
             # return the last not fully cut scans in the sensor timestamp order if
@@ -739,7 +753,7 @@ class ScansMulti(client.MultiScanSource):
             while last_scans:
                 idx, ls = last_scans.pop(0)
                 if not self._complete or ls.complete(col_window[idx]):
-                    yield idx, ls
+                    yield idx, scan_yield_op(ls)
 
             if cycle:
                 self._source.restart()
