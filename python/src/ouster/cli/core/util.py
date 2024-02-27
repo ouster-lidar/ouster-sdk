@@ -31,9 +31,10 @@ from copy import deepcopy
 from ouster import client
 from ouster.sdk.util import resolve_metadata
 
-
-from ouster.sdkx.multi import (SensorMultiPacketReader, ScansMulti, configure_sensor_multi,
+from ouster.sdkx.multi import (SensorMultiPacketReader, ScansMulti,
                                PacketMultiSource, PacketMultiWrapper)
+
+from ouster.sdkx.sensor_scan_source import configure_sensor_multi
 
 DEFAULT_SAMPLE_URL = 'https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip'
 

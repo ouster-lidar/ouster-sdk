@@ -119,3 +119,30 @@ class SensorScanSource(ScansMulti):
     def close(self):
         if self._source:
             self._source.close()
+
+
+def configure_sensor_multi(
+        hostnames: List[str],
+        first_lidar_port: Optional[int] = None,
+        do_not_reinitialize: bool = False,
+        no_auto_udp_dest: bool = False) -> List[client.SensorConfig]:
+    """Configure multiple sensors by hostnames/ips"""
+
+    from ouster.sdk.sensor_util import configure_sensor
+
+    first_lidar_port = first_lidar_port or 17502
+    configs: List[client.SensorConfig] = []
+
+    for idx, hn in enumerate(hostnames):
+        lidar_port = first_lidar_port + idx * 2
+        imu_port = lidar_port + 1
+        configs.append(
+            configure_sensor(hn,
+                             lidar_port=lidar_port,
+                             imu_port=imu_port,
+                             do_not_reinitialize=do_not_reinitialize,
+                             no_auto_udp_dest=no_auto_udp_dest))
+        print(f"Initializing connection to sensor {hn} on "
+              f"lidar port {configs[-1].udp_port_lidar} with udp dest "
+              f"'{configs[-1].udp_dest}'...")
+    return configs
