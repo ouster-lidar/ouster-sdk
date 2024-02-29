@@ -6,7 +6,6 @@ from typing import Iterator, Dict, cast, Optional, List, Tuple, Union
 import numpy as np
 
 from ouster.sdkx.pcap_scan_source import PcapScanSource  # type: ignore
-from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
 from ouster.osf.multi import OsfScanSource  # type: ignore
 
 
@@ -347,6 +346,7 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
     try:
         import ouster.osf as osf
         from ouster.viz import SimpleViz, LidarScanViz, scans_accum_for_cli
+        from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
     except ImportError as e:
         raise click.ClickException(str(e))
 

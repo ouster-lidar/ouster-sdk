@@ -21,7 +21,6 @@ from ouster.sdkx.util import resolve_extrinsics
 from .util import (click_ro_file, import_rosbag_modules)
 
 from ouster.sdkx.pcap_scan_source import PcapScanSource
-from ouster.sdkx.multi_viz import MultiLidarScanViz
 
 
 @click.group(name="pcap", hidden=True)
@@ -333,6 +332,7 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
 
     try:
         from ouster.viz import SimpleViz, LidarScanViz, scans_accum_for_cli
+        from ouster.sdkx.multi_viz import MultiLidarScanViz
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libGL is installed. Error: " + str(e))
