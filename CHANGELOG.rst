@@ -15,6 +15,7 @@ Important notes
 * The method ``version_of_string`` is marked as deprecated, use ``version_from_string``
   instead
 * Added a new method ``firmware_version_from_metadata`` which works across firmwares
+* [bugfix] Fix assertion error when using viz stepping on a live sensor
 
 
 Python SDK

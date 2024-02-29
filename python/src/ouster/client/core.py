@@ -228,8 +228,12 @@ class Sensor(PacketSource):
         st = self._peek()
         self._cache = None
 
-        if self._overflow_err and st & _client.ClientState.OVERFLOW:
-            raise ClientOverflow()
+        # TODO: revise this part and upper loop to eliminate ValueError
+        if st & _client.ClientState.OVERFLOW:
+            if self._overflow_err:
+                raise ClientOverflow("client packets overflow")
+            else:
+                raise ValueError()
         if st & _client.ClientState.LIDAR_DATA:
             if self._lidarbuf.id_error:
                 self._id_error_count += 1
