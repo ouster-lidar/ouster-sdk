@@ -151,6 +151,7 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool,
     except ImportError as e:
         raise click.ClickException(str(e))
 
+    scan_source = None
     try:
         from ouster.sdkx.open_source import open_source
         scan_source = open_source(hostname, sensor_idx=0,
@@ -173,7 +174,10 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool,
 
         SimpleViz(scan_source.metadata,
                   scans_accum=scans_accum).run(scan_source)
+    except Exception as e:
+        click.secho(f"{e}", fg='red')
     finally:
-        scan_source.close()
+        if scan_source:
+            scan_source.close()
 
     click.echo("Done")

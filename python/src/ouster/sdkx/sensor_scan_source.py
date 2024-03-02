@@ -24,6 +24,8 @@ class SensorScanSource(ScansMulti):
         **_
     ) -> None:
 
+        self._source = None
+
         if isinstance(hostnames, str):
             hostnames = [hostnames]
         elif len(hostnames) > 1:
@@ -90,7 +92,7 @@ class SensorScanSource(ScansMulti):
 
     @property
     def metadata(self) -> List[client.SensorInfo]:
-        return [self._source.metadata]
+        return [self._source.metadata]  # type: ignore
 
     @property
     def is_live(self) -> bool:

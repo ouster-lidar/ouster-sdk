@@ -17,6 +17,7 @@ Important notes
 * Added a new method ``firmware_version_from_metadata`` which works across firmwares
 * [bugfix] Fix assertion error when using viz stepping on a live sensor
 * Scope MultiLidarViz imports to viz commands
+* [bugfix] Gracefully handle failed sensor connection attempts with proper error reporting
 
 
 Python SDK

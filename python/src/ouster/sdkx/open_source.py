@@ -48,6 +48,9 @@ def open_source(source_url: str, sensor_idx: int = -1, *args, **kwargs
         scan_source = handler(source_urls[0], *args, **kwargs)
     except KeyError:
         raise NotImplementedError(f"The io_type:{source_type} is not supported!")
+    except Exception as ex:
+        raise RuntimeError(f"Failed to create scan_source for url {source_urls}\n"
+                           f" more details: {ex}")
 
     if scan_source is None:
         raise RuntimeError(f"Failed to create scan_source for url {source_urls}")
