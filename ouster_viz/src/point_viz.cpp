@@ -115,7 +115,6 @@ struct PointViz::Impl {
 
     Camera camera_back, camera_front;
 
-
     TargetDisplay target;
     impl::GLRings rings;
 
