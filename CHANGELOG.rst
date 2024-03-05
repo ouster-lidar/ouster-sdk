@@ -11,13 +11,8 @@ Important notes
 * Dropped support for python3.7
 * Dropped support macOS 10.15
 * This will be the last release that supports Ubuntu 18.04.
-* [bugfix] Fix potential flickering in Viz
-* The method ``version_of_string`` is marked as deprecated, use ``version_from_string``
-  instead
-* Added a new method ``firmware_version_from_metadata`` which works across firmwares
-* [bugfix] Fix assertion error when using viz stepping on a live sensor
-* Scope MultiLidarViz imports to viz commands
-* [bugfix] Gracefully handle failed sensor connection attempts with proper error reporting
+* Revised python's ScanSource API
+* [BREAKING] moved ``configure_sensor`` method to ``ouster.sdkx.sensor_scan_source`` module
 
 
 Python SDK
@@ -37,15 +32,25 @@ Python SDK
       and slicing operations as the ``MultiScanSource``
   * Added a generic ``open_source`` that accepts sensor urls, or a path to a pcap recording
     or an osf file
-* [BREAKING] moved ``configure_sensor`` method to ``ouster.sdkx.sensor_scan_source`` module
 * [bugfix] SimpleViz complains about missing fields
 * [bugfix] pcap_to_osf aborts when extracting a frame without proper packet timestamp 
+* [bugfix] Gracefully handle failed sensor connection attempts with proper error reporting
+* [bugfix] Fix assertion error when using viz stepping on a live sensor
+* [bugfix] Scope MultiLidarViz imports to viz commands
+* [bugfix] Fix potential flickering in Viz
+
+
+ouster.sdk
+----------
+* The method ``version_of_string`` is marked as deprecated, use ``version_from_string``
+  instead
+* Added a new method ``firmware_version_from_metadata`` which works across firmwares
+
 
 
 Known issues
 ------------
 
-* Slam does not work for python 3.12 due to missing upstream dependency support.
 * ouster-cli discover may not provide info for sensors using IPv6 link-local networks on Python 3.8 or with older versions of zeroconf.
 
 [20231031] [0.10.0]
