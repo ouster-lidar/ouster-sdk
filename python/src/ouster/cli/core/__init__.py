@@ -223,8 +223,9 @@ def run(args=None) -> None:
     logger.debug(platform.python_version() + " : " + " ".join(sys.argv))
 
     try:
+        exit_code = 0
         find_plugins(TRACEBACK_FLAG in sys.argv)
-        exit_code = cli.main(args=args, standalone_mode=False)
+        cli.main(args=args, standalone_mode=False)
     except click.Abort:
         print('Aborted!')
         logger.debug('Aborted!')

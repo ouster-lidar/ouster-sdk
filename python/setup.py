@@ -159,7 +159,8 @@ def install_requires():
         'scipy >=1.7, <2;platform_system != "Darwin" or platform_machine != "arm64" or platform_version >= "21.0.0"',
         'typing-extensions >=3.7.4.3',
         'Pillow >=9.2',
-        'packaging'
+        'packaging',
+        'setuptools; python_version >= "3.12"',
     ]
     # Removing mapping temporarily until 0.11.0 public release with 3.12 support
     # env = os.environ.copy()
