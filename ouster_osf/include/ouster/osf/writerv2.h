@@ -47,7 +47,7 @@ class WriterV2 {
     std::map<uint32_t, uint32_t> meta_id;
     std::unique_ptr<Writer> writer;
 
-private:
+   private:
     void _save(uint32_t stream_index, const LidarScan& scan);
 };
 

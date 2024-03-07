@@ -814,7 +814,7 @@ to work with OSF files.
         .def(
             "save",
             [](osf::WriterV2& writer, uint32_t stream_index,
-               const LidarScan& scan) { writer.save(stream_id, scan); },
+               const LidarScan& scan) { writer.save(stream_index, scan); },
             py::arg("stream_index"), py::arg("scan"),
             R"(
                  Save a lidar scan to the OSF file.
