@@ -6,6 +6,7 @@ find_package(OpenSSL REQUIRED)
 # Each test file should be in a format "<test_name>_test.cpp"
 set(OSF_TESTS_SOURCES png_tools_test.cpp
                       writer_test.cpp
+                      writerv2_test.cpp
                       writer_custom_test.cpp
                       file_test.cpp
                       crc_test.cpp

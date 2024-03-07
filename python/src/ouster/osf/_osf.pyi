@@ -5,7 +5,7 @@ from typing import Any, ClassVar, List
 from typing import (overload, Iterator)
 import numpy
 
-from ouster.client import BufferT, LidarScan
+from ouster.client import BufferT, LidarScan, SensorInfo
 
 
 class ChunkRef:
@@ -175,6 +175,41 @@ class Writer:
     @property
     def meta_store(self) -> MetadataStore: ...
 
+class WriterV2:
+    @overload
+    def __init__(self, filename: str, info: SensorInfo, chunk_size: int) -> None: ...
+
+    @overload
+    def __init__(self, filename: str, info: List[SensorInfo], chunk_size: int) -> None: ...
+
+    @overload
+    def save(self, stream_id: int, scan: LidarScan) -> None: ...
+
+    @overload
+    def save(self, stream_id: int, scan: List[LidarScan]) -> None: ...
+
+    @overload
+    def get_sensor_info(self) -> List[SensorInfo]: ...
+
+    @overload
+    def get_sensor_info(self, stream_id: int) -> SensorInfo: ...
+
+    def sensor_info_count(self) -> int: ...
+
+    def get_filename(self) -> str: ...
+
+    def get_chunk_size(self) -> int: ...
+
+    def close(self) -> None: ...
+
+    def is_closed(self) -> bool: ...
+
+    def __enter__(self) -> WriterV2: ...
+
+    def __exit__(*args) -> None: ...
+
+    
+    
 def slice_and_cast(lidar_scan: LidarScan, field_types = ...) -> LidarScan: ...
 
 def init_logger(log_level: str,

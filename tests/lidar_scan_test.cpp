@@ -443,3 +443,55 @@ TEST(LidarScan, packet_timestamp_3) {
     EXPECT_EQ(scan.packet_timestamp()[0], packet.host_timestamp);
     EXPECT_EQ(scan.packet_timestamp()[1], 0);
 }
+
+TEST(LidarScan, test_get_first_valid_packet_timestamp) {
+    int w = 32;
+    int h = 32;
+    auto scan = ouster::LidarScan(w, h);
+    EXPECT_EQ(scan.packet_timestamp().rows(), w / DEFAULT_COLUMNS_PER_PACKET);
+    EXPECT_TRUE((scan.packet_timestamp() == 0).all());
+
+    LidarPacket packet1;
+    packet1.host_timestamp = 123;
+    LidarPacket packet2;
+    packet2.host_timestamp = 456;
+
+    scan.status()[0] = 1;
+    scan.status()[1] = 0;
+    scan.status()[2] = 0;
+    scan.packet_timestamp()[0] = 123;
+    scan.packet_timestamp()[1] = 456;
+    scan.packet_timestamp()[2] = 789;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(),
+              scan.packet_timestamp()[0]);
+    scan.status()[0] = 0;
+    scan.status()[1] = 1;
+    scan.status()[2] = 0;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(),
+              scan.packet_timestamp()[1]);
+    scan.status()[0] = 0;
+    scan.status()[1] = 0;
+    scan.status()[2] = 0;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 0);
+}
+
+TEST(LidarScan, destagger) {
+    // It raises std::invalid_argument when the image height doesn't match the
+    // shift rows
+    int w = 32;
+    int h = 32;
+    auto scan = ouster::LidarScan(w, h);
+    std::vector<int> shift_by_row;
+    const auto& range = scan.field(ChanField::RANGE);
+    EXPECT_THROW(
+        {
+            try {
+                ouster::destagger<unsigned int>(range, shift_by_row);
+            } catch (const std::invalid_argument& e) {
+                ASSERT_STREQ(e.what(),
+                             "image height does not match shifts size");
+                throw;
+            }
+        },
+        std::invalid_argument);
+}

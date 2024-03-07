@@ -4,11 +4,94 @@ import numpy as np
 from more_itertools import ilen
 
 import ouster.osf as osf
+import ouster.client as client
 
 
 @pytest.fixture
 def input_osf_file(test_data_dir):
     return test_data_dir / "osfs" / "OS-1-128_v2.3.0_1024x10_lb_n3.osf"
+
+
+@pytest.fixture
+def input_info(test_data_dir):
+    filename = test_data_dir / "pcaps" / "OS-0-128-U1_v2.3.0_1024x10.json"
+    with open(filename, 'r') as f:
+        data = f.read()
+    return client.SensorInfo(data)
+
+
+def writerv2_output_handler(writer, output_osf_file, info):
+    assert writer.get_filename() == str(output_osf_file)
+    assert writer.sensor_info_count() == 1
+    assert info == writer.get_sensor_info(0)
+    assert info == writer.get_sensor_info()[0]
+
+    scan1 = client.LidarScan(128, 1024)
+    assert scan1 is not None
+    scan1.status[:] = 0x1
+    scan1.field(client.ChanField.REFLECTIVITY)[:] = 100
+
+    scan2 = client.LidarScan(128, 1024)
+    assert scan2 is not None
+    scan2.status[:] = 0x1
+    scan2.field(client.ChanField.REFLECTIVITY)[:] = 200
+
+    writer.save(0, scan1)
+    writer.save([scan2])
+
+    return (scan1, scan2)
+
+
+def writerv2_input_handler(scan1, scan2, output_osf_file):
+    assert scan1 is not None
+    assert scan2 is not None
+    assert scan1 != scan2
+
+    assert output_osf_file.exists()
+    res_reader = osf.Reader(str(output_osf_file))
+
+    messages = [it for it in res_reader.messages()]
+    assert len(messages) == 2
+
+    read_scan1 = messages[0].decode()
+    assert read_scan1 is not None
+    read_scan2 = messages[1].decode()
+    assert read_scan2 is not None
+    assert read_scan1 != read_scan2
+
+    assert read_scan1 == scan1
+    assert read_scan2 == scan2
+    count = 0
+    for _ in res_reader.messages():
+        count += 1
+    assert count == 2
+
+
+def test_osf_basic_writerv2(tmp_path, input_info):
+    output_osf_file = tmp_path / "out_basic.osf"
+
+    writer = osf.WriterV2(str(output_osf_file), input_info)
+    scan1, scan2 = writerv2_output_handler(writer, output_osf_file, input_info)
+    assert scan1 is not None
+    assert scan2 is not None
+
+    assert not writer.is_closed()
+    writer.close()
+    assert writer.is_closed()
+
+    assert scan1 is not None
+    assert scan2 is not None
+
+    writerv2_input_handler(scan1, scan2, output_osf_file)
+
+
+def test_osf_with_writerv2(tmp_path, input_info):
+    output_osf_file = tmp_path / "out_with.osf"
+
+    with osf.WriterV2(str(output_osf_file), input_info) as writer:
+        scan1, scan2 = writerv2_output_handler(writer, output_osf_file, input_info)
+
+    writerv2_input_handler(scan1, scan2, output_osf_file)
 
 
 def test_osf_save_message(tmp_path, input_osf_file):

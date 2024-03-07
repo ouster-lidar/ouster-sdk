@@ -20,6 +20,7 @@
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_scan.h"
 #include "ouster/osf/writer.h"
+#include "ouster/osf/writerv2.h"
 
 namespace py = pybind11;
 
@@ -571,15 +572,6 @@ to work with OSF files.
                         ``LidarScana`` (i.e. write only RANGE and SIGNAL fields)
         )")
         .def(
-            "log",
-            [](osf::LidarScanStream&, uint64_t, const LidarScan&) {
-                std::cerr << "LidarScanStream.log() method is removed, use "
-                             "LidarScanStream.save() instead."
-                          << std::endl;
-                std::abort();
-            },
-            "DEPRECATED and REMOVED")
-        .def(
             "save",
             [](osf::LidarScanStream& stream, uint64_t ts, const LidarScan& ls) {
                 stream.save(osf::ts_t{ts}, ls);
@@ -684,16 +676,16 @@ to work with OSF files.
         chunks writer.
     )")
         .def(py::init<std::string>(), py::arg("file_name"), R"(
-            Creates a `Writer` with deafault ``STREAMING`` layout chunks writer.
+            Creates a `Writer` with default ``STREAMING`` layout chunks writer.
             
-            Using default ``chunk_size`` of ``5MB``.
+            Using default ``chunk_size`` of ``2MB``.
         )")
         .def(py::init<std::string, std::string, uint32_t>(),
              py::arg("file_name"), py::arg("metadata_id"),
              py::arg("chunk_size") = 0, R"(
                  Creates a `Writer` with specified ``chunk_size``.
 
-                 Default ``chunk_size`` is ``5 MB``.
+                 Default ``chunk_size`` is ``2 MB``.
         )")
         .def_property_readonly("filename", &osf::Writer::filename,
                                "OSF file name where data is written to")
@@ -798,6 +790,104 @@ to work with OSF files.
         py::arg("rotating") = false, py::arg("max_size_in_bytes") = 0,
         py::arg("max_files") = 0);
 
+    // WriterV2
+    py::class_<osf::WriterV2>(m, "WriterV2", R"(
+        Higher level Writer API
+    )")
+        .def(py::init<const std::string&, const sensor::sensor_info&,
+                      uint32_t>(),
+             py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
+             R"(
+            Creates a `WriterV2` with deafault ``STREAMING`` layout chunks writer.
+            
+            Using default ``chunk_size`` of ``2MB``.
+        )")
+        .def(py::init<const std::string&,
+                      const std::vector<ouster::sensor::sensor_info>&,
+                      uint32_t>(),
+             py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
+             R"(
+                 Creates a `Writer` with specified ``chunk_size``.
+
+                 Default ``chunk_size`` is ``2 MB``.
+        )")
+        .def(
+            "save",
+            [](osf::WriterV2& writer, uint32_t stream_index,
+               const LidarScan& scan) { writer.save(stream_id, scan); },
+            py::arg("stream_index"), py::arg("scan"),
+            R"(
+                 Save a lidar scan to the OSF file.
+            )")
+        .def(
+            "save",
+            [](osf::WriterV2& writer, const std::vector<LidarScan>& scans) {
+                writer.save(scans);
+            },
+            py::arg("scan"),
+            R"(
+                 Save a set of lidar scans to the OSF file.
+            )")
+        .def(
+            "get_sensor_info",
+            [](osf::WriterV2& writer) { return writer.get_sensor_info(); },
+            R"(
+                 Return the sensor info vector.
+            )")
+        .def(
+            "get_sensor_info",
+            [](osf::WriterV2& writer, uint32_t stream_index) {
+                return writer.get_sensor_info(stream_index);
+            },
+            py::arg("stream_index"),
+            R"(
+                 Return the sensor info of the specifed stream_index.
+            )")
+        .def(
+            "sensor_info_count",
+            [](osf::WriterV2& writer) { return writer.sensor_info_count(); },
+            R"(
+                 Return the number of sensor_info objects.
+            )")
+        .def(
+            "get_filename",
+            [](osf::WriterV2& writer) { return writer.get_filename(); },
+            R"(
+                 Return the osf file name.
+            )")
+        .def(
+            "get_chunk_size",
+            [](osf::WriterV2& writer) { return writer.get_filename(); },
+            R"(
+                 Return the chunk size.
+            )")
+        .def(
+            "close", [](osf::WriterV2& writer) { return writer.close(); },
+            R"(
+                 Close the writer.
+            )")
+        .def(
+            "is_closed",
+            [](osf::WriterV2& writer) { return writer.is_closed(); },
+            R"(
+                 Return the closed status of the writer.
+            )")
+        .def(
+            "__enter__", [](osf::WriterV2* writer) { return writer; },
+            R"(
+                 Allow WriterV2 to work within `with` blocks.
+            )")
+        .def(
+            "__exit__",
+            [](osf::WriterV2& writer, pybind11::object& exc_type,
+               pybind11::object& exc_value, pybind11::object& traceback) {
+                writer.close();
+
+                return py::none();
+            },
+            R"(
+                 Allow WriterV2 to work within `with` blocks.
+            )");
     // TODO[pb]: (HACK) This is copied directly from _client.cpp to enable the
     // custom profile addition in the compiled OSF SDK native module code.
     m.def("add_custom_profile", &ouster::sensor::add_custom_profile);

@@ -116,22 +116,18 @@ flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
         //           not done on the first pass here ...
         ls = slice_with_cast(lidar_scan, meta_field_types);
     }
-
     // Encode LidarScan to PNG buffers
     ScanData scan_data = scanEncode(ls, info.format.pixel_shift_by_row);
-
     // Prepare PNG encoded channels for LidarScanMsg.channels vector
     std::vector<flatbuffers::Offset<gen::ChannelData>> channels;
     for (const auto& channel_data : scan_data) {
         channels.emplace_back(gen::CreateChannelDataDirect(fbb, &channel_data));
     }
-
     // Prepare field_types for LidarScanMsg
     std::vector<ouster::osf::gen::ChannelField> field_types;
     for (const auto& f : ls) {
         field_types.emplace_back(to_osf_enum(f.first), to_osf_enum(f.second));
     }
-
     auto channels_off =
         fbb.CreateVector<::flatbuffers::Offset<gen::ChannelData>>(channels);
     auto field_types_off = osf::CreateVectorOfStructs<gen::ChannelField>(
@@ -141,13 +137,11 @@ flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
     auto measurement_id_off =
         fbb.CreateVector<uint16_t>(ls.measurement_id().data(), ls.w);
     auto status_off = fbb.CreateVector<uint32_t>(ls.status().data(), ls.w);
-
     flatbuffers::Offset<flatbuffers::Vector<double>> pose_off = 0;
     if (poses_present(ls)) {
         pose_off = fbb.CreateVector<double>(ls.pose().data()->data(),
                                             ls.pose().size() * 16);
     }
-
     auto packet_timestamp_id_off = fbb.CreateVector<uint64_t>(
         ls.packet_timestamp().data(), ls.packet_timestamp().size());
     return gen::CreateLidarScanMsg(

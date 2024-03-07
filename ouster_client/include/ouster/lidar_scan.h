@@ -240,6 +240,13 @@ class LidarScan {
     Eigen::Ref<const Header<uint64_t>> packet_timestamp() const;
 
     /**
+     * Return the first valid packet timestamp
+     *
+     * @return the first valid packet timestamp, 0 if none available
+     */
+    uint64_t get_first_valid_packet_timestamp() const;
+
+    /**
      * Access the measurement id headers.
      *
      * @return a view of measurement ids as a w-element vector.

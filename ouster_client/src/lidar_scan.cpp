@@ -239,6 +239,20 @@ Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::packet_timestamp()
     return packet_timestamp_;
 }
 
+uint64_t LidarScan::get_first_valid_packet_timestamp() const {
+    auto ts_it = packet_timestamp_.data();
+    for (auto it = status_.data(); it < status_.data() + status_.size(); ++it) {
+        if (ts_it >= packet_timestamp_.data() + packet_timestamp_.size()) {
+            return 0;
+        }
+        if (*it & 1) {
+            return *ts_it;
+        }
+        ts_it++;
+    }
+    return 0;
+}
+
 Eigen::Ref<LidarScan::Header<uint16_t>> LidarScan::measurement_id() {
     return measurement_id_;
 }

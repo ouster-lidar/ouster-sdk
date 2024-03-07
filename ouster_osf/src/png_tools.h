@@ -254,9 +254,8 @@ bool fieldEncode(
  * @param scan_idxs a vector of indices in `scan_data` of the beginning of field
  *                 buffers where the result of encoding will be inserted.
  *                 `field_types.size()` should be equal to `scan_idxs.size()`
- * @return false (0) if operation is successful true (1) if error occured
  */
-bool fieldEncodeMulti(const LidarScan& lidar_scan,
+void fieldEncodeMulti(const LidarScan& lidar_scan,
                       const LidarScanFieldTypes& field_types,
                       const std::vector<int>& px_offset, ScanData& scan_data,
                       const std::vector<size_t>& scan_idxs);

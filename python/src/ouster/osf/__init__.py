@@ -19,6 +19,7 @@ from ._osf import StreamStats
 from ._osf import StreamingInfo
 from ._osf import ChunksLayout
 from ._osf import Writer
+from ._osf import WriterV2
 
 from ._osf import slice_and_cast
 

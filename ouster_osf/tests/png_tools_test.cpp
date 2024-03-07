@@ -308,6 +308,29 @@ TEST_F(OsfPngToolsTest, InternalsTest) {
               " - Arriving Somewhere But Not Here\n");
 }
 
+#ifndef OUSTER_OSF_NO_THREADING
+TEST_F(OsfPngToolsTest, scanDecodeFields) {
+    // it should propagate the exception
+    // if destagger throws std::invalid_argument
+    int w = 32;
+    int h = 32;
+    auto scan = ouster::LidarScan(w, h);
+    LidarScanFieldTypes field_types(scan.begin(), scan.end());
+    std::vector<int> shift_by_row;
+    EXPECT_THROW(
+        {
+            try {
+                scanEncodeFields(scan, shift_by_row, field_types);
+            } catch (const std::invalid_argument& e) {
+                ASSERT_STREQ(e.what(),
+                             "image height does not match shifts size");
+                throw;
+            }
+        },
+        std::invalid_argument);
+}
+#endif
+
 }  // namespace
 }  // namespace osf
 }  // namespace ouster
