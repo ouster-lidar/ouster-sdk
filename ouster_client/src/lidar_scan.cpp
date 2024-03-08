@@ -240,16 +240,17 @@ Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::packet_timestamp()
 }
 
 uint64_t LidarScan::get_first_valid_packet_timestamp() const {
-    auto ts_it = packet_timestamp_.data();
-    for (auto it = status_.data(); it < status_.data() + status_.size(); ++it) {
-        if (ts_it >= packet_timestamp_.data() + packet_timestamp_.size()) {
-            return 0;
-        }
-        if (*it & 1) {
-            return *ts_it;
-        }
-        ts_it++;
+    int total_packets = packet_timestamp().size();
+    int columns_per_packet = w / total_packets;
+
+    for (int i = 0; i < total_packets; ++i) {
+        if (status()
+                .middleRows(i * columns_per_packet, columns_per_packet)
+                .unaryExpr([](uint32_t s) { return s & 1; })
+                .any())
+            return packet_timestamp()[i];
     }
+
     return 0;
 }
 

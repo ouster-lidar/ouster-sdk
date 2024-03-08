@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <map>
+#include <numeric>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -445,34 +446,32 @@ TEST(LidarScan, packet_timestamp_3) {
 }
 
 TEST(LidarScan, test_get_first_valid_packet_timestamp) {
-    int w = 32;
+    int w = 1024;
     int h = 32;
     auto scan = ouster::LidarScan(w, h);
     EXPECT_EQ(scan.packet_timestamp().rows(), w / DEFAULT_COLUMNS_PER_PACKET);
-    EXPECT_TRUE((scan.packet_timestamp() == 0).all());
+    ASSERT_TRUE((scan.packet_timestamp() == 0).all());
 
-    LidarPacket packet1;
-    packet1.host_timestamp = 123;
-    LidarPacket packet2;
-    packet2.host_timestamp = 456;
+    auto packet_ts = scan.packet_timestamp();
+    // fill in some default values
+    std::iota(packet_ts.begin(), packet_ts.end(), 1);
+    ASSERT_TRUE((packet_ts == scan.packet_timestamp()).all());
 
-    scan.status()[0] = 1;
-    scan.status()[1] = 0;
-    scan.status()[2] = 0;
-    scan.packet_timestamp()[0] = 123;
-    scan.packet_timestamp()[1] = 456;
-    scan.packet_timestamp()[2] = 789;
-    EXPECT_EQ(scan.get_first_valid_packet_timestamp(),
-              scan.packet_timestamp()[0]);
-    scan.status()[0] = 0;
-    scan.status()[1] = 1;
-    scan.status()[2] = 0;
-    EXPECT_EQ(scan.get_first_valid_packet_timestamp(),
-              scan.packet_timestamp()[1]);
-    scan.status()[0] = 0;
-    scan.status()[1] = 0;
-    scan.status()[2] = 0;
+    // no packet found
     EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 0);
+
+    // first packet
+    scan.status()[1] = 1;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 1);
+
+    // fifth packet
+    scan.status()[1] = 0;
+    scan.status()[74] = 1;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 5);
+
+    scan.status()[74] = 0;
+    scan.status()[1023] = 1;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 64);
 }
 
 TEST(LidarScan, destagger) {
