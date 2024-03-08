@@ -32,6 +32,8 @@ Python SDK
       and slicing operations as the ``MultiScanSource``
   * Added a generic ``open_source`` that accepts sensor urls, or a path to a pcap recording
     or an osf file
+  * Automatically index legacy unindexed osf files inplace the first time file accessed
+  * Display a progressbar during index of pcap file or osf(if unindexed)
 * [bugfix] SimpleViz complains about missing fields
 * [bugfix] pcap_to_osf aborts when extracting a frame without proper packet timestamp 
 * [bugfix] Gracefully handle failed sensor connection attempts with proper error reporting

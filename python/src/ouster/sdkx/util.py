@@ -53,11 +53,13 @@ def quatToRotMat(q: np.ndarray) -> np.ndarray:
     """Converts Quaternion [w, x, y, z] to Rotation [3x3] matrix."""
     (q0, q1, q2, q3) = q
     # yapf: disable
+    # autopep8: off
     return np.array([
         [2 * (q0 * q0 + q1 * q1) - 1, 2 * (q1 * q2 - q0 * q3), 2 * (q1 * q3 + q0 * q2)],
         [2 * (q1 * q2 + q0 * q3), 2 * (q0 * q0 + q2 * q2) - 1, 2 * (q2 * q3 - q0 * q1)],
         [2 * (q1 * q3 - q0 * q2), 2 * (q2 * q3 + q0 * q1), 2 * (q0 * q0 + q3 * q3) - 1]
     ])
+    # autopep8: on
     # yapf: enable
 
 
@@ -180,3 +182,23 @@ def resolve_extrinsics(
                                           sensor_names=snames,
                                           destination_frame="base_link")
     return []
+
+
+def progressbar(progress, total, prefix="", suffix=""):
+    """
+    Displays progress in the console as a percentage.
+
+    Args:
+        progress: The current progress (number of items completed).
+        total: The total number of items.
+        prefix: A prefix string to display before the progress bar (optional).
+        suffix: A suffix string to display after the progress bar (optional).
+    """
+    if total == 0:
+        raise ValueError(
+            "Progress cannot be displayed for a total of 0 items.")
+    progress = total if progress > total else progress
+    percent = round(100 * progress / total, 1)
+    filled_length = int(round(percent * 20 / 100))
+    bar = f'[{filled_length * "#"}{(20 - filled_length) * "-"}]'
+    print(f'{prefix} {bar} {percent}% {suffix}', end="\r")

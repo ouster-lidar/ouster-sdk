@@ -8,6 +8,7 @@ from ouster.sdk.sensor_util import configure_sensor
 
 
 class SensorScanSource(ScansMulti):
+    """Implements MultiScanSource protocol for live sensors, multiple sensors isn't supported yet."""
 
     def __init__(
         self,

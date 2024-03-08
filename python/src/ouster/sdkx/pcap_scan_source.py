@@ -1,20 +1,23 @@
 from typing import List, Optional, Union
 
 from ouster.sdk.util import resolve_metadata_multi
+from ouster.client import LidarScan, first_valid_packet_ts
 from .parsing import resolve_field_types    # type: ignore
 from .multi import PcapMultiPacketReader, collate_scans, ScansMulti     # type: ignore
 from .forward_slicer import ForwardSlicer
-from ouster.client import LidarScan, first_valid_packet_ts
+from .util import progressbar   # type: ignore
 
 
 class PcapScanSource(ScansMulti):
+    """Implements MultiScanSource protocol for pcap files with multiple sensors."""
 
     def __init__(
         self,
         file_path: str,
         *,
+        dt: int = 10**8,
         complete: bool = False,
-        index: bool = False,
+        index: bool = True,
         cycle: bool = False,
         flags: bool = False,
         raw_headers: bool = False,
@@ -22,6 +25,18 @@ class PcapScanSource(ScansMulti):
         _soft_id_check: bool = False,
         **_
     ) -> None:
+        """
+        Args:
+            file_path: OSF filename as scans source
+            dt: max time difference between scans in the collated scan (i.e.
+                time period at which every new collated scan is released/cut),
+                default is 0.1s
+            complete: set to True to only release complete scans
+            index: if this flag is set to true an index will be built for the pcap
+                file enabling index and slice operations on the scan source, if
+                the flag is set to False indexing is skipped (default is True)
+            cycle: repeat infinitely after iteration is finished (default is False)
+        """
 
         metadata_paths = resolve_metadata_multi(file_path)
         if not metadata_paths:
@@ -51,11 +66,7 @@ class PcapScanSource(ScansMulti):
                                           raw_headers=raw_headers,
                                           raw_fields=raw_fields)
 
-        # set sensor names as idx in the source
-        for idx, m in enumerate(source.metadata):
-            source.metadata[idx].hostname = f"sensoridx: {idx}"
-
-        super().__init__(source, fields=field_types, complete=complete, cycle=cycle)
+        super().__init__(source, dt=dt, complete=complete, cycle=cycle, fields=field_types)
 
         # TODO[IMPORTANT]: there is a bug with collate scans in which it always
         # skips the first frame
@@ -67,10 +78,14 @@ class PcapScanSource(ScansMulti):
             self._frame_offset = []
             pi = self._source._index
             scans_itr = collate_scans_itr(self._scans_iter(True, False, False))
-            for scans in scans_itr:
+            # scans count in first source
+            scans_count = len(pi.frame_id_indices[0])
+            for scan_idx, scans in enumerate(scans_itr):
                 offsets = [pi.frame_id_indices[idx].get(
                     scan.frame_id) for idx, scan in enumerate(scans) if scan]
                 self._frame_offset.append(min([v for v in offsets if v]))
+                progressbar(scan_idx, scans_count, "", "indexed")
+            print("\nfinished building index")
 
     @property
     def scans_num(self) -> List[int]:
