@@ -38,7 +38,7 @@ class PcapScanSource(ScansMulti):
             cycle: repeat infinitely after iteration is finished (default is False)
         """
 
-        self._source = None
+        self._source: PcapMultiPacketReader = None
 
         metadata_paths = resolve_metadata_multi(file_path)
         if not metadata_paths:

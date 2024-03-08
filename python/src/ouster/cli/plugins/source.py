@@ -99,6 +99,12 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
 
 
 @click.command()
+@click.option("-p", "--pause", is_flag=True, help="Pause at first lidar scan")
+@click.option("-e", "--on-eof", default='loop', type=click.Choice(['loop', 'stop', 'exit']),
+              help="Loop, stop or exit after reaching end of file")
+@click.option("--pause-at",
+              default=-1,
+              help="Lidar Scan number to pause at")
 @click.option("--accum-num",
               default=0,
               help="Integer number of scans to accumulate")
@@ -121,7 +127,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
               help="Ratio of random points of every scan to add to an overall map")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
-def source_viz(ctx: SourceCommandContext, accum_num: int,
+def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: int, accum_num: int,
                accum_every: Optional[int], accum_every_m: Optional[float],
                accum_map: bool, accum_map_ratio: float) -> SourceCommandCallback:
     """Visualize LidarScans in a 3D viewer."""
@@ -129,6 +135,19 @@ def source_viz(ctx: SourceCommandContext, accum_num: int,
         from ouster.viz import SimpleViz, scans_accum_for_cli
     except ImportError as e:
         raise click.ClickException(str(e))
+
+    # ugly workarounds ensue
+    if on_eof == 'loop':
+        source = ctx.scan_source
+        from ouster.client import ScanSourceAdapter
+        if type(source) is ScanSourceAdapter:
+            source = source._scan_source
+        # NOTE: setting it here instead of at open_source stage because we do not want to propagate
+        #       the flag up to `source` command
+        source._cycle = True
+
+    if pause and pause_at == -1:
+        pause_at = 0
 
     ctx.scan_iter, scans = CoupledTee.tee(ctx.scan_iter,
                             terminate=ctx.terminate_evt)
@@ -141,7 +160,7 @@ def source_viz(ctx: SourceCommandContext, accum_num: int,
                                 accum_map_ratio=accum_map_ratio)
 
     def viz_thread_fn():
-        sv = SimpleViz(metadata, scans_accum=scans_accum, rate=1.0)
+        sv = SimpleViz(metadata, scans_accum=scans_accum, rate=1.0, pause_at=pause_at, on_eof=on_eof)
         sv.run(scans)
         ctx.terminate_evt.set()
 
