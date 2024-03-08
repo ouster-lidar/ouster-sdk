@@ -66,7 +66,7 @@ class CMakeBuild(build_ext):
         build_args = ['--config', cfg]
 
         env = os.environ.copy()
-        jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', 2)
+        jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', os.cpu_count())
         build_args += ['--', f'-j{jobs}']
 
         if platform.system() == "Windows":
