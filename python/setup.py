@@ -162,10 +162,11 @@ def install_requires():
         'Pillow >=9.2',
         'packaging'
     ]
-    env = os.environ.copy()
-    skip_mapping = env.get('OUSTER_SDK_SKIP_MAPPING')
-    if not skip_mapping:
-        install_requires.append('ouster-mapping>=0.2.0rc1; python_version >= "3.8" and python_version <= "3.12"')
+    # Removing mapping temporarily until 0.11.0 public release with 3.12 support
+    # env = os.environ.copy()
+    # skip_mapping = env.get('OUSTER_SDK_SKIP_MAPPING')
+    # if not skip_mapping:
+    #     install_requires.append('ouster-mapping>=0.2.0rc1; python_version >= "3.8" and python_version <= "3.12"')
 
     return install_requires
 
