@@ -18,7 +18,9 @@ import time
 import logging
 
 from ._viz import (PointViz, WindowCtx, Label, Cloud, grey_palette,
-                   spezia_palette, magma_palette, viridis_palette,
+                   grey_cal_ref_palette, spezia_palette, spezia_cal_ref_palette,
+                   magma_palette, magma_cal_ref_palette,
+                   viridis_palette, viridis_cal_ref_palette,
                    calref_palette)
 from .util import push_point_viz_handler
 import ouster.client as client
@@ -184,8 +186,9 @@ class ScansAccumulator:
         self._cloud_mode_ind = 0
         self._cloud_mode_ind_prev = (self._cloud_mode_ind + 1) % len(self._cloud_modes)
 
-        # cloud color palettes to use
-        self._cloud_palettes: List[CloudPaletteItem] = [
+        # Note these 2 palette arrays must always be the same length
+        self._cloud_palettes: List[CloudPaletteItem]
+        self._cloud_palettes = [
             CloudPaletteItem("Ouster Colors", spezia_palette),
             CloudPaletteItem("Greyscale", grey_palette),
             CloudPaletteItem("Viridis", viridis_palette),
@@ -193,23 +196,18 @@ class ScansAccumulator:
             CloudPaletteItem("Cal. Ref", calref_palette),
         ]
 
-        # Cal. Ref. is separate because we explicitly set it on REFLECTIVITY
-        # color mode and restrict rotations of palettes when it's reflectivity
-        self._cloud_calref_palette = CloudPaletteItem("Cal. Ref", calref_palette)
+        self._refl_cloud_palettes: List[CloudPaletteItem]
+        self._refl_cloud_palettes = [
+            CloudPaletteItem("Cal. Ref. Ouster Colors", spezia_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref. Greyscale", grey_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref. Viridis", viridis_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref. Magma", magma_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref", calref_palette),
+        ]
 
         # init cloud palette toggle
         self._cloud_palette_ind = 0
-        self._cloud_palette_ind_prev = self._cloud_palette_ind
-
-        # whether it's currently "snapped" to the Cal.Ref. palette
-        self._cloud_palette_refl_mode = False
-
-        # trigger the palette check, so it initializes the _cloud_palette_refl_mode
-        # variable correctly for situations when OSD text is drawn before the
-        # call to draw()
-        # TODO[pb]: Make it less convoluted with palettes toggling and Cal.Ref.
-        # snapping
-        self._update_cloud_palette()
+        self._cloud_palette_prev = self._refl_cloud_palettes[self._cloud_palette_ind]
 
         # initialize MAP structs
         map_init_points_num = MAP_INIT_POINTS_NUM if self._map_enabled else 0
@@ -483,8 +481,6 @@ class ScansAccumulator:
             logger.debug("ACTIVE CLOUD MODE (MAP): %s", self.active_cloud_mode.name)
 
         update_palette = self._update_cloud_palette()
-        if update_palette is not None:
-            self._cloud_map.set_palette(update_palette.palette)
 
     @no_type_check
     def _draw_accum(self) -> None:
@@ -567,9 +563,6 @@ class ScansAccumulator:
                     if self._cloud_mode_ind_prev != self._active_cloud_mode_ind:
                         acloud.set_key(sr.cloud_mode_keys[mode_name])
 
-                    if update_palette is not None:
-                        acloud.set_palette(update_palette.palette)
-
     @no_type_check
     def toggle_mode_accum(self, state: Optional[bool] = None) -> bool:
         """Toggle ACCUM view"""
@@ -617,7 +610,6 @@ class ScansAccumulator:
         """Change the coloring mode of the point cloud for MAP/ACCUM clouds"""
         with self._lock:
             self._cloud_mode_ind = (self._cloud_mode_ind + direction)
-            self._cloud_palette_refl_mode = False
             # update internal states immediately so the OSD text of scans accum
             # is switched already to a good state (needed for LidarScanViz osd
             # update)
@@ -630,7 +622,6 @@ class ScansAccumulator:
             npalettes = len(self._cloud_palettes)
             self._cloud_palette_ind = (self._cloud_palette_ind + direction +
                                        npalettes) % npalettes
-            self._cloud_palette_refl_mode = False
             # update internal states immediately so the OSD text of scans accum
             # is switched already to a good state (needed for LidarScanViz osd
             # update)
@@ -991,9 +982,7 @@ class ScansAccumulator:
     @property
     def active_cloud_palette(self) -> CloudPaletteItem:
         """Cloud palette used for ACCUM/MAP clouds"""
-        return (self._cloud_palettes[self._active_cloud_palette_ind]
-                if not self._cloud_palette_refl_mode else
-                self._cloud_calref_palette)
+        return self._cloud_palette_prev
 
     @property
     def _active_cloud_palette_ind(self) -> int:
@@ -1010,18 +999,25 @@ class ScansAccumulator:
         mode and coloring options.
         """
         refl_mode = is_norm_reflectivity_mode(self.active_cloud_mode)
-        if self._cloud_mode_ind_prev != self._active_cloud_mode_ind:
-            refl_mode_prev = is_norm_reflectivity_mode(
-                self._cloud_modes[self._cloud_mode_ind_prev])
 
-            if refl_mode_prev and not refl_mode:
-                return self.active_cloud_palette
-            elif not refl_mode_prev and refl_mode:
-                # snap to the Cal.Ref. palette until cloud mode or palette cycled
-                self._cloud_palette_refl_mode = True
-                return self._cloud_calref_palette
+        current_palette = None
+        if refl_mode:
+            current_palette = self._refl_cloud_palettes[self._cloud_palette_ind]
+        else:
+            current_palette = self._cloud_palettes[self._cloud_palette_ind]
 
-        if (self._cloud_palette_ind_prev != self._active_cloud_palette_ind):
+        if self._cloud_palette_prev is None or self._cloud_palette_prev.name != current_palette.name:
+            self._cloud_palette_prev = current_palette
+
+            # update palettes on everything
+            if self._clouds_accum:
+                for acloud, kf_idx in zip(self._clouds_accum, self._key_frames):
+                    if acloud:
+                        acloud.set_palette(current_palette.palette)
+
+            if self._cloud_map:
+                self._cloud_map.set_palette(current_palette.palette)
+
             return self.active_cloud_palette
 
         return None
@@ -1053,7 +1049,6 @@ class ScansAccumulator:
 
         # saving the "pen" and palette that we drew everything with
         self._cloud_mode_ind_prev = self._active_cloud_mode_ind
-        self._cloud_palette_ind_prev = self._active_cloud_palette_ind
 
         self._last_draw_dt = time.monotonic() - t
 

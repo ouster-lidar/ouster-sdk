@@ -480,6 +480,15 @@ def test_point_viz_destruction() -> None:
     assert ref() is None
 
 
+def test_palette_lengths(meta: client.SensorInfo,
+                        scan: client.LidarScan) -> None:
+    """Check that LidarScanViz has matching palette lengths."""
+    point_viz = viz.PointViz("Test Viz")
+    scan_viz = viz.LidarScanViz(meta, point_viz)
+
+    assert len(scan_viz._refl_cloud_palettes) == len(scan_viz._cloud_palettes)
+
+
 @pytest.mark.parametrize('test_key', ['single-2.3'])
 def test_scan_viz_destruction(meta: client.SensorInfo,
                               point_viz: viz.PointViz) -> None:

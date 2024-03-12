@@ -13,9 +13,13 @@ from ouster.client import SensorInfo
 
 calref_palette: np.ndarray
 spezia_palette: np.ndarray
+spezia_cal_ref_palette: np.ndarray
 grey_palette: np.ndarray
+grey_cal_ref_palette: np.ndarray
 viridis_palette: np.ndarray
+viridis_cal_ref_palette: np.ndarray
 magma_palette: np.ndarray
+magma_cal_ref_palette: np.ndarray
 
 class WindowCtx:
 

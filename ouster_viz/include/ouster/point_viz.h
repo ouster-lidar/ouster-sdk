@@ -1061,6 +1061,15 @@ extern const size_t spezia_n;
 extern const float spezia_palette[][3];
 
 /**
+ * Spezia Cal Ref palette size in number of colors.
+ */
+extern const size_t spezia_cal_ref_n;
+/**
+ * Spezia Cal Ref palette, RGB values per element.
+ */
+extern const float spezia_cal_ref_palette[][3];
+
+/**
  * Calibrated reflectifiy palette size in number of colors.
  */
 extern const size_t calref_n;
@@ -1079,6 +1088,15 @@ extern const size_t grey_n;
 extern const float grey_palette[][3];
 
 /**
+ * Greyscale Cal Ref palette size in number of colors.
+ */
+extern const size_t grey_cal_ref_n;
+/**
+ * Greyscale Cal Ref palette, RGB values per element.
+ */
+extern const float grey_cal_ref_palette[][3];
+
+/**
  * Viridis palette size in number of colors.
  */
 extern const size_t viridis_n;
@@ -1088,6 +1106,15 @@ extern const size_t viridis_n;
 extern const float viridis_palette[][3];
 
 /**
+ * Viridis Cal Ref palette size in number of colors.
+ */
+extern const size_t viridis_cal_ref_n;
+/**
+ * Viridis Cal Ref palette, RGB values per element.
+ */
+extern const float viridis_cal_ref_palette[][3];
+
+/**
  * Magma palette size in number of colors.
  */
 extern const size_t magma_n;
@@ -1095,6 +1122,15 @@ extern const size_t magma_n;
  * Magma palette, RGB values per element.
  */
 extern const float magma_palette[][3];
+
+/**
+ * Magma Cal Ref palette size in number of colors.
+ */
+extern const size_t magma_cal_ref_n;
+/**
+ * Magma Cal Ref palette, RGB values per element.
+ */
+extern const float magma_cal_ref_palette[][3];
 
 }  // namespace viz
 }  // namespace ouster

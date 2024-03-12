@@ -14,6 +14,7 @@ from enum import Enum
 import os
 import threading
 import time
+import copy
 from datetime import datetime
 from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
                     Optional, Tuple, TypeVar, Union, Any)
@@ -27,7 +28,9 @@ from ouster import client
 from ouster.client import ChanField, ShotLimitingStatus, ThermalShutdownStatus
 from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, calref_palette,
-                   spezia_palette, grey_palette, viridis_palette, magma_palette)
+                   spezia_palette, spezia_cal_ref_palette, grey_palette,
+                   grey_cal_ref_palette, viridis_palette, viridis_cal_ref_palette,
+                   magma_palette, magma_cal_ref_palette)
 from .util import push_point_viz_handler, push_point_viz_fb_handler
 from . import util as vizu
 
@@ -145,9 +148,13 @@ class LidarScanViz:
         self._cloud_enabled = [True, True]
         self._cloud_pt_size = 2.0
 
-        self._cloud_refl_mode_prev = False
-        self._cloud_refl_mode = False
+        self._cloud_palette_prev: Optional[CloudPaletteItem] = None
 
+        # make a special version of the calref palette for images
+        self._image_calref_palette = copy.deepcopy(calref_palette)
+        self._image_calref_palette[0] = [0.1, 0.1, 0.1]
+
+        # Note these 2 palette arrays must always be the same length
         self._cloud_palettes: List[CloudPaletteItem]
         self._cloud_palettes = [
             CloudPaletteItem("Ouster Colors", spezia_palette),
@@ -157,13 +164,24 @@ class LidarScanViz:
             CloudPaletteItem("Cal. Ref", calref_palette),
         ]
 
+        self._refl_cloud_palettes: List[CloudPaletteItem]
+        self._refl_cloud_palettes = [
+            CloudPaletteItem("Cal. Ref. Ouster Colors", spezia_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref. Greyscale", grey_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref. Viridis", viridis_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref. Magma", magma_cal_ref_palette),
+            CloudPaletteItem("Cal. Ref", calref_palette),
+        ]
+
         # Add extra color palettes, usually inserted through plugins
         self._cloud_palettes.extend(_viz_extra_palettes)
+        self._refl_cloud_palettes.extend(_viz_extra_palettes)
 
         self._cloud_palettes.extend(_ext_palettes or [])
+        self._refl_cloud_palettes.extend(_ext_palettes or [])
 
         self._cloud_palette_ind = 0
-        self._cloud_palette = self._cloud_palettes[self._cloud_palette_ind]
+        self._cloud_palette = self._refl_cloud_palettes[self._cloud_palette_ind]
         self._cloud_palette_name = self._cloud_palette.name
 
         # image display state
@@ -332,7 +350,6 @@ class LidarScanViz:
         """Change the coloring mode of the 3D point cloud."""
         with self._lock:
             self._cloud_mode_ind = (self._cloud_mode_ind + direction)
-            self._cloud_refl_mode = False
 
     def cycle_cloud_palette(self, *, direction: int = 1) -> None:
         """Change the color palette of the 3D point cloud."""
@@ -341,7 +358,6 @@ class LidarScanViz:
             self._cloud_palette_ind = (self._cloud_palette_ind + npalettes +
                                        direction) % npalettes
             self._cloud_palette = self._cloud_palettes[self._cloud_palette_ind]
-            self._cloud_refl_mode = False
 
     def toggle_cloud(self, i: int) -> None:
         """Toggle whether the i'th return is displayed."""
@@ -514,18 +530,16 @@ class LidarScanViz:
         cloud_mode = cloud_modes[self._cloud_mode_ind]
 
         refl_mode = is_norm_reflectivity_mode(cloud_mode)
+
+        current_palette = None
         if refl_mode:
-            if not self._cloud_refl_mode_prev:
-                self._cloud_palette = CloudPaletteItem("Cal. Ref", calref_palette)
-                self._cloud_refl_mode = True
-            elif not self._cloud_refl_mode:
-                self._cloud_palette = self._cloud_palettes[
-                    self._cloud_palette_ind]
+            current_palette = self._refl_cloud_palettes[self._cloud_palette_ind]
         else:
-            if self._cloud_refl_mode_prev:
-                self._cloud_palette = self._cloud_palettes[
-                    self._cloud_palette_ind]
-        self._cloud_refl_mode_prev = refl_mode
+            current_palette = self._cloud_palettes[self._cloud_palette_ind]
+
+        if self._cloud_palette_prev is None or self._cloud_palette_prev.name != current_palette.name:  # type: ignore
+            self._cloud_palette = current_palette
+        self._cloud_palette_prev = current_palette
 
         for i, range_field in ((0, ChanField.RANGE), (1, ChanField.RANGE2)):
             if range_field in scan.fields:
@@ -560,7 +574,7 @@ class LidarScanViz:
 
             refl_mode = is_norm_reflectivity_mode(img_mode)
             if refl_mode and not self._img_refl_mode[i]:
-                self._images[i].set_palette(calref_palette)
+                self._images[i].set_palette(self._image_calref_palette)
             if not refl_mode and self._img_refl_mode[i]:
                 self._images[i].clear_palette()
             self._img_refl_mode[i] = refl_mode

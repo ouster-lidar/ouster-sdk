@@ -833,18 +833,30 @@ PYBIND11_MODULE(_viz, m) {
     m.attr("spezia_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::spezia_n), static_cast<pysize>(3)},
         &viz::spezia_palette[0][0]};
+    m.attr("spezia_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::spezia_cal_ref_n), static_cast<pysize>(3)},
+        &viz::spezia_cal_ref_palette[0][0]};
     m.attr("calref_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::calref_n), static_cast<pysize>(3)},
         &viz::calref_palette[0][0]};
     m.attr("grey_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::grey_n), static_cast<pysize>(3)},
         &viz::grey_palette[0][0]};
+    m.attr("grey_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::grey_cal_ref_n), static_cast<pysize>(3)},
+        &viz::grey_cal_ref_palette[0][0]};
     m.attr("viridis_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::viridis_n), static_cast<pysize>(3)},
         &viz::viridis_palette[0][0]};
+    m.attr("viridis_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::viridis_cal_ref_n), static_cast<pysize>(3)},
+        &viz::viridis_cal_ref_palette[0][0]};
     m.attr("magma_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::magma_n), static_cast<pysize>(3)},
         &viz::magma_palette[0][0]};
+    m.attr("magma_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::magma_cal_ref_n), static_cast<pysize>(3)},
+        &viz::magma_cal_ref_palette[0][0]};
 
     m.attr("__version__") = ouster::SDK_VERSION;
 }
