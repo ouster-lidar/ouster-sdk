@@ -489,20 +489,21 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
                                         const sensor_config& config,
                                         const std::string& mtp_dest_host,
                                         bool main, int timeout_sec) {
+    int lidar_port = config.udp_port_lidar ? config.udp_port_lidar.value() : 0;
+    int imu_port = config.udp_port_imu ? config.udp_port_imu.value() : 0;
+    auto udp_dest = config.udp_dest ? config.udp_dest.value() : "";
+
     logger().info(
         "initializing sensor client: {} expecting ports: {}/{}, multicast "
         "group: {} (0 means a random port will be chosen)",
-        hostname, config.udp_port_lidar.value(), config.udp_port_imu.value(),
-        config.udp_dest.value());
+        hostname, lidar_port, imu_port, udp_dest);
 
     auto cli = std::make_shared<client>();
     cli->hostname = hostname;
 
-    cli->lidar_fd = mtp_data_socket(config.udp_port_lidar.value(),
-                                    config.udp_dest.value(), mtp_dest_host);
+    cli->lidar_fd = mtp_data_socket(lidar_port, udp_dest, mtp_dest_host);
     cli->imu_fd = mtp_data_socket(
-        config.udp_port_imu
-            .value());  // no need to join multicast group second time
+        imu_port);  // no need to join multicast group second time
 
     if (!impl::socket_valid(cli->lidar_fd) || !impl::socket_valid(cli->imu_fd))
         return std::shared_ptr<client>();

@@ -47,6 +47,7 @@ ouster.sdk
 * The method ``version_of_string`` is marked as deprecated, use ``version_from_string``
   instead
 * Added a new method ``firmware_version_from_metadata`` which works across firmwares
+* [bugfix] ``mtp_init_client`` throws a bad optional access
 
 
 
