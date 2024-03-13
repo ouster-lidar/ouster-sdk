@@ -312,7 +312,7 @@ class LidarScanViz:
             "e / E": "Increase/decrease size of displayed 2D images",
             "p / P": "Increase/decrease point size",
             "R": "Reset camera orientation",
-            "ctr+r": "Camera bird-eye view",
+            "CTRL+r": "Camera bird-eye view",
             "0": "Toggle orthographic camera",
             "1": "Toggle point cloud 1 visibility",
             "2": "Toggle point cloud 2 visibility",
@@ -326,6 +326,7 @@ class LidarScanViz:
             '?': "Print keys to standard out",
             "= / -": "Dolly in and out",
             "' / \"": "Increase/decrease spacing in range markers",
+            "CTRL+'": "Cycle through thickness of range markers",
             'SHIFT': "Camera Translation with mouse drag",
             'ESC': "Exit the application",
         }

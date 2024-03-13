@@ -30,29 +30,51 @@ GLuint GLRings::ring_program_id;
 GLuint GLRings::ring_xyz_id;
 GLuint GLRings::ring_proj_view_id;
 GLuint GLRings::ring_range_id;
+GLuint GLRings::ring_thickness_id;
 
-GLRings::GLRings(const size_t points_per_ring_)
-    : points_per_ring(points_per_ring_),
-      ring_size_(1),
-      ring_line_width_(1),
-      rings_enabled(true) {
-    std::vector<GLfloat> xyz(points_per_ring_ * 3, 0);
-    for (size_t i = 0; i < points_per_ring; i++) {
-        const GLfloat theta = i * 2.0 * M_PI / points_per_ring;
-        xyz[3 * i] = std::sin(theta);
-        xyz[3 * i + 1] = std::cos(theta);
-        xyz[3 * i + 2] = 0.0;
+GLRings::GLRings() : ring_size(1), ring_line_width(1), rings_enabled(true) {
+    // Make a quad thats a bit larger than our maximum range
+    std::vector<GLfloat> xyz(3 * 6, 0);
+    const float max_range = 1000;
+    // Point 0
+    xyz[0] = -1.1;
+    xyz[1] = -1.1;
+    xyz[2] = 0.0;
+    // Point 1
+    xyz[3] = 1.1;
+    xyz[4] = -1.1;
+    xyz[5] = 0.0;
+    // Point 2
+    xyz[6] = 1.1;
+    xyz[7] = 1.1;
+    xyz[8] = 0.0;
+    // Point 3
+    xyz[9] = -1.1;
+    xyz[10] = -1.1;
+    xyz[11] = 0.0;
+    // Point 4
+    xyz[12] = -1.1;
+    xyz[13] = 1.1;
+    xyz[14] = 0.0;
+    // Point 5
+    xyz[15] = 1.1;
+    xyz[16] = 1.1;
+    xyz[17] = 0.0;
+
+    // scale to expected size
+    for (size_t i = 0; i < xyz.size(); i++) {
+        xyz[i] = xyz[i] * max_range;
     }
     glGenBuffers(1, &xyz_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * points_per_ring * 3,
-                 xyz.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * xyz.size(), xyz.data(),
+                 GL_STATIC_DRAW);
 }
 
 void GLRings::update(const TargetDisplay& target) {
     rings_enabled = target.rings_enabled_;
-    ring_size_ = target.ring_size_;
-    ring_line_width_ = target.ring_line_width_;
+    ring_size = target.ring_size_;
+    ring_line_width = target.ring_line_width_;
 }
 
 void GLRings::draw(const WindowCtx&, const CameraData& camera) {
@@ -62,8 +84,7 @@ void GLRings::draw(const WindowCtx&, const CameraData& camera) {
     if (!rings_enabled) return;
 
     glUseProgram(GLRings::ring_program_id);
-    glLineWidth(1);
-    const float radius = std::pow(10.0f, ring_size_);
+    const float radius = std::pow(10.0f, ring_size);
     // rings are displayed at the camera target, so model is inverse of target
     Eigen::Matrix4f mvp = (camera.proj * camera.view).cast<float>();
     glUniformMatrix4fv(GLRings::ring_proj_view_id, 1, GL_FALSE, mvp.data());
@@ -76,22 +97,10 @@ void GLRings::draw(const WindowCtx&, const CameraData& camera) {
                           0,         // stride
                           (void*)0   // array buffer offset
     );
-    const GLfloat max_radius = 1000;
-    const GLfloat max_rings = 2000;  // for performance
-    for (GLfloat r = radius, rr = 0; r < max_radius && rr < max_rings;
-         r += radius, rr += 1) {
-        glUniform1f(GLRings::ring_range_id, r);
-        glDrawArrays(GL_LINE_LOOP, 0, points_per_ring);
-        // Making more paths to thicken the line
-        // TODO[pb]: Need to find a better way to draw a thick lines, this
-        //           method is too gross (slow and rugged) :(
-        for (int lw = 1; lw < ring_line_width_; ++lw) {
-            glUniform1f(GLRings::ring_range_id, r + lw * 0.02);
-            glDrawArrays(GL_LINE_LOOP, 0, points_per_ring);
-            glUniform1f(GLRings::ring_range_id, r - lw * 0.02);
-            glDrawArrays(GL_LINE_LOOP, 0, points_per_ring);
-        }
-    }
+
+    glUniform1f(GLRings::ring_range_id, radius);
+    glUniform1f(GLRings::ring_thickness_id, ring_line_width);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
     glDisableVertexAttribArray(GLRings::ring_xyz_id);
 }
 
@@ -103,6 +112,8 @@ void GLRings::initialize() {
         glGetUniformLocation(ring_program_id, "proj_view");
     GLRings::ring_range_id =
         glGetUniformLocation(ring_program_id, "ring_range");
+    GLRings::ring_thickness_id =
+        glGetUniformLocation(ring_program_id, "ring_thickness");
     GLRings::initialized = true;
 }
 

@@ -216,18 +216,42 @@ static const std::string ring_vertex_shader_code =
     R"SHADER(
             #version 330 core
             in vec3 ring_xyz;
-            uniform float ring_range;
             uniform mat4 proj_view;
+            out vec2 ring_xy;
             void main(){
-                gl_Position = proj_view * vec4(ring_xyz * ring_range, 1.0);
+                gl_Position = proj_view * vec4(ring_xyz, 1.0);
                 gl_Position.z = gl_Position.w;
+                ring_xy = ring_xyz.xy;
             })SHADER";
 static const std::string ring_fragment_shader_code =
     R"SHADER(
             #version 330 core
             out vec4 color;
+            in vec2 ring_xy;
+            uniform float ring_range;
+            uniform float ring_thickness;
             void main() {
-                color = vec4(0.15, 0.15, 0.15, 1);
+                // Compute this fragment's distance from the center of the rings
+                float radius = length(ring_xy);
+
+                // Convert to a signed distance from the nearest ring
+                float signedDistance = radius - round(radius/ring_range)*ring_range;
+
+                // Compute how quickly distance changes per pixel at our location
+                // Make sure to do this using radius since it is mostly continuous
+                vec2 gradient = vec2(dFdx(radius), dFdy(radius));
+                float len = length(gradient);// meters/pixel
+
+                // Get far we are from the line in pixel coordinates
+                //  meters/(meters/pixels) = pixels
+                float rangeFromLine = abs(signedDistance/len);
+
+                // Draw a line within the thickness
+                float lineWeight = clamp(ring_thickness - rangeFromLine, 0.0f, 1.0f);
+                
+                // Don't draw anything outside our max radius or at the center
+                if (radius > 1000.0 || radius < ring_range*0.1) { lineWeight = 0; }
+                color = vec4(vec3(0.15)*lineWeight, 1.0);
             })SHADER";
 static const std::string cuboid_vertex_shader_code =
     R"SHADER(
