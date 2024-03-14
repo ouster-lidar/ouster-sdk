@@ -104,6 +104,8 @@ extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
 extern Table<ThermalShutdownStatus, const char*, 2>
     thermal_shutdown_status_strings;
+extern Table<FullScaleRange, const char*, 2> full_scale_range_strings;
+extern Table<ReturnOrder, const char*, 3> return_order_strings;
 
 }  // namespace impl
 }  // namespace sensor
@@ -768,6 +770,18 @@ PYBIND11_MODULE(_client, m) {
         Applicable to several Polarity settings on sensor.)");
     def_enum(Polarity, sensor::impl::polarity_strings, "POLARITY_");
 
+    auto ReturnOrder = py::enum_<sensor::ReturnOrder>(m, "ReturnOrder", R"(
+        Sensor return order.
+
+        See sensor documentation for details.)");
+    def_enum(ReturnOrder, sensor::impl::return_order_strings, "ORDER_");
+
+    auto FullScaleRange = py::enum_<sensor::FullScaleRange>(m, "FullScaleRange", R"(
+        IMU output scale range.
+
+        See sensor documentation for details.)");
+    def_enum(FullScaleRange, sensor::impl::full_scale_range_strings, "FSR_");
+
     auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate", R"(
         Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.)");
     def_enum(NMEABaudRate, sensor::impl::nmea_baud_rate_strings);
@@ -840,6 +854,10 @@ PYBIND11_MODULE(_client, m) {
         .def_readwrite("columns_per_packet", &sensor_config::columns_per_packet, "Measurement blocks per UDP packet. See sensor documentation for details.")
         .def_readwrite("udp_profile_lidar", &sensor_config::udp_profile_lidar, "UDP packet format for lidar data. See sensor documentation for details.")
         .def_readwrite("udp_profile_imu", &sensor_config::udp_profile_imu, "UDP packet format for imu data. See sensor documentation for details.")
+        .def_readwrite("gyro_fsr", &sensor_config::gyro_fsr, "The gyro full scale measurement range to use. See sensor documentation for details.")
+        .def_readwrite("accel_fsr", &sensor_config::accel_fsr, "The accelerometer full scale measurement range to use. See sensor documentation for details.")
+        .def_readwrite("return_order", &sensor_config::return_order, "The priority of sensor returns to output. See sensor documentation for details.")
+        .def_readwrite("min_range_threshold_cm", &sensor_config::min_range_threshold_cm, "The minimum detection range of the sensor in cm. See sensor documentation for details.")
         .def("__str__", [](const sensor_config& i) { return to_string(i); })
         .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; })

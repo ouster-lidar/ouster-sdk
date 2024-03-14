@@ -189,6 +189,31 @@ enum UDPProfileIMU {
     PROFILE_IMU_LEGACY = 1,  ///< Legacy IMU data
 };
 
+/** Full scale range for IMU data. */
+enum FullScaleRange {
+    /** Higher precision lower range measurement mode */
+    FSR_NORMAL = 0,
+
+    /** Lower precision higher range measurement mode */
+    FSR_EXTENDED
+};
+
+/** Priority of returns for the lidar to output.
+ *   Lidar can have more than 1 or 2 detected "returns".
+ *   This indicates to the lidar which ones it should output.
+ *   See sensor docs for more details.
+ */
+enum ReturnOrder {
+    /** Lidar returns the strongest returns first */
+    ORDER_STRONGEST_TO_WEAKEST = 0,
+
+    /** Lidar returns the furthest returns first */
+    ORDER_FARTHEST_TO_NEAREST,
+
+    /** Lidar returns the nearest returns first */
+    ORDER_NEAREST_TO_FARTHEST
+};
+
 /** Thermal Shutdown status. */
 enum ThermalShutdownStatus {
     THERMAL_SHUTDOWN_NORMAL = 0x00,    ///< Normal operation
@@ -360,6 +385,29 @@ struct sensor_config {
      * Refer to UDPProfileIMU for more details.
      */
     optional<UDPProfileIMU> udp_profile_imu;
+
+    /**
+     * The gyro full scale measurement range to use.
+     * Refer to FullScaleRange for more details.
+     */
+    optional<FullScaleRange> gyro_fsr;
+
+    /**
+     * The accelerometer full scale measurement range to use.
+     * Refer to FullScaleRange for more details.
+     */
+    optional<FullScaleRange> accel_fsr;
+
+    /**
+     * The priority of returns for the lidar to output.
+     * Refer to ReturnOrder for more details.
+     */
+    optional<ReturnOrder> return_order;
+
+    /**
+     * The minimum detection range of the lidar in cm.
+     */
+    optional<int> min_range_threshold_cm;
 };
 
 /** Stores data format information. */
@@ -708,6 +756,44 @@ std::string to_string(UDPProfileIMU profile);
 optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
 
 /**
+ * Get full scale range setting from string
+ *
+ * @param[in] s The string to decode into a full scale range.
+ *
+ * @return full scale range corresponding to the string, or nullopt on error.
+ */
+optional<FullScaleRange> full_scale_range_of_string(const std::string& s);
+
+/**
+ * Get return order setting from string
+ *
+ * @param[in] s The string to decode into a return order.
+ *
+ * @return return order corresponding to the string, or nullopt on error.
+ */
+optional<ReturnOrder> return_order_of_string(const std::string& s);
+
+/**
+ * Get string representation of a Return Order.
+ *
+ * @param[in] return_order The return order to get the string
+ * representation of.
+ *
+ * @return string representation of the return order.
+ */
+std::string to_string(ReturnOrder return_order);
+
+/**
+ * Get string representation of a Full Scale Range.
+ *
+ * @param[in] full_scale_range The shot limiting status to get the string
+ * representation of.
+ *
+ * @return string representation of the full scale range.
+ */
+std::string to_string(FullScaleRange full_scale_range);
+
+/**
  * Get string representation of a Shot Limiting Status.
  *
  * @param[in] shot_limiting_status The shot limiting status to get the string
@@ -726,6 +812,16 @@ std::string to_string(ShotLimitingStatus shot_limiting_status);
  * @return string representation of thermal shutdown status.
  */
 std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
+
+/**
+ * Get string representation of Thermal Shutdown Status.
+ *
+ * @param[in] thermal_shutdown_status The thermal shutdown status to get the
+ * string representation of.
+ *
+ * @return string representation of thermal shutdown status.
+ */
+std::string to_string(FullScaleRange thermal_shutdown_status);
 
 /**
  * Determine validity of provided signal multiplier value

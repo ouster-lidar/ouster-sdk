@@ -583,6 +583,59 @@ class Polarity:
         ...
 
 
+class FullScaleRange:
+    FSR_NORMAL: ClassVar[FullScaleRange]
+    FSR_EXTENDED: ClassVar[FullScaleRange]
+
+    __members__: ClassVar[Dict[str, FullScaleRange]]
+    values: ClassVar[Iterator[FullScaleRange]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> FullScaleRange:
+        ...
+
+
+class ReturnOrder:
+    ORDER_STRONGEST_TO_WEAKEST: ClassVar[ReturnOrder]
+    ORDER_FARTHEST_TO_NEAREST: ClassVar[ReturnOrder]
+    ORDER_NEAREST_TO_FARTHEST: ClassVar[ReturnOrder]
+
+    __members__: ClassVar[Dict[str, ReturnOrder]]
+    values: ClassVar[Iterator[ReturnOrder]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> ReturnOrder:
+        ...
+
+
 class NMEABaudRate:
     BAUD_9600: ClassVar[NMEABaudRate]
     BAUD_115200: ClassVar[NMEABaudRate]
@@ -804,6 +857,10 @@ class SensorConfig:
     columns_per_packet: Optional[int]
     udp_profile_lidar: Optional[UDPProfileLidar]
     udp_profile_imu: Optional[UDPProfileIMU]
+    min_range_threshold_cm: Optional[int]
+    gyro_fsr: Optional[FullScaleRange]
+    accel_fsr: Optional[FullScaleRange]
+    return_order: Optional[ReturnOrder]
 
     @overload
     def __init__(self) -> None:

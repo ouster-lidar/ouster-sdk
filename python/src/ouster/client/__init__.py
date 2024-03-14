@@ -21,6 +21,8 @@ from ._client import SensorConfig
 from ._client import SensorCalibration
 from ._client import ShotLimitingStatus
 from ._client import ThermalShutdownStatus
+from ._client import FullScaleRange
+from ._client import ReturnOrder
 from ._client import init_logger
 from ._client import convert_to_legacy
 from ._client import get_config
