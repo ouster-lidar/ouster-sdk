@@ -1023,6 +1023,7 @@ class SimpleViz:
                     # process new data
                     scan_idx = seekable.next_ind
                     scan = next(seekable)
+
                     # TODO[pb]: Now scan_idx keeps increasing if looped source
                     # is presented, thus there is a need to keep track the lapsed
                     # scan_idx and pass it always as a valid scan number starting
@@ -1054,7 +1055,7 @@ class SimpleViz:
                     # show new data
                     self._viz.update()
                 except StopIteration:
-                    if self._on_eof == 'exit':
+                    if self._on_eof == 'exit' and not self._paused:
                         break
 
         finally:
