@@ -17,7 +17,7 @@ class PcapScanSource(ScansMulti):
         *,
         dt: int = 10**8,
         complete: bool = False,
-        index: bool = True,
+        index: bool = False,
         cycle: bool = False,
         flags: bool = False,
         raw_headers: bool = False,
@@ -34,7 +34,7 @@ class PcapScanSource(ScansMulti):
             complete: set to True to only release complete scans
             index: if this flag is set to true an index will be built for the pcap
                 file enabling index and slice operations on the scan source, if
-                the flag is set to False indexing is skipped (default is True)
+                the flag is set to False indexing is skipped (default is False)
             cycle: repeat infinitely after iteration is finished (default is False)
         """
 

@@ -22,7 +22,7 @@ class OsfScanSource(MultiScanSource):
         *,
         dt: int = 10**8,
         complete: bool = False,
-        index: bool = True,
+        index: bool = False,
         cycle: bool = False,
         **_
     ) -> None:
@@ -36,7 +36,7 @@ class OsfScanSource(MultiScanSource):
             index: if this flag is set to true and the underlying osf file was
                 not indexed, in the case the file will be indexed inplace, otherwise
                 the file will be left intact. If the file already had index builtin
-                then this flag does nothing (default is True)
+                then this flag does nothing (default is False)
             cycle: repeat infinitely after iteration is finished (default is False)
         """
 
