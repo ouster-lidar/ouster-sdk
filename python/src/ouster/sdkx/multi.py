@@ -751,7 +751,9 @@ class ScansMulti(client.MultiScanSource):
         raise NotImplementedError
 
     def close(self) -> None:
-        self._source.close()
+        if self._source:
+            self._source.close()
+            self._source = None
 
     def __del__(self) -> None:
         self.close()

@@ -38,6 +38,8 @@ class PcapScanSource(ScansMulti):
             cycle: repeat infinitely after iteration is finished (default is False)
         """
 
+        self._source = None
+
         metadata_paths = resolve_metadata_multi(file_path)
         if not metadata_paths:
             raise RuntimeError(
@@ -46,6 +48,7 @@ class PcapScanSource(ScansMulti):
 
         # TODO: need a better way to save these
         self._metadata_paths = metadata_paths
+        print(f"loading metadata from {metadata_paths}")
 
         source = PcapMultiPacketReader(file_path,
                                        metadata_paths=metadata_paths,
