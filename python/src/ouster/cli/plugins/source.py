@@ -150,7 +150,7 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
     if on_eof == 'loop':
         source = ctx.scan_source
         from ouster.sdk.client import ScanSourceAdapter
-        if type(source) is ScanSourceAdapter:
+        if isinstance(source, ScanSourceAdapter):
             source = source._scan_source
         # NOTE: setting it here instead of at open_source stage because we do not want to propagate
         #       the flag up to `source` command
@@ -256,7 +256,7 @@ class SourceMultiCommand(click.MultiCommand):
                 'save', context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
 
     def get_supported_source_types(self):
-        return [iotype for iotype in self.commands.keys() if type(iotype) is OusterIoType]
+        return [iotype for iotype in self.commands.keys() if isinstance(iotype, OusterIoType)]
 
     def get_source_file_extension_str(self):
         exts = sorted(

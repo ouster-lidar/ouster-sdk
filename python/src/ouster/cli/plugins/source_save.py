@@ -6,16 +6,16 @@ from pathlib import Path
 import numpy as np
 from typing import (Tuple, List, Iterator, Optional, Union)
 from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
-                           Sensor, UDPProfileLidar,
-                           LidarScan, ChanField, XYZLut,
-                           ScanSource, destagger, SensorInfo,
-                           LidarPacket, ImuPacket)
+                               UDPProfileLidar, LidarScan, ChanField, XYZLut,
+                               ScanSource, destagger, SensorInfo,
+                               LidarPacket, ImuPacket, ScanSourceAdapter)
 import ouster.cli.core.pcap
 import ouster.cli.core.sensor
 from ouster.sdk import osf
-from ouster.sdk.pcap import RecordingPacketSource
+from ouster.sdk.pcap import BagRecordingPacketSource, RecordingPacketSource, PcapScanSource
+from ouster.sdk.sensor import SensorScanSource
 from ouster.sdk.util import scan_to_packets  # type: ignore
-from ouster.sdk.pcap.pcap import MTU_SIZE, Pcap
+from ouster.sdk.pcap.pcap import MTU_SIZE
 import ouster.sdk.pcap._pcap as _pcap
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
@@ -60,31 +60,32 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str,
     prefix = f"{prefix}_" if prefix else prefix
     filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_{info.mode}_{time_str}")
 
-    packetsource = getattr(scan_source, "_source", None)
-    packetsource = (packetsource if
-                    type(packetsource) is Pcap or
-                    type(packetsource) is Sensor
-                    else None)
-
-    click.echo(f"Saving PCAP file at {filename}.pcap")
-    click.echo(f"Saving metadata json at {filename}.json")
-
     # Save metadata as json
     with open(f"{filename}.json", 'w') as f:
         f.write(info.updated_metadata_string())
 
     if raw:
-        if type(ctx.scan_source) not in [Pcap, Sensor]:
-            raise click.exceptions.BadParameter("Saving in --raw mode is not supported with the current source type.")
+        scan_source = None
+        if isinstance(ctx.scan_source, ScanSourceAdapter):
+            if isinstance(ctx.scan_source._scan_source, SensorScanSource):
+                scan_source = ctx.scan_source._scan_source._scans  # type: ignore
+            elif isinstance(ctx.scan_source._scan_source, PcapScanSource):
+                scan_source = ctx.scan_source._scan_source  # type: ignore
+
+        if scan_source is None:
+            # [kk] TODO: Only single-source via ScanSourceAdapter is currently supported.
+            # Revisit when implmenting multi source in CLI
+            raise click.exceptions.BadParameter("Saving in -r/--raw mode is not supported with "
+                                                "the current source type.")
 
         if len(ctx.invoked_command_names) != 1:
-            click.echo("Warning: Saving pcap without -r/--rebuild will drop any LidarScan "
+            click.echo("Warning: Saving pcap in -r/--raw mode will drop any LidarScan "
                        "transformations perfomed by other commands in this multi-command chain: "
                        f"{', '.join([c for c in ctx.invoked_command_names if c != 'save'])}.")
 
-        # Replace ScanSource's packetsource with RecordingPacketSource
-        ctx.scan_source._source = RecordingPacketSource(  # type: ignore
-            packetsource, "", n_frames=None,  # type: ignore
+        # replace ScanSource's packetsource with RecordingPacketSource
+        scan_source._source = RecordingPacketSource(
+            scan_source._source, dir, n_frames=None,
             prefix=prefix, chunk_size=chunk_size,
             lidar_port=info.udp_port_lidar, imu_port=info.udp_port_imu
         )
@@ -111,7 +112,10 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str,
             finally:
                 # Finish pcap_recording when this generator is garbage collected
                 _pcap.record_uninitialize(pcap_record_handle)
+        click.echo(f"Saving PCAP file at {filename}.pcap")
         ctx.scan_iter = save_iter()
+
+    click.echo(f"Saving metadata json at {filename}.json")
 
 
 @click.command(context_settings=dict(
@@ -347,8 +351,6 @@ def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str,
                     raw: bool, **kwargs) -> None:
     """Save source as a packet rosbag."""
     if raw:
-        if type(ctx.scan_source) not in [Pcap, Sensor]:
-            raise click.exceptions.BadParameter("Saving in --raw mode is not supported with the current source type.")
         _ = source_to_bag_iter(ctx.scan_source, ctx.scan_source.metadata, save_source_packets=True,  # type: ignore
                            prefix=prefix, dir=dir)
     else:
@@ -357,7 +359,7 @@ def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str,
 
 
 def source_to_bag_iter(scans: Union[ScanSource, Iterator[LidarScan]], info: SensorInfo,
-                       save_source_packets: bool = False, prefix: str = "",
+                       sensor_idx: int = 0, save_source_packets: bool = False, prefix: str = "",
                        dir: Optional[str] = None) -> Iterator[LidarScan]:
     """Create a ROSBAG saving iterator from a LidarScan iterator
 
@@ -416,29 +418,24 @@ def source_to_bag_iter(scans: Union[ScanSource, Iterator[LidarScan]], info: Sens
 
         return save_iter()
     else:
-        packet_source = getattr(scans, "_source", None)
-        packet_source = (packet_source if
-                         type(packet_source) is Pcap or
-                         type(packet_source) is Sensor
-                         else None)
-        if packet_source is None:
-            raise RuntimeError("Error source_to_bag_iter: incompatible scans object for saving raw packets.")
+        scan_source = None
+        if isinstance(scans, ScanSourceAdapter):
+            if isinstance(scans._scan_source, SensorScanSource):
+                scan_source = scans._scan_source._scans  # type: ignore
+            elif isinstance(scans._scan_source, PcapScanSource):
+                scan_source = scans._scan_source  # type: ignore
 
-        def saving_packet_iter():
-            try:
-                with rosbag.Bag(filename, 'w') as outbag:
-                    for packet in packet_source:
-                        ts = rospy.Time.from_sec(packet.capture_timestamp)
-                        msg = PacketMsg(buf=packet._data.tobytes())
-                        if isinstance(packet, LidarPacket):
-                            outbag.write(lidar_topic, msg, ts)
-                        elif isinstance(packet, ImuPacket):
-                            outbag.write(imu_topic, msg, ts)
-                    yield packet
-            except (KeyboardInterrupt, StopIteration):
-                pass
+        if scan_source is None:
+            # [kk] TODO: Only single-source via ScanSourceAdapter is currently supported.
+            # Revisit when implmenting multi source in CLI
+            raise click.exceptions.BadParameter("Saving in -r/--raw mode is not supported with "
+                                                "the current source type.")
 
-        scans._source = saving_packet_iter()  # type: ignore
+        # replace ScanSource's packetsource with BagRecordingPacketSource
+        scan_source._source = BagRecordingPacketSource(
+            scan_source._source, filename, lidar_topic=lidar_topic, imu_topic=imu_topic
+        )
+
         return scans  # type: ignore
 
 

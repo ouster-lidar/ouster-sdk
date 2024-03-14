@@ -13,3 +13,4 @@ from .pcap import _replay
 from .pcap_multi_packet_reader import PcapMultiPacketReader
 from .pcap_scan_source import PcapScanSource
 from .packet_iter import RecordingPacketSource
+from .packet_iter import BagRecordingPacketSource
