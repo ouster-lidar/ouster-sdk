@@ -101,6 +101,34 @@ to work with OSF files.
     )doc",
           py::arg("file"), py::arg("with_decoding") = false);
 
+    m.def("backup_osf_file_metablob", &ouster::osf::backup_osf_file_metablob,
+          R"doc(
+         Backup the metadata blob in an OSF file.
+
+        :file: OSF file path (v1/v2)
+        :backup_file_name: Backup path
+    )doc",
+          py::arg("file"), py::arg("backup_file_name"));
+
+    m.def("restore_osf_file_metablob", &ouster::osf::restore_osf_file_metablob,
+          R"doc(
+        Restore an OSF metadata blob from a backup file.
+
+        :file: OSF file path (v1/v2)
+        :backup_file_name: The backup to use
+    )doc",
+          py::arg("file"), py::arg("backup_file_name"));
+
+    m.def("osf_file_modify_metadata", &ouster::osf::osf_file_modify_metadata,
+          R"doc(
+        Modify an OSF files sensor_info metadata.
+
+        :file_name: The OSF file to modify.
+        :new_metadata: Array containing sensor infos to write to the file.
+        :returns: The number of the bytes written to the OSF file.
+    )doc",
+          py::arg("file_name"), py::arg("new_metadata"));
+
     m.def("pcap_to_osf", &ouster::osf::pcap_to_osf, R"doc(
         Convert Pcap file to OSF v2.
 

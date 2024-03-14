@@ -166,7 +166,15 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
         metadata_offset = osf_file.metadata_offset();
     }
     truncate_file(osf_file_name, metadata_offset);
-    return append_binary_file(osf_file_name, backup_file_name);
+    auto result = append_binary_file(osf_file_name, backup_file_name);
+
+    if (result > 0) {
+        finish_osf_file(osf_file_name, metadata_offset,
+                        result - metadata_offset);
+    } else {
+        return -1;
+    }
+    return result;
 }
 
 flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
@@ -226,32 +234,18 @@ int64_t osf_file_modify_metadata(
     int64_t saved_bytes = -2;
     uint64_t metadata_offset = 0;
 
-    if (make_tmp_dir(temp_dir)) {
-        temp_path = path_concat(temp_dir, "temp_binary");
-        // Scope the reading portion so that we dont run into read write file
-        // locks
-        {
-            OsfFile osf_file{file_name};
-            metadata_offset = osf_file.metadata_offset();
-        }
-
-        // Backup the current metadata blob
-        if (copy_file_trailing_bytes(file_name, temp_path, metadata_offset) <=
-            0) {
-            // Cant backup current metadata blob, error out
-            return -1;
-        }
-
-        auto metadata_fbb =
-            _generate_modify_metadata_fbb(file_name, new_metadata);
-
-        truncate_file(file_name, metadata_offset);
-        saved_bytes = builder_to_file(metadata_fbb, file_name, true);
-        finish_osf_file(file_name, metadata_offset, saved_bytes);
-
-        unlink_path(temp_path);
-        unlink_path(temp_dir);
+    // Scope the reading portion so that we dont run into read write file
+    // locks
+    {
+        OsfFile osf_file{file_name};
+        metadata_offset = osf_file.metadata_offset();
     }
+
+    auto metadata_fbb = _generate_modify_metadata_fbb(file_name, new_metadata);
+
+    truncate_file(file_name, metadata_offset);
+    saved_bytes = builder_to_file(metadata_fbb, file_name, true);
+    finish_osf_file(file_name, metadata_offset, saved_bytes);
 
     return saved_bytes;
 }

@@ -1,5 +1,8 @@
 import pytest
 import numpy as np
+import hashlib
+import shutil
+import os
 
 from more_itertools import ilen
 
@@ -175,3 +178,40 @@ def test_osf_messages(input_osf_file):
 
     assert reader.has_message_idx
     assert reader.ts_by_message_idx(lidar_stream.id, 0) > 0
+
+
+def _get_file_hash(file_name):
+    result = hashlib.sha512()
+    with open(file_name, "rb") as f:
+        result.update(f.read())
+
+    return result.hexdigest()
+
+
+def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
+    new_metadata = client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+
+    test_path = os.path.join(tmp_path, "test.osf")
+    backup_path = os.path.join(tmp_path, "test.bak")
+
+    shutil.copyfile(str(input_osf_file), test_path)
+    assert os.path.exists(test_path)
+    assert os.stat(test_path).st_size == os.stat(str(input_osf_file)).st_size
+    hash1 = _get_file_hash(test_path)
+
+    metadata1 = osf.dump_metadata(test_path)
+    assert not os.path.exists(backup_path)
+    osf.backup_osf_file_metablob(test_path, backup_path)
+    assert os.path.exists(backup_path)
+
+    osf.osf_file_modify_metadata(test_path, [new_metadata])
+
+    hash2 = _get_file_hash(test_path)
+
+    assert hash1 != hash2
+
+    osf.restore_osf_file_metablob(test_path, backup_path)
+    hash3 = _get_file_hash(test_path)
+    assert hash2 != hash3
+    metadata3 = osf.dump_metadata(test_path)
+    assert metadata1 == metadata3

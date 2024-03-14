@@ -154,7 +154,11 @@ bool OsfFile::valid() {
     }
 
     if (osf_header->file_length() != size_) {
-        print_error(filename_, "OSF header file size field is incorrect.");
+        std::stringstream ss;
+        ss << "OSF file size does not match the stored value";
+        ss << " Expected: " << size_;
+        ss << " Actual: " << osf_header->file_length();
+        print_error(filename_, ss.str());
         return false;
     }
 

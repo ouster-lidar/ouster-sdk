@@ -22,6 +22,10 @@ from ._osf import Writer
 from ._osf import WriterV2
 
 from ._osf import slice_and_cast
+from ._osf import dump_metadata
+from ._osf import backup_osf_file_metablob
+from ._osf import restore_osf_file_metablob
+from ._osf import osf_file_modify_metadata
 
 from .data import Scans
 
