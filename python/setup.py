@@ -150,7 +150,6 @@ def install_requires():
         'psutil >=5.9.5, <6',
         'zeroconf >=0.58.2',
         'click >=8.1.3, <9',
-        'python-magic ==0.4.27',
         'importlib_metadata ==6.6.0',
         'prettytable >= 2.1.0',
         'requests >=2.0, <3',

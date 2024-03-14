@@ -46,32 +46,9 @@ def io_type_from_extension(source: str) -> OusterIoType:
             OusterIoType.extension_2_io_type().keys()))
 
 
-def io_type_from_magic(source: str) -> Optional[OusterIoType]:
-    """Try to return an OusterIoType given a file path, using python-magic"""
-    try:
-        import magic
-        # Note - python-magic doesn't know what .osf or .bag files are.
-        type_wizard = magic.from_file(os.path.realpath(source))
-        if "pcap capture file" in type_wizard:
-            return OusterIoType.PCAP
-        elif "Point Cloud Data" in type_wizard:
-            return OusterIoType.PCD
-        elif "LIDAR point data records" in type_wizard:
-            return OusterIoType.LAS
-        elif "CSV text" in type_wizard:
-            return OusterIoType.CSV
-
-    except ImportError:
-        pass
-    return None
-
-
 def io_type(source: str) -> OusterIoType:
     """Return a OusterIoType given a source arg str"""
     if os.path.isfile(source):
-        magic_type = io_type_from_magic(source)
-        if magic_type:
-            return magic_type
         return io_type_from_extension(source)
     try:
         if socket.gethostbyname(source):

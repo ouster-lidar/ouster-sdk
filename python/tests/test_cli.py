@@ -11,7 +11,7 @@ from click.testing import CliRunner
 
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
-from ouster.cli.plugins.io_type import io_type_from_extension, io_type_from_magic, OusterIoType
+from ouster.cli.plugins.io_type import io_type_from_extension, OusterIoType
 from ouster.cli.plugins import source  # noqa: F401
 import ouster.pcap
 
@@ -33,14 +33,6 @@ class set_directory(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         os.chdir(self.origin)
-
-
-has_magic = False
-try:
-    import magic  # noqa: F401
-    has_magic = True
-except ImportError as e:
-    print(e)
 
 
 @pytest.fixture
@@ -110,17 +102,6 @@ def test_cli_args_borg_2() -> None:
     assert CliArgs().args == ['d', 'e', 'f']
     assert CliArgs().has_any_of(['d', 'e'])
     assert not CliArgs().has_any_of(['a', 'b'])
-
-
-@pytest.mark.skipif(not has_magic, reason="didn't have the magic.")
-def test_io_type_from_magic(test_osf_file, test_pcap_file) -> None:
-    # magic doesn't know OSF
-    assert io_type_from_magic(test_osf_file) is None
-    assert io_type_from_magic(test_pcap_file) == OusterIoType.PCAP
-    # test_bag_file = BAG
-    # assert io_type_from_magic(test_bag_file) is None
-    with pytest.raises(FileNotFoundError):
-        io_type_from_magic('doesntexist')
 
 
 def test_io_type_from_extension() -> None:
