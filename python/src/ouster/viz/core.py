@@ -301,7 +301,7 @@ class LidarScanViz:
                         mods: int) -> bool:
             if (key, mods) in key_bindings:
                 key_bindings[key, mods](self)
-                self.draw(update=self._viz.paused())
+                self.draw(update=self._viz.update_on_input())
             return True
 
         key_definitions: Dict[str, str] = {
@@ -820,8 +820,8 @@ class SimpleViz:
 
         # pausing and stepping
         self._cv = threading.Condition()
-        self._paused = False
-        self._viz.paused(self._paused)
+        self._paused = True
+        self._viz.update_on_input(self._paused)
         self._step = 0
         self._proc_exit = False
 
@@ -929,7 +929,7 @@ class SimpleViz:
         """Pause or unpause the visualization."""
         with self._cv:
             self._paused = not self._paused
-            self._viz.paused(self._paused)
+            self._viz.update_on_input(self._paused)
             self._update_playback_osd()
             if not self._paused:
                 self._cv.notify()
@@ -938,7 +938,7 @@ class SimpleViz:
         """Seek forward of backwards in the stream."""
         with self._cv:
             self._paused = True
-            self._viz.paused(self._paused)
+            self._viz.update_on_input(self._paused)
             self._step = n_frames
             self._update_playback_osd()
             self._cv.notify()
@@ -1038,7 +1038,7 @@ class SimpleViz:
 
                     if self._pause_at == scan_idx:
                         self._paused = True
-                        self._viz.paused(self._paused)
+                        self._viz.update_on_input(self._paused)
 
                     self._update_playback_osd()
 

@@ -276,11 +276,11 @@ class PointViz:
         ...
 
     @overload
-    def paused(self) -> bool:
+    def update_on_input(self) -> bool:
         ...
 
     @overload
-    def paused(self, state: bool) -> None:
+    def update_on_input(self, state: bool) -> None:
         ...
 
     def update(self) -> bool:

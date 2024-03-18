@@ -128,18 +128,18 @@ class PointViz {
     void visible(bool state);
 
     /**
-     * Check if viz set in a paused state
+     * Check if viz update_on_input state
      *
-     * @return true if the viz is currently paused
+     * @return true if the viz will update on input
      */
-    bool paused();
+    bool update_on_input();
 
     /**
-     * Set viz paused flag.
+     * Set viz update_on_input flag.
      *
      * @param[in] state new value of the flag
      */
-    void paused(bool state);
+    void update_on_input(bool state);
 
     /**
      * Update visualization state
