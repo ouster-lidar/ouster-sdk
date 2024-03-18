@@ -40,9 +40,7 @@ class OsfScanSource(MultiScanSource):
             cycle: repeat infinitely after iteration is finished (default is False)
         """
 
-        # TODO: implement 'complete' flag for OSF
-        if complete:
-            print("OSF 'complete' flag requested but isn't implemented for OSF")
+        self._complete = complete
 
         self._reader = osf.Reader(file_path)
 
@@ -156,7 +154,10 @@ class OsfScanSource(MultiScanSource):
         for idx, msg in self._msgs_iter(self._stream_ids, start_ts, stop_ts, cycle):
             ls = msg.decode()
             if ls:
-                yield idx, cast(LidarScan, ls)
+                window = self.metadata[idx].format.column_window
+                scan = cast(LidarScan, ls)
+                if not self._complete or scan.complete(window):
+                    yield idx, scan
 
     @property
     def sensors_count(self) -> int:
