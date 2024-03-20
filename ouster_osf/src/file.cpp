@@ -189,7 +189,7 @@ OsfFile::operator bool() const { return good(); };
 uint64_t OsfFile::offset() const { return offset_; }
 // ========= Geneal Data Access =============
 
-OsfFile& OsfFile::seek(const uint64_t pos) {
+OsfFile& OsfFile::seek(uint64_t pos) {
     if (!good()) throw std::logic_error("bad osf file");
     if (pos > size_) {
         std::stringstream ss;

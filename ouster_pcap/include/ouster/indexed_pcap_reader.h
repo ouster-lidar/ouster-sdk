@@ -43,7 +43,7 @@ struct PcapIndex {
      * Returns the number of frames in the frame index for the given sensor
      * index.
      *
-     * @param sensor_index[in] The position of the sensor for which to retrieve
+     * @param[in] sensor_index The position of the sensor for which to retrieve
      * the desired frame count.
      * @return The number of frames in the sensor's frame index.
      */
@@ -71,15 +71,15 @@ struct PcapIndex {
  */
 struct IndexedPcapReader : public PcapReader {
     /**
-     * @param pcap_filename[in] A file path of the pcap to read
-     * @param metadata_filenames[in] A vector of sensor metadata file paths
+     * @param[in] pcap_filename A file path of the pcap to read
+     * @param[in] metadata_filenames A vector of sensor metadata file paths
      */
     IndexedPcapReader(const std::string& pcap_filename,
                       const std::vector<std::string>& metadata_filenames);
 
     /**
-     * @param pcap_filename[in] A file path of the pcap to read
-     * @param sensor_infos[in] A vector of sensor info structures for each
+     * @param[in] pcap_filename A file path of the pcap to read
+     * @param[in] sensor_infos A vector of sensor info structures for each
      * sensors
      */
     IndexedPcapReader(

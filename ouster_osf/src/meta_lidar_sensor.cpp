@@ -17,12 +17,31 @@ namespace osf {
 
 // === Lidar Sensor stream/msgs functions ====================
 
+/**
+ * Internal helper function for creating flatbuffer blobs to represent
+ * LidarSensor objects.
+ *
+ * @param[in] fbb The flatbufferbuilder to use when generating the blob.
+ * @param[in] sensor_metadata ///< The json string representation of the
+ *                            ///< sensor_info to use when creating
+ *                            ///< the flatbuffer blob.
+ * @return The offset pointer inside the flatbufferbuilder to the new section.
+ */
 flatbuffers::Offset<ouster::osf::gen::LidarSensor> create_lidar_sensor(
     flatbuffers::FlatBufferBuilder& fbb, const std::string& sensor_metadata) {
     auto ls_offset =
         ouster::osf::gen::CreateLidarSensorDirect(fbb, sensor_metadata.c_str());
     return ls_offset;
 }
+
+/**
+ * Internal helper function for restoring a LidarSensor's json string
+ * representation of a sensor_info from a raw flatbuffer byte vector.
+ *
+ * @param[in] buf The flatbuffer byte vector.
+ * @return ///< The json string representation of the sensor_info object
+ *         ///< contained within the flatbuffer blob.
+ */
 
 std::unique_ptr<std::string> restore_lidar_sensor(
     const std::vector<uint8_t> buf) {

@@ -23,9 +23,8 @@ namespace osf {
  *
  * @param file OSF file (only v2 supported)
  * @param full flag print full information (i.e. chunks_offset and decoded
- * metas)
+ *             metas)
  * @return JSON formatted string of the OSF metadata + header
- *
  */
 std::string dump_metadata(const std::string& file, bool full = true);
 
@@ -35,16 +34,15 @@ std::string dump_metadata(const std::string& file, bool full = true);
  *
  * @param file OSF file
  * @param with_decoding decode known messages (used to time a
- *  reading + decoding together)
- *
+ *                      reading + decoding together)
  */
 void parse_and_print(const std::string& file, bool with_decoding = false);
 
 /**
  * Backup the metadata blob in an OSF file.
  *
- * @param osf_file_name[in] The OSF file to backup from.
- * @param backup_file_name[in] The path to store the metadata blob backup.
+ * @param[in] osf_file_name The OSF file to backup from.
+ * @param[in] backup_file_name The path to store the metadata blob backup.
  * @return The number of the bytes written to the backup file.
  */
 int64_t backup_osf_file_metablob(const std::string& osf_file_name,
@@ -53,8 +51,8 @@ int64_t backup_osf_file_metablob(const std::string& osf_file_name,
 /**
  * Restore an OSF metadata blob from a backup file.
  *
- * @param osf_file_name[in] The OSF file to restore to.
- * @param backup_file_name[in] The path to the metadata blob backup.
+ * @param[in] osf_file_name The OSF file to restore to.
+ * @param[in] backup_file_name The path to the metadata blob backup.
  * @return The number of the bytes written to the OSF file.
  */
 int64_t restore_osf_file_metablob(const std::string& osf_file_name,
@@ -63,8 +61,8 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
 /**
  * Modify an OSF files sensor_info metadata.
  *
- * @param file_name[in] The OSF file to modify.
- * @param new_metadata[in] The new metadata for the OSF file
+ * @param[in] file_name The OSF file to modify.
+ * @param[in] new_metadata The new metadata for the OSF file
  * @return The number of the bytes written to the OSF file.
  */
 int64_t osf_file_modify_metadata(
@@ -73,7 +71,15 @@ int64_t osf_file_modify_metadata(
 
 /**
  * Convert pcap with a single sensor stream to OSF.
- * @todo fix api comments
+ *
+ * @param[in] pcap_filename The pcap file to convert to OSF.
+ * @param[in] meta_filename The metadata file associated with pcap_filename.
+ * @param[in] lidar_port The lidar port corrosponding to the lidar stream in the
+ *                       pcap file.
+ * @param[in] osf_filename The path for the resulting OSF file.
+ * @param[in] chunk_size The chunk size to use for the OSF file, this argument
+ *                       is optional and will default.
+ * @return The success of the operation
  */
 bool pcap_to_osf(const std::string& pcap_filename,
                  const std::string& meta_filename, int lidar_port,

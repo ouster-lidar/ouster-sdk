@@ -57,8 +57,8 @@ std::string get_last_error();
 /**
  * Truncate a file to a certain length
  *
- * @param path[in] The file to truncate.
- * @param filesize[in] The final size of the file.
+ * @param[in] path The file to truncate.
+ * @param[in] filesize The final size of the file.
  *
  * @return The number of bytes of the final file.
  */
@@ -67,8 +67,8 @@ int64_t truncate_file(const std::string& path, uint64_t filesize);
 /**
  * Appends one file to another
  *
- * @param append_to_file_name[in] The file to append to.
- * @param append_from_file_name[in] The file to append from.
+ * @param[in] append_to_file_name The file to append to.
+ * @param[in] append_from_file_name The file to append from.
  *
  * @return The number of bytes of the final file.
  */
@@ -78,9 +78,9 @@ int64_t append_binary_file(const std::string& append_to_file_name,
 /**
  * Copies trailing bytes from a file
  *
- * @param source_file[in] The file to copy from.
- * @param target_file[in] The file to copy to.
- * @param offset[in] The offset in the source_file to start copying from.
+ * @param[in] source_file The file to copy from.
+ * @param[in] target_file The file to copy to.
+ * @param[in] offset The offset in the source_file to start copying from.
  *
  * @return The number of bytes of the target file.
  */

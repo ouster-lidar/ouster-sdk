@@ -87,50 +87,79 @@ class MetadataEntry {
         std::unique_ptr<MetadataEntry> (*)(const std::vector<uint8_t>&);
 
     /**
-     * Type of the metadata, used to identify the object type in serialized OSF
-     * and as key in deserialization registry
+     * @return Type of the metadata, used to identify the object type in
+     *         serialized OSF and as key in deserialization registry
      */
     virtual std::string type() const = 0;
 
     /**
-     * Same as type with the difference that type() can be dynamic and
-     * static_type() should always be defined in compile time.
-     * NOTE: Introduced as a convenience/(HACK?) to simpler reconstruct and cast
-     * dynamic objects from MetadataEntryRef
+     * @return Same as type with the difference that type() can be dynamic and
+     *         static_type() should always be defined in compile time.
+     *         NOTE: Introduced as a convenience/(HACK?) to simpler reconstruct
+     *         and cast dynamic objects from MetadataEntryRef
      */
     virtual std::string static_type() const = 0;
 
     /**
      * Should be provided by derived class and is used in handling polymorphic
      * objects and avoid object slicing
+     *
+     * @return Should return a clone of the current MetadataEntry
      */
     virtual std::unique_ptr<MetadataEntry> clone() const = 0;
 
     /**
-     * byte represantation of the internal derived metadata type, used as
-     * serialization function when saving to OSF file
+     * Byte represantation of the internal derived metadata type, used as
+     * serialization function when saving to OSF file.
+     *
+     * @return The byte vector representation of the metadata.
      */
     virtual std::vector<uint8_t> buffer() const = 0;
 
     /**
-     * recover metadata object from the bytes representation if possible.
+     * Recover metadata object from the bytes representation if possible.
      * If recovery is not possible returns nullptr
+     *
+     * @param[in] buf The buffer to recover the metadata object from.
+     * @param[in] type_str The type string from the derived type.
+     * @return A new object of the derived type cast as a MetadataEntry
      */
     static std::unique_ptr<MetadataEntry> from_buffer(
         const std::vector<uint8_t>& buf, const std::string type_str);
 
     /**
-     * string representation of the internal metadata object, used in
+     * String representation of the internal metadata object, used in
      * to_string() for debug/info outputs.
+     *
+     * @return The string representation for the internal metadata object.
      */
     virtual std::string repr() const;
 
     /**
-     * string representation of the whole metadata entry with type and id
+     * String representation of the whole metadata entry with type and id.
+     *
+     * @todo Figure out why we have both repr and to_string
+     *
+     * @return The string representation of the whole metadata entry.
      */
     virtual std::string to_string() const;
 
+    /**
+     * Unique id used inside the flatbuffer metadata store to refer to
+     * metadata entries.
+     *
+     * @param[in] id The unique id to set.
+     */
     void setId(uint32_t id);
+
+    /**
+     * Unique id used inside the flatbuffer metadata store to refer to
+     * metadata entries.
+     *
+     * @relates setId
+     *
+     * @return The unique id of this object.
+     */
     uint32_t id() const;
 
     /**
@@ -139,6 +168,10 @@ class MetadataEntry {
      * is a polymorphic object, or as reconstruction from buffer()
      * representation when it used from MetadataEntryRef (i.e. wrapper on
      * underlying bytes)
+     *
+     * @tparam T The derived metadata type
+     * @return A unique pointer to the derived metadata object, nullptr on
+     *         error.
      */
     template <typename T>
     std::unique_ptr<T> as() const {
@@ -150,6 +183,10 @@ class MetadataEntry {
                 m = T::from_buffer(buffer());
             }
             if (m != nullptr) {
+                // Verify the casting
+                T& test = dynamic_cast<T&>(*m);
+                (void)test;
+
                 m->setId(id());
                 // NOTE: Little bit crazy unique_ptr cast (not absolutely
                 //       correct because of no deleter handled). But works
@@ -163,13 +200,18 @@ class MetadataEntry {
     /**
      * Implementation details that emits buffer() content as proper
      * Flatbuffer MetadataEntry object.
+     *
+     * @param[in] fbb The flatbuffer builder to use to make the entry.
+     * @return An offset into a flatbuffer for the new entry.
      */
     flatbuffers::Offset<ouster::osf::gen::MetadataEntry> make_entry(
         flatbuffers::FlatBufferBuilder& fbb) const;
 
     /**
-     * Registry that holds from_buffer function by type string and used
-     * during deserialization.
+     * Method to return the registry that holds from_buffer function by
+     * type string and is used during deserialization.
+     *
+     * @return
      */
     static std::map<std::string, from_buffer_func>& get_registry();
 

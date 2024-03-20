@@ -15,13 +15,16 @@
 namespace ouster {
 namespace osf {
 
-/// Size of the CRC field in a buffer
+/**
+ *  Size of the CRC field in a buffer
+ */
 const uint32_t CRC_BYTES_SIZE = 4;
 
 /**
  * Caclulate CRC value for the buffer of given size. (ZLIB version)
- * @param buf pointer to the data buffer
- * @param size size of the buffer in bytes
+ *
+ * @param[in] buf Pointer to the data buffer.
+ * @param[in] size Size of the buffer in bytes.
  * @return CRC32 value
  */
 uint32_t crc32(const uint8_t* buf, uint32_t size);
@@ -29,9 +32,10 @@ uint32_t crc32(const uint8_t* buf, uint32_t size);
 /**
  * Caclulate and append CRC value for the buffer of given size and append
  * it to the initial crc value. (ZLIB version)
- * @param initial_crc initial crc value to append to
- * @param buf pointer to the data buffer
- * @param size size of the buffer in bytes
+ *
+ * @param[in] initial_crc Initial crc value to append to.
+ * @param[in] buf Pointer to the data buffer.
+ * @param[in] size Size of the buffer in bytes.
  * @return CRC32 value
  */
 uint32_t crc32(uint32_t initial_crc, const uint8_t* buf, uint32_t size);

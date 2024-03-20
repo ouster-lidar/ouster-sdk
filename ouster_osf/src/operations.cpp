@@ -177,6 +177,14 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
     return result;
 }
 
+/**
+ * Internal simplification function for generating modified
+ * metadata flatbuffer blobs.
+ *
+ * @param[in] file_name Filename of the OSF file to modify
+ * @param[in] new_metadata List of new sensor infos to populate
+ * @return The generated flatbuffer metadata blob
+ */
 flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
     const std::string& file_name,
     const std::vector<ouster::sensor::sensor_info>& new_metadata) {

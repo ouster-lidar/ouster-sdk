@@ -85,6 +85,11 @@ StreamingInfo::StreamingInfo(
     : chunks_info_{chunks_info.begin(), chunks_info.end()},
       stream_stats_{stream_stats.begin(), stream_stats.end()} {}
 
+StreamingInfo::StreamingInfo(
+    const std::map<uint64_t, ChunkInfo>& chunks_info,
+    const std::map<uint32_t, StreamStats>& stream_stats)
+    : chunks_info_(chunks_info), stream_stats_(stream_stats) {}
+
 std::map<uint64_t, ChunkInfo>& StreamingInfo::chunks_info() {
     return chunks_info_;
 }

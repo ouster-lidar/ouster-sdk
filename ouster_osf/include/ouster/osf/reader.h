@@ -244,9 +244,9 @@ class Reader {
      * Requires the OSF with message_counts inside, i.e. has_message_idx()
      * return ``True``, otherwise return value is always empty (nullopt).
      *
-     * @param stream_id[in] stream id on which the message_idx search is
+     * @param[in] stream_id stream id on which the message_idx search is
      * performed
-     * @param message_idx[in] the message index (i.e. rank/number) to search for
+     * @param[in] message_idx the message index (i.e. rank/number) to search for
      * @return message timestamp that corresponds to the message_idx in the
      *         stream_id
      */
