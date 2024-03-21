@@ -6,7 +6,7 @@ import time
 import pytest
 import flask
 from werkzeug.serving import make_server
-from ouster.client._client import Client
+from ouster.sdk.client._client import Client
 
 
 class ServerThread(threading.Thread):

@@ -6,7 +6,7 @@ from itertools import islice
 from ouster.cli.core import cli
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
-from ouster.sdkx.open_source import open_source
+from ouster.sdk import open_source
 import ouster.cli.core.pcap
 import ouster.cli.core.sensor
 import ouster.cli.core.osf as osf_cli
@@ -132,14 +132,14 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
                accum_map: bool, accum_map_ratio: float) -> SourceCommandCallback:
     """Visualize LidarScans in a 3D viewer."""
     try:
-        from ouster.viz import SimpleViz, scans_accum_for_cli
+        from ouster.sdk.viz import SimpleViz, scans_accum_for_cli
     except ImportError as e:
         raise click.ClickException(str(e))
 
     # ugly workarounds ensue
     if on_eof == 'loop':
         source = ctx.scan_source
-        from ouster.client import ScanSourceAdapter
+        from ouster.sdk.client import ScanSourceAdapter
         if type(source) is ScanSourceAdapter:
             source = source._scan_source
         # NOTE: setting it here instead of at open_source stage because we do not want to propagate

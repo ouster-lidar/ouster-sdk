@@ -1,6 +1,5 @@
 import pytest
-
-from ouster.sdkx.forward_slicer import ForwardSlicer
+from ouster.sdk.util.forward_slicer import ForwardSlicer
 
 
 class ReferenceSliceable:

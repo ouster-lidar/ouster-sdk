@@ -11,7 +11,7 @@ from typing import List
 
 import numpy as np
 
-from ouster import client
+from ouster.sdk import client
 
 # TODO: replace link when new FW 2.5/3.0 manual is up
 

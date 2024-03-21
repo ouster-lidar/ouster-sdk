@@ -12,7 +12,7 @@ import inspect
 from pathlib import Path
 from os import path
 
-from ouster import client
+from ouster.sdk import client
 
 from tests.conftest import METADATA_DATA_DIR, PCAPS_DATA_DIR
 

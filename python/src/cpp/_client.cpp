@@ -595,12 +595,12 @@ PYBIND11_MODULE(_client, m) {
           [](const LidarScan& ls, const packet_writer& pw) -> py::list {
               py::list packets;
               py::object class_type =
-                  py::module::import("ouster.client").attr("LidarPacket");
+                  py::module::import("ouster.sdk.client").attr("LidarPacket");
 
               auto append_pypacket = [&](const LidarPacket& packet) {
                   py::object pypacket = class_type(py::arg("packet_format") = pw);
                   // next couple lines should not fail unless someone messes with
-                  // ouster.client.LidarPacket implementation
+                  // ouster.sdk.client.LidarPacket implementation
                   LidarPacket* p_ptr = pypacket.cast<LidarPacket*>();
                   if (p_ptr->buf.size() != packet.buf.size())
                       throw std::invalid_argument("packet sizes don't match");
@@ -718,7 +718,7 @@ PYBIND11_MODULE(_client, m) {
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__repr__", [](const sensor_info& self) {
             const auto mode = self.mode ? to_string(self.mode) : std::to_string(self.format.fps) + "fps";
-            return "<ouster.client.SensorInfo " + self.prod_line + " " +
+            return "<ouster.sdk.client.SensorInfo " + self.prod_line + " " +
                 self.sn + " " + self.fw_rev + " " + mode + ">";
         })
         .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; })
@@ -1340,7 +1340,7 @@ PYBIND11_MODULE(_client, m) {
         .def("__repr__",
              [](const LidarScan& self) {
                  std::stringstream ss;
-                 ss << "<ouster.client._client.LidarScan @" << (void*)&self
+                 ss << "<ouster.sdk.client._client.LidarScan @" << (void*)&self
                     << ">";
                  return ss.str();
              })

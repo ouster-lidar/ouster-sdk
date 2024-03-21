@@ -42,7 +42,7 @@ endif()
 # CMAKE_LIBRARY_OUTPUT_DIRECTORY is set in setup.py to the root of the `ouster`
 # namespace, but we have to provide per-target packages directories for each
 # extension module here.
-set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/sdk)
 
 # Note: With multi-configuration generators (like for VS), CMake automatically
 # appends build-configuration suffix to *_OUTPUT_DIRECTORY properties *unless*

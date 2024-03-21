@@ -178,11 +178,11 @@ setup(
     package_dir={'': 'src'},
     packages=find_namespace_packages(where='src', include='ouster.*'),
     package_data={
-        'ouster.client': ['py.typed', '_client.pyi'],
-        'ouster.pcap': ['py.typed', '_pcap.pyi'],
-        'ouster.osf': ['py.typed', '_osf.pyi'],
-        'ouster.viz': ['py.typed', '_viz.pyi'],
-        'ouster.sdkx': ['py.typed'],
+        'ouster.sdk.client': ['py.typed', '_client.pyi'],
+        'ouster.sdk.pcap': ['py.typed', '_pcap.pyi'],
+        'ouster.sdk.osf': ['py.typed', '_osf.pyi'],
+        'ouster.sdk.viz': ['py.typed', '_viz.pyi'],
+        'ouster.sdk.bag': ['py.typed']
     },
     author='Ouster Sensor SDK Developers',
     author_email='oss@ouster.io',
@@ -225,8 +225,8 @@ setup(
     },
     entry_points={'console_scripts':
         [
-            'simple-viz=ouster.sdk.simple_viz:main',
-            'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main',
+            'simple-viz=ouster.sdk.simple_viz:main',                        # TODO[UN]: do we need to keep?
+            'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main',     # TODO[UN]: do we need to keep?
             'ouster-cli=ouster.cli.core:run'
         ]
     }

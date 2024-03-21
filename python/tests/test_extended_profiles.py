@@ -5,9 +5,9 @@ All rights reserved.
 import pytest
 import numpy as np
 
-from ouster import client
-from ouster.client import _client
-from ouster.client._client import (ChanField, FieldInfo)
+from ouster.sdk import client
+from ouster.sdk.client import _client
+from ouster.sdk.client._client import (ChanField, FieldInfo)
 
 
 def test_create_field_info() -> None:

@@ -8,7 +8,7 @@ import time
 import pytest
 
 
-import ouster.sdk.pose_util as pu
+import ouster.sdk.util.pose_util as pu
 
 
 def gt_pose6toHomMatrix(vec: np.ndarray) -> np.ndarray:

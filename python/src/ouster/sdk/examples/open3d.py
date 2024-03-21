@@ -16,8 +16,8 @@ except ModuleNotFoundError:
           "platforms. Try running `pip3 install open3d` first.")
     exit(1)
 
-from ouster import client
-from ouster.client import _utils
+from ouster.sdk import client
+from ouster.sdk.client import _utils
 from .colormaps import colorize
 
 Z_NEAR = 1.0
@@ -268,7 +268,7 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
 def main() -> None:
     import argparse
     import os
-    import ouster.pcap as pcap
+    import ouster.sdk.pcap as pcap
 
     descr = """Example visualizer using the open3d library.
 

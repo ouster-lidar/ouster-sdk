@@ -1,6 +1,6 @@
 from enum import IntEnum
 from functools import wraps
-from ouster.client import LidarScan, ScanSource
+from ouster.sdk.client import LidarScan, ScanSource
 from typing import (Callable, List, Any, Union,
                     Dict, Optional, Iterator)
 from threading import Event

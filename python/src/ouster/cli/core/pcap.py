@@ -11,16 +11,15 @@ from more_itertools import side_effect, consume
 from prettytable import PrettyTable, PLAIN_COLUMNS  # type: ignore
 from textwrap import indent
 
-from ouster import client
-from ouster.sdk.sensor_util import configure_sensor
-from ouster.sdk.util import resolve_metadata
-import ouster.sdk.pose_util as pu
-from ouster.sdkx import packet_iter
-from ouster.sdkx.parsing import default_scan_fields
-from ouster.sdkx.util import resolve_extrinsics
+from ouster.sdk import client
+from ouster.sdk.sensor.util import configure_sensor
+from ouster.sdk.util import (resolve_metadata, resolve_extrinsics,
+                             default_scan_fields)
+import ouster.sdk.util.pose_util as pu
+from ouster.sdk.pcap import packet_iter
 from .util import (click_ro_file, import_rosbag_modules)
 
-from ouster.sdkx.pcap_scan_source import PcapScanSource
+from ouster.sdk.pcap import PcapScanSource
 
 
 @click.group(name="pcap", hidden=True)
@@ -76,7 +75,7 @@ def print_stream_table(all_infos):
 def pcap_info(file: str, n: int) -> None:
     """Print information about a pcap file to stdout."""
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
@@ -164,7 +163,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     settings separately.
     """
     try:
-        import ouster.pcap as pcap  # noqa: F401
+        import ouster.sdk.pcap as pcap  # noqa: F401
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
@@ -176,6 +175,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
     else:
         message += ", hit ctrl-c to exit"
 
+    # TODO: why are we not using open_source?
     config = configure_sensor(hostname,
                               lidar_port,
                               do_not_reinitialize=do_not_reinitialize,
@@ -211,7 +211,7 @@ def pcap_record(hostname: str, dest, lidar_port: int, imu_port: int,
         click.echo(message)
         if viz:
             try:
-                from ouster.viz import SimpleViz, scans_accum_for_cli
+                from ouster.sdk.viz import SimpleViz, scans_accum_for_cli
             except ImportError as e:
                 raise click.ClickException(
                     "Please verify that libGL is installed. Error: " + str(e))
@@ -325,14 +325,14 @@ def pcap_viz(file: str, meta: Optional[str], cycle: bool, on_eof: str,
         timeout = None
 
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libpcap is installed. Error: " + str(e))
 
     try:
-        from ouster.viz import SimpleViz, LidarScanViz, scans_accum_for_cli
-        from ouster.sdkx.multi_viz import MultiLidarScanViz
+        from ouster.sdk.viz import SimpleViz, LidarScanViz, scans_accum_for_cli
+        from ouster.sdk.viz.multi_viz import MultiLidarScanViz
     except ImportError as e:
         raise click.ClickException(
             "Please verify that libGL is installed. Error: " + str(e))
@@ -481,7 +481,7 @@ def pcap_slice_impl(file: str, start_frame: int, num_frames: int,
     """Truncate a pcap file to the specified frames."""
 
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
@@ -551,14 +551,14 @@ def pcap_to_bag_impl(file: str, meta: Optional[str], lidar_port: Optional[int],
     """
 
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
     # Checks only ros imports availability
     import_rosbag_modules(raise_on_fail=True)
 
-    from ouster.sdkx.bag import PacketMsg
+    from ouster.sdk.bag import PacketMsg
 
     import rosbag
     import rospy
@@ -651,14 +651,14 @@ def bag_to_pcap(file: str, meta: Optional[str], lidar_topic: str,
     """
 
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
     # Checks only ros imports availability
     import_rosbag_modules(raise_on_fail=True)
 
-    from ouster.sdkx.bag import BagSource
+    from ouster.sdk.bag import BagSource
 
     meta = resolve_metadata(file, meta)
     if not meta:
@@ -774,7 +774,7 @@ def pcap_to_csv_impl(file: str,
                 output_names: Optional[List[str]]) -> None:
 
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
@@ -908,7 +908,7 @@ def pcap_to_csv_impl(file: str,
 def replay(file, meta, cycle, host, lidar_port, imu_port):
     """Replay lidar and IMU packets from a PCAP file to a UDP socket."""
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
     meta = resolve_metadata(file, meta)

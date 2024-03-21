@@ -28,13 +28,13 @@ import numpy as np
 
 from copy import deepcopy
 
-from ouster import client
+from ouster.sdk import client
 from ouster.sdk.util import resolve_metadata
 
-from ouster.sdkx.multi import (SensorMultiPacketReader, ScansMulti,
-                               PacketMultiSource, PacketMultiWrapper)
+from ouster.sdk.sensor import SensorMultiPacketReader
+from ouster.sdk.client import ScansMulti, PacketMultiSource, PacketMultiWrapper
 
-from ouster.sdkx.sensor_scan_source import configure_sensor_multi
+from ouster.sdk.sensor.util import configure_sensor_multi
 
 DEFAULT_SAMPLE_URL = 'https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip'
 
@@ -210,7 +210,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     """
 
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
@@ -344,7 +344,8 @@ def convert_metadata_to_legacy(meta: str, output_path: Optional[str]) -> None:
         if output_path is None:
             click.echo(output)
         else:
-            click.echo(f"Reading metadata from: {meta} and outputting converted legacy metadata to: {output_path}")
+            click.echo(f"Reading metadata from: {meta} and outputting converted "
+                       f"legacy metadata to: {output_path}")
             with open(output_path, "w") as outfile:
                 outfile.write(output)
 
@@ -447,10 +448,10 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                                timeout=timeout if timeout > 0 else None)
     else:
         source = SensorMultiPacketReader(hostnames,
-                             ports=ports,
-                             buf_size_secs=3.0,
-                             timeout=timeout if timeout > 0 else None,
-                             extrinsics_path=os.getcwd())
+                                         ports=ports,
+                                         buf_size_secs=3.0,
+                                         timeout=timeout if timeout > 0 else None,
+                                         extrinsics_path=os.getcwd())
 
     packet_source = PacketMultiWrapper(source)
 
@@ -469,8 +470,8 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     # TODO[pb]: Left here commented for quick test of MultiViz while we don't have
     #           `ouster-cli sensor viz --multi` implemented
-    # from ouster.viz import SimpleViz
-    # from ouster.sdkx.multi_viz import MultiLidarScanViz
+    # from ouster.sdk.viz import SimpleViz
+    # from ouster.sdk.viz.multi_viz import MultiLidarScanViz
     # scan_source = ScansMulti(packet_source)
     # ls_viz = MultiLidarScanViz(scan_source.metadata, source_name=str(hostnames))
     # scans = iter(scan_source)

@@ -12,7 +12,9 @@ Important notes
 * Dropped support macOS 10.15
 * This will be the last release that supports Ubuntu 18.04.
 * Revised python's ScanSource API
-* [BREAKING] moved ``configure_sensor`` method to ``ouster.sdkx.sensor_scan_source`` module
+* Moved all library level modules under ``ouster.sdk``, this includes ``ouster.client``, ``ouster.pcap``
+  ``ouster.osf``. So the new access name will be ``ouster.sdk.client``, ``ouster.sdk.pcap`` and so on
+* [BREAKING] moved ``configure_sensor`` method to ``ouster.sdk.sensor.util`` module
 
 
 Python SDK
@@ -41,6 +43,7 @@ Python SDK
 * [bugfix] Fix assertion error when using viz stepping on a live sensor
 * [bugfix] Scope MultiLidarViz imports to viz commands
 * [bugfix] Fix potential flickering in Viz
+* Removed ``ouster.sdkx``, the ``open_source`` command is now part of ``ouster.sdk`` module
 
 
 ouster.sdk

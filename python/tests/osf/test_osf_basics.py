@@ -6,8 +6,8 @@ import os
 
 from more_itertools import ilen
 
-import ouster.osf as osf
-import ouster.client as client
+import ouster.sdk.osf as osf
+import ouster.sdk.client as client
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ from typing import Optional, List
 import click
 from click import ClickException
 
-import ouster.client as client
+import ouster.sdk.client as client
 from .util import click_ro_file
 
 
@@ -147,13 +147,13 @@ def viz(hostname: str, lidar_port: int, meta: Optional[str], filter: bool,
     may have to disable your firewall for packets to reach the visualizer/client.
     """
     try:
-        from ouster.viz import SimpleViz, scans_accum_for_cli
+        from ouster.sdk.viz import SimpleViz, scans_accum_for_cli
     except ImportError as e:
         raise click.ClickException(str(e))
 
     scan_source = None
     try:
-        from ouster.sdkx.open_source import open_source
+        from ouster.sdk import open_source
         scan_source = open_source(hostname, sensor_idx=0,
                                   lidar_port=lidar_port,
                                   imu_port=7503,    # viz doesn't use imu

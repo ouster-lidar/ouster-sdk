@@ -5,18 +5,18 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 from typing import (Tuple, List, Iterator, Optional, Union)
-from ouster.client import (get_field_types, first_valid_packet_ts,
+from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
                            Sensor, UDPProfileLidar,
                            LidarScan, ChanField, XYZLut,
                            ScanSource, destagger, SensorInfo,
                            LidarPacket, ImuPacket)
 import ouster.cli.core.pcap
 import ouster.cli.core.sensor
-from ouster import osf
-from ouster.sdkx.packet_iter import RecordingPacketSource
-from ouster.sdkx.parsing import scan_to_packets  # type: ignore
-from ouster.pcap.pcap import MTU_SIZE, Pcap
-import ouster.pcap._pcap as _pcap
+from ouster.sdk import osf
+from ouster.sdk.pcap import RecordingPacketSource
+from ouster.sdk.util import scan_to_packets  # type: ignore
+from ouster.sdk.pcap.pcap import MTU_SIZE, Pcap
+import ouster.sdk.pcap._pcap as _pcap
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
                           source_multicommand,
@@ -371,13 +371,13 @@ def source_to_bag_iter(scans: Union[ScanSource, Iterator[LidarScan]], info: Sens
     """
 
     try:
-        import ouster.pcap as pcap  # noqa: F401
+        import ouster.sdk.pcap as pcap  # noqa: F401
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
     # Check that ROS imports are available
     import_rosbag_modules(raise_on_fail=True)
-    from ouster.sdkx.bag import PacketMsg  # type: ignore
+    from ouster.sdk.bag import PacketMsg  # type: ignore
     import rosbag  # type: ignore
     import rospy  # type: ignore
 

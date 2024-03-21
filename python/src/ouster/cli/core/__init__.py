@@ -14,7 +14,7 @@ import inspect
 
 from typing import Optional, List, Mapping
 
-from ouster.client import ClientError, init_logger
+from ouster.sdk.client import ClientError, init_logger
 
 from .pcap import pcap_group
 from .sensor import sensor_group

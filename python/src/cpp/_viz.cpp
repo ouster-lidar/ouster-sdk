@@ -572,7 +572,8 @@ PYBIND11_MODULE(_viz, m) {
              [](viz::Cloud& self, py::dict) { return viz::Cloud{self}; })
         .def("__repr__", [](const viz::Cloud& self) {
             std::stringstream ss;
-            ss << "<ouster.viz.Cloud " << &self << ", pts = " << self.get_size()
+            ss << "<ouster.sdk.viz.Cloud " << &self
+               << ", pts = " << self.get_size()
                << ", cols = " << self.get_cols() << ">";
             return ss.str();
         });

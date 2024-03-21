@@ -13,9 +13,9 @@ from copy import deepcopy
 import numpy as np
 import pytest
 
-from ouster import client
-from ouster.client import _client
-from ouster.pcap import _pcap
+from ouster.sdk import client
+from ouster.sdk.client import _client
+from ouster.sdk.pcap import _pcap
 
 from tests.conftest import PCAPS_DATA_DIR
 

@@ -5,9 +5,9 @@ import weakref
 
 import pytest
 
-from ouster.client import SensorInfo
-from ouster.pcap import Pcap
-from ouster.sdkx import packet_iter
+from ouster.sdk.client import SensorInfo
+from ouster.sdk.pcap import Pcap
+from ouster.sdk.pcap import packet_iter
 from tests.conftest import PCAPS_DATA_DIR
 
 

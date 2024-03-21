@@ -9,7 +9,7 @@ import pytest
 import warnings
 import inspect
 
-from ouster import client
+from ouster.sdk import client
 
 # all valid values
 valid_signal_multiplier_values = [0.25, 0.5, 1, 2, 3]

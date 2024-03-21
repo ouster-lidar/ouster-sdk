@@ -11,9 +11,9 @@ from more_itertools import take
 import numpy as np
 import pytest
 
-from ouster import client
-from ouster.client._client import ScanBatcher
-from ouster.sdkx.parsing import PacketFormat, ColHeader
+from ouster.sdk import client
+from ouster.sdk.client._client import ScanBatcher
+from ouster.sdk.util import PacketFormat, ColHeader
 
 
 def _patch_frame_id(packet: client.LidarPacket, fid: int) -> None:

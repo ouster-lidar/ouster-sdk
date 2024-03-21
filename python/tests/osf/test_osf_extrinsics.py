@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-import ouster.osf as osf
+import ouster.sdk.osf as osf
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ import argparse
 from contextlib import closing
 import numpy as np
 
-from ouster import client, pcap
+from ouster.sdk import client, pcap
 from .colormaps import normalize
 
 

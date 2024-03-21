@@ -6,7 +6,7 @@ All rights reserved.
 import numpy as np
 import pytest
 
-from ouster import client
+from ouster.sdk import client
 from ouster.sdk.examples import reference
 
 

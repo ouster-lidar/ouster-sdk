@@ -9,11 +9,11 @@ import socket
 import numpy as np
 import pytest
 
-from ouster import client
-from ouster.client import ChanField, _LidarPacket, _ImuPacket
+from ouster.sdk import client
+from ouster.sdk.client import ChanField, _LidarPacket, _ImuPacket
 
-pytest.register_assert_rewrite('ouster.client._digest')
-import ouster.client._digest as digest  # noqa
+pytest.register_assert_rewrite('ouster.sdk.client._digest')
+import ouster.sdk.client._digest as digest  # noqa
 
 
 @pytest.fixture

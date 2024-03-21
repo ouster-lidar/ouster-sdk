@@ -9,11 +9,12 @@ import tempfile
 from typing import List
 from click.testing import CliRunner
 
+import ouster.sdk.pcap
+import ouster.sdk.client
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins.io_type import io_type_from_extension, OusterIoType
 from ouster.cli.plugins import source  # noqa: F401
-import ouster.pcap
 
 from tests.conftest import PCAPS_DATA_DIR, OSFS_DATA_DIR
 
@@ -390,9 +391,9 @@ def test_discover(runner):
 
 def test_match_metadata_with_data_stream(test_pcap_file, test_metadata_file):
     """It should find the data stream with a destination port that matches the metadata file lidar port"""
-    all_infos = ouster.pcap._packet_info_stream(test_pcap_file, 0, None, 100)
-    meta = ouster.client.SensorInfo(open(test_metadata_file).read())
-    matched_stream = ouster.cli.core.pcap.match_metadata_with_data_stream(all_infos, meta)
+    all_infos = ouster.sdk.pcap._packet_info_stream(test_pcap_file, 0, None, 100)
+    meta = ouster.sdk.client.SensorInfo(open(test_metadata_file).read())
+    matched_stream = core.pcap.match_metadata_with_data_stream(all_infos, meta)
     assert matched_stream.dst_port == 7502
 
 

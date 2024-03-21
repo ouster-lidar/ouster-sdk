@@ -5,8 +5,8 @@ from pprint import pprint
 from typing import Iterator, Dict, cast, Optional, List, Tuple, Union
 import numpy as np
 
-from ouster.sdkx.pcap_scan_source import PcapScanSource  # type: ignore
-from ouster.osf.multi import OsfScanSource  # type: ignore
+from ouster.sdk.pcap import PcapScanSource  # type: ignore
+from ouster.sdk.osf import OsfScanSource  # type: ignore
 
 
 def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
@@ -18,8 +18,8 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
     Convert PCAP file to OSF.
     """
     try:
-        from ouster import client
-        import ouster.osf as osf
+        from ouster.sdk import client
+        import ouster.sdk.osf as osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
@@ -41,8 +41,8 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
                f" FLAGS: {flags}, RAW fields: {raw_fields}\n")
 
     if extrinsics and scan_source.sensors_count == 1:
-        scan_source._source.metadata[0].extrinsic = np.array(extrinsics).reshape((4, 4))
-        scan_source._source.extrinsics_source[0] = "osf_from_pcap_param"
+        scan_source._source.metadata[0].extrinsic = np.array(extrinsics).reshape((4, 4))    # type: ignore
+        scan_source._source.extrinsics_source[0] = "osf_from_pcap_param"                    # type: ignore
 
     # Using osf.Writer to save pcap to OSF
     writer = osf.Writer(output, "from_pcap pythonic", chunk_size)
@@ -60,7 +60,7 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
 
     click.echo()
 
-    for idx, ext_source in enumerate(scan_source._source.extrinsics_source):
+    for idx, ext_source in enumerate(scan_source._source.extrinsics_source):    # type: ignore
 
         if ext_source is None:
             # skip extrinsics if they weren't explicitly set during previous
@@ -115,7 +115,7 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
         writer.close()
 
         # checking for bad init_ids
-        if scan_source._source.id_error_count:
+        if scan_source._source.id_error_count:  # type: ignore
             click.echo(f"WARNING: {scan_source._id_error_count} lidar_packets with "
                        "mismatched init_id/sn were detected.")
             if not soft_id_check:
@@ -129,7 +129,7 @@ def osf_from_pcap_impl(file: str, meta: Optional[str], output: Optional[str],
 def osf_group(ctx) -> None:
     """Commands for working with OSF files and converting data to OSF."""
     try:
-        from ouster.osf import _osf
+        from ouster.sdk.osf import _osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
     ctx.ensure_object(dict)
@@ -148,7 +148,7 @@ def osf_info(ctx, file: str, short: bool) -> None:
     Parses all metadata entries, output is in JSON format.
     """
     try:
-        from ouster.osf import _osf
+        from ouster.sdk.osf import _osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
@@ -187,14 +187,14 @@ def osf_parse(file: str, decode: bool, verbose: bool, check_raw_headers: bool,
     Useful to check chunks layout and decoding of all known messages (-d option).
     """
     try:
-        from ouster import client
-        import ouster.osf as osf
+        from ouster.sdk import client
+        import ouster.sdk.osf as osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
     # NOTE[pb]: Mypy quirks or some of our Python packages structure quirks, idk :(
-    from ouster.client._client import get_field_types
-    from ouster.sdkx.parsing import scan_to_packets, packets_to_scan, cut_raw32_words  # type: ignore
+    from ouster.sdk.client._client import get_field_types
+    from ouster.sdk.util import scan_to_packets, packets_to_scan, cut_raw32_words  # type: ignore
 
     reader = osf.Reader(file)
 
@@ -344,9 +344,9 @@ def osf_viz(file: str, on_eof: str, pause: bool, pause_at: int, rate: float,
     Only one LidarScan stream will be shown, unless ``--multi`` is set.
     """
     try:
-        import ouster.osf as osf
-        from ouster.viz import SimpleViz, LidarScanViz, scans_accum_for_cli
-        from ouster.sdkx.multi_viz import MultiLidarScanViz  # type: ignore
+        import ouster.sdk.osf as osf
+        from ouster.sdk.viz import SimpleViz, LidarScanViz, scans_accum_for_cli
+        from ouster.sdk.viz.multi_viz import MultiLidarScanViz  # type: ignore
     except ImportError as e:
         raise click.ClickException(str(e))
 

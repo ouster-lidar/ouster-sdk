@@ -8,8 +8,8 @@ from copy import copy
 import numpy as np
 import pytest
 
-from ouster import client
-import ouster.client._digest as digest
+from ouster.sdk import client
+import ouster.sdk.client._digest as digest
 from ouster.sdk.examples import reference
 
 
