@@ -21,7 +21,7 @@ from .source_util import (CoupledTee,
                           _join_with_conjunction)
 
 # TODO: generalize the current solution for any like-plugins that want
-# to alter or extend the default command set 
+# to alter or extend the default command set
 _has_mapping = False
 try:
     from ouster.cli.plugins.cli_source_mapping import (SourceMappingSaveCommand,    # type: ignore # noqa: F401
