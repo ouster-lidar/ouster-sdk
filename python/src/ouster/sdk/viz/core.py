@@ -821,7 +821,7 @@ class SimpleViz:
 
         # pausing and stepping
         self._cv = threading.Condition()
-        self._paused = True
+        self._paused = False
         self._viz.update_on_input(self._paused)
         self._step = 0
         self._proc_exit = False
