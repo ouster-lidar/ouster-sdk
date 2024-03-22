@@ -20,11 +20,11 @@ namespace osf {
 /**
  * Metadata entry to store sensor Extrinsics.
  *
- * Flatbuffer definition file:
- *   fb/os_sensor/extrinsics.fbs
- *
  * OSF type:
  *   ouster/v1/os_sensor/Extrinsics
+ *
+ * Flat Buffer Reference:
+ *   fb/os_sensor/extrinsics.fbs
  */
 class Extrinsics : public MetadataEntryHelper<Extrinsics> {
    public:
@@ -93,16 +93,23 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
    private:
     /**
      * The internal extrinsics array.
+     *
+     * Flat Buffer Reference:
+     *   fb/os_sensor/extrinsics.fbs::Extrinsics::extrinsics
      */
     mat4d extrinsics_;
 
     /**
      * The internal flatbuffer metadata reference id.
+     *
+     * Flat Buffer Reference: fb/os_sensor/extrinsics.fbs::Extrinsics::ref_id
      */
     uint32_t ref_meta_id_;
 
     /**
      * The internal name for the extrinsics array.
+     *
+     * Flat Buffer Reference: fb/os_sensor/extrinsics.fbs::Extrinsics::name
      */
     std::string name_;
 };

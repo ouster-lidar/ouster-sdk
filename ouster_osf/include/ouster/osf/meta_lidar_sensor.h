@@ -23,7 +23,7 @@ namespace osf {
  * OSF type:
  *   ouster/v1/os_sensor/LidarSensor
  *
- * Flatbuffer definition file:
+ * Flat Buffer Reference:
  *   fb/os_sensor/lidar_sensor.fbs
  */
 class LidarSensor : public MetadataEntryHelper<LidarSensor> {

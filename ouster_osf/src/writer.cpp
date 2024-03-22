@@ -135,6 +135,7 @@ std::vector<uint8_t> Writer::make_metadata() const {
     const uint8_t* buf = metadata_fbb.GetBufferPointer();
     uint32_t size = metadata_fbb.GetSize();
 
+    // Construct the std::vector<uint8_t> from the start/end pointers.
     return {buf, buf + size};
 }
 

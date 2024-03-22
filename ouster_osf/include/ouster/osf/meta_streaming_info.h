@@ -19,30 +19,83 @@ namespace osf {
 
 /**
  * Class for keeping track of OSF chunks.
+ *
+ * Flat Buffer Reference:
+ *   fb/streaming/streaming_info.fbs::ChunkInfo
  */
 struct ChunkInfo {
-    uint64_t offset;  ///< The offset in the flatbuffer
-                      ///< where the chunk is located
+    /**
+     * The offset in the flatbuffer where
+     * the chunk is located.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::ChunkInfo::offset
+     */
+    uint64_t offset;
 
-    uint32_t stream_id;  ///< The specific stream the
-                         ///< chunk is associated with
+    /**
+     * The specific stream the chunk is associated with.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::ChunkInfo::stream_id
+     */
+    uint32_t stream_id;
 
-    uint32_t message_count;  ///< The number of messages
-                             ///< in the chunk
+    /**
+     * The number of messages in the chunk
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::ChunkInfo::message_count
+     */
+    uint32_t message_count;
 };
 
 /**
  * Class for keeping track of OSF stream stats.
+ *
+ * Flat Buffer Reference:
+ *   fb/streaming/streaming_info.fbs::StreamStats
  */
 struct StreamStats {
-    uint32_t stream_id;  ///< The specific stream the
-                         ///< chunk is associated with
+    /**
+     * The specific stream the chunk is associated with.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::StreamStats::stream_id
+     */
+    uint32_t stream_id;
 
-    ts_t start_ts;           ///< The first timestamp in the stream
-    ts_t end_ts;             ///< The last timestamp in the stream
-    uint64_t message_count;  ///< The number of messages in the stream
-    uint32_t
-        message_avg_size;  ///< The average size of the messages in the stream
+    /**
+     * The first timestamp in the stream.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::StreamStats::start_ts
+     */
+    ts_t start_ts;
+
+    /**
+     * The last timestamp in the stream.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::StreamStats::end_ts
+     */
+    ts_t end_ts;
+
+    /**
+     * The number of messages in the stream.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::StreamStats::message_count
+     */
+    uint64_t message_count;
+
+    /**
+     * The average size of the messages in the stream.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::StreamStats::message_avg_size
+     */
+    uint32_t message_avg_size;
 
     /**
      * Default constructor, sets everthing to 0.
@@ -88,8 +141,8 @@ std::string to_string(const StreamStats& stream_stats);
  * OSF type:
  *   ouster/v1/streaming/StreamingInfo
  *
- * Flatbuffer definition file:
- *   fb/streaming/streaming_info.fbs
+ * Flat Buffer Reference:
+ *   fb/streaming/streaming_info.fbs::StreamingInfo
  */
 class StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
    public:
@@ -160,11 +213,17 @@ class StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
    private:
     /**
      * The internal stream_id to ChunkInfo map.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::StreamingInfo::chunks
      */
     std::map<uint64_t, ChunkInfo> chunks_info_{};
 
     /**
      * The internal stream_id to StreamStats map.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::StreamingInfo::stream_stats
      */
     std::map<uint32_t, StreamStats> stream_stats_{};
 };

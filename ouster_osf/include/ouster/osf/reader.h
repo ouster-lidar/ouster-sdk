@@ -18,24 +18,116 @@
 namespace ouster {
 namespace osf {
 
-enum class ChunkValidity { UNKNOWN = 0, VALID, INVALID };
+/**
+ * Enumerator for dealing with chunk validity.
+ *
+ * This is synthesized and thus does not have a reference in the Flat Buffer.
+ * Value is set in Reader::verify_chunk
+ */
+enum class ChunkValidity {
+    UNKNOWN = 0,  ///< Validity can not be ascertained.
+    VALID,        ///< Chunk is valid.
+    INVALID       ///< Chunk is invalid.
+};
 
 /**
- * Chunks state. Validity info and next offset for forward iteration.
+ * The structure for representing chunk information and
+ * for forward iteration.
+ *
+ * This struct is partially mapped to the Flat Buffer data.
+ * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset
  */
 struct ChunkState {
+    /**
+     * The current chunk's offset from the begining of the chunks section.
+     *
+     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     */
     uint64_t offset;
+
+    /**
+     * The next chunk's offset for forward iteration.
+     * Should work like a linked list.
+     *
+     * This is partially synthesized from the Flat Buffers.
+     * This will link up with the next chunks offset.
+     * Value is set in ChunksPile::link_stream_chunks
+     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     */
     uint64_t next_offset;
+
+    /**
+     * The first timestamp in the chunk in ordinality.
+     *
+     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::start_ts
+     */
     ts_t start_ts;
+
+    /**
+     * The last timestamp in the chunk in ordinality.
+     *
+     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::end_ts
+     */
     ts_t end_ts;
+
+    /**
+     * The validity of the current chunk
+     *
+     * This is synthesized and thus does not have a reference in the Flat
+     * Buffers. Value is set in Reader::verify_chunk
+     */
     ChunkValidity status;
 };
 
+/**
+ * The structure for representing streaming information.
+ *
+ * This struct is partially mapped to the Flat Buffer data.
+ */
 struct ChunkInfoNode {
+    /**
+     * The chunk offset from the begining of the chunks section.
+     *
+     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     */
     uint64_t offset;
+
+    /**
+     * The next chunk's offset for forward iteration.
+     * Should work like a linked list.
+     *
+     * This is partially synthesized from the Flat Buffers.
+     * This will link up with the next chunks offset.
+     * Value is set in ChunksPile::link_stream_chunks
+     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     */
     uint64_t next_offset;
+
+    /**
+     * The stream this is associated with.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::ChunkInfo::stream_id
+     */
     uint32_t stream_id;
+
+    /**
+     * Total number of messages in a `stream_id` in the whole OSF file
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs::ChunkInfo::message_count
+     */
     uint32_t message_count;
+
+    /**
+     * The index of the start of the message.
+     * @todo try to describe this better
+     *
+     * This is partially synthesized from the Flat Buffers.
+     * Value is set in ChunksPile::link_stream_chunks
+     * Synthesized from Flat Buffer Reference:
+     *   fb/metadata.fbs::ChunkOffset::message_count
+     */
     uint32_t message_start_idx;
 };
 
@@ -44,41 +136,141 @@ struct ChunkInfoNode {
  */
 class ChunksPile {
    public:
-    using ChunkStateIter = std::unordered_map<uint64_t, ChunkState>::iterator;
-    using ChunkInfoIter = std::unordered_map<uint64_t, ChunkInfoNode>::iterator;
+    /**
+     * stream_id to offset map.
+     */
     using StreamChunksMap =
         std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
 
+    /**
+     * Default blank constructor.
+     */
     ChunksPile();
 
+    /**
+     * Add a new chunk to the ChunkPile.
+     *
+     * @param[in] offset The offset for the chunk.
+     * @param[in] start_ts The first timestamp in the chunk.
+     * @param[in] end_ts The first timestamp in the chunk.
+     */
     void add(uint64_t offset, ts_t start_ts, ts_t end_ts);
+
+    /**
+     * Return the chunk associated with an offset.
+     *
+     * @param[in] offset The offset to return the chunk for.
+     * @return The chunk if found, or nullptr.
+     */
     ChunkState* get(uint64_t offset);
+
+    /**
+     * Add a new streaming info to the ChunkPile.
+     *
+     * @param[in] offset The offset for the chunk.
+     * @param[in] stream_id The stream_id associated.
+     * @param[in] message_count The number of messages.
+     */
     void add_info(uint64_t offset, uint32_t stream_id, uint32_t message_count);
+
+    /**
+     * Return the streaming info associated with an offset.
+     *
+     * @param[in] offset The offset to return the streaming info for.
+     * @return The streaming info if found, or nullptr.
+     */
     ChunkInfoNode* get_info(uint64_t offset);
+
+    /**
+     * Return the streaming info associated with a message_idx.
+     *
+     * @param[in] stream_id The stream to look for infos in.
+     * @param[in] message_idx The specific message index to look for.
+     * @return The streaming info if found, or nullptr.
+     */
     ChunkInfoNode* get_info_by_message_idx(uint32_t stream_id,
                                            uint32_t message_idx);
+
+    /**
+     * Return the chunk associated with a lower bound timestamp.
+     *
+     * @param[in] stream_id The stream to look for chunks in.
+     * @param[in] ts The lower bound for the chunk.
+     * @return The chunk if found, or nullptr.
+     */
     ChunkState* get_by_lower_bound_ts(uint32_t stream_id, const ts_t ts);
+
+    /**
+     * Return the next chunk identified by the offset.
+     *
+     * @param[in] offset The offset to return the next chunk for.
+     * @return The chunk if found, or nullptr.
+     */
     ChunkState* next(uint64_t offset);
+
+    /**
+     * Return the next chunk identified by the offset per stream.
+     *
+     * @param[in] offset The offset to return the next chunk for.
+     * @return The chunk if found, or nullptr.
+     */
     ChunkState* next_by_stream(uint64_t offset);
 
+    /**
+     * Return the first chunk.
+     *
+     * @return The chunk if found, or nullptr.
+     */
     ChunkState* first();
 
+    /**
+     * Return the size of the chunk pile.
+     *
+     * @return The size of the chunk pile.
+     */
     size_t size() const;
 
+    /**
+     * Return if there is stream info.
+     *
+     * @return If there is stream info.
+     */
     bool has_info() const;
+
+    /**
+     * Return if there is a message index.
+     *
+     * @return If there is  a message index.
+     */
     bool has_message_idx() const;
 
+    /**
+     * Return the stream_id to chunk offset map.
+     *
+     * @return The stream_id to chunk offset map.
+     */
     StreamChunksMap& stream_chunks();
 
-    // builds internal links between ChunkInfoNode per stream
+    /**
+     * Builds internal links between ChunkInfoNode per stream
+     */
     void link_stream_chunks();
 
    private:
+    /**
+     * The offset to chunk state map
+     */
     std::unordered_map<uint64_t, ChunkState> pile_{};
+
+    /**
+     * The offset to stream info map
+     */
     std::unordered_map<uint64_t, ChunkInfoNode> pile_info_{};
 
-    // ordered list of chunks offsets per stream id (only when ChunkInfo
-    // is present)
+    /**
+     * Ordered list of chunks offsets per stream id (only when ChunkInfo
+     * is present)
+     */
     StreamChunksMap stream_chunks_{};
 };
 

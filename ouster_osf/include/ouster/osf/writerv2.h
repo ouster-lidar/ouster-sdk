@@ -153,18 +153,59 @@ class WriterV2 {
      */
     uint32_t get_chunk_size() const;
 
+    /**
+     * Close and finalize the writing.
+     */
     void close();
+
+    /**
+     * Returns if the writer is closed or not.
+     *
+     * @return If the writer is closed or not.
+     */
     bool is_closed() const;
 
    protected:
+    /**
+     * The internal filename for the output file.
+     */
     const std::string filename;
+
+    /**
+     * The internal sensor_info store ordered by stream_index.
+     */
     const std::vector<ouster::sensor::sensor_info> info;
+
+    /**
+     * The internal chunck size to use for OSF writing.
+     */
     const uint32_t chunk_size;
+
+    /**
+     * Internal stream index to LidarScanStream map.
+     */
     std::map<uint32_t, std::unique_ptr<LidarScanStream>> streams;
+
+    /**
+     * Internal stream index to metadata map.
+     */
     std::map<uint32_t, uint32_t> meta_id;
+
+    /**
+     * Internal Writer object used to write the OSF file.
+     */
     std::unique_ptr<Writer> writer;
 
    private:
+    /**
+     * Internal method used to save a scan to a specified stream_index
+     * specified stream. This method is here so that we can bypass
+     * is_closed checking for speed sake. The calling functions will
+     * do the check for us.
+     *
+     * @param[in] stream_index The stream to save to.
+     * @param[in] scan The scan to save.
+     */
     void _save(uint32_t stream_index, const LidarScan& scan);
 };
 

@@ -45,26 +45,20 @@ class StreamingLayoutCW : public ChunksWriter {
                       uint32_t chunk_size = STREAMING_DEFAULT_CHUNK_SIZE);
 
     /**
-     * Save a message to a specified stream.
+     * @copydoc ChunksWriter::saveMessage
      *
      * @throws std::logic_error Exception on inconsistent timestamps.
-     *
-     * @param[in] stream_id The stream id to associate with the message.
-     * @param[in] ts The timestamp for the messages.
-     * @param[in] msg_buf A vector of message buffers to record.
      */
     void saveMessage(const uint32_t stream_id, const ts_t ts,
                      const std::vector<uint8_t>& msg_buf) override;
 
     /**
-     * Finish the process of saving messages and write out the stream stats.
+     * @copydoc ChunksWriter::finish
      */
     void finish() override;
 
     /**
-     * Get the chunksize
-     *
-     * @return the chunk size
+     * @copydoc ChunksWriter::chunk_size
      */
     uint32_t chunk_size() const override;
 
@@ -113,7 +107,7 @@ class StreamingLayoutCW : public ChunksWriter {
     std::map<uint32_t, StreamStats> stream_stats_{};
 
     /**
-     * Writer object to use for writing.
+     * Internal writer object to use for writing.
      */
     Writer& writer_;
 };
