@@ -20,6 +20,16 @@ from .source_util import (CoupledTee,
                           source_multicommand,
                           _join_with_conjunction)
 
+# TODO: generalize the current solution for any like-plugins that want
+# to alter or extend the default command set 
+_has_mapping = False
+try:
+    from ouster.cli.plugins.cli_source_mapping import (SourceMappingSaveCommand,    # type: ignore # noqa: F401
+                                                       source_slam)
+    _has_mapping = True
+except ImportError:
+    pass
+
 
 _source_arg_name: str = 'source'
 
@@ -213,25 +223,37 @@ class SourceMultiCommand(click.MultiCommand):
 
     def __init__(self, *args, **kwargs):
         kwargs['no_args_is_help'] = True
+
         super().__init__(*args, **kwargs)
         self.commands = {
             'ANY': {
                 'viz': source_viz,
                 'slice': source_slice,
-                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
-                                                                        allow_extra_args=True)),
             },
             OusterIoType.SENSOR: {
                 'config': sensor_config,
                 'metadata': sensor_info,
+                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
+                                                                        allow_extra_args=True)),
+
             },
             OusterIoType.PCAP: {
                 'info': pcap_info,
+                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
+                                                                        allow_extra_args=True)),
             },
             OusterIoType.OSF: {
                 'info': osf_info,
+                'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
+                                                                        allow_extra_args=True)),
             }
         }
+
+        if _has_mapping:
+            # extend current set of verbs
+            self.commands['ANY']['slam'] = source_slam
+            self.commands[OusterIoType.OSF]['save'] = SourceMappingSaveCommand(
+                'save', context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
 
     def get_supported_source_types(self):
         return [iotype for iotype in self.commands.keys() if type(iotype) is OusterIoType]
