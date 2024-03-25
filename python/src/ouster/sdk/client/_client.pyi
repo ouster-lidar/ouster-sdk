@@ -64,7 +64,8 @@ class SensorConnection:
                  timestamp_mode: TimestampMode = ...,
                  lidar_port: int = ...,
                  imu_port: int = ...,
-                 timeout_sec: int = ...,) -> None:
+                 timeout_sec: int = ...,
+                 persist_config: bool = ...) -> None:
         ...
 
     def poll(self, timeout_sec: int) -> ClientState:

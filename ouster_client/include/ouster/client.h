@@ -90,6 +90,7 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
  * @param[in] imu_port port on which the sensor will send imu data. When
  * using zero the method will automatically acquire and assign any free port.
  * @param[in] timeout_sec how long to wait for the sensor to initialize.
+ * @param[in] persist_config if true, persists sensor settings between restarts
  *
  * @return pointer owning the resources associated with the connection.
  */
@@ -97,7 +98,8 @@ std::shared_ptr<client> init_client(
     const std::string& hostname, const std::string& udp_dest_host,
     lidar_mode ld_mode = MODE_UNSPEC, timestamp_mode ts_mode = TIME_FROM_UNSPEC,
     int lidar_port = 0, int imu_port = 0,
-    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
+    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
+    bool persist_config = false);
 
 /**
  * [BETA] Connect to and configure the sensor and start listening for data via
@@ -110,6 +112,7 @@ std::shared_ptr<client> init_client(
  * @param[in] main a flag that indicates this is the main connection to the
  * sensor in an multicast setup.
  * @param[in] timeout_sec how long to wait for the sensor to initialize.
+ * @param[in] persist_config if true, persists sensor settings between restarts
  *
  * @return pointer owning the resources associated with the connection.
  *
@@ -120,7 +123,8 @@ std::shared_ptr<client> init_client(
 std::shared_ptr<client> mtp_init_client(
     const std::string& hostname, const sensor_config& config,
     const std::string& mtp_dest_host, bool main,
-    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
+    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
+    bool persist_config = false);
 
 /** @}*/
 
@@ -270,6 +274,7 @@ enum config_flags : uint8_t {
  * @param[in] hostname sensor hostname.
  * @param[in] config sensor config.
  * @param[in] config_flags flags to pass in.
+ * @param[in] timeout_sec timeout in seconds for http requests
  *
  * @return true if config params successfuly set on sensor.
  */

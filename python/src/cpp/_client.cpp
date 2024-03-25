@@ -977,10 +977,11 @@ PYBIND11_MODULE(_client, m) {
         .def(py::init([](std::string hostname, std::string udp_dest_host,
                          sensor::lidar_mode lp_mode,
                          sensor::timestamp_mode ts_mode, int lidar_port,
-                         int imu_port, int timeout_sec) -> client_shared_ptr {
-                 auto cli = sensor::init_client(hostname, udp_dest_host,
-                                                lp_mode, ts_mode, lidar_port,
-                                                imu_port, timeout_sec);
+                         int imu_port, int timeout_sec,
+                         bool persist_config) -> client_shared_ptr {
+                 auto cli = sensor::init_client(
+                     hostname, udp_dest_host, lp_mode, ts_mode, lidar_port,
+                     imu_port, timeout_sec, persist_config);
                  if (!cli)
                      throw std::runtime_error(
                          "Failed initializing sensor connection");
@@ -991,7 +992,7 @@ PYBIND11_MODULE(_client, m) {
              py::arg("timestamp_mode") =
                  sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
              py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
-             py::arg("timeout_sec") = 10)
+             py::arg("timeout_sec") = 10, py::arg("persist_config") = false)
         .def(
             "poll",
             [](const client_shared_ptr& self,

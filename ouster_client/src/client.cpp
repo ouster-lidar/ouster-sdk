@@ -446,7 +446,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode ld_mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
-                                    int timeout_sec) {
+                                    int timeout_sec, bool persist_config) {
     auto cli = init_client(hostname, lidar_port, imu_port);
     if (!cli) return std::shared_ptr<client>();
 
@@ -467,6 +467,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         if (ts_mode) config.ts_mode = ts_mode;
         if (lidar_port) config.udp_port_lidar = lidar_port;
         if (imu_port) config.udp_port_imu = imu_port;
+        if (persist_config) config_flags |= CONFIG_PERSIST;
         config.operating_mode = OPERATING_NORMAL;
         set_config(hostname, config, config_flags);
 
@@ -488,7 +489,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
 std::shared_ptr<client> mtp_init_client(const std::string& hostname,
                                         const sensor_config& config,
                                         const std::string& mtp_dest_host,
-                                        bool main, int timeout_sec) {
+                                        bool main, int timeout_sec,
+                                        bool persist_config) {
     int lidar_port = config.udp_port_lidar ? config.udp_port_lidar.value() : 0;
     int imu_port = config.udp_port_imu ? config.udp_port_imu.value() : 0;
     auto udp_dest = config.udp_dest ? config.udp_dest.value() : "";
@@ -517,6 +519,7 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
             uint8_t config_flags = 0;
             if (lidar_port) config_copy.udp_port_lidar = lidar_port;
             if (imu_port) config_copy.udp_port_imu = imu_port;
+            if (persist_config) config_flags |= CONFIG_PERSIST;
             config_copy.operating_mode = OPERATING_NORMAL;
             set_config(hostname, config_copy, config_flags);
 
