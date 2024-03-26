@@ -136,8 +136,8 @@ TEST_F(ReaderTest, Basics) {
         "\"udp_port_imu\": 7503,\n    \"udp_port_lidar\": 7502\n  }\n}");
     EXPECT_EQ(1, reader.meta_store().count<osf::LidarSensor>());
 
-    EXPECT_EQ(3, std::distance(reader.messages_standard().begin(),
-                               reader.messages_standard().end()));
+    EXPECT_EQ(
+        3, std::distance(reader.messages().begin(), reader.messages().end()));
 
     const MetadataStore& meta_store = reader.meta_store();
     EXPECT_EQ(3, meta_store.size());
@@ -216,42 +216,6 @@ TEST_F(ReaderTest, ChunksPileBasics) {
     EXPECT_EQ(3, cp.size());
 }
 
-TEST_F(ReaderTest, MessagesReadingStandard) {
-    OsfFile osf_file(
-        path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
-
-    Reader reader(osf_file);
-
-    const auto msgs = reader.messages_standard();
-    EXPECT_EQ(msgs.begin().to_string(),
-              "MessagesStandardIter: [curr_chunk_it = ChunksIter:"
-              " [ca = 0, ea = 1013976], msg_idx = 0, end_chunk_it"
-              " = ChunksIter: [ca = 1013976, ea = 1013976]]");
-    EXPECT_EQ((*msgs.begin()).to_string(),
-              "MessageRef: [id = 2, ts = 991587364520, buffer ="
-              " 0c 2b 05 00 14 00 00 00 10 00 1c 00 04 00 08 00"
-              " 0c 00 10 00 14 00 18 00 10 00 00 00 34 38 00 00"
-              " 24 38 00 00 18 18 00 00 10 10 00 00 08 00 00 00"
-              " 03 07 00 00 00 04 00 00 01 00 00 00 01 00 00 00"
-              " 01 00 00 00 01 00 00 00 01 00 00 00 01 00 00 00"
-              " 01 00 00 00 01 00 00 00 01 00 00 00 01 00 00 00"
-              " 01 00 00 00 ... and 338604 more ...]");
-    EXPECT_EQ(msgs.to_string(),
-              "MessagesStandardRange:"
-              " [bit = ChunksIter: [ca = 0, ea = 1013976],"
-              " eit = ChunksIter: [ca = 1013976, ea = 1013976]]");
-    EXPECT_EQ(3, std::distance(msgs.begin(), msgs.end()));
-
-    // Chunks Iterator
-    auto chunks = reader.chunks();
-    EXPECT_EQ(1, std::distance(chunks.begin(), chunks.end()));
-
-    // Get messages from first chunks
-    auto first_chunk_it = chunks.begin();
-    EXPECT_EQ(3, first_chunk_it->size());
-    EXPECT_EQ(3, std::distance(first_chunk_it->begin(), first_chunk_it->end()));
-}
-
 TEST_F(ReaderTest, MessagesReadingStreaming) {
     OsfFile osf_file(
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
@@ -262,7 +226,7 @@ TEST_F(ReaderTest, MessagesReadingStreaming) {
     int it_cnt = 0;
     ts_t it_prev{0};
     bool it_ordered = true;
-    for (const auto msg : reader.messages_standard()) {
+    for (const auto msg : reader.messages()) {
         it_ordered = it_ordered && (it_prev <= msg.ts());
         ++it_cnt;
         it_prev = msg.ts();

@@ -31,8 +31,8 @@ class PcapRawSource {
     /**
      * Lidar data callbacks
      *
-     * @param timestamp[in] The timestamp for the scan.
-     * @param scan[in] The LidarScan object.
+     * @param[in] timestamp The timestamp for the scan.
+     * @param[in] scan The LidarScan object.
      */
     using LidarDataHandler = std::function<void(const ts_t timestamp,
                                                 const ouster::LidarScan& scan)>;
@@ -40,8 +40,8 @@ class PcapRawSource {
     /**
      * General pcap packet handler
      *
-     * @param info[in] The sensor_info for the packet.
-     * @param buf[in] The raw buffer for the packet.
+     * @param[in] info The sensor_info for the packet.
+     * @param[in] buf The raw buffer for the packet.
      */
     using PacketHandler = std::function<void(
         const ouster::sensor_utils::packet_info& info, const uint8_t* buf)>;
@@ -49,7 +49,7 @@ class PcapRawSource {
     /**
      * Predicate to control the bag run loop
      *
-     * @param info[in] The sensor_info for the packet.
+     * @param[in] info The sensor_info for the packet.
      * @return True if the loop should continue, False if the loop should halt.
      */
     using PacketInfoPredicate =
@@ -59,7 +59,7 @@ class PcapRawSource {
      * Opens pcap file and checks available packets inside with
      * heuristics applied to guess Ouster lidar port with data.
      *
-     * @param filename[in] The filename of the pcap file to open.
+     * @param[in] filename The filename of the pcap file to open.
      */
     PcapRawSource(const std::string& filename);
 
@@ -68,9 +68,9 @@ class PcapRawSource {
      * batched LidarScans with a timestamp of the first UDP lidar packet.
      * LidarScan uses default field types by the profile
      *
-     * @param dst_port[in] The destination port for the target lidar stream.
-     * @param info[in] The sensor info for the stream.
-     * @param lidar_handler[in] The callback to call on packet.
+     * @param[in] dst_port The destination port for the target lidar stream.
+     * @param[in] info The sensor info for the stream.
+     * @param[in] lidar_handler The callback to call on packet.
      */
     void addLidarDataHandler(int dst_port,
                              const ouster::sensor::sensor_info& info,
@@ -78,7 +78,7 @@ class PcapRawSource {
 
     /**
      * @copydoc addLidarDataHandler
-     * @param ls_field_types[in] The LidarScan field types to use.
+     * @param[in] ls_field_types The LidarScan field types to use.
      */
     void addLidarDataHandler(int dst_port,
                              const ouster::sensor::sensor_info& info,
@@ -115,7 +115,7 @@ class PcapRawSource {
     /**
      * Read current packet and dispatch handlers accordingly.
      *
-     * @param pinfo[in] The new packet info.
+     * @param[in] pinfo The new packet info.
      */
     void handleCurrentPacket(const sensor_utils::packet_info& pinfo);
 

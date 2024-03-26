@@ -108,7 +108,7 @@ void parse_and_print(const std::string& file, bool with_decoding) {
     thread_local std::atomic_bool quit{false};
     auto sig = std::signal(SIGINT, [](int) { quit = true; });
 
-    for (const auto msg : reader.messages_standard()) {
+    for (const auto msg : reader.messages()) {
         if (msg.is<LidarScanStream>()) {
             std::cout << "  Ls     ts: " << msg.ts().count()
                       << ", stream_id = " << msg.id();

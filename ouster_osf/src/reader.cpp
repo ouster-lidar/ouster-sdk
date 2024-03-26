@@ -300,102 +300,6 @@ std::string ChunksRange::to_string() const {
 }
 
 // ==========================================================
-// ========= Reader::MessagesStandardIter ===================
-// ==========================================================
-
-MessagesStandardIter::MessagesStandardIter()
-    : current_chunk_it_{}, end_chunk_it_{}, msg_idx_{0} {}
-
-MessagesStandardIter::MessagesStandardIter(const MessagesStandardIter& other)
-    : current_chunk_it_(other.current_chunk_it_),
-      end_chunk_it_(other.end_chunk_it_),
-      msg_idx_(other.msg_idx_) {}
-
-MessagesStandardIter::MessagesStandardIter(const ChunksIter begin_it,
-                                           const ChunksIter end_it,
-                                           const size_t msg_idx)
-    : current_chunk_it_{begin_it}, end_chunk_it_{end_it}, msg_idx_{msg_idx} {
-    if (current_chunk_it_ != end_chunk_it_ && !is_cleared()) next();
-}
-
-const MessageRef MessagesStandardIter::operator*() const {
-    return current_chunk_it_->operator[](msg_idx_);
-}
-
-std::unique_ptr<const MessageRef> MessagesStandardIter::operator->() const {
-    return current_chunk_it_->messages(msg_idx_);
-}
-
-MessagesStandardIter& MessagesStandardIter::operator++() {
-    this->next();
-    return *this;
-}
-
-void MessagesStandardIter::next() {
-    if (current_chunk_it_ == end_chunk_it_) return;
-    next_any();
-    while (current_chunk_it_ != end_chunk_it_ && !is_cleared()) next_any();
-}
-
-void MessagesStandardIter::next_any() {
-    if (current_chunk_it_ == end_chunk_it_) return;
-    auto chunk_ref = *current_chunk_it_;
-    ++msg_idx_;
-    if (msg_idx_ >= chunk_ref.size()) {
-        // Advance to the next chunk
-        ++current_chunk_it_;
-        msg_idx_ = 0;
-    }
-}
-
-bool MessagesStandardIter::operator==(const MessagesStandardIter& other) const {
-    return (current_chunk_it_ == other.current_chunk_it_ &&
-            end_chunk_it_ == other.end_chunk_it_ && msg_idx_ == other.msg_idx_);
-}
-
-bool MessagesStandardIter::operator!=(const MessagesStandardIter& other) const {
-    return !this->operator==(other);
-}
-
-bool MessagesStandardIter::is_cleared() {
-    if (current_chunk_it_ == end_chunk_it_) return false;
-    const auto chunk_ref = *current_chunk_it_;
-    if (!chunk_ref.valid()) return false;
-    return (msg_idx_ < chunk_ref.size());
-}
-
-std::string MessagesStandardIter::to_string() const {
-    std::stringstream ss;
-    ss << "MessagesStandardIter: [curr_chunk_it = "
-       << current_chunk_it_.to_string() << ", msg_idx = " << msg_idx_
-       << ", end_chunk_it = " << end_chunk_it_.to_string() << "]";
-    return ss.str();
-}
-
-// =========================================================
-// ========= Reader::MessagesStandardRange =========================
-// =========================================================
-
-MessagesStandardRange::MessagesStandardRange(const ChunksIter begin_it,
-                                             const ChunksIter end_it)
-    : begin_chunk_it_(begin_it), end_chunk_it_(end_it) {}
-
-MessagesStandardIter MessagesStandardRange::begin() const {
-    return MessagesStandardIter(begin_chunk_it_, end_chunk_it_, 0);
-}
-
-MessagesStandardIter MessagesStandardRange::end() const {
-    return MessagesStandardIter(end_chunk_it_, end_chunk_it_, 0);
-}
-
-std::string MessagesStandardRange::to_string() const {
-    std::stringstream ss;
-    ss << "MessagesStandardRange: [bit = " << begin_chunk_it_.to_string()
-       << ", eit = " << end_chunk_it_.to_string() << "]";
-    return ss.str();
-}
-
-// ==========================================================
 // ========= Reader =========================================
 // ==========================================================
 
@@ -476,10 +380,6 @@ nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id,
 }
 
 bool Reader::has_message_idx() const { return chunks_.has_message_idx(); };
-
-MessagesStandardRange Reader::messages_standard() {
-    return MessagesStandardRange(chunks().begin(), chunks().end());
-}
 
 ChunksRange Reader::chunks() {
     return ChunksRange(0, file_.metadata_offset(), this);

@@ -236,18 +236,6 @@ to work with OSF files.
                     is ``True``, otherwise return value is always None.
                 )")
         .def(
-            "messages_standard",
-            [](osf::Reader& r) {
-                return py::make_iterator(r.messages_standard().begin(),
-                                         r.messages_standard().end());
-            },
-            py::keep_alive<0, 1>(), R"(
-                Creates an iterator to reads messages in ``STANDARD`` layout.
-                
-                ``STANDARD`` layout order is how messages stored physically in
-                the chunks.
-            )")
-        .def(
             "chunks",
             [](osf::Reader& r) {
                 return py::make_iterator(r.chunks().begin(), r.chunks().end());

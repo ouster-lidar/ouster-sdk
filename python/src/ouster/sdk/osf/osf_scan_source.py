@@ -112,10 +112,13 @@ class OsfScanSource(MultiScanSource):
                 # default STREAMING chunks layout, so we don't copy the original
                 continue
             writer.addMetadata(m)
-        # convert should be able to read OSF in STANDARD layout too
-        msgs = reader.messages() if reader.has_stream_info else reader.messages_standard()
+        # convert
+        if not reader.has_stream_info:
+            writer.close()
+            raise Exception("Standard Message Layout No Longer Supported")
+        msgs = reader.messages()
         msgs_count = ilen(msgs)
-        msgs = reader.messages() if reader.has_stream_info else reader.messages_standard()
+        msgs = reader.messages()
         for idx, msg in enumerate(msgs):
             writer.saveMessage(msg.id, msg.ts, msg.buffer)
             progressbar(idx, msgs_count, "", "indexed")

@@ -26,15 +26,27 @@ namespace osf {
 /**
  * Need to be specialized for every derived MetadataEntry class that can be
  * stored/recovered as metadata object.
+ *
  * @sa metadata_type(), MetadataEntry
+ *
+ * @tparam MetadataDerived The derived subclass cpp type.
  */
 template <typename MetadataDerived>
 struct MetadataTraits {
+    /**
+     * Default type returning nullptr.
+     *
+     * @todo Possible undefined behavior here.
+     *
+     * @returns nullptr
+     */
     static const std::string type() { return nullptr; }
 };
 
 /**
  * Helper function that returns the MetadataEntry type of concrete metadata.
+ *
+ * @tparam MetadataDerived The derived subclass cpp type.
  */
 template <typename MetadataDerived>
 inline const std::string metadata_type() {
@@ -69,6 +81,67 @@ inline const std::string metadata_type() {
  *         return "ouster/v1/something/MyMeta";
  *     }
  * };
+ * @endcode
+ *
+ * Graph representing the heirarchy.
+ * @code[.dot]
+ * digraph {
+ *    subgraph cluster_SpecificMetadataClass {
+ *        SpecificMetadataClass [
+ *            label="class SpecificMetadataClass",
+ *            shape="rectangle"];
+ *        SpecificMetadataClassType [
+ *            label="struct MetadataTraits<SpecificMetadataClass>",
+ *            shape="rectangle"
+ *        ];
+ *
+ *        SpecificMetadataClass -> SpecificMetadataClassType;
+ *    }
+ *
+ *    MetadataEntryHelper [
+ *        label="class MetadataEntryHelper",
+ *        shape="rectangle"];
+ *    MetadataTraits [
+ *        label="struct MetadataTraits",
+ *        shape="rectangle"];
+ *
+ *    SpecificMetadataClass -> MetadataEntryHelper;
+ *    SpecificMetadataClassType -> MetadataTraits;
+ *
+ *    MetadataEntry [
+ *        label="MetadataEntry",
+ *        shape="rectangle"];
+ *    MetadataEntryRef [
+ *        label="MetadataEntryRef",
+ *        shape="rectangle"];
+ *
+ *    MetadataEntry -> MetadataEntryRef;
+ *
+ *    subgraph cluster_RegisterMetadata {
+ *        RegisterMetadata [
+ *            label="RegisterMetadata",
+ *            shape="rectangle"];
+ *        RegisterMetadata_Decoder [
+ *            label="RegisterMetadata::registered=register_type_decoder()",
+ *            shape="rectangle"];
+ *        RegisterMetadata->RegisterMetadata_Decoder;
+ *    };
+ *
+ *    MetadataEntryHelper -> MetadataEntry;
+ *    MetadataEntryHelper -> RegisterMetadata;
+ *
+ *    subgraph cluster_MetadataStore {
+ *        MetadataStore [
+ *            label="MetadataStore",
+ *            shape="rectangle"];
+ *        MetadataStore_Entries [
+ *            label="MetadataStore::metadata_entries_",
+ *            shape="rectangle"];
+ *        MetadataStore->MetadataStore_Entries;
+ *    };
+ *
+ *    MetadataEntry -> MetadataStore_Entries;
+ * }
  * @endcode
  *
  * `buffer` - byte representation of the metadata content whatever it is defined
@@ -209,17 +282,20 @@ class MetadataEntry {
 
     /**
      * Method to return the registry that holds from_buffer function by
-     * type string and is used during deserialization.
+     * type string and is used during deserialization. The registry is
+     * a static variable defined within the get_registry method.
      *
-     * @return
+     * @return The static registry used to register metadata types.
      */
     static std::map<std::string, from_buffer_func>& get_registry();
 
     virtual ~MetadataEntry() = default;
 
    private:
-    // id as its stored in metadata OSF and used for linking between other
-    // metadata object and messages to streams
+    /**
+     * Id as its stored in metadata OSF and used for linking between other
+     * metadata object and messages to streams.
+     */
     uint32_t id_{0};
 };
 
@@ -227,6 +303,11 @@ class MetadataEntry {
  * Safe and convenient cast of shared_ptr<MetadataEntry> to concrete derived
  * class using either shortcut (dynamic_pointer_cast) when it's save to do so
  * or reconstructs a new copy of the object from underlying data.
+ *
+ * @tparam MetadataDerived The cpp type of the derived object.
+ * @tparam MetadataBase The cpp type of the metadata base.
+ * @param[in] m The MetadataBase to convert to MetadataDerived.
+ * @return The MetadataBase cast as a MetadataDerived pointer.
  */
 template <typename MetadataDerived, typename MetadataBase>
 std::shared_ptr<MetadataDerived> metadata_pointer_as(
@@ -243,9 +324,15 @@ std::shared_ptr<MetadataDerived> metadata_pointer_as(
  * Registrar class helper to add static from_buffer() function of the concrete
  * derived metadata class to the registry.
  *
+ * @tparam MetadataDerived The derived subclass cpp type.
  */
 template <class MetadataDerived>
 struct RegisterMetadata {
+    /**
+     * @todo See if we can remove these aborts.
+     *
+     * @note Will abort on already being registered.
+     */
     virtual ~RegisterMetadata() {
         if (!registered_) {
             std::cerr << "ERROR: Can't be right! We shouldn't be here. "
@@ -254,6 +341,13 @@ struct RegisterMetadata {
             std::abort();
         }
     }
+
+    /**
+     * Register the specific derived class decoder into the global registrar.
+     *
+     * @return true If class has been registered successfully,
+     *              false otherwise.
+     */
     static bool register_type_decoder() {
         auto& registry = MetadataEntry::get_registry();
         auto type = metadata_type<MetadataDerived>();
@@ -266,8 +360,20 @@ struct RegisterMetadata {
         registry.insert(std::make_pair(type, MetadataDerived::from_buffer));
         return true;
     }
+
+    /**
+     * If the derived class has been registered.
+     */
     static const bool registered_;
 };
+
+/**
+ * This line is incredibly IMPORTANT. This will statically
+ * run the registration for all derived classes before the class
+ * constructer is run.
+ *
+ * @tparam MetadataDerived The derived subclass cpp type.
+ */
 template <typename MetadataDerived>
 const bool RegisterMetadata<MetadataDerived>::registered_ =
     RegisterMetadata<MetadataDerived>::register_type_decoder();
@@ -279,17 +385,33 @@ const bool RegisterMetadata<MetadataDerived>::registered_ =
  * Also registers the from_buffer() function for deserializer registry via
  * RegisterMetadata helper trick.
  *
+ * @tparam DerivedMetadataEntry The derived Metadata Entry type.
  */
 template <typename DerivedMetadataEntry>
 class MetadataEntryHelper : public MetadataEntry,
                             RegisterMetadata<DerivedMetadataEntry> {
    public:
+    /**
+     * Return the metadata type string for the specific derived class.
+     *
+     * @return The specific type string for the derived class.
+     */
     std::string type() const override {
         return metadata_type<DerivedMetadataEntry>();
     }
+
+    /**
+     * @copydoc type()
+     */
     std::string static_type() const override {
         return metadata_type<DerivedMetadataEntry>();
     }
+
+    /**
+     * Clone the specific derived metadata object.
+     *
+     * @return The cloned MetadataEntry object.
+     */
     std::unique_ptr<MetadataEntry> clone() const override {
         return std::make_unique<DerivedMetadataEntry>(
             *dynamic_cast<const DerivedMetadataEntry*>(this));
@@ -314,25 +436,62 @@ class MetadataEntryRef : public MetadataEntry {
     /**
      * Creates the metadata reference from Flatbuffers v2::MetadataEntry buffer.
      * No copy involved.
+     *
+     * @param[in] buf The buffer to create the MetadataEntryRef from.
      */
     explicit MetadataEntryRef(const uint8_t* buf);
+
+    /**
+     * Return the type of the MetadataEntry.
+     *
+     * @return The type of the MetadataEntry.
+     */
     std::string type() const override;
+
+    /**
+     * @copydoc type()
+     */
     std::string static_type() const override;
 
+    /**
+     * Clone the MetadataEntry.
+     *
+     * @return The cloned MetadataEntry object.
+     */
     std::unique_ptr<MetadataEntry> clone() const override;
 
+    /**
+     * Return the raw underlying buffer for the MetadataEntryRef.
+     *
+     * @return The raw underlying byte vector.
+     */
     std::vector<uint8_t> buffer() const final;
 
     /**
      * Reconstructs the object as concrete metadata of type() from the
      * buffer() using registered deserialization function from_buffer() of
      * current type
+     *
+     * @return The reconstructed object.
      */
     std::unique_ptr<MetadataEntry> as_type() const;
 
    private:
+    /**
+     * Internal method to set the specific metadata entry id.
+     *
+     * @param[in] id The metadata id to set.
+     */
     void setId(uint32_t id);
+
+    /**
+     * Data pointer to the raw MetadataEntry buffer.
+     */
     const uint8_t* buf_;
+
+    /**
+     * Internal variable for storing the metadata type string.
+     */
     std::string buf_type_{};
 };
 
@@ -342,6 +501,12 @@ class MetadataEntryRef : public MetadataEntry {
  */
 template <>
 struct MetadataTraits<MetadataEntryRef> {
+    /**
+     * Implementation detail for MetadataEntryRef to distinguish it from
+     * any possible metadata type.
+     *
+     * @return The type string "impl/MetadataEntryRef".
+     */
     static const std::string type() { return "impl/MetadataEntryRef"; }
 };
 
@@ -352,19 +517,37 @@ struct MetadataTraits<MetadataEntryRef> {
  * Provide functions to retrieve concrete metadata types by id or by type.
  *
  * Also can serialize itself to Flatbuffers collection of metadata.
- *
  */
 class MetadataStore {
+    /**
+     * Metadata id to MetadataEntry map.
+     */
     using MetadataEntriesMap =
         std::map<uint32_t, std::shared_ptr<MetadataEntry>>;
 
    public:
     using key_type = MetadataEntriesMap::key_type;
 
+    /**
+     * Add a specified MetadataEntry to the store
+     *
+     * @param[in] entry The entry to add to the store.
+     */
     uint32_t add(MetadataEntry&& entry);
 
+    /**
+     * @copydoc add(MetadataEntry&& entry)
+     */
     uint32_t add(MetadataEntry& entry);
 
+    /**
+     * Get the first specified MetadataEntry associated to the
+     * template parameter.
+     *
+     * @tparam MetadataEntryClass The metadata cpp type to try and
+     *                            retrieve.
+     * @return The MetadataEntry of type MetadataEntryClass if it exists.
+     */
     template <class MetadataEntryClass>
     std::shared_ptr<MetadataEntryClass> get() const {
         auto it = metadata_entries_.begin();
@@ -377,6 +560,14 @@ class MetadataStore {
         return nullptr;
     }
 
+    /**
+     * Count the number of specified MetadataEntry associated to the
+     * template parameter.
+     *
+     * @tparam MetadataEntryClass The metadata cpp type to try and
+     *                            count.
+     * @return The count type MetadataEntryClass.
+     */
     template <class MetadataEntryClass>
     size_t count() const {
         auto it = metadata_entries_.begin();
@@ -389,18 +580,41 @@ class MetadataStore {
         return cnt;
     }
 
+    /**
+     * Get the specified MetadataEntry associated to the
+     * template parameter and metadata_id.
+     *
+     * @tparam MetadataEntryClass The metadata cpp type to try and
+     *                            retrieve.
+     * @param[in] metadata_id The id to try and return the associated entry.
+     * @return The MetadataEntryClass.
+     */
     template <class MetadataEntryClass>
     std::shared_ptr<MetadataEntryClass> get(const uint32_t metadata_id) const {
         auto meta_entry = get(metadata_id);
         return metadata_pointer_as<MetadataEntryClass>(meta_entry);
     }
 
+    /**
+     * Get the specified MetadataEntry associated to the
+     * metadata_id.
+     *
+     * @param[in] metadata_id The id to try and return the associated entry.
+     * @return The MetadataEntry.
+     */
     std::shared_ptr<MetadataEntry> get(const uint32_t metadata_id) const {
         auto it = metadata_entries_.find(metadata_id);
         if (it == metadata_entries_.end()) return nullptr;
         return it->second;
     }
 
+    /**
+     * Return a map containing all of the MetadataEntries that match
+     * the specified template class.
+     *
+     * @tparam MetadataEntryClass The metadata cpp type to try and retrieve.
+     * @return The MetadataEntry map.
+     */
     template <class MetadataEntryClass>
     std::map<uint32_t, std::shared_ptr<MetadataEntryClass>> find() const {
         std::map<uint32_t, std::shared_ptr<MetadataEntryClass>> res;
@@ -414,17 +628,46 @@ class MetadataStore {
         return res;
     }
 
+    /**
+     * Return the number of MetadataEntries.
+     *
+     * @return The number of MetadataEntry objects.
+     */
     size_t size() const;
 
+    /**
+     * Return the entire map of MetadataEntry.
+     *
+     * @return The entire map of MetadataEnty objects.
+     */
     const MetadataEntriesMap& entries() const;
 
+    /**
+     * Serialize the MetadataStore to the specified flatbuffer builder
+     * and return the resulting byte vector.
+     *
+     * @param[in] fbb The flatbuffer builder to use.
+     * @return The resulting serialized byte vector.
+     */
     std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>>
     make_entries(flatbuffers::FlatBufferBuilder& fbb) const;
 
    private:
+    /**
+     * Assign and increment an id to the entry.
+     *
+     * @param[in] entry The entry to assign a generated id to.
+     */
     void assignId(MetadataEntry& entry);
 
+    /**
+     * The autogenerated meta id variable.
+     */
     uint32_t next_meta_id_{1};
+
+    /**
+     * The internal storage for all of the metadata entries.
+     */
     MetadataEntriesMap metadata_entries_{};
 };
 
