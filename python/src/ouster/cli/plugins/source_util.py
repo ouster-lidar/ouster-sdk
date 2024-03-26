@@ -26,6 +26,7 @@ class SourceCommandContext:
     thread_fns: List[Callable[[None], None]]
     invoked_command_names: List[str]
     misc: Dict[Any, Any]
+    terminate_exception: Optional[Exception]
 
     def __init__(self) -> None:
         self.source_uri = ""
@@ -36,6 +37,7 @@ class SourceCommandContext:
         self.thread_fns = []
         self.invoked_command_names = []
         self.misc = {}
+        self.terminate_exception = None
 
     # [kk] NOTE: get and __getitem__ are defined to support
     # older code that still treats ctx.obj as a dict
@@ -86,31 +88,37 @@ class CoupledTee:
         self._poll_wait_sec = poll_wait_sec
 
     def main_tee(self) -> Iterator:
-        for val in self._iter:
+        try:
+            for val in self._iter:
+                for q in self._queues:
+                    q.put(val)
+                yield val
+                for q in self._queues:
+                    with q.all_tasks_done:
+                        while q.unfinished_tasks:
+                            q.all_tasks_done.wait(self._poll_wait_sec)
+                            if self._terminate and self._terminate.is_set():
+                                return
+        except Exception as ex:
             for q in self._queues:
-                q.put(val)
-            yield val
-            for q in self._queues:
-                with q.all_tasks_done:
-                    while q.unfinished_tasks:
-                        q.all_tasks_done.wait(self._poll_wait_sec)
-                        if self._terminate and self._terminate.is_set():
-                            return
+                q.put(ex)
+            raise ex
 
-        # propagate StopIteration to sub_tee's
+        # propagate StopIteration to sub_tees
         for q in self._queues:
-            q.put(CoupledTee.sentinel)
-        return
+            q.put(StopIteration())
 
     def sub_tee(self, idx: int) -> Iterator:
         while True:
             try:
                 val = self._queues[idx].get(block=True, timeout=0.5)
                 self._queues[idx].task_done()
-                if val is CoupledTee.sentinel:
-                    return
-                else:
-                    yield val
+                if isinstance(val, Exception):
+                    # python doesnt allow you to throw a stop iteration here
+                    if isinstance(val, StopIteration):
+                        return
+                    raise val
+                yield val
             except queue.Empty:
                 if self._terminate and self._terminate.is_set():
                     return

@@ -59,32 +59,17 @@ class SensorScanSource(ScansMulti):
         self._fields = default_scan_fields(self._source.metadata.format.udp_profile_lidar,
                                            flags=True)
 
-        try:
-            self._scans = client.Scans(self._source,
-                                       timeout=timeout_,
-                                       complete=complete,
-                                       fields=self._fields,
-                                       _max_latency=2)
+        self._scans = client.Scans(self._source,
+                                   timeout=timeout_,
+                                   complete=complete,
+                                   fields=self._fields,
+                                   _max_latency=2)
 
-            if extrinsics:
-                self._scans.metadata.extrinsic = np.array(
-                    extrinsics).reshape((4, 4))
-                print(
-                    f"Using sensor extrinsics:\n{self._scans.metadata.extrinsic}")
-        finally:
-            if self._scans._timed_out:
-                print(f"ERROR: Timed out while awaiting new packets from sensor {hostnames[0]} "
-                      f"using udp destination {config.udp_dest} on port {config.udp_port_lidar}. "
-                      f"Check your firewall settings and/or ensure that the lidar port "
-                      f"{config.udp_port_lidar} is not being held open.")
-
-            if self._source.id_error_count:
-                print(f"WARNING: {self._source.id_error_count} lidar_packets with "
-                      "mismatched init_id/sn were detected.")
-                if not _soft_id_check:
-                    print("NOTE: To disable strict init_id/sn checking use "
-                          "--soft-id-check option (may lead to parsing "
-                          "errors)")
+        if extrinsics:
+            self._scans.metadata.extrinsic = np.array(
+                extrinsics).reshape((4, 4))
+            print(
+                f"Using sensor extrinsics:\n{self._scans.metadata.extrinsic}")
 
     # NOTE: the following properties have been adapted to the multi sensor case
     # using the single client.Scans inteface.

@@ -172,7 +172,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, **kwargs) 
                     if np.any(scan.status):
                         write_osf(scan)
                     yield scan
-        except (KeyboardInterrupt, StopIteration):
+        except (KeyboardInterrupt):
             pass
     ctx.scan_iter = save_iter()
 

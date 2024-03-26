@@ -11,6 +11,7 @@ import pytest
 
 from ouster.sdk import client
 from ouster.sdk.client import ChanField, _LidarPacket, _ImuPacket
+from ouster.sdk.client.core import ClientTimeout
 
 pytest.register_assert_rewrite('ouster.sdk.client._digest')
 import ouster.sdk.client._digest as digest  # noqa
@@ -254,19 +255,13 @@ def test_scans_complete(packets: client.PacketSource) -> None:
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_scans_timeout(packets: client.PacketSource) -> None:
-    """A zero timeout should deterministically throw.
-
-    TODO: should it, though?
-
-    TWS 20230609: a timeout no longer raises an exception...
-    instead it stops iteration and sets _timed_out=True.
+    """A zero timeout should deterministically throw a ClientTimeout.
     """
     scans = client.Scans(packets, timeout=0.0)
     scans_itr = iter(scans)
 
-    with pytest.raises(StopIteration):
+    with pytest.raises(ClientTimeout):
         next(scans_itr)
-    assert scans._timed_out
 
 
 def test_scans_digest(stream_digest, packets: client.PacketSource) -> None:

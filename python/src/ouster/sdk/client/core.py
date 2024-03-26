@@ -118,6 +118,8 @@ class Sensor(PacketSource):
     _cache: Optional[ClientState]
     _lidarbuf: LidarPacket
     _imubuf: ImuPacket
+    _lidar_port: int
+    _hostname: str
 
     def __init__(self,
                  hostname: str,
@@ -169,6 +171,9 @@ class Sensor(PacketSource):
         self._soft_id_check = _soft_id_check
         self._id_error_count = 0
         self._skip_metadata_beam_validation = _skip_metadata_beam_validation
+
+        self._hostname = hostname
+        self._lidar_port = lidar_port
 
         # Fetch from sensor if not explicitly provided
         if metadata:
@@ -243,7 +248,10 @@ class Sensor(PacketSource):
         elif st & ClientState.IMU_DATA:
             return self._imubuf
         elif st == ClientState.TIMEOUT:
-            raise ClientTimeout(f"No packets received within {self._timeout}s")
+            raise ClientTimeout(f"No packets received within {self._timeout}s from sensor "
+                                f"{self._hostname} using udp destination {self._metadata.config.udp_dest} "
+                                f"on port {self._lidar_port}. Check your firewall settings and/or ensure "
+                                f"that the lidar port {self._lidar_port} is not being held open.")
         elif st & ClientState.ERROR:
             raise ClientError("Client returned ERROR state")
         elif st & ClientState.EXIT:
@@ -406,7 +414,6 @@ class Scans(ScanSource):
         self._source = source
         self._complete = complete
         self._timeout = timeout
-        self._timed_out = False
         self._max_latency = _max_latency
         # used to initialize LidarScan
         self._fields: FieldTypes = (
@@ -445,14 +452,10 @@ class Scans(ScanSource):
                     if not self._complete or ls_write.complete(column_window):
                         yield ls_write
                 return
-            except ClientTimeout:
-                self._timed_out = True
-                return
 
             if self._timeout is not None and (time.monotonic() >=
                                               start_ts + self._timeout):
-                self._timed_out = True
-                return
+                raise ClientTimeout(f"No valid frames received within {self._timeout}s")
 
             if isinstance(packet, LidarPacket):
                 ls_write = ls_write or LidarScan(

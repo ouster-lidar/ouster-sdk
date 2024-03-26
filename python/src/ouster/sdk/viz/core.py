@@ -1056,7 +1056,7 @@ class SimpleViz:
                     # show new data
                     self._viz.update()
                 except StopIteration:
-                    if self._on_eof == 'exit' and not self._paused:
+                    if not self._paused and not self._on_eof == "stop":
                         break
 
         finally:

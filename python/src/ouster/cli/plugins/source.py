@@ -7,6 +7,7 @@ from ouster.cli.core import cli
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
 from ouster.sdk import open_source
+from ouster.sdk.client.core import ClientTimeout
 import ouster.cli.core.pcap
 import ouster.cli.core.sensor
 import ouster.cli.core.osf as osf_cli
@@ -431,6 +432,18 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                                       timeout=timeout, complete=filter,
                                       buf_size=buf_size, legacy_format=legacy)
         ctx.scan_iter = iter(ctx.scan_source)
+
+        # print any timeout exceptions we get
+        scans = ctx.scan_iter
+
+        def save_iter():
+            try:
+                for scan in scans:
+                    yield scan
+            except ClientTimeout as ex:
+                print(f"ERROR: {ex}")
+            return
+        ctx.scan_iter = save_iter()
         try:
             # Execute multicommand callbacks
 
@@ -469,8 +482,14 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
 
             # Define a function to consume ctx.scan_iter
             def pipeline_flush():
-                for _ in ctx.scan_iter:
-                    pass
+                try:
+                    for _ in ctx.scan_iter:
+                        pass
+                except Exception as ex:
+                    # Terminate everything if we get an unhandled exception
+                    ctx.terminate_evt.set()
+                    raise ex
+
             threads.append(threading.Thread(target=pipeline_flush))
 
             # Start all threads
@@ -486,6 +505,15 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
             for thread in threads:
                 thread.join()
 
+            # Todo MDB this is broken, uncomment when id error handling is fixed
+            # true_source = ctx.scan_source._scan_source
+            # if true_source._source._id_error_count > 0:
+            #    print(f"WARNING: {true_source._source._id_error_count} lidar_packets with "
+            #          "mismatched init_id/sn were detected.")
+            #    if not soft_id_check:
+            #        print("NOTE: To disable strict init_id/sn checking use "
+            #              "--soft-id-check option (may lead to parsing "
+            #              "errors)")
         finally:
             # Attempt to close scansource
             try:
