@@ -8,9 +8,9 @@ from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
 from ouster.sdk import open_source
 from ouster.sdk.client.core import ClientTimeout
-import ouster.cli.core.pcap
-import ouster.cli.core.sensor
-import ouster.cli.core.osf as osf_cli
+import ouster.cli.plugins.source_pcap as pcap_cli
+import ouster.cli.plugins.source_osf as osf_cli
+import ouster.cli.plugins.source_sensor as sensor_cli
 from typing import (List, Optional, Iterable, Tuple)
 from .io_type import (extension_from_io_type, io_type, OusterIoType)
 from .source_save import SourceSaveCommand
@@ -33,80 +33,6 @@ except ImportError:
 
 
 _source_arg_name: str = 'source'
-
-
-@click.command()
-@click.argument('keyval', metavar='[KEY VAL]...', type=str, nargs=-1)
-@click.option('-d', 'dump', is_flag=True, help='Dump current configuration')
-@click.option('-c', 'file', type=click.File(), help='Read config from file')
-@click.option('-u', 'auto', is_flag=True, help='Set automatic udp dest')
-@click.option('-p', 'persist', is_flag=True, help='Persist configuration')
-@click.option('-s/-n', 'standby', default=None, help='Set STANDBY or NORMAL')
-@click.pass_context
-@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
-                     retrieve_click_context=True)
-def sensor_config(ctx: SourceCommandContext, click_ctx: click.core.Context,
-                  *args, **kwargs) -> None:
-    """
-    Manipulate the sensor configuration.
-
-      Update the sensor configuration or dump it to stdout. The first positional
-      argument is the sensor hostname; remaining arguments are interpreted as
-      config parameter key/value pairs, for example:
-
-      \b
-          $ ouster-cli sensor config os-99xxxxxxxxxx \\
-          lidar_mode 2048x10 azimuth_window "[20000, 60000]"
-
-      If no options or config param values are specified, use the default UDP
-      ports, automatic UDP destination, full azimuth azimuth window, and set the
-      operating mode to NORMAL.
-    """
-    # Implements ouster-cli source <hostname> config
-    source = ctx.source_uri
-    kwargs['hostname'] = source
-    click_ctx.forward(ouster.cli.core.sensor.config, *args, **kwargs)
-
-
-@click.command
-@click.option('--legacy/--non-legacy',
-              default=False,
-              help="Use legacy metadata format or not")
-@click.pass_context
-@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
-                     retrieve_click_context=True)
-def sensor_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
-                *args, **kwargs) -> None:
-    """Display info about the SOURCE."""  # Implements ouster-cli source <hostname> metadata
-    source = ctx.source_uri
-    kwargs['hostname'] = source
-    click_ctx.forward(ouster.cli.core.sensor.metadata, *args, **kwargs)
-
-
-@click.command
-@click.option('-n', type=int, default=0, help="Read only INTEGER packets.")
-@click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR,
-                     retrieve_click_context=True)
-def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
-              *args, **kwargs) -> None:
-    """Display info about the SOURCE."""
-    source = ctx.source_uri
-    kwargs['file'] = source
-    click_ctx.forward(ouster.cli.core.pcap.pcap_info, *args, **kwargs)
-
-
-@click.command
-@click.option('-s', '--short', is_flag=True, help='Print less metadata info')
-@click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR,
-                     retrieve_click_context=True)
-def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
-             *args, **kwargs) -> None:
-    """Display info about the SOURCE."""  # Implements ouster-cli source <sourcefile>.osf info
-    source = ctx.source_uri
-    kwargs['file'] = source
-    click_ctx.forward(osf_cli.osf_info, *args, **kwargs)
 
 
 @click.command()
@@ -232,19 +158,21 @@ class SourceMultiCommand(click.MultiCommand):
                 'slice': source_slice,
             },
             OusterIoType.SENSOR: {
-                'config': sensor_config,
-                'metadata': sensor_info,
+                'config': sensor_cli.sensor_config,
+                'metadata': sensor_cli.sensor_info,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
 
             },
             OusterIoType.PCAP: {
-                'info': pcap_info,
+                'info': pcap_cli.pcap_info,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
+                'replay': pcap_cli.replay
             },
             OusterIoType.OSF: {
-                'info': osf_info,
+                'info': osf_cli.osf_info,
+                'parse': osf_cli.osf_parse,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
             }

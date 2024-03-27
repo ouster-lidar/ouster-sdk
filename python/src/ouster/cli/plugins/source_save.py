@@ -5,12 +5,11 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 from typing import (Tuple, List, Iterator, Optional, Union)
+from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
 from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
                                UDPProfileLidar, LidarScan, ChanField, XYZLut,
                                ScanSource, destagger, SensorInfo,
                                LidarPacket, ImuPacket, ScanSourceAdapter)
-import ouster.cli.core.pcap
-import ouster.cli.core.sensor
 from ouster.sdk import osf
 from ouster.sdk.pcap import BagRecordingPacketSource, RecordingPacketSource, PcapScanSource
 from ouster.sdk.sensor import SensorScanSource
@@ -510,4 +509,4 @@ class SourceSaveCommand(click.Command):
                 return ctx.forward(convert_command)
             except TypeError:
                 if len(ctx.args) > 0:
-                    raise ouster.cli.core.SourceArgsException(ctx)
+                    raise SourceArgsException(ctx)

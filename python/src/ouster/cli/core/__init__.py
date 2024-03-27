@@ -16,11 +16,7 @@ from typing import Optional, List, Mapping
 
 from ouster.sdk.client import ClientError, init_logger
 
-from .pcap import pcap_group
-from .sensor import sensor_group
 from .util import util_group
-from .osf import osf_group
-
 
 this_package_name = 'ouster-sdk'
 APP_NAME = 'ouster'
@@ -106,17 +102,8 @@ def cli(ctx, trace: bool, sdk_log_level: Optional[str]) -> None:
             init_logger(ctx.obj['SDK_LOG_LEVEL'])
 
 
-# pcap commands
-cli.add_command(pcap_group)
-
-# sensor commands
-cli.add_command(sensor_group)
-
 # util commands
 cli.add_command(util_group)
-
-# osf commands
-cli.add_command(osf_group)
 
 
 # from https://github.com/python/importlib_metadata, Apache 2.0 license

@@ -9,12 +9,10 @@ import tempfile
 from typing import List
 from click.testing import CliRunner
 
-import ouster.sdk.pcap
-import ouster.sdk.client
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins.io_type import io_type_from_extension, OusterIoType
-from ouster.cli.plugins import source  # noqa: F401
+from ouster.cli.plugins import source, source_osf  # noqa: F401
 
 from tests.conftest import PCAPS_DATA_DIR, OSFS_DATA_DIR
 
@@ -124,23 +122,14 @@ def test_help(runner) -> None:
     result = runner.invoke(core.cli, ['--help'])
     assert result.exit_code == 0
 
-    result = runner.invoke(core.cli, ['pcap', '--help'])
-    assert result.exit_code == 0
-
-    result = runner.invoke(core.cli, ['sensor', '--help'])
-    assert result.exit_code == 0
-
     result = runner.invoke(core.cli, CliArgs(['util', '--help']).args)
     assert "Usage: cli util [OPTIONS] COMMAND [ARGS]" in result.output
     assert result.exit_code == 0
 
-    result = runner.invoke(core.cli, ['osf', '--help'])
+    result = runner.invoke(core.cli, ['--traceback', 'util'])
     assert result.exit_code == 0
 
-    result = runner.invoke(core.cli, ['--traceback', 'osf'])
-    assert result.exit_code == 0
-
-    result = runner.invoke(core.cli, ['--sdk-log-level', 'debug', 'osf'])
+    result = runner.invoke(core.cli, ['--sdk-log-level', 'debug', 'util'])
     assert result.exit_code == 0
 
 
@@ -351,7 +340,7 @@ def test_source_osf_info_help(test_osf_file, runner):
     result = runner.invoke(core.cli, CliArgs(['source', test_osf_file, 'info', '--help']).args)
     assert "Usage: cli source SOURCE info [OPTIONS]" in result.output
 
-    option_names = [option.name.replace('_', '-') for option in source.osf_info.params]
+    option_names = [option.name.replace('_', '-') for option in source_osf.osf_info.params]
     assert all([option_name in result.output.lower().replace('_', '-') for option_name in option_names])
     assert result.exit_code == 0
 
@@ -387,14 +376,6 @@ def test_discover(runner):
     result = runner.invoke(core.cli, ['discover', '--help'])
     assert "Usage: cli discover [OPTIONS]" in result.output
     assert result.exit_code == 0
-
-
-def test_match_metadata_with_data_stream(test_pcap_file, test_metadata_file):
-    """It should find the data stream with a destination port that matches the metadata file lidar port"""
-    all_infos = ouster.sdk.pcap._packet_info_stream(test_pcap_file, 0, None, 100)
-    meta = ouster.sdk.client.SensorInfo(open(test_metadata_file).read())
-    matched_stream = core.pcap.match_metadata_with_data_stream(all_infos, meta)
-    assert matched_stream.dst_port == 7502
 
 
 def test_source_osf(runner, has_mapping) -> None:
