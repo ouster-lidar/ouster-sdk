@@ -323,6 +323,10 @@ class PacketFormat:
     def packet_footer_size(self) -> int:
         ...
 
+    @property
+    def max_frame_id(self) -> int:
+        ...
+
     def packet_type(self, buf: BufferT) -> int:
         ...
 

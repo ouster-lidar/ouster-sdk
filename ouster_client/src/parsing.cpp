@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -181,6 +182,8 @@ struct packet_format::Impl {
     size_t col_footer_size;
     size_t packet_footer_size;
 
+    uint64_t max_frame_id;
+
     size_t col_size;
     size_t lidar_packet_size;
 
@@ -201,6 +204,12 @@ struct packet_format::Impl {
         channel_data_size = entry.chan_data_size;
         col_footer_size = legacy ? 4 : 0;
         packet_footer_size = legacy ? 0 : 32;
+
+        if (profile == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+            max_frame_id = std::numeric_limits<uint32_t>::max();
+        } else {
+            max_frame_id = std::numeric_limits<uint16_t>::max();
+        }
 
         col_size = col_header_size + pixels_per_column * channel_data_size +
                    col_footer_size;
@@ -233,7 +242,8 @@ packet_format::packet_format(UDPProfileLidar udp_profile_lidar,
       col_header_size{impl_->col_header_size},
       col_footer_size{impl_->col_footer_size},
       col_size{impl_->col_size},
-      packet_footer_size{impl_->packet_footer_size} {
+      packet_footer_size{impl_->packet_footer_size},
+      max_frame_id{impl_->max_frame_id} {
     for (const auto& kv : impl_->fields) {
         field_types_.push_back({kv.first, kv.second.ty_tag});
     }

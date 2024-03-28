@@ -1061,6 +1061,8 @@ class packet_format {
     const size_t col_size;
     const size_t packet_footer_size;
 
+    const uint64_t max_frame_id;
+
     /**
      * Read the packet type packet header.
      *

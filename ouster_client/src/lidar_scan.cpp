@@ -729,7 +729,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         this->operator()(cache.data(), cache_packet_ts, ls);
     }
 
-    const uint16_t f_id = pf.frame_id(packet_buf);
+    const uint64_t f_id = pf.frame_id(packet_buf);
 
     const bool raw_headers = impl::raw_headers_enabled(pf, ls);
 
@@ -744,7 +744,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         const uint8_t f_shot_limiting = pf.shot_limiting(packet_buf);
         ls.frame_status = frame_status(f_thermal_shutdown, f_shot_limiting);
 
-    } else if (ls.frame_id == static_cast<uint16_t>(f_id + 1)) {
+    } else if (ls.frame_id == ((f_id + 1) % (pf.max_frame_id + 1))) {
         // drop reordered packets from the previous frame
         return false;
     } else if (ls.frame_id != f_id) {

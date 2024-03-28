@@ -423,6 +423,7 @@ PYBIND11_MODULE(_client, m) {
         .def_readonly("col_footer_size", &packet_format::col_footer_size)
         .def_readonly("col_size", &packet_format::col_size)
         .def_readonly("packet_footer_size", &packet_format::packet_footer_size)
+        .def_readonly("max_frame_id", &packet_format::max_frame_id)
 
         .def("field_value_mask", &packet_format::field_value_mask)
         .def("field_bitness", &packet_format::field_bitness)

@@ -93,7 +93,7 @@ class LidarScan {
      * @warning Members variables: use with caution, some of these will become
      * private.
      */
-    int32_t frame_id{-1};
+    int64_t frame_id{-1};
 
     using FieldIter =
         decltype(field_types_)::const_iterator;  ///< An STL Iterator of the

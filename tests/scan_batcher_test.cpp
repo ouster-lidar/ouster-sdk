@@ -461,7 +461,7 @@ TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
     auto packet = std::make_unique<LidarPacket>();
     std::memset(packet->buf.data(), 0, packet->buf.size());
     packet->host_timestamp = 100;
-    pw.set_frame_id(packet->buf.data(), 65535);
+    pw.set_frame_id(packet->buf.data(), pw.max_frame_id);
     uint16_t m_id = columns_per_frame - columns_per_packet;
     uint64_t ts = 100;
     for (size_t icol = 0; icol < columns_per_packet; ++icol) {
