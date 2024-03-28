@@ -326,7 +326,7 @@ bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls);
 template <typename OutputItT>
 void scan_to_packets(const LidarScan& ls,
                      const ouster::sensor::impl::packet_writer& pw,
-                     OutputItT iter) {
+                     OutputItT iter, uint32_t init_id, uint64_t prod_sn) {
     int total_packets = ls.packet_timestamp().size();
     auto columns_per_packet = pw.columns_per_packet;
 
@@ -361,6 +361,8 @@ void scan_to_packets(const LidarScan& ls,
         packet.host_timestamp = ls.packet_timestamp()[p_id];
 
         pw.set_frame_id(lidar_buf, frame_id);
+        pw.set_init_id(lidar_buf, init_id);
+        pw.set_prod_sn(lidar_buf, prod_sn);
 
         bool any_valid = false;
         for (int icol = 0; icol < columns_per_packet; ++icol) {

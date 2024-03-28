@@ -18,7 +18,7 @@ class SensorScanSource(ScansMulti):
         lidar_port: int = 7502,
         imu_port: int = 7503,
         complete: bool = False,
-        _soft_id_check: bool = False,
+        soft_id_check: bool = False,
         do_not_reinitialize: bool = False,
         no_auto_udp_dest: bool = False,
         timeout: float = 1.0,
@@ -52,7 +52,7 @@ class SensorScanSource(ScansMulti):
                                      lidar_port,
                                      imu_port,
                                      timeout=timeout_,
-                                     _soft_id_check=_soft_id_check)
+                                     soft_id_check=soft_id_check)
 
         # enable parsing flags field
         # TODO: try to switch to using the resolve_field_types

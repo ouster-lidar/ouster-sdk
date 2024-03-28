@@ -660,7 +660,7 @@ def scan_to_packets(ls: client.LidarScan,
         A set of lidar packets that will produce the same LidarScan if passed
         through the ScanBatcher again (less fields data)
     """
-    return client._client.scan_to_packets(ls, PacketWriter.from_info(info))
+    return client._client.scan_to_packets(ls, PacketWriter.from_info(info), info.init_id, int(info.sn))
 
 
 def terminator_packet(info: client.SensorInfo,

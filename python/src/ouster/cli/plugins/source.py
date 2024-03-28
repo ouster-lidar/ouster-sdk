@@ -284,7 +284,7 @@ class SourceMultiCommand(click.MultiCommand):
               help="Do not reinitialize (by default it will reinitialize if needed)")
 @click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
               help="Do not automatically set udp_dest (by default it will auto set udp_dest")
-@click.option('-s', '--soft-id-check', is_flag=True, hidden=True,
+@click.option('-s', '--soft-id-check', is_flag=True,
               help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.option('-t', '--timeout', default=1.0, help="Seconds to wait for data")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
@@ -433,15 +433,17 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
             for thread in threads:
                 thread.join()
 
-            # Todo MDB this is broken, uncomment when id error handling is fixed
-            # true_source = ctx.scan_source._scan_source
-            # if true_source._source._id_error_count > 0:
-            #    print(f"WARNING: {true_source._source._id_error_count} lidar_packets with "
-            #          "mismatched init_id/sn were detected.")
-            #    if not soft_id_check:
-            #        print("NOTE: To disable strict init_id/sn checking use "
-            #              "--soft-id-check option (may lead to parsing "
-            #              "errors)")
+            true_source = ctx.scan_source._scan_source
+            try:
+                if true_source._source._id_error_count > 0:
+                    print(f"WARNING: {true_source._source._id_error_count} lidar_packets with "
+                          "mismatched init_id/sn were detected.")
+                    if not soft_id_check:
+                        print("NOTE: To disable strict init_id/sn checking use "
+                              "--soft-id-check option (may lead to parsing "
+                              "errors)")
+            except AttributeError:
+                pass  # This source doesnt support _id_error_count
         finally:
             # Attempt to close scansource
             try:

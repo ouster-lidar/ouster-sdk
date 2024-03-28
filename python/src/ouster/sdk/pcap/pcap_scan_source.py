@@ -22,7 +22,7 @@ class PcapScanSource(ScansMulti):
         flags: bool = False,
         raw_headers: bool = False,
         raw_fields: bool = False,
-        _soft_id_check: bool = False,
+        soft_id_check: bool = False,
         **_
     ) -> None:
         """
@@ -54,7 +54,7 @@ class PcapScanSource(ScansMulti):
             self._source = PcapMultiPacketReader(file_path,
                                                  metadata_paths=metadata_paths,
                                                  index=index,
-                                                 _soft_id_check=_soft_id_check,
+                                                 soft_id_check=soft_id_check,
                                                  _resolve_extrinsics=True)
         except Exception:
             self._source = None

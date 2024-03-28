@@ -435,7 +435,7 @@ class PacketWriter(PacketFormat):
         ...
 
 
-def scan_to_packets(ls: LidarScan, pw: PacketWriter) -> List[_LidarPacket]:
+def scan_to_packets(ls: LidarScan, pw: PacketWriter, init_id: int, prod_sn: int) -> List[_LidarPacket]:
     ...
 
 

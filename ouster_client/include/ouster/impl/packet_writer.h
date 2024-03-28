@@ -32,6 +32,8 @@ class packet_writer : public packet_format {
     void set_col_timestamp(uint8_t* col_buf, uint64_t ts) const;
     void set_col_measurement_id(uint8_t* col_buf, uint16_t m_id) const;
     void set_frame_id(uint8_t* lidar_buf, uint32_t frame_id) const;
+    void set_init_id(uint8_t* lidar_buf, uint32_t init_id) const;
+    void set_prod_sn(uint8_t* lidar_buf, uint64_t sn) const;
 
     template <typename T>
     void set_px(uint8_t* px_buf, ChanField i, T value) const;

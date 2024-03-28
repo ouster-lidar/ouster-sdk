@@ -133,7 +133,7 @@ class Sensor(PacketSource):
                  _flush_before_read: bool = True,
                  _flush_frames: int = 5,
                  _legacy_format: bool = False,
-                 _soft_id_check: bool = False,
+                 soft_id_check: bool = False,
                  _skip_metadata_beam_validation: bool = False) -> None:
         """
         Neither the ports nor udp destination configuration on the sensor will
@@ -151,7 +151,7 @@ class Sensor(PacketSource):
             _flush_before_read: if True, try to clear buffers before reading
             _flush_frames: the number of frames to skip/flush on start of a new iter
             _legacy_format: if True, use legacy metadata format
-            _soft_id_check: if True, don't skip lidar packets buffers on,
+            soft_id_check: if True, don't skip lidar packets buffers on,
             id mismatch (init_id/sn pair),
             _skip_metadata_beam_validation: if True, skip metadata beam angle check
 
@@ -168,7 +168,7 @@ class Sensor(PacketSource):
         self._flush_frames = _flush_frames
         self._legacy_format = _legacy_format
 
-        self._soft_id_check = _soft_id_check
+        self._soft_id_check = soft_id_check
         self._id_error_count = 0
         self._skip_metadata_beam_validation = _skip_metadata_beam_validation
 
@@ -242,9 +242,12 @@ class Sensor(PacketSource):
             else:
                 raise ValueError()
         if st & ClientState.LIDAR_DATA:
-            if self._lidarbuf.id_error:
+            packet = LidarPacket(self._lidarbuf._data, self._metadata,
+                                 self._lidarbuf.capture_timestamp,
+                                 _raise_on_id_check = not self._soft_id_check)
+            if packet.id_error:
                 self._id_error_count += 1
-            return self._lidarbuf
+            return packet
         elif st & ClientState.IMU_DATA:
             return self._imubuf
         elif st == ClientState.TIMEOUT:

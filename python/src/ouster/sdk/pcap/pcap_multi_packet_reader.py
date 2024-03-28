@@ -31,7 +31,7 @@ class PcapMultiPacketReader(PacketMultiSource):
                  *,
                  rate: float = 0.0,
                  index: bool = False,
-                 _soft_id_check: bool = False,
+                 soft_id_check: bool = False,
                  _resolve_extrinsics: bool = False):
         """Read a single sensor data stream from a single packet capture file.
 
@@ -40,7 +40,7 @@ class PcapMultiPacketReader(PacketMultiSource):
             pcap_path: File path of recorded pcap
             rate: Output packets in real time, if non-zero
             index: Should index the source, may take extra time on startup
-            _soft_id_check: if True, don't skip lidar packets buffers on
+            soft_id_check: if True, don't skip lidar packets buffers on
                             init_id mismatch
             _resolve_extrinsics: if True attempts to find the extrinsics source
                                  and fill source.metadata[i].extrinsic field
@@ -48,7 +48,7 @@ class PcapMultiPacketReader(PacketMultiSource):
         self._metadata = []
         self._metadata_json = []
         self._indexed = index
-        self._soft_id_check = _soft_id_check
+        self._soft_id_check = soft_id_check
         self._id_error_count = 0
 
         self._port_info: Dict[int, object] = dict()
@@ -79,7 +79,7 @@ class PcapMultiPacketReader(PacketMultiSource):
                 port_to_packet = [
                     (meta_info.udp_port_lidar,
                      partial(LidarPacket,
-                             _raise_on_id_check=not _soft_id_check)),
+                             _raise_on_id_check=not soft_id_check)),
                     (meta_info.udp_port_imu, ImuPacket)
                 ]
                 for packet_port, packet_ctor in port_to_packet:

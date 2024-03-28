@@ -593,7 +593,7 @@ PYBIND11_MODULE(_client, m) {
         .def("set_field", set_field<uint64_t>{});
 
     m.def("scan_to_packets",
-          [](const LidarScan& ls, const packet_writer& pw) -> py::list {
+          [](const LidarScan& ls, const packet_writer& pw, uint32_t init_id, uint64_t prod_sn) -> py::list {
               py::list packets;
               py::object class_type =
                   py::module::import("ouster.sdk.client").attr("LidarPacket");
@@ -611,7 +611,7 @@ PYBIND11_MODULE(_client, m) {
               };
 
               auto iter = make_lambda_iter(append_pypacket);
-              impl::scan_to_packets(ls, pw, iter);
+              impl::scan_to_packets(ls, pw, iter, init_id, prod_sn);
               return packets;
           });
 

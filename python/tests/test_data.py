@@ -666,10 +666,10 @@ def test_packet_writer_bindings(meta: client.SensorInfo) -> None:
     ls = client.LidarScan(pf.pixels_per_column, columns_per_frame,
                           pf.udp_profile_lidar, pf.columns_per_packet)
     # all fields are invalid, expect zero packets
-    packets = _client.scan_to_packets(ls, pw)
+    packets = _client.scan_to_packets(ls, pw, 0, 0)
     assert len(packets) == 0
 
     expected_packets = columns_per_frame / pf.columns_per_packet
     ls.status[:] = 0x1
-    packets = _client.scan_to_packets(ls, pw)
+    packets = _client.scan_to_packets(ls, pw, 0, 0)
     assert len(packets) == expected_packets

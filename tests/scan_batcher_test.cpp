@@ -65,8 +65,16 @@ std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
     };
     ouster::impl::foreach_field(ls, randomise);
 
+    auto g = std::mt19937(0xdeadbeef);
+    auto dinit_id = std::uniform_int_distribution<uint32_t>(0, 0xFFFFFF);
+    auto dserial_no = std::uniform_int_distribution<uint64_t>(0, 0xFFFFFFFFFF);
+
+    uint32_t init_id = dinit_id(g);      // 24 bits
+    uint64_t serial_no = dserial_no(g);  // 40 bits
+
     auto packets = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets));
+    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets), init_id,
+                                  serial_no);
 
     return packets;
 }
