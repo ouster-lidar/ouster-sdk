@@ -43,6 +43,7 @@ Python SDK
 * [bugfix] Fix assertion error when using viz stepping on a live sensor
 * [bugfix] Scope MultiLidarViz imports to viz commands
 * [bugfix] Fix potential flickering in Viz
+* [bugfix] LidarScan yielded with improper header/status
 * Removed ``ouster.sdkx``, the ``open_source`` command is now part of ``ouster.sdk`` module
 
 

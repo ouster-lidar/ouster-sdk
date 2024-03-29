@@ -259,7 +259,6 @@ class ScansMulti(MultiScanSource):
                         if not self._complete or ls_write[idx].complete(col_window[idx]):
                             yield idx, scan_yield_op(ls_write[idx])
 
-            # TODO[UN]: revisit this piece
             # return the last not fully cut scans in the sensor timestamp order if
             # they satisfy the completeness criteria
             last_scans = sorted(

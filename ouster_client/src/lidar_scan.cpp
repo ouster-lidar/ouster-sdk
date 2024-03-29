@@ -476,7 +476,6 @@ ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
       h(pf.pixels_per_column),
       next_valid_m_id(0),
       next_headers_m_id(0),
-      next_valid_packet_id(0),
       cache(pf.lidar_packet_size),
       cache_packet_ts(0),
       pf(pf) {
@@ -737,13 +736,12 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         // expecting to start batching a new scan
         next_valid_m_id = 0;
         next_headers_m_id = 0;
-        next_valid_packet_id = 0;
         ls.frame_id = f_id;
-
+        zero_header_cols(ls, 0, w);
+        ls.packet_timestamp().setZero();
         const uint8_t f_thermal_shutdown = pf.thermal_shutdown(packet_buf);
         const uint8_t f_shot_limiting = pf.shot_limiting(packet_buf);
         ls.frame_status = frame_status(f_thermal_shutdown, f_shot_limiting);
-
     } else if (ls.frame_id == ((f_id + 1) % (pf.max_frame_id + 1))) {
         // drop reordered packets from the previous frame
         return false;
@@ -761,14 +759,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
                               field_type.first, end_m_id, w);
         }
 
-        zero_header_cols(ls, next_valid_m_id, w);
-
-        // zero packet timestamp separately, since it's packet level data
-        ls.packet_timestamp()
-            .segment(next_valid_packet_id,
-                     ls.packet_timestamp().rows() - next_valid_packet_id)
-            .setZero();
-
         // store packet buf and ts data to the cache for later processing
         std::memcpy(cache.data(), packet_buf, cache.size());
         cache_packet_ts = packet_ts;
@@ -782,13 +772,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
     const uint16_t packet_id =
         pf.col_measurement_id(col0_buf) / pf.columns_per_packet;
     if (packet_id < ls.packet_timestamp().rows()) {
-        if (packet_id >= next_valid_packet_id) {
-            // zeroing skipped packets timestamps
-            ls.packet_timestamp()
-                .segment(next_valid_packet_id, packet_id - next_valid_packet_id)
-                .setZero();
-            next_valid_packet_id = packet_id + 1;
-        }
         ls.packet_timestamp()[packet_id] = packet_ts;
     }
 
