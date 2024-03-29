@@ -1,10 +1,15 @@
 """Miscellaneous utilites."""
 
-import os
+import os.path
+from pathlib import Path
 from typing import Optional, List, Any
 from packaging import version
 import requests
 import re
+
+
+data_must_be_a_file_err = "The source parameter must be a path to a file."
+meta_must_be_a_file_err = "The metadata parameter must be a path to a file."
 
 
 def _resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
@@ -16,11 +21,17 @@ def _resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
     Returns:
         list of metadata json paths guessed with the most common prefix match
     """
+    if not os.path.isfile(data_path):
+        raise ValueError(data_must_be_a_file_err)
+
     dirname, pcap_ = os.path.split(data_path)
     if not dirname:
         dirname = os.getcwd()
-    # find all .json in same dir
-    options = list(filter(lambda f: f.endswith(".json"), os.listdir(dirname)))
+    # find all .json files in same dir
+    options = list(filter(
+        lambda f: (Path(dirname) / f).is_file() and
+        f.lower().endswith(".json"), os.listdir(dirname)
+    ))
     # for each json name, find how many characters are in common
     option_scores = map(lambda f: len(os.path.commonprefix([f, pcap_])),
                         options)
@@ -32,9 +43,11 @@ def _resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
                             reverse=True)
     best_score = sorted_options[0][1]
     if not best_score:
-        # return a single json if there is no files with commonprefix
-        # because it's probably not a multi-sensor recording
-        return [os.path.join(dirname, sorted_options[0][0])]
+        # TWS 20240329: previously, this method would return
+        # any old JSON file even if there was no common prefix.
+        # In my experience, it's almost always an incorrect guess.
+        # Now it requires at least a single character to be common.
+        return []
     else:
         return [
             os.path.join(dirname, b_path) for b_path, _ in filter(
@@ -61,14 +74,13 @@ def resolve_metadata(data_path: str,
         metadata json paths guessed with the most common prefix match or passed
         through from `meta_path` parameter
     """
-    if meta_path is None:
-        meta_paths = _resolve_metadata_multi_with_prefix_guess(data_path)
-        meta_path = meta_paths[0] if meta_paths else ""
-        if os.path.exists(meta_path):
+    if meta_path is not None:
+        if os.path.isfile(meta_path):
             return meta_path
-    elif os.path.exists(meta_path):
-        return meta_path
-    return None
+        raise ValueError(meta_must_be_a_file_err)
+
+    meta_paths = _resolve_metadata_multi_with_prefix_guess(data_path)
+    return meta_paths[0] if meta_paths else None
 
 
 def resolve_metadata_multi(data_path: str) -> List[str]:
