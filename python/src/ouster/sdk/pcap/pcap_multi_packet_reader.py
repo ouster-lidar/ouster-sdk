@@ -5,15 +5,12 @@ from ouster.sdk.pcap._pcap import PcapIndex     # type: ignore
 from ouster.sdk.pcap.pcap import _guess_ports, _packet_info_stream
 from functools import partial
 
-import os
 import time
 
 from threading import Lock
 
 from ouster.sdk.client import SensorInfo, PacketIdError
 from ouster.sdk.client.data import Packet, LidarPacket, ImuPacket
-
-from ouster.sdk.util import resolve_extrinsics     # type: ignore
 
 
 class PcapMultiPacketReader(PacketMultiSource):
@@ -31,8 +28,7 @@ class PcapMultiPacketReader(PacketMultiSource):
                  *,
                  rate: float = 0.0,
                  index: bool = False,
-                 soft_id_check: bool = False,
-                 _resolve_extrinsics: bool = False):
+                 soft_id_check: bool = False):
         """Read a single sensor data stream from a single packet capture file.
 
         Args:
@@ -42,8 +38,6 @@ class PcapMultiPacketReader(PacketMultiSource):
             index: Should index the source, may take extra time on startup
             soft_id_check: if True, don't skip lidar packets buffers on
                             init_id mismatch
-            _resolve_extrinsics: if True attempts to find the extrinsics source
-                                 and fill source.metadata[i].extrinsic field
         """
         self._metadata = []
         self._metadata_json = []
@@ -89,20 +83,6 @@ class PcapMultiPacketReader(PacketMultiSource):
                             f" was already used for another stream")
                     self._port_info[packet_port] = dict(ctor=packet_ctor,
                                                         idx=idx)
-
-        self._extrinsics_source: List[str] = [""] * len(self._metadata)
-        if _resolve_extrinsics:
-            # Handle extrinsics search, parse and set to the metadata
-            ext_results = resolve_extrinsics(data_path=pcap_path,
-                                             infos=self._metadata)
-            if ext_results and all(ext_results):
-                for idx, ext_record in enumerate(ext_results):
-                    ext_mat = ext_record[0]
-                    ext_source = ext_record[1]
-                    self._metadata[idx].extrinsic = ext_mat
-                    ext_src = (ext_source if ext_source.startswith("tar:") else
-                               os.path.basename(ext_source))
-                    self._extrinsics_source[idx] = f"lookup:{ext_src}"
 
         self._rate = rate
         self._reader: Optional[_pcap.IndexedPcapReader] = \
@@ -192,11 +172,6 @@ class PcapMultiPacketReader(PacketMultiSource):
     @property
     def id_error_count(self) -> int:
         return self._id_error_count
-
-    # TODO: Do we need this info
-    @property
-    def extrinsics_source(self) -> List[str]:
-        return self._extrinsics_source
 
     def restart(self) -> None:
         """Restart playback, only relevant to non-live sources"""

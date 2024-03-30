@@ -54,18 +54,10 @@ class PcapScanSource(ScansMulti):
             self._source = PcapMultiPacketReader(file_path,
                                                  metadata_paths=metadata_paths,
                                                  index=index,
-                                                 soft_id_check=soft_id_check,
-                                                 _resolve_extrinsics=True)
+                                                 soft_id_check=soft_id_check)
         except Exception:
             self._source = None
             raise
-
-        # print extrinsics if any were found
-        for ext_source, m in zip(self._source.extrinsics_source,
-                                 self._source._metadata):
-            if ext_source:
-                print(f"Found extrinsics for {m.sn} "
-                      f"(from {ext_source}):\n{m.extrinsic}")
 
         # generate the field types per sensor with flags/raw_fields if specified
         field_types = resolve_field_types(self._source.metadata,

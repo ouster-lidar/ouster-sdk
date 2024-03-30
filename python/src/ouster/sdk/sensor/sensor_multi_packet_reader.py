@@ -13,8 +13,6 @@ import ouster.sdk.client._client as _client
 from ouster.sdk.client import SensorInfo, PacketIdError
 from ouster.sdk.client.data import Packet, LidarPacket, ImuPacket
 
-from ouster.sdk.util import resolve_extrinsics
-
 
 logger = logging.getLogger("multi-logger")
 
@@ -36,7 +34,6 @@ class SensorMultiPacketReader(PacketMultiSource):
                  *,
                  buf_size_secs: float = 2.0,
                  timeout: Optional[float] = 2.0,
-                 extrinsics_path: Optional[str] = None,
                  _overflow_err: bool = False,
                  _flush_before_read: bool = True,
                  _flush_frames: int = 5,
@@ -83,23 +80,6 @@ class SensorMultiPacketReader(PacketMultiSource):
         # set names
         for m, hn in zip(self._metadata, self._hostnames):
             m.hostname = hn
-
-        # resolving extrinsics
-        self._extrinsics_source = [None] * len(self._metadata)
-        logger.debug(f"{extrinsics_path =}")
-        if extrinsics_path:
-            # Handle extrinsics search, parse and set to the metadata
-            ext_results = resolve_extrinsics(data_path=extrinsics_path,
-                                             infos=self._metadata)
-            if ext_results:
-                for idx, ext_record in enumerate(ext_results):
-                    if ext_record:
-                        ext_mat, ext_source = ext_record
-                        self._metadata[idx].extrinsic = ext_mat
-                        ext_src = (ext_source if ext_source.startswith("tar:")
-                                   else os.path.basename(ext_source))
-                        self._extrinsics_source[idx] = f"lookup:{ext_src}"
-                        self._extrinsics_source[idx] = ext_src
 
         self._pf = [_client.PacketFormat.from_info(m) for m in self._metadata]
         self._cli = _client.UDPPacketSource()

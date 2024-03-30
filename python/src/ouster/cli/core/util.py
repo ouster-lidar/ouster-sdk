@@ -465,8 +465,6 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                 "azimuth_window", "udp_profile_lidar"
         ]:
             click.echo(f"  {prop:<20}: {getattr(conf, prop)}")
-        if hasattr(packet_source, "_extrinsics_source"):
-            click.echo(f"  {'extrinsics src':<20}: {packet_source._extrinsics_source[idx]}")
 
     # TODO[pb]: Left here commented for quick test of MultiViz while we don't have
     #           `ouster-cli sensor viz --multi` implemented

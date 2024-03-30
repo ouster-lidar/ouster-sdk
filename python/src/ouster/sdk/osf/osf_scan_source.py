@@ -73,7 +73,7 @@ class OsfScanSource(MultiScanSource):
         for _, v in extrinsics.items():
             if v.ref_meta_id in self._sensor_idx:
                 sidx = self._sensor_idx[v.ref_meta_id]
-                print(f"Found extrinsics for sensor[{sidx}]:\n",
+                print(f"OSF: stored extrinsics for sensor[{sidx}]:\n",
                       v.extrinsics)
                 self._sensors[sidx][1].info.extrinsic = v.extrinsics
 

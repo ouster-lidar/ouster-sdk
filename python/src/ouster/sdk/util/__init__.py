@@ -19,8 +19,9 @@ from .parsing import PacketFormat           # type: ignore
 from .parsing import ColHeader              # type: ignore
 from .parsing import FusaDualFormat         # type: ignore
 
-from .extrinsics import resolve_extrinsics  # type: ignore
-from .extrinsics import img_aspect_ratio    # type: ignore
+from .extrinsics import resolve_extrinsics      # type: ignore
+from .extrinsics import _parse_extrinsics_file  # type: ignore
+from .extrinsics import img_aspect_ratio        # type: ignore
 
 from .progress_bar import progressbar
 

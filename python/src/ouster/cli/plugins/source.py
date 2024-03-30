@@ -2,6 +2,7 @@
 import click
 import re
 import threading
+import numpy as np
 from itertools import islice
 from ouster.cli.core import cli
 from ouster.cli.core.cli_args import CliArgs
@@ -11,7 +12,7 @@ from ouster.sdk.client.core import ClientTimeout
 import ouster.cli.plugins.source_pcap as pcap_cli
 import ouster.cli.plugins.source_osf as osf_cli
 import ouster.cli.plugins.source_sensor as sensor_cli
-from typing import (List, Optional, Iterable, Tuple)
+from typing import (List, Optional, Iterable, Tuple, Union)
 from .io_type import (extension_from_io_type, io_type, OusterIoType)
 from .source_save import SourceSaveCommand
 from .source_util import (CoupledTee,
@@ -87,22 +88,24 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
         pause_at = 0
 
     ctx.scan_iter, scans = CoupledTee.tee(ctx.scan_iter,
-                            terminate=ctx.terminate_evt)
+                                          terminate=ctx.terminate_evt)
     metadata = ctx.scan_source.metadata
     scans_accum = scans_accum_for_cli(metadata,
-                                accum_num=accum_num,
-                                accum_every=accum_every,
-                                accum_every_m=accum_every_m,
-                                accum_map=accum_map,
-                                accum_map_ratio=accum_map_ratio)
+                                      accum_num=accum_num,
+                                      accum_every=accum_every,
+                                      accum_every_m=accum_every_m,
+                                      accum_map=accum_map,
+                                      accum_map_ratio=accum_map_ratio)
 
     def viz_thread_fn():
-        sv = SimpleViz(metadata, scans_accum=scans_accum, rate=1.0, pause_at=pause_at, on_eof=on_eof)
+        sv = SimpleViz(metadata, scans_accum=scans_accum,
+                       rate=1.0, pause_at=pause_at, on_eof=on_eof)
         sv.run(scans)
         ctx.terminate_evt.set()
 
     if ctx.main_thread_fn is not None:
-        raise RuntimeError("A main-thread required function has already been set.")
+        raise RuntimeError(
+            "A main-thread required function has already been set.")
     ctx.main_thread_fn = viz_thread_fn
 
 
@@ -113,18 +116,22 @@ def extract_slice_indices(click_ctx: Optional[click.core.Context],
 
     # Check that indices can be parsed
     if not index_matches or len(index_matches[0]) != 3:
-        raise click.exceptions.BadParameter("slice indices must be of the form start:[stop][:step]")
+        raise click.exceptions.BadParameter(
+            "slice indices must be of the form start:[stop][:step]")
     parsed_indices = [int(i) if i != "" else None for i in index_matches[0]]
     start, stop, step = parsed_indices[0], parsed_indices[1], parsed_indices[2]
     # Check that indices are non-negative
     if any(i < 0 if i is not None else False for i in parsed_indices):
-        raise click.exceptions.BadParameter("slice indices must be non-negative")
+        raise click.exceptions.BadParameter(
+            "slice indices must be non-negative")
     # Check that stop > start
     if (stop is not None) and (not stop > start):
-        raise click.exceptions.BadParameter("slice stop index must be greater than start")
+        raise click.exceptions.BadParameter(
+            "slice stop index must be greater than start")
     # Check that step > 1
     if (step is not None) and (not step > 0):
-        raise click.exceptions.BadParameter("slice step index must be greater than 0")
+        raise click.exceptions.BadParameter(
+            "slice step index must be greater than 0")
 
     return start, stop, step
 
@@ -215,7 +222,8 @@ class SourceMultiCommand(click.MultiCommand):
             # Prefix command name with names of supported source types
             command_to_types_renamed = {}
             for key, value in command_to_types.items():
-                prefix = _join_with_conjunction([t.name.upper() for t in value.keys()], separator="|", conjunction="")
+                prefix = _join_with_conjunction(
+                    [t.name.upper() for t in value.keys()], separator="|", conjunction="")
                 command_to_types_renamed[f"{prefix} {key}"] = value
 
             return command_to_types_renamed
@@ -224,7 +232,8 @@ class SourceMultiCommand(click.MultiCommand):
         if not source:
             param_decls = [_source_arg_name]
             param = click.core.Argument(param_decls=param_decls)
-            raise click.exceptions.MissingParameter(None, click_ctx, param=param)
+            raise click.exceptions.MissingParameter(
+                None, click_ctx, param=param)
         try:
             return {**self.commands[io_type(source)], **self.commands["ANY"]}
         except ValueError as e:  # noqa: F841
@@ -276,10 +285,9 @@ class SourceMultiCommand(click.MultiCommand):
 @cli.group(cls=SourceMultiCommand, chain=True)
 @click.argument(_source_arg_name, required=True)
 @click.option('-m', '--meta', required=False, type=click_ro_file,
-        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
+              help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=None, type=int, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
-@click.option('-e', '--extrinsics', type=float, nargs=16, help='Lidar sensor extrinsics.')
 @click.option('-x', '--do-not-reinitialize', is_flag=True, default=False,
               help="Do not reinitialize (by default it will reinitialize if needed)")
 @click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
@@ -292,9 +300,19 @@ class SourceMultiCommand(click.MultiCommand):
 @click.option('--legacy/--non-legacy',
               default=False,
               help="Use legacy metadata format or not")
+@click.option('-e', '--extrinsics', type=float, required=False, nargs=16,
+              help="Lidar sensor extrinsics to use in viz (instead possible"
+                   " extrinsics stored in OSF). If more than one sensor is"
+                   " stored in the osf file and this argument is used then"
+                   " the same extrinsics will be applied to all sensors")
+@click.option("--extrinsics-file",
+              type=click.Path(exists=True, dir_okay=False),
+              required=False,
+              help="Path to a file containing extrinscs. The parameter would be"
+              " superseeded by the --extrinscs parameter if both supplied")
 def source(source, meta: str, lidar_port: int, imu_port: int, extrinsics: Optional[List[float]],
-           do_not_reinitialize: bool, no_auto_udp_dest: bool, soft_id_check: bool, timeout: int,
-           filter: bool, buf_size: int, legacy: bool):
+           extrinsics_file: Optional[str], do_not_reinitialize: bool, no_auto_udp_dest: bool,
+           soft_id_check: bool, timeout: int, filter: bool, buf_size: int, legacy: bool):
     """Run a command with the specified source (SENSOR, PCAP, or OSF) as SOURCE.
     For example, a sensor source: ouster-cli source os1-992xxx.local viz
     """
@@ -305,8 +323,8 @@ def source(source, meta: str, lidar_port: int, imu_port: int, extrinsics: Option
 @click.pass_context
 def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCommandCallback],
                      source: str, meta: str, lidar_port: int, imu_port: int,
-                     extrinsics: Optional[List[float]], do_not_reinitialize: bool,
-                     no_auto_udp_dest: bool, soft_id_check: bool,
+                     extrinsics: Optional[List[float]], extrinsics_file: Optional[str],
+                     do_not_reinitialize: bool, no_auto_udp_dest: bool, soft_id_check: bool,
                      timeout: int, filter: bool, buf_size: int, legacy: bool) -> None:
     """Process all commands in a SourceMultiCommand, using each command's callback"""
 
@@ -351,9 +369,18 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
     else:
         # Execute multicommands
         # Open source
-        ctx.scan_source = open_source(source, sensor_idx=0, meta=meta,
+
+        resolved_extrinsics: Optional[Union[str, np.ndarray]] = None
+
+        if extrinsics_file:
+            resolved_extrinsics = extrinsics_file
+        if extrinsics:
+            resolved_extrinsics = np.array(extrinsics).reshape((4, 4))
+
+        ctx.scan_source = open_source(source, sensor_idx=0,
+                                      extrinsics=resolved_extrinsics,
+                                      meta=meta,
                                       lidar_port=lidar_port, imu_port=imu_port,
-                                      extrinsics=extrinsics,
                                       do_not_reinitialize=do_not_reinitialize,
                                       no_auto_udp_dest=no_auto_udp_dest,
                                       soft_id_check=soft_id_check,
