@@ -50,12 +50,14 @@ class ScanSourceAdapter(ScanSource):
         return self._scan_source.fields[self._stream_idx]
 
     @property
-    def scans_num(self) -> int:
+    def scans_num(self) -> Optional[int]:
         """Number of scans available, in case of a live sensor or non-indexable scan source this method
          returns None"""
         return self._scan_source.scans_num[self._stream_idx]
 
     def __len__(self) -> int:
+        if self.scans_num is None:
+            raise TypeError("len is not supported on live or non-indexed sources")
         return self.scans_num
 
     # NOTE: we need to consider a case without collation of scans

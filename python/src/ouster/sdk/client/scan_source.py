@@ -42,12 +42,14 @@ class ScanSource(Protocol):
         ...
 
     @property
-    def scans_num(self) -> int:
+    def scans_num(self) -> Optional[int]:
         """Number of scans available, in case of a live sensor or non-indexable scan source this method
          returns None"""
         ...
 
     def __len__(self) -> int:
+        """Number of scans available, in case of a live sensor or non-indexable scan source this method
+         throws a TypeError"""
         ...
 
     # NOTE: based on the underlying implemention the return type is

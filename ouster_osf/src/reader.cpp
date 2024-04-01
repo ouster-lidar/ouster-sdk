@@ -126,17 +126,17 @@ ChunkState* ChunksPile::first() { return get(0); }
 
 size_t ChunksPile::size() const { return pile_.size(); }
 
-bool ChunksPile::has_info() const {
-    return !pile_info_.empty() && pile_info_.size() == pile_.size();
-}
-
 bool ChunksPile::has_message_idx() const {
+    // return true if we have no chunks (we're functionally indexed)
+    if (pile_.size() == 0) {
+        return true;
+    }
     // rely on the fact that message_count in the ChunkInfo, if present
     // during Writing/Chunk building, can't be 0 (by construction in
     // ChunkBuilder and StreamingLayoutCW)
     // In other words we can't have Chunks with 0 messages written to OSF
     // file
-    return has_info() && pile_info_.begin()->second.message_count > 0;
+    return pile_info_.size() && pile_info_.begin()->second.message_count > 0;
 }
 
 StreamChunksMap& ChunksPile::stream_chunks() { return stream_chunks_; }
@@ -153,7 +153,7 @@ void ChunksPile::link_stream_chunks() {
 
     stream_chunks_.clear();
 
-    if (has_info()) {
+    if (pile_info_.size()) {
         // Do the next_offset links by streams
         auto curr_chunk = first();
         while (curr_chunk != nullptr) {
@@ -473,6 +473,7 @@ void Reader::read_chunks_info() {
     // see RFC0018 for details
     auto streaming_info = meta_store_.get<osf::StreamingInfo>();
     if (!streaming_info) {
+        has_streaming_info_ = false;
         return;
     }
 
@@ -486,6 +487,8 @@ void Reader::read_chunks_info() {
         chunks_.add_info(sci.first, sci.second.stream_id,
                          sci.second.message_count);
     }
+
+    has_streaming_info_ = true;
 
     chunks_.link_stream_chunks();
 }
@@ -517,7 +520,7 @@ ts_t Reader::end_ts() const {
 
 const MetadataStore& Reader::meta_store() const { return meta_store_; }
 
-bool Reader::has_stream_info() const { return chunks_.has_info(); }
+bool Reader::has_stream_info() const { return has_streaming_info_; }
 
 bool Reader::verify_chunk(uint64_t chunk_offset) {
     auto cs = chunks_.get(chunk_offset);

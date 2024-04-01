@@ -203,14 +203,14 @@ class ScansMulti(MultiScanSource):
         return self._fields
 
     @property
-    def scans_num(self) -> List[int]:
+    def scans_num(self) -> List[Optional[int]]:
         if self.is_live or not self.is_indexed:
-            return [0] * self.sensors_count
+            return [None] * self.sensors_count
         raise NotImplementedError
 
     def __len__(self) -> int:
         if self.is_live or not self.is_indexed:
-            return 0
+            raise TypeError("len is not supported on unindexed or live sources")
         raise NotImplementedError
 
     def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:

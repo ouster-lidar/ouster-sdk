@@ -154,12 +154,19 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, **kwargs) 
     osf_stream = osf.LidarScanStream(osf_writer, lidar_id, field_types)
 
     # TODO: extrinsics still need to be plugged in here -- Tim T.
+    wrote_scans = False
+    dropped_scans = 0
 
     def write_osf(scan: LidarScan):
+        nonlocal wrote_scans
         # Set OSF timestamp to the timestamp of the first valid column
         ts = first_valid_packet_ts(scan)
         if ts:
+            wrote_scans = True
             osf_stream.save(ts, scan)
+        else:
+            nonlocal dropped_scans
+            dropped_scans = dropped_scans + 1
 
     write_osf(first_scan)
 
@@ -173,6 +180,10 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, **kwargs) 
                     yield scan
         except (KeyboardInterrupt):
             pass
+        if dropped_scans > 0:
+            print(f"WARNING: Dropped {dropped_scans} scans because missing packet timestamps")
+        if not wrote_scans:
+            print("WARNING: No scans saved.")
     ctx.scan_iter = save_iter()
 
 

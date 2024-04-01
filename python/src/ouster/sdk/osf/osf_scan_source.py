@@ -187,8 +187,8 @@ class OsfScanSource(MultiScanSource):
         return [client.get_field_types(m) for m in self.metadata]
 
     @property
-    def scans_num(self) -> List[int]:
-        return self._scans_num
+    def scans_num(self) -> List[Optional[int]]:
+        return self._scans_num  # type: ignore
 
     def __len__(self) -> int:
         return self._len

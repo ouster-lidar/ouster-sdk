@@ -231,13 +231,6 @@ class ChunksPile {
     size_t size() const;
 
     /**
-     * Return if there is stream info.
-     *
-     * @return If there is stream info.
-     */
-    bool has_info() const;
-
-    /**
      * Return if there is a message index.
      *
      * @return If there is  a message index.
@@ -646,6 +639,11 @@ class Reader {
      * chunks.
      */
     ChunksPile chunks_{};
+
+    /**
+     * Internal indicator of if this file has streaming info
+     */
+    bool has_streaming_info_{false};
 
     /**
      * Absolute offset to the beginning of the chunks in a file.

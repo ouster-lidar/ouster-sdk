@@ -386,6 +386,11 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                                       soft_id_check=soft_id_check,
                                       timeout=timeout, complete=filter,
                                       buf_size=buf_size, legacy_format=legacy)
+        try:
+            if len(ctx.scan_source) == 0:
+                print("WARNING: Source contains no scans.")
+        except TypeError:
+            pass
         ctx.scan_iter = iter(ctx.scan_source)
 
         # print any timeout exceptions we get

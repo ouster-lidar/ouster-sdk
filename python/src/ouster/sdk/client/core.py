@@ -508,11 +508,11 @@ class Scans(ScanSource):
         return self._fields
 
     @property
-    def scans_num(self) -> int:
-        return 0
+    def scans_num(self) -> Optional[int]:
+        return None
 
     def __len__(self) -> int:
-        return 0
+        raise TypeError("len is not supported on live or non-indexed sources")
 
     def _seek(self, int) -> None:
         raise RuntimeError(

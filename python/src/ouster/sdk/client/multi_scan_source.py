@@ -51,14 +51,15 @@ class MultiScanSource(Protocol):
         ...
 
     @property
-    def scans_num(self) -> List[int]:
+    def scans_num(self) -> List[Optional[int]]:
         """Number of scans available, in case of a live sensor or non-indexable scan source this method
-         returns zero"""
+         returns a None for that stream"""
         ...
 
     def __len__(self) -> int:
         """returns the number of scans containe with the scan_source, in case scan_source holds more than
         one stream then this would measure the number of collated scans across the streams
+        in the case of a live sensor or non-indexable scan source this method throws a TypeError
         """
         ...
 

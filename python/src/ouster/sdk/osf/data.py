@@ -110,11 +110,11 @@ class Scans(ScanSource):
         return client.get_field_types(self.metadata)
 
     @property
-    def scans_num(self) -> int:
-        return 0    # TODO: implement
+    def scans_num(self) -> Optional[int]:
+        raise NotImplementedError  # TODO: implement
 
     def __len__(self) -> int:
-        return 0    # TODO: implement
+        raise NotImplementedError  # TODO: implement
 
     def _seek(self, key: int) -> None:
         pass

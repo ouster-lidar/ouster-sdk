@@ -88,14 +88,16 @@ class PcapScanSource(ScansMulti):
             print("\nfinished building index")
 
     @property
-    def scans_num(self) -> List[int]:
+    def scans_num(self) -> List[Optional[int]]:
         if not self.is_indexed:
-            return [0] * self.sensors_count
+            return [None] * self.sensors_count
         pi = self._source._index    # type: ignore
         return [pi.frame_count(i) for i in range(self.sensors_count)]   # type: ignore
 
     def __len__(self) -> int:
-        return len(self._frame_offset) if self.is_indexed else 0
+        if self.is_indexed:
+            return len(self._frame_offset)
+        raise TypeError("len is not supported on unindexed pcaps")
 
     def __getitem__(self, key: Union[int, slice]
                     ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
