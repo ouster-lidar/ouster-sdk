@@ -125,10 +125,12 @@ Table<FullScaleRange, const char*, 2> full_scale_range_strings{{
     {FSR_EXTENDED, "EXTENDED"},
 }};
 
-Table<ReturnOrder, const char*, 3> return_order_strings{{
+Table<ReturnOrder, const char*, 5> return_order_strings{{
     {ORDER_STRONGEST_TO_WEAKEST, "STRONGEST_TO_WEAKEST"},
     {ORDER_FARTHEST_TO_NEAREST, "FARTHEST_TO_NEAREST"},
     {ORDER_NEAREST_TO_FARTHEST, "NEAREST_TO_FARTHEST"},
+    {ORDER_DEPRECATED_STRONGEST_RETURN_FIRST, "STRONGEST_RETURN_FIRST"},
+    {ORDER_DEPRECATED_LAST_RETURN_FIRST, "LAST_RETURN_FIRST"},
 }};
 
 // TODO: should we name them something better? feel like the most important is

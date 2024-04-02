@@ -211,7 +211,11 @@ enum ReturnOrder {
     ORDER_FARTHEST_TO_NEAREST,
 
     /** Lidar returns the nearest returns first */
-    ORDER_NEAREST_TO_FARTHEST
+    ORDER_NEAREST_TO_FARTHEST,
+
+    /** DEPRECATED: Only Present In Old Test Firmware */
+    ORDER_DEPRECATED_STRONGEST_RETURN_FIRST,
+    ORDER_DEPRECATED_LAST_RETURN_FIRST
 };
 
 /** Thermal Shutdown status. */

@@ -105,7 +105,7 @@ extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
 extern Table<ThermalShutdownStatus, const char*, 2>
     thermal_shutdown_status_strings;
 extern Table<FullScaleRange, const char*, 2> full_scale_range_strings;
-extern Table<ReturnOrder, const char*, 3> return_order_strings;
+extern Table<ReturnOrder, const char*, 5> return_order_strings;
 
 }  // namespace impl
 }  // namespace sensor
