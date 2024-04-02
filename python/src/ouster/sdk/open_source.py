@@ -2,9 +2,7 @@ from typing import List, Optional, Union
 import numpy as np
 from pathlib import Path
 from ouster.sdk.client import ScanSource, MultiScanSource
-# TODO[UN]: we probably want to move these to the SDK so we don't have a dependency
-# from the SDK to the ouster.cli
-from ouster.cli.plugins.io_type import OusterIoType, io_type
+from ouster.sdk.io_type import OusterIoType, io_type
 from ouster.sdk.osf import OsfScanSource
 from ouster.sdk.pcap import PcapScanSource
 from ouster.sdk.sensor import SensorScanSource

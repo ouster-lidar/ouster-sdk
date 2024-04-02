@@ -11,6 +11,9 @@ from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
                                ScanSource, destagger, SensorInfo,
                                LidarPacket, ImuPacket, ScanSourceAdapter)
 from ouster.sdk import osf
+from ouster.sdk.io_type import (extension_from_io_type,
+                                io_type_from_extension,
+                                OusterIoType)
 from ouster.sdk.pcap import BagRecordingPacketSource, RecordingPacketSource, PcapScanSource
 from ouster.sdk.sensor import SensorScanSource
 from ouster.sdk.util import scan_to_packets  # type: ignore
@@ -21,9 +24,6 @@ from .source_util import (SourceCommandContext,
                           source_multicommand,
                           _join_with_conjunction,
                           import_rosbag_modules)
-from .io_type import (extension_from_io_type,
-                      io_type_from_extension,
-                      OusterIoType)
 from contextlib import closing
 
 

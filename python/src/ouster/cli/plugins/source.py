@@ -9,11 +9,11 @@ from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
 from ouster.sdk import open_source
 from ouster.sdk.client.core import ClientTimeout
+from ouster.sdk.io_type import (extension_from_io_type, io_type, OusterIoType)
 import ouster.cli.plugins.source_pcap as pcap_cli
 import ouster.cli.plugins.source_osf as osf_cli
 import ouster.cli.plugins.source_sensor as sensor_cli
 from typing import (List, Optional, Iterable, Tuple, Union)
-from .io_type import (extension_from_io_type, io_type, OusterIoType)
 from .source_save import SourceSaveCommand
 from .source_util import (CoupledTee,
                           SourceCommandContext,
