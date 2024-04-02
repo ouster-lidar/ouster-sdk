@@ -1059,6 +1059,13 @@ class SimpleViz:
                     if not self._paused and not self._on_eof == "stop":
                         break
 
+                    # Pause after we get a StopIteration in eof "stop"
+                    if self._on_eof == "stop":
+                        self._paused = True
+                        self._viz.update_on_input(self._paused)
+                        self._update_playback_osd()
+                        self._viz.update()
+
         finally:
             # signal rendering (main) thread to exit, with a delay
             # because the viz in main thread may not have been started

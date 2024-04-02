@@ -5,6 +5,7 @@ import shutil
 import os
 
 from more_itertools import ilen
+from ouster.sdk import open_source
 
 import ouster.sdk.osf as osf
 import ouster.sdk.client as client
@@ -215,3 +216,10 @@ def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
     assert hash2 != hash3
     metadata3 = osf.dump_metadata(test_path)
     assert metadata1 == metadata3
+
+
+def test_empty_osf_loop(test_data_dir):
+    source = open_source(str(test_data_dir / "osfs" / "empty_osf.osf"), cycle=True)
+
+    with pytest.raises(StopIteration):
+        next(iter(source))

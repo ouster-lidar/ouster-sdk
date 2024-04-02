@@ -251,12 +251,14 @@ class ScansMulti(MultiScanSource):
         if restart:
             self._source.restart()  # start from the beginning
         while True:
+            had_message = False
             for idx, packet in self._source:
                 if isinstance(packet, LidarPacket):
                     ls_write[idx] = ls_write[idx] or LidarScan(
                         h[idx], w[idx], self._fields[idx], columns_per_packet[idx])
                     if batch[idx](packet._data, packet_ts(packet), ls_write[idx]):
                         if not self._complete or ls_write[idx].complete(col_window[idx]):
+                            had_message = True
                             yield idx, scan_yield_op(ls_write[idx])
 
             # return the last not fully cut scans in the sensor timestamp order if
@@ -267,9 +269,11 @@ class ScansMulti(MultiScanSource):
             while last_scans:
                 idx, ls = last_scans.pop(0)
                 if not self._complete or ls.complete(col_window[idx]):
+                    had_message = True
                     yield idx, scan_yield_op(ls)
 
-            if cycle:
+            # exit if we had no scans so we dont infinite loop when cycling
+            if cycle and had_message:
                 self._source.restart()
             else:
                 break

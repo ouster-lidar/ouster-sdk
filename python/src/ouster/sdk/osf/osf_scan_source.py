@@ -148,11 +148,14 @@ class OsfScanSource(MultiScanSource):
     def _msgs_iter(self, stream_ids: List[int], start_ts: int, stop_ts: int, cycle: bool
                    ) -> Iterator[Tuple[int, MessageRef]]:
         while True:
+            had_message = False
             for msg in self._reader.messages(stream_ids, start_ts, stop_ts):
                 if msg.of(LidarScanStream):
                     sidx = self._stream_sensor_idx[msg.id]
+                    had_message = True
                     yield sidx, msg
-            if not cycle:
+            # exit if we had no messages to prevent an infinite loop
+            if not cycle or not had_message:
                 break
 
     def _scans_iter(self, start_ts: int, stop_ts: int, cycle: bool
