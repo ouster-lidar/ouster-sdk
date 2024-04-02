@@ -817,15 +817,30 @@ to work with OSF files.
             Creates a `WriterV2` with deafault ``STREAMING`` layout chunks writer.
             
             Using default ``chunk_size`` of ``2MB``.
+
+            Args:
+                filename (str): The filename to output to.
+                info (sensor_info): The sensor info vector to use for a multi stream OSF
+                    file.
+                chunk_size (int): The chunksize to use for the OSF file, this arg
+                    is optional.
+
         )")
         .def(py::init<const std::string&,
                       const std::vector<ouster::sensor::sensor_info>&,
                       uint32_t>(),
              py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
              R"(
-                 Creates a `Writer` with specified ``chunk_size``.
+             Creates a `Writer` with specified ``chunk_size``.
 
-                 Default ``chunk_size`` is ``2 MB``.
+             Default ``chunk_size`` is ``2MB``.
+
+             Args:
+                filename (str): The filename to output to.
+                info (List[sensor_info]): The sensor info vector to use for a 
+                    multi stream OSF file.
+                chunk_size (int): The chunksize to use for the OSF file, this arg
+                    is optional.
         )")
         .def(
             "save",
@@ -833,7 +848,13 @@ to work with OSF files.
                const LidarScan& scan) { writer.save(stream_index, scan); },
             py::arg("stream_index"), py::arg("scan"),
             R"(
-                 Save a lidar scan to the OSF file.
+               Save a lidar scan to the OSF file.
+
+               Args:
+                   stream_index (int): The index of the corrosponding 
+                       sensor_info to use.
+                   scan (LidarScan): The scan to save.
+
             )")
         .def(
             "save",
@@ -842,13 +863,22 @@ to work with OSF files.
             },
             py::arg("scan"),
             R"(
-                 Save a set of lidar scans to the OSF file.
+               Save a set of lidar scans to the OSF file.
+
+               Args:
+                   scans (List[LidarScan]): The scans to save. This will correspond
+                       to the list of sensor_infos.
+
             )")
         .def(
             "get_sensor_info",
             [](osf::WriterV2& writer) { return writer.get_sensor_info(); },
             R"(
-                 Return the sensor info vector.
+                 Return the sensor info list.
+
+                 Returns (List[sensor_info]):
+                     The sensor info list.
+
             )")
         .def(
             "get_sensor_info",
@@ -858,24 +888,42 @@ to work with OSF files.
             py::arg("stream_index"),
             R"(
                  Return the sensor info of the specifed stream_index.
+
+                 Args:
+                     stream_index (in): The index of the sensor to return
+                                        info about.
+
+                 Returns (sensor_info):
+                     The correct sensor info
+
             )")
         .def(
             "sensor_info_count",
             [](osf::WriterV2& writer) { return writer.sensor_info_count(); },
             R"(
                  Return the number of sensor_info objects.
+
+                 Returns (int):
+                     The number of sensor_info objects.
+
             )")
         .def(
             "get_filename",
             [](osf::WriterV2& writer) { return writer.get_filename(); },
             R"(
                  Return the osf file name.
+
+                 Returns (str):
+                     The OSF filename.
             )")
         .def(
             "get_chunk_size",
             [](osf::WriterV2& writer) { return writer.get_filename(); },
             R"(
                  Return the chunk size.
+
+                 Returns (int):
+                     The OSF chunk size.
             )")
         .def(
             "close", [](osf::WriterV2& writer) { return writer.close(); },
@@ -887,6 +935,10 @@ to work with OSF files.
             [](osf::WriterV2& writer) { return writer.is_closed(); },
             R"(
                  Return the closed status of the writer.
+
+                 Returns (bool):
+                     The closed status of the writer.
+
             )")
         .def(
             "__enter__", [](osf::WriterV2* writer) { return writer; },

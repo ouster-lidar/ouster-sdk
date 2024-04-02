@@ -228,8 +228,11 @@ class StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
     std::map<uint32_t, StreamStats> stream_stats_{};
 };
 
+/** @defgroup OSFTraitsStreamingInfo */
 /**
  * Templated struct for returning the OSF type string.
+ *
+ * @ingroup OSFTraitsStreamingInfo
  */
 template <>
 struct MetadataTraits<StreamingInfo> {

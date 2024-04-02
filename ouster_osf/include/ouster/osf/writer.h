@@ -4,7 +4,6 @@
  *
  * @file writer.h
  * @brief OSF file Writer
- *
  */
 #pragma once
 

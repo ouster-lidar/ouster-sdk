@@ -14,9 +14,13 @@
 namespace ouster {
 namespace osf {
 
+/** @defgroup OSFStreamingDefaultSize */
+
 /**
  * Default Streaming Chunk Size.
  * This is used in StreamingLayoutCW
+ *
+ * @ingroup OSFStreamingDefaultSize
  * @relates StreamingLayoutCW
  */
 constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE =

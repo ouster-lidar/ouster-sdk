@@ -105,7 +105,13 @@ std::string to_string(const HEADER_STATUS status);
 std::string to_string(const uint8_t* buf, const size_t count,
                       const size_t max_show_count = 0);
 
-/** @todo Figure out why this is needed */
+/**
+ * Internal method for reading a file and returning the text
+ * data.
+ *
+ * @param[in] filename The file to read.
+ * @return The text of the file specified.
+ */
 std::string read_text_file(const std::string& filename);
 
 /**
@@ -140,10 +146,14 @@ bool check_prefixed_size_block_crc(
     const uint8_t* buf,
     const uint32_t max_size = std::numeric_limits<uint32_t>::max());
 
+/** @defgroup OsfBatchingFunctions */
+
 /**
  * Makes the closure to batch lidar_packets and emit LidarScan object.
  * Result returned through callback handler(ts, LidarScan).
  * LidarScan uses user modified field types
+ *
+ * @ingroup OsfBatchingFunctions
  *
  * @param[in] info The sensor metadata to use.
  * @param[in] ls_field_types The field types to use.
@@ -158,6 +168,8 @@ std::function<void(const osf::ts_t, const uint8_t*)> make_build_ls(
 /**
  * The above make_build_ls() function overload. In this function, LidarScan
  * uses default field types by the profile
+ *
+ * @ingroup OsfBatchingFunctions
  *
  * @param[in] info The sensor metadata to use.
  * @param[in] handler  The callback to use on the results.

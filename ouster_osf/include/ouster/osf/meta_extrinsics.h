@@ -114,8 +114,12 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
     std::string name_;
 };
 
+/** @defgroup OSFTraitsExtrinsics */
+
 /**
  * Templated struct for returning the OSF type string.
+ *
+ * @ingroup OSFTraitsExtrinsics
  */
 template <>
 struct MetadataTraits<Extrinsics> {

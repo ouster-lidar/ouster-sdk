@@ -127,8 +127,8 @@ class WriterV2 {
      output.get_sensor_info(2) == info3;
      @endcode
      *
-     * @param[in] sensor_info The sensor info to return.
-     * @return The correct sensor info
+     * @param[in] stream_index The sensor info to return.
+     * @return The correct sensor info.
      */
     const ouster::sensor::sensor_info get_sensor_info(int stream_index) const;
 

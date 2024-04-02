@@ -77,7 +77,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
 
     /**
      * Get the string representation for the LidarSensor object.
--     *
+     *
      * @relates MetadataEntry::repr
      *
      * @return The string representation for the LidarSensor object.
@@ -105,8 +105,12 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
     const std::string metadata_;
 };
 
+/** @defgroup OSFTraitsLidarSensor */
+
 /**
  * Templated struct for returning the OSF type string.
+ *
+ * @ingroup OSFTraitsLidarSensor
  */
 template <>
 struct MetadataTraits<LidarSensor> {

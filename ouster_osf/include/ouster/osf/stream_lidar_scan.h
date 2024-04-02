@@ -122,8 +122,12 @@ class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
     LidarScanFieldTypes field_types_;
 };
 
+/** @defgroup OSFTraitsLidarScanStreamMeta */
+
 /**
  * Templated struct for returning the OSF type string.
+ *
+ * @ingroup OSFTraitsLidarScanStreamMeta
  */
 template <>
 struct MetadataTraits<LidarScanStreamMeta> {

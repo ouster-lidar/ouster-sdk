@@ -83,67 +83,6 @@ inline const std::string metadata_type() {
  * };
  * @endcode
  *
- * Graph representing the heirarchy.
- * @code[.dot]
- * digraph {
- *    subgraph cluster_SpecificMetadataClass {
- *        SpecificMetadataClass [
- *            label="class SpecificMetadataClass",
- *            shape="rectangle"];
- *        SpecificMetadataClassType [
- *            label="struct MetadataTraits<SpecificMetadataClass>",
- *            shape="rectangle"
- *        ];
- *
- *        SpecificMetadataClass -> SpecificMetadataClassType;
- *    }
- *
- *    MetadataEntryHelper [
- *        label="class MetadataEntryHelper",
- *        shape="rectangle"];
- *    MetadataTraits [
- *        label="struct MetadataTraits",
- *        shape="rectangle"];
- *
- *    SpecificMetadataClass -> MetadataEntryHelper;
- *    SpecificMetadataClassType -> MetadataTraits;
- *
- *    MetadataEntry [
- *        label="MetadataEntry",
- *        shape="rectangle"];
- *    MetadataEntryRef [
- *        label="MetadataEntryRef",
- *        shape="rectangle"];
- *
- *    MetadataEntry -> MetadataEntryRef;
- *
- *    subgraph cluster_RegisterMetadata {
- *        RegisterMetadata [
- *            label="RegisterMetadata",
- *            shape="rectangle"];
- *        RegisterMetadata_Decoder [
- *            label="RegisterMetadata::registered=register_type_decoder()",
- *            shape="rectangle"];
- *        RegisterMetadata->RegisterMetadata_Decoder;
- *    };
- *
- *    MetadataEntryHelper -> MetadataEntry;
- *    MetadataEntryHelper -> RegisterMetadata;
- *
- *    subgraph cluster_MetadataStore {
- *        MetadataStore [
- *            label="MetadataStore",
- *            shape="rectangle"];
- *        MetadataStore_Entries [
- *            label="MetadataStore::metadata_entries_",
- *            shape="rectangle"];
- *        MetadataStore->MetadataStore_Entries;
- *    };
- *
- *    MetadataEntry -> MetadataStore_Entries;
- * }
- * @endcode
- *
  * `buffer` - byte representation of the metadata content whatever it is defined
  * by concrete metadata type. Every metadata object should have a recipe how
  * to serialize itself to the bytes buffer by overwriting the buffer() function.
@@ -323,6 +262,66 @@ std::shared_ptr<MetadataDerived> metadata_pointer_as(
 /**
  * Registrar class helper to add static from_buffer() function of the concrete
  * derived metadata class to the registry.
+ *
+ * @dot
+ * digraph {
+ *    subgraph cluster_SpecificMetadataClass {
+ *        SpecificMetadataClass [
+ *            label="class SpecificMetadataClass",
+ *            shape="rectangle"];
+ *        SpecificMetadataClassType [
+ *            label="struct MetadataTraits<SpecificMetadataClass>",
+ *            shape="rectangle"
+ *        ];
+ *
+ *        SpecificMetadataClass -> SpecificMetadataClassType;
+ *    }
+ *
+ *    MetadataEntryHelper [
+ *        label="class MetadataEntryHelper",
+ *        shape="rectangle"];
+ *    MetadataTraits [
+ *        label="struct MetadataTraits",
+ *        shape="rectangle"];
+ *
+ *    SpecificMetadataClass -> MetadataEntryHelper;
+ *    SpecificMetadataClassType -> MetadataTraits;
+ *
+ *    MetadataEntry [
+ *        label="MetadataEntry",
+ *        shape="rectangle"];
+ *    MetadataEntryRef [
+ *        label="MetadataEntryRef",
+ *        shape="rectangle"];
+ *
+ *    MetadataEntry -> MetadataEntryRef;
+ *
+ *    subgraph cluster_RegisterMetadata {
+ *        RegisterMetadata [
+ *            label="RegisterMetadata",
+ *            shape="rectangle"];
+ *        RegisterMetadata_Decoder [
+ *            label="RegisterMetadata::registered=register_type_decoder()",
+ *            shape="rectangle"];
+ *        RegisterMetadata->RegisterMetadata_Decoder;
+ *    };
+ *
+ *    MetadataEntryHelper -> MetadataEntry;
+ *    MetadataEntryHelper -> RegisterMetadata;
+ *
+ *    subgraph cluster_MetadataStore {
+ *        MetadataStore [
+ *            label="MetadataStore",
+ *            shape="rectangle"];
+ *        MetadataStore_Entries [
+ *            label="MetadataStore::metadata_entries_",
+ *            shape="rectangle"];
+ *        MetadataStore->MetadataStore_Entries;
+ *    };
+ *
+ *    MetadataEntry -> MetadataStore_Entries;
+ * }
+ * @enddot
  *
  * @tparam MetadataDerived The derived subclass cpp type.
  */

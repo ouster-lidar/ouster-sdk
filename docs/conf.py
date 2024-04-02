@@ -67,6 +67,7 @@ extensions = [
     'sphinx_tabs.tabs',
     'breathe',
     'sphinx_rtd_size',
+    "sphinx.ext.graphviz"
 ]
 
 # Page width
@@ -161,9 +162,9 @@ todo_link_only = True
 todo_emit_warnings = True
 
 # copybutton configs
-# Note: last entry treats four spaces as a prompt to support "continuation lines"
-copybutton_prompt_text = r'>>> |\.\.\. |\$ |PS > |C:\\> |> |    '
+copybutton_prompt_text = r'PS >'
 copybutton_prompt_is_regexp = True
+copybutton_exclude = '.linenos, .gp'
 
 # tabs behavior
 sphinx_tabs_disable_tab_closing = True

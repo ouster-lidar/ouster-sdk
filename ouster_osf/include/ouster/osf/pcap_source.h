@@ -4,7 +4,6 @@
  *
  * @file pcap_source.h
  * @brief Pcap raw data source
- *
  */
 #pragma once
 
