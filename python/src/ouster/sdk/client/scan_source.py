@@ -1,4 +1,4 @@
-from typing import Iterator, List, Union, Optional
+from typing import Iterator, Union, Optional
 from typing_extensions import Protocol
 from ._client import SensorInfo, LidarScan
 from .data import FieldTypes
@@ -67,15 +67,8 @@ class ScanSource(Protocol):
     # Optional[LidarScan] since MultiScanSource returns collate scans by default.
     # This can be solved by provide a method that gives access to uncollated scans
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], Iterator[Optional[LidarScan]]]:
         """Indexed access and slices support"""
-        ...
-
-    def set_playback_speed(self, int) -> None:
-        """allows callers to set the speed rate at which the scan source runs at, only valid for non live scan
-        source, if called on a live scan source, the invocation will simply be ignored.
-           valid ranges TBD {0.5x, 1x, 2x, ...}
-        """
         ...
 
     def close(self) -> None:

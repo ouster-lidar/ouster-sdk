@@ -280,14 +280,11 @@ class ScansMulti(MultiScanSource):
         self._source.seek(offset)
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], Iterator[List[Optional[LidarScan]]]]:
 
         if not self.is_indexed:
             raise RuntimeError(
                 "can not invoke __getitem__ on non-indexed source")
-        raise NotImplementedError
-
-    def set_playback_speed(self, int) -> None:
         raise NotImplementedError
 
     def close(self) -> None:

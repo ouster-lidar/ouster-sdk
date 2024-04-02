@@ -32,14 +32,18 @@ class OsfScanSource(MultiScanSource):
                 time period at which every new collated scan is released/cut),
                 default is 0.1s
             complete: set to True to only release complete scans (not implemnted)
-            index: if this flag is set to true and the underlying osf file was
-                not indexed, in the case the file will be indexed inplace, otherwise
-                the file will be left intact. If the file already had index builtin
-                then this flag does nothing (default is False)
+            index: if this flag is set to true an index will be built for the osf
+                file enabling len, index and slice operations on the scan source, if
+                the flag is set to False indexing is skipped (default is False).
             cycle: repeat infinitely after iteration is finished (default is False)
+
+        Remarks:
+            In case the OSF file didn't have builtin-index and the index flag was
+            was set to True the object will attempt to index the file in place.
         """
 
         self._complete = complete
+        self._indexed = index
 
         self._reader = Reader(file_path)
 
@@ -50,7 +54,7 @@ class OsfScanSource(MultiScanSource):
                     self._reindex_osf_inplace(self._reader, file_path)
                 except RuntimeError as e:
                     print(f"Failed re-indexing OSF file!\n more details: {e}")
-                # TODO: should we proceed if we failed to re-index for any given reason
+                    self._indexed = False
                 self._reader = Reader(file_path)
             else:
                 print("OSF file not indexed, indexing not requested!")
@@ -93,14 +97,14 @@ class OsfScanSource(MultiScanSource):
         # TODO: the following two properties (_scans_num, _len) are computed on
         # load but should rather be provided directly through OSF API. Obtain
         # these values directly from OSF API once implemented.
-
-        start_ts = self._reader.start_ts
-        end_ts = self._reader.end_ts
-        self._scans_num = [ilen(self._msgs_iter_stream(
-            mid, start_ts, end_ts)) for mid in self._stream_ids]
-        self._len = ilen(collate_scans(self._msgs_iter(
-            self._stream_ids, start_ts, end_ts, False),
-            self.sensors_count, lambda msg: cast(MessageRef, msg).ts, dt=self._dt))
+        if self._indexed:
+            start_ts = self._reader.start_ts
+            end_ts = self._reader.end_ts
+            self._scans_num = [ilen(self._msgs_iter_stream(
+                mid, start_ts, end_ts)) for mid in self._stream_ids]
+            self._len = ilen(collate_scans(self._msgs_iter(
+                self._stream_ids, start_ts, end_ts, False),
+                self.sensors_count, lambda msg: cast(MessageRef, msg).ts, dt=self._dt))
 
     def _osf_convert(self, reader: Reader, output: str) -> None:
         # TODO: figure out how to get the current chunk_size
@@ -179,7 +183,7 @@ class OsfScanSource(MultiScanSource):
 
     @property
     def is_indexed(self) -> bool:
-        return self._reader.has_message_idx
+        return self._indexed
 
     @property
     def fields(self) -> List[client.FieldTypes]:
@@ -191,10 +195,11 @@ class OsfScanSource(MultiScanSource):
         return self._scans_num  # type: ignore
 
     def __len__(self) -> int:
+        if not self.is_indexed:
+            raise TypeError("len is not supported on non-indexed source")
         return self._len
 
     def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
-
         msgs_itr = self._scans_iter(
             self._reader.start_ts, self._reader.end_ts, self._cycle)
         return collate_scans(msgs_itr, self.sensors_count, first_valid_packet_ts, dt=self._dt)
@@ -205,13 +210,13 @@ class OsfScanSource(MultiScanSource):
         ...
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], Iterator[List[Optional[LidarScan]]]]:
 
         if not self.is_indexed:
-            raise RuntimeError(
+            raise TypeError(
                 "can not invoke __getitem__ on non-indexed source")
 
-        msgs_itr: Iterator[Tuple[int, LidarScan]]
+        scans_itr: Iterator[Tuple[int, LidarScan]]
 
         if isinstance(key, int):
             L = len(self)
@@ -223,13 +228,15 @@ class OsfScanSource(MultiScanSource):
                 mid, key) for mid in self._stream_ids]
             ts_start = min(ts)
             ts_stop = min(ts_start + self._dt, max(ts))
-            msgs_itr = self._scans_iter(ts_start, ts_stop, False)
-            return next(collate_scans(msgs_itr, self.sensors_count,
+            scans_itr = self._scans_iter(ts_start, ts_stop, False)
+            return next(collate_scans(scans_itr, self.sensors_count,
                                       first_valid_packet_ts, dt=self._dt))
 
         if isinstance(key, slice):
             L = len(self)
             k = ForwardSlicer.normalize(key, L)
+            if k.step < 0:
+                raise TypeError("step must be positive")
             count = k.stop - k.start
             if count <= 0:
                 return []
@@ -237,19 +244,18 @@ class OsfScanSource(MultiScanSource):
                            for mid in self._stream_ids])
             ts_stop = max([self._reader.ts_by_message_idx(mid, k.stop - 1)
                           for mid in self._stream_ids])
-            msgs_itr = self._scans_iter(ts_start, ts_stop, False)
-            result = [msg for idx, msg in ForwardSlicer.slice(
-                enumerate(collate_scans(msgs_itr, self.sensors_count,
+            scans_itr = self._scans_iter(ts_start, ts_stop, False)
+            for idx, scans in ForwardSlicer.slice(
+                enumerate(collate_scans(scans_itr,
+                                        self.sensors_count,
                                         first_valid_packet_ts,
-                                        dt=self._dt)), k) if idx < count]
-            return result if k.step > 0 else list(reversed(result))
+                                        dt=self._dt)), k):
+                if idx < count:
+                    yield scans
+            return
 
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")
-
-    # TODO: implement
-    def set_playback_speed(self, int) -> None:
-        raise NotImplementedError
 
     def close(self) -> None:
         """Close osf file."""

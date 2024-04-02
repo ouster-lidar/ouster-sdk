@@ -72,15 +72,8 @@ class MultiScanSource(Protocol):
         ...
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], Iterator[List[Optional[LidarScan]]]]:
         """Indexed access and slices support"""
-        ...
-
-    def set_playback_speed(self, int) -> None:
-        """allows callers to set the speed rate at which the scan source runs at, only valid for non live scan
-        source, if called on a live scan source, the invocation will simply be ignored.
-           valid ranges TBD {0.5x, 1x, 2x, ...}
-        """
         ...
 
     def close(self) -> None:

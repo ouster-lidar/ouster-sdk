@@ -75,23 +75,19 @@ class ScanSourceAdapter(ScanSource):
         raise NotImplementedError
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], Iterator[Optional[LidarScan]]]:
         """Indexed access and slices support"""
         if isinstance(key, int):
-            return self._scan_source[key][self._stream_idx]
-        elif isinstance(key, slice):
             scans_list = self._scan_source[key]
-            scans_list = typing.cast(List[List[Optional[LidarScan]]], scans_list)
-            return [ls[self._stream_idx] for ls in scans_list] if scans_list else None
+            scans_list = typing.cast(List[Optional[LidarScan]], scans_list)
+            return scans_list[self._stream_idx] if scans_list else None
+        elif isinstance(key, slice):
+            scans_itr = self._scan_source[key]
+            scans_itr = typing.cast(Iterator[List[Optional[LidarScan]]], scans_itr)
+            for ls in scans_itr:
+                yield ls[self._stream_idx]
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")
-
-    def set_playback_speed(self, int) -> None:
-        """allows callers to set the speed rate at which the scan source runs at, only valid for non live scan
-        source, if called on a live scan source, the invocation will simply be ignored.
-           valid ranges TBD {0.5x, 1x, 2x, ...}
-        """
-        raise NotImplementedError
 
     # TODO: should this actually the parent scan source? any object why not
     def close(self) -> None:

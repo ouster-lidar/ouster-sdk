@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Iterator
 
 from ouster.sdk.client import LidarScan, first_valid_packet_ts
 from ouster.sdk.client import ScansMulti     # type: ignore
@@ -33,7 +33,7 @@ class PcapScanSource(ScansMulti):
                 default is 0.1s
             complete: set to True to only release complete scans
             index: if this flag is set to true an index will be built for the pcap
-                file enabling index and slice operations on the scan source, if
+                file enabling len, index and slice operations on the scan source, if
                 the flag is set to False indexing is skipped (default is False)
             cycle: repeat infinitely after iteration is finished (default is False)
         """
@@ -95,15 +95,15 @@ class PcapScanSource(ScansMulti):
         return [pi.frame_count(i) for i in range(self.sensors_count)]   # type: ignore
 
     def __len__(self) -> int:
-        if self.is_indexed:
-            return len(self._frame_offset)
-        raise TypeError("len is not supported on unindexed pcaps")
+        if not self.is_indexed:
+            raise TypeError("len is not supported on non-indexed source")
+        return len(self._frame_offset)
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], Iterator[List[Optional[LidarScan]]]]:
 
         if not self.is_indexed:
-            raise RuntimeError(
+            raise TypeError(
                 "can not invoke __getitem__ on non-indexed source")
 
         if isinstance(key, int):
@@ -121,6 +121,8 @@ class PcapScanSource(ScansMulti):
         if isinstance(key, slice):
             L = len(self)
             k = ForwardSlicer.normalize(key, L)
+            if k.step < 0:
+                raise TypeError("step must be positive")
             count = k.stop - k.start
             if count <= 0:
                 return []
@@ -130,9 +132,14 @@ class PcapScanSource(ScansMulti):
                                       self.sensors_count,
                                       first_valid_packet_ts,
                                       dt=self._dt)
-            result = [msg for idx, msg in ForwardSlicer.slice(
-                enumerate([scans for scans in scans_itr]), k) if idx < count]
-            return result if k.step > 0 else list(reversed(result))
+            for idx, scans in ForwardSlicer.slice(
+                enumerate(collate_scans(scans_itr,
+                                        self.sensors_count,
+                                        first_valid_packet_ts,
+                                        dt=self._dt)), k):
+                if idx < count:
+                    yield scans
+            return
 
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")
