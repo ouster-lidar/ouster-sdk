@@ -114,7 +114,9 @@ High-Level API
 .. autoclass:: Scans
    :members:
    :special-members: __iter__
-   
+
+``osf.WriterV2`` Higher level writer api.
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. autoclass:: WriterV2
    :members:
    :special-members: __enter__ __exit__

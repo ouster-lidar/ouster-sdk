@@ -59,10 +59,9 @@ class ChunksWriter {
 class Writer {
    public:
     /**
-     * @param[in] file_name The filename of the output OSF file.
+     * @throws std::runtime_error Exception on file writing issues.
      *
-     * @note Will abort on a size mismatch.
-     * @todo Figure out a better way of handling this rather than aborting.
+     * @param[in] file_name The filename of the output OSF file.
      */
     explicit Writer(const std::string& file_name);
 
@@ -140,8 +139,7 @@ class Writer {
      * @todo [pb]: It should be hidden into private/protected, but I don't see
      * yet how to do it and give an access to every derived Stream objects.
      *
-     * @note Will abort on non existent stream id.
-     * @todo Figure out a better way of handling this rather than aborting.
+     * @throws std::logic_error Exception on non existent stream id.
      *
      * @param[in] stream_id The stream to save the message to.
      * @param[in] ts The timestamp to use for the message.
@@ -199,9 +197,8 @@ class Writer {
      * Writes buf to the file with CRC32 appended and return the number of
      * bytes writen to the file
      *
-     * @note Will abort on bad file position.
-     * @note Will abort on a closed writer object.
-     * @todo Figure out a better way of handling this rather than aborting.
+     * @throws std::logic_error Exception on bad file position.
+     * @throws std::logic_error Exception on a closed writer object.
      *
      * @param[in] buf The buffer to append.
      * @param[in] size The size of the buffer to append.
@@ -212,8 +209,7 @@ class Writer {
     /**
      * Save a specified chunk to the OSF file.
      *
-     * @note Will abort on a size mismatch.
-     * @todo Figure out a better way of handling this rather than aborting.
+     * @throws std::logic_error Exception on a size mismatch
      *
      * @param[in] start_ts The lowest timestamp in the chunk.
      * @param[in] end_ts The highest timestamp in the chunk.
@@ -225,9 +221,6 @@ class Writer {
 
     /**
      * Finish file with a proper metadata object, and header.
-     *
-     * @note Will abort on a size mismatch.
-     * @todo Figure out a better way of handling this rather than aborting.
      */
     void close();
 
@@ -345,8 +338,7 @@ class ChunkBuilder {
     /**
      * Save messages to the serialized chunks.
      *
-     * @note Will abort on a size mismatch.
-     * @todo Figure out a better way of handling this rather than aborting.
+     * @throws std::logic_error Exception on a size mismatch
      *
      * @param[in] stream_id The stream to save the message to.
      * @param[in] ts The timestamp to use for the message.

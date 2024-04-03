@@ -1366,8 +1366,12 @@ class packet_format {
     int field_bitness(ChanField f) const;
 };
 
+/** @defgroup OusterClientTypeGetFormat */
+
 /**
  * Get a packet parser for a particular data format.
+ *
+ * @ingroup OusterClientTypeGetFormat
  *
  * @param[in] info parameters provided by the sensor.
  *
@@ -1377,6 +1381,8 @@ const packet_format& get_format(const sensor_info& info);
 
 /**
  * Get a packet parser for a particular data format.
+ *
+ * @ingroup OusterClientTypeGetFormat
  *
  * @param[in] udp_profile_lidar   lidar profile
  * @param[in] pixels_per_column   pixels per column

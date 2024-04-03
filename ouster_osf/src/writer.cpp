@@ -5,6 +5,8 @@
 
 #include "ouster/osf/writer.h"
 
+#include <sstream>
+
 #include "fb_utils.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
@@ -36,8 +38,7 @@ Writer::Writer(const std::string& filename, const std::string& metadata_id,
     if (header_size_ > 0) {
         pos_ = static_cast<int>(header_size_);
     } else {
-        std::cerr << "ERROR: Can't write to file :(\n";
-        std::abort();
+        throw std::runtime_error("ERROR: Can't write to file :(");
     }
 }
 
@@ -56,12 +57,10 @@ std::shared_ptr<MetadataEntry> Writer::getMetadata(
 
 uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
     if (pos_ < 0) {
-        std::cerr << "ERROR: Writer is not ready (not started?)\n";
-        std::abort();
+        throw std::logic_error("ERROR: Writer is not ready (not started?)");
     }
     if (finished_) {
-        std::cerr << "ERROR: Hmm, Writer is finished. \n";
-        std::abort();
+        throw std::logic_error("ERROR: Hmm, Writer is finished.");
     }
     if (size == 0) {
         std::cout << "nothing to append!!!\n";
@@ -77,9 +76,12 @@ uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
 void Writer::saveMessage(const uint32_t stream_id, const ts_t ts,
                          const std::vector<uint8_t>& msg_buf) {
     if (!meta_store_.get(stream_id)) {
-        std::cerr << "ERROR: Attempt to save the non existent stream: id = "
-                  << stream_id << std::endl;
-        std::abort();
+        std::stringstream ss;
+        ss << "ERROR: Attempt to save the non existent stream: id = "
+           << stream_id << std::endl;
+
+        throw std::logic_error(ss.str());
+
         return;
     }
 
@@ -109,9 +111,10 @@ uint64_t Writer::emit_chunk(const ts_t chunk_start_ts, const ts_t chunk_end_ts,
         next_chunk_offset_ += saved_bytes;
         started_ = true;
     } else {
-        std::cerr << "ERROR: Can't save to file. saved_bytes = " << saved_bytes
-                  << std::endl;
-        std::abort();
+        std::stringstream ss;
+        ss << "ERROR: Can't save to file. saved_bytes = " << saved_bytes
+           << std::endl;
+        throw std::logic_error(ss.str());
     }
     return res_chunk_offset;
 }
@@ -160,15 +163,15 @@ void Writer::close() {
             header_size_) {
             finished_ = true;
         } else {
-            std::cerr << "ERROR: Can't finish OSF file! Recorded header of "
+            std::cerr << "ERROR: Can't finish OSF file!"
+                         "Recorded header of "
                          "different sizes ..."
                       << std::endl;
-            std::abort();
         }
     } else {
-        std::cerr << "ERROR: Oh, why we are here and didn't finish correctly?"
+        std::cerr << "ERROR: Oh, why we are here and "
+                     "didn't finish correctly?"
                   << std::endl;
-        std::abort();
     }
 }
 
@@ -188,9 +191,9 @@ void ChunkBuilder::saveMessage(const uint32_t stream_id, const ts_t ts,
     }
 
     if (fbb_.GetSize() + msg_buf.size() > MAX_CHUNK_SIZE) {
-        std::cerr << "ERROR: reached max possible chunk size MAX_SIZE"
-                  << std::endl;
-        std::abort();
+        throw std::logic_error(
+            "ERROR: reached max possible"
+            " chunk size MAX_SIZE");
     }
 
     update_start_end(ts);

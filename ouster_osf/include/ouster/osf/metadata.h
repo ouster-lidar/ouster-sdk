@@ -9,9 +9,11 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -327,18 +329,16 @@ std::shared_ptr<MetadataDerived> metadata_pointer_as(
  */
 template <class MetadataDerived>
 struct RegisterMetadata {
-    /**
-     * @todo See if we can remove these aborts.
-     *
-     * @note Will abort on already being registered.
-     */
     virtual ~RegisterMetadata() {
-        if (!registered_) {
-            std::cerr << "ERROR: Can't be right! We shouldn't be here. "
-                         "Duplicate metadata types?"
-                      << std::endl;
-            std::abort();
-        }
+        assert(registered_);
+
+        /**
+         * This line is incredibly IMPORTANT.  This line ensures
+         * that the compiler does not optimize out the side effects
+         * from the register_type_decoder method. Without this line
+         * the MetadataEntry registry will be empty.
+         */
+        (void)registered_;
     }
 
     /**

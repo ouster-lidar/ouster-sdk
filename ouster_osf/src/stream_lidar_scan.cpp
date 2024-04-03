@@ -6,6 +6,7 @@
 #include "ouster/osf/stream_lidar_scan.h"
 
 #include <algorithm>
+#include <sstream>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/basics.h"
@@ -355,9 +356,9 @@ LidarScanStream::LidarScanStream(Writer& writer, const uint32_t sensor_meta_id,
     // Check sensor and get sensor_info
     auto sensor_meta_entry = writer.getMetadata<LidarSensor>(sensor_meta_id_);
     if (sensor_meta_entry == nullptr) {
-        std::cerr << "ERROR: can't find sensor_meta_id = " << sensor_meta_id
-                  << std::endl;
-        std::abort();
+        std::stringstream ss;
+        ss << "ERROR: can't find sensor_meta_id = " << sensor_meta_id;
+        throw std::logic_error(ss.str());
     }
 
     sensor_info_ = sensor_meta_entry->info();

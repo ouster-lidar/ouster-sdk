@@ -22,7 +22,7 @@
    :hidden:
 
    Build <cpp/building.rst>
-   Examples <cpp/examples.rst>
+   Examples <cpp/examples/index.rst>
 
 .. toctree::
    :caption: ROS1 Guide
