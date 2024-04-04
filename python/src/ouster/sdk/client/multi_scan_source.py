@@ -72,7 +72,7 @@ class MultiScanSource(Protocol):
         ...
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], Iterator[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
         """Indexed access and slices support"""
         ...
 

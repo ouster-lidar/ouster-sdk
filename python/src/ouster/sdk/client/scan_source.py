@@ -1,4 +1,4 @@
-from typing import Iterator, Union, Optional
+from typing import Iterator, List, Union, Optional
 from typing_extensions import Protocol
 from ._client import SensorInfo, LidarScan
 from .data import FieldTypes
@@ -67,7 +67,7 @@ class ScanSource(Protocol):
     # Optional[LidarScan] since MultiScanSource returns collate scans by default.
     # This can be solved by provide a method that gives access to uncollated scans
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], Iterator[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
         """Indexed access and slices support"""
         ...
 

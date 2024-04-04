@@ -1,4 +1,4 @@
-from typing import Optional, Union, cast, Iterator, Tuple
+from typing import List, Optional, Union, cast, Iterator, Tuple
 
 from ouster.sdk import client
 from ouster.sdk.client.data import FieldTypes
@@ -120,7 +120,7 @@ class Scans(ScanSource):
         pass
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], Iterator[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
         raise NotImplementedError
 
     def __del__(self) -> None:

@@ -213,7 +213,7 @@ class OsfScanSource(MultiScanSource):
         ...
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], Iterator[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
 
         if not self.is_indexed:
             raise TypeError(
@@ -238,8 +238,6 @@ class OsfScanSource(MultiScanSource):
         if isinstance(key, slice):
             L = len(self)
             k = ForwardSlicer.normalize(key, L)
-            if k.step < 0:
-                raise TypeError("step must be positive")
             count = k.stop - k.start
             if count <= 0:
                 return []
@@ -247,15 +245,12 @@ class OsfScanSource(MultiScanSource):
                            for mid in self._stream_ids])
             ts_stop = max([self._reader.ts_by_message_idx(mid, k.stop - 1)
                           for mid in self._stream_ids])
-            scans_itr = self._scans_iter(ts_start, ts_stop, False)
-            for idx, scans in ForwardSlicer.slice(
-                enumerate(collate_scans(scans_itr,
-                                        self.sensors_count,
-                                        first_valid_packet_ts,
-                                        dt=self._dt)), k):
-                if idx < count:
-                    yield scans
-            return
+            scans_itr = collate_scans(self._scans_iter(ts_start, ts_stop, False),
+                                      self.sensors_count, first_valid_packet_ts,
+                                      dt=self._dt)
+            result = [scan for idx, scan in ForwardSlicer.slice(
+                enumerate(scans_itr), k) if idx < count]
+            return result if k.step > 0 else list(reversed(result))
 
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")

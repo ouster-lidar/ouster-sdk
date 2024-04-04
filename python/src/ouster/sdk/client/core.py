@@ -519,7 +519,7 @@ class Scans(ScanSource):
             "can not invoke __getitem__ on non-indexed source")
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], Iterator[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
         raise RuntimeError(
             "can not invoke __getitem__ on non-indexed source")
 

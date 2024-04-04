@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, Iterator
+from typing import List, Optional, Union
 
 from ouster.sdk.client import LidarScan, first_valid_packet_ts
 from ouster.sdk.client import ScansMulti     # type: ignore
@@ -100,7 +100,7 @@ class PcapScanSource(ScansMulti):
         return len(self._frame_offset)
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], Iterator[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
 
         if not self.is_indexed:
             raise TypeError(
@@ -121,8 +121,6 @@ class PcapScanSource(ScansMulti):
         if isinstance(key, slice):
             L = len(self)
             k = ForwardSlicer.normalize(key, L)
-            if k.step < 0:
-                raise TypeError("step must be positive")
             count = k.stop - k.start
             if count <= 0:
                 return []
@@ -132,14 +130,9 @@ class PcapScanSource(ScansMulti):
                                       self.sensors_count,
                                       first_valid_packet_ts,
                                       dt=self._dt)
-            for idx, scans in ForwardSlicer.slice(
-                enumerate(collate_scans(scans_itr,
-                                        self.sensors_count,
-                                        first_valid_packet_ts,
-                                        dt=self._dt)), k):
-                if idx < count:
-                    yield scans
-            return
+            result = [scan for idx, scan in ForwardSlicer.slice(
+                enumerate(scans_itr), k) if idx < count]
+            return result if k.step > 0 else list(reversed(result))
 
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")

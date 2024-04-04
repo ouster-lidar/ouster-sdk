@@ -75,17 +75,14 @@ class ScanSourceAdapter(ScanSource):
         raise NotImplementedError
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], Iterator[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
         """Indexed access and slices support"""
         if isinstance(key, int):
-            scans_list = self._scan_source[key]
-            scans_list = typing.cast(List[Optional[LidarScan]], scans_list)
-            return scans_list[self._stream_idx] if scans_list else None
+            return self._scan_source[key][self._stream_idx]
         elif isinstance(key, slice):
-            scans_itr = self._scan_source[key]
-            scans_itr = typing.cast(Iterator[List[Optional[LidarScan]]], scans_itr)
-            for ls in scans_itr:
-                yield ls[self._stream_idx]
+            scans_list = self._scan_source[key]
+            scans_list = typing.cast(List[List[Optional[LidarScan]]], scans_list)
+            return [ls[self._stream_idx] for ls in scans_list] if scans_list else None
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")
 
