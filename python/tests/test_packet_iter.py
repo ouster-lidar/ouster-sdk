@@ -115,7 +115,7 @@ def test_recording_packet_source(tmp_path) -> None:
     meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
     pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
     source = PcapMultiPacketReader(pcap_file_path, [meta_file_path])
-    recording_iter = packet_iter.RecordingPacketSource(source, tmp_path, n_frames=1)
+    recording_iter = packet_iter.RecordingPacketSource(source, str(tmp_path) + "/test", n_frames=1)
     emitted_packets = 0
     for (idx, packet) in recording_iter:
         emitted_packets += 1
@@ -140,7 +140,7 @@ def test_recording_packet_source_bad_packet_format(tmp_path) -> None:
     pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'VLI-16-one-packet.pcap')
     source = PcapMultiPacketReader(pcap_file_path, [meta_file_path])
     source.metadata[0].udp_port_lidar = 2368
-    recording_iter = packet_iter.RecordingPacketSource(source, tmp_path, n_frames=1)
+    recording_iter = packet_iter.RecordingPacketSource(source, str(tmp_path) + "/test", n_frames=1)
     emitted_packets = 0
     for (idx, packet) in recording_iter:
         emitted_packets += 1

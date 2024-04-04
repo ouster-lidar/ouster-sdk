@@ -1,6 +1,5 @@
 import os
 import time
-from datetime import datetime
 from typing import (Callable, Iterable, Iterator, TypeVar,
                     Optional, Any)
 
@@ -79,10 +78,9 @@ class RecordingPacketSource:
     # TODO: deduplicate this & pcap.record
     def __init__(self,
                 source: PacketMultiSource,
-                output_directory: str,
+                prefix_path: str,
                 *,
                 sensor_idx: int = 0,
-                prefix: str = "",
                 n_seconds: float = 0.0,
                 n_frames: Optional[int],
                 chunk_size: int = 0,
@@ -90,11 +88,11 @@ class RecordingPacketSource:
                 dst_ip: str = "127.0.0.1",
                 lidar_port: int = 7502,
                 imu_port: int = 7503,
-                use_sll_encapsulation: bool = False):
+                use_sll_encapsulation: bool = False,
+                overwrite: bool = True):
         self.source = source
         self.sensor_idx = sensor_idx
-        self.output_directory = output_directory
-        self.prefix = prefix
+        self.prefix_path = prefix_path
         self.n_seconds = n_seconds
         self.n_frames = n_frames
         self.chunk_size = chunk_size
@@ -103,6 +101,7 @@ class RecordingPacketSource:
         self.lidar_port = lidar_port
         self.imu_port = imu_port
         self.use_sll_encapsulation = use_sll_encapsulation
+        self.overwrite = overwrite
 
     @property  # type: ignore
     def __class__(self):
@@ -113,21 +112,22 @@ class RecordingPacketSource:
         has_timestamp = None
         error = False
         n = 0
-        file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         metadata = self.source.metadata
         if type(metadata) is list:
             metadata = metadata[self.sensor_idx]
 
-        base_name = f"{self.prefix}{metadata.prod_line}_{metadata.fw_rev}_{metadata.mode}_{file_timestamp}"
         frame_bound = FrameBorder()
+
+        chunk = 0
+        pcap_path = self.prefix_path + f"-{chunk:03}.pcap"
+        print(f"Saving PCAP file at {pcap_path}")
+        if os.path.isfile(pcap_path) and not self.overwrite:
+            raise FileExistsError(f"File '{pcap_path}' already exists")
 
         try:
             start_time = time.time()
-            chunk = 0
             num_frames = 0
-            pcap_path = os.path.join(self.output_directory, base_name) + f"-{chunk:03}.pcap"
-            print(f"Saving PCAP file at {pcap_path}")
             handle = _pcap.record_initialize(pcap_path, MTU_SIZE,
                                              self.use_sll_encapsulation)
             for next_packet in self.source:
@@ -149,14 +149,17 @@ class RecordingPacketSource:
 
                     ts = packet.capture_timestamp or time.time()
                     _pcap.record_packet(handle, self.src_ip, self.dst_ip, src_port, dst_port, packet._data, ts)
+
                     if frame_bound(packet):
                         num_frames += 1
                         if self.chunk_size and os.path.getsize(pcap_path) > self.chunk_size * 2**20:
                             # file size exceeds chunk size; create a new chunk
                             chunk += 1
-                            pcap_path = os.path.join(self.output_directory, base_name) + f"-{chunk:03}.pcap"
+                            pcap_path = self.prefix_path + f"-{chunk:03}.pcap"
                             print(f"Saving PCAP file at {pcap_path}")
                             _pcap.record_uninitialize(handle)
+                            if os.path.isfile(pcap_path) and not self.overwrite:
+                                raise FileExistsError(f"File '{pcap_path}' already exists")
                             handle = _pcap.record_initialize(pcap_path, MTU_SIZE,
                                                             self.use_sll_encapsulation)
                         if (self.n_frames and num_frames > self.n_frames) or \

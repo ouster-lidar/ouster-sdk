@@ -1,10 +1,11 @@
 from ouster.cli.core.cli_args import CliArgs
 import click
+import os
 import time
 from datetime import datetime
 from pathlib import Path
 import numpy as np
-from typing import (Tuple, List, Iterator, Optional, Union)
+from typing import (Tuple, List, Iterator, Union)
 from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
 from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
                                UDPProfileLidar, LidarScan, ChanField, XYZLut,
@@ -26,38 +27,42 @@ from .source_util import (SourceCommandContext,
                           import_rosbag_modules)
 from contextlib import closing
 
+_file_exists_error = lambda filename: (f"Error: File '{filename}' already exists. Add --overwrite "
+                                       "flag to overwrite and continue anyways.")
+
 
 @click.command(context_settings=dict(
     ignore_unknown_options=True,
     allow_extra_args=True,
 ))
+@click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
 @click.option('--chunk-size', default=0, help="Split output by size (MB)")
+@click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option('-r', '--raw', is_flag=True, default=False, help="Save in raw mode, "
               "where LidarPackets and ImuPackets from compatible sources are saved directly. "
               "This mode does not preserve LidarScan transformations performed by other commands "
               "in a multi-command chain. This mode preserves LEGACY ImuPackets.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.UNTYPED)
-def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str,
-                     chunk_size: int, raw: bool, **kwargs) -> None:
+def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
+                     chunk_size: int, raw: bool, overwrite: bool, **kwargs) -> None:
     """Save source as a PCAP"""
     scan_source = ctx.scan_source
     scans = ctx.scan_iter
     info = scan_source.metadata  # type: ignore
 
-    # Output directory
-    outpath = Path.cwd()
-    if dir:
-        outpath = Path(dir)
-        if not outpath.is_dir():
-            outpath.mkdir(parents=True)
-
     # Automatic file naming
-    time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    prefix = f"{prefix}_" if prefix else prefix
-    filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_{info.mode}_{time_str}")
+    filename = determine_filename(filename=filename, info=info, extension=".pcap", prefix=prefix, dir=dir)
+
+    create_directories_if_missing(filename)
+
+    filename = filename[0:-5]  # remove extension
+
+    if os.path.isfile(f'{filename}.json') and not overwrite:
+        print(_file_exists_error(f'{filename}.json'))
+        exit(1)
 
     # Save metadata as json
     with open(f"{filename}.json", 'w') as f:
@@ -84,13 +89,16 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str,
 
         # replace ScanSource's packetsource with RecordingPacketSource
         scan_source._source = RecordingPacketSource(
-            scan_source._source, dir, n_frames=None,
-            prefix=prefix, chunk_size=chunk_size,
+            scan_source._source, n_frames=None,
+            prefix_path=filename, chunk_size=chunk_size, overwrite=overwrite,
             lidar_port=info.udp_port_lidar, imu_port=info.udp_port_imu
         )
-
     else:
         click.echo("Warning: Saving pcap without -r/--raw will not save LEGACY IMU packets.")
+
+        if os.path.isfile(f'{filename}.pcap') and not overwrite:
+            print(_file_exists_error(f'{filename}.pcap'))
+            exit(1)
 
         # Initialize pcap writer
         pcap_record_handle = _pcap.record_initialize(f"{filename}.pcap", MTU_SIZE, False)
@@ -121,33 +129,32 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str,
     ignore_unknown_options=True,
     allow_extra_args=True,
 ))
+@click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.UNTYPED)
-def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, **kwargs) -> None:
+def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str, overwrite: bool, **kwargs) -> None:
     """Save source as an OSF"""
     scans = ctx.scan_iter
     info = ctx.scan_source.metadata  # type: ignore
 
-    # Output directory
-    outpath = Path.cwd()
-    if dir:
-        outpath = Path(dir)
-        if not outpath.is_dir():
-            outpath.mkdir(parents=True)
-
     # Automatic file naming
-    time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    prefix = f"{prefix}_" if prefix else prefix
-    filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_{info.mode}_{time_str}")
+    filename = determine_filename(filename=filename, info=info, extension=".osf", prefix=prefix, dir=dir)
+
+    create_directories_if_missing(filename)
+
+    click.echo(f"Saving OSF file at {filename}")
+
+    if os.path.isfile(filename) and not overwrite:
+        print(_file_exists_error(filename))
+        exit(1)
 
     # Initialize osf writer
-    osf_writer = osf.Writer(f"{filename}.osf")
+    osf_writer = osf.Writer(filename)
     osf_lidar_meta = osf.LidarSensor(metadata_json=info.original_string())
     lidar_id = osf_writer.addMetadata(osf_lidar_meta)
-
-    click.echo(f"Saving OSF file at {filename}.osf")
 
     first_scan = next(scans)  # type: ignore
     field_types = get_field_types(first_scan)  # type: ignore
@@ -191,22 +198,23 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, **kwargs) 
     ignore_unknown_options=True,
     allow_extra_args=True,
 ))
+@click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
-@click.option('-g', '--gzip', is_flag=True, default=False,
-              help="Compress with gzip. Can be loaded with numpy.loadtxt.")
+@click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.UNTYPED)
 def source_save_csv(ctx: SourceCommandContext, prefix: str,
-                    dir: str, gzip: bool, **kwargs) -> None:
+                    dir: str, filename: str, overwrite: bool, **kwargs) -> None:
     """Save source as one CSV file per LidarScan."""
     ctx.scan_iter = source_to_csv_iter(ctx.scan_iter, ctx.scan_source.metadata,  # type: ignore
-                                       prefix=prefix, dir=dir, gzip=gzip)
+                                       prefix=prefix, dir=dir, filename=filename,
+                                       overwrite=overwrite)
 
 
 def source_to_csv_iter(scan_iter: Iterator[LidarScan], info: SensorInfo,
-                       prefix: str = "", dir: Optional[str] = None,
-                       gzip: bool = False) -> Iterator[LidarScan]:
+                       prefix: str = "", dir: str = "", overwrite: bool = True,
+                       filename: str = "") -> Iterator[LidarScan]:
     """Create a CSV saving iterator from a LidarScan iterator
 
     The number of saved lines per csv file is always H x W, which corresponds to
@@ -218,10 +226,6 @@ def source_to_csv_iter(scan_iter: Iterator[LidarScan], info: SensorInfo,
             SIGNAL2 (photons), REFLECTIVITY (%), REFLECTIVITY2 (%),
             NEAR_IR (photons), X (m), Y (m), Z (m), X2 (m), Y2 (m), Z2(m),
             MEASUREMENT_ID, ROW, COLUMN
-
-    If ``--gzip`` is specified, the file is automatically saved in
-    compressed gzip format. :func:`.numpy.loadtxt` can be used to read gzipped
-    files transparently back to :class:`.numpy.ndarray`.
     """
 
     dual = False
@@ -235,18 +239,13 @@ def source_to_csv_iter(scan_iter: Iterator[LidarScan], info: SensorInfo,
               "documentation website to modify it for your own needs.")
 
     # Build filename
-    ext = "gz" if gzip else "csv"
-    outpath = Path.cwd()
-    if dir:
-        outpath = Path(dir)
-        if not outpath.is_dir():
-            outpath.mkdir(parents=True)
+    filename = determine_filename(filename=filename, info=info, extension=".csv", prefix=prefix, dir=dir)
 
-    time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    prefix = f"{prefix}_" if prefix else prefix
-    filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_{info.mode}_{time_str}")
+    create_directories_if_missing(filename)
 
-    click.echo(f"Saving CSV file at {filename}.{ext}")
+    filename = filename[0:-4]  # remove extension
+
+    click.echo(f"Saving CSV file at {filename}.csv")
 
     # Construct csv header and data format
     def get_fields_info(scan: LidarScan) -> Tuple[str, List[str]]:
@@ -327,8 +326,12 @@ def source_to_csv_iter(scan_iter: Iterator[LidarScan], info: SensorInfo,
                 frame_colmajor = np.swapaxes(frame, 0, 1)
 
                 # Write csv out to file
-                csv_path = f"{filename}_{idx}.{ext}"
+                csv_path = f"{filename}_{idx}.csv"
                 print(f'write frame index #{idx}, to file: {csv_path}')
+
+                if os.path.isfile(csv_path) and not overwrite:
+                    print(_file_exists_error(csv_path))
+                    exit(1)
 
                 header = '\n'.join([f'frame num: {idx}', field_names])
 
@@ -345,32 +348,59 @@ def source_to_csv_iter(scan_iter: Iterator[LidarScan], info: SensorInfo,
     return save_iter()
 
 
+# Determines the filename to use
+def determine_filename(prefix: str, dir: str, filename: str, extension: str, info: SensorInfo):
+    outpath = Path.cwd()
+    if dir:
+        outpath = Path(dir)
+
+    time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    prefix = f"{prefix}_" if prefix else prefix
+
+    if filename != "":
+        filename = str(outpath / f"{prefix}{filename}")
+    else:
+        filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_{info.mode}_{time_str}{extension}")
+
+    return filename
+
+
+# Creates path to file if any folders in the chain are missing
+def create_directories_if_missing(filename: str):
+    outpath = Path(filename).parents[0]
+    if not outpath.is_dir():
+        outpath.mkdir(parents=True)
+
+
 @click.command(context_settings=dict(
     ignore_unknown_options=True,
     allow_extra_args=True,
 ))
+@click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option('-r', '--raw', is_flag=True, default=False, help="Save in raw mode, "
               "where LidarPackets and ImuPackets from compatible sources are saved directly. "
               "This mode does not preserve LidarScan transformations performed by other commands "
               "in a multi-command chain. This mode preserves LEGACY ImuPackets.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.UNTYPED)
-def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str,
-                    raw: bool, **kwargs) -> None:
+def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
+                    raw: bool, overwrite: bool, **kwargs) -> None:
     """Save source as a packet rosbag."""
     if raw:
         _ = source_to_bag_iter(ctx.scan_source, ctx.scan_source.metadata, save_source_packets=True,  # type: ignore
-                           prefix=prefix, dir=dir)
+                           prefix=prefix, dir=dir, filename=filename, overwrite=overwrite)
     else:
         ctx.scan_iter = source_to_bag_iter(ctx.scan_iter, ctx.scan_source.metadata,  # type: ignore
-                                           prefix=prefix, dir=dir)
+                                           prefix=prefix, dir=dir, filename=filename,
+                                           overwrite=overwrite)
 
 
 def source_to_bag_iter(scans: Union[ScanSource, Iterator[LidarScan]], info: SensorInfo,
                        sensor_idx: int = 0, save_source_packets: bool = False, prefix: str = "",
-                       dir: Optional[str] = None) -> Iterator[LidarScan]:
+                       dir: str = "", filename: str = "", overwrite: bool = False) -> Iterator[LidarScan]:
     """Create a ROSBAG saving iterator from a LidarScan iterator
 
     Requires the active ROS environment or ROS-less rospy/rosbag python
@@ -394,15 +424,13 @@ def source_to_bag_iter(scans: Union[ScanSource, Iterator[LidarScan]], info: Sens
     import rospy  # type: ignore
 
     # Build filename
-    outpath = Path.cwd()
-    if dir:
-        outpath = Path(dir)
-        if not outpath.is_dir():
-            outpath.mkdir(parents=True)
+    filename = determine_filename(filename=filename, info=info, extension=".bag", prefix=prefix, dir=dir)
 
-    time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    prefix = f"{prefix}_" if prefix else prefix
-    filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_{info.mode}_{time_str}.bag")
+    if os.path.isfile(filename) and not overwrite:
+        print(_file_exists_error(filename))
+        exit(1)
+
+    create_directories_if_missing(filename)
 
     lidar_topic = "/os_node/lidar_packets"
     imu_topic = "/os_node/imu_packets"
@@ -461,12 +489,13 @@ class SourceSaveCommand(click.Command):
         OusterIoType.BAG: source_save_bag,
     }
 
-    help_str = "Save to "
+    help_str = "Save to an "
     for idx, iotype in enumerate(conversions.keys()):
         if idx == len(conversions) - 1:
-            help_str += f"or {iotype.name.upper()}."
+            help_str += f"or {iotype.name.upper()} with the given filename."
         else:
             help_str += f"{iotype.name.upper()}, "
+    help_str = help_str + " If only an extension is provided, the file is named automatically."
 
     def __init__(self, *args, **kwargs):
         kwargs['add_help_option'] = True
@@ -474,11 +503,10 @@ class SourceSaveCommand(click.Command):
         super().__init__(*args, **kwargs)
 
         # Build list of supported formats
-        supported_formats = []
+        self._supported_formats = []
         for iotype in self.conversions.keys():
-            supported_formats.append(iotype.name.upper())
-        click.option('-f', '--format', type=click.Choice(supported_formats, case_sensitive=False), default='OSF',
-                     help="Output file format. Default: OSF")(self)
+            self._supported_formats.append(iotype.name.upper())
+        click.argument("filename", required=True)
 
         # Add click options/parameters from conversion commands
         param_mapping = {}
@@ -510,7 +538,27 @@ class SourceSaveCommand(click.Command):
         return _join_with_conjunction(exts)
 
     def invoke(self, ctx, *args):
-        output_format = ctx.params.get('format')
+        output_name = ctx.params.get('filename')
+        output_format = ""
+
+        split = os.path.splitext(output_name)
+        if split[0][0] == '.' and split[1] == "":
+            output_format = split[0].replace(".", "")
+            ctx.params["filename"] = ""
+        elif split[1] == "":
+            print("Error: Must provide a filename with an extension.")
+            exit(2)
+        else:
+            output_format = split[1].replace(".", "")
+
+        # Ensure the file extension is present and a valid one
+        if output_format.upper() not in self._supported_formats:
+            string = f"Error: Invalid file extension. '.{output_format.lower()}' is not one of "
+            string = string + _join_with_conjunction(["'." + x.lower() + "'" for x in self._supported_formats])
+
+            print(string + ".")
+            exit(2)
+
         output_type = io_type_from_extension(f" .{output_format}")
         convert_command = self.conversions[output_type]
         if CliArgs().has_any_of(ctx.help_option_names):

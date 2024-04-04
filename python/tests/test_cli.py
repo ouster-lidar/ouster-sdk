@@ -305,7 +305,7 @@ def test_source_pcap_slice(test_pcap_file, runner):
         with tempfile.NamedTemporaryFile(delete=False) as f:
             pass
         result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice',
-                                          '0:1', 'save', '-f', 'pcap', '-p', f.name])
+                                          '0:1', 'save', '-p', f.name, ".pcap"])
         # FIXME! Written file paths should be logged in output.
         # assert f'Writing: {f.name}' in result.output
         assert result.exit_code == 0
@@ -322,16 +322,52 @@ def test_source_pcap_slice(test_pcap_file, runner):
         os.unlink(json_filename)
 
 
-def test_source_pcap_save_no_arguments(test_pcap_file, runner, tmp_path):
-    """It should save an OSF file by default."""
+def test_source_pcap_save_no_filename(test_pcap_file, runner, tmp_path):
+    """It should save an automatically named file with that extension by default."""
     with set_directory(tmp_path):
         assert not os.listdir(tmp_path)  # no files in output dir
-        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save']).args)
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save', '.osf']).args)
         assert result.exit_code == 0
         # there's at most one OSF file in output dir
         files = os.listdir(tmp_path)
         assert len(files) == 1
         assert all(filename.endswith('.osf') for filename in files)
+
+
+def test_source_pcap_save_filename(test_pcap_file, runner, tmp_path):
+    """It should save an osf file with the desired name."""
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save', 'test.osf']).args)
+        assert result.exit_code == 0
+        # there's at most one OSF file in output dir
+        files = os.listdir(tmp_path)
+        assert len(files) == 1
+        assert all(filename == 'test.osf' for filename in files)
+
+
+def test_source_pcap_save_filename_prefix(test_pcap_file, runner, tmp_path):
+    """It should save an osf file with the desired name."""
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save', '-p', 'prefix', 'test.osf']).args)
+        assert result.exit_code == 0
+        # there's at most one OSF file in output dir
+        files = os.listdir(tmp_path)
+        assert len(files) == 1
+        assert all(filename == 'prefix_test.osf' for filename in files)
+
+
+def test_source_pcap_save_no_extension(test_pcap_file, runner, tmp_path):
+    """It should save an osf file with the desired name."""
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save', 'osf']).args)
+        assert result.exit_code == 2
+        # there's no OSF file in output dir
+        files = os.listdir(tmp_path)
+        assert "Must provide a " in result.output
+        assert len(files) == 0
 
 
 def test_source_osf_info_help(test_osf_file, runner):

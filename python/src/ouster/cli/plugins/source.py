@@ -392,14 +392,16 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
         # print any timeout exceptions we get
         scans = ctx.scan_iter
 
-        def save_iter():
+        def catch_iter():
             try:
                 for scan in scans:
                     yield scan
             except ClientTimeout as ex:
-                print(f"ERROR: {ex}")
+                print(f"Error: {ex}")
+            except FileExistsError as ex:
+                print(f"Error: {ex}. Add --overwrite flag to overwrite and continue anyways.")
             return
-        ctx.scan_iter = save_iter()
+        ctx.scan_iter = catch_iter()
         try:
             # Execute multicommand callbacks
 
