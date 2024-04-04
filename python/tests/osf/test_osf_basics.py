@@ -9,6 +9,7 @@ from ouster.sdk import open_source
 
 import ouster.sdk.osf as osf
 import ouster.sdk.client as client
+from ouster.sdk.osf._osf import LidarScanStream
 
 
 @pytest.fixture
@@ -22,6 +23,49 @@ def input_info(test_data_dir):
     with open(filename, 'r') as f:
         data = f.read()
     return client.SensorInfo(data)
+
+
+# Test that we can save a subset of scan fields and that it errors
+# if you try and save a scan missing fields in the metadata
+def test_writerv2_quick(tmp_path, input_info):
+    file_name = tmp_path / "test.osf"
+    save_fields = {}
+    save_fields[client.ChanField.REFLECTIVITY] = np.uint32
+    save_fields[client.ChanField.RANGE] = np.uint32
+
+    error_fields = {}
+    error_fields[client.ChanField.RANGE] = np.uint32
+    with osf.WriterV2(str(file_name), input_info, 2, save_fields) as writer:
+        scan = client.LidarScan(128, 1024)
+        scan.field(client.ChanField.REFLECTIVITY)[:] = 123
+        scan.field(client.ChanField.RANGE)[:] = 5
+
+        writer.save(0, scan)
+
+        # also try saving an scan with missing fields
+        scan2 = client.LidarScan(128, 1024, error_fields)
+        scan2.field(client.ChanField.RANGE)[:] = 6
+
+        with pytest.raises(ValueError):
+            writer.save(0, scan2)
+
+        writer.close()
+
+    # then open it and double check that we only got the fields we needed
+    res_reader = osf.Reader(str(file_name))
+
+    messages = [it for it in res_reader.messages()]
+    for msg in messages:
+        if msg.of(LidarScanStream):
+            ls = msg.decode()
+            if ls:
+                # validate that it only has the channels we added
+                fields = [field for field in ls.fields]
+                assert client.ChanField.RANGE in fields
+                assert client.ChanField.REFLECTIVITY in fields
+                assert len(fields) == 2
+
+    assert len(messages) == 1
 
 
 def writerv2_output_handler(writer, output_osf_file, info):

@@ -24,22 +24,32 @@ class WriterV2 {
     /**
      * @param[in] filename The filename to output to.
      * @param[in] info The sensor info to use for a single stream OSF file.
-     * @param chunk_size The chunksize to use for the OSF file, this parameter
-     *                   is optional.
+     * @param[in] chunk_size The chunksize to use for the OSF file, this
+     *                       parameter is optional.
+     * @param[in] field_types The fields from scans to actually save into the
+     *                        OSF. If not provided uses the fields from the
+     *                        first saved lidar scan for each stream. This
+     *                        parameter is optional.
      */
     WriterV2(const std::string& filename,
-             const ouster::sensor::sensor_info& info, uint32_t chunk_size = 0);
+             const ouster::sensor::sensor_info& info, uint32_t chunk_size = 0,
+             const LidarScanFieldTypes& field_types = LidarScanFieldTypes());
 
     /**
      * @param[in] filename The filename to output to.
      * @param[in] info The sensor info vector to use for a multi stream OSF
      *                 file.
-     * @param chunk_size The chunksize to use for the OSF file, this parameter
-     *                   is optional.
+     * @param[in] chunk_size The chunksize to use for the OSF file, this
+     *                       parameter is optional.
+     * @param[in] field_types The fields from scans to actually save into the
+     *                        OSF. If not provided uses the fields from the
+     *                        first saved lidar scan for each stream. This
+     *                        parameter is optional.
      */
     WriterV2(const std::string& filename,
              const std::vector<ouster::sensor::sensor_info>& info,
-             uint32_t chunk_size = 0);
+             uint32_t chunk_size = 0,
+             const LidarScanFieldTypes& field_types = LidarScanFieldTypes());
 
     /**
      * Save a single scan to the specified stream_index in an OSF file.
@@ -195,6 +205,11 @@ class WriterV2 {
      * Internal Writer object used to write the OSF file.
      */
     std::unique_ptr<Writer> writer;
+
+    /**
+     * Fields to serialize for scans. If empty use data from the first scan.
+     */
+    LidarScanFieldTypes field_types;
 
    private:
     /**

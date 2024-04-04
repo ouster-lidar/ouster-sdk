@@ -585,7 +585,7 @@ to work with OSF files.
                         to ``LidarSensor`` with sensor intrinsics.
                     field_types (dict): set of fields to use from the
                         ``LidarScan``, it's used to create horizontal slices of
-                        ``LidarScana`` (i.e. write only RANGE and SIGNAL fields)
+                        ``LidarScan`` (i.e. write only RANGE and SIGNAL fields)
         )")
         .def(
             "save",
@@ -810,10 +810,22 @@ to work with OSF files.
     py::class_<osf::WriterV2>(m, "WriterV2", R"(
         Higher level Writer API
     )")
-        .def(py::init<const std::string&, const sensor::sensor_info&,
-                      uint32_t>(),
-             py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
-             R"(
+        .def(
+            py::init(
+                [](const std::string& filename, const sensor::sensor_info& info,
+                   uint32_t chunk_size,
+                   const std::map<sensor::ChanField, py::object>& field_types) {
+                    LidarScanFieldTypes ft{};
+                    for (const auto& f : field_types) {
+                        auto dtype = py::dtype::from_args(f.second);
+                        ft.push_back(std::make_pair(
+                            f.first, field_type_of_dtype(dtype)));
+                    }
+                    return new osf::WriterV2(filename, info, chunk_size, ft);
+                }),
+            py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
+            py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
+            R"(
             Creates a `WriterV2` with deafault ``STREAMING`` layout chunks writer.
             
             Using default ``chunk_size`` of ``2MB``.
@@ -824,13 +836,28 @@ to work with OSF files.
                     file.
                 chunk_size (int): The chunksize to use for the OSF file, this arg
                     is optional.
+                field_types (Dict[ChanField, FieldDType]): The fields from scans to
+                    actually save into the OSF. If not provided uses the fields from 
+                    the first saved lidar scan for each stream. This parameter is optional.
 
         )")
-        .def(py::init<const std::string&,
-                      const std::vector<ouster::sensor::sensor_info>&,
-                      uint32_t>(),
-             py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
-             R"(
+        .def(
+            py::init(
+                [](const std::string& filename,
+                   const std::vector<sensor::sensor_info>& info,
+                   uint32_t chunk_size,
+                   const std::map<sensor::ChanField, py::object>& field_types) {
+                    LidarScanFieldTypes ft{};
+                    for (const auto& f : field_types) {
+                        auto dtype = py::dtype::from_args(f.second);
+                        ft.push_back(std::make_pair(
+                            f.first, field_type_of_dtype(dtype)));
+                    }
+                    return new osf::WriterV2(filename, info, chunk_size, ft);
+                }),
+            py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
+            py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
+            R"(
              Creates a `Writer` with specified ``chunk_size``.
 
              Default ``chunk_size`` is ``2MB``.
@@ -841,6 +868,10 @@ to work with OSF files.
                     multi stream OSF file.
                 chunk_size (int): The chunksize to use for the OSF file, this arg
                     is optional.
+                field_types (Dict[ChanField, FieldDType]): The fields from scans to
+                    actually save into the OSF. If not provided uses the fields from 
+                    the first saved lidar scan for each stream. This parameter is optional.
+
         )")
         .def(
             "save",

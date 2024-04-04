@@ -10,14 +10,18 @@
 namespace ouster {
 namespace osf {
 WriterV2::WriterV2(const std::string& filename,
-                   const ouster::sensor::sensor_info& info, uint32_t chunk_size)
+                   const ouster::sensor::sensor_info& info, uint32_t chunk_size,
+                   const LidarScanFieldTypes& field_types)
     : WriterV2(filename, std::vector<ouster::sensor::sensor_info>{info},
-               chunk_size) {}
+               chunk_size, field_types) {}
 
 WriterV2::WriterV2(const std::string& filename,
                    const std::vector<ouster::sensor::sensor_info>& info,
-                   uint32_t chunk_size)
-    : filename(filename), info(info), chunk_size(chunk_size) {
+                   uint32_t chunk_size, const LidarScanFieldTypes& field_types)
+    : filename(filename),
+      info(info),
+      chunk_size(chunk_size),
+      field_types(field_types) {
     writer =
         std::make_unique<Writer>(filename, "New Writer Interface", chunk_size);
 
@@ -30,8 +34,10 @@ void WriterV2::_save(uint32_t stream_index, const LidarScan& scan) {
     if (stream_index < sensor_info_count()) {
         auto item = streams.find(stream_index);
         if (item == streams.end()) {
+            const auto& fields =
+                field_types.size() ? field_types : get_field_types(scan);
             streams[stream_index] = std::make_unique<LidarScanStream>(
-                *writer, meta_id[stream_index], get_field_types(scan));
+                *writer, meta_id[stream_index], fields);
         }
         ts_t time = ts_t(scan.get_first_valid_packet_timestamp());
 

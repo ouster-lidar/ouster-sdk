@@ -263,7 +263,7 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
         test_data_dir(), "metadata/2_5_0_os-992146000760-128_legacy.json"));
     LidarScan ls_orig = get_random_lidar_scan(sinfo);
 
-    // Subset of fields to leave in LidarScan (or extend ... ) during writing
+    // Subset of fields to leave in LidarScan during writing
     LidarScanFieldTypes field_types;
     field_types.emplace_back(sensor::ChanField::RANGE,
                              sensor::ChanFieldType::UINT32);
@@ -271,8 +271,6 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
                              sensor::ChanFieldType::UINT16);
     field_types.emplace_back(sensor::ChanField::REFLECTIVITY,
                              sensor::ChanFieldType::UINT8);
-    field_types.emplace_back(sensor::ChanField::REFLECTIVITY2,
-                             sensor::ChanFieldType::UINT16);
 
     std::cout << "LidarScan field_types: " << ouster::to_string(field_types)
               << std::endl;
@@ -280,12 +278,6 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
     // Make a reduced/extended fields LidarScan
     // that will be compared with a recovered LidarScan from OSF
     auto ls_reference = slice_with_cast(ls_orig, field_types);
-
-    // Check that we have non existent REFLECTIVITY2 set as Zero
-    img_t<uint32_t> refl2{ls_reference.h, ls_reference.w};
-    impl::visit_field(ls_reference, sensor::ChanField::REFLECTIVITY2,
-                      ouster::impl::read_and_cast(), refl2);
-    EXPECT_TRUE((refl2 == 0).all());
 
     EXPECT_EQ(field_types.size(),
               std::distance(ls_reference.begin(), ls_reference.end()));

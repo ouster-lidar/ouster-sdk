@@ -46,7 +46,6 @@ bool poses_present(const LidarScan& ls) {
            ls.pose().end();
 }
 
-// TODO[pb]: Error if field_types is not subset of fields in ls?
 LidarScan slice_with_cast(const LidarScan& ls_src,
                           const LidarScanFieldTypes& field_types) {
     LidarScan ls_dest{static_cast<std::size_t>(ls_src.w),
@@ -69,7 +68,9 @@ LidarScan slice_with_cast(const LidarScan& ls_src,
                                       ouster::impl::copy_and_cast(), ls_src,
                                       ft.first);
         } else {
-            ouster::impl::visit_field(ls_dest, ft.first, zero_field());
+            throw std::invalid_argument("Required field '" +
+                                        sensor::to_string(ft.first) +
+                                        "' is missing from scan.");
         }
     }
 
@@ -110,11 +111,7 @@ flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
     const LidarScanFieldTypes meta_field_types) {
     auto ls = lidar_scan;
     if (!meta_field_types.empty()) {
-        // Make a reduced field LidarScan (or extend if the field types is
-        // different)
-        // TODO[pb]: Consider to error instead of extending LidarScan, but be
-        //           sure to check the consistence everywhere. That's why it's
-        //           not done on the first pass here ...
+        // Make a reduced field LidarScan (erroring if we are missing anything)
         ls = slice_with_cast(lidar_scan, meta_field_types);
     }
     // Encode LidarScan to PNG buffers

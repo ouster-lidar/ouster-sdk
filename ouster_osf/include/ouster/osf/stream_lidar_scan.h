@@ -20,6 +20,9 @@ namespace osf {
  * Cast `ls_src` LidarScan to a subset of fields with possible different
  * underlying ChanFieldTypes.
  *
+ * @throws std::logic_error Exception on trying to slice a scan with only
+ *                          a subset of the requested scans
+ *
  * @param[in] ls_src The LidarScan to cast.
  * @param[in] field_types The field types to cast the LidarScan to.
  * @return a copy of `ls_src` with transformed fields.
