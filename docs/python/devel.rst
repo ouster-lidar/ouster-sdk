@@ -39,7 +39,7 @@ On supported Debian-based linux systems, you can install all build dependencies 
                       libglfw3-dev libglew-dev libspdlog-dev \
                       libpng-dev libflatbuffers-dev
 
-On macos >= 10.13, using homebrew, you should be able to run:
+On macos >= 11, using homebrew, you should be able to run:
 
 .. code:: console
 

@@ -162,11 +162,10 @@ def install_requires():
         'packaging',
         'setuptools; python_version >= "3.12"',
     ]
-    # Removing mapping temporarily until 0.11.0 public release with 3.12 support
-    # env = os.environ.copy()
-    # skip_mapping = env.get('OUSTER_SDK_SKIP_MAPPING')
-    # if not skip_mapping:
-    #     install_requires.append('ouster-mapping>=0.2.0rc1; python_version >= "3.8" and python_version <= "3.12"')
+    env = os.environ.copy()
+    skip_mapping = env.get('OUSTER_SDK_SKIP_MAPPING')
+    if not skip_mapping:
+        install_requires.append('ouster-mapping>=0.2.0rc1; python_version >= "3.8" and python_version <= "3.12"')
 
     return install_requires
 
@@ -198,7 +197,7 @@ setup(
         'bdist_wheel': sdk_bdist_wheel,
     },
     zip_safe=False,
-    python_requires='>=3.7, <4',
+    python_requires='>=3.8, <4',
     install_requires=install_requires(),
     extras_require={
         'test': [

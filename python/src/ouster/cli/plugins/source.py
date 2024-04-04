@@ -287,7 +287,7 @@ class SourceMultiCommand(click.MultiCommand):
 @click.option('-m', '--meta', required=False, type=click_ro_file,
               help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=None, type=int, help="Dest. port of lidar data")
-@click.option('-i', '--imu-port', default=None, help="Dest. port of imu data")
+@click.option('-i', '--imu-port', default=None, type=int, help="Dest. port of imu data")
 @click.option('-x', '--do-not-reinitialize', is_flag=True, default=False,
               help="Do not reinitialize (by default it will reinitialize if needed)")
 @click.option('-y', '--no-auto-udp-dest', is_flag=True, default=False,
