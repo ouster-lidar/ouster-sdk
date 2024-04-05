@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from ouster.sdk.client import LidarScan, first_valid_packet_ts
 from ouster.sdk.client import ScansMulti     # type: ignore
@@ -23,6 +23,7 @@ class PcapScanSource(ScansMulti):
         raw_headers: bool = False,
         raw_fields: bool = False,
         soft_id_check: bool = False,
+        meta: Tuple[str, ...] = (),
         **_
     ) -> None:
         """
@@ -40,7 +41,10 @@ class PcapScanSource(ScansMulti):
 
         self._source: Optional[PcapMultiPacketReader]
 
-        metadata_paths = resolve_metadata_multi(file_path)
+        metadata_paths = list(meta)
+        if not meta:
+            metadata_paths = resolve_metadata_multi(file_path)
+
         if not metadata_paths:
             raise RuntimeError(
                 "Metadata jsons not found. Make sure that metadata json files "

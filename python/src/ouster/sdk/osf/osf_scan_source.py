@@ -23,7 +23,7 @@ class OsfScanSource(MultiScanSource):
         complete: bool = False,
         index: bool = False,
         cycle: bool = False,
-        **_
+        **kwargs
     ) -> None:
         """
         Args:
@@ -44,6 +44,9 @@ class OsfScanSource(MultiScanSource):
 
         self._complete = complete
         self._indexed = index
+
+        if 'meta' in kwargs and kwargs['meta']:
+            raise TypeError(f"{OsfScanSource.__name__} does not support user-supplied metadata.")
 
         self._reader = Reader(file_path)
 

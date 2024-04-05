@@ -23,7 +23,7 @@ class SensorScanSource(ScansMulti):
         no_auto_udp_dest: bool = False,
         timeout: float = 1.0,
         extrinsics: Optional[List[float]] = None,
-        **_
+        **kwargs
     ) -> None:
 
         self._source = None
@@ -32,6 +32,9 @@ class SensorScanSource(ScansMulti):
             hostnames = [hostnames]
         elif len(hostnames) > 1:
             raise NotImplementedError("multi sensor is not implemented")
+
+        if 'meta' in kwargs and kwargs['meta']:
+            raise TypeError(f"{SensorScanSource.__name__} does not support user-supplied metadata.")
 
         config = configure_sensor(hostnames[0],
                                   lidar_port,

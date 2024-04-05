@@ -284,7 +284,7 @@ class SourceMultiCommand(click.MultiCommand):
 
 @cli.group(cls=SourceMultiCommand, chain=True)
 @click.argument(_source_arg_name, required=True)
-@click.option('-m', '--meta', required=False, type=click_ro_file,
+@click.option('-m', '--meta', required=False, type=click_ro_file, multiple=True,
               help="Metadata for PCAP, helpful if automatic metadata resolution fails")
 @click.option('-l', '--lidar-port', default=None, type=int, help="Dest. port of lidar data")
 @click.option('-i', '--imu-port', default=None, type=int, help="Dest. port of imu data")
@@ -306,7 +306,7 @@ class SourceMultiCommand(click.MultiCommand):
               required=False,
               help="Path to a file containing extrinscs. The parameter would be"
               " superseeded by the --extrinscs parameter if both supplied")
-def source(source, meta: str, lidar_port: int, imu_port: int, extrinsics: Optional[List[float]],
+def source(source, meta: Tuple[str, ...], lidar_port: int, imu_port: int, extrinsics: Optional[List[float]],
            extrinsics_file: Optional[str], do_not_reinitialize: bool, no_auto_udp_dest: bool,
            soft_id_check: bool, timeout: int, filter: bool):
     """Run a command with the specified source (SENSOR, PCAP, or OSF) as SOURCE.
@@ -318,7 +318,7 @@ def source(source, meta: str, lidar_port: int, imu_port: int, extrinsics: Option
 @source.result_callback()
 @click.pass_context
 def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCommandCallback],
-                     source: str, meta: str, lidar_port: int, imu_port: int,
+                     source: str, meta: Tuple[str, ...], lidar_port: int, imu_port: int,
                      extrinsics: Optional[List[float]], extrinsics_file: Optional[str],
                      do_not_reinitialize: bool, no_auto_udp_dest: bool, soft_id_check: bool,
                      timeout: int, filter: bool) -> None:

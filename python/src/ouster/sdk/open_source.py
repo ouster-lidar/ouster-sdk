@@ -2,7 +2,8 @@ from typing import List, Optional, Union
 import numpy as np
 from pathlib import Path
 from ouster.sdk.client import ScanSource, MultiScanSource
-from ouster.sdk.io_type import OusterIoType, io_type
+import ouster.sdk.io_type
+from ouster.sdk.io_type import OusterIoType
 from ouster.sdk.osf import OsfScanSource
 from ouster.sdk.pcap import PcapScanSource
 from ouster.sdk.sensor import SensorScanSource
@@ -35,7 +36,7 @@ def open_source(source_url: str, sensor_idx: int = -1, *args,
     source_urls = [url.strip() for url in source_url.split(',') if url.strip()]
 
     if len(source_urls) == 0:
-        raise ValueError("No valid source specificed")
+        raise ValueError("No valid source specified")
 
     if len(source_urls) > 1:
         # This only applies to the live sensors case.
@@ -53,7 +54,7 @@ def open_source(source_url: str, sensor_idx: int = -1, *args,
     source_type: OusterIoType
     scan_source: Optional[MultiScanSource] = None
     try:
-        source_type = io_type(source_urls[0])
+        source_type = ouster.sdk.io_type.io_type(source_urls[0])
         handler = io_type_handlers[source_type]
         scan_source = handler(source_urls[0], *args, **kwargs)
     except KeyError:
