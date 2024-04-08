@@ -106,10 +106,10 @@ class PcapReader {
      * @param[in] offset The position to seek to in bytes,
      * starting from the beginning of the file.
      *
-     * @pre \paramname{offset} must be the offset of a PCAP
+     * @pre offset must be the offset of a PCAP
      * record header. If any other value is provided,
      * subsequent packet reads from this PcapReader will be
-     * invalid until \functionname{reset} is called.
+     * invalid until PcapReader::reset is called.
      */
     void seek(uint64_t offset);
 

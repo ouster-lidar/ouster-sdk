@@ -21,7 +21,7 @@ namespace osf {
  * Class for keeping track of OSF chunks.
  *
  * Flat Buffer Reference:
- *   fb/streaming/streaming_info.fbs::ChunkInfo
+ *   fb/streaming/streaming_info.fbs :: ChunkInfo
  */
 struct ChunkInfo {
     /**
@@ -29,7 +29,7 @@ struct ChunkInfo {
      * the chunk is located.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::ChunkInfo::offset
+     *   fb/streaming/streaming_info.fbs :: ChunkInfo :: offset
      */
     uint64_t offset;
 
@@ -37,7 +37,7 @@ struct ChunkInfo {
      * The specific stream the chunk is associated with.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::ChunkInfo::stream_id
+     *   fb/streaming/streaming_info.fbs :: ChunkInfo :: stream_id
      */
     uint32_t stream_id;
 
@@ -45,7 +45,7 @@ struct ChunkInfo {
      * The number of messages in the chunk
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::ChunkInfo::message_count
+     *   fb/streaming/streaming_info.fbs :: ChunkInfo :: message_count
      */
     uint32_t message_count;
 };
@@ -54,14 +54,14 @@ struct ChunkInfo {
  * Class for keeping track of OSF stream stats.
  *
  * Flat Buffer Reference:
- *   fb/streaming/streaming_info.fbs::StreamStats
+ *   fb/streaming/streaming_info.fbs :: StreamStats
  */
 struct StreamStats {
     /**
      * The specific stream the chunk is associated with.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::StreamStats::stream_id
+     *   fb/streaming/streaming_info.fbs :: StreamStats :: stream_id
      */
     uint32_t stream_id;
 
@@ -69,7 +69,7 @@ struct StreamStats {
      * The first timestamp in the stream.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::StreamStats::start_ts
+     *   fb/streaming/streaming_info.fbs :: StreamStats :: start_ts
      */
     ts_t start_ts;
 
@@ -77,7 +77,7 @@ struct StreamStats {
      * The last timestamp in the stream.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::StreamStats::end_ts
+     *   fb/streaming/streaming_info.fbs :: StreamStats :: end_ts
      */
     ts_t end_ts;
 
@@ -85,7 +85,7 @@ struct StreamStats {
      * The number of messages in the stream.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::StreamStats::message_count
+     *   fb/streaming/streaming_info.fbs :: StreamStats :: message_count
      */
     uint64_t message_count;
 
@@ -93,7 +93,7 @@ struct StreamStats {
      * The average size of the messages in the stream.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::StreamStats::message_avg_size
+     *   fb/streaming/streaming_info.fbs :: StreamStats :: message_avg_size
      */
     uint32_t message_avg_size;
 
@@ -142,7 +142,7 @@ std::string to_string(const StreamStats& stream_stats);
  *   ouster/v1/streaming/StreamingInfo
  *
  * Flat Buffer Reference:
- *   fb/streaming/streaming_info.fbs::StreamingInfo
+ *   fb/streaming/streaming_info.fbs :: StreamingInfo
  */
 class StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
    public:
@@ -215,7 +215,7 @@ class StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
      * The internal stream_id to ChunkInfo map.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::StreamingInfo::chunks
+     *   fb/streaming/streaming_info.fbs :: StreamingInfo :: chunks
      */
     std::map<uint64_t, ChunkInfo> chunks_info_{};
 
@@ -223,12 +223,12 @@ class StreamingInfo : public MetadataEntryHelper<StreamingInfo> {
      * The internal stream_id to StreamStats map.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::StreamingInfo::stream_stats
+     *   fb/streaming/streaming_info.fbs :: StreamingInfo :: stream_stats
      */
     std::map<uint32_t, StreamStats> stream_stats_{};
 };
 
-/** @defgroup OSFTraitsStreamingInfo */
+/** @defgroup OSFTraitsStreamingInfo Templated struct for traits. */
 /**
  * Templated struct for returning the OSF type string.
  *

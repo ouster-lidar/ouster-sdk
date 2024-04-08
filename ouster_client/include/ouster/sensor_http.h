@@ -122,6 +122,8 @@ class SensorHttp {
      * Retrieves sensor firmware version information as a string.
      *
      * @param[in] hostname hostname of the sensor to communicate with.
+     * @param[in] timeout_sec The timeout to use in seconds, this argument
+     *                        is optional.
      */
     static std::string firmware_version_string(
         const std::string& hostname,
@@ -131,6 +133,8 @@ class SensorHttp {
      * Retrieves sensor firmware version information.
      *
      * @param[in] hostname hostname of the sensor to communicate with.
+     * @param[in] timeout_sec The timeout to use in seconds, this argument
+     *                        is optional.
      */
     static ouster::util::version firmware_version(
         const std::string& hostname,
@@ -140,6 +144,8 @@ class SensorHttp {
      * Creates an instance of the SensorHttp interface.
      *
      * @param[in] hostname hostname of the sensor to communicate with.
+     * @param[in] timeout_sec The timeout to use in seconds, this argument
+     *                        is optional.
      */
     static std::unique_ptr<SensorHttp> create(
         const std::string& hostname,

@@ -14,7 +14,7 @@
 namespace ouster {
 namespace osf {
 
-/** @defgroup OSFStreamingDefaultSize */
+/** @defgroup OSFStreamingDefaultSize OSF Streaming Default Size. */
 
 /**
  * Default Streaming Chunk Size.
@@ -54,7 +54,7 @@ class StreamingLayoutCW : public ChunksWriter {
      * @throws std::logic_error Exception on inconsistent timestamps.
      */
     void saveMessage(const uint32_t stream_id, const ts_t ts,
-                     const std::vector<uint8_t>& msg_buf) override;
+                     const std::vector<uint8_t>& buf) override;
 
     /**
      * @copydoc ChunksWriter::finish
@@ -73,7 +73,7 @@ class StreamingLayoutCW : public ChunksWriter {
      *
      * @param[in] stream_id The stream id to associate with the message.
      * @param[in] ts The timestamp for the messages.
-     * @param[in]  msg_buf A vector of message buffers to gather stats about.
+     * @param[in] msg_buf A vector of message buffers to gather stats about.
      */
     void stats_message(const uint32_t stream_id, const ts_t ts,
                        const std::vector<uint8_t>& msg_buf);
@@ -81,6 +81,7 @@ class StreamingLayoutCW : public ChunksWriter {
     /**
      *  Finish out a chunk and write the chunk to the writer.
      *
+     * @param[in] stream_id The stream id finish up.
      * @param[in] chunk_builder The chunk builder to use for formulating the
      *                          chunk.
      */

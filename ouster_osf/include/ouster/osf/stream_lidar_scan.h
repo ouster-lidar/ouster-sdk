@@ -112,7 +112,7 @@ class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
      * Internal store of the sensor id.
      *
      * Flat Buffer Reference:
-     *   fb/os_sensor/lidar_scan_stream.fbs::LidarScanStream::sensor_id
+     *   fb/os_sensor/lidar_scan_stream.fbs :: LidarScanStream :: sensor_id
      */
     uint32_t sensor_meta_id_{0};
 
@@ -120,12 +120,12 @@ class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
      * Internal store of the field types.
      *
      * Flat Buffer Reference:
-     *   fb/os_sensor/lidar_scan_stream.fbs::LidarScanStream::field_types
+     *   fb/os_sensor/lidar_scan_stream.fbs :: LidarScanStream :: field_types
      */
     LidarScanFieldTypes field_types_;
 };
 
-/** @defgroup OSFTraitsLidarScanStreamMeta */
+/** @defgroup OSFTraitsLidarScanStreamMeta Templated struct for traits.*/
 
 /**
  * Templated struct for returning the OSF type string.

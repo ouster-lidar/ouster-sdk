@@ -26,7 +26,7 @@ class ChunksWriter {
      *
      * @param[in] stream_id The stream id to associate with the message.
      * @param[in] ts The timestamp for the messages.
-     * @param[in] msg_buf A vector of message buffers to record.
+     * @param[in] buf A vector of message buffers to record.
      */
     virtual void saveMessage(const uint32_t stream_id, const ts_t ts,
                              const std::vector<uint8_t>& buf) = 0;
@@ -52,9 +52,6 @@ class ChunksWriter {
 /**
  * %OSF Writer provides the base universal interface to store the collection
  * of metadata entries, streams and corresponding objects.
- *
- * Examples:
- *  @ref writer_test.cpp, writer_custom_test.cpp
  */
 class Writer {
    public:
@@ -101,15 +98,21 @@ class Writer {
     uint32_t addMetadata(MetadataEntry& entry);
 
     /**
+     * @defgroup OSFGetMetadataGroup Get specified metadata.
      * Get and return a metadata entry.
+     *
      * @param[in] metadata_id The id of the metadata to get and return.
      * @return The correct MetadataEntry.
+     */
+
+    /**
+     * @copydoc OSFGetMetadataGroup
      */
     std::shared_ptr<MetadataEntry> getMetadata(
         const uint32_t metadata_id) const;
 
     /**
-     * @copydoc getMetadata(const uint32_t metadata_id)
+     * @copydoc OSFGetMetadataGroup
      *
      * @tparam MetadataEntryClass The type of metadata to get and return.
      */
@@ -166,7 +169,7 @@ class Writer {
     /**
      * Sets the metadata id label.
      *
-     * @param[in] The metadata id label to set.
+     * @param[in] id The metadata id label to set.
      */
     void setMetadataId(const std::string& id);
 

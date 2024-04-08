@@ -95,26 +95,27 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
      * The internal extrinsics array.
      *
      * Flat Buffer Reference:
-     *   fb/os_sensor/extrinsics.fbs::Extrinsics::extrinsics
+     *   fb/os_sensor/extrinsics.fbs :: Extrinsics :: extrinsics
      */
     mat4d extrinsics_;
 
     /**
      * The internal flatbuffer metadata reference id.
      *
-     * Flat Buffer Reference: fb/os_sensor/extrinsics.fbs::Extrinsics::ref_id
+     * Flat Buffer Reference:
+     *   fb/os_sensor/extrinsics.fbs :: Extrinsics :: ref_id
      */
     uint32_t ref_meta_id_;
 
     /**
      * The internal name for the extrinsics array.
      *
-     * Flat Buffer Reference: fb/os_sensor/extrinsics.fbs::Extrinsics::name
+     * Flat Buffer Reference: fb/os_sensor/extrinsics.fbs :: Extrinsics :: name
      */
     std::string name_;
 };
 
-/** @defgroup OSFTraitsExtrinsics */
+/** @defgroup OSFTraitsExtrinsics OSF Templated traits struct. */
 
 /**
  * Templated struct for returning the OSF type string.

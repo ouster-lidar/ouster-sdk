@@ -36,8 +36,8 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
     explicit LidarSensor(const sensor_info& si);
 
     /**
-     * @param[in] si ///< Initialize the LidarSensor with a json string
-     *               ///< representation of the sensor_info object.
+     * @param[in] sensor_metadata Initialize the LidarSensor with a json string
+     *                            representation of the sensor_info object.
      */
     explicit LidarSensor(const std::string& sensor_metadata);
 
@@ -105,7 +105,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
     const std::string metadata_;
 };
 
-/** @defgroup OSFTraitsLidarSensor */
+/** @defgroup OSFTraitsLidarSensor Templated struct for traits */
 
 /**
  * Templated struct for returning the OSF type string.

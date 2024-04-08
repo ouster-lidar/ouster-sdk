@@ -191,7 +191,9 @@ def do_doxygen_generate_xml(app):
     dictionary = {
         'project': app.config.project,
         'version': app.config.release,
-        'output_dir': doxygen_output_dir
+        'output_dir': doxygen_output_dir,
+        'warn_log_file': os.path.join(
+            doxygen_output_dir, "warning_log.log")
     }
 
     with open(os.path.join(app.confdir, 'Doxyfile'), 'r') as template_file:

@@ -89,7 +89,7 @@ static constexpr uint32_t FLATBUFFERS_PREFIX_LENGTH = 4;
 /**
  * To String Functionality For HEADER_STATUS
  *
- * @param[in] chunks_layout The data to get the string representation format
+ * @param[in] status The data to get the string representation format
  * @return The string representation
  */
 std::string to_string(const HEADER_STATUS status);
@@ -136,7 +136,7 @@ uint32_t get_block_size(const uint8_t* buf);
  * @param[in] buf Structured as size prefixed Flatbuffer buffer, i.e. first
  *                4 bytes is the size of the buffer (excluding 4 bytes of the
  *                size), and the 4 bytes that follows right after the
- *                4 + <prefixed_size> isthe CRC32 bytes.
+ *                4 + [prefixed_size] is the CRC32 bytes.
  * @param[in] max_size Total number of bytes that can be accessed in the buffer,
  *                     as a safety precaution if buffer is not well formed, or
  *                     if first prefixed size bytes are broken.
@@ -146,7 +146,7 @@ bool check_prefixed_size_block_crc(
     const uint8_t* buf,
     const uint32_t max_size = std::numeric_limits<uint32_t>::max());
 
-/** @defgroup OsfBatchingFunctions */
+/** @defgroup OsfBatchingFunctions Osf Batching Functions. */
 
 /**
  * Makes the closure to batch lidar_packets and emit LidarScan object.

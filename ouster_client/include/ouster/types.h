@@ -652,7 +652,7 @@ std::string to_string(OperatingMode mode);
 /**
  * Get operating mode from string.
  *
- * @param s String to get the operating mode from.
+ * @param[in] s String to get the operating mode from.
  *
  * @return operating mode corresponding to the string, or 0 on error.
  */
@@ -791,7 +791,7 @@ std::string to_string(ReturnOrder return_order);
  * Get string representation of a Full Scale Range.
  *
  * @param[in] full_scale_range The shot limiting status to get the string
- * representation of.
+ *                             representation of.
  *
  * @return string representation of the full scale range.
  */
@@ -801,7 +801,7 @@ std::string to_string(FullScaleRange full_scale_range);
  * Get string representation of a Shot Limiting Status.
  *
  * @param[in] shot_limiting_status The shot limiting status to get the string
- * representation of.
+ *                                 representation of.
  *
  * @return string representation of the shot limiting status.
  */
@@ -811,21 +811,11 @@ std::string to_string(ShotLimitingStatus shot_limiting_status);
  * Get string representation of Thermal Shutdown Status.
  *
  * @param[in] thermal_shutdown_status The thermal shutdown status to get the
- * string representation of.
+ *                                    string representation of.
  *
  * @return string representation of thermal shutdown status.
  */
 std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
-
-/**
- * Get string representation of Thermal Shutdown Status.
- *
- * @param[in] thermal_shutdown_status The thermal shutdown status to get the
- * string representation of.
- *
- * @return string representation of thermal shutdown status.
- */
-std::string to_string(FullScaleRange thermal_shutdown_status);
 
 /**
  * Determine validity of provided signal multiplier value
@@ -844,7 +834,8 @@ void check_signal_multiplier(const double signal_multiplier);
  *
  * @param[in] metadata a text blob returned by get_metadata from client.h.
  * @param[in] skip_beam_validation whether to skip validation on metdata - not
- * for use on recorded data or metadata from sensors
+ *                                 for use on recorded data or metadata
+ *                                 from sensors
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
@@ -858,7 +849,8 @@ sensor_info parse_metadata(const std::string& metadata,
  *
  * @param[in] json_file path to a json file containing sensor metadata.
  * @param[in] skip_beam_validation whether to skip validation on metadata - not
- * for use on recorded data or metadata from sensors
+ *                                 for use on recorded data or metadata
+ *                                 from sensors
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
@@ -916,7 +908,7 @@ std::string convert_to_legacy(const std::string& metadata);
  * Get a string representation of sensor calibration. Only set fields will be
  * represented.
  *
- * @param[in] calibraiton a struct of calibration.
+ * @param[in] cal a struct of calibration.
  *
  * @return string representation of sensor calibration.
  */
@@ -1366,7 +1358,7 @@ class packet_format {
     int field_bitness(ChanField f) const;
 };
 
-/** @defgroup OusterClientTypeGetFormat */
+/** @defgroup OusterClientTypeGetFormat Get Packet Format functions */
 
 /**
  * Get a packet parser for a particular data format.

@@ -609,7 +609,7 @@ class BufferedUDPSource : protected Producer, protected Subscriber {
      * CLIENT_OVERFLOW flag will be set on the next returned status.
      *
      * @param[in] lidarp lidar packet to read into
-     * @param[in] imu imu packet to read into
+     * @param[in] imup imu packet to read into
      * @param[in] timeout_sec maximum time to wait for data.
      * @return client status, see sensor::poll_client().
      */

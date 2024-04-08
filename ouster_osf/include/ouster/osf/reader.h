@@ -35,13 +35,13 @@ enum class ChunkValidity {
  * for forward iteration.
  *
  * This struct is partially mapped to the Flat Buffer data.
- * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset
+ * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset
  */
 struct ChunkState {
     /**
      * The current chunk's offset from the begining of the chunks section.
      *
-     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset :: offset
      */
     uint64_t offset;
 
@@ -52,21 +52,21 @@ struct ChunkState {
      * This is partially synthesized from the Flat Buffers.
      * This will link up with the next chunks offset.
      * Value is set in ChunksPile::link_stream_chunks
-     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset :: offset
      */
     uint64_t next_offset;
 
     /**
      * The first timestamp in the chunk in ordinality.
      *
-     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::start_ts
+     * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset :: start_ts
      */
     ts_t start_ts;
 
     /**
      * The last timestamp in the chunk in ordinality.
      *
-     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::end_ts
+     * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset :: end_ts
      */
     ts_t end_ts;
 
@@ -88,7 +88,7 @@ struct ChunkInfoNode {
     /**
      * The chunk offset from the begining of the chunks section.
      *
-     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset :: offset
      */
     uint64_t offset;
 
@@ -99,7 +99,7 @@ struct ChunkInfoNode {
      * This is partially synthesized from the Flat Buffers.
      * This will link up with the next chunks offset.
      * Value is set in ChunksPile::link_stream_chunks
-     * Flat Buffer Reference: fb/metadata.fbs::ChunkOffset::offset
+     * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset :: offset
      */
     uint64_t next_offset;
 
@@ -107,7 +107,7 @@ struct ChunkInfoNode {
      * The stream this is associated with.
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::ChunkInfo::stream_id
+     *   fb/streaming/streaming_info.fbs :: ChunkInfo :: stream_id
      */
     uint32_t stream_id;
 
@@ -115,7 +115,7 @@ struct ChunkInfoNode {
      * Total number of messages in a `stream_id` in the whole OSF file
      *
      * Flat Buffer Reference:
-     *   fb/streaming/streaming_info.fbs::ChunkInfo::message_count
+     *   fb/streaming/streaming_info.fbs :: ChunkInfo :: message_count
      */
     uint32_t message_count;
 
@@ -126,7 +126,7 @@ struct ChunkInfoNode {
      * This is partially synthesized from the Flat Buffers.
      * Value is set in ChunksPile::link_stream_chunks
      * Synthesized from Flat Buffer Reference:
-     *   fb/metadata.fbs::ChunkOffset::message_count
+     *   fb/metadata.fbs :: ChunkOffset :: message_count
      */
     uint32_t message_start_idx;
 };
@@ -281,7 +281,7 @@ std::string to_string(const ChunkState& chunk_state);
 /**
  * To String Functionality For ChunkInfoNode
  *
- * @param[in] chunk_state The data to get the string representation format
+ * @param[in] chunk_info The data to get the string representation format
  * @return The string representation
  */
 std::string to_string(const ChunkInfoNode& chunk_info);
@@ -351,6 +351,7 @@ struct ChunksIter {
     /**
      * Equality operator to compare two ChunksIter objects.
      *
+     * @param[in] other The other object to compare.
      * @return Whether the two ChunksIter objects are the same.
      */
     bool operator==(const ChunksIter& other) const;
@@ -359,7 +360,7 @@ struct ChunksIter {
      * Equality operator to compare two ChunksIter objects.
      *
      * @relates operator==(const ChunksIter& other)
-     *
+     * @param[in] other The other object to compare.
      * @return Whether the two ChunksIter objects are not the same.
      */
     bool operator!=(const ChunksIter& other) const;
@@ -488,7 +489,7 @@ class Reader {
     /**
      * Creates reader from %OSF file name.
      *
-     * @param[in] osf_file The OSF file path to read from.
+     * @param[in] file The OSF file path to read from.
      */
     Reader(const std::string& file);
 
@@ -728,7 +729,7 @@ class MessageRef {
      * Checks whether the message belongs to the specified Stream type.
      *
      * @tparam Stream The cpp data type to check against.
-     * @return If the current MessageRef is of type <Stream>.
+     * @return If the current MessageRef is of type [Stream].
      */
     template <typename Stream>
     bool is() const {
@@ -772,7 +773,7 @@ class MessageRef {
     /**
      * Check if two MessageRefs are equal.
      *
-     * @param[in] The other MessageRef to check against.
+     * @param[in] other The other MessageRef to check against.
      * @return If the two MessageRefs are equal.
      */
     bool operator==(const MessageRef& other) const;
@@ -780,7 +781,7 @@ class MessageRef {
     /**
      * Check if two MessageRefs are not equal.
      *
-     * @param[in] The other MessageRef to check against.
+     * @param[in] other The other MessageRef to check against.
      * @return If the two MessageRefs are not equal.
      */
     bool operator!=(const MessageRef& other) const;
@@ -824,7 +825,7 @@ class ChunkRef {
     /**
      * Check if two ChunkRefs are equal.
      *
-     * @param[in] The other ChunkRef to check against.
+     * @param[in] other The other ChunkRef to check against.
      * @return If the two ChunkRef are equal.
      */
     bool operator==(const ChunkRef& other) const;
@@ -832,7 +833,7 @@ class ChunkRef {
     /**
      * Check if two ChunkRefs are not equal.
      *
-     * @param[in] The other ChunkRef to check against.
+     * @param[in] other The other ChunkRef to check against.
      * @return If the two ChunkRef are not equal.
      */
     bool operator!=(const ChunkRef& other) const;
@@ -1044,7 +1045,7 @@ struct MessagesChunkIter {
     /**
      * Check if two MessagesChunkIter are equal.
      *
-     * @param[in] The other MessagesChunkIter to check against.
+     * @param[in] other The other MessagesChunkIter to check against.
      * @return If the two MessagesChunkIter are equal.
      */
     bool operator==(const MessagesChunkIter& other) const;
@@ -1052,7 +1053,7 @@ struct MessagesChunkIter {
     /**
      * Check if two MessagesChunkIter are not equal.
      *
-     * @param[in] The other MessagesChunkIter to check against.
+     * @param[in] other The other MessagesChunkIter to check against.
      * @return If the two MessagesChunkIter are not equal.
      */
     bool operator!=(const MessagesChunkIter& other) const;
@@ -1070,8 +1071,8 @@ struct MessagesChunkIter {
      * off of a ChunkRef and message index.
      *
      * @param[in] chunk_ref The ChunkRef to use when initializing.
-     * @param[in] msg_index The message index in the ChunkRef
-     *                      to use when initializing.
+     * @param[in] msg_idx The message index in the ChunkRef
+     *                    to use when initializing.
      */
     MessagesChunkIter(const ChunkRef chunk_ref, const size_t msg_idx);
 
@@ -1238,7 +1239,7 @@ struct MessagesStreamingIter {
     /**
      * Check if two MessagesStreamingIter are equal.
      *
-     * @param[in] The other MessagesStreamingIter to check against.
+     * @param[in] other The other MessagesStreamingIter to check against.
      * @return If the two MessagesStreamingIter are equal.
      */
     bool operator==(const MessagesStreamingIter& other) const;
@@ -1246,7 +1247,7 @@ struct MessagesStreamingIter {
     /**
      * Check if two MessagesStreamingIter are not equal.
      *
-     * @param[in] The other MessagesStreamingIter to check against.
+     * @param[in] other The other MessagesStreamingIter to check against.
      * @return If the two MessagesStreamingIter are not equal.
      */
     bool operator!=(const MessagesStreamingIter& other) const;

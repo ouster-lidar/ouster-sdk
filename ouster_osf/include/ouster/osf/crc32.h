@@ -20,7 +20,7 @@ namespace osf {
  */
 const uint32_t CRC_BYTES_SIZE = 4;
 
-/** @defgroup OsfCRCFunctions */
+/** @defgroup OsfCRCFunctions Osf CRC Functions. */
 
 /**
  * Caclulate CRC value for the buffer of given size. (ZLIB version)

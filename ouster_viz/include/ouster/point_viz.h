@@ -699,8 +699,8 @@ class Cloud {
     /**
      * Set the key alpha values, leaving the color the same.
      *
-     * @param[in] key pointer to array of at least as many elements as there are
-     *        points, normalized between 0 and 1
+     * @param[in] key_alpha pointer to array of at least as many elements as
+     *                      there are points, normalized between 0 and 1
      */
     void set_key_alpha(const float* key_alpha);
 
@@ -715,7 +715,7 @@ class Cloud {
     /**
      * Set the key values in RGBA format, used for coloring.
      *
-     * @param[in] key_rgb pointer to array of at least 4x as many elements as
+     * @param[in] key_rgba pointer to array of at least 4x as many elements as
      * there are points, normalized between 0 and 1
      */
     void set_key_rgba(const float* key_rgba);
@@ -844,7 +844,7 @@ class Image {
      *
      * @param[in] width width of the image data in pixels
      * @param[in] height height of the image data in pixels
-     * @param[in] image_data pointer to an array of width * height elements
+     * @param[in] image_data_rgb pointer to an array of width * height elements
      *        interpreted as a row-major RGB image
      */
     void set_image_rgb(size_t width, size_t height,
@@ -855,7 +855,7 @@ class Image {
      *
      * @param[in] width width of the image data in pixels
      * @param[in] height height of the image data in pixels
-     * @param[in] image_data pointer to an array of width * height elements
+     * @param[in] image_data_rgba pointer to an array of width * height elements
      *        interpreted as a row-major RGBA image
      */
     void set_image_rgba(size_t width, size_t height,
@@ -960,7 +960,7 @@ class Cuboid {
     /**
      * Set the color of the cuboid.
      *
-     * @param rgba @todo document me
+     * @param[in] rgba @todo document me
      */
     void set_rgba(const vec4f& rgba);
 

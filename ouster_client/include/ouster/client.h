@@ -245,6 +245,8 @@ std::string get_metadata(client& cli,
  * @param[in] hostname sensor hostname.
  * @param[out] config sensor config to populate.
  * @param[in] active whether to pull active or passive configs.
+ * @param[in] timeout_sec set the timeout for the request,
+ *                        this argument is optional.
  *
  * @return true if sensor config successfully populated.
  */

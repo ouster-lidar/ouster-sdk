@@ -21,8 +21,8 @@ namespace osf {
 /**
  * Outputs OSF v2 metadata + header info in JSON format.
  *
- * @param file OSF file (only v2 supported)
- * @param full flag print full information (i.e. chunks_offset and decoded
+ * @param[in] file OSF file (only v2 supported)
+ * @param[in] full flag print full information (i.e. chunks_offset and decoded
  *             metas)
  * @return JSON formatted string of the OSF metadata + header
  */
@@ -32,9 +32,9 @@ std::string dump_metadata(const std::string& file, bool full = true);
  * Reads OSF file and prints (STDOUT) messages types, timestamps and
  * overall statistics per message type.
  *
- * @param file OSF file
- * @param with_decoding decode known messages (used to time a
- *                      reading + decoding together)
+ * @param[in] file OSF file
+ * @param[in] with_decoding decode known messages (used to time a
+ *                          reading + decoding together)
  */
 void parse_and_print(const std::string& file, bool with_decoding = false);
 
