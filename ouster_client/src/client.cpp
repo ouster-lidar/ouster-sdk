@@ -426,8 +426,7 @@ bool init_logger(const std::string& log_level, const std::string& log_file_path,
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port) {
     logger().info(
-        "initializing sensor client: {} expecting lidar port/imu port: {}/{} "
-        "(0 means a random port will be chosen)",
+        "initializing sensor client: {} expecting lidar port/imu port: {}/{}",
         hostname, lidar_port, imu_port);
 
     auto cli = std::make_shared<client>();
@@ -449,6 +448,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     int timeout_sec, bool persist_config) {
     auto cli = init_client(hostname, lidar_port, imu_port);
     if (!cli) return std::shared_ptr<client>();
+    logger().info("(0 means a random port will be chosen)");
 
     // update requested ports to actual bound ports
     lidar_port = get_sock_port(cli->lidar_fd);
