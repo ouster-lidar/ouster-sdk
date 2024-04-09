@@ -296,7 +296,6 @@ class SourceMultiCommand(click.MultiCommand):
               help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.option('-t', '--timeout', default=1.0, help="Seconds to wait for data")
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
-@click.option('-b', '--buf-size', default=1280, help="Max packets to buffer")
 @click.option('-e', '--extrinsics', type=float, required=False, nargs=16,
               help="Lidar sensor extrinsics to use in viz (instead possible"
                    " extrinsics stored in OSF). If more than one sensor is"
@@ -309,7 +308,7 @@ class SourceMultiCommand(click.MultiCommand):
               " superseeded by the --extrinscs parameter if both supplied")
 def source(source, meta: str, lidar_port: int, imu_port: int, extrinsics: Optional[List[float]],
            extrinsics_file: Optional[str], do_not_reinitialize: bool, no_auto_udp_dest: bool,
-           soft_id_check: bool, timeout: int, filter: bool, buf_size: int):
+           soft_id_check: bool, timeout: int, filter: bool):
     """Run a command with the specified source (SENSOR, PCAP, or OSF) as SOURCE.
     For example, a sensor source: ouster-cli source os1-992xxx.local viz
     """
@@ -322,7 +321,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                      source: str, meta: str, lidar_port: int, imu_port: int,
                      extrinsics: Optional[List[float]], extrinsics_file: Optional[str],
                      do_not_reinitialize: bool, no_auto_udp_dest: bool, soft_id_check: bool,
-                     timeout: int, filter: bool, buf_size: int) -> None:
+                     timeout: int, filter: bool) -> None:
     """Process all commands in a SourceMultiCommand, using each command's callback"""
 
     callbacks = list(callbacks)
@@ -381,8 +380,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                                       do_not_reinitialize=do_not_reinitialize,
                                       no_auto_udp_dest=no_auto_udp_dest,
                                       soft_id_check=soft_id_check,
-                                      timeout=timeout, complete=filter,
-                                      buf_size=buf_size)
+                                      timeout=timeout, complete=filter)
 
         if ctx.scan_source.is_indexed and len(ctx.scan_source) == 0:
             print("WARNING: Source contains no scans.")
