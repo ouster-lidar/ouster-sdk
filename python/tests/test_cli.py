@@ -296,16 +296,15 @@ def test_source_pcap_slice_help_2(test_pcap_file, runner):
     should display help"""
     result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice', 'outputfile.pcap', '--help'])
     assert result.exit_code == 2
-    assert "Error: Invalid value for 'INDICES': slice indices must be of the form start:[stop][:step]" in result.output
+    assert "Error: Invalid value for 'INDICES'" in result.output
 
 
-def test_source_pcap_slice(test_pcap_file, runner):
-    """Slicing a pcap should succeed with exit code 0."""
+def source_pcap_slice_impl(test_pcap_file, runner, command, packets):
     try:
         with tempfile.NamedTemporaryFile(delete=False) as f:
             pass
         result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice',
-                                          '0:1', 'save', '-p', f.name, ".pcap"])
+                                          command, 'save', '-p', f.name, ".pcap"])
         # FIXME! Written file paths should be logged in output.
         # assert f'Writing: {f.name}' in result.output
         assert result.exit_code == 0
@@ -314,12 +313,25 @@ def test_source_pcap_slice(test_pcap_file, runner):
         pcap_filename = pcaps_generated[0]
         result2 = runner.invoke(core.cli, ['source', pcap_filename, 'info'])
         assert result2.exit_code == 0
-        assert "Packets read:  64" in result2.output
+        print(result2.output)
+        assert "Packets read:  " + packets in result2.output
     finally:
         json_filename = pcap_filename[:-4] + 'json'
         os.unlink(f'{f.name}')
         os.unlink(pcap_filename)
         os.unlink(json_filename)
+
+
+def test_source_pcap_slice(test_pcap_file, runner):
+    """Slicing a pcap should succeed with exit code 0."""
+    source_pcap_slice_impl(test_pcap_file, runner, "0:1:1", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "0:1:2", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "0:1:3", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "0:2", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "0:", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "2:", "0")
+    source_pcap_slice_impl(test_pcap_file, runner, "1::", "0")
+    source_pcap_slice_impl(test_pcap_file, runner, "1::1", "0")
 
 
 def test_source_pcap_save_no_filename(test_pcap_file, runner, tmp_path):

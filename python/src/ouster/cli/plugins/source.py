@@ -111,13 +111,12 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
 
 def extract_slice_indices(click_ctx: Optional[click.core.Context],
                           param: Optional[click.core.Argument], value: str):
-    """Validate and extract slice indices of the form start:[stop][:step]."""
-    index_matches = re.findall("^\[?(-?[0-9]+):(-?[0-9]*):?(-?[0-9]*)\]?$", value)  # noqa: W605
+    """Validate and extract slice indices of the form [start]:[stop][:step]."""
+    index_matches = re.findall("^(-?\d*):(-?\d*):?(-?\d*)$", value)  # noqa: W605
 
-    # Check that indices can be parsed
     if not index_matches or len(index_matches[0]) != 3:
         raise click.exceptions.BadParameter(
-            "slice indices must be of the form start:[stop][:step]")
+            "slice indices must be of the form [start]:[stop][:step]")
     parsed_indices = [int(i) if i != "" else None for i in index_matches[0]]
     start, stop, step = parsed_indices[0], parsed_indices[1], parsed_indices[2]
     # Check that indices are non-negative
@@ -142,7 +141,7 @@ def extract_slice_indices(click_ctx: Optional[click.core.Context],
 @source_multicommand(type=SourceCommandType.PROCESSOR)
 def source_slice(ctx: SourceCommandContext,
                  indices: Tuple[Optional[int]]) -> SourceCommandCallback:
-    """Slice LidarScans streamed from SOURCE."""
+    """Slice LidarScans streamed from SOURCE. Use the form [start]:[stop][:step]."""
     start, stop, step = indices
     ctx.scan_iter = islice(ctx.scan_iter, start, stop, step)
 
