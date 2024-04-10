@@ -184,20 +184,6 @@ def test_scan_writeable() -> None:
                                           [0, 0, 1, 0], [0, 0, 0, 1]]))
 
 
-def test_scan_from_native() -> None:
-    ls = client.LidarScan(1024, 32)
-    ls2 = client.LidarScan.from_native(ls)
-
-    assert ls is ls2
-
-
-def test_scan_to_native() -> None:
-    ls = client.LidarScan(1024, 32)
-    ls2 = ls.to_native()
-
-    assert ls is ls2
-
-
 def test_scan_field_ref() -> None:
     """Test that field references keep scans alive."""
 

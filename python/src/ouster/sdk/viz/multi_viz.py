@@ -421,7 +421,7 @@ class MultiLidarScanViz:
             ])
 
             sensors_str = "  ".join([
-                f"{num}{'  ' if not enabled else '-' if scan is None else '*' }"
+                f"{num}{'  ' if not enabled else '-' if scan is None else '*'}"
                 for num, (enabled, scan) in enumerate(
                     zip(self._sensor_enabled, self._scan), start=1)
             ])

@@ -987,13 +987,6 @@ class LidarScan:
     def fields(self) -> Iterator[ChanField]:
         ...
 
-    def to_native(self) -> LidarScan:
-        ...
-
-    @classmethod
-    def from_native(cls, scan: LidarScan) -> LidarScan:
-        ...
-
 
 def destagger_int8(field: ndarray, shifts: List[int],
                    inverse: bool) -> ndarray:

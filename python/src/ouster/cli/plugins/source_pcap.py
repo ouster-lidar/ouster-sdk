@@ -87,7 +87,7 @@ def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) 
     max_datetime = datetime.fromtimestamp(all_infos.timestamp_max)
     duration = max_datetime - min_datetime
 
-    click.echo(f"File size:     {pcap_size/(2**20):.2f}M")
+    click.echo(f"File size:     {pcap_size / (2**20):.2f}M")
     click.echo(f"Packets read:  {all_infos.total_packets}")
     click.echo(f"Encapsulation: {encap}")
     click.echo(f"Capture start: {min_datetime}")

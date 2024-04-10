@@ -153,7 +153,7 @@ link-local IPv6 addresses, which are necessary to retrieve the sensor configurat
             return f"{error_prefix} - the installed version of zeroconf ({zeroconf_version}) \
 may not be able to provide scoped link-local IPv6 addresses, \
 which are necessary to retrieve the sensor configuration.\n" \
-            + "Please refer to this GitHub pull request for specifics: \
+                + "Please refer to this GitHub pull request for specifics: \
 https://github.com/python-zeroconf/python-zeroconf/pull/1322"
         else:
             return f"{error_prefix} - {e}"

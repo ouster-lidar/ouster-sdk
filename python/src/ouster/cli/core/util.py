@@ -239,7 +239,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     click.echo("Gathering system info...")
     sys_info = get_system_info()
     click.echo(
-        f"  cpu: {sys_info.get('cpuinfo',{}).get('brand_raw', 'UNKNOWN')}")
+        f"  cpu: {sys_info.get('cpuinfo', {}).get('brand_raw', 'UNKNOWN')}")
     click.echo(f"  platform: {sys_info['platform']['platform']}")
     click.echo(f"  python: {sys_info['platform']['python_version']}")
     click.echo(f"  ouster-sdk: {sys_info['packages']['ouster-sdk']}")

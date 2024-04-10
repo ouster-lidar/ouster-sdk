@@ -1346,11 +1346,7 @@ PYBIND11_MODULE(_client, m) {
                     << ">";
                  return ss.str();
              })
-        .def("__str__", [](const LidarScan& self) { return to_string(self); })
-        // for backwards compatibility: previously converted between Python
-        // / native representations, now a noop
-        .def("to_native", [](py::object& self) { return self; })
-        .def_static("from_native", [](py::object& scan) { return scan; });
+        .def("__str__", [](const LidarScan& self) { return to_string(self); });
 
     // Destagger overloads for most numpy scalar types
     m.def("destagger_int8", &ouster::destagger<int8_t>);
