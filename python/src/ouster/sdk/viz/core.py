@@ -327,7 +327,7 @@ class LidarScanViz:
             '?': "Print keys to standard out",
             "= / -": "Dolly in and out",
             "' / \"": "Increase/decrease spacing in range markers",
-            "CTRL+'": "Cycle through thickness of range markers",
+            "CTRL+'": "Cycle through thickness of range markers or hide",
             'SHIFT': "Camera Translation with mouse drag",
             'ESC': "Exit the application",
         }
@@ -406,8 +406,9 @@ class LidarScanViz:
     def cicle_ring_line_width(self) -> None:
         """Change rings line width."""
         with self._lock:
-            self._ring_line_width = max(1, (self._ring_line_width + 1) % 10)
+            self._ring_line_width = max(0, (self._ring_line_width + 1) % 10)
             self._viz.target_display.set_ring_line_width(self._ring_line_width)
+            self._viz.target_display.enable_rings(self._ring_line_width != 0)
 
     def toggle_osd(self, state: Optional[bool] = None) -> None:
         """Show or hide the on-screen display."""
