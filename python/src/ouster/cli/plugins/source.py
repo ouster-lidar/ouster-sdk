@@ -22,16 +22,6 @@ from .source_util import (CoupledTee,
                           source_multicommand,
                           _join_with_conjunction)
 
-# TODO: generalize the current solution for any like-plugins that want
-# to alter or extend the default command set
-_has_mapping = False
-try:
-    from ouster.cli.plugins.cli_source_mapping import (SourceMappingSaveCommand,    # type: ignore # noqa: F401
-                                                       source_slam)
-    _has_mapping = True
-except ImportError:
-    pass
-
 
 _source_arg_name: str = 'source'
 
@@ -183,12 +173,6 @@ class SourceMultiCommand(click.MultiCommand):
                                                                         allow_extra_args=True)),
             }
         }
-
-        if _has_mapping:
-            # extend current set of verbs
-            self.commands['ANY']['slam'] = source_slam
-            self.commands[OusterIoType.OSF]['save'] = SourceMappingSaveCommand(
-                'save', context_settings=dict(ignore_unknown_options=True, allow_extra_args=True))
 
     def get_supported_source_types(self):
         return [iotype for iotype in self.commands.keys() if isinstance(iotype, OusterIoType)]

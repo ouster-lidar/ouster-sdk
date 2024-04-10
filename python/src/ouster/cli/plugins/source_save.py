@@ -12,8 +12,7 @@ from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
                                ScanSource, destagger, SensorInfo,
                                LidarPacket, ImuPacket, ScanSourceAdapter)
 from ouster.sdk import osf
-from ouster.sdk.io_type import (extension_from_io_type,
-                                io_type_from_extension,
+from ouster.sdk.io_type import (io_type_from_extension,
                                 OusterIoType)
 from ouster.sdk.pcap import BagRecordingPacketSource, RecordingPacketSource, PcapScanSource
 from ouster.sdk.sensor import SensorScanSource
@@ -61,7 +60,7 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
     filename = filename[0:-5]  # remove extension
 
     if os.path.isfile(f'{filename}.json') and not overwrite:
-        print(_file_exists_error(f'{filename}.json'))
+        click.echo(_file_exists_error(f'{filename}.json'))
         exit(1)
 
     # Save metadata as json
@@ -97,7 +96,7 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
         click.echo("Warning: Saving pcap without -r/--raw will not save LEGACY IMU packets.")
 
         if os.path.isfile(f'{filename}.pcap') and not overwrite:
-            print(_file_exists_error(f'{filename}.pcap'))
+            click.echo(_file_exists_error(f'{filename}.pcap'))
             exit(1)
 
         # Initialize pcap writer
@@ -148,7 +147,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     click.echo(f"Saving OSF file at {filename}")
 
     if os.path.isfile(filename) and not overwrite:
-        print(_file_exists_error(filename))
+        click.echo(_file_exists_error(filename))
         exit(1)
 
     # Initialize osf writer
@@ -188,9 +187,9 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         except (KeyboardInterrupt):
             pass
         if dropped_scans > 0:
-            print(f"WARNING: Dropped {dropped_scans} scans because missing packet timestamps")
+            click.echo(f"WARNING: Dropped {dropped_scans} scans because missing packet timestamps")
         if not wrote_scans:
-            print("WARNING: No scans saved.")
+            click.echo("WARNING: No scans saved.")
     ctx.scan_iter = save_iter()
 
 
@@ -481,36 +480,30 @@ class SourceSaveCommand(click.Command):
     """Generalizes ouster-cli source <> save <outputfile>
     """
 
-    # Map from output type to a conversion function
-    conversions = {
+    # Map from output type to a save implementation function
+    implementations = {
         OusterIoType.OSF: source_save_osf,
         OusterIoType.PCAP: source_save_pcap,
         OusterIoType.CSV: source_save_csv,
         OusterIoType.BAG: source_save_bag,
     }
 
-    help_str = "Save to an "
-    for idx, iotype in enumerate(conversions.keys()):
-        if idx == len(conversions) - 1:
-            help_str += f"or {iotype.name.upper()} with the given filename."
-        else:
-            help_str += f"{iotype.name.upper()}, "
-    help_str = help_str + " If only an extension is provided, the file is named automatically."
-
     def __init__(self, *args, **kwargs):
         kwargs['add_help_option'] = True
-        kwargs['help'] = self.help_str
         super().__init__(*args, **kwargs)
+        self.update_help()
+        self.update_params()
 
-        # Build list of supported formats
-        self._supported_formats = []
-        for iotype in self.conversions.keys():
-            self._supported_formats.append(iotype.name.upper())
-        click.argument("filename", required=True)
+    def update_help(self):
+        help_str = "Save to an "
+        help_str += _join_with_conjunction([k.name.upper() for k in self.implementations.keys()])
+        help_str += " with the given filename. If only an extension is provided, the file is named automatically."
+        self.help = help_str
 
-        # Add click options/parameters from conversion commands
+    def update_params(self):
+        # Add click options/parameters from save implementation commands
         param_mapping = {}
-        for (iotype, cmd) in self.conversions.items():
+        for (iotype, cmd) in self.implementations.items():
             for p in cmd.params:
                 if p.name in param_mapping.keys():
                     param_mapping[p.name][1].append(iotype)
@@ -518,24 +511,25 @@ class SourceSaveCommand(click.Command):
                     param_mapping[p.name] = (p, [iotype])
 
         # Prefix options/parameters with name of the output iotype
+        self.params = []
         for (_, (param, iotypes)) in param_mapping.items():
-            if len(iotypes) < len(self.conversions):
-                help_prefix = ""
-                for idx, iotype in enumerate(iotypes):
-                    help_prefix += iotype.name.upper()
-                    if idx != (len(iotypes) - 1):
-                        help_prefix += "|"
+            if len(iotypes) < len(self.implementations):
+                help_prefix = "|".join([k.name.upper() for k in iotypes])
                 # Click calls this init function multiple times on --help.
                 # Check that the help string has not already been prepended with param.help
                 if help_prefix not in param.help:
                     param.help = f"[{help_prefix}]: {param.help}"
             self.params.append(param)
 
-    def get_output_type_file_extensions_str(self):
-        exts = sorted(
-            [extension_from_io_type(source_type) for source_type in self.conversions.keys()]
-        )
-        return _join_with_conjunction(exts)
+    def get_help(self, *args, **kwargs):
+        # Update help text to capture changes from lazily loaded save implementations
+        self.update_help()
+        return super().get_help(*args, **kwargs)
+
+    def get_params(self, *args, **kwargs):
+        # Update params to capture changes from lazily loaded save implementations
+        self.update_params()
+        return super().get_params(*args, **kwargs)
 
     def invoke(self, ctx, *args):
         output_name = ctx.params.get('filename')
@@ -546,21 +540,23 @@ class SourceSaveCommand(click.Command):
             output_format = split[0].replace(".", "")
             ctx.params["filename"] = ""
         elif split[1] == "":
-            print("Error: Must provide a filename with an extension.")
+            click.echo("Error: Must provide a filename with an extension.")
             exit(2)
         else:
             output_format = split[1].replace(".", "")
 
         # Ensure the file extension is present and a valid one
-        if output_format.upper() not in self._supported_formats:
+        supported_formats = [iotype.name.upper() for iotype in self.implementations.keys()]
+        if output_format.upper() not in supported_formats:
             string = f"Error: Invalid file extension. '.{output_format.lower()}' is not one of "
-            string = string + _join_with_conjunction(["'." + x.lower() + "'" for x in self._supported_formats])
+            string += _join_with_conjunction([f".{x.lower()}" for x in supported_formats])
 
-            print(string + ".")
+            click.echo(string + ".")
             exit(2)
 
+        ctx.params["format"] = output_format
         output_type = io_type_from_extension(f" .{output_format}")
-        convert_command = self.conversions[output_type]
+        convert_command = self.implementations[output_type]
         if CliArgs().has_any_of(ctx.help_option_names):
             click.echo(convert_command.get_help(ctx))
         else:
