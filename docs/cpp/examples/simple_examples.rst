@@ -56,8 +56,8 @@ persistence which can be set as above. The automatic udp destination flag cannot
 Working with LidarScans
 -----------------------
 
-The :cpp:class:`ouster::LidarScan` is explained in depth conceptually in the :doc:`LidarScan reference
-</reference/lidar-scan>`_. Here we cover some specifics that will be useful for C++ developers.
+The :cpp:class:`ouster::LidarScan` is explained in depth conceptually in the :ref:`LidarScan reference
+<lidar-scan>`. Here we cover some specifics that will be useful for C++ developers.
 
 
 LidarScan constructors
