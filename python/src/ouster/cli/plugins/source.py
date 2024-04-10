@@ -102,7 +102,7 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
 def extract_slice_indices(click_ctx: Optional[click.core.Context],
                           param: Optional[click.core.Argument], value: str):
     """Validate and extract slice indices of the form [start]:[stop][:step]."""
-    index_matches = re.findall("^(-?\d*):(-?\d*):?(-?\d*)$", value)  # noqa: W605
+    index_matches = re.findall(r"^(-?\d*):(-?\d*):?(-?\d*)$", value)  # noqa: W605
 
     if not index_matches or len(index_matches[0]) != 3:
         raise click.exceptions.BadParameter(
