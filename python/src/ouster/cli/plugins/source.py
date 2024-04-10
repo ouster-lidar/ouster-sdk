@@ -363,7 +363,11 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                                       do_not_reinitialize=do_not_reinitialize,
                                       no_auto_udp_dest=no_auto_udp_dest,
                                       soft_id_check=soft_id_check,
-                                      timeout=timeout, complete=filter)
+                                      timeout=timeout, complete=filter,
+                                      buf_size=512)
+        # [kk] NOTE: buf_size is in terms of lidar_packets. In 4096x5 mode
+        # with 16 columns per packet, 512 packets are needed to fully
+        # buffer two frames
 
         if ctx.scan_source.is_indexed and len(ctx.scan_source) == 0:
             print("WARNING: Source contains no scans.")

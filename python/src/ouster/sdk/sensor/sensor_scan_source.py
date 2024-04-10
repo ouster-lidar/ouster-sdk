@@ -21,6 +21,7 @@ class SensorScanSource(ScansMulti):
         soft_id_check: bool = False,
         do_not_reinitialize: bool = False,
         no_auto_udp_dest: bool = False,
+        buf_size: int = 128,
         timeout: float = 1.0,
         extrinsics: Optional[List[float]] = None,
         **kwargs
@@ -54,6 +55,7 @@ class SensorScanSource(ScansMulti):
         self._source = client.Sensor(hostnames[0],
                                      lidar_port,
                                      imu_port,
+                                     buf_size=buf_size,
                                      timeout=timeout_,
                                      soft_id_check=soft_id_check)
 
