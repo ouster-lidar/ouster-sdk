@@ -8,6 +8,7 @@ import numpy as np
 from typing import (Tuple, List, Iterator, Union)
 from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
 from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
+                               first_valid_column_ts,
                                UDPProfileLidar, LidarScan, ChanField, XYZLut,
                                ScanSource, destagger, SensorInfo,
                                LidarPacket, ImuPacket, ScanSourceAdapter)
@@ -132,9 +133,11 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
+@click.option("--ts", default='packet', help="Timestamp to use for indexing.", type=click.Choice(['packet', 'lidar']))
 @click.pass_context
 @source_multicommand(type=SourceCommandType.UNTYPED)
-def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str, overwrite: bool, **kwargs) -> None:
+def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
+                    overwrite: bool, ts: str, **kwargs) -> None:
     """Save source as an OSF"""
     scans = ctx.scan_iter
     info = ctx.scan_source.metadata  # type: ignore
@@ -162,14 +165,15 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     # TODO: extrinsics still need to be plugged in here -- Tim T.
     wrote_scans = False
     dropped_scans = 0
+    ts_method = first_valid_packet_ts if ts == "packet" else first_valid_column_ts
 
     def write_osf(scan: LidarScan):
         nonlocal wrote_scans
         # Set OSF timestamp to the timestamp of the first valid column
-        ts = first_valid_packet_ts(scan)
-        if ts:
+        scan_ts = ts_method(scan)
+        if scan_ts:
             wrote_scans = True
-            osf_stream.save(ts, scan)
+            osf_stream.save(scan_ts, scan)
         else:
             nonlocal dropped_scans
             dropped_scans = dropped_scans + 1
@@ -187,7 +191,8 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         except (KeyboardInterrupt):
             pass
         if dropped_scans > 0:
-            click.echo(f"WARNING: Dropped {dropped_scans} scans because missing packet timestamps")
+            click.echo(f"WARNING: Dropped {dropped_scans} scans because missing packet timestamps. "
+                       "Try with `--ts lidar` instead.")
         if not wrote_scans:
             click.echo("WARNING: No scans saved.")
     ctx.scan_iter = save_iter()
@@ -515,10 +520,11 @@ class SourceSaveCommand(click.Command):
         for (_, (param, iotypes)) in param_mapping.items():
             if len(iotypes) < len(self.implementations):
                 help_prefix = "|".join([k.name.upper() for k in iotypes])
+                help_prefix = f"[{help_prefix}]:"
                 # Click calls this init function multiple times on --help.
                 # Check that the help string has not already been prepended with param.help
                 if help_prefix not in param.help:
-                    param.help = f"[{help_prefix}]: {param.help}"
+                    param.help = f"{help_prefix} {param.help}"
             self.params.append(param)
 
     def get_help(self, *args, **kwargs):
