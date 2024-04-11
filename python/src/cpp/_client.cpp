@@ -1232,6 +1232,48 @@ PYBIND11_MODULE(_client, m) {
          )",
             py::arg("w"), py::arg("h"), py::arg("field_types"),
             py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
+        .def(
+            "__init__",
+            [](LidarScan& self, const LidarScan& source,
+               const std::map<sensor::ChanField, py::object>& field_types) {
+                LidarScanFieldTypes ft{};
+                for (const auto& f : field_types) {
+                    auto dtype = py::dtype::from_args(f.second);
+                    ft.push_back(
+                        std::make_pair(f.first, field_type_of_dtype(dtype)));
+                }
+                new (&self) LidarScan(source, ft);
+            },
+            R"(
+        Initialize a lidar scan from another with only the indicated fields.
+        Casts, zero pads or removes fields from the original scan if necessary.
+
+        Args:
+            source: LidarScan to copy data from
+            fields_dict: dict of fields to have in the new scan where keys are ChanFields
+                         and values are type, e.g., {client.ChanField.SIGNAL: np.uint32}
+
+        Returns:
+            New LidarScan with selected data copied over or zero padded
+
+         )",
+            py::arg("source"), py::arg("field_types"))
+        .def(
+            "__init__",
+            [](LidarScan& self, const LidarScan& source) {
+                new (&self) LidarScan(source);
+            },
+            R"(
+        Initialize a lidar scan with a copy of the data from another.
+
+        Args:
+            source: LidarScan to copy
+
+        Returns:
+            New LidarScan with data copied over from provided scan.
+
+         )",
+            py::arg("source"))
         .def_readonly("w", &LidarScan::w,
                       "Width or horizontal resolution of the scan.")
         .def_readonly("h", &LidarScan::h,

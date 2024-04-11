@@ -313,6 +313,22 @@ struct copy_and_cast {
 };
 
 /**
+ * Zeros fields in LidarScans
+ */
+struct zero_field {
+    /**
+     * Zeros the field dest.
+     *
+     * @tparam T The type of data inside of the eigen array.
+     * @param[in,out] field_dest The field to zero.
+     */
+    template <typename T>
+    void operator()(Eigen::Ref<img_t<T>> field_dest) {
+        field_dest.setZero();
+    }
+};
+
+/**
  * Checks whether RAW_HEADERS field is present and can be used to store headers.
  *
  * @param[in] pf packet format

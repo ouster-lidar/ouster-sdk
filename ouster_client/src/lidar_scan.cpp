@@ -172,6 +172,39 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
     }
 }
 
+LidarScan::LidarScan(const LidarScan& ls_src,
+                     const LidarScanFieldTypes& field_types)
+    : timestamp_(ls_src.timestamp_),
+      packet_timestamp_(ls_src.packet_timestamp_),
+      measurement_id_(ls_src.measurement_id_),
+      status_(ls_src.status_),
+      pose_(ls_src.pose_),
+      field_types_(field_types),
+      w(ls_src.w),
+      h(ls_src.h),
+      frame_status(ls_src.frame_id),
+      frame_id(ls_src.frame_id) {
+    // Initialize fields
+    for (const auto& ft : field_types_) {
+        if (fields_.count(ft.first) > 0)
+            throw std::invalid_argument("Duplicated fields found");
+        fields_[ft.first] = impl::FieldSlot{ft.second, static_cast<size_t>(w),
+                                            static_cast<size_t>(h)};
+    }
+
+    // Copy fields
+    for (const auto& ft : field_types) {
+        if (ls_src.field_type(ft.first)) {
+            ouster::impl::visit_field(*this, ft.first,
+                                      ouster::impl::copy_and_cast(), ls_src,
+                                      ft.first);
+        } else {
+            ouster::impl::visit_field(*this, ft.first,
+                                      ouster::impl::zero_field());
+        }
+    }
+}
+
 LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile,
                      size_t columns_per_packet)
     : LidarScan{w, h, impl::lookup_scan_fields(profile), columns_per_packet} {}

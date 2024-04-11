@@ -492,6 +492,97 @@ def test_scan_eq_with_custom_fields() -> None:
     assert ls2 == ls0
 
 
+def test_scan_copy_extension() -> None:
+    """ Verify we can clone a scan and null pad missing desired fields """
+    ls0 = client.LidarScan(32, 512, {
+        client.ChanField.CUSTOM4: np.uint8
+    })
+
+    ls0.field(client.ChanField.CUSTOM4)[:] = 123
+
+    ls1 = client.LidarScan(ls0, {
+        client.ChanField.CUSTOM0: np.uint32,
+        client.ChanField.CUSTOM4: np.uint8
+    })
+
+    assert len(list(ls1.fields)) == 2
+    assert np.count_nonzero(ls1.field(client.ChanField.CUSTOM0)[0, 0]) == 0
+    assert np.count_nonzero(
+        ls1.field(client.ChanField.CUSTOM4) == 123) == ls1.h * ls1.w
+
+
+def test_scan_copy_retraction() -> None:
+    """ Verify we can clone a scan and remove undesired fields """
+    ls0 = client.LidarScan(32, 512, {
+        client.ChanField.CUSTOM0: np.uint32,
+        client.ChanField.CUSTOM4: np.uint8
+    })
+
+    ls0.field(client.ChanField.CUSTOM0)[:] = 100
+    ls0.field(client.ChanField.CUSTOM4)[:] = 123
+
+    ls1 = client.LidarScan(ls0, {
+        client.ChanField.CUSTOM0: np.uint32,
+    })
+
+    assert ls0.h == ls1.h
+    assert ls0.w == ls1.w
+
+    assert len(list(ls1.fields)) == 1
+    assert np.count_nonzero(
+        ls1.field(client.ChanField.CUSTOM0) == 100) == ls1.h * ls1.w
+    with pytest.raises(ValueError):
+        ls1.field(client.ChanField.CUSTOM4)[0, 0] == 100
+
+
+def test_scan_copy_cast() -> None:
+    """ Verify we can clone a scan and cast between field types """
+    ls0 = client.LidarScan(32, 512, {
+        client.ChanField.CUSTOM0: np.uint32,
+        client.ChanField.CUSTOM4: np.uint8
+    })
+
+    ls0.field(client.ChanField.CUSTOM0)[:] = 2 ** 16 - 1
+    ls0.field(client.ChanField.CUSTOM4)[:] = 255
+
+    ls1 = client.LidarScan(ls0, {
+        client.ChanField.CUSTOM0: np.uint8,
+        client.ChanField.CUSTOM4: np.uint16
+    })
+
+    assert ls0.h == ls1.h
+    assert ls0.w == ls1.w
+
+    assert len(list(ls1.fields)) == 2
+    assert ls1.field(client.ChanField.CUSTOM0).dtype == np.uint8
+    assert ls1.field(client.ChanField.CUSTOM4).dtype == np.uint16
+    assert np.count_nonzero(
+        ls1.field(client.ChanField.CUSTOM0) == 255) == ls1.h * ls1.w
+    assert np.count_nonzero(
+        ls1.field(client.ChanField.CUSTOM4) == 255) == ls1.h * ls1.w
+
+
+def test_scan_copy() -> None:
+    ls0 = client.LidarScan(32, 512, {
+        client.ChanField.CUSTOM0: np.uint32,
+        client.ChanField.CUSTOM4: np.uint8
+    })
+
+    ls0.field(client.ChanField.CUSTOM0)[:] = 100
+    ls0.field(client.ChanField.CUSTOM4)[:] = 123
+
+    ls1 = client.LidarScan(ls0)
+
+    assert ls0.h == ls1.h
+    assert ls0.w == ls1.w
+
+    assert len(list(ls1.fields)) == 2
+    assert np.count_nonzero(
+        ls1.field(client.ChanField.CUSTOM0) == 100) == ls1.h * ls1.w
+    assert np.count_nonzero(
+        ls1.field(client.ChanField.CUSTOM4) == 123) == ls1.h * ls1.w
+
+
 def test_error_eq() -> None:
     assert client.PacketSizeError("abc") == client.PacketSizeError("abc")
 

@@ -31,22 +31,6 @@ LidarScan slice_with_cast(const LidarScan& ls_src,
                           const LidarScanFieldTypes& field_types);
 
 /**
- * Zeros field
- */
-struct zero_field {
-    /**
-     * Zeros the field dest.
-     *
-     * @tparam T The type of data inside of the eigen array.
-     * @param[in,out] field_dest The field to zero.
-     */
-    template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field_dest) {
-        field_dest.setZero();
-    }
-};
-
-/**
  * Metadata entry for LidarScanStream to store reference to a sensor and
  * field_types
  *

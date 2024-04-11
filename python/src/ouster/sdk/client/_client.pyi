@@ -942,6 +942,14 @@ class LidarScan:
     def __init__(self, h: int, w: int, fields: Dict[ChanField, FieldDType], columns_per_packet: int) -> None:
         ...
 
+    @overload
+    def __init__(self, scan: LidarScan) -> None:
+        ...
+
+    @overload
+    def __init__(self, scan: LidarScan, fields: Dict[ChanField, FieldDType]) -> None:
+        ...
+
     @property
     def w(self) -> int:
         ...

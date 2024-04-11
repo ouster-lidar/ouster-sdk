@@ -152,17 +152,30 @@ class LidarScan {
      */
     LidarScan(const LidarScan& other);
 
+    /**
+     * Initialize a lidar scan from another with only the indicated fields.
+     * Casts, zero pads or removes fields from the original scan if necessary.
+     *
+     * @param[in] other The other lidar scan to initialize from.
+     * @param[in] fields Fields to have in new lidar scan.
+     */
+    LidarScan(const LidarScan& other, const LidarScanFieldTypes& fields);
+
     /** @copydoc LidarScan(const LidarScan& other) */
     LidarScan(LidarScan&& other);
+
+    /**
+     * Copy.
+     *
+     * @param[in] other The lidar scan to copy from.
+     */
+    LidarScan& operator=(const LidarScan& other);
 
     /**
      * Copy via Move semantic.
      *
      * @param[in] other The lidar scan to copy from.
      */
-    LidarScan& operator=(const LidarScan& other);
-
-    /** @copydoc operator=(const LidarScan& other) */
     LidarScan& operator=(LidarScan&& other);
 
     /**
