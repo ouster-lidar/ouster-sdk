@@ -9,6 +9,13 @@ from ouster.sdk.pcap import PcapScanSource
 from ouster.sdk.sensor import SensorScanSource
 
 
+io_type_handlers = {
+    OusterIoType.SENSOR: SensorScanSource,
+    OusterIoType.PCAP: PcapScanSource,
+    OusterIoType.OSF: OsfScanSource
+}
+
+
 def open_source(source_url: str, sensor_idx: int = -1, *args,
                 extrinsics: Optional[Union[str, np.ndarray, List[np.ndarray]]] = None,
                 **kwargs) -> Union[ScanSource, MultiScanSource]:
@@ -43,13 +50,6 @@ def open_source(source_url: str, sensor_idx: int = -1, *args,
         # TODO: revise once working on multi sensors
         raise NotImplementedError(
             "providing more than a single url is current not supported!")
-
-    # TODO: allow injecting/overriding with additional source type handlers
-    io_type_handlers = {
-        OusterIoType.SENSOR: SensorScanSource,
-        OusterIoType.PCAP: PcapScanSource,
-        OusterIoType.OSF: OsfScanSource
-    }
 
     source_type: OusterIoType
     scan_source: Optional[MultiScanSource] = None
