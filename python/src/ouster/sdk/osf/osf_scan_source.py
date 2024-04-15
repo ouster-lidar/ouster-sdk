@@ -97,6 +97,7 @@ class OsfScanSource(MultiScanSource):
 
         scan_streams = self._reader.meta_store.find(LidarScanStream)
         self._stream_ids = [mid for mid, _ in scan_streams.items()]
+        self._fields = [lss.field_types for _, lss in scan_streams.items()]
         # TODO: the following two properties (_scans_num, _len) are computed on
         # load but should rather be provided directly through OSF API. Obtain
         # these values directly from OSF API once implemented.
@@ -194,7 +195,7 @@ class OsfScanSource(MultiScanSource):
     @property
     def fields(self) -> List[client.FieldTypes]:
         """Field types are present in the LidarScan objects on read from iterator"""
-        return [client.get_field_types(m) for m in self.metadata]
+        return self._fields
 
     @property
     def scans_num(self) -> List[Optional[int]]:

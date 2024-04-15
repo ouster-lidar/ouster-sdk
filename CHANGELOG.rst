@@ -44,6 +44,7 @@ Python SDK
 * [bugfix] Scope MultiLidarViz imports to viz commands
 * [bugfix] Fix potential flickering in Viz
 * [bugfix] LidarScan yielded with improper header/status
+* [bugfix] OSF ScanSource fields property doesn't report the actual fields 
 * Removed ``ouster.sdkx``, the ``open_source`` command is now part of ``ouster.sdk`` module
 
 
