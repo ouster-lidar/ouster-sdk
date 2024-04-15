@@ -13,7 +13,6 @@ class SourceCommandType(IntEnum):
     MULTICOMMAND_UNSUPPORTED = 0
     PROCESSOR = 1
     CONSUMER = 2
-    UNTYPED = 3
 
 
 @dataclass(init=False)

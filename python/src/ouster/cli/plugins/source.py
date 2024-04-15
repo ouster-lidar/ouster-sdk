@@ -330,16 +330,23 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                 raise click.exceptions.UsageError(f"'{command_names[idx]}' does not support multi-command chaining. "
                                                   "Please invoke it without other commands. ")
 
-    # Ensure that the order of commands is PROCESSOR < CONSUMER
-    first_consumer_name, first_consumer_idx = None, None
+    # Ensure that a consumer is always last
+    last_consumer_name, last_consumer_idx = None, None
+    last_processor_name, last_processor_idx = None, None
     for idx, c in enumerate(callbacks):
         if c.type is SourceCommandType.PROCESSOR:
-            if (first_consumer_idx is not None) and (idx >= first_consumer_idx):
-                raise click.exceptions.UsageError(f"'{command_names[idx]}' must be invoked before "
-                                                  f"'{first_consumer_name}'. Please reorder the multi-command chain. ")
-        elif (c.type is SourceCommandType.CONSUMER) and (first_consumer_idx is None):
-            first_consumer_idx = idx
-            first_consumer_name = command_names[idx]
+            last_processor_idx = idx
+            last_processor_name = command_names[idx]
+        elif c.type is SourceCommandType.CONSUMER:
+            last_consumer_idx = idx
+            last_consumer_name = command_names[idx]
+
+    if multicommand:
+        if last_consumer_idx is None:
+            raise click.exceptions.UsageError("Must have a consumer such as 'viz' or 'save'.")
+        if (last_processor_idx is not None) and (last_processor_idx > last_consumer_idx):
+            raise click.exceptions.UsageError(f"'{last_processor_name}' must be invoked before "
+                                              f"'{last_consumer_name}'. Please reorder the multi-command chain. ")
 
     if not multicommand:
         # Execute single non-multicommand command

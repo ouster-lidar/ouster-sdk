@@ -24,7 +24,7 @@ def osf_group(ctx) -> None:
 @click.command
 @click.option('-s', '--short', is_flag=True, help='Print less metadata info')
 @click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR,
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bool) -> None:
     """Print information about an OSF file to stdout.
@@ -63,7 +63,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
               is_flag=True,
               help="Show standard layout with chunks")
 @click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR,
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
               decode: bool, verbose: bool, check_raw_headers: bool,

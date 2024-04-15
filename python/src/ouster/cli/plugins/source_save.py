@@ -45,7 +45,7 @@ _file_exists_error = lambda filename: (f"Error: File '{filename}' already exists
               "This mode does not preserve LidarScan transformations performed by other commands "
               "in a multi-command chain. This mode preserves LEGACY ImuPackets.")
 @click.pass_context
-@source_multicommand(type=SourceCommandType.UNTYPED)
+@source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
                      chunk_size: int, raw: bool, overwrite: bool, **kwargs) -> None:
     """Save source as a PCAP"""
@@ -135,7 +135,7 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option("--ts", default='packet', help="Timestamp to use for indexing.", type=click.Choice(['packet', 'lidar']))
 @click.pass_context
-@source_multicommand(type=SourceCommandType.UNTYPED)
+@source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
                     overwrite: bool, ts: str, **kwargs) -> None:
     """Save source as an OSF"""
@@ -207,7 +207,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 @click.option('-d', '--dir', default="", help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.pass_context
-@source_multicommand(type=SourceCommandType.UNTYPED)
+@source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_csv(ctx: SourceCommandContext, prefix: str,
                     dir: str, filename: str, overwrite: bool, **kwargs) -> None:
     """Save source as one CSV file per LidarScan."""
@@ -389,7 +389,7 @@ def create_directories_if_missing(filename: str):
               "This mode does not preserve LidarScan transformations performed by other commands "
               "in a multi-command chain. This mode preserves LEGACY ImuPackets.")
 @click.pass_context
-@source_multicommand(type=SourceCommandType.UNTYPED)
+@source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
                     raw: bool, overwrite: bool, **kwargs) -> None:
     """Save source as a packet rosbag."""

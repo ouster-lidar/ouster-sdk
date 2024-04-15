@@ -59,7 +59,7 @@ def print_stream_table(all_infos):
 @click.command
 @click.option('-n', type=int, default=-1, help="Read only INTEGER packets.")
 @click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR,
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
 def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) -> None:
     """Print information about a pcap file to stdout."""
