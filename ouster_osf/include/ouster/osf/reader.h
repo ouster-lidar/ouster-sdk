@@ -569,7 +569,7 @@ class Reader {
      *
      * @return The metadata id.
      */
-    std::string id() const;
+    std::string metadata_id() const;
 
     /**
      * Return the lowest timestamp in the ChunksIter.

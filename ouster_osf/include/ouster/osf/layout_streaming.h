@@ -49,12 +49,12 @@ class StreamingLayoutCW : public ChunksWriter {
                       uint32_t chunk_size = STREAMING_DEFAULT_CHUNK_SIZE);
 
     /**
-     * @copydoc ChunksWriter::saveMessage
+     * @copydoc ChunksWriter::save_message
      *
      * @throws std::logic_error Exception on inconsistent timestamps.
      */
-    void saveMessage(const uint32_t stream_id, const ts_t ts,
-                     const std::vector<uint8_t>& buf) override;
+    void save_message(const uint32_t stream_id, const ts_t ts,
+                      const std::vector<uint8_t>& buf) override;
 
     /**
      * @copydoc ChunksWriter::finish

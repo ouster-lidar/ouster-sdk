@@ -22,29 +22,31 @@ All examples below assume that a user has an ``osf_file`` variable with a path t
     
     osf_file = 'path/to/osf_file.osf'
 
-You can use ``osf from_pcap/from_bag`` commands to generate a test OSF file to test any of the examples.
+You can use ``ouster-cli source .... save`` commands to generate a test OSF file to test any of the examples.
 
-Every example is wrapped into a CLI subgroup ``examples`` and available for quick tests under
-``ouster-cli osf examples``:
+Every example is wrapped into a CLI and available for quick tests by running 
+``python3 -m ouster.sdk.examples.osf <OSF_FILE.osf> <EXAMPLE_NAME>``:
 
 .. code:: bash
 
-    $ ouster-cli osf examples --help
+    $ python3 -m ouster.sdk.examples.osf --help
 
-    Commands:
-    check_layout       Checks chunks layout of an OSF file.
-    get_lidar_streams  Reads info about available Lidar Scan streams in an...
-    get_sensors_info   Read Lidar Sensors info from an OSF file.
-    read_all_messages  Read all message from an OSF file.
-    read_scans         Read Lidar Scans from an OSF file.
-    slice_scans        Copy scans from input OSF file with reduction.
-    split_scans        Splits scans from input OSF into N=2 files.
+    usage: osf.py [-h] [--scan-num SCAN_NUM] OSF EXAMPLE
 
-To test ``get_lidar_streams`` example you can run:
+    Ouster Python SDK OSF examples. The EXAMPLE must be one of:
+      read-scans
+      read-messages
+      split-scans
+      slice-scans
+      get-lidar-streams
+      get-sensors-info
+      check-layout
+
+For example to execute the ``get-lidar-streams`` example you can run:
 
 .. code:: bash
     
-    $ ouster-cli osf examples get_lidar_streams <OSF_FILE.osf>
+    $ python3 -m ouster.sdk.examples.osf <OSF_FILE.osf> get-lidar-streams
 
 
 Read Lidar Scans with ``osf.Scans``
@@ -53,7 +55,7 @@ Read Lidar Scans with ``osf.Scans``
 ``osf.Scans()`` interface is the simplest way to get all ``LidarScan`` objects for the first sensor
 that was found in an OSF (majority of our test data uses only a single sensor recordings):
 
-.. literalinclude:: /../../ouster-sensor-tools/src/ouster/cli/plugins/osf_examples.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-read-scans]
     :end-before: [doc-etag-osf-read-scans]
     :dedent:
@@ -79,7 +81,7 @@ Sensors information is stored as ``osf.LidarSensor`` metadata entry and can be r
 ``reader.meta_store.find()`` function that returns all metadata entry of the specified type (in our
 case it's of type ``osf.LidarSensor``):
 
-.. literalinclude:: /../../ouster-sensor-tools/src/ouster/cli/plugins/osf_examples.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-get-sensors-info]
     :end-before: [doc-etag-osf-get-sensors-info]
     :dedent:
@@ -91,7 +93,7 @@ Read All Messages with ``osf.Reader``
 With ``osf.Reader``, you can use ``reader.messages()`` iterator to read messages in ``timestamp``
 order.
 
-.. literalinclude:: /../../ouster-sensor-tools/src/ouster/cli/plugins/osf_examples.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-read-all-messages]
     :end-before: [doc-etag-osf-read-all-messages]
     :dedent:
@@ -103,7 +105,7 @@ Checking Chunks Layout via ``osf.StreamingInfo``
 Building on top of an example from above we can check for stream
 statistics information from ``osf.StreamingInfo``:
 
-.. literalinclude:: /../../ouster-sensor-tools/src/ouster/cli/plugins/osf_examples.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-check-layout]
     :end-before: [doc-etag-osf-check-layout]
     :dedent:
@@ -120,29 +122,27 @@ Every message in an OSF belongs to a stream of a particular type (i.e. ``osf.Lid
 of how we can check parameters of an available LidarScan streams (``osf.LidarScanStream``) by
 checking the metadata entries:
 
-.. literalinclude:: /../../ouster-sensor-tools/src/ouster/cli/plugins/osf_examples.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-get-lidar-streams]
     :end-before: [doc-etag-osf-get-lidar-streams]
     :dedent:
 
 
 Write Lidar Scan with sliced fields with ``osf.Writer``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We will look into ``osf.Writer`` example on the task of re-coding the available OSF file into Lidar
+We will look into the ``osf.Writer`` example on the task of re-coding the available OSF file into Lidar
 Scans with a reduced fields. By reduce fields we mean here that if LidarScan has ``7`` channel
 fields, we can keep only ``3`` and save the disk space and bandwidth during replay.
 
-A general scheme of writing any messages to OSF is:
+A general scheme of writing scans to the OSF with Writer:
 
-0. Create ``osf.Writer``
-1. Create a corresponding stream object (``osf.LidarScanStream``) with the required additional
-   metadata entries (like ``osf.LidarSensor`` in our example above)
-2. Use the stream's ``save`` function ``stream.save(ts, obj)`` to encode the message ``obj`` into the
-   underlying message buffer and send it to the ``osf.Writer`` which then uses the specified chunks
-   layout scheme pushes bytes to the disk.
+0. Create ``osf.Writer`` with the output file name, lidar metadata(s) (``ouster.sdk.client.SensorInfo``) and optionally the desired output scan fields.
+1. Use the writers's ``save`` function ``writer.save(index, scan)`` to encode the LidarScan ``scan`` into the
+   underlying message buffer for lidar ``index`` and finally push it to disk. If you have multiple lidars you can
+   save the scans simultaneously by providing them in an array to ``writer.save``.
 
-.. literalinclude:: /../../ouster-sensor-tools/src/ouster/cli/plugins/osf_examples.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-slice-scans]
     :end-before: [doc-etag-osf-slice-scans]
     :dedent:
@@ -154,7 +154,7 @@ Split Lidar Scan stream into multiple files
 Another example of using ``osf.Writer`` that we will see is the splitting of Lidar Scan stream from
 one OSF file into 2 files.
 
-.. literalinclude:: /../../ouster-sensor-tools/src/ouster/cli/plugins/osf_examples.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-split-scans]
     :end-before: [doc-etag-osf-split-scans]
     :dedent:

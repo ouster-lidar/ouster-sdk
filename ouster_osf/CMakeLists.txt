@@ -92,7 +92,6 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/basics.cpp
                               src/crc32.cpp
                               src/metadata.cpp
-                              src/writer.cpp
                               src/meta_lidar_sensor.cpp
                               src/meta_extrinsics.cpp
                               src/meta_streaming_info.cpp
@@ -104,7 +103,7 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/json_utils.cpp
                               src/fb_utils.cpp
                               src/pcap_source.cpp
-                              src/writerv2.cpp
+                              src/writer.cpp
 )
 
 CodeCoverageFunctionality(ouster_osf)

@@ -20,7 +20,6 @@
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_scan.h"
 #include "ouster/osf/writer.h"
-#include "ouster/osf/writerv2.h"
 
 namespace py = pybind11;
 
@@ -129,25 +128,13 @@ to work with OSF files.
     )doc",
           py::arg("file_name"), py::arg("new_metadata"));
 
-    m.def("pcap_to_osf", &ouster::osf::pcap_to_osf, R"doc(
-        Convert Pcap file to OSF v2.
-
-        :pcap_filename: Pcap file path to be converted
-        :meta_filename: metadata for recorded sensor data
-        :lidar_port: destination port for lidar_packets
-        :osf_filename: OSF output file
-        :returns: True on success, False on error
-    )doc",
-          py::arg("file"), py::arg("meta"), py::arg("lidar_port"),
-          py::arg("osf_filename"), py::arg("chunk_size") = 0);
-
     // Reader
     py::class_<osf::Reader>(m, "Reader", R"(
         Reader is a main entry point to get any info out of OSF file.
     )")
         .def(py::init<std::string>(), py::arg("file"))
-        .def_property_readonly("id", &osf::Reader::id, R"(
-            Data id
+        .def_property_readonly("metadata_id", &osf::Reader::metadata_id, R"(
+            Data id string
         )")
         .def_property_readonly(
             "start_ts",
@@ -558,43 +545,7 @@ to work with OSF files.
             })
         .def_property_readonly("meta", &osf::LidarScanStream::meta,
                                "`metadata entry` to store `LidarScanStream` "
-                               "metadata in an OSF file")
-        .def(
-            py::init(
-                [](osf::Writer* writer, uint32_t sensor_meta_id,
-                   const std::map<sensor::ChanField, py::object>& field_types) {
-                    LidarScanFieldTypes ft{};
-                    for (const auto& f : field_types) {
-                        auto dtype = py::dtype::from_args(f.second);
-                        ft.push_back(std::make_pair(
-                            f.first, field_type_of_dtype(dtype)));
-                    }
-                    return new osf::LidarScanStream(*writer, sensor_meta_id,
-                                                    ft);
-                }),
-            py::arg("writer"), py::arg("sensor_meta_id"),
-            py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
-            py::keep_alive<1, 2>(),  // ties Writer to the constructed
-                                     // LidarScanStream
-            R"(
-                Creates `LidarScanStream` for a ``writer``
-
-                Args:
-                    writer (Writer): writes stream to the specified ``writer``
-                    sensor_meta_id (int): id of the metadata entry, that points
-                        to ``LidarSensor`` with sensor intrinsics.
-                    field_types (dict): set of fields to use from the
-                        ``LidarScan``, it's used to create horizontal slices of
-                        ``LidarScan`` (i.e. write only RANGE and SIGNAL fields)
-        )")
-        .def(
-            "save",
-            [](osf::LidarScanStream& stream, uint64_t ts, const LidarScan& ls) {
-                stream.save(osf::ts_t{ts}, ls);
-            },
-            py::arg("ts"), py::arg("ls"),
-            "Writes `LidarScan` (``ls``) object to a `stream`. (i.e. saves it "
-            "to an OSF file)");
+                               "metadata in an OSF file");
 
     // StreamStats
     py::class_<osf::StreamStats>(m, "StreamStats", R"(
@@ -691,29 +642,154 @@ to work with OSF files.
         and stream interfaces that encodes messages and passes them to internal
         chunks writer.
     )")
-        .def(py::init<std::string>(), py::arg("file_name"), R"(
-            Creates a `Writer` with default ``STREAMING`` layout chunks writer.
-            
-            Using default ``chunk_size`` of ``2MB``.
-        )")
-        .def(py::init<std::string, std::string, uint32_t>(),
-             py::arg("file_name"), py::arg("metadata_id"),
+        .def(py::init<std::string, uint32_t>(), py::arg("file_name"),
              py::arg("chunk_size") = 0, R"(
                  Creates a `Writer` with specified ``chunk_size``.
 
                  Default ``chunk_size`` is ``2 MB``.
         )")
-        .def_property_readonly("filename", &osf::Writer::filename,
-                               "OSF file name where data is written to")
         .def(
-            "addMetadata",
+            py::init(
+                [](const std::string& filename, const sensor::sensor_info& info,
+                   const std::map<sensor::ChanField, py::object>& field_types,
+                   uint32_t chunk_size) {
+                    LidarScanFieldTypes ft{};
+                    for (const auto& f : field_types) {
+                        auto dtype = py::dtype::from_args(f.second);
+                        ft.push_back(std::make_pair(
+                            f.first, field_type_of_dtype(dtype)));
+                    }
+                    return new osf::Writer(filename, info, ft, chunk_size);
+                }),
+            py::arg("filename"), py::arg("info"),
+            py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
+            py::arg("chunk_size") = 0,
+            R"(
+            Creates a `Writer` with deafault ``STREAMING`` layout chunks writer.
+            
+            Using default ``chunk_size`` of ``2MB``.
+
+            Args:
+                filename (str): The filename to output to.
+                info (sensor_info): The sensor info vector to use for a multi stream OSF
+                    file.
+                chunk_size (int): The chunksize to use for the OSF file, this arg
+                    is optional.
+                field_types (Dict[ChanField, FieldDType]): The fields from scans to
+                    actually save into the OSF. If not provided uses the fields from 
+                    the first saved lidar scan for each stream. This parameter is optional.
+
+        )")
+        .def(py::init(
+                 [](const std::string& filename,
+                    const std::vector<sensor::sensor_info>& info,
+                    const std::map<sensor::ChanField, py::object>& field_types,
+                    uint32_t chunk_size) {
+                     LidarScanFieldTypes ft{};
+                     for (const auto& f : field_types) {
+                         auto dtype = py::dtype::from_args(f.second);
+                         ft.push_back(std::make_pair(
+                             f.first, field_type_of_dtype(dtype)));
+                     }
+                     return new osf::Writer(filename, info, ft, chunk_size);
+                 }),
+             py::arg("filename"), py::arg("info"),
+             py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
+             py::arg("chunk_size") = 0,
+             R"(
+             Creates a `Writer` with specified ``chunk_size``.
+
+             Default ``chunk_size`` is ``2MB``.
+
+             Args:
+                filename (str): The filename to output to.
+                info (List[sensor_info]): The sensor info vector to use for a 
+                    multi stream OSF file.
+                field_types (Dict[ChanField, FieldDType]): The fields from scans to
+                    actually save into the OSF. If not provided uses the fields from 
+                    the first saved lidar scan for each stream. This parameter is optional.
+                chunk_size (int): The chunksize to use for the OSF file, this arg
+                    is optional.
+
+        )")
+        .def(
+            "save",
+            [](osf::Writer& writer, uint32_t stream_index,
+               const LidarScan& scan) { writer.save(stream_index, scan); },
+            py::arg("stream_index"), py::arg("scan"),
+            R"(
+               Save a lidar scan to the OSF file.
+
+               Args:
+                   stream_index (int): The index of the corrosponding 
+                       sensor_info to use.
+                   scan (LidarScan): The scan to save.
+
+            )")
+        .def(
+            "save",
+            [](osf::Writer& writer, uint32_t stream_index,
+               const LidarScan& scan, uint64_t ts) {
+                writer.save(stream_index, scan, ouster::osf::ts_t(ts));
+            },
+            py::arg("stream_index"), py::arg("scan"), py::arg("ts"),
+            R"(
+               Save a lidar scan to the OSF file.
+
+               Args:
+                   stream_index (int): The index of the corresponding 
+                       sensor_info to use.
+                   scan (LidarScan): The scan to save.
+                   ts (int): The timestamp to index the scan with.
+            )")
+        .def(
+            "save",
+            [](osf::Writer& writer, const std::vector<LidarScan>& scans) {
+                writer.save(scans);
+            },
+            py::arg("scan"),
+            R"(
+               Save a set of lidar scans to the OSF file.
+
+               Args:
+                   scans (List[LidarScan]): The scans to save. This will correspond
+                       to the list of sensor_infos.
+
+            )")
+        .def(
+            "set_metadata_id",
+            [](osf::Writer& writer, const std::string& str) {
+                return writer.set_metadata_id(str);
+            },
+            R"(
+                 Set the metadata identifier string.
+            )")
+        .def(
+            "metadata_id",
+            [](osf::Writer& writer) { return writer.metadata_id(); },
+            R"(
+                 Return the metadata identifier string.
+
+                 Returns (str):
+                     The OSF metadata identifier string.
+            )")
+        .def(
+            "filename", [](osf::Writer& writer) { return writer.filename(); },
+            R"(
+                 Return the osf file name.
+
+                 Returns (str):
+                     The OSF filename.
+            )")
+        .def(
+            "add_metadata",
             [](osf::Writer& writer, py::object m) {
                 uint32_t res = 0;
                 if (py::hasattr(m, "type_id")) {
                     std::string type_id =
                         py::cast<std::string>(py::getattr(m, "type_id"));
                     osf::MetadataEntry* me = m.cast<osf::MetadataEntry*>();
-                    res = writer.addMetadata(*me);
+                    res = writer.add_metadata(*me);
                 }
                 return res;
             },
@@ -723,10 +799,10 @@ to work with OSF files.
                 *metadata entries* in the file.
         )")
         .def(
-            "saveMessage",
+            "save_message",
             [](osf::Writer& writer, uint32_t stream_id, uint64_t ts,
                py::array_t<uint8_t>& buf) {
-                writer.saveMessage(stream_id, osf::ts_t{ts}, getvector(buf));
+                writer.save_message(stream_id, osf::ts_t{ts}, getvector(buf));
             },
             py::arg("stream_id"), py::arg("ts"), py::arg("buffer"), R"(
                  Low-level save message routine.
@@ -735,10 +811,10 @@ to work with OSF files.
                  without any further checks.
             )")
         .def(
-            "saveMessage",
+            "save_message",
             [](osf::Writer& writer, uint32_t stream_id, uint64_t ts,
                py::buffer& buf) {
-                writer.saveMessage(stream_id, osf::ts_t{ts}, getvector(buf));
+                writer.save_message(stream_id, osf::ts_t{ts}, getvector(buf));
             },
             py::arg("stream_id"), py::arg("ts"), py::arg("buffer"), R"(
                  Low-level save message routine.
@@ -746,8 +822,126 @@ to work with OSF files.
                  Directly saves the message `buffer` with `id` and `ts` (ns)
                  without any further checks.
             )")
+        .def(
+            "add_sensor",
+            [](osf::Writer& writer, const sensor::sensor_info& info,
+               const std::map<sensor::ChanField, py::object>& field_types) {
+                LidarScanFieldTypes ft{};
+                for (const auto& f : field_types) {
+                    auto dtype = py::dtype::from_args(f.second);
+                    ft.push_back(
+                        std::make_pair(f.first, field_type_of_dtype(dtype)));
+                }
+                return writer.add_sensor(info, ft);
+            },
+            py::arg("info"),
+            py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
+            R"(
+               Add a sensor to the OSF file.
+
+               Args:
+                   info (sensor_info): Sensor to add.
+                   field_types (Dict[ChanField, FieldDType]): The fields from scans to
+                       actually save into the OSF. If not provided uses the fields from 
+                       the first saved lidar scan for each stream. This parameter is optional.
+               
+               Returns (int):
+                   The stream index to use to write scans to this sensor.
+
+            )")
         .def("close", &osf::Writer::close,
-             "Finish OSF file and flush everything on disk.");
+             "Finish OSF file and flush everything on disk.")
+        .def(
+            "is_closed", [](osf::Writer& writer) { return writer.is_closed(); },
+            R"(
+                 Return the closed status of the writer.
+
+                 Returns (bool):
+                     The closed status of the writer.
+
+            )")
+        .def(
+            "save",
+            [](osf::Writer& writer, uint32_t stream_index,
+               const LidarScan& scan) { writer.save(stream_index, scan); },
+            py::arg("stream_index"), py::arg("scan"),
+            R"(
+               Save a lidar scan to the OSF file.
+
+               Args:
+                   stream_index (int): The index of the corrosponding 
+                       sensor_info to use.
+                   scan (LidarScan): The scan to save.
+
+            )")
+        .def(
+            "save",
+            [](osf::Writer& writer, const std::vector<LidarScan>& scans) {
+                writer.save(scans);
+            },
+            py::arg("scan"),
+            R"(
+               Save a set of lidar scans to the OSF file.
+
+               Args:
+                   scans (List[LidarScan]): The scans to save. This will correspond
+                       to the list of sensor_infos.
+
+            )")
+        .def(
+            "sensor_info",
+            [](osf::Writer& writer) { return writer.sensor_info(); },
+            R"(
+                 Return the sensor info list.
+
+                 Returns (List[sensor_info]):
+                     The sensor info list.
+
+            )")
+        .def(
+            "sensor_info",
+            [](osf::Writer& writer, uint32_t stream_index) {
+                return writer.sensor_info(stream_index);
+            },
+            py::arg("stream_index"),
+            R"(
+                 Return the sensor info of the specifed stream_index.
+
+                 Args:
+                     stream_index (in): The index of the sensor to return
+                                        info about.
+
+                 Returns (sensor_info):
+                     The correct sensor info
+
+            )")
+        .def(
+            "sensor_info_count",
+            [](osf::Writer& writer) { return writer.sensor_info_count(); },
+            R"(
+                 Return the number of sensor_info objects.
+
+                 Returns (int):
+                     The number of sensor_info objects.
+
+            )")
+        .def(
+            "__enter__", [](osf::Writer* writer) { return writer; },
+            R"(
+                 Allow Writer to work within `with` blocks.
+            )")
+        .def(
+            "__exit__",
+            [](osf::Writer& writer, pybind11::object& /*exc_type*/,
+               pybind11::object& /*exc_value*/,
+               pybind11::object& /*traceback*/) {
+                writer.close();
+
+                return py::none();
+            },
+            R"(
+                 Allow Writer to work within `with` blocks.
+            )");
 
     m.def("slice_and_cast", &ouster::osf::slice_with_cast,
           py::arg("lidar_scan"), py::arg("field_types"),
@@ -806,187 +1000,6 @@ to work with OSF files.
         py::arg("rotating") = false, py::arg("max_size_in_bytes") = 0,
         py::arg("max_files") = 0);
 
-    // WriterV2
-    py::class_<osf::WriterV2>(m, "WriterV2", R"(
-        Higher level Writer API
-    )")
-        .def(
-            py::init(
-                [](const std::string& filename, const sensor::sensor_info& info,
-                   uint32_t chunk_size,
-                   const std::map<sensor::ChanField, py::object>& field_types) {
-                    LidarScanFieldTypes ft{};
-                    for (const auto& f : field_types) {
-                        auto dtype = py::dtype::from_args(f.second);
-                        ft.push_back(std::make_pair(
-                            f.first, field_type_of_dtype(dtype)));
-                    }
-                    return new osf::WriterV2(filename, info, chunk_size, ft);
-                }),
-            py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
-            py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
-            R"(
-            Creates a `WriterV2` with deafault ``STREAMING`` layout chunks writer.
-            
-            Using default ``chunk_size`` of ``2MB``.
-
-            Args:
-                filename (str): The filename to output to.
-                info (sensor_info): The sensor info vector to use for a multi stream OSF
-                    file.
-                chunk_size (int): The chunksize to use for the OSF file, this arg
-                    is optional.
-                field_types (Dict[ChanField, FieldDType]): The fields from scans to
-                    actually save into the OSF. If not provided uses the fields from 
-                    the first saved lidar scan for each stream. This parameter is optional.
-
-        )")
-        .def(
-            py::init(
-                [](const std::string& filename,
-                   const std::vector<sensor::sensor_info>& info,
-                   uint32_t chunk_size,
-                   const std::map<sensor::ChanField, py::object>& field_types) {
-                    LidarScanFieldTypes ft{};
-                    for (const auto& f : field_types) {
-                        auto dtype = py::dtype::from_args(f.second);
-                        ft.push_back(std::make_pair(
-                            f.first, field_type_of_dtype(dtype)));
-                    }
-                    return new osf::WriterV2(filename, info, chunk_size, ft);
-                }),
-            py::arg("filename"), py::arg("info"), py::arg("chunk_size") = 0,
-            py::arg("field_types") = std::map<sensor::ChanField, py::object>{},
-            R"(
-             Creates a `Writer` with specified ``chunk_size``.
-
-             Default ``chunk_size`` is ``2MB``.
-
-             Args:
-                filename (str): The filename to output to.
-                info (List[sensor_info]): The sensor info vector to use for a 
-                    multi stream OSF file.
-                chunk_size (int): The chunksize to use for the OSF file, this arg
-                    is optional.
-                field_types (Dict[ChanField, FieldDType]): The fields from scans to
-                    actually save into the OSF. If not provided uses the fields from 
-                    the first saved lidar scan for each stream. This parameter is optional.
-
-        )")
-        .def(
-            "save",
-            [](osf::WriterV2& writer, uint32_t stream_index,
-               const LidarScan& scan) { writer.save(stream_index, scan); },
-            py::arg("stream_index"), py::arg("scan"),
-            R"(
-               Save a lidar scan to the OSF file.
-
-               Args:
-                   stream_index (int): The index of the corrosponding 
-                       sensor_info to use.
-                   scan (LidarScan): The scan to save.
-
-            )")
-        .def(
-            "save",
-            [](osf::WriterV2& writer, const std::vector<LidarScan>& scans) {
-                writer.save(scans);
-            },
-            py::arg("scan"),
-            R"(
-               Save a set of lidar scans to the OSF file.
-
-               Args:
-                   scans (List[LidarScan]): The scans to save. This will correspond
-                       to the list of sensor_infos.
-
-            )")
-        .def(
-            "get_sensor_info",
-            [](osf::WriterV2& writer) { return writer.get_sensor_info(); },
-            R"(
-                 Return the sensor info list.
-
-                 Returns (List[sensor_info]):
-                     The sensor info list.
-
-            )")
-        .def(
-            "get_sensor_info",
-            [](osf::WriterV2& writer, uint32_t stream_index) {
-                return writer.get_sensor_info(stream_index);
-            },
-            py::arg("stream_index"),
-            R"(
-                 Return the sensor info of the specifed stream_index.
-
-                 Args:
-                     stream_index (in): The index of the sensor to return
-                                        info about.
-
-                 Returns (sensor_info):
-                     The correct sensor info
-
-            )")
-        .def(
-            "sensor_info_count",
-            [](osf::WriterV2& writer) { return writer.sensor_info_count(); },
-            R"(
-                 Return the number of sensor_info objects.
-
-                 Returns (int):
-                     The number of sensor_info objects.
-
-            )")
-        .def(
-            "get_filename",
-            [](osf::WriterV2& writer) { return writer.get_filename(); },
-            R"(
-                 Return the osf file name.
-
-                 Returns (str):
-                     The OSF filename.
-            )")
-        .def(
-            "get_chunk_size",
-            [](osf::WriterV2& writer) { return writer.get_filename(); },
-            R"(
-                 Return the chunk size.
-
-                 Returns (int):
-                     The OSF chunk size.
-            )")
-        .def(
-            "close", [](osf::WriterV2& writer) { return writer.close(); },
-            R"(
-                 Close the writer.
-            )")
-        .def(
-            "is_closed",
-            [](osf::WriterV2& writer) { return writer.is_closed(); },
-            R"(
-                 Return the closed status of the writer.
-
-                 Returns (bool):
-                     The closed status of the writer.
-
-            )")
-        .def(
-            "__enter__", [](osf::WriterV2* writer) { return writer; },
-            R"(
-                 Allow WriterV2 to work within `with` blocks.
-            )")
-        .def(
-            "__exit__",
-            [](osf::WriterV2& writer, pybind11::object& exc_type,
-               pybind11::object& exc_value, pybind11::object& traceback) {
-                writer.close();
-
-                return py::none();
-            },
-            R"(
-                 Allow WriterV2 to work within `with` blocks.
-            )");
     // TODO[pb]: (HACK) This is copied directly from _client.cpp to enable the
     // custom profile addition in the compiled OSF SDK native module code.
     m.def("add_custom_profile", &ouster::sensor::add_custom_profile);

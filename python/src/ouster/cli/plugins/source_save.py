@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from typing import (Tuple, List, Iterator, Union)
 from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
-from ouster.sdk.client import (get_field_types, first_valid_packet_ts,
+from ouster.sdk.client import (first_valid_packet_ts,
                                first_valid_column_ts,
                                UDPProfileLidar, LidarScan, ChanField, XYZLut,
                                ScanSource, destagger, SensorInfo,
@@ -154,13 +154,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         exit(1)
 
     # Initialize osf writer
-    osf_writer = osf.Writer(filename)
-    osf_lidar_meta = osf.LidarSensor(metadata_json=info.original_string())
-    lidar_id = osf_writer.addMetadata(osf_lidar_meta)
-
-    first_scan = next(scans)  # type: ignore
-    field_types = get_field_types(first_scan)  # type: ignore
-    osf_stream = osf.LidarScanStream(osf_writer, lidar_id, field_types)
+    osf_writer = osf.Writer(filename, info)
 
     # TODO: extrinsics still need to be plugged in here -- Tim T.
     wrote_scans = False
@@ -173,12 +167,10 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         scan_ts = ts_method(scan)
         if scan_ts:
             wrote_scans = True
-            osf_stream.save(scan_ts, scan)
+            osf_writer.save(0, scan, scan_ts)
         else:
             nonlocal dropped_scans
             dropped_scans = dropped_scans + 1
-
-    write_osf(first_scan)
 
     def save_iter():
         try:

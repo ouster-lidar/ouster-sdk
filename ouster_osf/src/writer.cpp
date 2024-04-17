@@ -11,18 +11,16 @@
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/layout_streaming.h"
+#include "ouster/osf/stream_lidar_scan.h"
 
 constexpr size_t MAX_CHUNK_SIZE = 500 * 1024 * 1024;
 
 namespace ouster {
 namespace osf {
 
-Writer::Writer(const std::string& filename) : Writer(filename, std::string{}) {}
-
-Writer::Writer(const std::string& filename, const std::string& metadata_id,
-               uint32_t chunk_size)
+Writer::Writer(const std::string& filename, uint32_t chunk_size)
     : file_name_(filename),
-      metadata_id_{metadata_id},
+      metadata_id_{"ouster_sdk"},
       chunks_layout_{ChunksLayout::LAYOUT_STREAMING} {
     // chunks STREAMING_LAYOUT
     chunks_writer_ = std::make_shared<StreamingLayoutCW>(*this, chunk_size);
@@ -42,15 +40,101 @@ Writer::Writer(const std::string& filename, const std::string& metadata_id,
     }
 }
 
-uint32_t Writer::addMetadata(MetadataEntry&& entry) {
-    return addMetadata(entry);
+Writer::Writer(const std::string& filename,
+               const ouster::sensor::sensor_info& info,
+               const LidarScanFieldTypes& field_types, uint32_t chunk_size)
+    : Writer(filename, std::vector<ouster::sensor::sensor_info>{info},
+             field_types, chunk_size) {}
+
+Writer::Writer(const std::string& filename,
+               const std::vector<ouster::sensor::sensor_info>& info,
+               const LidarScanFieldTypes& field_types, uint32_t chunk_size)
+    : Writer(filename, chunk_size) {
+    sensor_info_ = info;
+    for (uint32_t i = 0; i < info.size(); i++) {
+        lidar_meta_id_[i] = add_metadata(ouster::osf::LidarSensor(info[i]));
+        field_types_.push_back(field_types);
+    }
 }
 
-uint32_t Writer::addMetadata(MetadataEntry& entry) {
+const std::vector<ouster::sensor::sensor_info>& Writer::sensor_info() const {
+    return sensor_info_;
+}
+
+const ouster::sensor::sensor_info Writer::sensor_info(int stream_index) const {
+    return sensor_info_[stream_index];
+}
+
+uint32_t Writer::sensor_info_count() const { return sensor_info_.size(); }
+
+uint32_t Writer::add_sensor(const ouster::sensor::sensor_info& info,
+                            const LidarScanFieldTypes& field_types) {
+    lidar_meta_id_[lidar_meta_id_.size()] =
+        add_metadata(ouster::osf::LidarSensor(info));
+    field_types_.push_back(field_types);
+    sensor_info_.push_back(info);
+    return lidar_meta_id_.size() - 1;
+}
+
+void Writer::_save(uint32_t stream_index, const LidarScan& scan,
+                   const ts_t time) {
+    if (stream_index < lidar_meta_id_.size()) {
+        auto item = lidar_streams_.find(stream_index);
+        if (item == lidar_streams_.end()) {
+            const auto& fields = field_types_[stream_index].size()
+                                     ? field_types_[stream_index]
+                                     : get_field_types(scan);
+            lidar_streams_[stream_index] =
+                std::make_unique<ouster::osf::LidarScanStream>(
+                    LidarScanStream::Token(), *this,
+                    lidar_meta_id_[stream_index], fields);
+        }
+        lidar_streams_[stream_index]->save(time, scan);
+    } else {
+        throw std::logic_error("ERROR: Bad Stream ID");
+    }
+}
+
+void Writer::save(uint32_t stream_index, const LidarScan& scan) {
+    if (is_closed()) {
+        throw std::logic_error("ERROR: Writer is closed");
+    }
+    ts_t time = ts_t(scan.get_first_valid_packet_timestamp());
+    _save(stream_index, scan, time);
+}
+
+void Writer::save(uint32_t stream_index, const LidarScan& scan, const ts_t ts) {
+    if (is_closed()) {
+        throw std::logic_error("ERROR: Writer is closed");
+    }
+    _save(stream_index, scan, ts);
+}
+
+void Writer::save(const std::vector<LidarScan>& scans) {
+    if (is_closed()) {
+        throw std::logic_error("ERROR: Writer is closed");
+    }
+    if (scans.size() != lidar_meta_id_.size()) {
+        throw std::logic_error(
+            "ERROR: Scans passed in to writer "
+            "does not match number of sensor infos");
+    } else {
+        for (uint32_t i = 0; i < scans.size(); i++) {
+            ts_t time = ts_t(scans[i].get_first_valid_packet_timestamp());
+            _save(i, scans[i], time);
+        }
+    }
+}
+
+uint32_t Writer::add_metadata(MetadataEntry&& entry) {
+    return add_metadata(entry);
+}
+
+uint32_t Writer::add_metadata(MetadataEntry& entry) {
     return meta_store_.add(entry);
 }
 
-std::shared_ptr<MetadataEntry> Writer::getMetadata(
+std::shared_ptr<MetadataEntry> Writer::get_metadata(
     const uint32_t metadata_id) const {
     return meta_store_.get(metadata_id);
 }
@@ -73,8 +157,8 @@ uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
 
 // > > > ===================== Chunk Emiter operations ======================
 
-void Writer::saveMessage(const uint32_t stream_id, const ts_t ts,
-                         const std::vector<uint8_t>& msg_buf) {
+void Writer::save_message(const uint32_t stream_id, const ts_t ts,
+                          const std::vector<uint8_t>& msg_buf) {
     if (!meta_store_.get(stream_id)) {
         std::stringstream ss;
         ss << "ERROR: Attempt to save the non existent stream: id = "
@@ -85,14 +169,14 @@ void Writer::saveMessage(const uint32_t stream_id, const ts_t ts,
         return;
     }
 
-    chunks_writer_->saveMessage(stream_id, ts, msg_buf);
+    chunks_writer_->save_message(stream_id, ts, msg_buf);
 }
 
 const MetadataStore& Writer::meta_store() const { return meta_store_; }
 
 const std::string& Writer::metadata_id() const { return metadata_id_; }
 
-void Writer::setMetadataId(const std::string& id) { metadata_id_ = id; }
+void Writer::set_metadata_id(const std::string& id) { metadata_id_ = id; }
 
 const std::string& Writer::filename() const { return file_name_; }
 
@@ -181,8 +265,8 @@ Writer::~Writer() { close(); }
 
 // ================================================================
 
-void ChunkBuilder::saveMessage(const uint32_t stream_id, const ts_t ts,
-                               const std::vector<uint8_t>& msg_buf) {
+void ChunkBuilder::save_message(const uint32_t stream_id, const ts_t ts,
+                                const std::vector<uint8_t>& msg_buf) {
     if (finished_) {
         std::cerr
             << "ERROR: ChunkBuilder is finished and can't accept new messages!"

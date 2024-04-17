@@ -15,6 +15,8 @@
 namespace ouster {
 namespace osf {
 
+class LidarScanStream;
+
 /**
  * Chunks writing strategy that decides when and how exactly write chunks
  * to a file. See RFC 0018 for Standard and Streaming Layout description.
@@ -28,8 +30,8 @@ class ChunksWriter {
      * @param[in] ts The timestamp for the messages.
      * @param[in] buf A vector of message buffers to record.
      */
-    virtual void saveMessage(const uint32_t stream_id, const ts_t ts,
-                             const std::vector<uint8_t>& buf) = 0;
+    virtual void save_message(const uint32_t stream_id, const ts_t ts,
+                              const std::vector<uint8_t>& buf) = 0;
 
     /**
      * Finish the process of saving messages and write out the stream stats.
@@ -54,21 +56,46 @@ class ChunksWriter {
  * of metadata entries, streams and corresponding objects.
  */
 class Writer {
+    friend class StreamingLayoutCW;
+
    public:
     /**
      * @throws std::runtime_error Exception on file writing issues.
      *
      * @param[in] file_name The filename of the output OSF file.
-     */
-    explicit Writer(const std::string& file_name);
-
-    /**
-     * @copydoc Writer(const std::string& file_name)
-     * @param[in] metadata_id The flatbuffer metadata id label to use.
      * @param[in] chunk_size The chunk size to use for the OSF file,
      *                       this argument is optional.
      */
-    Writer(const std::string& file_name, const std::string& metadata_id,
+    Writer(const std::string& file_name, uint32_t chunk_size = 0);
+
+    /**
+     * @param[in] filename The filename to output to.
+     * @param[in] info The sensor info to use for a single stream OSF file.
+     * @param[in] chunk_size The chunksize to use for the OSF file, this
+     *                       parameter is optional.
+     * @param[in] field_types The fields from scans to actually save into the
+     *                        OSF. If not provided uses the fields from the
+     *                        first saved lidar scan for each stream. This
+     *                        parameter is optional.
+     */
+    Writer(const std::string& filename, const ouster::sensor::sensor_info& info,
+           const LidarScanFieldTypes& field_types = LidarScanFieldTypes(),
+           uint32_t chunk_size = 0);
+
+    /**
+     * @param[in] filename The filename to output to.
+     * @param[in] info The sensor info vector to use for a multi stream OSF
+     *                 file.
+     * @param[in] chunk_size The chunksize to use for the OSF file, this
+     *                       parameter is optional.
+     * @param[in] field_types The fields from scans to actually save into the
+     *                        OSF. If not provided uses the fields from the
+     *                        first saved lidar scan for each stream. This
+     *                        parameter is optional.
+     */
+    Writer(const std::string& filename,
+           const std::vector<ouster::sensor::sensor_info>& info,
+           const LidarScanFieldTypes& field_types = LidarScanFieldTypes(),
            uint32_t chunk_size = 0);
 
     /**
@@ -80,7 +107,7 @@ class Writer {
      * @param[in] params The parameters to add.
      */
     template <typename MetaType, typename... MetaParams>
-    uint32_t addMetadata(MetaParams&&... params) {
+    uint32_t add_metadata(MetaParams&&... params) {
         MetaType entry(std::forward<MetaParams>(params)...);
         return meta_store_.add(entry);
     }
@@ -90,12 +117,12 @@ class Writer {
      *
      * @param[in] entry The metadata entry to add to the OSF file.
      */
-    uint32_t addMetadata(MetadataEntry&& entry);
+    uint32_t add_metadata(MetadataEntry&& entry);
 
     /**
-     * @copydoc addMetadata(MetadataEntry&& entry)
+     * @copydoc add_metadata(MetadataEntry&& entry)
      */
-    uint32_t addMetadata(MetadataEntry& entry);
+    uint32_t add_metadata(MetadataEntry& entry);
 
     /**
      * @defgroup OSFGetMetadataGroup Get specified metadata.
@@ -108,7 +135,7 @@ class Writer {
     /**
      * @copydoc OSFGetMetadataGroup
      */
-    std::shared_ptr<MetadataEntry> getMetadata(
+    std::shared_ptr<MetadataEntry> get_metadata(
         const uint32_t metadata_id) const;
 
     /**
@@ -117,7 +144,7 @@ class Writer {
      * @tparam MetadataEntryClass The type of metadata to get and return.
      */
     template <class MetadataEntryClass>
-    std::shared_ptr<MetadataEntryClass> getMetadata(
+    std::shared_ptr<MetadataEntryClass> get_metadata(
         const uint32_t metadata_id) const {
         return meta_store_.get<MetadataEntryClass>(metadata_id);
     }
@@ -132,7 +159,7 @@ class Writer {
      * @param[in] params The parameters to use when creating a stream.
      */
     template <typename Stream, typename... StreamParams>
-    Stream createStream(StreamParams&&... params) {
+    Stream create_stream(StreamParams&&... params) {
         return Stream(*this, std::forward<StreamParams>(params)...);
     }
 
@@ -148,8 +175,103 @@ class Writer {
      * @param[in] ts The timestamp to use for the message.
      * @param[in] buf The message to save in the form of a byte vector.
      */
-    void saveMessage(const uint32_t stream_id, const ts_t ts,
-                     const std::vector<uint8_t>& buf);
+    void save_message(const uint32_t stream_id, const ts_t ts,
+                      const std::vector<uint8_t>& buf);
+
+    /**
+     * Adds info about a sensor to the OSF and returns the stream index to
+     * to write scans to it's stream.
+     *
+     * @param[in] info The info of the sensor to add to the file.
+     * @param[in] field_types The fields from scans to actually save into the
+     *                        OSF. If not provided uses the fields from the
+     *                        first saved lidar scan for this sensor. This
+     *                        parameter is optional.
+     *
+     * @return The stream index for the newly added sensor.
+     */
+    uint32_t add_sensor(
+        const ouster::sensor::sensor_info& info,
+        const LidarScanFieldTypes& field_types = LidarScanFieldTypes());
+
+    /**
+     * Save a single scan to the specified stream_index in an OSF file.
+     * The concept of the stream_index is related to the sensor_info vector.
+     * Consider the following:
+     @code{.cpp}
+     sensor_info info1; // The first sensor in this OSF file
+     sensor_info info2; // The second sensor in this OSF file
+     sensor_info info3; // The third sensor in this OSF file
+
+     Writer output = Writer(filename, {info1, info2, info3});
+
+     LidarScan scan = RANDOM_SCAN_HERE;
+
+     // To save the LidarScan of scan to the first sensor, you would do the
+     // following
+     output.save(0, scan);
+
+     // To save the LidarScan of scan to the second sensor, you would do the
+     // following
+     output.save(1, scan);
+
+     // To save the LidarScan of scan to the third sensor, you would do the
+     // following
+     output.save(2, scan);
+     @endcode
+     *
+     * @throws std::logic_error Will throw exception on writer being closed.
+     * @throws std::logic_error ///< Will throw exception on
+     *                          ///< out of bound stream_index.
+     *
+     * @param[in] stream_index The index of the corrosponding sensor_info to
+     *                         use.
+     * @param[in] scan The scan to save.
+     */
+    void save(uint32_t stream_index, const LidarScan& scan);
+
+    /**
+     * Save a single scan to the specified stream_index in an OSF file indexed
+     * with the provided timestamp.
+     *
+     * @throws std::logic_error Will throw exception on writer being closed.
+     * @throws std::logic_error ///< Will throw exception on
+     *                          ///< out of bound stream_index.
+     *
+     * @param[in] stream_index The index of the corrosponding sensor_info to
+     *                         use.
+     * @param[in] scan The scan to save.
+     * @param[in] timestamp Timestamp to index this scan with.
+     */
+    void save(uint32_t stream_index, const LidarScan& scan,
+              const ouster::osf::ts_t timestamp);
+
+    /**
+     * Save multiple scans in an OSF file.
+     * The concept of the stream_index is related to the sensor_info vector.
+     * Consider the following:
+     @code{.cpp}
+     sensor_info info1; // The first sensor in this OSF file
+     sensor_info info2; // The second sensor in this OSF file
+     sensor_info info3; // The third sensor in this OSF file
+
+     Writer output = Writer(filename, {info1, info2, info3});
+
+     LidarScan sensor1_scan = RANDOM_SCAN_HERE;
+     LidarScan sensor2_scan = RANDOM_SCAN_HERE;
+     LidarScan sensor3_scan = RANDOM_SCAN_HERE;
+
+     // To save the scans matched appropriately to their sensors, you would do
+     // the following
+     output.save({sensor1_scan, sensor2_scan, sensor3_scan});
+     @endcode
+     *
+     *
+     * @throws std::logic_error Will throw exception on writer being closed
+     *
+     * @param[in] scans The vector of scans to save.
+     */
+    void save(const std::vector<LidarScan>& scans);
 
     /**
      * Returns the metadata store. This is used for getting the entire
@@ -171,7 +293,7 @@ class Writer {
      *
      * @param[in] id The metadata id label to set.
      */
-    void setMetadataId(const std::string& id);
+    void set_metadata_id(const std::string& id);
 
     /**
      * Return the filename for the OSF file.
@@ -197,35 +319,62 @@ class Writer {
     uint32_t chunk_size() const;
 
     /**
-     * Writes buf to the file with CRC32 appended and return the number of
-     * bytes writen to the file
+     * Return the sensor info vector.
+     * Consider the following:
+     @code{.cpp}
+     sensor_info info1; // The first sensor in this OSF file
+     sensor_info info2; // The second sensor in this OSF file
+     sensor_info info3; // The third sensor in this OSF file
+
+     Writer output = Writer(filename, {info1, info2, info3});
+
+     // The following will be true
+     output.sensor_info() == std::vector<sensor_info>{info1, info2, info3};
+     @endcode
      *
-     * @throws std::logic_error Exception on bad file position.
-     * @throws std::logic_error Exception on a closed writer object.
-     *
-     * @param[in] buf The buffer to append.
-     * @param[in] size The size of the buffer to append.
-     * @return The number of bytes writen to the OSF file.
+     * @return The sensor info vector.
      */
-    uint64_t append(const uint8_t* buf, const uint64_t size);
+    const std::vector<ouster::sensor::sensor_info>& sensor_info() const;
 
     /**
-     * Save a specified chunk to the OSF file.
+     * Get the specified sensor info
+     * Consider the following:
+     @code{.cpp}
+     sensor_info info1; // The first sensor in this OSF file
+     sensor_info info2; // The second sensor in this OSF file
+     sensor_info info3; // The third sensor in this OSF file
+
+     Writer output = Writer(filename, {info1, info2, info3});
+
+     // The following will be true
+     output.sensor_info(0) == info1;
+     output.sensor_info(1) == info2;
+     output.sensor_info(2) == info3;
+     @endcode
      *
-     * @throws std::logic_error Exception on a size mismatch
-     *
-     * @param[in] start_ts The lowest timestamp in the chunk.
-     * @param[in] end_ts The highest timestamp in the chunk.
-     * @param[in] chunk_buf The byte vector representation of the chunk.
-     * @return The result offset in the OSF file.
+     * @param[in] stream_index The sensor info to return.
+     * @return The correct sensor info.
      */
-    uint64_t emit_chunk(const ts_t start_ts, const ts_t end_ts,
-                        const std::vector<uint8_t>& chunk_buf);
+    const ouster::sensor::sensor_info sensor_info(int stream_index) const;
+
+    /**
+     * Get the number of sensor_info objects.
+     *
+     * @return The sensor_info count.
+     */
+    uint32_t sensor_info_count() const;
 
     /**
      * Finish file with a proper metadata object, and header.
      */
     void close();
+
+    /**
+     * Returns if the writer is closed or not.
+     *
+     * @return If the writer is closed or not.
+     */
+    inline bool is_closed() const { return finished_; }
 
     /**
      * @relates close
@@ -262,6 +411,44 @@ class Writer {
      *         the metadata section.
      */
     std::vector<uint8_t> make_metadata() const;
+
+    /**
+     * Internal method used to save a scan to a specified stream_index
+     * specified stream. This method is here so that we can bypass
+     * is_closed checking for speed sake. The calling functions will
+     * do the check for us.
+     *
+     * @param[in] stream_index The stream to save to.
+     * @param[in] scan The scan to save.
+     * @param[in] time Timestamp to use to index scan.
+     */
+    void _save(uint32_t stream_index, const LidarScan& scan, const ts_t time);
+
+    /**
+     * Writes buf to the file with CRC32 appended and return the number of
+     * bytes writen to the file
+     *
+     * @throws std::logic_error Exception on bad file position.
+     * @throws std::logic_error Exception on a closed writer object.
+     *
+     * @param[in] buf The buffer to append.
+     * @param[in] size The size of the buffer to append.
+     * @return The number of bytes writen to the OSF file.
+     */
+    uint64_t append(const uint8_t* buf, const uint64_t size);
+
+    /**
+     * Save a specified chunk to the OSF file.
+     *
+     * @throws std::logic_error Exception on a size mismatch
+     *
+     * @param[in] start_ts The lowest timestamp in the chunk.
+     * @param[in] end_ts The highest timestamp in the chunk.
+     * @param[in] chunk_buf The byte vector representation of the chunk.
+     * @return The result offset in the OSF file.
+     */
+    uint64_t emit_chunk(const ts_t start_ts, const ts_t end_ts,
+                        const std::vector<uint8_t>& chunk_buf);
 
     /**
      * Internal filename of the OSF file.
@@ -329,6 +516,27 @@ class Writer {
      * ChunksWriter is reponsible for chunking strategy.
      */
     std::shared_ptr<ChunksWriter> chunks_writer_{nullptr};
+
+    /**
+     * Internal store of field types to serialize for lidar scans
+     */
+    std::vector<LidarScanFieldTypes> field_types_;
+
+    /**
+     * Internal stream index to metadata map.
+     */
+    std::map<uint32_t, uint32_t> lidar_meta_id_;
+
+    /**
+     * Internal stream index to LidarScanStream map.
+     */
+    std::map<uint32_t, std::unique_ptr<ouster::osf::LidarScanStream>>
+        lidar_streams_;
+
+    /**
+     * The internal sensor_info store ordered by stream_index.
+     */
+    std::vector<ouster::sensor::sensor_info> sensor_info_;
 };
 
 /**
@@ -347,8 +555,8 @@ class ChunkBuilder {
      * @param[in] ts The timestamp to use for the message.
      * @param[in] msg_buf The message to save in the form of a byte vector.
      */
-    void saveMessage(const uint32_t stream_id, const ts_t ts,
-                     const std::vector<uint8_t>& msg_buf);
+    void save_message(const uint32_t stream_id, const ts_t ts,
+                      const std::vector<uint8_t>& msg_buf);
 
     /**
      * Completely wipe all data and start the chunk anew.

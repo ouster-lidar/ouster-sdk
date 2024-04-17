@@ -345,13 +345,15 @@ std::string LidarScanStreamMeta::repr() const {
 
 // ============== LidarScan Stream ops ===========================
 
-LidarScanStream::LidarScanStream(Writer& writer, const uint32_t sensor_meta_id,
+LidarScanStream::LidarScanStream(Token /*key*/, Writer& writer,
+                                 const uint32_t sensor_meta_id,
                                  const LidarScanFieldTypes& field_types)
     : writer_{writer},
       meta_(sensor_meta_id, field_types),
       sensor_meta_id_(sensor_meta_id) {
+    // Note key is ignored and just used to gatekeep.
     // Check sensor and get sensor_info
-    auto sensor_meta_entry = writer.getMetadata<LidarSensor>(sensor_meta_id_);
+    auto sensor_meta_entry = writer.get_metadata<LidarSensor>(sensor_meta_id_);
     if (sensor_meta_entry == nullptr) {
         std::stringstream ss;
         ss << "ERROR: can't find sensor_meta_id = " << sensor_meta_id;
@@ -360,7 +362,7 @@ LidarScanStream::LidarScanStream(Writer& writer, const uint32_t sensor_meta_id,
 
     sensor_info_ = sensor_meta_entry->info();
 
-    stream_meta_id_ = writer_.addMetadata(meta_);
+    stream_meta_id_ = writer_.add_metadata(meta_);
 }
 
 // TODO[pb]: Every save func in Streams is uniform, need to nicely extract
@@ -368,7 +370,7 @@ LidarScanStream::LidarScanStream(Writer& writer, const uint32_t sensor_meta_id,
 void LidarScanStream::save(const ouster::osf::ts_t ts,
                            const LidarScan& lidar_scan) {
     const auto& msg_buf = make_msg(lidar_scan);
-    writer_.saveMessage(meta_.id(), ts, msg_buf);
+    writer_.save_message(meta_.id(), ts, msg_buf);
 }
 
 std::vector<uint8_t> LidarScanStream::make_msg(const LidarScan& lidar_scan) {

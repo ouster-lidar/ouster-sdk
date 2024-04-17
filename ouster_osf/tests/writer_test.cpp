@@ -48,26 +48,23 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
 
     std::string output_osf_filename = tmp_file("writer_simple.osf");
 
-    std::string sinfo_str = sinfo.original_string();
+    std::string sinfo_str = sinfo.updated_metadata_string();
 
     // Writing LidarScan
-    Writer writer(output_osf_filename, "test_session");
+    Writer writer(output_osf_filename);
+    writer.set_metadata_id("test_session");
     EXPECT_EQ(writer.chunks_layout(), ChunksLayout::LAYOUT_STREAMING);
 
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sinfo_str);
+    writer.add_sensor(sinfo, get_field_types(sinfo));
 
-    writer.addMetadata<LidarSensor>(sinfo);
-
-    auto ls_stream = writer.createStream<LidarScanStream>(
-        sensor_meta_id, get_field_types(sinfo));
-    ls_stream.save(ts_t{123}, ls);
+    writer.save(0, ls, ts_t{123});
     writer.close();
 
     OsfFile osf_file(output_osf_filename);
     EXPECT_TRUE(osf_file.good());
 
     Reader reader(osf_file);
-    EXPECT_EQ(reader.id(), "test_session");
+    EXPECT_EQ(reader.metadata_id(), "test_session");
 
     auto msg_it = reader.messages().begin();
     EXPECT_NE(msg_it, reader.messages().end());
@@ -81,7 +78,7 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
 
     // Map of all MetadataEntries of type LidarSensor
     auto sensors = reader.meta_store().find<LidarSensor>();
-    EXPECT_EQ(sensors.size(), 2);
+    EXPECT_EQ(sensors.size(), 1);
 
     // Use first sensor and get its sensor_info
     auto sinfo_recovered = sensors.begin()->second->info();
@@ -106,12 +103,12 @@ TEST_F(WriterTest, WriteLidarSensorWithExtrinsics) {
     sinfo.extrinsic(0, 0) = 0.0;
 
     // Writing LidarSensor
-    Writer writer(output_osf_filename, "test_session");
+    Writer writer(output_osf_filename);
 
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sinfo_str);
+    auto sensor_meta_id = writer.add_metadata<LidarSensor>(sinfo_str);
     EXPECT_TRUE(sensor_meta_id != 0);
 
-    writer.addMetadata<Extrinsics>(sinfo.extrinsic, sensor_meta_id);
+    writer.add_metadata<Extrinsics>(sinfo.extrinsic, sensor_meta_id);
 
     writer.close();
 
@@ -147,23 +144,22 @@ TEST_F(WriterTest, WriteSingleLidarScanStreamingLayout) {
 
     std::string output_osf_filename = tmp_file("writer_simple_streaming.osf");
 
-    std::string sinfo_str = sinfo.original_string();
+    std::string sinfo_str = sinfo.updated_metadata_string();
 
     // Writing LidarScan
-    Writer writer(output_osf_filename, "test_session");
+    Writer writer(output_osf_filename);
+    writer.set_metadata_id("test_session");
     EXPECT_EQ(writer.chunks_layout(), ChunksLayout::LAYOUT_STREAMING);
 
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sinfo_str);
-    auto ls_stream = writer.createStream<LidarScanStream>(
-        sensor_meta_id, get_field_types(sinfo));
-    ls_stream.save(ts_t{123}, ls);
+    writer.add_sensor(sinfo, get_field_types(sinfo));
+    writer.save(0, ls, ts_t{123});
     writer.close();
 
     OsfFile osf_file(output_osf_filename);
     EXPECT_TRUE(osf_file.good());
 
     Reader reader(osf_file);
-    EXPECT_EQ(reader.id(), "test_session");
+    EXPECT_EQ(reader.metadata_id(), "test_session");
 
     // TODO[pb]: Add reader validation CRC
 
@@ -217,21 +213,19 @@ TEST_F(WriterTest, WriteSlicedLidarScan) {
 
     std::string output_osf_filename = tmp_file("writer_sliced.osf");
 
-    std::string sinfo_str = sinfo.original_string();
+    std::string sinfo_str = sinfo.updated_metadata_string();
 
     // Writing LidarScan
-    Writer writer(output_osf_filename, "test_session");
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sinfo_str);
-    auto ls_stream =
-        writer.createStream<LidarScanStream>(sensor_meta_id, field_types);
-    ls_stream.save(ts_t{123}, ls);
+    Writer writer(output_osf_filename, sinfo, field_types);
+    writer.set_metadata_id("test_session");
+    writer.save(0, ls, ts_t{123});
     writer.close();
 
     OsfFile osf_file(output_osf_filename);
     EXPECT_TRUE(osf_file.good());
 
     Reader reader(osf_file);
-    EXPECT_EQ(reader.id(), "test_session");
+    EXPECT_EQ(reader.metadata_id(), "test_session");
 
     auto msg_it = reader.messages().begin();
     EXPECT_NE(msg_it, reader.messages().end());
@@ -284,24 +278,20 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
 
     std::string output_osf_filename = tmp_file("writer_sliced_legacy.osf");
 
-    std::string sinfo_str = sinfo.original_string();
+    std::string sinfo_str = sinfo.updated_metadata_string();
 
-    // Writing LidarScan
-    Writer writer(output_osf_filename, "test_session");
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sinfo_str);
+    // Writing LidarScan with custom field types
+    Writer writer(output_osf_filename, sinfo, field_types);
+    writer.set_metadata_id("test_session");
 
-    // Creating LidarScanStream with custom field_types, that will be used to
-    // transform LidarScan during save()
-    auto ls_stream =
-        writer.createStream<LidarScanStream>(sensor_meta_id, field_types);
-    ls_stream.save(ts_t{123}, ls_orig);
+    writer.save(0, ls_orig, ts_t{123});
     writer.close();
 
     OsfFile osf_file(output_osf_filename);
     EXPECT_TRUE(osf_file.good());
 
     Reader reader(osf_file);
-    EXPECT_EQ(reader.id(), "test_session");
+    EXPECT_EQ(reader.metadata_id(), "test_session");
 
     auto msg_it = reader.messages().begin();
     EXPECT_NE(msg_it, reader.messages().end());
@@ -386,19 +376,16 @@ TEST_F(WriterTest, WriteCustomLidarScanWithFlags) {
     std::string sinfo_str = sinfo.original_string();
 
     // Writing LidarScan
-    Writer writer(output_osf_filename, "test_session");
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sinfo_str);
-
-    auto ls_stream = writer.createStream<LidarScanStream>(sensor_meta_id,
-                                                          get_field_types(ls));
-    ls_stream.save(ts_t{123}, ls);
+    Writer writer(output_osf_filename, sinfo, get_field_types(ls));
+    writer.set_metadata_id("test_session");
+    writer.save(0, ls, ts_t{123});
     writer.close();
 
     OsfFile osf_file(output_osf_filename);
     EXPECT_TRUE(osf_file.good());
 
     Reader reader(osf_file);
-    EXPECT_EQ(reader.id(), "test_session");
+    EXPECT_EQ(reader.metadata_id(), "test_session");
 
     auto msg_it = reader.messages().begin();
     EXPECT_NE(msg_it, reader.messages().end());
@@ -450,20 +437,16 @@ TEST_F(WriterTest, WriteExample) {
     // Get sensor_info
     const sensor_info sinfo = sensor::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
-    std::string sensor_metadata = sinfo.original_string();
 
     std::string output_osf_filename = tmp_file("write_example.osf");
 
     // Create OSF v2 Writer
-    osf::Writer writer(output_osf_filename, "Example Session 1234");
+    osf::Writer writer(output_osf_filename);
+    writer.set_metadata_id("Example Session 1234");
     EXPECT_EQ(writer.chunks_layout(), ChunksLayout::LAYOUT_STREAMING);
 
     // Create LidarSensor record
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sensor_metadata);
-
-    // Create stream for LidarScan objects
-    auto ls_stream = writer.createStream<LidarScanStream>(
-        sensor_meta_id, get_field_types(sinfo));
+    auto sensor_id = writer.add_sensor(sinfo);
 
     const int LOOP_CNT = 7;
 
@@ -472,7 +455,7 @@ TEST_F(WriterTest, WriteExample) {
         LidarScan ls = get_random_lidar_scan(sinfo);
 
         // Save LidarScan
-        ls_stream.save(ts_t{timestamp}, ls);
+        writer.save(sensor_id, ls, ts_t{timestamp});
     }
 
     writer.close();
@@ -540,7 +523,7 @@ TEST_F(WriterTest, WriteExample) {
 TEST_F(WriterTest, FileNameOnlyWriterTest) {
     osf::Writer writer("FOOBARBAT");
     EXPECT_EQ(writer.filename(), "FOOBARBAT");
-    EXPECT_EQ(writer.metadata_id(), "");
+    EXPECT_EQ(writer.metadata_id(), "ouster_sdk");
 }
 
 }  // namespace

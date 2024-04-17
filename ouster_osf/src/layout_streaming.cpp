@@ -17,8 +17,8 @@ StreamingLayoutCW::StreamingLayoutCW(Writer& writer, uint32_t chunk_size)
     : chunk_size_{chunk_size ? chunk_size : STREAMING_DEFAULT_CHUNK_SIZE},
       writer_{writer} {}
 
-void StreamingLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
-                                    const std::vector<uint8_t>& msg_buf) {
+void StreamingLayoutCW::save_message(const uint32_t stream_id, const ts_t ts,
+                                     const std::vector<uint8_t>& msg_buf) {
     if (!chunk_builders_.count(stream_id)) {
         chunk_builders_.insert({stream_id, std::make_shared<ChunkBuilder>()});
     }
@@ -39,7 +39,7 @@ void StreamingLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
         finish_chunk(stream_id, chunk_builder);
     }
 
-    chunk_builder->saveMessage(stream_id, ts, msg_buf);
+    chunk_builder->save_message(stream_id, ts, msg_buf);
 
     // update running statistics per stream
     stats_message(stream_id, ts, msg_buf);
@@ -50,7 +50,7 @@ void StreamingLayoutCW::finish() {
         finish_chunk(cb_it.first, cb_it.second);
     }
 
-    writer_.addMetadata(StreamingInfo{
+    writer_.add_metadata(StreamingInfo{
         chunk_stream_id_, {stream_stats_.begin(), stream_stats_.end()}});
 }
 

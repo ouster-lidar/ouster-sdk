@@ -25,7 +25,7 @@ TEST_F(ReaderTest, Basics) {
 
     Reader reader(osf_file);
 
-    EXPECT_EQ("from_pcap pythonic", reader.id());
+    EXPECT_EQ("from_pcap pythonic", reader.metadata_id());
     EXPECT_EQ(991587364520LL, reader.start_ts().count());
     EXPECT_EQ(991787323080LL, reader.end_ts().count());
 

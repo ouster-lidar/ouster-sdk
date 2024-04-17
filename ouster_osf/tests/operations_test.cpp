@@ -137,30 +137,6 @@ TEST_F(OperationsTest, ParseAndPrintSmoke) {
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
 }
 
-// TODO[pb]: Remove this test and remove PcapRawSource since it's not mathing
-// the python impl.
-TEST_F(OperationsTest, PcapToOsf) {
-    std::string pcap_file = path_concat(
-        test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10_lb_n3.pcap");
-    std::string meta_file =
-        path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json");
-
-    std::string output_osf_filename = tmp_file("pcap_to_osf_test.osf");
-
-    bool res = pcap_to_osf(pcap_file, meta_file, 7502, output_osf_filename);
-
-    EXPECT_TRUE(res);
-
-    OsfFile output_osf_file{output_osf_filename};
-    EXPECT_TRUE(output_osf_file.valid());
-
-    Reader reader{output_osf_file};
-
-    auto msgs_count =
-        std::distance(reader.messages().begin(), reader.messages().end());
-    EXPECT_EQ(2, msgs_count);
-}
-
 TEST_F(OperationsTest, FileShaTest) {
     std::fstream test_file_out;
     std::string temp_dir;

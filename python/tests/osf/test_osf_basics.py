@@ -27,7 +27,7 @@ def input_info(test_data_dir):
 
 # Test that we can save a subset of scan fields and that it errors
 # if you try and save a scan missing fields in the metadata
-def test_writerv2_quick(tmp_path, input_info):
+def test_writer_quick(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
     save_fields = {}
     save_fields[client.ChanField.REFLECTIVITY] = np.uint32
@@ -35,7 +35,7 @@ def test_writerv2_quick(tmp_path, input_info):
 
     error_fields = {}
     error_fields[client.ChanField.RANGE] = np.uint32
-    with osf.WriterV2(str(file_name), input_info, 2, save_fields) as writer:
+    with osf.Writer(str(file_name), input_info, save_fields) as writer:
         scan = client.LidarScan(128, 1024)
         scan.field(client.ChanField.REFLECTIVITY)[:] = 123
         scan.field(client.ChanField.RANGE)[:] = 5
@@ -68,11 +68,11 @@ def test_writerv2_quick(tmp_path, input_info):
     assert len(messages) == 1
 
 
-def writerv2_output_handler(writer, output_osf_file, info):
-    assert writer.get_filename() == str(output_osf_file)
+def writer_output_handler(writer, output_osf_file, info):
+    assert writer.filename() == str(output_osf_file)
     assert writer.sensor_info_count() == 1
-    assert info == writer.get_sensor_info(0)
-    assert info == writer.get_sensor_info()[0]
+    assert info == writer.sensor_info(0)
+    assert info == writer.sensor_info()[0]
 
     scan1 = client.LidarScan(128, 1024)
     assert scan1 is not None
@@ -90,7 +90,7 @@ def writerv2_output_handler(writer, output_osf_file, info):
     return (scan1, scan2)
 
 
-def writerv2_input_handler(scan1, scan2, output_osf_file):
+def writer_input_handler(scan1, scan2, output_osf_file):
     assert scan1 is not None
     assert scan2 is not None
     assert scan1 != scan2
@@ -115,11 +115,11 @@ def writerv2_input_handler(scan1, scan2, output_osf_file):
     assert count == 2
 
 
-def test_osf_basic_writerv2(tmp_path, input_info):
+def test_osf_basic_writer(tmp_path, input_info):
     output_osf_file = tmp_path / "out_basic.osf"
 
-    writer = osf.WriterV2(str(output_osf_file), input_info)
-    scan1, scan2 = writerv2_output_handler(writer, output_osf_file, input_info)
+    writer = osf.Writer(str(output_osf_file), input_info)
+    scan1, scan2 = writer_output_handler(writer, output_osf_file, input_info)
     assert scan1 is not None
     assert scan2 is not None
 
@@ -130,16 +130,16 @@ def test_osf_basic_writerv2(tmp_path, input_info):
     assert scan1 is not None
     assert scan2 is not None
 
-    writerv2_input_handler(scan1, scan2, output_osf_file)
+    writer_input_handler(scan1, scan2, output_osf_file)
 
 
-def test_osf_with_writerv2(tmp_path, input_info):
+def test_osf_with_writer(tmp_path, input_info):
     output_osf_file = tmp_path / "out_with.osf"
 
-    with osf.WriterV2(str(output_osf_file), input_info) as writer:
-        scan1, scan2 = writerv2_output_handler(writer, output_osf_file, input_info)
+    with osf.Writer(str(output_osf_file), input_info) as writer:
+        scan1, scan2 = writer_output_handler(writer, output_osf_file, input_info)
 
-    writerv2_input_handler(scan1, scan2, output_osf_file)
+    writer_input_handler(scan1, scan2, output_osf_file)
 
 
 def test_osf_save_message(tmp_path, input_osf_file):
@@ -149,18 +149,19 @@ def test_osf_save_message(tmp_path, input_osf_file):
     lidar_meta = reader.meta_store.get(osf.LidarSensor)
     lidar_stream_meta = reader.meta_store.get(osf.LidarScanStream)
 
-    writer = osf.Writer(str(output_osf_file), reader.id)
-    lidar_id = writer.addMetadata(lidar_meta)
-    lidar_stream_id = writer.addMetadata(lidar_stream_meta)
+    writer = osf.Writer(str(output_osf_file))
+    writer.set_metadata_id(reader.metadata_id)
+    lidar_id = writer.add_metadata(lidar_meta)
+    lidar_stream_id = writer.add_metadata(lidar_stream_meta)
 
     # WARNING:
     # This is a test of low-level saveMessage API that directly writes
     # any buffers into the message, users usually really don't want to use it
     # directly. Unless one is creating custom messages.
-    writer.saveMessage(lidar_id, 1, bytes([0, 1, 2, 3, 4]))
-    writer.saveMessage(lidar_id, 2, bytearray([0, 1, 2, 3, 4]))
-    writer.saveMessage(lidar_id, 3, [0, 1, 2, 3, 4])
-    writer.saveMessage(lidar_id, 4, np.array([0, 1, 2, 3, 4], dtype=np.uint8))
+    writer.save_message(lidar_id, 1, bytes([0, 1, 2, 3, 4]))
+    writer.save_message(lidar_id, 2, bytearray([0, 1, 2, 3, 4]))
+    writer.save_message(lidar_id, 3, [0, 1, 2, 3, 4])
+    writer.save_message(lidar_id, 4, np.array([0, 1, 2, 3, 4], dtype=np.uint8))
 
     # WARNING: It's all not safe to do, but because it's a test we know what
     # we are doing here
@@ -169,7 +170,7 @@ def test_osf_save_message(tmp_path, input_osf_file):
         # pass LidarScan messages as is to a writer
         if msg.id == lidar_stream_meta.id:
             total_ls_cnt += 1
-            writer.saveMessage(lidar_stream_id, msg.ts, msg.buffer)
+            writer.save_message(lidar_stream_id, msg.ts, msg.buffer)
 
     writer.close()
 

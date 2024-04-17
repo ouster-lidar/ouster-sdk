@@ -138,14 +138,11 @@ struct MetadataTraits<LidarScanStreamMeta> {
  *   fb/os_sensor/lidar_scan_stream.fbs
  */
 class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
-   public:
-    /**
-     * @param[in] writer The writer object to use to write messages out.
-     * @param[in] sensor_meta_id The sensor to use.
-     * @param[in] field_types LidarScan fields specs, this argument is optional.
-     */
-    LidarScanStream(Writer& writer, const uint32_t sensor_meta_id,
-                    const LidarScanFieldTypes& field_types = {});
+    friend class Writer;
+    friend class MessageRef;
+
+    // Access key pattern used to only allow friends to call our constructor
+    struct Token {};
 
     /**
      * Saves the object to the writer applying the coding/serizlization
@@ -183,6 +180,17 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
     static std::unique_ptr<obj_type> decode_msg(
         const std::vector<uint8_t>& buf, const meta_type& meta,
         const MetadataStore& meta_provider);
+
+   public:
+    /**
+     * @param[in] key Private class used to prevent non-friends from calling
+     * this.
+     * @param[in] writer The writer object to use to write messages out.
+     * @param[in] sensor_meta_id The sensor to use.
+     * @param[in] field_types LidarScan fields specs, this argument is optional.
+     */
+    LidarScanStream(Token key, Writer& writer, const uint32_t sensor_meta_id,
+                    const LidarScanFieldTypes& field_types = {});
 
     /**
      * Return the concrete metadata type.

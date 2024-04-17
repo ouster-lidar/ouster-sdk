@@ -158,5 +158,34 @@ In the following code, ``transformation`` represents the extrinsincs transform:
     :start-after: [doc-stag-extrinsics-to-xyzlut]
     :end-before: [doc-etag-extrinsics-to-xyzlut]
     :dedent:
+    
 
+Reading Scans From An OSF File
+++++++++++++++++++++++++++++++
+
+The OSF file is a common format used to store Ouster sensor data. It can be useful to read 
+the file outside of the ``ouster-cli`` utility in order to perform more advanced processing.
+
+Below you can see an example which reads each scan in an OSF and prints them to stdout:
+
+.. literalinclude:: /../examples/osf_reader_example.cpp
+    :language: cpp
+    :start-after: [doc-stag-osf-read-cpp]
+    :end-before: [doc-etag-osf-read-cpp]
+    :dedent:
+
+
+Writing Scans To An OSF File
+++++++++++++++++++++++++++++
+
+An API for writing to the OSF file format is also exposed. This is most often used for writing
+scans and metadata, possibly with a reduced number of fields in order to save data.
+
+Below you can see an example which creates a scan and writes it to an OSF File using the Writer API:
+
+.. literalinclude:: /../examples/osf_writer_example.cpp
+    :language: cpp
+    :start-after: [doc-stag-osf-write-cpp]
+    :end-before: [doc-etag-osf-write-cpp]
+    :dedent:
 

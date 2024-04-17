@@ -274,6 +274,9 @@ Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::packet_timestamp()
 
 uint64_t LidarScan::get_first_valid_packet_timestamp() const {
     int total_packets = packet_timestamp().size();
+    if (total_packets == 0) {
+        return 0;  // prevent a divide by zero
+    }
     int columns_per_packet = w / total_packets;
 
     for (int i = 0; i < total_packets; ++i) {

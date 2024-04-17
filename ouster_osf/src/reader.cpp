@@ -495,7 +495,7 @@ void Reader::read_chunks_info() {
 
 // TODO[pb]: MetadataStore to_string() ?
 
-std::string Reader::id() const {
+std::string Reader::metadata_id() const {
     if (auto metadata = get_osf_metadata_from_buf(metadata_buf_.data())) {
         if (metadata->id()) {
             return metadata->id()->str();

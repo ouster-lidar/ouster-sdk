@@ -74,13 +74,13 @@ struct yo {
 class YoStream : public MessageStream<YoStreamMeta, yo> {
    public:
     YoStream(Writer& writer) : writer_{writer}, meta_{} {
-        stream_meta_id_ = writer_.addMetadata(meta_);
+        stream_meta_id_ = writer_.add_metadata(meta_);
     };
 
     // Boilerplate for writer
     void save(const ouster::osf::ts_t ts, const obj_type& yo_obj) {
         const auto& msg_buf = make_msg(yo_obj);
-        writer_.saveMessage(meta_.id(), ts, msg_buf);
+        writer_.save_message(meta_.id(), ts, msg_buf);
     }
 
     // Pack yo message into buffer
@@ -107,13 +107,13 @@ TEST_F(WriterCustomTest, WriteCustomMsgExample) {
     std::string output_osf_filename = tmp_file("writer_new_meta_info_msg.osf");
 
     // Create OSF v2 Writer
-    osf::Writer writer(output_osf_filename, "Yo Example");
+    osf::Writer writer(output_osf_filename);
 
     // Create LidarSensor record
-    writer.addMetadata<MyNewMetaInfo>("Happy New Year!");
+    writer.add_metadata<MyNewMetaInfo>("Happy New Year!");
 
     // Create stream for `yo` objects
-    auto yo_stream = writer.createStream<YoStream>();
+    auto yo_stream = writer.create_stream<YoStream>();
 
     uint8_t yo_cnt = 0;
     while (yo_cnt < 100) {

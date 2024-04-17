@@ -41,7 +41,7 @@ std::string dump_metadata(const std::string& file, bool full) {
 
     Reader reader(file);
 
-    root["metadata"]["id"] = reader.id();
+    root["metadata"]["id"] = reader.metadata_id();
     root["metadata"]["start_ts"] =
         static_cast<Json::UInt64>(reader.start_ts().count());
     root["metadata"]["end_ts"] =
@@ -191,7 +191,7 @@ flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
     auto metadata_fbb = flatbuffers::FlatBufferBuilder(32768);
     Reader reader(file_name);
 
-    std::string metadata_id = reader.id();
+    std::string metadata_id = reader.metadata_id();
     ts_t start_ts = reader.start_ts();
     ts_t end_ts = reader.end_ts();
 
@@ -256,88 +256,6 @@ int64_t osf_file_modify_metadata(
     finish_osf_file(file_name, metadata_offset, saved_bytes);
 
     return saved_bytes;
-}
-
-bool pcap_to_osf(const std::string& pcap_filename,
-                 const std::string& meta_filename, int lidar_port,
-                 const std::string& osf_filename, int chunk_size) {
-    std::cout << "Converting: " << std::endl
-              << "  PCAP file: " << pcap_filename << std::endl
-              << "  with json file: " << meta_filename << std::endl
-              << "  to OSF file: " << osf_filename << std::endl
-              << "  chunk_size: "
-              << (chunk_size ? std::to_string(chunk_size) : "DEFAULT")
-              << std::endl;
-
-    PcapRawSource pcap_source{pcap_filename};
-
-    std::string sensor_metadata = read_text_file(meta_filename);
-
-    auto info = sensor::parse_metadata(sensor_metadata);
-
-    std::cout << "Using sensor data:\n"
-              << "  lidar_port = " << lidar_port << std::endl;
-
-    std::cout << "Processing PCAP packects to OSF messages ";
-
-    Writer writer{osf_filename, "ouster-cli osf from_pcap",
-                  static_cast<uint32_t>(chunk_size)};
-
-    std::cout << "(chunk_size: " << writer.chunk_size() << "): ..."
-              << std::endl;
-
-    auto field_types = get_field_types(info);
-
-    // Overwrite field_types for Legacy UDP profile, so to reduce the LidarScan
-    // encoding sizes (saves about ~15% of disk/bandwidth)
-    if (info.format.udp_profile_lidar ==
-        sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        field_types.clear();
-        field_types.emplace_back(sensor::ChanField::RANGE,
-                                 sensor::ChanFieldType::UINT32);
-        field_types.emplace_back(sensor::ChanField::SIGNAL,
-                                 sensor::ChanFieldType::UINT16);
-        field_types.emplace_back(sensor::ChanField::REFLECTIVITY,
-                                 sensor::ChanFieldType::UINT16);
-        field_types.emplace_back(sensor::ChanField::NEAR_IR,
-                                 sensor::ChanFieldType::UINT16);
-    }
-    std::cout << "LidarScan field_types: " << ouster::to_string(field_types)
-              << std::endl;
-
-    auto sensor_meta_id = writer.addMetadata<LidarSensor>(sensor_metadata);
-    auto ls_stream =
-        writer.createStream<LidarScanStream>(sensor_meta_id, field_types);
-
-    int ls_cnt = 0;
-
-    if (lidar_port > 0) {
-        pcap_source.addLidarDataHandler(
-            lidar_port, info,
-            [&ls_cnt, &ls_stream](const osf::ts_t ts, const LidarScan& ls) {
-                ls_cnt++;
-                ls_stream.save(ts, ls);
-            });
-    }
-
-    // TODO[pb]: Remove the SIGINT handlers from C++ wrapped function used in
-    //           Python bindings
-    // https://pybind11.readthedocs.io/en/stable/faq.html#how-can-i-properly-handle-ctrl-c-in-long-running-functions
-    thread_local std::atomic_bool quit{false};
-    auto sig = std::signal(SIGINT, [](int) { quit = true; });
-
-    pcap_source.runWhile(
-        [](const sensor_utils::packet_info&) { return !quit; });
-
-    // restore signal handler
-    std::signal(SIGINT, sig);
-
-    writer.close();
-
-    std::cout << "Saved to OSF file:" << std::endl
-              << "  Lidar Scan messages: " << ls_cnt << std::endl;
-
-    return true;
 }
 
 }  // namespace osf

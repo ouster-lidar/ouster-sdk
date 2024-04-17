@@ -69,21 +69,5 @@ int64_t osf_file_modify_metadata(
     const std::string& file_name,
     const std::vector<ouster::sensor::sensor_info>& new_metadata);
 
-/**
- * Convert pcap with a single sensor stream to OSF.
- *
- * @param[in] pcap_filename The pcap file to convert to OSF.
- * @param[in] meta_filename The metadata file associated with pcap_filename.
- * @param[in] lidar_port The lidar port corrosponding to the lidar stream in the
- *                       pcap file.
- * @param[in] osf_filename The path for the resulting OSF file.
- * @param[in] chunk_size The chunk size to use for the OSF file, this argument
- *                       is optional and will default.
- * @return The success of the operation
- */
-bool pcap_to_osf(const std::string& pcap_filename,
-                 const std::string& meta_filename, int lidar_port,
-                 const std::string& osf_filename, int chunk_size = 0);
-
 }  // namespace osf
 }  // namespace ouster
