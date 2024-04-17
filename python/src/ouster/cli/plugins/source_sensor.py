@@ -23,9 +23,9 @@ def sensor_group() -> None:
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
-def sensor_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
+def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context,
                 legacy: bool) -> None:
-    """Display info about the SOURCE."""  # Implements ouster-cli source <hostname> metadata
+    """Display sensor metadata about the SOURCE."""  # Implements ouster-cli source <hostname> metadata
     try:
         click.echo(client.Sensor(ctx.source_uri, 7502, 7503,
                                  _legacy_format=legacy)._fetched_meta)

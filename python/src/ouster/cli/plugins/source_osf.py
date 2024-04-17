@@ -1,6 +1,6 @@
 import click
 
-from typing import Iterator, Dict, cast
+from typing import Any, Iterator, Dict, cast
 
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
@@ -26,8 +26,8 @@ def osf_group(ctx) -> None:
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
-def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bool) -> None:
-    """Print information about an OSF file to stdout.
+def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bool) -> None:
+    """Print metdata information from an OSF file to stdout.
 
     Parses all metadata entries, output is in JSON format.
     """
@@ -44,6 +44,168 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
         _osf.init_logger("error")
 
     print(_osf.dump_metadata(file, not short))
+
+
+@click.command
+@click.option('-n',
+              type=int,
+              default=0,
+              help="Index of lidar")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
+                     retrieve_click_context=True)
+def osf_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) -> None:
+    """
+    Display sensor metadata about the SOURCE.
+    """
+    file = ctx.source_uri or ""
+    try:
+        import ouster.sdk.osf as osf
+    except ImportError as e:
+        raise click.ClickException("Error: " + str(e))
+
+    reader = osf.Reader(file)
+    msensors = reader.meta_store.find(osf.LidarSensor)
+    index = 0
+    for sensor_id, sensor_meta in msensors.items():
+        if index == n:
+            print(sensor_meta.info.original_string())
+            return
+        index = index + 1
+
+    raise click.ClickException(f"Sensor Index {n} Not Found")
+
+
+@click.command
+@click.option('-v',
+              '--verbose',
+              is_flag=True,
+              help="Print additional information about the file")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
+                     retrieve_click_context=True)
+def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
+             verbose: bool) -> None:
+    """
+    Read an OSF file and print messages type, timestamp and counts to stdout.
+    Useful to check chunks layout and decoding of all known messages (-d option).
+    """
+    file = ctx.source_uri or ""
+    try:
+        import ouster.sdk.osf as osf
+    except ImportError as e:
+        raise click.ClickException("Error: " + str(e))
+
+    from ouster.sdk.client._client import get_field_types
+    from ouster.sdk.osf._osf import LidarScanStream
+    import os
+    import sys
+
+    reader = osf.Reader(file)
+
+    orig_layout = "Streaming" if reader.has_stream_info else "Standard"
+    if orig_layout == "Streaming" and reader.has_message_idx:
+        orig_layout = "Streaming, Indexed"
+
+    # count of messages in each stream
+    lidar_streams: Dict[str, Dict[str, Any]]
+    lidar_streams = {}
+    other_streams: Dict[str, Dict[str, Any]]
+    other_streams = {}
+
+    start = sys.maxsize
+    end = 0
+    count = 0
+    size = os.path.getsize(file)
+
+    sensors = {}
+    msensors = reader.meta_store.find(osf.LidarSensor)
+    for sensor_id, sensor_meta in msensors.items():
+        info = sensor_meta.info
+        sensors[sensor_id] = info
+
+    messages = [it for it in reader.messages()]
+    for msg in messages:
+        count = count + 1
+        start = min(msg.ts, start)
+        end = max(msg.ts, end)
+        obj: Dict[str, Any]
+        if not msg.of(LidarScanStream):
+            if msg.id not in other_streams:
+                obj = {}
+                obj["count"] = 1
+                obj["start"] = obj["end"] = msg.ts
+                obj["type"] = reader.meta_store[msg.id].type
+                other_streams[msg.id] = obj
+            else:
+                obj = other_streams[msg.id]
+                obj["count"] = obj["count"] + 1
+                obj["end"] = max(obj["end"], msg.ts)
+        else:
+            ls = msg.decode()
+            if ls:
+                if msg.id not in lidar_streams:
+                    # get sensor id
+                    obj = {}
+                    obj["count"] = 1
+                    obj["start"] = msg.ts
+                    obj["end"] = msg.ts
+                    obj["type"] = reader.meta_store[msg.id].type
+                    obj["fields"] = get_field_types(ls)
+                    obj["sensor"] = sensors[reader.meta_store[msg.id].sensor_meta_id]
+                    lidar_streams[msg.id] = obj
+                else:
+                    obj = lidar_streams[msg.id]
+                    obj["count"] = obj["count"] + 1
+                    obj["end"] = max(obj["end"], msg.ts)
+                    if get_field_types(ls) != obj["fields"]:
+                        print("WARNING: fields not equal!")
+                        obj["fields"] = None
+
+    print(f"Filename: {file}\nLayout: {orig_layout}")
+    print(f"Metadata ID: '{reader.metadata_id}'")
+    print(f"Size: {size/1000000} MB")
+    print(f"Start: {start/1000000000.0}")
+    print(f"End: {end/1000000000.0}")
+    print(f"Duration: {(end-start)/1000000000.0}")
+    print(f"Messages: {count}\n")
+
+    # print out info about each stream
+    for k in lidar_streams:
+        stream = lidar_streams[k]
+        count = stream["count"]
+        start = stream['start'] / 1000000000.0
+        end = stream['end'] / 1000000000.0
+        sensor = stream["sensor"]
+        print(f"Stream {k} {stream['type']}: ")
+        print(f"  Scan Count: {count}")
+        print(f"  Start: {start}")
+        print(f"  End: {end}")
+        print(f"  Duration: {end-start} seconds")
+        print(f"  Rate: {count/(end-start)} Hz")
+        print(f"  Product Line: {sensor.prod_line}")
+        print(f"  Sensor Mode: {sensor.mode}")
+        if verbose:
+            print(f"  Sensor SN: {sensor.sn}")
+            print(f"  Sensor FW Rev: {sensor.fw_rev}")
+            print("  Fields:")
+            if stream["fields"] is None:
+                print("  NO CONSISTENT FIELD TYPE")
+            else:
+                for f in stream["fields"]:
+                    print(f"    {f}:{stream['fields'][f]}")
+
+    for k in other_streams:
+        stream = other_streams[k]
+        count = stream["count"]
+        start = stream['start'] / 1000000000.0
+        end = stream['end'] / 1000000000.0
+        print(f"Stream {k} {stream['type']}: ")
+        print(f"  Message Count: {count}")
+        print(f"  Start: {start}")
+        print(f"  End: {end}")
+        print(f"  Duration: {end-start} seconds")
+        print(f"  Rate: {count/(end-start)} Hz")
 
 
 @click.command

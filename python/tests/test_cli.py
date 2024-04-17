@@ -439,10 +439,10 @@ def test_source_osf(runner, has_mapping) -> None:
         assert read_commands_from_help_text(result.output) >= expected_commands
 
 
-def test_source_osf_info(test_osf_file, runner):
-    """ouster-cli source <src>.osf info
+def test_source_osf_dump(test_osf_file, runner):
+    """ouster-cli source <src>.osf dump
     should display OSF metadata"""
-    result = runner.invoke(core.cli, ['source', test_osf_file, 'info'])
+    result = runner.invoke(core.cli, ['source', test_osf_file, 'dump'])
     meta = json.loads(result.output)
     assert len(meta['metadata']['entries']) == 3
     assert 'buffer' in meta['metadata']['entries'][0]
@@ -450,10 +450,10 @@ def test_source_osf_info(test_osf_file, runner):
     assert result.exit_code == 0
 
 
-def test_source_osf_info_short(test_osf_file, runner):
+def test_source_osf_dump_short(test_osf_file, runner):
     """ouster-cli source <src>.osf info -s
     should display OSF metadata in short form"""
-    result = runner.invoke(core.cli, ['source', test_osf_file, 'info', '-s'])
+    result = runner.invoke(core.cli, ['source', test_osf_file, 'dump', '-s'])
     meta = json.loads(result.output)
     assert len(meta['metadata']['entries']) == 3
     assert 'buffer' not in meta['metadata']['entries'][0]

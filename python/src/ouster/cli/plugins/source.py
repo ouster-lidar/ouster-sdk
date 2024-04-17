@@ -155,7 +155,7 @@ class SourceMultiCommand(click.MultiCommand):
             },
             OusterIoType.SENSOR: {
                 'config': sensor_cli.sensor_config,
-                'metadata': sensor_cli.sensor_info,
+                'metadata': sensor_cli.sensor_metadata,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
 
@@ -167,7 +167,9 @@ class SourceMultiCommand(click.MultiCommand):
                 'replay': pcap_cli.replay
             },
             OusterIoType.OSF: {
+                'dump': osf_cli.osf_dump,
                 'info': osf_cli.osf_info,
+                'metadata': osf_cli.osf_metadata,
                 'parse': osf_cli.osf_parse,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
