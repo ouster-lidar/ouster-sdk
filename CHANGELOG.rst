@@ -61,6 +61,9 @@ Known issues
 ------------
 
 * ouster-cli discover may not provide info for sensors using IPv6 link-local networks on Python 3.8 or with older versions of zeroconf.
+* ouster-cli when combining ``slice`` command with ``viz``the program will exit once iterate over the selected range of scans even when
+  the ``--on-eof`` option is set to ``loop``.
+  - workaround: to have ``viz`` loop over the selected range, first perform a ``slice`` with ``save``, then playback the generated file. 
 
 [20231031] [0.10.0]
 ===================
