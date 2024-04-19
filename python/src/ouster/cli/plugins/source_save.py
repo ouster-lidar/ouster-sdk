@@ -132,12 +132,14 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('-c', '--continue-anyways', is_flag=True, default=False, help="Continue saving "
+              "scans after an error is encountered, dropping bad data if necessary.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option("--ts", default='packet', help="Timestamp to use for indexing.", type=click.Choice(['packet', 'lidar']))
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
-                    overwrite: bool, ts: str, **kwargs) -> None:
+                    overwrite: bool, ts: str, continue_anyways: bool, **kwargs) -> None:
     """Save source as an OSF"""
     scans = ctx.scan_iter
     info = ctx.scan_source.metadata  # type: ignore
@@ -169,6 +171,13 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
             wrote_scans = True
             osf_writer.save(0, scan, scan_ts)
         else:
+            # by default fail out
+            if not continue_anyways:
+                osf_writer.close()
+                os.remove(filename)
+                print("ERROR: Cannot save scans because they are missing packet timestamps."
+                      " Try with `--ts lidar` instead or `-c` to continue anyways.")
+                exit(1)
             nonlocal dropped_scans
             dropped_scans = dropped_scans + 1
 
