@@ -32,7 +32,7 @@ _source_arg_name: str = 'source'
               help="Loop, stop or exit after reaching end of file")
 @click.option('-r',
               '--rate',
-              default="1.0",
+              default="1",
               help="Playback rate.",
               type=click.Choice(["0.25", "0.5", "0.75", "1", "1.5", "2", "3"]))
 @click.option("--pause-at",
