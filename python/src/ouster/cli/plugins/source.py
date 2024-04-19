@@ -30,6 +30,11 @@ _source_arg_name: str = 'source'
 @click.option("-p", "--pause", is_flag=True, help="Pause at first lidar scan")
 @click.option("-e", "--on-eof", default='loop', type=click.Choice(['loop', 'stop', 'exit']),
               help="Loop, stop or exit after reaching end of file")
+@click.option('-r',
+              '--rate',
+              default="1.0",
+              help="Playback rate.",
+              type=click.Choice(["0.25", "0.5", "0.75", "1", "1.5", "2", "3"]))
 @click.option("--pause-at",
               default=-1,
               help="Lidar Scan number to pause at")
@@ -57,7 +62,7 @@ _source_arg_name: str = 'source'
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: int, accum_num: int,
                accum_every: Optional[int], accum_every_m: Optional[float],
-               accum_map: bool, accum_map_ratio: float) -> SourceCommandCallback:
+               accum_map: bool, accum_map_ratio: float, rate: str) -> SourceCommandCallback:
     """Visualize LidarScans in a 3D viewer."""
     try:
         from ouster.sdk.viz import SimpleViz, scans_accum_for_cli
@@ -89,7 +94,7 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
 
     def viz_thread_fn():
         sv = SimpleViz(metadata, scans_accum=scans_accum,
-                       rate=1.0, pause_at=pause_at, on_eof=on_eof)
+                       rate=float(rate), pause_at=pause_at, on_eof=on_eof)
         sv.run(scans)
         ctx.terminate_evt.set()
 
