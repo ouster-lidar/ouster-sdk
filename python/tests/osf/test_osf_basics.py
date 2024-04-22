@@ -28,9 +28,9 @@ def input_info(test_data_dir):
 def test_osf_scan_source_flags(input_osf_file):
     from ouster.sdk.client import ChanField
     ss = open_source(str(input_osf_file), sensor_idx=0, flags=False)
-    assert ss.fields.get(ChanField.FLAGS) == None
+    assert ss.fields.get(ChanField.FLAGS) is None
     ss = open_source(str(input_osf_file), sensor_idx=0)
-    assert ss.fields.get(ChanField.FLAGS) != None
+    assert ss.fields.get(ChanField.FLAGS) is not None
 
 
 # Test that we can save a subset of scan fields and that it errors
