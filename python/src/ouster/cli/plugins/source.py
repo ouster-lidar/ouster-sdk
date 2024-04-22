@@ -168,7 +168,6 @@ class SourceMultiCommand(click.MultiCommand):
                 'info': pcap_cli.pcap_info,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
-                'replay': pcap_cli.replay
             },
             OusterIoType.OSF: {
                 'dump': osf_cli.osf_dump,

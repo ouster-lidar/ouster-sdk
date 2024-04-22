@@ -3,13 +3,8 @@ from datetime import datetime
 import os
 
 import click
-from more_itertools import consume
 from prettytable import PrettyTable, PLAIN_COLUMNS  # type: ignore
 from textwrap import indent
-
-from ouster.sdk import client
-from ouster.sdk.util import (resolve_metadata)
-from ouster.cli.core.util import (click_ro_file)
 
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
@@ -95,36 +90,3 @@ def pcap_info(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) 
     click.echo(f"Duration:      {duration}")
     click.echo("UDP Streams:")
     print_stream_table(all_infos)
-
-
-@click.command
-@click.option('-m', '--meta', required=False, type=click_ro_file,
-        help="Metadata for PCAP, helpful if automatic metadata resolution fails")
-@click.option('-c', '--cycle', is_flag=True, required=False, type=bool, help='Loop playback')
-@click.option('-h', '--host', required=False, type=str, default='127.0.1.1', help='Dest. host of UDP packets')
-@click.option('--lidar-port', required=False, type=int, default=7502, help='Dest. port of lidar data')
-@click.option('--imu-port', required=False, type=int, default=7503, help='Dest. port of imu data')
-@click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR,
-                     retrieve_click_context=True)
-def replay(ctx: SourceCommandContext, click_ctx: click.core.Context, meta, cycle, host, lidar_port, imu_port):
-    """Replay lidar and IMU packets from a PCAP file to a UDP socket."""
-    file = ctx.source_uri
-    try:
-        import ouster.sdk.pcap as pcap
-    except ImportError:
-        raise click.ClickException("Please verify that libpcap is installed")
-    meta = resolve_metadata(file, meta)
-    with open(meta) as json:
-        click.echo(f"Reading metadata from: {meta}")
-        info = client.SensorInfo(json.read())
-
-    click.echo(f"Sending UDP packets to host {host}, ports {lidar_port} and {imu_port} - Ctrl-C to exit.")
-
-    def replay_once():
-        replay = pcap._replay(file, info, host, lidar_port, imu_port)
-        consume(replay)
-
-    replay_once()
-    while cycle:
-        replay_once()
