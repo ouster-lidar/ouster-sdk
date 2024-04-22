@@ -1,4 +1,6 @@
-import sphinx_rtd_theme # noqa
+import sphinx_rtd_theme  # noqa
+import os
+import json
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -27,6 +29,11 @@ import re
 project = 'Ouster Sensor SDK'
 copyright = '2022, Ouster, Inc.'
 author = 'Ouster SW'
+# -- Project variables  -----------------------------------------------------
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+base_url = f"{os.environ.get('docs_url')}"
+print(f"base_url: {base_url}, ROOT_DIR: {ROOT_DIR}")
 
 # use SDK source location from environment or try to guess
 SRC_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -89,7 +96,6 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
@@ -117,7 +123,9 @@ html_context = {
     'github_repo': 'ouster_example',
     # 'github_version': 'ouster/python-bindings',
     'github_version': 'master',
-    'conf_py_path': '/docs/'
+    'conf_py_path': '/docs/',
+    'versions': [["latest", base_url]],
+    'current_version': "latest"
 }
 
 # show Ouster logo in sidebar header
@@ -132,8 +140,6 @@ html_static_path = ['_static']
 html_css_files = [
     'css/ouster_rtd_tweaks.css',
 ]
-
-
 # -- Extension configuration -------------------------------------------------
 
 # use both class and constructor docstrings
@@ -169,11 +175,8 @@ copybutton_exclude = '.linenos, .gp'
 # tabs behavior
 sphinx_tabs_disable_tab_closing = True
 
-
 # -- Doxygen XML generation handlers -----------------------------------
-
 def do_doxygen_generate_xml(app):
-
     # Only runs is breathe projects exists
     if not app.config["breathe_projects"]:
         return
@@ -218,7 +221,14 @@ def do_doxygen_temp_cleanup(app, exception):
 
 
 def setup(app):
-
     # Add a hook for generating doxygen xml and cleaning up
     app.connect("builder-inited", do_doxygen_generate_xml)
     app.connect("build-finished", do_doxygen_temp_cleanup)
+
+# read all versions from the JSON file
+# This is displayed in the footer
+# Duplicate versions.json file to allow building sdk docs independently
+with open(f"versions.json", "r") as file:
+    versions = json.load(file)
+for v in versions:
+    html_context['versions'].append([v["version"], base_url + '/' + v["version"]])

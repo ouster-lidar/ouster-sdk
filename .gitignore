@@ -27,3 +27,4 @@ CTestTestfile.cmake
 generated
 rules.ninja
 *.a
+**/_build
