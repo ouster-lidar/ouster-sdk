@@ -23,6 +23,7 @@ class OsfScanSource(MultiScanSource):
         complete: bool = False,
         index: bool = False,
         cycle: bool = False,
+        flags: bool = True,
         **kwargs
     ) -> None:
         """
@@ -36,6 +37,9 @@ class OsfScanSource(MultiScanSource):
                 file enabling len, index and slice operations on the scan source, if
                 the flag is set to False indexing is skipped (default is False).
             cycle: repeat infinitely after iteration is finished (default is False)
+            flags: when this option is set, the FLAGS field will be added to the list
+                of fields of every scan, in case of dual returns FLAGS2 will also be
+                 appended (default is True).
 
         Remarks:
             In case the OSF file didn't have builtin-index and the index flag was
@@ -46,7 +50,8 @@ class OsfScanSource(MultiScanSource):
         self._indexed = index
 
         if 'meta' in kwargs and kwargs['meta']:
-            raise TypeError(f"{OsfScanSource.__name__} does not support user-supplied metadata.")
+            raise TypeError(
+                f"{OsfScanSource.__name__} does not support user-supplied metadata.")
 
         self._reader = Reader(file_path)
 
@@ -95,9 +100,18 @@ class OsfScanSource(MultiScanSource):
                 self._stream_sensor_idx[stream_id] = self._sensor_idx[
                     stream_meta.sensor_meta_id]
 
+        def append_flags(ftypes: Dict, flags: bool) -> Dict:
+            import numpy as np
+            if flags:
+                ftypes.update({client.ChanField.FLAGS: np.uint8})
+                if client.ChanField.RANGE2 in ftypes:
+                    ftypes.update({client.ChanField.FLAGS2: np.uint8})
+            return ftypes
+
         scan_streams = self._reader.meta_store.find(LidarScanStream)
         self._stream_ids = [mid for mid, _ in scan_streams.items()]
-        self._fields = [lss.field_types for _, lss in scan_streams.items()]
+        self._fields = [append_flags(lss.field_types, flags)
+                        for _, lss in scan_streams.items()]
         # TODO: the following two properties (_scans_num, _len) are computed on
         # load but should rather be provided directly through OSF API. Obtain
         # these values directly from OSF API once implemented.
@@ -171,7 +185,9 @@ class OsfScanSource(MultiScanSource):
                 window = self.metadata[idx].format.column_window
                 scan = cast(LidarScan, ls)
                 if not self._complete or scan.complete(window):
-                    yield idx, cast(LidarScan, ls)
+                    if set(scan.fields) != set(self._fields[idx].keys()):
+                        scan = client.LidarScan(scan, self._fields[idx])
+                    yield idx, scan
 
     @property
     def sensors_count(self) -> int:

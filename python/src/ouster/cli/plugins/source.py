@@ -163,7 +163,6 @@ class SourceMultiCommand(click.MultiCommand):
                 'metadata': sensor_cli.sensor_metadata,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
-
             },
             OusterIoType.PCAP: {
                 'info': pcap_cli.pcap_info,

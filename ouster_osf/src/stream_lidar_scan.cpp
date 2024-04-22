@@ -387,9 +387,7 @@ std::unique_ptr<LidarScanStream::obj_type> LidarScanStream::decode_msg(
     const std::vector<uint8_t>& buf, const LidarScanStream::meta_type& meta,
     const MetadataStore& meta_provider) {
     auto sensor = meta_provider.get<LidarSensor>(meta.sensor_meta_id());
-
     auto info = sensor->info();
-
     return restore_lidar_scan(buf, info);
 }
 

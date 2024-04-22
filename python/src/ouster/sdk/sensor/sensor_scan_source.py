@@ -24,8 +24,17 @@ class SensorScanSource(ScansMulti):
         buf_size: int = 128,
         timeout: float = 1.0,
         extrinsics: Optional[List[float]] = None,
+        flags: bool = True,
         **kwargs
     ) -> None:
+        """
+        Args:
+            hostnames: sensor hostname urls or IPs.
+            complete: set to True to only release complete scans.
+            flags: when this option is set, the FLAGS field will be added to the list
+                of fields of every scan, in case of dual returns FLAGS2 will also be
+                appended (default is True).
+        """
 
         self._source = None
 
@@ -35,7 +44,8 @@ class SensorScanSource(ScansMulti):
             raise NotImplementedError("multi sensor is not implemented")
 
         if 'meta' in kwargs and kwargs['meta']:
-            raise TypeError(f"{SensorScanSource.__name__} does not support user-supplied metadata.")
+            raise TypeError(
+                f"{SensorScanSource.__name__} does not support user-supplied metadata.")
 
         config = configure_sensor(hostnames[0],
                                   lidar_port,
@@ -62,7 +72,7 @@ class SensorScanSource(ScansMulti):
         # enable parsing flags field
         # TODO: try to switch to using the resolve_field_types
         self._fields = default_scan_fields(self._source.metadata.format.udp_profile_lidar,
-                                           flags=True)
+                                           flags=flags)
 
         self._scans = client.Scans(self._source,
                                    timeout=timeout_,

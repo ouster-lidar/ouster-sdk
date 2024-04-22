@@ -46,6 +46,8 @@ Python SDK
 * [bugfix] LidarScan yielded with improper header/status
 * [bugfix] OSF ScanSource fields property doesn't report the actual fields 
 * Removed ``ouster.sdkx``, the ``open_source`` command is now part of ``ouster.sdk`` module
+* The ``FLAGS`` field is always added to the list fields of any source type by default. In case of a 
+  dual return lidar profile then a second ``FLAGS2`` will also be added. 
 
 
 ouster.sdk

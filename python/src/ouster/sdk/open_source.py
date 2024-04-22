@@ -39,6 +39,9 @@ def open_source(source_url: str, sensor_idx: int = -1, *args,
         - cycle: loop when the stream ends, applies only to non-live sources.
         - index: index the source before start if the format doesn't natively have
             an index. doens't apply to live sources.
+        - flags: when this option is set, the FLAGS field will be added to the list
+            of fields of every scan. in case of dual returns profile FLAGS2 will also
+            be appended (default is True).
     """
     source_urls = [url.strip() for url in source_url.split(',') if url.strip()]
 
@@ -58,13 +61,15 @@ def open_source(source_url: str, sensor_idx: int = -1, *args,
         handler = io_type_handlers[source_type]
         scan_source = handler(source_urls[0], *args, **kwargs)
     except KeyError:
-        raise NotImplementedError(f"The io_type:{source_type} is not supported!")
+        raise NotImplementedError(
+            f"The io_type:{source_type} is not supported!")
     except Exception as ex:
         raise RuntimeError(f"Failed to create scan_source for url {source_urls}\n"
                            f" more details: {ex}")
 
     if scan_source is None:
-        raise RuntimeError(f"Failed to create scan_source for url {source_urls}")
+        raise RuntimeError(
+            f"Failed to create scan_source for url {source_urls}")
 
     _populate_extrinsics(scan_source, source_urls[0], source_type, extrinsics)
 
@@ -104,7 +109,8 @@ def _populate_extrinsics(scan_source: MultiScanSource,
             extrinsics_from_file = _parse_extrinsics_file(
                 _extrinsics, sensors_serial)
             if extrinsics_from_file:
-                extrinsics = [ext_f[0] for ext_f in extrinsics_from_file if ext_f]
+                extrinsics = [ext_f[0]
+                              for ext_f in extrinsics_from_file if ext_f]
             else:
                 print(f"warning: failed to load extrinsics from provided path: "
                       f"{_extrinsics}")
@@ -118,7 +124,8 @@ def _populate_extrinsics(scan_source: MultiScanSource,
             extrinsics_from_file = resolve_extrinsics(data_path=source_dir,
                                                       infos=scan_source.metadata)
             if extrinsics_from_file:
-                extrinsics = [ext_f[0] for ext_f in extrinsics_from_file if ext_f]
+                extrinsics = [ext_f[0]
+                              for ext_f in extrinsics_from_file if ext_f]
 
     if extrinsics:
         if len(extrinsics) < scan_source.sensors_count:

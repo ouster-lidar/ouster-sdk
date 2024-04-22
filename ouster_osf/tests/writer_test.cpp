@@ -56,7 +56,6 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
     EXPECT_EQ(writer.chunks_layout(), ChunksLayout::LAYOUT_STREAMING);
 
     writer.add_sensor(sinfo, get_field_types(sinfo));
-
     writer.save(0, ls, ts_t{123});
     writer.close();
 

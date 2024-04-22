@@ -19,7 +19,7 @@ class PcapScanSource(ScansMulti):
         complete: bool = False,
         index: bool = False,
         cycle: bool = False,
-        flags: bool = False,
+        flags: bool = True,
         raw_headers: bool = False,
         raw_fields: bool = False,
         soft_id_check: bool = False,
@@ -31,30 +31,33 @@ class PcapScanSource(ScansMulti):
             file_path: OSF filename as scans source
             dt: max time difference between scans in the collated scan (i.e.
                 time period at which every new collated scan is released/cut),
-                default is 0.1s
+                default is 0.1s.
             complete: set to True to only release complete scans
             index: if this flag is set to true an index will be built for the pcap
                 file enabling len, index and slice operations on the scan source, if
-                the flag is set to False indexing is skipped (default is False)
+                the flag is set to False indexing is skipped (default is False).
             cycle: repeat infinitely after iteration is finished (default is False)
+            flags: when this option is set, the FLAGS field will be added to the list
+                of fields of every scan, in case of dual returns FLAGS2 will also be
+                appended (default is True).
         """
 
         self._source: Optional[PcapMultiPacketReader]
 
-        metadata_paths = list(meta)
-        if not meta:
-            metadata_paths = resolve_metadata_multi(file_path)
-
-        if not metadata_paths:
-            raise RuntimeError(
-                "Metadata jsons not found. Make sure that metadata json files "
-                "have common prefix with a PCAP file")
-
-        # TODO: need a better way to save these
-        self._metadata_paths = metadata_paths
-        print(f"loading metadata from {metadata_paths}")
-
         try:
+            metadata_paths = list(meta)
+            if not meta:
+                metadata_paths = resolve_metadata_multi(file_path)
+
+            if not metadata_paths:
+                raise RuntimeError(
+                    "Metadata jsons not found. Make sure that metadata json files "
+                    "have common prefix with a PCAP file")
+
+            # TODO: need a better way to save these
+            self._metadata_paths = metadata_paths
+            print(f"loading metadata from {metadata_paths}")
+
             self._source = PcapMultiPacketReader(file_path,
                                                  metadata_paths=metadata_paths,
                                                  index=index,

@@ -25,6 +25,14 @@ def input_info(test_data_dir):
     return client.SensorInfo(data)
 
 
+def test_osf_scan_source_flags(input_osf_file):
+    from ouster.sdk.client import ChanField
+    ss = open_source(str(input_osf_file), sensor_idx=0, flags=False)
+    assert ss.fields.get(ChanField.FLAGS) == None
+    ss = open_source(str(input_osf_file), sensor_idx=0)
+    assert ss.fields.get(ChanField.FLAGS) != None
+
+
 # Test that we can save a subset of scan fields and that it errors
 # if you try and save a scan missing fields in the metadata
 def test_writer_quick(tmp_path, input_info):
@@ -137,7 +145,8 @@ def test_osf_with_writer(tmp_path, input_info):
     output_osf_file = tmp_path / "out_with.osf"
 
     with osf.Writer(str(output_osf_file), input_info) as writer:
-        scan1, scan2 = writer_output_handler(writer, output_osf_file, input_info)
+        scan1, scan2 = writer_output_handler(
+            writer, output_osf_file, input_info)
 
     writer_input_handler(scan1, scan2, output_osf_file)
 
@@ -235,7 +244,8 @@ def _get_file_hash(file_name):
 
 
 def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
-    new_metadata = client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    new_metadata = client.SensorInfo.from_default(
+        client.LidarMode.MODE_1024x10)
 
     test_path = os.path.join(tmp_path, "test.osf")
     backup_path = os.path.join(tmp_path, "test.bak")
@@ -264,7 +274,8 @@ def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
 
 
 def test_empty_osf_loop(test_data_dir):
-    source = open_source(str(test_data_dir / "osfs" / "empty_osf.osf"), cycle=True)
+    source = open_source(
+        str(test_data_dir / "osfs" / "empty_osf.osf"), cycle=True)
 
     with pytest.raises(StopIteration):
         next(iter(source))

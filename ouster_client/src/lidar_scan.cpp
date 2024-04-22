@@ -182,7 +182,7 @@ LidarScan::LidarScan(const LidarScan& ls_src,
       field_types_(field_types),
       w(ls_src.w),
       h(ls_src.h),
-      frame_status(ls_src.frame_id),
+      frame_status(ls_src.frame_status),
       frame_id(ls_src.frame_id) {
     // Initialize fields
     for (const auto& ft : field_types_) {
