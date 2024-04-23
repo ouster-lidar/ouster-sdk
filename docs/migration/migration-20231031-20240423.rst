@@ -1,0 +1,71 @@
+=================================================
+Migration from 20231031/0.10.0 to 20240423/0.11.0
+=================================================
+
+The 20240423 release, which corresponds to Python SDK 0.11.0, brings a few breaking changes.  The
+changes and how to mitigate them are summarized here.
+
+ouster.sdk module changes
++++++++++++++++++++++++++
+Starting with ouster-sdk v0.11.0, most of core python sdk objects have been moved from the ``ouster``
+namespace into the ``ouster.sdk`` namespace. For example, before ouster-sdk 0.11.0 users used to access
+the ``client`` object using: 
+
+.. code:: python
+
+   >>> from ouster import client
+
+
+This would still work but will generate a warning message asking the user to update the path to ``ouster.sdk``.
+Thus the update module path would be:
+
+.. code:: python
+
+   >>> from ouster.sdk import client
+
+This same change applies to ``ouster.pcap``, ``ouster.viz``, ``ouster.osf``. Each of these modules have been
+relocated to ``ouster.sdk.pcap``, ``ouster.sdk.viz``, ``ouster.sdk.osf``
+
+
+Using the new ScanSource
+++++++++++++++++++++++++
+
+Starting with ouster-sdk v0.11.0, the sdk includes a unified API for accessing LidarScan(s) from the three
+supported source types: live sensors, pcap files, and osf files. This completely replaces the previous objects
+that were used to handle each source type. For example, the user used to write the following to manipulate pcap
+files:
+
+.. code:: python
+
+  from ouster import client
+  from ouster.pcap import Pcap
+  from ouster.sdk.util import resolve_metadata
+  metadata = open(resolve_metadata(source), "r").read()
+  info = client.SensorInfo(metadata)
+  pcap = Pcap(source, info)
+  scans = client.Scans(pcap, fields=fields)
+
+but to stream from a live sensor the user had to do the following:
+
+.. code:: python
+
+  from ouster import client
+
+  scans = client.Scans.stream(hostname=source)
+
+
+This has been replaced with the unified ``ScanSource`` interface which can be easily constructed using a single method
+
+.. code:: python
+
+  from ouster.sdk import open_source
+  scans = open_source(source_url) # where source_url can be a path to pcap or an osf file or a sensor url
+
+
+Notes for the future
+--------------------
+
+
+Dropped Support
++++++++++++++++
+Next iterations of the Ouster-SDK is going to require C++17 standard at minimum to compile
