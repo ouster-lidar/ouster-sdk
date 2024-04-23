@@ -43,6 +43,7 @@ class PcapScanSource(ScansMulti):
         """
 
         self._source: Optional[PcapMultiPacketReader]
+        self._source = None  # initialize the attribute so close works correctly if we fail out
 
         try:
             metadata_paths = list(meta)
