@@ -1,11 +1,9 @@
+cmake_minimum_required(VERSION 3.10...3.22)
 if(DEFINED CMAKE_CXX_COMPILER_LAUNCHER )
-  cmake_minimum_required(VERSION 3.17...3.22)
   message("Using CXX Launcher: ${CMAKE_CXX_COMPILER_LAUNCHER}")
   if( DEFINED ENV{CCACHE_DIR} )
     message("Using CCACHE_DIR: $ENV{CCACHE_DIR}")
   endif()
-else()
-  cmake_minimum_required(VERSION 3.10...3.22)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
