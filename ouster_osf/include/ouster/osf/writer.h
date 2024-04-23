@@ -63,8 +63,16 @@ class Writer {
      * @throws std::runtime_error Exception on file writing issues.
      *
      * @param[in] file_name The filename of the output OSF file.
-     * @param[in] chunk_size The chunk size to use for the OSF file,
-     *                       this argument is optional.
+     * @param[in] chunk_size The chunk size in bytes to use for the OSF file.
+     *     This argument is optional, and if not provided the default value of
+     *     2MB is used. If the current chunk being written exceeds
+     *     the chunk_size, a new chunk will be started on the next call to
+     *     save. This allows an application to tune the number of messages (e.g.
+     *     lidar scans) per chunk, which affects the granularity of the message
+     *     index stored in the StreamingInfo in the file metadata. A smaller
+     *     chunk_size means more messages are indexed and a larger number of
+     *     index entries. A more granular index allows for more precise
+     *     seeking at the slight expense of a larger file.
      */
     Writer(const std::string& file_name, uint32_t chunk_size = 0);
 

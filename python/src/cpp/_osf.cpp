@@ -673,8 +673,17 @@ to work with OSF files.
                 filename (str): The filename to output to.
                 info (sensor_info): The sensor info vector to use for a multi stream OSF
                     file.
-                chunk_size (int): The chunksize to use for the OSF file, this arg
-                    is optional.
+                chunk_size (int): The chunk size in bytes to use for the OSF file. This arg
+                    is optional, and if not provided the default value of 2MB
+                    is used. If the current chunk being written exceeds the
+                    chunk_size, a new chunk will be started on the next call to
+                    `save`. This allows an application to tune the number of
+                    messages (e.g. lidar scans) per chunk, which affects the
+                    granularity of the message index stored in the
+                    StreamingInfo in the file metadata. A smaller chunk_size
+                    means more messages are indexed and a larger number of
+                    index entries. A more granular index allows for more
+                    precise seeking at the slight expense of a larger file.
                 field_types (Dict[ChanField, FieldDType]): The fields from scans to
                     actually save into the OSF. If not provided uses the fields from 
                     the first saved lidar scan for each stream. This parameter is optional.
