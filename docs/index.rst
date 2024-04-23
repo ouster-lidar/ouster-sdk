@@ -12,6 +12,7 @@
    :hidden:
 
    Developer Quick Start <python/quickstart>
+   Using ScanSource API <python/using-scan-source>
    Examples <python/examples/index>
    SLAM Quickstart <python/slam-api-example>
    Point Cloud Visualizer <python/viz/index>

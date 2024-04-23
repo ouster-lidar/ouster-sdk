@@ -14,38 +14,6 @@ Users can run SLAM with an OS sensor's hostname or IP for real-time processing, 
 .. warning::
    Due to missing upstream dependency support on python3.12, slam does not work on python3.12.
 
-Extract Scans and Metadata
-==========================
-We will demonstrate how to extract lidar scan objects and sensor's metadata from different sources which
-will be served as the input of the SLAM algrotihm
-
-.. code:: python
-
-   from ouster import client
-   from ouster.pcap import Pcap
-   import ouster.osf as osf
-   from ouster.sdkx.parsing import default_scan_fields
-   from ouster.sdk.util import resolve_metadata
-   import ipaddress
-
-   def load_source(source):
-       if source.endswith('.pcap'):
-           metadata = open(resolve_metadata(source), "r").read()
-           info = client.SensorInfo(metadata)
-           pcap = Pcap(source, info)
-           fields = default_scan_fields(info.format.udp_profile_lidar, flags=True)
-           scans = client.Scans(pcap, fields=fields)
-       elif source.endswith('.osf'):
-           scans = osf.Scans(source)
-           info = scans.metadata
-       elif source.endswith('.local') or ipaddress.ip_address(source):
-           scans = client.Scans.stream(hostname=source, lidar_port=LIDAR_PORT, complete=False, timeout=1)
-           info = scans.metadata
-       else:
-           raise ValueError("Not a valid source type")
-
-       return scans, info
-
 
 Obtain Lidar Pose and Calculate Pose Difference
 ===============================================
@@ -55,11 +23,11 @@ between consecutive scans
 
 .. code:: python
 
-   from ouster import client
+   from ouster.sdk import open_source
    from ouster.mapping.slam import KissBackend
    import numpy as np
-   scans, info = load_source(pcap_path)
-   slam = KissBackend(info, max_range=75, min_range=1, voxel_size=1.0)
+   scans = open_source(pcap_path, sensor_idx=0)
+   slam = KissBackend(scans.metadata, max_range=75, min_range=1, voxel_size=1.0)
    last_scan_pose = np.eye(4)
 
    for idx, scan in enumerate(scans):
@@ -91,8 +59,8 @@ as well as for demonstration and feedback purposes.
    from functools import partial
    from ouster.viz import SimpleViz, ScansAccumulator
    from ouster.mapping.slam import KissBackend
-   scans, info = load_source(pcap_path)
-   slam = KissBackend(info, max_range=75, min_range=1, voxel_size=1.0)
+   scans = open_source(pcap_path, sensor_idx=0)
+   slam = KissBackend(scans.metadata, max_range=75, min_range=1, voxel_size=1.0)
 
    scans_w_poses = map(partial(slam.update), scans)
    scans_acc = ScansAccumulator(info,
