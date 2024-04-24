@@ -99,7 +99,6 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     from ouster.sdk.client._client import get_field_types
     from ouster.sdk.osf._osf import LidarScanStream
     import os
-    import sys
 
     reader = osf.Reader(file)
 
@@ -113,7 +112,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     other_streams: Dict[str, Dict[str, Any]]
     other_streams = {}
 
-    start = sys.maxsize
+    start = 0
     end = 0
     count = 0
     size = os.path.getsize(file)
@@ -127,7 +126,10 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     messages = [it for it in reader.messages()]
     for msg in messages:
         count = count + 1
-        start = min(msg.ts, start)
+        if start == 0:
+            start = msg.ts
+        else:
+            start = min(msg.ts, start)
         end = max(msg.ts, end)
         obj: Dict[str, Any]
         if not msg.of(LidarScanStream):

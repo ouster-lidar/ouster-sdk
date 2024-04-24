@@ -1,4 +1,5 @@
 from ouster.cli.core.cli_args import CliArgs
+import atexit
 import click
 import os
 import time
@@ -162,14 +163,27 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     wrote_scans = False
     dropped_scans = 0
     ts_method = first_valid_packet_ts if ts == "packet" else first_valid_column_ts
+    last_ts = 0
 
+    # returns false if we should stop recording
     def write_osf(scan: LidarScan):
-        nonlocal wrote_scans
+        nonlocal wrote_scans, last_ts, dropped_scans
         # Set OSF timestamp to the timestamp of the first valid column
         scan_ts = ts_method(scan)
         if scan_ts:
+            if scan_ts < last_ts:
+                if continue_anyways:
+                    dropped_scans = dropped_scans + 1
+                    return True
+                else:
+                    print("WARNING: Stopped saving because scan timestamps jumped backwards which is "
+                          "not supported by OSF. Try with `-c` to drop these scans and continue "
+                          "anyways.")
+                    osf_writer.close()
+                    return False
             wrote_scans = True
             osf_writer.save(0, scan, scan_ts)
+            last_ts = scan_ts
         else:
             # by default fail out
             if not continue_anyways:
@@ -177,26 +191,37 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                 os.remove(filename)
                 print("ERROR: Cannot save scans because they are missing packet timestamps."
                       " Try with `--ts lidar` instead or `-c` to continue anyways.")
-                exit(1)
-            nonlocal dropped_scans
+                raise ValueError("Bad timestamps")
             dropped_scans = dropped_scans + 1
+        return True
 
     def save_iter():
         try:
             with closing(osf_writer):
+                stop = False
                 for scan in scans:
                     # Drop invalid lidarscans
-                    if np.any(scan.status):
-                        write_osf(scan)
+                    if not stop and np.any(scan.status):
+                        if not write_osf(scan):
+                            stop = True
                     yield scan
         except (KeyboardInterrupt):
             pass
+        except (ValueError):
+            ctx.terminate_evt.set()
+
+    ctx.scan_iter = save_iter()
+
+    def exit_print():
         if dropped_scans > 0:
-            click.echo(f"WARNING: Dropped {dropped_scans} scans because missing packet timestamps. "
-                       "Try with `--ts lidar` instead.")
+            if ts == "lidar":
+                click.echo(f"WARNING: Dropped {dropped_scans} scans because missing or decreasing timestamps.")
+            else:
+                click.echo(f"WARNING: Dropped {dropped_scans} scans because missing or decreasing "
+                           "packet timestamps. Try with `--ts lidar` instead.")
         if not wrote_scans:
             click.echo("WARNING: No scans saved.")
-    ctx.scan_iter = save_iter()
+    atexit.register(exit_print)
 
 
 @click.command(context_settings=dict(
