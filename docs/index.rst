@@ -35,6 +35,7 @@
    :caption: SDK Reference
    :hidden:
 
+   OSF <reference/osf>
    Lidar Scan API <reference/lidar-scan>
    Python API Reference <python/api/index>
    C++ API Reference <cpp/api>

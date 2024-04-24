@@ -12,6 +12,7 @@ sensor data in both languages. The SDK includes APIs for:
 
 * Querying and setting sensor configuration
 * Recording and reading data in pcap format
+* Recording and reading data in :ref:`Open Sensor Format (OSF)<osf>`
 * Reading and buffering sensor UDP data streams reliably
 * Conversion of raw data to range/signal/near_ir/reflectivity images (destaggering)
 * Efficient projection of range measurements to Cartesian (x, y, z) coordinates
