@@ -16,6 +16,9 @@
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
 
+using StreamChunksMap =
+    std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
+
 namespace ouster {
 namespace osf {
 
@@ -30,6 +33,7 @@ inline const ouster::osf::v2::Chunk* get_chunk_from_buf(const uint8_t* buf) {
 // =======================================================
 // =========== ChunksPile ================================
 // =======================================================
+ChunksPile::ChunksPile() {}
 
 void ChunksPile::add(uint64_t offset, ts_t start_ts, ts_t end_ts) {
     ChunkState cs{};
@@ -120,24 +124,22 @@ ChunkState* ChunksPile::next_by_stream(uint64_t offset) {
 
 ChunkState* ChunksPile::first() { return get(0); }
 
-ChunksPile::ChunkStateIter ChunksPile::begin() { return pile_.begin(); }
-
-ChunksPile::ChunkStateIter ChunksPile::end() { return pile_.end(); }
-
 size_t ChunksPile::size() const { return pile_.size(); }
 
-bool ChunksPile::has_info() const {
-    return !pile_info_.empty() && pile_info_.size() == pile_.size();
-}
-
 bool ChunksPile::has_message_idx() const {
+    // return true if we have no chunks (we're functionally indexed)
+    if (pile_.size() == 0) {
+        return true;
+    }
     // rely on the fact that message_count in the ChunkInfo, if present
     // during Writing/Chunk building, can't be 0 (by construction in
     // ChunkBuilder and StreamingLayoutCW)
     // In other words we can't have Chunks with 0 messages written to OSF
     // file
-    return has_info() && pile_info_.begin()->second.message_count > 0;
+    return pile_info_.size() && pile_info_.begin()->second.message_count > 0;
 }
+
+StreamChunksMap& ChunksPile::stream_chunks() { return stream_chunks_; }
 
 void ChunksPile::link_stream_chunks() {
     // This function does a couple of things:
@@ -151,7 +153,7 @@ void ChunksPile::link_stream_chunks() {
 
     stream_chunks_.clear();
 
-    if (has_info()) {
+    if (pile_info_.size()) {
         // Do the next_offset links by streams
         auto curr_chunk = first();
         while (curr_chunk != nullptr) {
@@ -238,12 +240,6 @@ ChunksIter& ChunksIter::operator++() {
     return *this;
 }
 
-ChunksIter ChunksIter::operator++(int) {
-    auto res = *this;
-    this->next();
-    return res;
-}
-
 void ChunksIter::next() {
     if (current_addr_ == end_addr_) return;
     next_any();
@@ -300,108 +296,6 @@ ChunksIter ChunksRange::end() const {
 std::string ChunksRange::to_string() const {
     std::stringstream ss;
     ss << "ChunksRange: [ba = " << begin_addr_ << ", ea = " << end_addr_ << "]";
-    return ss.str();
-}
-
-// ==========================================================
-// ========= Reader::MessagesStandardIter ===================
-// ==========================================================
-
-MessagesStandardIter::MessagesStandardIter()
-    : current_chunk_it_{}, end_chunk_it_{}, msg_idx_{0} {}
-
-MessagesStandardIter::MessagesStandardIter(const MessagesStandardIter& other)
-    : current_chunk_it_(other.current_chunk_it_),
-      end_chunk_it_(other.end_chunk_it_),
-      msg_idx_(other.msg_idx_) {}
-
-MessagesStandardIter::MessagesStandardIter(const ChunksIter begin_it,
-                                           const ChunksIter end_it,
-                                           const size_t msg_idx)
-    : current_chunk_it_{begin_it}, end_chunk_it_{end_it}, msg_idx_{msg_idx} {
-    if (current_chunk_it_ != end_chunk_it_ && !is_cleared()) next();
-}
-
-const MessageRef MessagesStandardIter::operator*() const {
-    return current_chunk_it_->operator[](msg_idx_);
-}
-
-std::unique_ptr<const MessageRef> MessagesStandardIter::operator->() const {
-    return current_chunk_it_->messages(msg_idx_);
-}
-
-MessagesStandardIter& MessagesStandardIter::operator++() {
-    this->next();
-    return *this;
-}
-
-MessagesStandardIter MessagesStandardIter::operator++(int) {
-    auto res = *this;
-    this->next();
-    return res;
-}
-
-void MessagesStandardIter::next() {
-    if (current_chunk_it_ == end_chunk_it_) return;
-    next_any();
-    while (current_chunk_it_ != end_chunk_it_ && !is_cleared()) next_any();
-}
-
-void MessagesStandardIter::next_any() {
-    if (current_chunk_it_ == end_chunk_it_) return;
-    auto chunk_ref = *current_chunk_it_;
-    ++msg_idx_;
-    if (msg_idx_ >= chunk_ref.size()) {
-        // Advance to the next chunk
-        ++current_chunk_it_;
-        msg_idx_ = 0;
-    }
-}
-
-bool MessagesStandardIter::operator==(const MessagesStandardIter& other) const {
-    return (current_chunk_it_ == other.current_chunk_it_ &&
-            end_chunk_it_ == other.end_chunk_it_ && msg_idx_ == other.msg_idx_);
-}
-
-bool MessagesStandardIter::operator!=(const MessagesStandardIter& other) const {
-    return !this->operator==(other);
-}
-
-bool MessagesStandardIter::is_cleared() {
-    if (current_chunk_it_ == end_chunk_it_) return false;
-    const auto chunk_ref = *current_chunk_it_;
-    if (!chunk_ref.valid()) return false;
-    return (msg_idx_ < chunk_ref.size());
-}
-
-std::string MessagesStandardIter::to_string() const {
-    std::stringstream ss;
-    ss << "MessagesStandardIter: [curr_chunk_it = "
-       << current_chunk_it_.to_string() << ", msg_idx = " << msg_idx_
-       << ", end_chunk_it = " << end_chunk_it_.to_string() << "]";
-    return ss.str();
-}
-
-// =========================================================
-// ========= Reader::MessagesStandardRange =========================
-// =========================================================
-
-MessagesStandardRange::MessagesStandardRange(const ChunksIter begin_it,
-                                             const ChunksIter end_it)
-    : begin_chunk_it_(begin_it), end_chunk_it_(end_it) {}
-
-MessagesStandardIter MessagesStandardRange::begin() const {
-    return MessagesStandardIter(begin_chunk_it_, end_chunk_it_, 0);
-}
-
-MessagesStandardIter MessagesStandardRange::end() const {
-    return MessagesStandardIter(end_chunk_it_, end_chunk_it_, 0);
-}
-
-std::string MessagesStandardRange::to_string() const {
-    std::stringstream ss;
-    ss << "MessagesStandardRange: [bit = " << begin_chunk_it_.to_string()
-       << ", eit = " << end_chunk_it_.to_string() << "]";
     return ss.str();
 }
 
@@ -485,9 +379,7 @@ nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id,
     return nonstd::nullopt;
 }
 
-MessagesStandardRange Reader::messages_standard() {
-    return MessagesStandardRange(chunks().begin(), chunks().end());
-}
+bool Reader::has_message_idx() const { return chunks_.has_message_idx(); };
 
 ChunksRange Reader::chunks() {
     return ChunksRange(0, file_.metadata_offset(), this);
@@ -581,6 +473,7 @@ void Reader::read_chunks_info() {
     // see RFC0018 for details
     auto streaming_info = meta_store_.get<osf::StreamingInfo>();
     if (!streaming_info) {
+        has_streaming_info_ = false;
         return;
     }
 
@@ -595,20 +488,14 @@ void Reader::read_chunks_info() {
                          sci.second.message_count);
     }
 
+    has_streaming_info_ = true;
+
     chunks_.link_stream_chunks();
 }
 
 // TODO[pb]: MetadataStore to_string() ?
-void Reader::print_metadata_entries() {
-    std::cout << "Reader::print_metadata_entries:\n";
-    int i = 0;
-    for (const auto& me : meta_store_.entries()) {
-        std::cout << "    entry[" << i++ << "] = " << me.second->to_string()
-                  << std::endl;
-    }
-}
 
-std::string Reader::id() const {
+std::string Reader::metadata_id() const {
     if (auto metadata = get_osf_metadata_from_buf(metadata_buf_.data())) {
         if (metadata->id()) {
             return metadata->id()->str();
@@ -631,7 +518,9 @@ ts_t Reader::end_ts() const {
     return ts_t{};
 }
 
-bool Reader::has_stream_info() const { return chunks_.has_info(); }
+const MetadataStore& Reader::meta_store() const { return meta_store_; }
+
+bool Reader::has_stream_info() const { return has_streaming_info_; }
 
 bool Reader::verify_chunk(uint64_t chunk_offset) {
     auto cs = chunks_.get(chunk_offset);
@@ -649,6 +538,12 @@ bool Reader::verify_chunk(uint64_t chunk_offset) {
 // =========================================================
 // ========= MessageRef ====================================
 // =========================================================
+MessageRef::MessageRef(const uint8_t* buf, const MetadataStore& meta_provider)
+    : buf_(buf), meta_provider_(meta_provider), chunk_buf_{nullptr} {}
+
+MessageRef::MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
+                       std::shared_ptr<std::vector<uint8_t>> chunk_buf)
+    : buf_(buf), meta_provider_(meta_provider), chunk_buf_{chunk_buf} {}
 
 uint32_t MessageRef::id() const {
     const ouster::osf::v2::StampedMessage* sm =
@@ -661,6 +556,8 @@ MessageRef::ts_t MessageRef::ts() const {
         reinterpret_cast<const ouster::osf::v2::StampedMessage*>(buf_);
     return ts_t(sm->ts());
 }
+
+const uint8_t* MessageRef::buf() const { return buf_; }
 
 bool MessageRef::is(const std::string& type_str) const {
     auto meta = meta_provider_.get(id());
@@ -721,6 +618,20 @@ ChunkRef::ChunkRef(const uint64_t offset, Reader* reader)
            ChunkValidity::UNKNOWN);
 }
 
+ChunkState* ChunkRef::state() { return reader_->chunks_.get(chunk_offset_); }
+
+const ChunkState* ChunkRef::state() const {
+    return reader_->chunks_.get(chunk_offset_);
+}
+
+ChunkInfoNode* ChunkRef::info() {
+    return reader_->chunks_.get_info(chunk_offset_);
+}
+
+const ChunkInfoNode* ChunkRef::info() const {
+    return reader_->chunks_.get_info(chunk_offset_);
+}
+
 size_t ChunkRef::size() const {
     if (!valid()) return 0;
     const ouster::osf::v2::Chunk* chunk = get_chunk_from_buf(get_chunk_ptr());
@@ -779,6 +690,12 @@ std::string ChunkRef::to_string() const {
        << "]";
     return ss.str();
 }
+
+uint64_t ChunkRef::offset() const { return chunk_offset_; }
+
+ts_t ChunkRef::start_ts() const { return state()->start_ts; }
+
+ts_t ChunkRef::end_ts() const { return state()->end_ts; }
 
 const uint8_t* ChunkRef::get_chunk_ptr() const {
     if (reader_->file_.is_memory_mapped()) {
@@ -874,6 +791,11 @@ uint32_t calc_stream_ids_hash(const std::vector<uint32_t>& stream_ids) {
         a *= b;
     }
     return hash;
+}
+
+bool MessagesStreamingIter::greater_chunk_type::operator()(
+    const opened_chunk_type& a, const opened_chunk_type& b) {
+    return a.first[a.second].ts() > b.first[b.second].ts();
 }
 
 MessagesStreamingIter::MessagesStreamingIter()
@@ -1054,18 +976,6 @@ void MessagesStreamingIter::next() {
         curr_ts_ = next_ts;
     } else {
         curr_ts_ = end_ts_;
-    }
-}
-
-/// NOTE: Debug function, will be removed after some time ...
-void MessagesStreamingIter::print_and_finish() {
-    while (!curr_chunks_.empty()) {
-        auto& top = curr_chunks_.top();
-        std::cout << "(( ts = " << top.first[top.second].ts().count()
-                  << ", id = " << top.first[top.second].id()
-                  << ", msg_idx = " << top.second
-                  << ", cref = " << top.first.to_string() << std::endl;
-        curr_chunks_.pop();
     }
 }
 

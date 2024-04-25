@@ -65,8 +65,16 @@ std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
     };
     ouster::impl::foreach_field(ls, randomise);
 
+    auto g = std::mt19937(0xdeadbeef);
+    auto dinit_id = std::uniform_int_distribution<uint32_t>(0, 0xFFFFFF);
+    auto dserial_no = std::uniform_int_distribution<uint64_t>(0, 0xFFFFFFFFFF);
+
+    uint32_t init_id = dinit_id(g);      // 24 bits
+    uint64_t serial_no = dserial_no(g);  // 40 bits
+
     auto packets = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets));
+    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets), init_id,
+                                  serial_no);
 
     return packets;
 }
@@ -461,7 +469,7 @@ TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
     auto packet = std::make_unique<LidarPacket>();
     std::memset(packet->buf.data(), 0, packet->buf.size());
     packet->host_timestamp = 100;
-    pw.set_frame_id(packet->buf.data(), 65535);
+    pw.set_frame_id(packet->buf.data(), pw.max_frame_id);
     uint16_t m_id = columns_per_frame - columns_per_packet;
     uint64_t ts = 100;
     for (size_t icol = 0; icol < columns_per_packet; ++icol) {

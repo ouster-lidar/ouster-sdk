@@ -2,11 +2,11 @@
  * Copyright (c) 2022, Ouster, Inc.
  * All rights reserved.
  *
- * @TODO check that the header casting is idiomatic libpcap
- * @TODO warn on dropped packets when pcap contains garbage, when fragments
+ * @todo check that the header casting is idiomatic libpcap
+ * @todo warn on dropped packets when pcap contains garbage, when fragments
  * missing, buffer reused before sending
- * @TODO split up reading / playback
- * @TODO improve error reporting
+ * @todo split up reading / playback
+ * @todo improve error reporting
  */
 
 #define _FILE_OFFSET_BITS 64

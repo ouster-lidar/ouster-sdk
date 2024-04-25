@@ -15,10 +15,9 @@ from more_itertools import consume
 import pytest
 import time
 
-from ouster import pcap
-from ouster.pcap import _pcap
-from ouster import client
-from ouster.client import _client
+from ouster.sdk import client, pcap, open_source
+from ouster.sdk.pcap import _pcap
+from ouster.sdk.client import _client
 from tests.conftest import PCAPS_DATA_DIR, TESTS
 from tests.test_batching import _patch_frame_id
 
@@ -645,3 +644,12 @@ def test_legacy_reduced_json_data():
     packet_source = pcap.Pcap(pcap_file_path, metadata)
     scans = client.Scans(packet_source)
     assert 1 == sum(1 for _ in scans)
+
+
+def test_empty_pcap_loop():
+    pcap_file_path = path.join(PCAPS_DATA_DIR, 'empty_pcap.pcap')
+
+    source = open_source(pcap_file_path, cycle=True)
+
+    with pytest.raises(StopIteration):
+        next(iter(source))

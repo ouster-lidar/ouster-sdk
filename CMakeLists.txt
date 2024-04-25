@@ -16,14 +16,14 @@ include(VcpkgEnv)
 project(ouster_example VERSION 20231031)
 
 # generate version header
-set(OusterSDK_VERSION_STRING 0.10.0)
+set(OusterSDK_VERSION_STRING 0.11.0)
 include(VersionGen)
 
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
 option(BUILD_SHARED_LIBS "Build shared libraries." OFF)
 option(BUILD_PCAP "Build pcap utils." ON)
-option(BUILD_OSF "Build Ouster OSF library." OFF)
+option(BUILD_OSF "Build Ouster OSF library." ON)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_EXAMPLES "Build C++ examples" OFF)

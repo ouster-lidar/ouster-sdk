@@ -5,11 +5,13 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace ouster {
 namespace osf {
 
+/// @todo Fix the api comments in this file
 #ifdef _WIN32
 constexpr char FILE_SEP = '\\';
 #else
@@ -52,5 +54,38 @@ bool mmap_close(uint8_t* file_buf, const uint64_t file_size);
 /// Get the last system error and return it in a string (not wide string)
 std::string get_last_error();
 
+/**
+ * Truncate a file to a certain length
+ *
+ * @param[in] path The file to truncate.
+ * @param[in] filesize The final size of the file.
+ *
+ * @return The number of bytes of the final file.
+ */
+int64_t truncate_file(const std::string& path, uint64_t filesize);
+
+/**
+ * Appends one file to another
+ *
+ * @param[in] append_to_file_name The file to append to.
+ * @param[in] append_from_file_name The file to append from.
+ *
+ * @return The number of bytes of the final file.
+ */
+int64_t append_binary_file(const std::string& append_to_file_name,
+                           const std::string& append_from_file_name);
+
+/**
+ * Copies trailing bytes from a file
+ *
+ * @param[in] source_file The file to copy from.
+ * @param[in] target_file The file to copy to.
+ * @param[in] offset The offset in the source_file to start copying from.
+ *
+ * @return The number of bytes of the target file.
+ */
+int64_t copy_file_trailing_bytes(const std::string& source_file,
+                                 const std::string& target_file,
+                                 uint64_t offset);
 }  // namespace osf
 }  // namespace ouster

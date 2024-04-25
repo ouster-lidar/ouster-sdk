@@ -12,6 +12,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -28,6 +29,7 @@ namespace ouster {
 using nonstd::make_optional;
 using nonstd::nullopt;
 using nonstd::optional;
+using std::stoul;
 
 namespace sensor {
 
@@ -118,6 +120,19 @@ Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
     {PROFILE_IMU_LEGACY, "LEGACY"},
 }};
 
+Table<FullScaleRange, const char*, 2> full_scale_range_strings{{
+    {FSR_NORMAL, "NORMAL"},
+    {FSR_EXTENDED, "EXTENDED"},
+}};
+
+Table<ReturnOrder, const char*, 5> return_order_strings{{
+    {ORDER_STRONGEST_TO_WEAKEST, "STRONGEST_TO_WEAKEST"},
+    {ORDER_FARTHEST_TO_NEAREST, "FARTHEST_TO_NEAREST"},
+    {ORDER_NEAREST_TO_FARTHEST, "NEAREST_TO_FARTHEST"},
+    {ORDER_DEPRECATED_STRONGEST_RETURN_FIRST, "STRONGEST_RETURN_FIRST"},
+    {ORDER_DEPRECATED_LAST_RETURN_FIRST, "LAST_RETURN_FIRST"},
+}};
+
 // TODO: should we name them something better? feel like the most important is
 // SHOT_LIMITING_NORMAL
 Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings{{
@@ -188,7 +203,11 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
             lhs.phase_lock_offset == rhs.phase_lock_offset &&
             lhs.columns_per_packet == rhs.columns_per_packet &&
             lhs.udp_profile_lidar == rhs.udp_profile_lidar &&
-            lhs.udp_profile_imu == rhs.udp_profile_imu);
+            lhs.udp_profile_imu == rhs.udp_profile_imu &&
+            lhs.gyro_fsr == rhs.gyro_fsr &&
+            lhs.accel_fsr == rhs.accel_fsr &&
+            lhs.return_order == rhs.return_order &&
+            lhs.min_range_threshold_cm == rhs.min_range_threshold_cm);
 }
 
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs) {
@@ -372,6 +391,14 @@ optional<Polarity> polarity_of_string(const std::string& s) {
     return rlookup(impl::polarity_strings, s.c_str());
 }
 
+optional<FullScaleRange> full_scale_range_of_string(const std::string& s) {
+    return rlookup(impl::full_scale_range_strings, s.c_str());
+}
+
+optional<ReturnOrder> return_order_of_string(const std::string& s) {
+    return rlookup(impl::return_order_strings, s.c_str());
+}
+
 std::string to_string(NMEABaudRate rate) {
     auto res = lookup(impl::nmea_baud_rate_strings, rate);
     return res ? res.value() : "UNKNOWN";
@@ -450,6 +477,18 @@ std::string to_string(ShotLimitingStatus shot_limiting_status) {
 std::string to_string(ThermalShutdownStatus thermal_shutdown_status) {
     auto res =
         lookup(impl::thermal_shutdown_status_strings, thermal_shutdown_status);
+    return res ? res.value() : "UNKNOWN";
+}
+
+std::string to_string(ReturnOrder return_order) {
+    auto res =
+        lookup(impl::return_order_strings, return_order);
+    return res ? res.value() : "UNKNOWN";
+}
+
+std::string to_string(FullScaleRange full_scale_range) {
+    auto res =
+        lookup(impl::full_scale_range_strings, full_scale_range);
     return res ? res.value() : "UNKNOWN";
 }
 
@@ -697,6 +736,40 @@ sensor_config parse_config(const Json::Value& root) {
         config.udp_profile_imu =
             udp_profile_imu_of_string(root["udp_profile_imu"].asString());
 
+    // Firmware 3.1 and higher options
+    if (!root["gyro_fsr"].empty()) {
+        auto gyro_fsr =
+            full_scale_range_of_string(root["gyro_fsr"].asString());
+        if (gyro_fsr) {
+            config.gyro_fsr = gyro_fsr;
+        } else {
+            throw std::runtime_error{"Unexpected Gyro FSR"};
+        }
+    }
+
+    if (!root["accel_fsr"].empty()) {
+        auto accel_fsr =
+            full_scale_range_of_string(root["accel_fsr"].asString());
+        if (accel_fsr) {
+            config.accel_fsr = accel_fsr;
+        } else {
+            throw std::runtime_error{"Unexpected Accel FSR"};
+        }
+    }
+
+    if (!root["return_order"].empty()) {
+        auto return_order =
+            return_order_of_string(root["return_order"].asString());
+        if (return_order) {
+            config.return_order = return_order;
+        } else {
+            throw std::runtime_error{"Unexpected Return Order"};
+        }
+    }
+
+    if (!root["min_range_threshold_cm"].empty())
+        config.min_range_threshold_cm = root["min_range_threshold_cm"].asInt();
+
     return config;
 }
 
@@ -812,6 +885,19 @@ Json::Value config_to_json(const sensor_config& config) {
     if (config.udp_profile_imu) 
         root["udp_profile_imu"] = to_string(config.udp_profile_imu.value());
 
+    // Firmware 3.1 and higher options
+    if (config.gyro_fsr)
+    	root["gyro_fsr"] = to_string(config.gyro_fsr.value());
+
+    if (config.accel_fsr)
+    	root["accel_fsr"] = to_string(config.accel_fsr.value());
+
+    if (config.min_range_threshold_cm)
+    	root["min_range_threshold_cm"] = config.min_range_threshold_cm.value();
+
+    if (config.return_order)
+    	root["return_order"] = to_string(config.return_order.value());
+
     return root;
 }
 
@@ -850,6 +936,22 @@ version version_of_string(const std::string& s) {
         return v;
     else
         return invalid_version;
+}
+
+version version_from_string(const std::string& v) {
+    auto rgx = std::regex(R"(v?(\d+).(\d+)\.(\d+))");
+    std::smatch matches;
+    std::regex_search(v, matches, rgx);
+
+    if (matches.size() < 4) return invalid_version;
+
+    try {
+        return version{static_cast<uint16_t>(stoul(matches[1])),
+                       static_cast<uint16_t>(stoul(matches[2])),
+                       static_cast<uint16_t>(stoul(matches[3]))};
+    } catch (const std::exception&) {
+        return invalid_version;
+    }
 }
 
 }  // namespace util

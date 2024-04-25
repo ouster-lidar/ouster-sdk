@@ -2,6 +2,8 @@
 find_package(Pcap REQUIRED)
 find_package(libtins REQUIRED)
 
+include(Coverage)
+
 # ==== Libraries ====
 add_library(ouster_pcap src/pcap.cpp src/os_pcap.cpp src/indexed_pcap_reader.cpp)
 target_include_directories(ouster_pcap SYSTEM PRIVATE
@@ -9,6 +11,7 @@ target_include_directories(ouster_pcap SYSTEM PRIVATE
 target_include_directories(ouster_pcap PUBLIC
   $<INSTALL_INTERFACE:include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+CodeCoverageFunctionality(ouster_pcap)
 
 if(WIN32)
   target_compile_options(ouster_pcap PRIVATE /wd4200)

@@ -7,6 +7,7 @@
  * explanations.
  */
 
+//! [doc-stag-osf-read-cpp]
 #include <iostream>
 
 #include "ouster/impl/build.h"
@@ -47,3 +48,4 @@ int main(int argc, char* argv[]) {
         }
     }
 }
+//! [doc-etag-osf-read-cpp]

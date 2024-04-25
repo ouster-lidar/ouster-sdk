@@ -230,10 +230,15 @@ This module is generated from the C++ code and not meant to be used directly.
         .def(py::init<int>())
         .def("frame_count", &PcapIndex::frame_count)
         .def("seek_to_frame", &PcapIndex::seek_to_frame)
-        .def_readonly("frame_indices", &PcapIndex::frame_indices_);
+        .def_readonly("frame_indices", &PcapIndex::frame_indices_)
+        .def_readonly("frame_timestamp_indices",
+                      &PcapIndex::frame_timestamp_indices_)
+        .def_readonly("frame_id_indices", &PcapIndex::frame_id_indices_);
 
     py::class_<IndexedPcapReader, PcapReader>(m, "IndexedPcapReader")
         .def(py::init<const std::string&, const std::vector<std::string>&>())
+        .def(py::init<const std::string&,
+                      const std::vector<ouster::sensor::sensor_info>&>())
         .def("current_info", &IndexedPcapReader::current_info)
         .def("next_packet", &IndexedPcapReader::next_packet)
         .def("update_index_for_current_packet",
@@ -247,6 +252,9 @@ This module is generated from the C++ code and not meant to be used directly.
              })
         .def("reset",
              &IndexedPcapReader::reset)  // TODO move to PcapReader binding?
+        .def("seek",
+             &IndexedPcapReader::seek)  // TODO move to PcapReader binding?
+        .def("build_index", &IndexedPcapReader::build_index)
         .def("get_index", &IndexedPcapReader::get_index)
         .def("current_data", [](IndexedPcapReader& reader) -> py::array {
             uint8_t* data = const_cast<uint8_t*>(reader.current_data());

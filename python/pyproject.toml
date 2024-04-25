@@ -1,7 +1,7 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-# use same cmake version as vcpkg (2023.02.24) for pep-517 builds
-requires = ["setuptools>=40.1.0", "wheel", "cmake==3.21.1", "pybind11==2.10.4"]
+# use same cmake version as vcpkg (2023.10.19) for pep-517 builds
+requires = ["setuptools==69.2.0", "wheel", "cmake==3.24.2", "pybind11==2.10.4"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

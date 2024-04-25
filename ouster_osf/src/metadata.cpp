@@ -27,6 +27,9 @@ std::string MetadataEntry::to_string() const {
     return ss.str();
 }
 
+void MetadataEntry::setId(uint32_t id) { id_ = id; }
+uint32_t MetadataEntry::id() const { return id_; }
+
 flatbuffers::Offset<ouster::osf::gen::MetadataEntry> MetadataEntry::make_entry(
     flatbuffers::FlatBufferBuilder& fbb) const {
     auto buf = this->buffer();
@@ -57,6 +60,23 @@ MetadataEntry::get_registry() {
     return registry_;
 }
 
+MetadataEntryRef::MetadataEntryRef(const uint8_t* buf) : buf_{buf} {
+    const gen::MetadataEntry* meta_entry =
+        reinterpret_cast<const gen::MetadataEntry*>(buf_);
+    buf_type_ = meta_entry->type()->str();
+    setId(meta_entry->id());
+}
+
+std::string MetadataEntryRef::type() const { return buf_type_; }
+
+std::string MetadataEntryRef::static_type() const {
+    return metadata_type<MetadataEntryRef>();
+}
+
+std::unique_ptr<MetadataEntry> MetadataEntryRef::clone() const {
+    return std::make_unique<MetadataEntryRef>(*this);
+}
+
 std::vector<uint8_t> MetadataEntryRef::buffer() const {
     const gen::MetadataEntry* meta_entry =
         reinterpret_cast<const gen::MetadataEntry*>(buf_);
@@ -79,6 +99,8 @@ std::unique_ptr<MetadataEntry> MetadataEntryRef::as_type() const {
     return m;
 }
 
+void MetadataEntryRef::setId(uint32_t id) { MetadataEntry::setId(id); }
+
 std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>>
 MetadataStore::make_entries(flatbuffers::FlatBufferBuilder& fbb) const {
     using FbEntriesVector =
@@ -89,6 +111,42 @@ MetadataStore::make_entries(flatbuffers::FlatBufferBuilder& fbb) const {
         entries.push_back(entry_offset);
     }
     return entries;
+}
+
+uint32_t MetadataStore::add(MetadataEntry&& entry) { return add(entry); }
+
+uint32_t MetadataStore::add(MetadataEntry& entry) {
+    if (entry.id() == 0) {
+        /// @todo [pb]: Figure out the whole sequence of ids in addMetas in
+        /// the Reader case
+        assignId(entry);
+    } else if (metadata_entries_.find(entry.id()) != metadata_entries_.end()) {
+        std::cout << "WARNING: MetadataStore: ENTRY EXISTS! id = " << entry.id()
+                  << std::endl;
+        return entry.id();
+    } else if (next_meta_id_ == entry.id()) {
+        // Find next available next_meta_id_ so we avoid id collisions
+        ++next_meta_id_;
+        auto next_it = metadata_entries_.lower_bound(next_meta_id_);
+        while (next_it != metadata_entries_.end() &&
+               next_it->first == next_meta_id_) {
+            ++next_meta_id_;
+            next_it = metadata_entries_.lower_bound(next_meta_id_);
+        }
+    }
+
+    metadata_entries_.emplace(entry.id(), entry.clone());
+    return entry.id();
+}
+
+size_t MetadataStore::size() const { return metadata_entries_.size(); }
+
+const MetadataStore::MetadataEntriesMap& MetadataStore::entries() const {
+    return metadata_entries_;
+}
+
+void MetadataStore::assignId(MetadataEntry& entry) {
+    entry.setId(next_meta_id_++);
 }
 
 }  // namespace osf

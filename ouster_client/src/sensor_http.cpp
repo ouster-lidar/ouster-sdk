@@ -1,12 +1,9 @@
 #include "ouster/sensor_http.h"
 
-#include <regex>
-
 #include "curl_client.h"
 #include "sensor_http_imp.h"
 #include "sensor_tcp_imp.h"
 
-using std::stoul;
 using std::string;
 
 using namespace ouster::util;
@@ -23,19 +20,7 @@ string SensorHttp::firmware_version_string(const string& hostname,
 
 version SensorHttp::firmware_version(const string& hostname, int timeout_sec) {
     auto result = firmware_version_string(hostname, timeout_sec);
-    auto rgx = std::regex(R"(v(\d+).(\d+)\.(\d+))");
-    std::smatch matches;
-    std::regex_search(result, matches, rgx);
-
-    if (matches.size() < 4) return invalid_version;
-
-    try {
-        return version{static_cast<uint16_t>(stoul(matches[1])),
-                       static_cast<uint16_t>(stoul(matches[2])),
-                       static_cast<uint16_t>(stoul(matches[3]))};
-    } catch (const std::exception&) {
-        return invalid_version;
-    }
+    return ouster::util::version_from_string(result);
 }
 
 std::unique_ptr<SensorHttp> SensorHttp::create(const string& hostname,

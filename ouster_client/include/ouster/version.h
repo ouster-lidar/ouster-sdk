@@ -109,7 +109,17 @@ std::string to_string(const version& v);
  *
  * @return version corresponding to the string, or invalid_version on error.
  */
-version version_of_string(const std::string& s);
+[[deprecated("Use version_from_string instead")]] version version_of_string(
+    const std::string& s);
+
+/**
+ * Get version from string.
+ *
+ * @param[in] ver string.
+ *
+ * @return version corresponding to the string, or invalid_version on error.
+ */
+version version_from_string(const std::string& ver);
 
 }  // namespace util
 }  // namespace ouster

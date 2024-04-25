@@ -1,13 +1,13 @@
 # type: ignore
 import os
 import numpy as np
-import ouster.pcap._pcap as _pcap
-from ouster.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField
-import ouster.client as client
-import ouster.pcap as pcap
-from ouster.sdkx.parsing import FusaDualFormat, PacketFormat, default_scan_fields
+import ouster.sdk.pcap._pcap as _pcap
+from ouster.sdk.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField
+import ouster.sdk.client as client
+import ouster.sdk.pcap as pcap
+from ouster.sdk.util import (FusaDualFormat, PacketFormat, default_scan_fields,
+                             resolve_metadata)
 from tests.conftest import PCAPS_DATA_DIR
-from ouster.sdk.util import resolve_metadata
 
 
 def test_fusa_parsing_profile():

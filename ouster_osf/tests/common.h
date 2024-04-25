@@ -28,6 +28,7 @@ constexpr char OSF_OUTPUT_DIR[] = "test_osf";
 
 using idx = std::ptrdiff_t;
 
+/// @todo move this stuff into a cpp file
 inline bool get_test_data_dir(std::string& test_data_dir) {
     std::string test_data_dir_var;
     if (get_env_var("DATA_DIR", test_data_dir_var)) {

@@ -15,6 +15,14 @@ IndexedPcapReader::IndexedPcapReader(
     }
 }
 
+IndexedPcapReader::IndexedPcapReader(
+    const std::string& pcap_filename,
+    const std::vector<ouster::sensor::sensor_info>& sensor_infos)
+    : PcapReader(pcap_filename),
+      sensor_infos_(sensor_infos),
+      index_(sensor_infos.size()),
+      previous_frame_ids_(sensor_infos.size()) {}
+
 nonstd::optional<size_t> IndexedPcapReader::sensor_idx_for_current_packet()
     const {
     const auto& pkt_info = current_info();
@@ -49,21 +57,41 @@ int IndexedPcapReader::update_index_for_current_packet() {
             sensor_idx_for_current_packet()) {
         if (nonstd::optional<uint16_t> frame_id = current_frame_id()) {
             if (!previous_frame_ids_[*sensor_info_idx] ||
-                *previous_frame_ids_[*sensor_info_idx] <
-                    *frame_id  // frame_id is greater than previous
-                || frame_id_rolled_over(*previous_frame_ids_[*sensor_info_idx],
-                                        *frame_id)) {
+                *previous_frame_ids_[*sensor_info_idx] < *frame_id ||
+                frame_id_rolled_over(*previous_frame_ids_[*sensor_info_idx],
+                                     *frame_id)) {
                 index_.frame_indices_[*sensor_info_idx].push_back(
                     current_info().file_offset);
+                index_.frame_timestamp_indices_[*sensor_info_idx].insert(
+                    {current_info().timestamp.count(),
+                     current_info().file_offset});
+                index_.frame_id_indices_[*sensor_info_idx].insert(
+                    {*frame_id, current_info().file_offset});
                 previous_frame_ids_[*sensor_info_idx] = *frame_id;
             }
         }
     }
+
     return static_cast<int>(100 * static_cast<float>(current_offset()) /
                             file_size());
 }
 
+void IndexedPcapReader::build_index() {
+    index_.clear();
+    reset();
+    while (next_packet() != 0) update_index_for_current_packet();
+    reset();
+}
+
 const PcapIndex& IndexedPcapReader::get_index() const { return index_; }
+
+void PcapIndex::clear() {
+    for (size_t i = 0; i < frame_indices_.size(); ++i) {
+        frame_indices_[i].clear();
+        frame_timestamp_indices_[i].clear();
+        frame_id_indices_[i].clear();
+    }
+}
 
 void PcapIndex::seek_to_frame(PcapReader& reader, size_t sensor_index,
                               unsigned int frame_number) {

@@ -122,8 +122,9 @@ TEST(IndexedPcapReader, constructor) {
         data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
     std::string meta_filename = data_dir + "/OS-0-32-U1_v2.2.0_1024x10.json";
 
-    IndexedPcapReader pcap(filename,
-                           {meta_filename, meta_filename, meta_filename});
+    IndexedPcapReader pcap(
+        filename,
+        std::vector<std::string>{meta_filename, meta_filename, meta_filename});
     EXPECT_EQ(pcap.index_.frame_indices_.size(), 3);
     EXPECT_EQ(pcap.previous_frame_ids_.size(), 3);
 }
@@ -133,7 +134,7 @@ TEST(IndexedPcapReader, frame_count) {
     auto data_dir = getenvs("DATA_DIR");
     std::string filename =
         data_dir + "/OS-0-32-U1_v2.2.0_1024x10-single-packet.pcap";
-    IndexedPcapReader pcap(filename, {});
+    IndexedPcapReader pcap(filename, std::vector<std::string>{});
     pcap.index_.frame_indices_.push_back(PcapIndex::frame_index());
     pcap.index_.frame_indices_.at(0).push_back(0);
 
@@ -147,7 +148,7 @@ TEST(IndexedPcapReader, seek_to_frame) {
     auto data_dir = getenvs("DATA_DIR");
     std::string filename = data_dir + "/OS-2-128-U1_v2.3.0_1024x10.pcap";
     std::string meta_filename = data_dir + "/OS-2-128-U1_v2.3.0_1024x10.json";
-    IndexedPcapReader pcap(filename, {meta_filename});
+    IndexedPcapReader pcap(filename, std::vector<std::string>{meta_filename});
 
     std::vector<int> progress;
     while (pcap.next_packet()) {

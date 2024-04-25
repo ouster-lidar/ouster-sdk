@@ -10,17 +10,38 @@
 #include "json_utils.h"
 #include "ouster/osf/basics.h"
 
+using sensor_info = ouster::sensor::sensor_info;
+
 namespace ouster {
 namespace osf {
 
 // === Lidar Sensor stream/msgs functions ====================
 
+/**
+ * Internal helper function for creating flatbuffer blobs to represent
+ * LidarSensor objects.
+ *
+ * @param[in] fbb The flatbufferbuilder to use when generating the blob.
+ * @param[in] sensor_metadata ///< The json string representation of the
+ *                            ///< sensor_info to use when creating
+ *                            ///< the flatbuffer blob.
+ * @return The offset pointer inside the flatbufferbuilder to the new section.
+ */
 flatbuffers::Offset<ouster::osf::gen::LidarSensor> create_lidar_sensor(
     flatbuffers::FlatBufferBuilder& fbb, const std::string& sensor_metadata) {
     auto ls_offset =
         ouster::osf::gen::CreateLidarSensorDirect(fbb, sensor_metadata.c_str());
     return ls_offset;
 }
+
+/**
+ * Internal helper function for restoring a LidarSensor's json string
+ * representation of a sensor_info from a raw flatbuffer byte vector.
+ *
+ * @param[in] buf The flatbuffer byte vector.
+ * @return ///< The json string representation of the sensor_info object
+ *         ///< contained within the flatbuffer blob.
+ */
 
 std::unique_ptr<std::string> restore_lidar_sensor(
     const std::vector<uint8_t> buf) {
@@ -32,6 +53,17 @@ std::unique_ptr<std::string> restore_lidar_sensor(
 
     return std::make_unique<std::string>(sensor_metadata);
 }
+
+LidarSensor::LidarSensor(const sensor_info& si)
+    : sensor_info_(si), metadata_(si.updated_metadata_string()) {}
+
+LidarSensor::LidarSensor(const std::string& sensor_metadata)
+    : sensor_info_(sensor::parse_metadata(sensor_metadata)),
+      metadata_(sensor_metadata) {}
+
+const sensor_info& LidarSensor::info() const { return sensor_info_; }
+
+const std::string& LidarSensor::metadata() const { return metadata_; }
 
 std::vector<uint8_t> LidarSensor::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(32768);
@@ -64,6 +96,8 @@ std::string LidarSensor::repr() const {
 
     return json_string(lidar_sensor_obj);
 };
+
+std::string LidarSensor::to_string() const { return repr(); };
 
 }  // namespace osf
 }  // namespace ouster

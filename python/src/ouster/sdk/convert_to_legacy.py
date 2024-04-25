@@ -3,9 +3,11 @@ Copyright (c) 2023, Ouster, Inc.
 All rights reserved.
 """
 
+# TODO[UN]: move to ouster/cli/util
+
 import argparse
 
-from ouster import client
+from ouster.sdk import client
 
 
 def main() -> None:

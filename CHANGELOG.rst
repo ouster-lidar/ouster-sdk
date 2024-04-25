@@ -2,8 +2,143 @@
 Changelog
 =========
 
+[20240425] [0.11.0]
+=========================
+
+Important notes
+---------------
+
+* Dropped support for python3.7
+* Dropped support macOS 10.15
+* This will be the last release that supports Ubuntu 18.04.
+* Moved all library level modules under ``ouster.sdk``, this includes ``ouster.client``, ``ouster.pcap``
+  ``ouster.osf``. So the new access name will be ``ouster.sdk.client``, ``ouster.sdk.pcap`` and so on
+* [BREAKING] many of the ``ouster-cli`` commands and arguments have changed (see below.)
+* [BREAKING] moved ``configure_sensor`` method to ``ouster.sdk.sensor.util`` module
+* [BREAKING] removed the ``pcap_to_osf`` method.
+
+
+examples
+--------
+
+* Added a new ``async_client_example.cpp`` C++ example.
+
+
+Python SDK
+----------
+
+* Add support for python 3.12, including wheels on pypi
+* Updated VCPKG libraries to 2023.10.19
+* New ``ScanSource`` API:
+  * Added new ``MultiScanSource`` that supports streaming and manipulating LidarScan frames
+    from multiple concurrent LidarScan sources
+    * For non-live sources the ``MultiScanSource`` have the option to choose LidarScan(s) by index
+    or choose a subset of scans using slicing operation
+    * The ``MultiScanSource`` interface has the ability to fallback to ``ScanSource`` using the 
+      ``single_source(sensor_idx)``, ``ScanSource`` interface yield a single LidarScan on iteration
+      rather than a List
+    * The ``ScanSource`` interface obtained via ``single_source`` method supports same indexing and
+      and slicing operations as the ``MultiScanSource``
+  * Added a generic ``open_source`` that accepts sensor urls, or a path to a pcap recording
+    or an osf file
+  * Add explicit flag ``index`` to index unindexed osf files, if flag is set to ``True`` the osf file
+    will be indexed and the index will be saved to the file on first attempt
+  * Display a progress bar during index of pcap file or osf (if unindexed)
+* Improved the robustness of the ``resolve_metadata`` method used to
+  automatically identify the sensor metadata associated with a PCAP source.
+* [bugfix] SimpleViz complains about missing fields
+* [bugfix] Gracefully handle failed sensor connection attempts with proper error reporting
+* [bugfix] Fix assertion error when using viz stepping on a live sensor
+* [bugfix] Scope MultiLidarViz imports to viz commands
+* [bugfix] LidarScan yielded with improper header/status
+* [bugfix] OSF ScanSource fields property doesn't report the actual fields 
+* Removed ``ouster.sdkx``, the ``open_source`` command is now part of ``ouster.sdk`` module
+* The ``FLAGS`` field is always added to the list fields of any source type by default. In case of a 
+  dual return lidar profile then a second ``FLAGS2`` will also be added. 
+
+
+mapping
+-------
+
+* Updated SLAM API and examples.
+* Added real time frame dropping capability to SLAM API.
+* The ``ouster-mapping`` package now uses ``point-cloud-utils`` instead of ``open3d``.
+* improved per-column pose accuracy, which is now based on the actual column timestamps
+
+
+ouster-cli
+----------
+
+* Many commands can now be chained together, e.g. ``ouster-cli source <src> slam viz``.
+* New ``save`` command can output the result in a variety of formats.
+* Added ``--ts`` option for specifying the timestamps to use when saving an OSF
+  file. Host packet receive time is the default, but not all scan sources have
+  this info. Lidar packet timestamps can be used as an alternative.
+* Changed the output format of ``ouster-cli discover`` to include more information.
+* Added JSON format output option to ``ouster-cli discover``.
+* Added a flag to output sensor user data to ``ouster-cli discover``.
+* Update the minimum required version of ``zeroconf``.
+* Removed ``python-magic`` package from required dependencies.
+* Made the output of ``ouster-cli source <osf> info`` much more
+  user-friendly. (``ouster-cli source <osf> dump`` gives old output.)
+* [breaking] changed the argument format of the ``slice`` command.
+* [breaking] removed the ``--legacy`` and ``--non-legacy`` flags.
+* [breaking] removed the ``ouster-cli mapping``, ``ouster-cli osf``,
+  ``ouster-cli pcap``, and ``ouster-cli sensor`` commands.
+* [bugfix] return a nonzero exit code on error.
+* [bugfix] fix an error that occurred when setting the IMU port using the
+  ``-i`` option.
+
+
+ouster_client
+-------------
+
+* Added a new buffered UDP source implementation ``BufferedUDPSource``.
+* The method ``version_of_string`` is marked as deprecated, use ``version_from_string``
+  instead.
+* Added a new method ``firmware_version_from_metadata`` which works across firmwares.
+* Added support for return order configuration parameter.
+* Added support for gyro and accelerometer FSR configuration parameters.
+* [bugfix] ``mtp_init_client`` throws a bad optional access.
+* [bugfix] properly handle 32-bit frame IDs from the
+  ``FUSA_RNG15_RFL8_NIR8_DUAL`` sensor UDP profile.
+
+
+ouster_osf
+----------
+
+* [breaking] Greatly simplified OSF writer API with examples.
+* [breaking] removed the ``to_native`` and ``from_native`` methods.
+* Updated Doxygen API documentation for OSF C++ API.
+* Removed support for the deprecated "standard" OSF file format. (The streaming
+  OSF format is still supported.)
+* Added ``osf_file_modify_metadata`` that allows updating the sensor info
+  associated with each lidar stream in an OSF file.
+* Warn the user if reading an empty or improperly indexed file.
+
+
+ouster_viz
+----------
+* Added scaled palettes for calibrated reflectivity.
+* Distance rings can now be hidden by setting their thickness to zero.
+* [bugfix] Fix some rendering issues with the distance rings.
+* [bugfix] Fix potential flickering in Viz
+
+
+Known issues
+------------
+
+* ouster-cli discover may not provide info for sensors using IPv6 link-local
+  networks on Python 3.8 or with older versions of zeroconf.
+* ouster-cli when combining ``slice`` command with ``viz`` the program will
+  exit once iterate over the selected range of scans even when
+  the ``--on-eof`` option is set to ``loop``.
+  - workaround: to have ``viz`` loop over the selected range, first perform a
+    ``slice`` with ``save``, then playback the generated file.
+
+
 [20231031] [0.10.0]
-============
+===================
 
 Important notes
 ---------------

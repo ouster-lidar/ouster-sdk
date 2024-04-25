@@ -24,7 +24,8 @@ class SensorHttpImp : public util::SensorHttp {
     /**
      * Constructs an http interface to communicate with the sensor.
      *
-     * @param[in] hostname hostname of the sensor to communicate with.
+     * @param[in] hostname Hostname of the sensor to communicate with.
+     * @param[in] timeout_sec The timeout to use in seconds.
      */
     SensorHttpImp(const std::string& hostname, int timeout_sec);
 
@@ -144,6 +145,7 @@ class SensorHttpImp_2_1 : public SensorHttpImp_2_2 {
      * Constructs an http interface to communicate with the sensor.
      *
      * @param[in] hostname hostname of the sensor to communicate with.
+     * @param[in] timeout_sec The timeout to use in seconds.
      */
     SensorHttpImp_2_1(const std::string& hostname, int timeout_sec);
 

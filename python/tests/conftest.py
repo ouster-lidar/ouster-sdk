@@ -11,16 +11,16 @@ from pathlib import Path
 from more_itertools import partition
 import pytest
 
-from ouster import client, pcap
+from ouster.sdk import client, pcap
 
-pytest.register_assert_rewrite('ouster.client._digest')
-import ouster.client._digest as digest  # noqa
+pytest.register_assert_rewrite('ouster.sdk.client._digest')
+import ouster.sdk.client._digest as digest  # noqa
 
 
 _has_mapping = False
 try:
     from ouster.cli.plugins import cli_mapping  # type: ignore # noqa: F401 # yes... it has to be in this order.
-    _has_mapping = True
+    _has_mapping = False  # NOTE: temporarily disabled due to CLI chaining -- Tim T.
 except ImportError:
     pass
 

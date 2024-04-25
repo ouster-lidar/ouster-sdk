@@ -50,7 +50,7 @@ class PcapReader {
 
    public:
     /**
-     * @param file[in] A filepath of the pcap to read
+     * @param[in] file A filepath of the pcap to read
      */
     PcapReader(const std::string& file);
     virtual ~PcapReader();
@@ -103,13 +103,13 @@ class PcapReader {
      * Seek to the position in the file represented by the
      * number of bytes from the beginning of the file.
      *
-     * @param offset[in] The position to seek to in bytes,
+     * @param[in] offset The position to seek to in bytes,
      * starting from the beginning of the file.
      *
-     * @pre \paramname{offset} must be the offset of a PCAP
+     * @pre offset must be the offset of a PCAP
      * record header. If any other value is provided,
      * subsequent packet reads from this PcapReader will be
-     * invalid until \functionname{reset} is called.
+     * invalid until PcapReader::reset is called.
      */
     void seek(uint64_t offset);
 
@@ -135,9 +135,9 @@ class PcapWriter {
     };
 
     /**
-     * @param file[in] The file path to write the pcap to
-     * @param encap[in] The encapsulation to use for the pcap
-     * @param frag_size[in] The fragmentation size to use (Currently broken)
+     * @param[in] file The file path to write the pcap to
+     * @param[in] encap The encapsulation to use for the pcap
+     * @param[in] frag_size The fragmentation size to use (Currently broken)
      */
     PcapWriter(const std::string& file, PacketEncapsulation encap,
                uint16_t frag_size);
@@ -146,13 +146,13 @@ class PcapWriter {
     /**
      * Write a packet using a buffer to the pcap
      *
-     * @param buf[in] The buffer to write
-     * @param buf_size[in] The size of the buffer to write
-     * @param src_ip[in] The source ip address to use for the packet
-     * @param dst_ip[in] The destination ip address to use for the packet
-     * @param src_port[in] The source port number to use for the packet
-     * @param dst_port[in] The destination port number to use for the packet
-     * @param timestamp[in] The timestamp of the packet to record
+     * @param[in] buf The buffer to write
+     * @param[in] buf_size The size of the buffer to write
+     * @param[in] src_ip The source ip address to use for the packet
+     * @param[in] dst_ip The destination ip address to use for the packet
+     * @param[in] src_port The source port number to use for the packet
+     * @param[in] dst_port The destination port number to use for the packet
+     * @param[in] timestamp The timestamp of the packet to record
      * @note The timestamp parameter does not affect the order of packets being
      * recorded, it is strictly recorded FIFO.
      */
@@ -164,9 +164,9 @@ class PcapWriter {
     /**
      * Write a packet using a buffer to the pcap
      *
-     * @param buf[in] The buffer to write
-     * @param buf_size[in] The size of the buffer to write
-     * @param info[in] The packet info object to use for the recording
+     * @param[in] buf The buffer to write
+     * @param[in] buf_size The size of the buffer to write
+     * @param[in] info The packet info object to use for the recording
      * parameters
      * @note The timestamp parameter in info does not affect the order of
      * packets being recorded, it is strictly recorded FIFO.

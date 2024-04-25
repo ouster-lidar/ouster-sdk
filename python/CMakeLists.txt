@@ -7,6 +7,7 @@ list(APPEND CMAKE_MODULE_PATH ${OUSTER_SDK_PATH}/cmake)
 
 # configure vcpkg from environment variables, if present
 include(VcpkgEnv)
+include(Coverage)
 
 project(python-ouster-sdk)
 
@@ -41,7 +42,7 @@ endif()
 # CMAKE_LIBRARY_OUTPUT_DIRECTORY is set in setup.py to the root of the `ouster`
 # namespace, but we have to provide per-target packages directories for each
 # extension module here.
-set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/sdk)
 
 # Note: With multi-configuration generators (like for VS), CMake automatically
 # appends build-configuration suffix to *_OUTPUT_DIRECTORY properties *unless*
@@ -53,7 +54,8 @@ target_link_libraries(_client
     ouster_client
     ouster_build
     spdlog::spdlog)
-
+CodeCoverageFunctionality(_client)
+  
 target_include_directories(_client SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_client PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
@@ -64,6 +66,7 @@ target_link_libraries(_pcap PRIVATE ouster_pcap ouster_build)
 set_target_properties(_pcap PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/pcap/$<0:>)
+CodeCoverageFunctionality(_pcap)
 
 pybind11_add_module(_viz src/cpp/_viz.cpp)
 target_link_libraries(_viz PRIVATE ouster_client ouster_viz ouster_build)
@@ -71,9 +74,11 @@ target_include_directories(_viz SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_viz PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/viz/$<0:>)
+CodeCoverageFunctionality(_viz)
 
 pybind11_add_module(_osf src/cpp/_osf.cpp)
 target_link_libraries(_osf PRIVATE ouster_osf ouster_build)
 set_target_properties(_osf PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/osf/$<0:>)
+CodeCoverageFunctionality(_osf)
