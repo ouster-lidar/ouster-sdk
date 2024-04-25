@@ -23,12 +23,12 @@ Available view modes
 There are three view modes of **ScansAccumulator**, that may be enabled/disabled depending on
 it's params and the data that is passed throught it:
 
-   * **poses** (or **TRACK**), key ``8`` - all scan poses in a trajectory/path view (avaialble only
+   * **poses** (or **TRACK**), key ``8`` - all scan poses in a trajectory/path view (available only
      if poses data is present in scans)
    * **scan map** (or **MAP**), key ``7`` - overall map view with select ratio of random points
-     from every scan (avaialble for scans with/without poses)
+     from every scan (available for scans with/without poses)
    * **scan accum** (or **ACCUM**), key ``6`` - accumulated *N* scans (key frames) that is picked
-     according to params (avaialble for scans with/without poses)
+     according to params (available for scans with/without poses)
 
 
 Key bindings
@@ -191,6 +191,6 @@ graphing tool, but it can be ``matplotlib`` instead)::
    cloud_map.set_point_size(1)
    point_viz.add(cloud_map)
 
-In the example above one might use ``matplolib`` with some modifications to use pallette for peeking
+In the example above one might use ``matplotlib`` with some modifications to use palette for picking
 the key color.
 

@@ -12,6 +12,7 @@ find_package(PNG REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(jsoncpp REQUIRED)
 find_package(spdlog REQUIRED)
+include(Coverage)
 
 # TODO: Extract to a separate FindFlatbuffers cmake file
 # Flatbuffers flatc resolution and different search name 'flatbuffers` with Conan
@@ -91,12 +92,10 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/basics.cpp
                               src/crc32.cpp
                               src/metadata.cpp
-                              src/writer.cpp
                               src/meta_lidar_sensor.cpp
                               src/meta_extrinsics.cpp
                               src/meta_streaming_info.cpp
                               src/stream_lidar_scan.cpp
-                              src/layout_standard.cpp
                               src/layout_streaming.cpp
                               src/file.cpp
                               src/reader.cpp
@@ -104,7 +103,10 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/json_utils.cpp
                               src/fb_utils.cpp
                               src/pcap_source.cpp
+                              src/writer.cpp
 )
+
+CodeCoverageFunctionality(ouster_osf)
 
 if (OUSTER_OSF_NO_MMAP)
   target_compile_definitions(ouster_osf PRIVATE OUSTER_OSF_NO_MMAP)

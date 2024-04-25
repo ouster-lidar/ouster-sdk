@@ -9,7 +9,7 @@ import pytest
 import warnings
 import inspect
 
-from ouster import client
+from ouster.sdk import client
 
 # all valid values
 valid_signal_multiplier_values = [0.25, 0.5, 1, 2, 3]
@@ -110,8 +110,11 @@ def test_optional_config() -> None:
     config = client.SensorConfig()
 
     # make sure all the values are empty
+    assert config.accel_fsr is None
     assert config.azimuth_window is None
     assert config.lidar_mode is None
+    assert config.gyro_fsr is None
+    assert config.min_range_threshold_cm is None
     assert config.multipurpose_io_mode is None
     assert config.nmea_baud_rate is None
     assert config.nmea_in_polarity is None
@@ -120,6 +123,7 @@ def test_optional_config() -> None:
     assert config.operating_mode is None
     assert config.phase_lock_enable is None
     assert config.phase_lock_offset is None
+    assert config.return_order is None
     assert config.signal_multiplier is None
     assert config.sync_pulse_out_pulse_width is None
     assert config.sync_pulse_out_frequency is None
@@ -160,6 +164,10 @@ def test_write_config() -> None:
     config.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
     config.udp_profile_imu = client.UDPProfileIMU.PROFILE_IMU_LEGACY
     config.columns_per_packet = 8
+    config.return_order = client.ReturnOrder.ORDER_FARTHEST_TO_NEAREST
+    config.gyro_fsr = client.FullScaleRange.FSR_NORMAL
+    config.accel_fsr = client.FullScaleRange.FSR_EXTENDED
+    config.min_range_threshold_cm = 30
 
     with pytest.raises(TypeError):
         config.lidar_mode = 1  # type: ignore
@@ -170,9 +178,12 @@ def test_write_config() -> None:
 @pytest.fixture()
 def complete_config_string() -> str:
     complete_config_string = """
-        {"azimuth_window": [0, 360000],
+        {"accel_fsr": "EXTENDED",
+        "azimuth_window": [0, 360000],
         "columns_per_packet": 8,
+        "gyro_fsr": "EXTENDED",
         "lidar_mode": "1024x10",
+        "min_range_threshold_cm": 30,
         "multipurpose_io_mode": "OFF",
         "nmea_baud_rate": "BAUD_9600",
         "nmea_ignore_valid_char": 0,
@@ -181,6 +192,7 @@ def complete_config_string() -> str:
         "operating_mode": "NORMAL",
         "phase_lock_enable": false,
         "phase_lock_offset": 0,
+        "return_order": "STRONGEST_TO_WEAKEST",
         "signal_multiplier": 2,
         "sync_pulse_in_polarity": "ACTIVE_HIGH",
         "sync_pulse_out_angle": 360,
@@ -201,9 +213,12 @@ def complete_config_string() -> str:
 def all_different_config_string() -> str:
     """All different from complete_config_string except for udp_profile_imu"""
     all_different_config_string = """
-        {"azimuth_window": [180000, 360000],
+        {"accel_fsr": "NORMAL",
+        "azimuth_window": [180000, 360000],
         "columns_per_packet": 16,
+        "gyro_fsr": "NORMAL",
         "lidar_mode": "512x10",
+        "min_range_threshold_cm": 0,
         "multipurpose_io_mode": "INPUT_NMEA_UART",
         "nmea_baud_rate": "BAUD_115200",
         "nmea_ignore_valid_char": 1,
@@ -212,6 +227,7 @@ def all_different_config_string() -> str:
         "operating_mode": "STANDBY",
         "phase_lock_enable": true,
         "phase_lock_offset": 180000,
+        "return_order": "NEAREST_TO_FARTHEST",
         "signal_multiplier": 0.5,
         "sync_pulse_in_polarity": "ACTIVE_LOW",
         "sync_pulse_out_angle": 180,
@@ -233,8 +249,11 @@ def test_read_config(complete_config_string: str) -> None:
     config = client.SensorConfig(complete_config_string)  # read from string
 
     # make sure all the values are correct
+    assert config.accel_fsr == client.FullScaleRange.FSR_EXTENDED
     assert config.azimuth_window == (0, 360000)
+    assert config.gyro_fsr == client.FullScaleRange.FSR_EXTENDED
     assert config.lidar_mode == client.LidarMode.MODE_1024x10
+    assert config.min_range_threshold_cm == 30
     assert config.multipurpose_io_mode == client.MultipurposeIOMode.MULTIPURPOSE_OFF
     assert config.nmea_baud_rate == client.NMEABaudRate.BAUD_9600
     assert config.nmea_in_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
@@ -243,6 +262,7 @@ def test_read_config(complete_config_string: str) -> None:
     assert config.operating_mode == client.OperatingMode.OPERATING_NORMAL
     assert config.phase_lock_enable is False
     assert config.phase_lock_offset == 0
+    assert config.return_order == client.ReturnOrder.ORDER_STRONGEST_TO_WEAKEST
     assert config.signal_multiplier == 2
     assert config.sync_pulse_out_pulse_width == 10
     assert config.sync_pulse_out_frequency == 1
@@ -311,7 +331,7 @@ def test_equality_config(complete_config_string: str, all_different_config_strin
             setattr(copy_config, property_name, property_value)
             assert copy_config != base_config
 
-    assert len(config_properties) == 23, "Don't forget to update tests and the config == operator!"
+    assert len(config_properties) == 27, "Don't forget to update tests and the config == operator!"
 
 
 def test_copy_config(complete_config_string: str) -> None:

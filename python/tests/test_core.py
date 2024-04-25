@@ -9,11 +9,12 @@ import socket
 import numpy as np
 import pytest
 
-from ouster import client
-from ouster.client import ChanField, _LidarPacket, _ImuPacket
+from ouster.sdk import client
+from ouster.sdk.client import ChanField, _LidarPacket, _ImuPacket
+from ouster.sdk.client.core import ClientTimeout
 
-pytest.register_assert_rewrite('ouster.client._digest')
-import ouster.client._digest as digest  # noqa
+pytest.register_assert_rewrite('ouster.sdk.client._digest')
+import ouster.sdk.client._digest as digest  # noqa
 
 
 @pytest.fixture
@@ -24,8 +25,8 @@ def default_meta():
 def test_sensor_init(default_meta: client.SensorInfo) -> None:
     """Initializing a data stream with metadata makes no network calls."""
     with closing(client.Sensor("", 0, 0, metadata=default_meta)) as source:
-        assert source._cli.lidar_port != 0
-        assert source._cli.imu_port != 0
+        assert source.lidar_port != 0
+        assert source.imu_port != 0
 
 
 def test_sensor_timeout(default_meta: client.SensorInfo) -> None:
@@ -49,13 +50,13 @@ def test_sensor_port_in_use(default_meta: client.SensorInfo) -> None:
     with closing(client.Sensor("", 0, 0, metadata=default_meta)) as s1:
         with closing(
                 client.Sensor("",
-                              s1._cli.lidar_port,
-                              s1._cli.imu_port,
+                              s1.lidar_port,
+                              s1.imu_port,
                               metadata=default_meta)) as s2:
-            assert s2._cli.lidar_port != 0
-            assert s2._cli.imu_port != 0
-            assert s2._cli.lidar_port == s1._cli.lidar_port
-            assert s2._cli.imu_port == s1._cli.imu_port
+            assert s2.lidar_port != 0
+            assert s2.imu_port != 0
+            assert s2.lidar_port == s1.lidar_port
+            assert s2.imu_port == s1.imu_port
 
 
 def test_sensor_packet(default_meta: client.SensorInfo) -> None:
@@ -73,7 +74,7 @@ def test_sensor_packet(default_meta: client.SensorInfo) -> None:
         data = np.random.randint(255,
                                  size=source._pf.lidar_packet_size,
                                  dtype=np.uint8)
-        sock.sendto(data.tobytes(), ("localhost", source._cli.lidar_port))
+        sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
         packet = next(iter(source))
         assert (packet._data == data).all()
         assert isinstance(packet, _LidarPacket)
@@ -81,10 +82,31 @@ def test_sensor_packet(default_meta: client.SensorInfo) -> None:
         data = np.random.randint(255,
                                  size=source._pf.imu_packet_size,
                                  dtype=np.uint8)
-        sock.sendto(data.tobytes(), ("localhost", source._cli.imu_port))
+        sock.sendto(data.tobytes(), ("localhost", source.imu_port))
         packet = next(iter(source))
         assert (packet._data == data).all()
         assert isinstance(packet, _ImuPacket)
+
+
+def test_sensor_flush(default_meta: client.SensorInfo) -> None:
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          metadata=default_meta,
+                          timeout=1.0,
+                          _flush_before_read=False)) as source:
+        total_packets_sent = 5
+        for i in range(total_packets_sent):
+            data = np.zeros((source._pf.lidar_packet_size), dtype=np.uint8)
+            data[:] = i
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
+        flushed_packets = 2
+        source.flush(flushed_packets)
+        for i in range(flushed_packets, total_packets_sent):
+            packet = next(iter(source))
+            assert (packet._data == i).all()
 
 
 def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
@@ -97,9 +119,43 @@ def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
                           timeout=1.0,
                           _flush_before_read=False)) as source:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(b"hello", ("localhost", source._cli.lidar_port))
+
+        # send packet too small
+        sock.sendto(b"hello", ("localhost", source.lidar_port))
         with pytest.raises(client.ClientTimeout):
             next(iter(source))
+
+        # send packet too big
+        data = np.random.randint(255,
+                                 size=source._pf.lidar_packet_size + 10,
+                                 dtype=np.uint8)
+        sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
+        with pytest.raises(client.ClientTimeout):
+            next(iter(source))
+
+
+# TODO: reenable once we figure out CI determinism
+@pytest.mark.skip
+def test_sensor_overflow(default_meta: client.SensorInfo) -> None:
+    with closing(
+            client.Sensor("",
+                          0,
+                          0,
+                          buf_size=10,
+                          metadata=default_meta,
+                          timeout=1.0,
+                          _overflow_err=True,
+                          _flush_before_read=False)) as source:
+        total_packets_sent = 20
+        for i in range(total_packets_sent):
+            data = np.random.randint(255,
+                                     size=source._pf.lidar_packet_size,
+                                     dtype=np.uint8)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
+        with pytest.raises(client.ClientOverflow):
+            for i in range(total_packets_sent):
+                next(iter(source))
 
 
 def test_scans_simple(packets: client.PacketSource) -> None:
@@ -199,19 +255,13 @@ def test_scans_complete(packets: client.PacketSource) -> None:
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_scans_timeout(packets: client.PacketSource) -> None:
-    """A zero timeout should deterministically throw.
-
-    TODO: should it, though?
-
-    TWS 20230609: a timeout no longer raises an exception...
-    instead it stops iteration and sets _timed_out=True.
+    """A zero timeout should deterministically throw a ClientTimeout.
     """
     scans = client.Scans(packets, timeout=0.0)
     scans_itr = iter(scans)
 
-    with pytest.raises(StopIteration):
+    with pytest.raises(ClientTimeout):
         next(scans_itr)
-    assert scans._timed_out
 
 
 def test_scans_digest(stream_digest, packets: client.PacketSource) -> None:

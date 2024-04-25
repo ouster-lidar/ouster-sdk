@@ -177,7 +177,7 @@ bool next_packet_info(playback_handle& handle, packet_info& info);
  *
  * @param[in] handle The playback handle.
  * @param[out] buf The buffer to write the recieved data to (Must be sized
- * appropriately.
+ *                 appropriately.
  * @param[in] buffer_size The size of the output buffer.
  *
  * @return 0 on no new packet, > 0 the size of the bytes recieved.
@@ -213,7 +213,7 @@ void record_uninitialize(record_handle& handle);
  * @param[in] buf The buffer to record to the pcap file.
  * @param[in] buffer_size The size of the buffer to record to the pcap file.
  * @param[in] microsecond_timestamp The timestamp to record the packet as
- * microseconds.
+ *                                  microseconds.
  */
 void record_packet(record_handle& handle, const std::string& src_ip,
                    const std::string& dst_ip, int src_port, int dst_port,
@@ -236,7 +236,7 @@ void record_packet(record_handle& handle, const packet_info& info,
  *
  * @param[in] file The pcap file to read.
  * @param[in] packets_to_process Number of packets to process < 0 for all of
- * them
+ *                               them
  *
  * @return A pointer to the resulting stream_info
  */
@@ -248,11 +248,13 @@ std::shared_ptr<stream_info> get_stream_info(const std::string& file,
  *
  * @param[in] file The pcap file to read.
  * @param[in] progress_callback A callback to invoke after each packet is
- * scanned current: The current file offset delta: The delta in file offset
- *                              total: The total size of the file
+ *                              scanned
+ *                                  current: The current file offset
+ *                                  delta: The delta in file offset
+ *                                  total: The total size of the file
  * @param[in] packets_per_callback Callback every n packets
  * @param[in] packets_to_process Number of packets to process < 0 for all of
- * them
+ *                               them
  *
  * @return A pointer to the resulting stream_info
  */
@@ -267,14 +269,14 @@ std::shared_ptr<stream_info> get_stream_info(
  * indicies (if the PcapReader is an IndexedPcapReader).
  *
  * @param[in] pcap_reader The PcapReader
- * @param[in] sensor_info a set of sensor_info used to parse packets contained
- * in the file
  * @param[in] progress_callback A callback to invoke after each packet is
- * scanned current: The current file offset delta: The delta in file offset
- *                              total: The total size of the file
+ *                              scanned
+ *                                  current: The current file offset
+ *                                  delta: The delta in file offset
+ *                                  total: The total size of the file
  * @param[in] packets_per_callback Callback every n packets
  * @param[in] packets_to_process Number of packets to process < 0 for all of
- * them
+ *                               them
  *
  * @return A pointer to the resulting stream_info
  */
@@ -286,12 +288,12 @@ std::shared_ptr<stream_info> get_stream_info(
  * Return a guess of the correct ports located in a pcap file.
  *
  * @param[in] info The stream_info structure generated from a specific pcap file
- * @param[in] lidar_packet_sizes The size of the lidar packets
- * @param[in] imu_packet_sizes The size of the imu packets
- * @param[in] lidar_spec The expected lidar port from the metadata(pass 0 for
- * unknown)
- * @param[in] imu_spec The expected imu port from the metadata(pass 0 for
- * unknown)
+ * @param[in] lidar_packet_size The size of the lidar packets
+ * @param[in] imu_packet_size The size of the imu packets
+ * @param[in] expected_lidar_port The expected lidar port from the metadata
+ *                                (pass 0 for unknown)
+ * @param[in] expected_imu_port The expected imu port from the metadata
+ *                              (pass 0 for unknown)
  *
  * @return A vector (sorted by most likely to least likely) of the guessed ports
  */

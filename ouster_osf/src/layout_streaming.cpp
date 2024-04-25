@@ -17,8 +17,8 @@ StreamingLayoutCW::StreamingLayoutCW(Writer& writer, uint32_t chunk_size)
     : chunk_size_{chunk_size ? chunk_size : STREAMING_DEFAULT_CHUNK_SIZE},
       writer_{writer} {}
 
-void StreamingLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
-                                    const std::vector<uint8_t>& msg_buf) {
+void StreamingLayoutCW::save_message(const uint32_t stream_id, const ts_t ts,
+                                     const std::vector<uint8_t>& msg_buf) {
     if (!chunk_builders_.count(stream_id)) {
         chunk_builders_.insert({stream_id, std::make_shared<ChunkBuilder>()});
     }
@@ -28,7 +28,7 @@ void StreamingLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
     // checking non-decreasing invariant of chunks and messages
     if (chunk_builder->end_ts() > ts) {
         std::stringstream err;
-        err << "ERROR: Can't write wirh a decreasing timestamp: " << ts.count()
+        err << "ERROR: Can't write with a decreasing timestamp: " << ts.count()
             << " for stream_id: " << stream_id
             << " ( previous recorded timestamp: "
             << chunk_builder->end_ts().count() << ")";
@@ -39,11 +39,22 @@ void StreamingLayoutCW::saveMessage(const uint32_t stream_id, const ts_t ts,
         finish_chunk(stream_id, chunk_builder);
     }
 
-    chunk_builder->saveMessage(stream_id, ts, msg_buf);
+    chunk_builder->save_message(stream_id, ts, msg_buf);
 
     // update running statistics per stream
     stats_message(stream_id, ts, msg_buf);
 }
+
+void StreamingLayoutCW::finish() {
+    for (auto& cb_it : chunk_builders_) {
+        finish_chunk(cb_it.first, cb_it.second);
+    }
+
+    writer_.add_metadata(StreamingInfo{
+        chunk_stream_id_, {stream_stats_.begin(), stream_stats_.end()}});
+}
+
+uint32_t StreamingLayoutCW::chunk_size() const { return chunk_size_; }
 
 void StreamingLayoutCW::stats_message(const uint32_t stream_id, const ts_t ts,
                                       const std::vector<uint8_t>& msg_buf) {
@@ -70,15 +81,5 @@ void StreamingLayoutCW::finish_chunk(
     // Prepare for the new chunk messages
     chunk_builder->reset();
 }
-
-void StreamingLayoutCW::finish() {
-    for (auto& cb_it : chunk_builders_) {
-        finish_chunk(cb_it.first, cb_it.second);
-    }
-
-    writer_.addMetadata(StreamingInfo{
-        chunk_stream_id_, {stream_stats_.begin(), stream_stats_.end()}});
-}
-
 }  // namespace osf
 }  // namespace ouster

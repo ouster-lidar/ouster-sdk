@@ -28,8 +28,9 @@ struct CloudIds {
 
     /**
      * constructor
-     * @param point_program_id handle to GLSL shader program compiled from
-     * point_vertex_shader_code and point_fragment_shader_code
+     * @param[in] point_program_id handle to GLSL shader program compiled from
+     *                             point_vertex_shader_code and
+     *                             point_fragment_shader_code
      */
     explicit CloudIds(GLuint point_program_id)
         : xyz_id(glGetAttribLocation(point_program_id, "xyz")),
@@ -80,8 +81,8 @@ GLCloud::~GLCloud() {
 /**
  * @brief Makes a key from the pair of (n, w) for use in maps.
  *
- * @param n total cloud size
- * @param w columns number
+ * @param[in] n total cloud size
+ * @param[in] w columns number
  * @return size_t hash of the pair (n, w) to use as a map key
  */
 static inline size_t ti_key(size_t n, size_t w) {

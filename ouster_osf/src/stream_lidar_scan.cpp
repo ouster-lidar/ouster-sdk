@@ -6,6 +6,7 @@
 #include "ouster/osf/stream_lidar_scan.h"
 
 #include <algorithm>
+#include <sstream>
 
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/basics.h"
@@ -45,7 +46,6 @@ bool poses_present(const LidarScan& ls) {
            ls.pose().end();
 }
 
-// TODO[pb]: Error if field_types is not subset of fields in ls?
 LidarScan slice_with_cast(const LidarScan& ls_src,
                           const LidarScanFieldTypes& field_types) {
     LidarScan ls_dest{static_cast<std::size_t>(ls_src.w),
@@ -68,7 +68,9 @@ LidarScan slice_with_cast(const LidarScan& ls_src,
                                       ouster::impl::copy_and_cast(), ls_src,
                                       ft.first);
         } else {
-            ouster::impl::visit_field(ls_dest, ft.first, zero_field());
+            throw std::invalid_argument("Required field '" +
+                                        sensor::to_string(ft.first) +
+                                        "' is missing from scan.");
         }
     }
 
@@ -109,29 +111,21 @@ flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
     const LidarScanFieldTypes meta_field_types) {
     auto ls = lidar_scan;
     if (!meta_field_types.empty()) {
-        // Make a reduced field LidarScan (or extend if the field types is
-        // different)
-        // TODO[pb]: Consider to error instead of extending LidarScan, but be
-        //           sure to check the consistence everywhere. That's why it's
-        //           not done on the first pass here ...
+        // Make a reduced field LidarScan (erroring if we are missing anything)
         ls = slice_with_cast(lidar_scan, meta_field_types);
     }
-
     // Encode LidarScan to PNG buffers
     ScanData scan_data = scanEncode(ls, info.format.pixel_shift_by_row);
-
     // Prepare PNG encoded channels for LidarScanMsg.channels vector
     std::vector<flatbuffers::Offset<gen::ChannelData>> channels;
     for (const auto& channel_data : scan_data) {
         channels.emplace_back(gen::CreateChannelDataDirect(fbb, &channel_data));
     }
-
     // Prepare field_types for LidarScanMsg
     std::vector<ouster::osf::gen::ChannelField> field_types;
     for (const auto& f : ls) {
         field_types.emplace_back(to_osf_enum(f.first), to_osf_enum(f.second));
     }
-
     auto channels_off =
         fbb.CreateVector<::flatbuffers::Offset<gen::ChannelData>>(channels);
     auto field_types_off = osf::CreateVectorOfStructs<gen::ChannelField>(
@@ -141,13 +135,11 @@ flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
     auto measurement_id_off =
         fbb.CreateVector<uint16_t>(ls.measurement_id().data(), ls.w);
     auto status_off = fbb.CreateVector<uint32_t>(ls.status().data(), ls.w);
-
     flatbuffers::Offset<flatbuffers::Vector<double>> pose_off = 0;
     if (poses_present(ls)) {
         pose_off = fbb.CreateVector<double>(ls.pose().data()->data(),
                                             ls.pose().size() * 16);
     }
-
     auto packet_timestamp_id_off = fbb.CreateVector<uint64_t>(
         ls.packet_timestamp().data(), ls.packet_timestamp().size());
     return gen::CreateLidarScanMsg(
@@ -283,6 +275,17 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
     return ls;
 }
 
+LidarScanStreamMeta::LidarScanStreamMeta(const uint32_t sensor_meta_id,
+                                         const LidarScanFieldTypes field_types)
+    : sensor_meta_id_{sensor_meta_id},
+      field_types_{field_types.begin(), field_types.end()} {}
+
+uint32_t LidarScanStreamMeta::sensor_meta_id() const { return sensor_meta_id_; }
+
+const LidarScanFieldTypes& LidarScanStreamMeta::field_types() const {
+    return field_types_;
+}
+
 std::vector<uint8_t> LidarScanStreamMeta::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(512);
 
@@ -342,22 +345,24 @@ std::string LidarScanStreamMeta::repr() const {
 
 // ============== LidarScan Stream ops ===========================
 
-LidarScanStream::LidarScanStream(Writer& writer, const uint32_t sensor_meta_id,
+LidarScanStream::LidarScanStream(Token /*key*/, Writer& writer,
+                                 const uint32_t sensor_meta_id,
                                  const LidarScanFieldTypes& field_types)
     : writer_{writer},
       meta_(sensor_meta_id, field_types),
       sensor_meta_id_(sensor_meta_id) {
+    // Note key is ignored and just used to gatekeep.
     // Check sensor and get sensor_info
-    auto sensor_meta_entry = writer.getMetadata<LidarSensor>(sensor_meta_id_);
+    auto sensor_meta_entry = writer.get_metadata<LidarSensor>(sensor_meta_id_);
     if (sensor_meta_entry == nullptr) {
-        std::cerr << "ERROR: can't find sensor_meta_id = " << sensor_meta_id
-                  << std::endl;
-        std::abort();
+        std::stringstream ss;
+        ss << "ERROR: can't find sensor_meta_id = " << sensor_meta_id;
+        throw std::logic_error(ss.str());
     }
 
     sensor_info_ = sensor_meta_entry->info();
 
-    stream_meta_id_ = writer_.addMetadata(meta_);
+    stream_meta_id_ = writer_.add_metadata(meta_);
 }
 
 // TODO[pb]: Every save func in Streams is uniform, need to nicely extract
@@ -365,7 +370,7 @@ LidarScanStream::LidarScanStream(Writer& writer, const uint32_t sensor_meta_id,
 void LidarScanStream::save(const ouster::osf::ts_t ts,
                            const LidarScan& lidar_scan) {
     const auto& msg_buf = make_msg(lidar_scan);
-    writer_.saveMessage(meta_.id(), ts, msg_buf);
+    writer_.save_message(meta_.id(), ts, msg_buf);
 }
 
 std::vector<uint8_t> LidarScanStream::make_msg(const LidarScan& lidar_scan) {
@@ -382,9 +387,7 @@ std::unique_ptr<LidarScanStream::obj_type> LidarScanStream::decode_msg(
     const std::vector<uint8_t>& buf, const LidarScanStream::meta_type& meta,
     const MetadataStore& meta_provider) {
     auto sensor = meta_provider.get<LidarSensor>(meta.sensor_meta_id());
-
     auto info = sensor->info();
-
     return restore_lidar_scan(buf, info);
 }
 

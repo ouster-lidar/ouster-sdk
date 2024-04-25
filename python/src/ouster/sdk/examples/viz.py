@@ -9,7 +9,7 @@ Intended to run with `python -m ouster.sdk.examples.viz`
 """
 
 import argparse
-from ouster import client, pcap, viz
+from ouster.sdk import client, pcap, viz
 from ouster.sdk.util import resolve_metadata
 import os
 import sys

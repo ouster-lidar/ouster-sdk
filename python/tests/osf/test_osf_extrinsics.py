@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-import ouster.osf as osf
+import ouster.sdk.osf as osf
 
 
 @pytest.fixture
@@ -20,8 +20,8 @@ def sensor_metadata(input_osf_file):
 def test_osf_save_extrinsics(tmp_path, sensor_metadata):
     output_osf_file = tmp_path / "out.osf"
 
-    writer = osf.Writer(str(output_osf_file), "testing extrinsics")
-    lidar_id = writer.addMetadata(osf.LidarSensor(sensor_metadata))
+    writer = osf.Writer(str(output_osf_file))
+    lidar_id = writer.add_metadata(osf.LidarSensor(sensor_metadata))
 
     ext_mat = np.eye(4)
     # some translation
@@ -31,7 +31,7 @@ def test_osf_save_extrinsics(tmp_path, sensor_metadata):
     ext_mat[2, 1] = np.sin(np.pi / 8)
     ext_mat[1, 2] = -ext_mat[2, 1]
 
-    writer.addMetadata(osf.Extrinsics(ext_mat, lidar_id, "test_calibrated"))
+    writer.add_metadata(osf.Extrinsics(ext_mat, lidar_id, "test_calibrated"))
 
     writer.close()
 

@@ -16,12 +16,29 @@
 namespace ouster {
 namespace osf {
 
-std::string to_string(ChunkInfo chunk_info) {
+std::string to_string(const ChunkInfo& chunk_info) {
     std::stringstream ss;
     ss << "{offset = " << chunk_info.offset
        << ", stream_id = " << chunk_info.stream_id
        << ", message_count = " << chunk_info.message_count << "}";
     return ss.str();
+}
+
+StreamStats::StreamStats(uint32_t s_id, ts_t t, uint32_t msg_size)
+    : stream_id{s_id},
+      start_ts{t},
+      end_ts{t},
+      message_count{1},
+      message_avg_size{msg_size} {};
+
+void StreamStats::update(ts_t t, uint32_t msg_size) {
+    if (start_ts > t) start_ts = t;
+    if (end_ts < t) end_ts = t;
+    ++message_count;
+    int avg_size = static_cast<int>(message_avg_size);
+    avg_size = avg_size + (static_cast<int>(msg_size) - avg_size) /
+                              static_cast<int>(message_count);
+    message_avg_size = static_cast<uint32_t>(avg_size);
 }
 
 std::string to_string(const StreamStats& stream_stats) {
@@ -60,6 +77,25 @@ flatbuffers::Offset<ouster::osf::gen::StreamingInfo> create_streaming_info(
     auto si_offset = ouster::osf::gen::CreateStreamingInfoDirect(
         fbb, &chunks_info_vec, &stream_stats_vec);
     return si_offset;
+}
+
+StreamingInfo::StreamingInfo(
+    const std::vector<std::pair<uint64_t, ChunkInfo>>& chunks_info,
+    const std::vector<std::pair<uint32_t, StreamStats>>& stream_stats)
+    : chunks_info_{chunks_info.begin(), chunks_info.end()},
+      stream_stats_{stream_stats.begin(), stream_stats.end()} {}
+
+StreamingInfo::StreamingInfo(
+    const std::map<uint64_t, ChunkInfo>& chunks_info,
+    const std::map<uint32_t, StreamStats>& stream_stats)
+    : chunks_info_(chunks_info), stream_stats_(stream_stats) {}
+
+std::map<uint64_t, ChunkInfo>& StreamingInfo::chunks_info() {
+    return chunks_info_;
+}
+
+std::map<uint32_t, StreamStats>& StreamingInfo::stream_stats() {
+    return stream_stats_;
 }
 
 std::vector<uint8_t> StreamingInfo::buffer() const {

@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "netcompat.h"
+#include "ouster/impl/netcompat.h"
 #include "ouster/sensor_http.h"
 
 namespace ouster {

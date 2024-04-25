@@ -6,6 +6,7 @@
 #include "png_tools.h"
 
 #include <gtest/gtest.h>
+#include <png.h>
 #include <sys/stat.h>
 
 #include <Eigen/Eigen>
@@ -22,6 +23,11 @@
 
 namespace ouster {
 namespace osf {
+
+// Internals to test
+void png_osf_flush_data(png_structp);
+void png_osf_error(png_structp png_ptr, png_const_charp msg);
+
 namespace {
 
 class OsfPngToolsTest : public OsfTestWithDataAndFiles {};
@@ -276,6 +282,54 @@ TEST_F(OsfPngToolsTest, ImageCoders) {
     EXPECT_TRUE(
         test64bitImageCoders<uint64_t>().to<uint64_t>(ls, px_offset, 64));
 }
+
+TEST_F(OsfPngToolsTest, InternalsTest) {
+    // This is unused but is still required, test calling it
+    // Not expecting any returns
+    png_structp foo =
+        png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    png_osf_flush_data(foo);
+
+    bool error_caught = false;
+    std::stringstream output_stream;
+    std::streambuf* old_output_stream = std::cout.rdbuf();
+    std::cout.rdbuf(output_stream.rdbuf());
+    if (setjmp(png_jmpbuf(foo))) {
+        error_caught = true;
+    } else {
+        png_osf_error(
+            foo,
+            "Also Checkout Porcupine Tree - Arriving Somewhere But Not Here");
+    }
+    std::cout.rdbuf(old_output_stream);
+    EXPECT_TRUE(error_caught);
+    EXPECT_EQ(output_stream.str(),
+              "ERROR libpng osf: Also Checkout Porcupine Tree"
+              " - Arriving Somewhere But Not Here\n");
+}
+
+#ifndef OUSTER_OSF_NO_THREADING
+TEST_F(OsfPngToolsTest, scanDecodeFields) {
+    // it should propagate the exception
+    // if destagger throws std::invalid_argument
+    int w = 32;
+    int h = 32;
+    auto scan = ouster::LidarScan(w, h);
+    LidarScanFieldTypes field_types(scan.begin(), scan.end());
+    std::vector<int> shift_by_row;
+    EXPECT_THROW(
+        {
+            try {
+                scanEncodeFields(scan, shift_by_row, field_types);
+            } catch (const std::invalid_argument& e) {
+                ASSERT_STREQ(e.what(),
+                             "image height does not match shifts size");
+                throw;
+            }
+        },
+        std::invalid_argument);
+}
+#endif
 
 }  // namespace
 }  // namespace osf

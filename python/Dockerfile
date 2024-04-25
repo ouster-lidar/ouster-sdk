@@ -51,7 +51,7 @@ WORKDIR ${BUILD_HOME}
 
 RUN set -xe \
 # use oldest available, supported python as tox default
-&& PYTHON=$(which python3.7 python3.8 python3.9 python3.10 | head -1) \
+&& PYTHON=$(which python3.8 python3.9 python3.10 | head -1) \
 && $PYTHON -m pip install --no-cache-dir --user -U pip tox pybind11
 
 # Populate source dir

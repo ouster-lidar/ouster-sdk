@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -181,6 +182,8 @@ struct packet_format::Impl {
     size_t col_footer_size;
     size_t packet_footer_size;
 
+    uint64_t max_frame_id;
+
     size_t col_size;
     size_t lidar_packet_size;
 
@@ -201,6 +204,12 @@ struct packet_format::Impl {
         channel_data_size = entry.chan_data_size;
         col_footer_size = legacy ? 4 : 0;
         packet_footer_size = legacy ? 0 : 32;
+
+        if (profile == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+            max_frame_id = std::numeric_limits<uint32_t>::max();
+        } else {
+            max_frame_id = std::numeric_limits<uint16_t>::max();
+        }
 
         col_size = col_header_size + pixels_per_column * channel_data_size +
                    col_footer_size;
@@ -233,7 +242,8 @@ packet_format::packet_format(UDPProfileLidar udp_profile_lidar,
       col_header_size{impl_->col_header_size},
       col_footer_size{impl_->col_footer_size},
       col_size{impl_->col_size},
-      packet_footer_size{impl_->packet_footer_size} {
+      packet_footer_size{impl_->packet_footer_size},
+      max_frame_id{impl_->max_frame_id} {
     for (const auto& kv : impl_->fields) {
         field_types_.push_back({kv.first, kv.second.ty_tag});
     }
@@ -755,6 +765,128 @@ void packet_writer::set_frame_id(uint8_t* lidar_buf, uint32_t frame_id) const {
     }
 
     std::memcpy(lidar_buf + 2, &f_id, sizeof(f_id));
+}
+
+// Helpers for weird sized ints
+// TODO: generalise when/if we need other uintXX_t fractionals
+class uint24_t {
+   protected:
+    uint8_t _internal[3];
+
+   public:
+    uint24_t() {}
+
+    uint24_t(const uint32_t val) { *this = val; }
+
+    uint24_t(const uint24_t& val) { *this = val; }
+
+    operator uint32_t() const {
+        return (_internal[2] << 16) | (_internal[1] << 8) | (_internal[0] << 0);
+    }
+
+    uint24_t& operator=(const uint24_t& input) {
+        _internal[0] = input._internal[0];
+        _internal[1] = input._internal[1];
+        _internal[2] = input._internal[2];
+
+        return *this;
+    }
+
+    uint24_t& operator=(const uint32_t input) {
+        _internal[0] = ((unsigned char*)&input)[0];
+        _internal[1] = ((unsigned char*)&input)[1];
+        _internal[2] = ((unsigned char*)&input)[2];
+
+        return *this;
+    }
+};
+
+class uint40_t {
+   protected:
+    uint8_t _internal[5];
+
+   public:
+    uint40_t() {}
+
+    uint40_t(const uint64_t val) { *this = val; }
+
+    uint40_t(const uint40_t& val) { *this = val; }
+
+    operator uint64_t() const {
+        return (((uint64_t)_internal[4]) << 32) |
+               (((uint64_t)_internal[3]) << 24) |
+               (((uint64_t)_internal[2]) << 16) |
+               (((uint64_t)_internal[1]) << 8) |
+               (((uint64_t)_internal[0]) << 0);
+    }
+
+    uint40_t& operator=(const uint40_t& input) {
+        _internal[0] = input._internal[0];
+        _internal[1] = input._internal[1];
+        _internal[2] = input._internal[2];
+        _internal[3] = input._internal[3];
+        _internal[4] = input._internal[4];
+
+        return *this;
+    }
+
+    uint40_t& operator=(const uint64_t input) {
+        _internal[0] = ((unsigned char*)&input)[0];
+        _internal[1] = ((unsigned char*)&input)[1];
+        _internal[2] = ((unsigned char*)&input)[2];
+        _internal[3] = ((unsigned char*)&input)[3];
+        _internal[4] = ((unsigned char*)&input)[4];
+
+        return *this;
+    }
+};
+
+#pragma pack(push, 1)
+// Relevant parts of packet headers as described/named in sensor documentation
+struct FUSAHeader {
+    uint8_t packet_type;
+    uint24_t init_id;
+    uint32_t frame_id;
+    uint24_t padding;
+    uint40_t serial_no;
+};
+
+struct ConfigurableHeader {
+    uint16_t packet_type;
+    uint16_t frame_id;
+    uint24_t init_id;
+    uint40_t serial_no;
+};
+#pragma pack(pop)
+
+void packet_writer::set_init_id(uint8_t* lidar_buf, uint32_t init_id) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no init_id
+        return;
+    }
+    if (udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        auto hdr = (FUSAHeader*)lidar_buf;
+        hdr->init_id = init_id;
+    } else {
+        auto hdr = (ConfigurableHeader*)lidar_buf;
+        hdr->init_id = init_id;
+    }
+}
+
+void packet_writer::set_prod_sn(uint8_t* lidar_buf, uint64_t sn) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+        // LEGACY profile has no prod_sn
+        return;
+    }
+    if (udp_profile_lidar ==
+        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        auto hdr = (FUSAHeader*)lidar_buf;
+        hdr->serial_no = sn;
+    } else {
+        auto hdr = (ConfigurableHeader*)lidar_buf;
+        hdr->serial_no = sn;
+    }
 }
 
 template <typename T>

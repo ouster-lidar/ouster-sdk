@@ -21,7 +21,7 @@ Building the Python SDK from source requires several dependencies:
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
 - `libglew <http://glew.sourceforge.net/>`_ >= 2.1 or `glad <https://github.com/Dav1dde/glad>`_
 - `spdlog <https://github.com/gabime/spdlog>`_ >= 1.9
-- `Python <https://www.python.org/>`_ >= 3.7 (with headers and development libraries)
+- `python <https://www.python.org/>`_ >= 3.8 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
 The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster_example>`_. You should clone the whole project.
@@ -39,7 +39,7 @@ On supported Debian-based linux systems, you can install all build dependencies 
                       libglfw3-dev libglew-dev libspdlog-dev \
                       libpng-dev libflatbuffers-dev
 
-On macos >= 10.13, using homebrew, you should be able to run:
+On macos >= 11, using homebrew, you should be able to run:
 
 .. code:: console
 
@@ -52,8 +52,8 @@ After you have the system dependencies, you can build the SDK with:
    # first, specify the path to the ouster_example repository
    $ export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
 
-   # make sure you have an up-to-date version of pip installed
-   $ python3 -m pip install --user --upgrade pip
+   # make sure you have an up-to-date version of pip and setuptools installed
+   $ python3 -m pip install --user --upgrade pip setuptools
 
    # install pybind11
    $ python3 -m pip install pybind11
@@ -82,7 +82,7 @@ package manager and run:
 
    PS > vcpkg install --triplet=x64-windows curl eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog libpng flatbuffers
 
-The currently tested vcpkg tag is ``2023.02.24``. After that, using a developer powershell prompt:
+The currently tested vcpkg tag is ``2023.10.19``. After that, using a developer powershell prompt:
 
 .. code:: powershell
 

@@ -5,11 +5,14 @@
 
 #include "compat_ops.h"
 
+#include <fstream>
 #include <iostream>
 #include <string>
 
 #ifdef _WIN32
 #include <direct.h>
+#include <fcntl.h>
+#include <io.h>
 #include <shlwapi.h>
 #include <tchar.h>
 #include <windows.h>
@@ -300,6 +303,102 @@ bool mmap_close(uint8_t* file_buf, const uint64_t file_size) {
 #else
     return (munmap(static_cast<void*>(file_buf), file_size) >= 0);
 #endif
+}
+
+int64_t truncate_file(const std::string& path, uint64_t filesize) {
+    int64_t actual_file_size = file_size(path);
+    if (actual_file_size < (int64_t)filesize) {
+        return -1;
+    }
+#ifdef _WIN32
+    int file_handle;
+    if (file_handle = _sopen(path.c_str(), _O_RDWR, _SH_DENYRW)) {
+        _chsize(file_handle, filesize);
+        _close(file_handle);
+    }
+#else
+    truncate(path.c_str(), filesize);
+#endif
+    return file_size(path);
+}
+
+int64_t append_binary_file(const std::string& append_to_file_name,
+                           const std::string& append_from_file_name) {
+    int64_t saved_size = -1;
+
+    std::fstream append_to_file_stream;
+    std::fstream append_from_file_stream;
+
+    // clang-format off
+    // There something seriously wrong with the clang formatting
+    // here.
+    append_to_file_stream.open(append_to_file_name, std::fstream::out |
+        std::fstream::app | std::fstream::binary);
+    append_from_file_stream.open(append_from_file_name,
+        std::fstream::in | std::fstream::binary);
+    // clang-format on
+
+    if (append_to_file_stream.is_open()) {
+        if (append_from_file_stream.is_open()) {
+            append_from_file_stream.seekg(0, std::ios::end);
+            uint64_t from_file_size = append_from_file_stream.tellg();
+            append_from_file_stream.seekg(0, std::ios::beg);
+
+            append_to_file_stream.seekg(0, std::ios::end);
+
+            append_to_file_stream << append_from_file_stream.rdbuf();
+            saved_size = append_to_file_stream.tellg();
+        } else {
+            std::cerr << "fail to open " << append_to_file_name << std::endl;
+        }
+    } else {
+        std::cerr << "fail to open " << append_from_file_name << std::endl;
+    }
+
+    if (append_to_file_stream.is_open()) append_to_file_stream.close();
+    if (append_from_file_stream.is_open()) append_from_file_stream.close();
+
+    return saved_size;
+}
+
+int64_t copy_file_trailing_bytes(const std::string& source_file,
+                                 const std::string& target_file,
+                                 uint64_t offset) {
+    int64_t actual_file_size = file_size(source_file);
+    if (actual_file_size < (int64_t)offset) {
+        return -1;
+    }
+
+    int64_t saved_size = -1;
+
+    std::fstream source_file_stream;
+    std::fstream target_file_stream;
+
+    // clang-format off
+    // There something seriously wrong with the clang formatting
+    // here.
+    target_file_stream.open(target_file, std::fstream::out |
+        std::fstream::trunc | std::fstream::binary);
+    source_file_stream.open(source_file,
+        std::fstream::in | std::fstream::binary);
+    // clang-format on
+
+    if (target_file_stream.is_open()) {
+        if (source_file_stream.is_open()) {
+            source_file_stream.seekg(offset);
+            target_file_stream << source_file_stream.rdbuf();
+            saved_size = target_file_stream.tellg();
+        } else {
+            std::cerr << "fail to open " << source_file << std::endl;
+        }
+    } else {
+        std::cerr << "fail to open " << target_file << std::endl;
+    }
+
+    if (source_file_stream.is_open()) source_file_stream.close();
+    if (target_file_stream.is_open()) target_file_stream.close();
+
+    return saved_size;
 }
 
 }  // namespace osf

@@ -27,19 +27,18 @@ class GLRings {
     static GLuint ring_xyz_id;
     static GLuint ring_proj_view_id;
     static GLuint ring_range_id;
+    static GLuint ring_thickness_id;
 
-    const size_t points_per_ring;
     GLuint xyz_buffer;
-    int ring_size_;
-    int ring_line_width_;
+    int ring_size;
+    int ring_line_width;
     bool rings_enabled;
 
    public:
     /*
-     * Parameter etermines number of points used to draw ring, the more the
-     * rounder
+     * Instantiate the rings
      */
-    GLRings(const size_t points_per_ring_ = 512);
+    GLRings();
 
     void update(const TargetDisplay& target);
 

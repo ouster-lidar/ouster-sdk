@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.1.0)
 
 find_package(GTest REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # Each test file should be in a format "<test_name>_test.cpp"
 set(OSF_TESTS_SOURCES png_tools_test.cpp
                       writer_test.cpp
+                      writerv2_test.cpp
                       writer_custom_test.cpp
                       file_test.cpp
                       crc_test.cpp
@@ -12,6 +14,8 @@ set(OSF_TESTS_SOURCES png_tools_test.cpp
                       reader_test.cpp
                       operations_test.cpp
                       pcap_source_test.cpp
+                      basics_test.cpp
+                      meta_streaming_info_test.cpp
 )
 
 message(STATUS "OSF: adding testing .... ")
@@ -23,9 +27,13 @@ foreach(TEST_FULL_NAME ${OSF_TESTS_SOURCES})
   add_executable(osf_${TEST_FILENAME} ${TEST_FULL_NAME})
   set_target_properties(osf_${TEST_FILENAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
   target_include_directories(osf_${TEST_FILENAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../src)
-  target_link_libraries(osf_${TEST_FILENAME} ouster_osf
-                                             GTest::gtest GTest::gtest_main)
+  target_link_libraries(osf_${TEST_FILENAME} PRIVATE ouster_osf
+      GTest::gtest
+      GTest::gtest_main
+      OpenSSL::Crypto)
+  CodeCoverageFunctionality(osf_${TEST_FILENAME})
   add_test(NAME osf_${TEST_FILENAME}
            COMMAND osf_${TEST_FILENAME} --gtest_output=xml:osf_${TEST_FILENAME}.xml)
   set_tests_properties(

@@ -33,8 +33,6 @@ Functions
 
 .. doxygenfunction:: ouster::sensor_utils::read_packet
 
-.. doxygenfunction:: ouster::sensor_utils::record_initialize( const std::string& file, const std::string& src_ip, const std::string& dst_ip, int frag_size, bool use_sll_encapsulation = false)
-
 .. doxygenfunction:: ouster::sensor_utils::record_initialize(const std::string& file, int frag_size, bool use_sll_encapsulation = false);
 
 .. doxygenfunction:: ouster::sensor_utils::record_uninitialize

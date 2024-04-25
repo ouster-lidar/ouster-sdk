@@ -77,10 +77,10 @@ for dependencies. Follow the official documentation to set up your build environ
   <https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019>`_
 * `Visual Studio CPP Support
   <https://docs.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=vs-2019>`_
-* `Vcpkg, at tag "2023.02.24" installed and integrated with Visual Studio
+* `Vcpkg, at tag "2023.10.19" installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-**Note** You'll need to run ``git checkout 2023.02.24`` in the vcpkg directory before bootstrapping
+**Note** You'll need to run ``git checkout 2023.10.19`` in the vcpkg directory before bootstrapping
 to use the correct versions of the dependencies. Building may fail unexpectedly if you skip this
 step.
 

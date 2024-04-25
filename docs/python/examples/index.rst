@@ -27,5 +27,6 @@ Similarly, ``$SENSOR_HOSTNAME`` is used for your sensor's hostname.
    record-stream
    visualizations
    conversion
+   osf-examples
 
 

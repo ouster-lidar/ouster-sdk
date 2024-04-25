@@ -11,6 +11,16 @@
 namespace ouster {
 namespace osf {
 
+Extrinsics::Extrinsics(const mat4d& extrinsics, uint32_t ref_meta_id,
+                       const std::string& name)
+    : extrinsics_(extrinsics), ref_meta_id_{ref_meta_id}, name_{name} {}
+
+const mat4d& Extrinsics::extrinsics() const { return extrinsics_; }
+
+const std::string& Extrinsics::name() const { return name_; }
+
+uint32_t Extrinsics::ref_meta_id() const { return ref_meta_id_; }
+
 std::vector<uint8_t> Extrinsics::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(256);
     std::vector<double> extrinsic_vec(16);

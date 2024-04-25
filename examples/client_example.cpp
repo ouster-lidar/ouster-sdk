@@ -75,7 +75,10 @@ int main(int argc, char* argv[]) {
 
     ouster::sensor::ColumnWindow column_window = info.format.column_window;
 
-    std::cerr << "  Firmware version:  " << info.fw_rev
+    // The dedicated firmware_version_from_metadata API works across firmwares
+    auto fw_ver = sensor::firmware_version_from_metadata(metadata);
+
+    std::cerr << "  Firmware version:  " << to_string(fw_ver)
               << "\n  Serial number:     " << info.sn
               << "\n  Product line:      " << info.prod_line
               << "\n  Scan dimensions:   " << w << " x " << h
@@ -99,8 +102,8 @@ int main(int argc, char* argv[]) {
     std::cerr << "Capturing points... ";
 
     // buffer to store raw packet data
-    auto lidar_packet = sensor::LidarPacket();
-    auto imu_packet = sensor::ImuPacket();
+    auto lidar_packet = sensor::LidarPacket(pf.lidar_packet_size);
+    auto imu_packet = sensor::ImuPacket(pf.imu_packet_size);
 
     for (size_t i = 0; i < N_SCANS;) {
         // wait until sensor data is available
@@ -112,7 +115,7 @@ int main(int argc, char* argv[]) {
 
         // check for lidar data, read a packet and add it to the current batch
         if (st & sensor::LIDAR_DATA) {
-            if (!sensor::read_lidar_packet(*handle, lidar_packet, pf)) {
+            if (!sensor::read_lidar_packet(*handle, lidar_packet)) {
                 FATAL("Failed to read a packet of the expected size!");
             }
 
@@ -126,7 +129,7 @@ int main(int argc, char* argv[]) {
 
         // check if IMU data is available (but don't do anything with it)
         if (st & sensor::IMU_DATA) {
-            sensor::read_imu_packet(*handle, imu_packet, pf);
+            sensor::read_imu_packet(*handle, imu_packet);
         }
     }
     std::cerr << "ok" << std::endl;

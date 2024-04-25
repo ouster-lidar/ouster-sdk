@@ -5,9 +5,10 @@ import weakref
 
 import pytest
 
-from ouster.client import SensorInfo
-from ouster.pcap import Pcap
-from ouster.sdkx import packet_iter
+from ouster.sdk.client import SensorInfo
+from ouster.sdk.pcap import PcapMultiPacketReader
+from ouster.sdk.pcap import Pcap
+from ouster.sdk.pcap import packet_iter
 from tests.conftest import PCAPS_DATA_DIR
 
 
@@ -113,14 +114,14 @@ def test_recording_packet_source(tmp_path) -> None:
     """It writes packets contained in the source to the output directory."""
     meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
     pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
-    sensor_info = SensorInfo(open(meta_file_path).read())
-    source = Pcap(pcap_file_path, sensor_info)
-    recording_iter = packet_iter.RecordingPacketSource(source, tmp_path, n_frames=1)
+    source = PcapMultiPacketReader(pcap_file_path, [meta_file_path])
+    recording_iter = packet_iter.RecordingPacketSource(source, str(tmp_path) + "/test", n_frames=1)
     emitted_packets = 0
-    for packet in recording_iter:
+    for (idx, packet) in recording_iter:
         emitted_packets += 1
     assert emitted_packets == 74
-    source = Pcap(pcap_file_path, sensor_info)
+
+    sensor_info = SensorInfo(open(meta_file_path).read())
     assert len(os.listdir(tmp_path)) == 1
     recording_path = os.path.join(tmp_path, os.listdir(tmp_path)[0])
     recorded_pcap = Pcap(recording_path, sensor_info)
@@ -137,11 +138,10 @@ def test_recording_packet_source_bad_packet_format(tmp_path) -> None:
     """
     meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
     pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'VLI-16-one-packet.pcap')
-    sensor_info = SensorInfo(open(meta_file_path).read())
-    sensor_info.udp_port_lidar = 2368
-    source = Pcap(pcap_file_path, sensor_info, lidar_port = 2368)
-    recording_iter = packet_iter.RecordingPacketSource(source, tmp_path, n_frames=1)
+    source = PcapMultiPacketReader(pcap_file_path, [meta_file_path])
+    source.metadata[0].udp_port_lidar = 2368
+    recording_iter = packet_iter.RecordingPacketSource(source, str(tmp_path) + "/test", n_frames=1)
     emitted_packets = 0
-    for packet in recording_iter:
+    for (idx, packet) in recording_iter:
         emitted_packets += 1
     assert emitted_packets == 0

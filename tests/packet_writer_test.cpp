@@ -198,6 +198,14 @@ TEST_P(PacketWriterTest, packet_writer_headers_test) {
 
     pw.set_frame_id(p.buf.data(), 777);
     EXPECT_EQ(pf.frame_id(p.buf.data()), 777);
+
+    if (profile != PROFILE_LIDAR_LEGACY) {
+        pw.set_init_id(p.buf.data(), 0x123456);
+        EXPECT_EQ(pf.init_id(p.buf.data()), 0x123456);
+
+        pw.set_prod_sn(p.buf.data(), 0x1234567890);
+        EXPECT_EQ(pf.prod_sn(p.buf.data()), 0x1234567890);
+    }
 }
 
 TEST_P(PacketWriterTest, packet_writer_randomize_test) {
@@ -258,11 +266,27 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     };
     ouster::impl::foreach_field(ls, verify_field);
 
+    auto g = std::mt19937(0xdeadbeef);
+    auto dinit_id = std::uniform_int_distribution<uint32_t>(0, 0xFFFFFF);
+    auto dserial_no = std::uniform_int_distribution<uint64_t>(0, 0xFFFFFFFFFF);
+
+    uint32_t init_id = dinit_id(g);      // 24 bits
+    uint64_t serial_no = dserial_no(g);  // 40 bits
+
     // produced and re-parsed packets should result in the same scan
     auto packets = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets));
+    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets), init_id,
+                                  serial_no);
 
     ASSERT_EQ(packets.size(), 64);
+
+    // validate the init id and serial no in each packet if supported
+    if (profile != PROFILE_LIDAR_LEGACY) {
+        for (const auto& p : packets) {
+            ASSERT_EQ(init_id, pf.init_id(p.buf.data()));
+            ASSERT_EQ(serial_no, pf.prod_sn(p.buf.data()));
+        }
+    }
 
     auto ls2 = LidarScan(columns_per_frame, pixels_per_column, profile,
                          columns_per_packet);
@@ -311,7 +335,8 @@ TEST_P(PacketWriterTest, scans_to_packets_skips_dropped_packets_test) {
     ouster::impl::foreach_field(ls, randomise);
 
     auto packets_orig = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets_orig));
+    ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets_orig), 0,
+                                  0);
 
     ASSERT_EQ(packets_orig.size(), 64);
 
@@ -332,8 +357,8 @@ TEST_P(PacketWriterTest, scans_to_packets_skips_dropped_packets_test) {
     }
 
     auto packets_repr = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(ls_repr, pw,
-                                  std::back_inserter(packets_repr));
+    ouster::impl::scan_to_packets(ls_repr, pw, std::back_inserter(packets_repr),
+                                  0, 0);
     EXPECT_EQ(packets_repr.size(), 63);
     EXPECT_EQ(packets_repr[14].host_timestamp, 25);
 
@@ -400,7 +425,8 @@ TEST_P(PacketWriterDataTest, packet_writer_data_repr_test) {
 
     // produced and re-parsed fields should match
     auto packets = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(ls_orig, pw, std::back_inserter(packets));
+    ouster::impl::scan_to_packets(ls_orig, pw, std::back_inserter(packets), 0,
+                                  0);
     ASSERT_EQ(packets.size(), n_packets);
 
     auto ls_repr =
@@ -440,7 +466,8 @@ TEST_P(PacketWriterDataTest, packet_writer_raw_headers_match_test) {
 
     // produced and re-parsed RAW_HEADERS fields should match
     auto packets = std::vector<LidarPacket>{};
-    ouster::impl::scan_to_packets(rh_ls_orig, pw, std::back_inserter(packets));
+    ouster::impl::scan_to_packets(rh_ls_orig, pw, std::back_inserter(packets),
+                                  0, 0);
     ASSERT_EQ(packets.size(), n_packets);
 
     auto rh_ls_repr =

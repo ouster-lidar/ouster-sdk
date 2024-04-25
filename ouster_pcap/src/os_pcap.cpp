@@ -22,6 +22,9 @@
 namespace ouster {
 namespace sensor_utils {
 
+// TODO: IndexedPcapReader bypasses playback_handle and record_handle, either
+// use the same fencing mechansim or switch to use OOP style
+
 struct record_handle {
     record_handle(const std::string& path,
                   PcapWriter::PacketEncapsulation encap, uint16_t frag_size)

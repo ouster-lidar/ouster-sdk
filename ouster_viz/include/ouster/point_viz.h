@@ -128,6 +128,20 @@ class PointViz {
     void visible(bool state);
 
     /**
+     * Check if viz update_on_input state
+     *
+     * @return true if the viz will update on input
+     */
+    bool update_on_input();
+
+    /**
+     * Set viz update_on_input flag.
+     *
+     * @param[in] state new value of the flag
+     */
+    void update_on_input(bool state);
+
+    /**
      * Update visualization state
      *
      * Send state updates to be rendered on the next frame
@@ -685,8 +699,8 @@ class Cloud {
     /**
      * Set the key alpha values, leaving the color the same.
      *
-     * @param[in] key pointer to array of at least as many elements as there are
-     *        points, normalized between 0 and 1
+     * @param[in] key_alpha pointer to array of at least as many elements as
+     *                      there are points, normalized between 0 and 1
      */
     void set_key_alpha(const float* key_alpha);
 
@@ -701,7 +715,7 @@ class Cloud {
     /**
      * Set the key values in RGBA format, used for coloring.
      *
-     * @param[in] key_rgb pointer to array of at least 4x as many elements as
+     * @param[in] key_rgba pointer to array of at least 4x as many elements as
      * there are points, normalized between 0 and 1
      */
     void set_key_rgba(const float* key_rgba);
@@ -830,7 +844,7 @@ class Image {
      *
      * @param[in] width width of the image data in pixels
      * @param[in] height height of the image data in pixels
-     * @param[in] image_data pointer to an array of width * height elements
+     * @param[in] image_data_rgb pointer to an array of width * height elements
      *        interpreted as a row-major RGB image
      */
     void set_image_rgb(size_t width, size_t height,
@@ -841,7 +855,7 @@ class Image {
      *
      * @param[in] width width of the image data in pixels
      * @param[in] height height of the image data in pixels
-     * @param[in] image_data pointer to an array of width * height elements
+     * @param[in] image_data_rgba pointer to an array of width * height elements
      *        interpreted as a row-major RGBA image
      */
     void set_image_rgba(size_t width, size_t height,
@@ -946,7 +960,7 @@ class Cuboid {
     /**
      * Set the color of the cuboid.
      *
-     * @param rgba @todo document me
+     * @param[in] rgba @todo document me
      */
     void set_rgba(const vec4f& rgba);
 
@@ -1047,6 +1061,15 @@ extern const size_t spezia_n;
 extern const float spezia_palette[][3];
 
 /**
+ * Spezia Cal Ref palette size in number of colors.
+ */
+extern const size_t spezia_cal_ref_n;
+/**
+ * Spezia Cal Ref palette, RGB values per element.
+ */
+extern const float spezia_cal_ref_palette[][3];
+
+/**
  * Calibrated reflectifiy palette size in number of colors.
  */
 extern const size_t calref_n;
@@ -1065,6 +1088,15 @@ extern const size_t grey_n;
 extern const float grey_palette[][3];
 
 /**
+ * Greyscale Cal Ref palette size in number of colors.
+ */
+extern const size_t grey_cal_ref_n;
+/**
+ * Greyscale Cal Ref palette, RGB values per element.
+ */
+extern const float grey_cal_ref_palette[][3];
+
+/**
  * Viridis palette size in number of colors.
  */
 extern const size_t viridis_n;
@@ -1074,6 +1106,15 @@ extern const size_t viridis_n;
 extern const float viridis_palette[][3];
 
 /**
+ * Viridis Cal Ref palette size in number of colors.
+ */
+extern const size_t viridis_cal_ref_n;
+/**
+ * Viridis Cal Ref palette, RGB values per element.
+ */
+extern const float viridis_cal_ref_palette[][3];
+
+/**
  * Magma palette size in number of colors.
  */
 extern const size_t magma_n;
@@ -1081,6 +1122,15 @@ extern const size_t magma_n;
  * Magma palette, RGB values per element.
  */
 extern const float magma_palette[][3];
+
+/**
+ * Magma Cal Ref palette size in number of colors.
+ */
+extern const size_t magma_cal_ref_n;
+/**
+ * Magma Cal Ref palette, RGB values per element.
+ */
+extern const float magma_cal_ref_palette[][3];
 
 }  // namespace viz
 }  // namespace ouster
