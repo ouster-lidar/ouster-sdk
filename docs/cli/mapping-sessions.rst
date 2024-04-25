@@ -6,6 +6,7 @@ Start mapping with the Ouster-CLI
 
 Installation
 ------------
+
 The Ouster CLI mapping functionality is a part of the Ouster SDK Python
 package.
 
@@ -35,7 +36,7 @@ following command:
 
         ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> --help
 
-Currently, there are two main commands: ``slam`` and ``convert``. You can further explore each
+Currently, there are two main commands: ``slam`` and ``save``. You can further explore each
 command by accessing their respective submenus using the ``--help`` flag. For example:
 
 .. code:: bash
@@ -45,6 +46,7 @@ command by accessing their respective submenus using the ``--help`` flag. For ex
 
 SLAM Command
 ------------
+
 Simultaneous localization and mapping (SLAM) is a technique that enables a system to construct
 a map of its surroundings while simultaneously determining its own position on that map.
 The Ouster SDK slam command writes lidar scans with per-column poses into an OSF file, an open-source
@@ -71,13 +73,14 @@ Then execute the following command:
         necessary substitutions in the subsequent commands.
 
 The terminal will display details such as the output filename and the processing duration. The
-output filename must have the .osf extension in order to be used by the convert command.
+output filename must have the .osf extension in order to be used by the ``save`` command.
 
 You can adjust settings such as point size, color, switch between 2D images, and pause playback in the visualizer, among other options. More details can be found at the :ref:`Ouster Visualizer <viz-run>`
 
 
 Accumulated Scan in SLAM command visulizer
 ------------------------------------------
+
 Within the Ouster Visualizer, there is a visualization feature known as **ScansAccumulator**. This functionality represents a continuation of efforts to visualize lidar data by incorporating SLAM-generated poses stored within the ``LidarScan.pose`` property."
 
 Available view modes
@@ -141,7 +144,7 @@ Overall map view (with poses)
 One of the main tasks we frequently need is a preview of the overall map. We can test this by using the generated OSF file, which was created with the above command and contains the SLAM-generated ``LidarScan.pose`` property.
 ::
 
-   ouster-cli osf viz sample.osf --accum-num 20 \
+   ouster-cli source sample.osf viz --accum-num 20 \
    --accum-every 0 --accum-every-m 10.5 --accum-map -r 0 -e stop
 
 
@@ -153,18 +156,19 @@ Here is a preview example of the overall map generated from the accumulated scan
    palette)
 
 
-Convert Command
----------------
-The convert command converts the SLAM-generated OSF file to a point cloud data file
+Save Command
+------------
+
+The ``save`` command can be used to convert the SLAM-generated OSF file to a point cloud data file
 format such as LAS (.las), PLY (.ply), or PCD (.pcd). The output file format depends on the
 extension of the output filename. Let's use the OSF file generated from the SLAM command
 and convert it to a PLY file:
 
 .. code:: bash
 
-        ouster-cli source sample.osf convert output.ply
+        ouster-cli source sample.osf save output.ply
 
-The convert command automatically splits and downsamples the trajectory-adjusted point cloud into
+The ``save`` command automatically splits and downsamples the trajectory-adjusted point cloud into
 several files to prevent exporting a huge size file. The terminal will display details, and you
 will see the following printout for each output file:
 
