@@ -100,6 +100,10 @@ OsfFile::OsfFile(const std::string& filename, OpenMode mode) : OsfFile() {
     }
 }
 
+uint64_t OsfFile::size() const { return size_; };
+
+std::string OsfFile::filename() const { return filename_; }
+
 OSF_VERSION OsfFile::version() {
     if (!good()) {
         return OSF_VERSION::V_INVALID;
@@ -150,7 +154,11 @@ bool OsfFile::valid() {
     }
 
     if (osf_header->file_length() != size_) {
-        print_error(filename_, "OSF header file size field is incorrect.");
+        std::stringstream ss;
+        ss << "OSF file size does not match the stored value";
+        ss << " Expected: " << size_;
+        ss << " Actual: " << osf_header->file_length();
+        print_error(filename_, ss.str());
         return false;
     }
 
@@ -172,9 +180,16 @@ bool OsfFile::valid() {
     return true;
 }
 
+bool OsfFile::good() const { return state_ == FileState::GOOD; }
+
+bool OsfFile::operator!() const { return !good(); };
+
+OsfFile::operator bool() const { return good(); };
+
+uint64_t OsfFile::offset() const { return offset_; }
 // ========= Geneal Data Access =============
 
-OsfFile& OsfFile::seek(const uint64_t pos) {
+OsfFile& OsfFile::seek(uint64_t pos) {
     if (!good()) throw std::logic_error("bad osf file");
     if (pos > size_) {
         std::stringstream ss;

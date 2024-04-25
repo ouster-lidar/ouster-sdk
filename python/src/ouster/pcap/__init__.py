@@ -1,12 +1,5 @@
-"""
-Copyright (c) 2021, Ouster, Inc.
-All rights reserved.
+# flake8: noqa (unused imports)
 
-Pcap tools to record/read/write Ouster sensor data."""
-# flake8: noqa: F401 (unused imports)
-
-from .pcap import Pcap
-from .pcap import record
-from .pcap import _guess_ports
-from .pcap import _packet_info_stream
-from .pcap import _replay
+print("warning: the ouster.pcap module has been moved to ouster.sdk.pcap, "
+      "please use the new path to avoid this warning.")
+from ouster.sdk.pcap import *

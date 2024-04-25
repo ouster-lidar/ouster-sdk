@@ -35,22 +35,23 @@ e.g., the SDK version 20210608 (ouster-sdk 0.2.0) is not compatible with FW 3.0.
 
 The following table indicates the compatibility of each released SDK version and its FW compatibility:
 
-===================================== ======= ======= ======= ======= ======= ======= ======= ======= =======
-SDK Tag (Release) / Python SDK        FW 1.13 FW 2.0  FW 2.1  FW 2.2  FW 2.3  FW 2.4  FW 2.5  FW 3.0  FW 3.1
-===================================== ======= ======= ======= ======= ======= ======= ======= ======= =======
-C++ SDK 20231031 /  Python SDK 0.10.0 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
-C++ SDK 20230710 /  Python SDK 0.9.0  no      **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
-C++ SDK 20230403 /  Python SDK 0.8.1  no      **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
-C++ SDK 20230114 /  Python SDK 0.7.1  no      **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
-C++ SDK 20220927 /  Python SDK 0.5.2  no      **yes** **yes** **yes** **yes** **yes** no      no      no
-C++ SDK 20220826 /  Python SDK 0.5.1  no      **yes** **yes** **yes** **yes** **yes** no      no      no
-C++ SDK 20220608 /  Python SDK 0.4.1  **yes** **yes** **yes** **yes** **yes** no      no      no      no
-C++ SDK 20220504 /  Python SDK 0.4.0  **yes** **yes** **yes** **yes** **yes** no      no      no      no
-C++ SDK 20220107 /  Python SDK 0.3.0  **yes** **yes** **yes** **yes** no      no      no      no      no
-C++ SDK 20210608 /  Python SDK 0.2.1  **yes** **yes** **yes** no      no      no      no      no      no
-C++ SDK 20201209 /    n/a             **yes** **yes** **yes** no      no      no      no      no      no
-C++ SDK v1.13.0  /    n/a             **yes** no      no      no      no      no      no      no      no
-===================================== ======= ======= ======= ======= ======= ======= ======= ======= =======
+===================================== ======= ======= ======= ======= ======= ======= ======= =======
+SDK Tag (Release) / Python SDK        FW 2.0  FW 2.1  FW 2.2  FW 2.3  FW 2.4  FW 2.5  FW 3.0  FW 3.1
+===================================== ======= ======= ======= ======= ======= ======= ======= =======
+C++ SDK 20240423 /  Python SDK 0.11.0 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
+C++ SDK 20231031 /  Python SDK 0.10.0 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
+C++ SDK 20230710 /  Python SDK 0.9.0  **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
+C++ SDK 20230403 /  Python SDK 0.8.1  **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
+C++ SDK 20230114 /  Python SDK 0.7.1  **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
+C++ SDK 20220927 /  Python SDK 0.5.2  **yes** **yes** **yes** **yes** **yes** no      no      no
+C++ SDK 20220826 /  Python SDK 0.5.1  **yes** **yes** **yes** **yes** **yes** no      no      no
+C++ SDK 20220608 /  Python SDK 0.4.1  **yes** **yes** **yes** **yes** no      no      no      no
+C++ SDK 20220504 /  Python SDK 0.4.0  **yes** **yes** **yes** **yes** no      no      no      no
+C++ SDK 20220107 /  Python SDK 0.3.0  **yes** **yes** **yes** no      no      no      no      no
+C++ SDK 20210608 /  Python SDK 0.2.1  **yes** **yes** no      no      no      no      no      no
+C++ SDK 20201209 /    n/a             **yes** **yes** no      no      no      no      no      no
+C++ SDK v1.13.0  /    n/a             no      no      no      no      no      no      no      no
+===================================== ======= ======= ======= ======= ======= ======= ======= =======
 
 If you are a C++ SDK user who has upgraded to the latest FW but requires an older SDK version,
 please contact our customer support or the Field Applications Engineer who works with you.

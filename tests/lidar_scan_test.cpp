@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <map>
+#include <numeric>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -442,4 +443,54 @@ TEST(LidarScan, packet_timestamp_3) {
     scan_batcher(packet, scan);
     EXPECT_EQ(scan.packet_timestamp()[0], packet.host_timestamp);
     EXPECT_EQ(scan.packet_timestamp()[1], 0);
+}
+
+TEST(LidarScan, test_get_first_valid_packet_timestamp) {
+    int w = 1024;
+    int h = 32;
+    auto scan = ouster::LidarScan(w, h);
+    EXPECT_EQ(scan.packet_timestamp().rows(), w / DEFAULT_COLUMNS_PER_PACKET);
+    ASSERT_TRUE((scan.packet_timestamp() == 0).all());
+
+    auto packet_ts = scan.packet_timestamp();
+    // fill in some default values
+    std::iota(packet_ts.begin(), packet_ts.end(), 1);
+    ASSERT_TRUE((packet_ts == scan.packet_timestamp()).all());
+
+    // no packet found
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 0);
+
+    // first packet
+    scan.status()[1] = 1;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 1);
+
+    // fifth packet
+    scan.status()[1] = 0;
+    scan.status()[74] = 1;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 5);
+
+    scan.status()[74] = 0;
+    scan.status()[1023] = 1;
+    EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 64);
+}
+
+TEST(LidarScan, destagger) {
+    // It raises std::invalid_argument when the image height doesn't match the
+    // shift rows
+    int w = 32;
+    int h = 32;
+    auto scan = ouster::LidarScan(w, h);
+    std::vector<int> shift_by_row;
+    const auto& range = scan.field(ChanField::RANGE);
+    EXPECT_THROW(
+        {
+            try {
+                ouster::destagger<unsigned int>(range, shift_by_row);
+            } catch (const std::invalid_argument& e) {
+                ASSERT_STREQ(e.what(),
+                             "image height does not match shifts size");
+                throw;
+            }
+        },
+        std::invalid_argument);
 }

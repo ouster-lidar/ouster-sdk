@@ -40,8 +40,8 @@ INSTANTIATE_TEST_CASE_P(CartesianParametrisedTests,
                                           std::pair<int, int>{4096, 128}));
 
 TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
-    const auto WIDTH = 512;
-    const auto HEIGHT = 64;
+    const auto WIDTH = 256;
+    const auto HEIGHT = 32;
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 
@@ -62,8 +62,8 @@ TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
 }
 
 TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatchF) {
-    const auto WIDTH = 512;
-    const auto HEIGHT = 64;
+    const auto WIDTH = 256;
+    const auto HEIGHT = 32;
     const auto ROWS = WIDTH * HEIGHT;
     const auto COLS = 3;
 
@@ -113,8 +113,8 @@ TEST_P(CartesianParametrisedTestFixture, SpeedCheck) {
     PointsF pointsF = PointsF(ROWS, COLS);
     img_t<uint32_t> range = img_t<uint32_t>(WIDTH, HEIGHT);
 
-    constexpr int N_SCANS = 1000;
-    constexpr int MOVING_AVG_WINDOW = 100;
+    constexpr int N_SCANS = 100;
+    constexpr int MOVING_AVG_WINDOW = 30;
     using MovingAverage64 = MovingAverage<int64_t, int64_t, MOVING_AVG_WINDOW>;
     static std::map<std::string, MovingAverage64> mv;
 

@@ -14,8 +14,8 @@ from contextlib import closing
 
 import numpy as np
 
-from ouster import client
-from ouster.client import LidarMode
+from ouster.sdk import client
+from ouster.sdk.client import LidarMode
 
 
 def configure_dual_returns(hostname: str) -> None:
@@ -248,7 +248,7 @@ def record_pcap(hostname: str,
         n_seconds: max seconds of time to record. (Ctrl-Z correctly closes
                    streams)
     """
-    import ouster.pcap as pcap
+    import ouster.sdk.pcap as pcap
     from datetime import datetime
 
     # [doc-stag-pcap-record]

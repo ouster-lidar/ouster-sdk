@@ -5,8 +5,8 @@ import time
 from typing import IO
 from os import path
 
-import ouster.client as client
-import ouster.client._digest as digest
+import ouster.sdk.client as client
+import ouster.sdk.client._digest as digest
 from ouster.sdk.util import resolve_metadata
 
 _click_ro_file = click.Path(exists=True, dir_okay=False, readable=True)
@@ -31,7 +31,7 @@ def testing_time(pcap_file: str, json: IO) -> None:
     """
 
     try:
-        import ouster.pcap as pcap
+        import ouster.sdk.pcap as pcap
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
@@ -81,7 +81,7 @@ def compute_digest(file: str, meta: str, lidar_port: int, imu_port: int,
     packets: client.PacketSource
     if path.splitext(file)[1] == ".pcap":
         try:
-            from ouster import pcap
+            from ouster.sdk import pcap
         except ImportError:
             raise click.ClickException(
                 "Please verify that libpcap is installed")

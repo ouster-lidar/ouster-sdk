@@ -172,6 +172,39 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
     }
 }
 
+LidarScan::LidarScan(const LidarScan& ls_src,
+                     const LidarScanFieldTypes& field_types)
+    : timestamp_(ls_src.timestamp_),
+      packet_timestamp_(ls_src.packet_timestamp_),
+      measurement_id_(ls_src.measurement_id_),
+      status_(ls_src.status_),
+      pose_(ls_src.pose_),
+      field_types_(field_types),
+      w(ls_src.w),
+      h(ls_src.h),
+      frame_status(ls_src.frame_status),
+      frame_id(ls_src.frame_id) {
+    // Initialize fields
+    for (const auto& ft : field_types_) {
+        if (fields_.count(ft.first) > 0)
+            throw std::invalid_argument("Duplicated fields found");
+        fields_[ft.first] = impl::FieldSlot{ft.second, static_cast<size_t>(w),
+                                            static_cast<size_t>(h)};
+    }
+
+    // Copy fields
+    for (const auto& ft : field_types) {
+        if (ls_src.field_type(ft.first)) {
+            ouster::impl::visit_field(*this, ft.first,
+                                      ouster::impl::copy_and_cast(), ls_src,
+                                      ft.first);
+        } else {
+            ouster::impl::visit_field(*this, ft.first,
+                                      ouster::impl::zero_field());
+        }
+    }
+}
+
 LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile,
                      size_t columns_per_packet)
     : LidarScan{w, h, impl::lookup_scan_fields(profile), columns_per_packet} {}
@@ -237,6 +270,24 @@ Eigen::Ref<LidarScan::Header<uint64_t>> LidarScan::packet_timestamp() {
 Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::packet_timestamp()
     const {
     return packet_timestamp_;
+}
+
+uint64_t LidarScan::get_first_valid_packet_timestamp() const {
+    int total_packets = packet_timestamp().size();
+    if (total_packets == 0) {
+        return 0;  // prevent a divide by zero
+    }
+    int columns_per_packet = w / total_packets;
+
+    for (int i = 0; i < total_packets; ++i) {
+        if (status()
+                .middleRows(i * columns_per_packet, columns_per_packet)
+                .unaryExpr([](uint32_t s) { return s & 1; })
+                .any())
+            return packet_timestamp()[i];
+    }
+
+    return 0;
 }
 
 Eigen::Ref<LidarScan::Header<uint16_t>> LidarScan::measurement_id() {
@@ -461,7 +512,6 @@ ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
       h(pf.pixels_per_column),
       next_valid_m_id(0),
       next_headers_m_id(0),
-      next_valid_packet_id(0),
       cache(pf.lidar_packet_size),
       cache_packet_ts(0),
       pf(pf) {
@@ -714,7 +764,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         this->operator()(cache.data(), cache_packet_ts, ls);
     }
 
-    const uint16_t f_id = pf.frame_id(packet_buf);
+    const uint64_t f_id = pf.frame_id(packet_buf);
 
     const bool raw_headers = impl::raw_headers_enabled(pf, ls);
 
@@ -722,14 +772,13 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         // expecting to start batching a new scan
         next_valid_m_id = 0;
         next_headers_m_id = 0;
-        next_valid_packet_id = 0;
         ls.frame_id = f_id;
-
+        zero_header_cols(ls, 0, w);
+        ls.packet_timestamp().setZero();
         const uint8_t f_thermal_shutdown = pf.thermal_shutdown(packet_buf);
         const uint8_t f_shot_limiting = pf.shot_limiting(packet_buf);
         ls.frame_status = frame_status(f_thermal_shutdown, f_shot_limiting);
-
-    } else if (ls.frame_id == static_cast<uint16_t>(f_id + 1)) {
+    } else if (ls.frame_id == ((f_id + 1) % (pf.max_frame_id + 1))) {
         // drop reordered packets from the previous frame
         return false;
     } else if (ls.frame_id != f_id) {
@@ -746,14 +795,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
                               field_type.first, end_m_id, w);
         }
 
-        zero_header_cols(ls, next_valid_m_id, w);
-
-        // zero packet timestamp separately, since it's packet level data
-        ls.packet_timestamp()
-            .segment(next_valid_packet_id,
-                     ls.packet_timestamp().rows() - next_valid_packet_id)
-            .setZero();
-
         // store packet buf and ts data to the cache for later processing
         std::memcpy(cache.data(), packet_buf, cache.size());
         cache_packet_ts = packet_ts;
@@ -767,13 +808,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
     const uint16_t packet_id =
         pf.col_measurement_id(col0_buf) / pf.columns_per_packet;
     if (packet_id < ls.packet_timestamp().rows()) {
-        if (packet_id >= next_valid_packet_id) {
-            // zeroing skipped packets timestamps
-            ls.packet_timestamp()
-                .segment(next_valid_packet_id, packet_id - next_valid_packet_id)
-                .setZero();
-            next_valid_packet_id = packet_id + 1;
-        }
         ls.packet_timestamp()[packet_id] = packet_ts;
     }
 

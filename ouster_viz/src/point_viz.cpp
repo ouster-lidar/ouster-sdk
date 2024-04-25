@@ -141,6 +141,7 @@ struct PointViz::Impl {
     double fps_last_time_{0};
     uint64_t fps_frame_counter_{0};
     double fps_{0};
+    bool update_on_input_{true};
 
     Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
 };
@@ -228,6 +229,10 @@ bool PointViz::running() { return pimpl->glfw->running(); }
 void PointViz::running(bool state) { pimpl->glfw->running(state); }
 
 void PointViz::visible(bool state) { pimpl->glfw->visible(state); }
+
+bool PointViz::update_on_input() { return pimpl->update_on_input_; }
+
+void PointViz::update_on_input(bool state) { pimpl->update_on_input_ = state; }
 
 bool PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl->update_mx};
@@ -816,32 +821,32 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 switch (key) {
                     case GLFW_KEY_W:
                         viz.camera().pitch(5);
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     case GLFW_KEY_S:
                         viz.camera().pitch(-5);
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     case GLFW_KEY_A:
                         viz.camera().yaw(5);
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     case GLFW_KEY_D:
                         viz.camera().yaw(-5);
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     case GLFW_KEY_EQUAL:
                         viz.camera().dolly(5);
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     case GLFW_KEY_MINUS:
                         viz.camera().dolly(-5);
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     case GLFW_KEY_0:
                         orthographic = !orthographic;
                         viz.camera().set_orthographic(orthographic);
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     case GLFW_KEY_ESCAPE:
                         viz.running(false);
@@ -853,7 +858,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 switch (key) {
                     case GLFW_KEY_R:
                         viz.camera().reset();
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     default:
                         break;
@@ -862,7 +867,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 switch (key) {
                     case GLFW_KEY_R:
                         viz.camera().birds_eye_view();
-                        viz.update();
+                        if (viz.update_on_input()) viz.update();
                         break;
                     default:
                         break;
@@ -875,7 +880,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
         auto lock = mx ? std::unique_lock<std::mutex>{*mx}
                        : std::unique_lock<std::mutex>{};
         viz.camera().dolly(static_cast<int>(yoff * 5));
-        viz.update();
+        if (viz.update_on_input()) viz.update();
         return true;
     });
 
@@ -900,7 +905,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 dy *= 2.0 / window_diagonal;
                 viz.camera().dolly_xy(dx, dy);
             }
-            viz.update();
+            if (viz.update_on_input()) viz.update();
             return true;
         });
 }

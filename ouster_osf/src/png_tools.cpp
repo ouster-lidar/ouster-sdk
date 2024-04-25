@@ -9,9 +9,9 @@
 
 #include <Eigen/Eigen>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <memory>
-#include <thread>
 
 #include "ouster/lidar_scan.h"
 
@@ -83,11 +83,9 @@ void png_osf_read_data(png_structp png_ptr, png_bytep bytes,
     vec_read->read(bytes, bytes_len);
 };
 
-// void user_read_data(png_structp png_ptr, png_bytep data, png_size_t length);
-
 /**
  * It's needed for custom png IO operations... but I've never seen it's called.
- * And also there are no need to flush writer to std::vector buufer in our case.
+ * And also there are no need to flush writer to std::vector buffer in our case.
  */
 void png_osf_flush_data(png_structp){};
 
@@ -154,7 +152,7 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 }
 
 // ========== Encode Functions ===================================
-
+#ifdef OUSTER_OSF_NO_THREADING
 ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
                                       const std::vector<int>& px_offset,
                                       const LidarScanFieldTypes& field_types) {
@@ -170,7 +168,7 @@ ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
 
     return fields_data;
 }
-
+#else
 ScanData scanEncodeFields(const LidarScan& lidar_scan,
                           const std::vector<int>& px_offset,
                           const LidarScanFieldTypes& field_types) {
@@ -185,7 +183,7 @@ ScanData scanEncodeFields(const LidarScan& lidar_scan,
     const size_t fields_num = field_types.size();
     // Number of fields to pack into a single thread coder
     size_t per_thread_num = (fields_num + con_num - 1) / con_num;
-    std::vector<std::thread> coders{};
+    std::vector<std::future<void>> futures{};
     size_t scan_idx = 0;
     for (size_t t = 0; t < con_num && t * per_thread_num < fields_num; ++t) {
         // Per every thread we pack the `per_thread_num` field_types encodings
@@ -203,15 +201,18 @@ ScanData scanEncodeFields(const LidarScan& lidar_scan,
         }
         // Start an encoder thread with selected fields and corresponding
         // indices list
-        coders.emplace_back(std::thread{fieldEncodeMulti, std::cref(lidar_scan),
+        futures.emplace_back(std::async(fieldEncodeMulti, std::cref(lidar_scan),
                                         thread_fields, std::cref(px_offset),
-                                        std::ref(fields_data), thread_idxs});
+                                        std::ref(fields_data), thread_idxs));
     }
 
-    for (auto& t : coders) t.join();
+    for (auto& t : futures) {
+        t.get();
+    }
 
     return fields_data;
 }
+#endif
 
 template <typename T>
 bool encode8bitImage(ScanChannelData& res_buf,
@@ -617,17 +618,15 @@ template bool encode64bitImage<uint32_t>(
 template bool encode64bitImage<uint64_t>(
     ScanChannelData&, const Eigen::Ref<const img_t<uint64_t>>&);
 
-bool fieldEncodeMulti(const LidarScan& lidar_scan,
+void fieldEncodeMulti(const LidarScan& lidar_scan,
                       const LidarScanFieldTypes& field_types,
                       const std::vector<int>& px_offset, ScanData& scan_data,
                       const std::vector<size_t>& scan_idxs) {
     if (field_types.size() != scan_idxs.size()) {
-        std::cerr << "ERROR: in fieldEncodeMulti field_types.size() should "
-                     "match scan_idxs.size()"
-                  << std::endl;
-        std::abort();
+        throw std::invalid_argument(
+            "ERROR: in fieldEncodeMulti field_types.size() should "
+            "match scan_idxs.size()");
     }
-    auto res_err = false;
     for (size_t i = 0; i < field_types.size(); ++i) {
         auto err = fieldEncode(lidar_scan, field_types[i], px_offset, scan_data,
                                scan_idxs[i]);
@@ -638,9 +637,7 @@ bool fieldEncodeMulti(const LidarScan& lidar_scan,
                          "fieldEncodeMulti)"
                       << std::endl;
         }
-        res_err = res_err || err;
     }
-    return res_err;
 }
 
 bool fieldEncode(
@@ -648,9 +645,9 @@ bool fieldEncode(
     const std::pair<sensor::ChanField, sensor::ChanFieldType> field_type,
     const std::vector<int>& px_offset, ScanData& scan_data, size_t scan_idx) {
     if (scan_idx >= scan_data.size()) {
-        std::cerr << "ERROR: scan_data size is not sufficient to hold idx: "
-                  << scan_idx << std::endl;
-        std::abort();
+        throw std::invalid_argument(
+            "ERROR: scan_data size is not sufficient to hold idx: " +
+            std::to_string(scan_idx));
     }
     bool res = true;
     switch (field_type.second) {
@@ -745,10 +742,9 @@ bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
                       const LidarScanFieldTypes& field_types,
                       const std::vector<int>& px_offset) {
     if (field_types.size() != scan_idxs.size()) {
-        std::cerr << "ERROR: in fieldDecodeMulti field_types.size() should "
-                     "match scan_idxs.size()"
-                  << std::endl;
-        std::abort();
+        throw std::invalid_argument(
+            "ERROR: in fieldDecodeMulti field_types.size() should "
+            "match scan_idxs.size()");
     }
     auto res_err = false;
     for (size_t i = 0; i < field_types.size(); ++i) {
@@ -762,7 +758,7 @@ bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
     }
     return res_err;
 }
-
+#ifdef OUSTER_OSF_NO_THREADING
 bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
                                   const ScanData& scan_data,
                                   const std::vector<int>& px_offset) {
@@ -784,7 +780,9 @@ bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
     }
     return false;
 }
-
+#else
+// TWS 20240301 TODO: determine if we can deduplicate this code (see
+// scanEncodeFields)
 bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
                       const std::vector<int>& px_offset) {
     LidarScanFieldTypes field_types(lidar_scan.begin(), lidar_scan.end());
@@ -802,7 +800,7 @@ bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
 
     // Number of fields to pack into a single thread coder
     size_t per_thread_num = (fields_num + con_num - 1) / con_num;
-    std::vector<std::thread> coders{};
+    std::vector<std::future<bool>> futures{};
     size_t scan_idx = 0;
 
     for (size_t t = 0; t < con_num && t * per_thread_num < fields_num; ++t) {
@@ -823,15 +821,22 @@ bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
         // Start a decoder thread with selected fields and corresponding
         // indices list
 
-        coders.emplace_back(std::thread{fieldDecodeMulti, std::ref(lidar_scan),
+        futures.emplace_back(std::async(fieldDecodeMulti, std::ref(lidar_scan),
                                         std::cref(scan_data), thread_idxs,
-                                        thread_fields, std::cref(px_offset)});
+                                        thread_fields, std::cref(px_offset)));
     }
 
-    for (auto& t : coders) t.join();
+    for (auto& t : futures) {
+        // TODO: refactor, use return std::all
+        bool res = t.get();
+        if (!res) {
+            return false;
+        }
+    }
 
     return false;
 }
+#endif
 
 template <typename T>
 bool decode24bitImage(Eigen::Ref<img_t<T>> img,
@@ -1374,25 +1379,6 @@ template bool decode8bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
                                         const ScanChannelData&);
 template bool decode8bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
                                         const ScanChannelData&);
-
-// =================== Save to File Functions ====================
-
-bool saveScanChannel(const ScanChannelData& channel_buf,
-                     const std::string& filename) {
-    std::fstream file(filename, std::ios_base::out | std::ios_base::binary);
-
-    if (file.good()) {
-        file.write(reinterpret_cast<const char*>(channel_buf.data()),
-                   channel_buf.size());
-        if (file.good()) {
-            file.close();
-            return false;  // SUCCESS
-        }
-    }
-
-    file.close();
-    return true;  // FAILURE
-}
 
 }  // namespace osf
 }  // namespace ouster

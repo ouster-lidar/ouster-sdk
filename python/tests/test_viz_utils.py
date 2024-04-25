@@ -11,13 +11,13 @@ import numpy as np
 
 import math
 
-from ouster import client
-import ouster.pcap as pcap
+from ouster.sdk import client
+import ouster.sdk.pcap as pcap
 from ouster.sdk.util import resolve_metadata
-import ouster.sdk.pose_util as pu
+import ouster.sdk.util.pose_util as pu
 
-from ouster.viz import grey_palette
-from ouster.viz.scans_accum import ScansAccumulator
+from ouster.sdk.viz import grey_palette
+from ouster.sdk.viz.scans_accum import ScansAccumulator
 
 try:
     from scipy.spatial.transform import Rotation as R
@@ -30,9 +30,9 @@ from .test_viz import point_viz as point_viz_plain  # noqa: F401
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
 if TYPE_CHECKING:
-    import ouster.viz as viz
+    import ouster.sdk.viz as viz
 else:
-    viz = pytest.importorskip('ouster.viz')
+    viz = pytest.importorskip('ouster.sdk.viz')
 
 # Loose vector type
 Vector = Union[List, Tuple, np.ndarray]

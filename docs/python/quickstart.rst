@@ -56,9 +56,20 @@ In your open python session, save the two paths to variables:
 Because our pcap file contains the UDP packet stream but not the sensor metadata, we load the sensor
 information from ``metadata_path`` first, using the client module:
 
+.. note::
+   Starting with ouster-sdk v0.11.0, most of core sdk objects have been moved from the ``ouster``
+   namespace into the ``ouster.sdk`` namespace.
+
+.. note::
+   Starting with ouster-sdk v0.11.0 we introduce a unified ``ScanSource`` interface that easier to utilize
+   and is more capable than original objects demonstrated in this quick guide. Please refer to
+   :ref:`Using ScanSource API <python/using-scan-source>` for details on how to use the new interface.
+
+
+
 .. code:: python
 
-   >>> from ouster import client
+   >>> from ouster.sdk import client
    >>> with open(metadata_path, 'r') as f:
    ...     info = client.SensorInfo(f.read())
 
@@ -68,7 +79,7 @@ captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
 
 .. code:: python
 
-    >>> from ouster import pcap
+    >>> from ouster.sdk import pcap
     >>> source = pcap.Pcap(pcap_path, info)
 
 To visualize data from this pcap file, proceed to :doc:`/python/examples/visualizations` examples.
@@ -123,7 +134,7 @@ Now configure the client:
 
 .. code:: python
 
-   >>> from ouster import client
+   >>> from ouster.sdk import client
    >>> config = client.SensorConfig()
    >>> config.udp_port_lidar = 7502
    >>> config.udp_port_imu = 7503

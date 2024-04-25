@@ -157,7 +157,8 @@ Packet Format
 .. doxygenclass:: ouster::sensor::packet_format
     :members:
 
-.. doxygenfunction:: ouster::sensor::get_format
+.. doxygengroup:: OusterClientTypeGetFormat
+    :content-only:
 
 MISC
 ====

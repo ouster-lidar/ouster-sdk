@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "nonstd/optional.hpp"
+#include "version.h"
 
 namespace ouster {
 
@@ -186,6 +187,35 @@ enum UDPProfileLidar {
 /** Profile indicating packet format of IMU data. */
 enum UDPProfileIMU {
     PROFILE_IMU_LEGACY = 1,  ///< Legacy IMU data
+};
+
+/** Full scale range for IMU data. */
+enum FullScaleRange {
+    /** Higher precision lower range measurement mode */
+    FSR_NORMAL = 0,
+
+    /** Lower precision higher range measurement mode */
+    FSR_EXTENDED
+};
+
+/** Priority of returns for the lidar to output.
+ *   Lidar can have more than 1 or 2 detected "returns".
+ *   This indicates to the lidar which ones it should output.
+ *   See sensor docs for more details.
+ */
+enum ReturnOrder {
+    /** Lidar returns the strongest returns first */
+    ORDER_STRONGEST_TO_WEAKEST = 0,
+
+    /** Lidar returns the furthest returns first */
+    ORDER_FARTHEST_TO_NEAREST,
+
+    /** Lidar returns the nearest returns first */
+    ORDER_NEAREST_TO_FARTHEST,
+
+    /** DEPRECATED: Only Present In Old Test Firmware */
+    ORDER_DEPRECATED_STRONGEST_RETURN_FIRST,
+    ORDER_DEPRECATED_LAST_RETURN_FIRST
 };
 
 /** Thermal Shutdown status. */
@@ -359,6 +389,29 @@ struct sensor_config {
      * Refer to UDPProfileIMU for more details.
      */
     optional<UDPProfileIMU> udp_profile_imu;
+
+    /**
+     * The gyro full scale measurement range to use.
+     * Refer to FullScaleRange for more details.
+     */
+    optional<FullScaleRange> gyro_fsr;
+
+    /**
+     * The accelerometer full scale measurement range to use.
+     * Refer to FullScaleRange for more details.
+     */
+    optional<FullScaleRange> accel_fsr;
+
+    /**
+     * The priority of returns for the lidar to output.
+     * Refer to ReturnOrder for more details.
+     */
+    optional<ReturnOrder> return_order;
+
+    /**
+     * The minimum detection range of the lidar in cm.
+     */
+    optional<int> min_range_threshold_cm;
 };
 
 /** Stores data format information. */
@@ -438,7 +491,7 @@ struct sensor_info {
     /* Return an updated version of the metadata string reflecting any
      * changes to the sensor_info.
      * Errors out if changes are incompatible but does not check for validity */
-    std::string updated_metadata_string();
+    std::string updated_metadata_string() const;
 
     bool has_fields_equal(const sensor_info& other) const;
 
@@ -599,7 +652,7 @@ std::string to_string(OperatingMode mode);
 /**
  * Get operating mode from string.
  *
- * @param s String to get the operating mode from.
+ * @param[in] s String to get the operating mode from.
  *
  * @return operating mode corresponding to the string, or 0 on error.
  */
@@ -707,10 +760,48 @@ std::string to_string(UDPProfileIMU profile);
 optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
 
 /**
+ * Get full scale range setting from string
+ *
+ * @param[in] s The string to decode into a full scale range.
+ *
+ * @return full scale range corresponding to the string, or nullopt on error.
+ */
+optional<FullScaleRange> full_scale_range_of_string(const std::string& s);
+
+/**
+ * Get return order setting from string
+ *
+ * @param[in] s The string to decode into a return order.
+ *
+ * @return return order corresponding to the string, or nullopt on error.
+ */
+optional<ReturnOrder> return_order_of_string(const std::string& s);
+
+/**
+ * Get string representation of a Return Order.
+ *
+ * @param[in] return_order The return order to get the string
+ * representation of.
+ *
+ * @return string representation of the return order.
+ */
+std::string to_string(ReturnOrder return_order);
+
+/**
+ * Get string representation of a Full Scale Range.
+ *
+ * @param[in] full_scale_range The shot limiting status to get the string
+ *                             representation of.
+ *
+ * @return string representation of the full scale range.
+ */
+std::string to_string(FullScaleRange full_scale_range);
+
+/**
  * Get string representation of a Shot Limiting Status.
  *
  * @param[in] shot_limiting_status The shot limiting status to get the string
- * representation of.
+ *                                 representation of.
  *
  * @return string representation of the shot limiting status.
  */
@@ -720,7 +811,7 @@ std::string to_string(ShotLimitingStatus shot_limiting_status);
  * Get string representation of Thermal Shutdown Status.
  *
  * @param[in] thermal_shutdown_status The thermal shutdown status to get the
- * string representation of.
+ *                                    string representation of.
  *
  * @return string representation of thermal shutdown status.
  */
@@ -743,7 +834,8 @@ void check_signal_multiplier(const double signal_multiplier);
  *
  * @param[in] metadata a text blob returned by get_metadata from client.h.
  * @param[in] skip_beam_validation whether to skip validation on metdata - not
- * for use on recorded data or metadata from sensors
+ *                                 for use on recorded data or metadata
+ *                                 from sensors
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
@@ -757,7 +849,8 @@ sensor_info parse_metadata(const std::string& metadata,
  *
  * @param[in] json_file path to a json file containing sensor metadata.
  * @param[in] skip_beam_validation whether to skip validation on metadata - not
- * for use on recorded data or metadata from sensors
+ *                                 for use on recorded data or metadata
+ *                                 from sensors
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
@@ -815,7 +908,7 @@ std::string convert_to_legacy(const std::string& metadata);
  * Get a string representation of sensor calibration. Only set fields will be
  * represented.
  *
- * @param[in] calibraiton a struct of calibration.
+ * @param[in] cal a struct of calibration.
  *
  * @return string representation of sensor calibration.
  */
@@ -828,6 +921,16 @@ std::string to_string(const calibration_status& cal);
  * @return client version string
  */
 std::string client_version();
+
+/**
+ * Get version information from the metadata.
+ *
+ * @param[in] metadata string.
+ *
+ * @return version corresponding to the string, or invalid_version on error.
+ */
+ouster::util::version firmware_version_from_metadata(
+    const std::string& metadata);
 
 // clang-format off
 /** Tag to identitify a paricular value reported in the sensor channel data
@@ -953,6 +1056,8 @@ class packet_format {
     const size_t col_footer_size;
     const size_t col_size;
     const size_t packet_footer_size;
+
+    const uint64_t max_frame_id;
 
     /**
      * Read the packet type packet header.
@@ -1253,8 +1358,12 @@ class packet_format {
     int field_bitness(ChanField f) const;
 };
 
+/** @defgroup OusterClientTypeGetFormat Get Packet Format functions */
+
 /**
  * Get a packet parser for a particular data format.
+ *
+ * @ingroup OusterClientTypeGetFormat
  *
  * @param[in] info parameters provided by the sensor.
  *
@@ -1264,6 +1373,8 @@ const packet_format& get_format(const sensor_info& info);
 
 /**
  * Get a packet parser for a particular data format.
+ *
+ * @ingroup OusterClientTypeGetFormat
  *
  * @param[in] udp_profile_lidar   lidar profile
  * @param[in] pixels_per_column   pixels per column
@@ -1282,7 +1393,12 @@ struct Packet {
     uint64_t host_timestamp;
     std::vector<uint8_t> buf;
 
-    Packet(int size = 65536) : host_timestamp{0}, buf(size) {}
+    Packet(int size = 65536) : host_timestamp{0} {
+        // this is necessary due to how client works - it may read size() + 1
+        // bytes into the packet in case of rogue packet coming through
+        buf.reserve(size + 1);
+        buf.resize(size, 0);
+    }
 
     template <typename PacketType>
     PacketType& as() {

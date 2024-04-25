@@ -46,19 +46,18 @@ Let's see what the sensor is seeing in a pretty visualizer:
 
     $ ouster-cli source <SENSOR HOSTNAME> viz
 
-That looked nice! Let's record ten seconds of data to a pcap so we can view it on repeat!
+That looked nice! Let's record some data to a pcap so we can view it on repeat!
 
 .. code:: bash
     
-    $ ouster-cli source <SENSOR HOSTNAME> record -s 10
+    $ ouster-cli source <SENSOR HOSTNAME> save .pcap
 
 That should produce screen output that looks something like:
 
 .. code:: bash
 
     Connecting to <SENSOR HOSTNAME>
-    Recording for up to 10.0 seconds...
-    Wrote X GiB to ./OS-<SENSOR_HOSTNAME>-<LIDAR_MODE>_<DATE>.pcap
+    Saving PCAP file at ./OS-<SENSOR_DETAILS>-<LIDAR_MODE>_<DATE>.pcap
 
 Go ahead and look in the current directory for the named pcap file and associated metadata file.
 

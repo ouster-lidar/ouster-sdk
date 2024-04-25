@@ -12,7 +12,9 @@
    :hidden:
 
    Developer Quick Start <python/quickstart>
+   Using ScanSource API <python/using-scan-source>
    Examples <python/examples/index>
+   SLAM Quickstart <python/slam-api-example>
    Point Cloud Visualizer <python/viz/index>
    Developing <python/devel>
 
@@ -21,7 +23,7 @@
    :hidden:
 
    Build <cpp/building.rst>
-   Examples <cpp/examples.rst>
+   Examples <cpp/examples/index.rst>
 
 .. toctree::
    :caption: ROS1 Guide
@@ -33,6 +35,7 @@
    :caption: SDK Reference
    :hidden:
 
+   OSF <reference/osf>
    Lidar Scan API <reference/lidar-scan>
    Python API Reference <python/api/index>
    C++ API Reference <cpp/api>
@@ -54,6 +57,7 @@
 
     Migrating from 20220927/0.5.1 to 20230114/0.7.1 <migration/migration-20220927-20230114>
     Migrating from 20230114/0.7.1 to 20230403/0.8.1 <migration/migration-20230114-20230403>
+    Migration from 20231031/0.10.0 to 20240423/0.11.0 <migration/migration-20231031-20240423>
 ..
    FAQ <faq>
 

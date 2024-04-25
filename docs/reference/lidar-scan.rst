@@ -1,3 +1,5 @@
+.. _lidar-scan:
+
 ==============
 Lidar Scan API
 ==============

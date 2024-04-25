@@ -685,7 +685,7 @@ Json::Value info_to_nested_json(const sensor_info& info) {
 }
 
 // TODO refactor for performance since we're parsing
-std::string sensor_info::updated_metadata_string() {
+std::string sensor_info::updated_metadata_string() const {
     Json::StreamWriterBuilder builder;
     builder["enableYAMLCompatibility"] = true;
     builder["precision"] = 6;
@@ -716,7 +716,9 @@ std::string sensor_info::updated_metadata_string() {
             logger().info(
                 "Outputting updated metadata string based on non-legacy format "
                 "of original metadata");
-            if (this->fw_rev.substr(0, 2) == "v1") {
+            using namespace ouster::util;
+            auto fw_version = ouster::util::version_from_string(fw_rev);
+            if (fw_version != invalid_version && fw_version.major == 1) {
                 // NOTE: currently updated_metatadata_string does not handle
                 // outputting udp_dest and operating_mode back into udp_ip and
                 // auto_start_flag for FW 1.12, 1.13, 1.14 in the config_params
@@ -992,6 +994,47 @@ std::string to_string(const sensor_info& info) {
 sensor_info parse_metadata(const std::string& metadata,
                            bool skip_beam_validation) {
     return sensor_info(metadata, skip_beam_validation);
+}
+
+// TODO: do we need to expose this method?
+std::string get_firmware_version(const Json::Value& metadata_root) {
+    auto fw_ver = std::string{};
+    if (metadata_root["sensor_info"].isObject()) {
+        if (metadata_root["sensor_info"].isMember("semver")) {
+            // This is only true for 3.2 and later
+            fw_ver = metadata_root["sensor_info"]["semver"].asString();
+        } else if (metadata_root["sensor_info"].isMember("build_rev")) {
+            // fall back to build_rev
+            fw_ver = metadata_root["sensor_info"]["build_rev"].asString();
+        }
+    }
+    return fw_ver;
+}
+
+ouster::util::version firmware_version_from_metadata(
+    const std::string& metadata) {
+    if (metadata.empty()) {
+        throw std::invalid_argument(
+            "firmware_version_from_metadata metadata empty!");
+    }
+
+    Json::Value root{};
+    Json::CharReaderBuilder builder{};
+    std::string errors{};
+    std::stringstream ss{metadata};
+
+    if (!Json::parseFromStream(builder, ss, &root, &errors))
+        throw std::runtime_error{
+            "Errors parsing metadata for parse_metadata: " + errors};
+
+    auto fw_ver = get_firmware_version(root);
+    if (fw_ver.empty()) {
+        throw std::runtime_error(
+            "firmware_version_from_metadata failed to deduce version info from "
+            "metadata!");
+    }
+
+    return ouster::util::version_from_string(fw_ver);
 }
 
 }  // namespace sensor

@@ -12,6 +12,7 @@ sensor data in both languages. The SDK includes APIs for:
 
 * Querying and setting sensor configuration
 * Recording and reading data in pcap format
+* Recording and reading data in :ref:`Open Sensor Format (OSF)<osf>`
 * Reading and buffering sensor UDP data streams reliably
 * Conversion of raw data to range/signal/near_ir/reflectivity images (destaggering)
 * Efficient projection of range measurements to Cartesian (x, y, z) coordinates
@@ -42,7 +43,7 @@ Pre-built binaries are provided on `PyPI`_ for the following platforms:
 Building from source is supported on:
 
 - Ubuntu 20.04, 22.04, and Debian 11 (x86-64, aarch64)
-- macOS >= 10.15 (x86-64), >= 11.0 (arm64)
+- macOS >= 11.0 (arm64, x86-64)
 - Windows 10 (x86-64)
 
 The Ouster SDK drops languages and platforms as they exit their standard support cycle. Please

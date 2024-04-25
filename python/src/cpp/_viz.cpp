@@ -126,6 +126,14 @@ PYBIND11_MODULE(_viz, m) {
         .def("visible", &viz::PointViz::visible,
              "Toggle if the PointViz window is visible")
 
+        .def("update_on_input",
+             py::overload_cast<>(&viz::PointViz::update_on_input),
+             "Will we update on user input.")
+
+        .def("update_on_input",
+             py::overload_cast<bool>(&viz::PointViz::update_on_input),
+             "Set update_on_input state.")
+
         // misc
         .def(
             "push_key_handler",
@@ -564,7 +572,8 @@ PYBIND11_MODULE(_viz, m) {
              [](viz::Cloud& self, py::dict) { return viz::Cloud{self}; })
         .def("__repr__", [](const viz::Cloud& self) {
             std::stringstream ss;
-            ss << "<ouster.viz.Cloud " << &self << ", pts = " << self.get_size()
+            ss << "<ouster.sdk.viz.Cloud " << &self
+               << ", pts = " << self.get_size()
                << ", cols = " << self.get_cols() << ">";
             return ss.str();
         });
@@ -827,18 +836,30 @@ PYBIND11_MODULE(_viz, m) {
     m.attr("spezia_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::spezia_n), static_cast<pysize>(3)},
         &viz::spezia_palette[0][0]};
+    m.attr("spezia_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::spezia_cal_ref_n), static_cast<pysize>(3)},
+        &viz::spezia_cal_ref_palette[0][0]};
     m.attr("calref_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::calref_n), static_cast<pysize>(3)},
         &viz::calref_palette[0][0]};
     m.attr("grey_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::grey_n), static_cast<pysize>(3)},
         &viz::grey_palette[0][0]};
+    m.attr("grey_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::grey_cal_ref_n), static_cast<pysize>(3)},
+        &viz::grey_cal_ref_palette[0][0]};
     m.attr("viridis_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::viridis_n), static_cast<pysize>(3)},
         &viz::viridis_palette[0][0]};
+    m.attr("viridis_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::viridis_cal_ref_n), static_cast<pysize>(3)},
+        &viz::viridis_cal_ref_palette[0][0]};
     m.attr("magma_palette") = py::array_t<float>{
         {static_cast<pysize>(viz::magma_n), static_cast<pysize>(3)},
         &viz::magma_palette[0][0]};
+    m.attr("magma_cal_ref_palette") = py::array_t<float>{
+        {static_cast<pysize>(viz::magma_cal_ref_n), static_cast<pysize>(3)},
+        &viz::magma_cal_ref_palette[0][0]};
 
     m.attr("__version__") = ouster::SDK_VERSION;
 }

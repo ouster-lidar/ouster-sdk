@@ -132,34 +132,5 @@ uint64_t finish_osf_file(const std::string& filename,
     return saved_size;
 }
 
-void print_metadata_buf(const uint8_t* buf, const uint32_t buf_size) {
-    (void)buf_size;
-    auto a = ouster::osf::gen::GetSizePrefixedMetadata(buf);
-    std::cout << "=== Metadata: =====================" << std::endl;
-    std::cout << "id = " << a->id()->str() << std::endl;
-    std::cout << "start_ts = " << a->start_ts() << std::endl;
-    std::cout << "end_ts = " << a->end_ts() << std::endl;
-    auto cs = a->chunks();
-    std::cout << "chunks.size = " << cs->size() << std::endl;
-    for (uint32_t i = 0; i < cs->size(); ++i) {
-        auto c = cs->Get(i);
-        std::cout << "  chunks[" << i << "] = " << c->start_ts() << ", "
-                  << c->end_ts() << ", " << c->offset() << std::endl;
-    }
-    auto ms = a->entries();
-    std::cout << "entries.size = " << ms->size() << std::endl;
-    for (uint32_t i = 0; i < ms->size(); ++i) {
-        auto e = ms->Get(i);
-        std::cout << "  entry[" << i << "] = " << e->id()
-                  << ", type = " << e->type()->str() << std::endl;
-        auto buffer = e->buffer();
-        std::cout << "    buffer_size = " << buffer->size() << ", vals = [";
-        std::cout << osf::to_string(buffer->Data(),
-                                    static_cast<size_t>(buffer->size()), 100)
-                  << "]" << std::endl;
-        ;
-    }
-}
-
 }  // namespace osf
 }  // namespace ouster

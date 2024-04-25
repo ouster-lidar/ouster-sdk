@@ -20,66 +20,105 @@ namespace osf {
 /**
  * Metadata entry to store lidar sensor_info, i.e. Ouster sensor configuration.
  *
- * @verbatim
- * Fields:
- *   metadata: string - lidar metadata in json
- *
  * OSF type:
  *   ouster/v1/os_sensor/LidarSensor
  *
- * Flatbuffer definition file:
+ * Flat Buffer Reference:
  *   fb/os_sensor/lidar_sensor.fbs
- * @endverbatim
- *
  */
 class LidarSensor : public MetadataEntryHelper<LidarSensor> {
     using sensor_info = ouster::sensor::sensor_info;
 
    public:
-    /// TODO]pb]: This is soft DEPRECATED until we have an updated sensor_info,
-    ///           since we are not encouraging storing the serialized metadata
-    explicit LidarSensor(const sensor_info& si)
-        : sensor_info_(si), metadata_(si.original_string()) {
-        throw std::invalid_argument(
-            "\nERROR: `osf::LidarSensor()` constructor accepts only "
-            "metadata_json "
-            "(full string of the file metadata.json or what was received from "
-            "sensor) and not a `sensor::sensor_info` object.\n\n"
-            "We are so sorry that we deprecated it's so hardly but the thing "
-            "is that `sensor::sensor_info` object doesn't equal the original "
-            "metadata.json file (or string) that we used to construct it.\n"
-            "However, Data App when tries to get metadata from OSF looks for "
-            "fields (like `image_rev`) that only present in metadata.json but "
-            "not `sensor::sensor_info` which effectively leads to OSF that "
-            "couldn't be uploaded to Data App.\n");
-    }
+    /**
+     * @param[in] si Initialize the LidarSensor with a sensor_info object.
+     */
+    explicit LidarSensor(const sensor_info& si);
 
-    explicit LidarSensor(const std::string& sensor_metadata)
-        : sensor_info_(sensor::parse_metadata(sensor_metadata)),
-          metadata_(sensor_metadata) {}
+    /**
+     * @param[in] sensor_metadata Initialize the LidarSensor with a json string
+     *                            representation of the sensor_info object.
+     */
+    explicit LidarSensor(const std::string& sensor_metadata);
 
-    const sensor_info& info() const { return sensor_info_; }
+    /**
+     * Returns the sensor_info associated with the LidarSensor.
+     *
+     * @return The sensor_info associated with the LidarSensor.
+     */
+    const sensor_info& info() const;
 
-    const std::string& metadata() const { return metadata_; }
+    /**
+     * Returns the json string representation sensor_info associated
+     * with the LidarSensor.
+     *
+     * @return  ///< The json string representation of the
+     *          ///< sensor_info object.
+     */
+    const std::string& metadata() const;
 
-    // === Simplified with MetadataEntryHelper<Sensor>: type()+clone()
-    // std::string type() const override;
-    // std::unique_ptr<MetadataEntry> clone() const override;
-
+    /**
+     * @copydoc MetadataEntry::buffer
+     */
     std::vector<uint8_t> buffer() const final;
 
+    /**
+     * Create a LidarSensor object from a byte array.
+     *
+     * @todo Figure out why this wasnt just done as a constructor overload.
+     *
+     * @relates MetadataEntry::from_buffer
+     *
+     * @param[in] buf The raw flatbuffer byte vector to initialize from.
+     * @return The new LidarSensor cast as a MetadataEntry
+     */
     static std::unique_ptr<MetadataEntry> from_buffer(
         const std::vector<uint8_t>& buf);
 
+    /**
+     * Get the string representation for the LidarSensor object.
+     *
+     * @relates MetadataEntry::repr
+     *
+     * @return The string representation for the LidarSensor object.
+     */
     std::string repr() const override;
 
+    /**
+     * @todo Figure out why we have both repr and to_string
+     *
+     * @relates MetadataEntry::to_string
+     *
+     * @copydoc LidarSensor::repr
+     */
+    std::string to_string() const override;
+
    private:
+    /**
+     * The internal sensor_info object.
+     */
     sensor_info sensor_info_;
+
+    /**
+     * The internal json string representation of the sensor_info object.
+     */
     const std::string metadata_;
 };
 
+/** @defgroup OSFTraitsLidarSensor Templated struct for traits */
+
+/**
+ * Templated struct for returning the OSF type string.
+ *
+ * @ingroup OSFTraitsLidarSensor
+ */
 template <>
 struct MetadataTraits<LidarSensor> {
+    /**
+     * Return the OSF type string.
+     *
+     * @return The OSF type string "ouster/v1/os_sensor/LidarSensor".
+     */
     static const std::string type() {
         return "ouster/v1/os_sensor/LidarSensor";
     }

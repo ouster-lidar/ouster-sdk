@@ -42,6 +42,5 @@ below:
 
 .. toctree::
 
-   Visualize SLAM Poses <viz-scans-accum>
    viz-api-tutorial
 

@@ -40,7 +40,6 @@
 #include <string>
 #include <utility>
 
-#include "ouster/buffered_udp_source.h"
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
 #include "ouster/impl/build.h"
@@ -48,6 +47,7 @@
 #include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
+#include "ouster/udp_packet_source.h"
 
 namespace py = pybind11;
 namespace chrono = std::chrono;
@@ -58,12 +58,19 @@ using ouster::sensor::ChanField;
 using ouster::sensor::data_format;
 using ouster::sensor::ImuPacket;
 using ouster::sensor::LidarPacket;
+using ouster::sensor::Packet;
 using ouster::sensor::packet_format;
 using ouster::sensor::sensor_config;
 using ouster::sensor::sensor_info;
 using ouster::sensor::impl::BufferedUDPSource;
+using ouster::sensor::impl::Event;
 using ouster::sensor::impl::packet_writer;
+using ouster::sensor::impl::Producer;
+using ouster::sensor::impl::UDPPacketSource;
 using namespace ouster;
+
+using client_shared_ptr = std::shared_ptr<sensor::client>;
+PYBIND11_MAKE_OPAQUE(client_shared_ptr);
 
 namespace pybind11 {
 namespace detail {
@@ -97,6 +104,8 @@ extern Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings;
 extern Table<ShotLimitingStatus, const char*, 10> shot_limiting_status_strings;
 extern Table<ThermalShutdownStatus, const char*, 2>
     thermal_shutdown_status_strings;
+extern Table<FullScaleRange, const char*, 2> full_scale_range_strings;
+extern Table<ReturnOrder, const char*, 5> return_order_strings;
 
 }  // namespace impl
 }  // namespace sensor
@@ -414,6 +423,7 @@ PYBIND11_MODULE(_client, m) {
         .def_readonly("col_footer_size", &packet_format::col_footer_size)
         .def_readonly("col_size", &packet_format::col_size)
         .def_readonly("packet_footer_size", &packet_format::packet_footer_size)
+        .def_readonly("max_frame_id", &packet_format::max_frame_id)
 
         .def("field_value_mask", &packet_format::field_value_mask)
         .def("field_bitness", &packet_format::field_bitness)
@@ -583,15 +593,15 @@ PYBIND11_MODULE(_client, m) {
         .def("set_field", set_field<uint64_t>{});
 
     m.def("scan_to_packets",
-          [](const LidarScan& ls, const packet_writer& pw) -> py::list {
+          [](const LidarScan& ls, const packet_writer& pw, uint32_t init_id, uint64_t prod_sn) -> py::list {
               py::list packets;
               py::object class_type =
-                  py::module::import("ouster.client").attr("LidarPacket");
+                  py::module::import("ouster.sdk.client").attr("LidarPacket");
 
               auto append_pypacket = [&](const LidarPacket& packet) {
                   py::object pypacket = class_type(py::arg("packet_format") = pw);
                   // next couple lines should not fail unless someone messes with
-                  // ouster.client.LidarPacket implementation
+                  // ouster.sdk.client.LidarPacket implementation
                   LidarPacket* p_ptr = pypacket.cast<LidarPacket*>();
                   if (p_ptr->buf.size() != packet.buf.size())
                       throw std::invalid_argument("packet sizes don't match");
@@ -601,7 +611,7 @@ PYBIND11_MODULE(_client, m) {
               };
 
               auto iter = make_lambda_iter(append_pypacket);
-              impl::scan_to_packets(ls, pw, iter);
+              impl::scan_to_packets(ls, pw, iter, init_id, prod_sn);
               return packets;
           });
 
@@ -709,7 +719,7 @@ PYBIND11_MODULE(_client, m) {
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__repr__", [](const sensor_info& self) {
             const auto mode = self.mode ? to_string(self.mode) : std::to_string(self.format.fps) + "fps";
-            return "<ouster.client.SensorInfo " + self.prod_line + " " +
+            return "<ouster.sdk.client.SensorInfo " + self.prod_line + " " +
                 self.sn + " " + self.fw_rev + " " + mode + ">";
         })
         .def("__copy__", [](const sensor_info& self) { return sensor_info{self}; })
@@ -760,6 +770,18 @@ PYBIND11_MODULE(_client, m) {
 
         Applicable to several Polarity settings on sensor.)");
     def_enum(Polarity, sensor::impl::polarity_strings, "POLARITY_");
+
+    auto ReturnOrder = py::enum_<sensor::ReturnOrder>(m, "ReturnOrder", R"(
+        Sensor return order.
+
+        See sensor documentation for details.)");
+    def_enum(ReturnOrder, sensor::impl::return_order_strings, "ORDER_");
+
+    auto FullScaleRange = py::enum_<sensor::FullScaleRange>(m, "FullScaleRange", R"(
+        IMU output scale range.
+
+        See sensor documentation for details.)");
+    def_enum(FullScaleRange, sensor::impl::full_scale_range_strings, "FSR_");
 
     auto NMEABaudRate = py::enum_<sensor::NMEABaudRate>(m, "NMEABaudRate", R"(
         Expected baud rate sensor attempts to decode for NMEA UART input $GPRMC messages.)");
@@ -833,6 +855,10 @@ PYBIND11_MODULE(_client, m) {
         .def_readwrite("columns_per_packet", &sensor_config::columns_per_packet, "Measurement blocks per UDP packet. See sensor documentation for details.")
         .def_readwrite("udp_profile_lidar", &sensor_config::udp_profile_lidar, "UDP packet format for lidar data. See sensor documentation for details.")
         .def_readwrite("udp_profile_imu", &sensor_config::udp_profile_imu, "UDP packet format for imu data. See sensor documentation for details.")
+        .def_readwrite("gyro_fsr", &sensor_config::gyro_fsr, "The gyro full scale measurement range to use. See sensor documentation for details.")
+        .def_readwrite("accel_fsr", &sensor_config::accel_fsr, "The accelerometer full scale measurement range to use. See sensor documentation for details.")
+        .def_readwrite("return_order", &sensor_config::return_order, "The priority of sensor returns to output. See sensor documentation for details.")
+        .def_readwrite("min_range_threshold_cm", &sensor_config::min_range_threshold_cm, "The minimum detection range of the sensor in cm. See sensor documentation for details.")
         .def("__str__", [](const sensor_config& i) { return to_string(i); })
         .def("__eq__", [](const sensor_config& i, const sensor_config& j) { return i == j; })
         .def("__copy__", [](const sensor_config& self) { return sensor_config{self}; })
@@ -929,13 +955,77 @@ PYBIND11_MODULE(_client, m) {
         .def_readwrite("major", &util::version::major)
         .def_readwrite("minor", &util::version::minor)
         .def_readwrite("patch", &util::version::patch)
-        .def_static("from_string", &util::version_of_string);
+        .def_static("from_string", &util::version_from_string);
 
     m.attr("invalid_version") = util::invalid_version;
 
     m.attr("min_version") = sensor::min_version;
 
     // clang-format on
+
+    // client
+    py::class_<client_shared_ptr>(m, "SensorConnection")
+        .def(py::init([](std::string hostname, int lidar_port,
+                         int imu_port) -> client_shared_ptr {
+                 auto cli = sensor::init_client(hostname, lidar_port, imu_port);
+                 if (!cli)
+                     throw std::runtime_error(
+                         "Failed initializing sensor connection");
+                 return cli;
+             }),
+             py::arg("hostname"), py::arg("lidar_port") = 7502,
+             py::arg("imu_port") = 7503)
+        .def(py::init([](std::string hostname, std::string udp_dest_host,
+                         sensor::lidar_mode lp_mode,
+                         sensor::timestamp_mode ts_mode, int lidar_port,
+                         int imu_port, int timeout_sec,
+                         bool persist_config) -> client_shared_ptr {
+                 auto cli = sensor::init_client(
+                     hostname, udp_dest_host, lp_mode, ts_mode, lidar_port,
+                     imu_port, timeout_sec, persist_config);
+                 if (!cli)
+                     throw std::runtime_error(
+                         "Failed initializing sensor connection");
+                 return cli;
+             }),
+             py::arg("hostname"), py::arg("udp_dest_host"),
+             py::arg("mode") = sensor::lidar_mode::MODE_1024x10,
+             py::arg("timestamp_mode") =
+                 sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
+             py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
+             py::arg("timeout_sec") = 10, py::arg("persist_config") = false)
+        .def(
+            "poll",
+            [](const client_shared_ptr& self,
+               int timeout_sec) -> sensor::client_state {
+                return sensor::poll_client(*self, timeout_sec);
+            },
+            py::arg("timeout_sec") = 1)
+        .def("read_lidar_packet",
+             [](const client_shared_ptr& self, LidarPacket& packet) -> bool {
+                 return sensor::read_lidar_packet(*self, packet);
+             })
+        .def("read_imu_packet",
+             [](const client_shared_ptr& self, ImuPacket& packet) -> bool {
+                 return sensor::read_imu_packet(*self, packet);
+             })
+        .def_property_readonly("lidar_port",
+                               [](const client_shared_ptr& self) -> int {
+                                   return sensor::get_lidar_port(*self);
+                               })
+        .def_property_readonly("imu_port",
+                               [](const client_shared_ptr& self) -> int {
+                                   return sensor::get_imu_port(*self);
+                               })
+        .def(
+            "get_metadata",
+            [](client_shared_ptr& self, int timeout_sec,
+               bool legacy_format) -> std::string {
+                return sensor::get_metadata(*self, timeout_sec, legacy_format);
+            },
+            py::arg("timeout_sec") = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
+            py::arg("legacy") = false)
+        .def("shutdown", [](client_shared_ptr& self) { self.reset(); });
 
     // Client Handle
     py::enum_<sensor::client_state>(m, "ClientState", py::arithmetic())
@@ -945,24 +1035,84 @@ PYBIND11_MODULE(_client, m) {
         .value("IMU_DATA", sensor::client_state::IMU_DATA)
         .value("EXIT", sensor::client_state::EXIT)
         // TODO: revisit including in C++ API
-        .value("OVERFLOW",
-               sensor::client_state(BufferedUDPSource::CLIENT_OVERFLOW));
+        .value("OVERFLOW", sensor::client_state(Producer::CLIENT_OVERFLOW));
+
+    py::class_<Event>(m, "Event")
+        .def(py::init())
+        .def_readwrite("source", &Event::source)
+        .def_readwrite("state", &Event::state);
+
+    py::class_<UDPPacketSource>(m, "UDPPacketSource")
+        .def(py::init())
+        .def(
+            "add_client",
+            [](UDPPacketSource& self, client_shared_ptr cli,
+               size_t lidar_buf_size, size_t lidar_packet_size,
+               size_t imu_buf_size, size_t imu_packet_size) {
+                self.add_client(cli, lidar_buf_size, lidar_packet_size,
+                                imu_buf_size, imu_packet_size);
+            },
+            py::arg("connection"), py::arg("lidar_buf_size"),
+            py::arg("lidar_packet_size"), py::arg("imu_buf_size"),
+            py::arg("imu_buf_size"))
+        .def(
+            "add_client",
+            [](UDPPacketSource& self, client_shared_ptr cli,
+               const sensor_info& info, float seconds_to_buffer) {
+                self.add_client(cli, info, seconds_to_buffer);
+            },
+            py::arg("connection"), py::arg("metadata"),
+            py::arg("seconds_to_buffer"))
+        .def("shutdown", [](UDPPacketSource& self) { self.shutdown(); })
+        // clang-format off
+        .def_property_readonly("size", [](const UDPPacketSource& self) {
+            return self.size();
+        })
+        // clang-format on
+        .def_property_readonly(
+            "capacity",
+            [](const UDPPacketSource& self) { return self.capacity(); })
+        .def("produce",
+             [](UDPPacketSource& self) {
+                 py::gil_scoped_release release;
+                 self.produce();
+             })
+        .def("pop",
+             [](UDPPacketSource& self, float timeout_sec) -> Event {
+                 py::gil_scoped_release release;
+                 return self.pop(timeout_sec);
+             })
+        .def(
+            "packet",
+            [](UDPPacketSource& self, Event e) -> Packet& {
+                return self.packet(e);
+            },
+            py::return_value_policy::reference)
+        .def("advance", [](UDPPacketSource& self, Event e) { self.advance(e); })
+        .def("flush", [](UDPPacketSource& self) { self.flush(); });
 
     py::class_<BufferedUDPSource>(m, "Client")
-        .def(py::init<std::string, int, int, size_t>(), py::arg("hostname"),
-             py::arg("lidar_port"), py::arg("imu_port"),
-             py::arg("capacity") = 128)
-        .def(py::init<std::string, std::string, sensor::lidar_mode,
-                      sensor::timestamp_mode, int, int, int, size_t>(),
-             py::arg("hostname"), py::arg("udp_dest_host"),
-             py::arg("mode") = sensor::lidar_mode::MODE_1024x10,
-             py::arg("timestamp_mode") =
-                 sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
-             py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
-             py::arg("timeout_sec") = 10, py::arg("capacity") = 128)
-        .def("get_metadata", &BufferedUDPSource::get_metadata,
-             py::arg("timeout_sec") = 10, py::arg("legacy") = true)
-        .def("shutdown", &BufferedUDPSource::shutdown)
+        .def(py::init<client_shared_ptr, size_t, size_t, size_t, size_t>(),
+             py::arg("connection"), py::arg("lidar_buf_size"),
+             py::arg("lidar_packet_size"), py::arg("imu_buf_size"),
+             py::arg("imu_buf_size"))
+        .def(py::init<client_shared_ptr, const sensor_info&, float>(),
+             py::arg("connection"), py::arg("metadata"),
+             py::arg("seconds_to_buffer"))
+        .def("shutdown", [](BufferedUDPSource& self) { self.shutdown(); })
+        .def("pop",
+             [](BufferedUDPSource& self,
+                float timeout_sec) -> sensor::client_state {
+                 py::gil_scoped_release release;
+                 return self.pop(timeout_sec);
+             })
+        .def(
+            "packet",
+            [](BufferedUDPSource& self, sensor::client_state st) -> Packet& {
+                return self.packet(st);
+            },
+            py::return_value_policy::reference)
+        .def("advance", &BufferedUDPSource::advance)
         .def("consume",
              [](BufferedUDPSource& self, LidarPacket& lp, ImuPacket& ip,
                 float timeout_sec) {
@@ -992,15 +1142,19 @@ PYBIND11_MODULE(_client, m) {
                  return res;
              })
         .def("produce",
-             [](BufferedUDPSource& self, const packet_format& pf) {
+             [](BufferedUDPSource& self) {
                  py::gil_scoped_release release;
-                 self.produce(pf);
+                 self.produce();
              })
-        .def("flush", &BufferedUDPSource::flush, py::arg("n_packets") = 0)
-        .def_property_readonly("capacity", &BufferedUDPSource::capacity)
-        .def_property_readonly("size", &BufferedUDPSource::size)
-        .def_property_readonly("lidar_port", &BufferedUDPSource::get_lidar_port)
-        .def_property_readonly("imu_port", &BufferedUDPSource::get_imu_port);
+        .def("flush", [](BufferedUDPSource& self) { self.flush(); })
+        // clang-format off
+        .def_property_readonly("size", [](const BufferedUDPSource& self) {
+            return self.size();
+        })
+        // clang-format on
+        .def_property_readonly("capacity", [](const BufferedUDPSource& self) {
+            return self.capacity();
+        });
 
     // Scans
     py::class_<LidarScan>(m, "LidarScan", R"(
@@ -1049,7 +1203,7 @@ PYBIND11_MODULE(_client, m) {
             New LidarScan of specified dimensions expecting fields of specified profile
 
          )",
-            py::arg("w"), py::arg("h"), py::arg("profile"),
+            py::arg("h"), py::arg("w"), py::arg("profile"),
             py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
         .def(
             "__init__",
@@ -1078,6 +1232,48 @@ PYBIND11_MODULE(_client, m) {
          )",
             py::arg("w"), py::arg("h"), py::arg("field_types"),
             py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
+        .def(
+            "__init__",
+            [](LidarScan& self, const LidarScan& source,
+               const std::map<sensor::ChanField, py::object>& field_types) {
+                LidarScanFieldTypes ft{};
+                for (const auto& f : field_types) {
+                    auto dtype = py::dtype::from_args(f.second);
+                    ft.push_back(
+                        std::make_pair(f.first, field_type_of_dtype(dtype)));
+                }
+                new (&self) LidarScan(source, ft);
+            },
+            R"(
+        Initialize a lidar scan from another with only the indicated fields.
+        Casts, zero pads or removes fields from the original scan if necessary.
+
+        Args:
+            source: LidarScan to copy data from
+            fields_dict: dict of fields to have in the new scan where keys are ChanFields
+                         and values are type, e.g., {client.ChanField.SIGNAL: np.uint32}
+
+        Returns:
+            New LidarScan with selected data copied over or zero padded
+
+         )",
+            py::arg("source"), py::arg("field_types"))
+        .def(
+            "__init__",
+            [](LidarScan& self, const LidarScan& source) {
+                new (&self) LidarScan(source);
+            },
+            R"(
+        Initialize a lidar scan with a copy of the data from another.
+
+        Args:
+            source: LidarScan to copy
+
+        Returns:
+            New LidarScan with data copied over from provided scan.
+
+         )",
+            py::arg("source"))
         .def_readonly("w", &LidarScan::w,
                       "Width or horizontal resolution of the scan.")
         .def_readonly("h", &LidarScan::h,
@@ -1188,15 +1384,11 @@ PYBIND11_MODULE(_client, m) {
         .def("__repr__",
              [](const LidarScan& self) {
                  std::stringstream ss;
-                 ss << "<ouster.client._client.LidarScan @" << (void*)&self
+                 ss << "<ouster.sdk.client._client.LidarScan @" << (void*)&self
                     << ">";
                  return ss.str();
              })
-        .def("__str__", [](const LidarScan& self) { return to_string(self); })
-        // for backwards compatibility: previously converted between Python
-        // / native representations, now a noop
-        .def("to_native", [](py::object& self) { return self; })
-        .def_static("from_native", [](py::object& scan) { return scan; });
+        .def("__str__", [](const LidarScan& self) { return to_string(self); });
 
     // Destagger overloads for most numpy scalar types
     m.def("destagger_int8", &ouster::destagger<int8_t>);
@@ -1346,7 +1538,6 @@ PYBIND11_MODULE(_client, m) {
             )",
         py::arg("udp_profile_lidar"));
 
-    using ouster::sensor::Packet;
     py::class_<Packet>(m, "_Packet")
         .def(py::init<int>(), py::arg("size") = 65536)
         // direct access to timestamp field

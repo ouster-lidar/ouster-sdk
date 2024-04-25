@@ -11,14 +11,14 @@ import numpy as np
 
 import random
 
-from ouster import client
+from ouster.sdk import client
 
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
 if TYPE_CHECKING:
-    import ouster.viz as viz
+    import ouster.sdk.viz as viz
 else:
-    viz = pytest.importorskip('ouster.viz')
+    viz = pytest.importorskip('ouster.sdk.viz')
 
 # mark all tests in this module so they only run with the --interactive flag
 pytestmark = pytest.mark.interactive
@@ -478,6 +478,15 @@ def test_point_viz_destruction() -> None:
 
     del point_viz
     assert ref() is None
+
+
+def test_palette_lengths(meta: client.SensorInfo,
+                        scan: client.LidarScan) -> None:
+    """Check that LidarScanViz has matching palette lengths."""
+    point_viz = viz.PointViz("Test Viz")
+    scan_viz = viz.LidarScanViz(meta, point_viz)
+
+    assert len(scan_viz._refl_cloud_palettes) == len(scan_viz._cloud_palettes)
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])

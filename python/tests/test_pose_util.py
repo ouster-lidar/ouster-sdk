@@ -8,7 +8,7 @@ import time
 import pytest
 
 
-import ouster.sdk.pose_util as pu
+import ouster.sdk.util.pose_util as pu
 
 
 def gt_pose6toHomMatrix(vec: np.ndarray) -> np.ndarray:
@@ -112,10 +112,10 @@ def test_traj_pose_interp(poses6: List[pu.Pose6]):
     print(f"Summary times for {len(ts)} poses calc:")
     print(f"  pose_interp() ........ one by one :  {t_pose_interp:.08f} s")
     print(f"  traj_eval.pose_at() .. one by one :  {t_pose_te_one_by_one:.08f} s "
-          f"({t_pose_interp/t_pose_te_one_by_one:.02f}x)")
+          f"({t_pose_interp / t_pose_te_one_by_one:.02f}x)")
     vec_speedup = ""
     if t_pose_te_vec > 0:
-        vec_speedup = f"({t_pose_te_one_by_one/t_pose_te_vec:.02f}x)"
+        vec_speedup = f"({t_pose_te_one_by_one / t_pose_te_vec:.02f}x)"
     else:
         vec_speedup = "(FTL)"  # Faster Than Light
     print(f"  traj_eval.poses_at() . vectorised :  {t_pose_te_vec:.08f} s "

@@ -1,6 +1,9 @@
 add_executable(client_example client_example.cpp)
 target_link_libraries(client_example PRIVATE OusterSDK::ouster_client)
 
+add_executable(async_client_example async_client_example.cpp)
+target_link_libraries(async_client_example PRIVATE OusterSDK::ouster_client)
+
 add_executable(mtp_client_example mtp_client_example.cpp)
 target_link_libraries(mtp_client_example PRIVATE OusterSDK::ouster_client)
 
@@ -20,6 +23,9 @@ endif()
 if(TARGET OusterSDK::ouster_osf)
   add_executable(osf_reader_example osf_reader_example.cpp)
   target_link_libraries(osf_reader_example PRIVATE OusterSDK::ouster_osf)
+  
+  add_executable(osf_writer_example osf_writer_example.cpp)
+  target_link_libraries(osf_writer_example PRIVATE OusterSDK::ouster_osf)
 else()
   message(STATUS "No ouster_osf library available; skipping examples")
 endif()
