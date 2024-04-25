@@ -18,4 +18,3 @@ Ouster OSF API
    reader.h <reader.rst>
    stream_lidar_scan.h <stream_lidar_scan.rst>
    writer.h <writer.rst>
-   writerv2.h <writerv2.rst>
