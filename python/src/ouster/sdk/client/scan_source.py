@@ -9,7 +9,7 @@ class ScanSource(Protocol):
 
     @property
     def metadata(self) -> SensorInfo:
-        """A list of Metadata objects associated with the scan streams."""
+        """A metadata object associated with the scan streams."""
         ...
 
     @property

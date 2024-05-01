@@ -368,7 +368,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
         if extrinsics:
             resolved_extrinsics = np.array(extrinsics).reshape((4, 4))
 
-        ctx.scan_source = open_source(source, sensor_idx=0,
+        ctx.scan_source = open_source(source,
                                       extrinsics=resolved_extrinsics,
                                       meta=meta,
                                       lidar_port=lidar_port, imu_port=imu_port,

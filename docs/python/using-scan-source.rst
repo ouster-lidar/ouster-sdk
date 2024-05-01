@@ -24,38 +24,39 @@ can be accomplished as follows:
    >>> pcap_path = '<SAMPLE_DATA_PCAP_PATH>'
    >>> metadata_path = '<SAMPLE_DATA_JSON_PATH>'
    >>> from ouster.sdk import open_source
-   >>> source = open_source(pcap_path, sensor_idx=0, meta=[metadata_path])
+   >>> source = open_source(pcap_path, meta=[metadata_path])
 
 
 The ``source`` handle here acts the same as the handle returned by the ``pcap.Pcap`` constructor, with some
 extra capabilities that we will cover later.  
 
-Notice here that besides the ``pcap_path`` we pass two additional parameters: ``sensor_idx`` with a value
-of zero, and ``meta`` which we set to the ``metadata_path`` to point to the sensor metadata associated with
-the pcap file we are trying to open. Both parameters are optional and can be omitted. In case the ``meta``
-parameter was not omitted, the ``open_source`` method will attempt to locate the metadata associated with
-the pcap file based on location and the pcap file prefix. That being said, if ``SAMPLE_DATA_JSON_PATH`` is
-located in the same folder as ``SAMPLE_DATA_PCAP_PATH`` and the two files share a prefix we can simplify the
-above call to:
+Notice here that rather than we try to load and parse the metadata ourselves we only need to pass to metadata
+to the method through ``meta`` parameter and the method will take care of loading it and associating it with the
+source object. The ``meta`` parameter however is optional and can be omitted. When the ``meta`` parameter is not
+set explicity the ``open_source`` method will attempt to locate the metadata automatically for us and we can reduce
+the call to:
 
 .. code:: python
-   >>> source = open_source(pcap_path, sensor_idx=0)
+   >>> source = open_source(pcap_path)
+
+However if metadata file is not in the same folder as the pcap and don't have a shared name prefix the method will
+fail.
 
 
-The second parameter, ``sensor_idx``, allows users to select a specific sensor from the selected source.
-That is because starting with ouster-sdk v0.11 Ouster added support for working with sensor data collected from
-multiple sensors. The ``open_source`` method by default returns the more complete interface ``MultiScanSource``
-which has the capability to interact with multiple sensor streams, which we will in next section. Setting the
-value of ``sensor_idx`` to zero tells ``open_source`` we are only interested in LidarScan data coming from the
-first sensor from this specific pcap file in case the file had more than one sensor. By doing so, the
-``open_source`` method returns a less sophisticated interface ``ScanSource`` which is more familiar to SDK users
-from previous versions.
-
-The main different between the ``MultiScanSource`` and the ``ScanSource`` is the expected return of some
-of the object methods. For example, when creating an iterator for a ``ScanSource`` object, the user would get
-a single ``LidarScan`` object per iteration. Iterating over the contents of a ``MultiScanSource`` object always
-yields a **list** of ``LidarScan(s)`` per iteration corresponding to the number of sensors stored in the pcap
-file or whatever source type is being used. This is true even when the pcap file contains data for a single sensor.
+.. note::
+  Another optional but important parameter for the ``open_source`` method is ``sensor_idx``. This paramter is to zero
+  by default, which should always be the case unless the pcap file that you are using (or osf or any LidarScan storage)
+  contains scans from more than one sensor, in this case, users can set the ``sensor_idx`` to a any value between zero 
+  and ``sensors_count -1`` to access and manipulate scans from a specific sensor by the order they appear in the file.
+  Alternatively, if users set the value of ``sensor_idx`` to ``-1`` then ``open_source`` will return a slightly differnt
+  interface from ``ScanSource`` which is the ``MultiScanSource`` this interface and as the name suggests allows users to
+  work with sensor data collected from multiple sensors at the same time.
+  
+  The main different between the ``MultiScanSource`` and the ``ScanSource`` is the expected return of some of the object
+  methods. For example, when creating an iterator for a ``ScanSource`` object, the user would get a single ``LidarScan``
+  object per iteration. Iterating over the contents of a ``MultiScanSource`` object always yields a **list** of
+  ``LidarScan(s)`` per iteration corresponding to the number of sensors stored in the pcap file or whatever source type
+  is being used. This is true even when the pcap file contains data for a single sensor.
 
 
 On the other hand, if the user wants to open an osf file or access the a live sensor, all that changes is url
@@ -65,7 +66,7 @@ of the source. For example, to interact with a live sensor the user can execute 
 
    >>> sensor_url = '<SENSOR-HOSTNAME-OR-IP>'
    >>> from ouster.sdk import open_source
-   >>> source = open_source(sensor_url, sensor_idx=0)
+   >>> source = open_source(sensor_url)
 
 
 Obtaining sensor metadata
@@ -96,8 +97,7 @@ scans. We can achieve that using:
    ...     if ctr == 10:
    ...         break
 
-
-As we noted earlier, if we don't supply ``sensor_idx=0`` to the ``open_source`` method, the method will construct a
+As we noted earlier, if we set ``sensor_idx=-1`` when invoking ``open_source`` method, the method will construct a
 ``MultiScanSource``, which always addresses a group of sensors. Thus, when iterating over the ``source`` the user
 receives a collated set of scans from the addressed sensors per iteration. The ``MultiScanSource`` examines the
 timestamp of every scan from every sensor and returns a list of scans that fit within the same time window as single
@@ -126,7 +126,6 @@ Note that when iterating over a ``MultiScanSource`` object, it always a list of 
 source has only a single sensor. In this case, the iterator will yield a list with a single element per iteration.
 
 
-
 Using indexing and slicing capabilities of a ScanSource
 ========================================================
 
@@ -142,7 +141,7 @@ source as an indexed one upon opening. Revisitng the previous pcap open example,
 
    >>> pcap_path = '<SAMPLE_DATA_PCAP_PATH>'
    >>> from ouster.sdk import open_source
-   >>> source = open_source(pcap_path, sensor_idx=0, index=True)
+   >>> source = open_source(pcap_path, index=True)
 
 First note that we omitted the ``meta`` parameter since it can be populated automatically as we explained earlier.
 Second you will noticed that we introduced a new parameter ``index`` with its value set to ``True`` (default is false),
