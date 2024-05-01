@@ -2,7 +2,7 @@
 Changelog
 =========
 
-[unreleased] [0.11.0-dev]
+[20240425] [0.11.0]
 =========================
 
 Important notes
