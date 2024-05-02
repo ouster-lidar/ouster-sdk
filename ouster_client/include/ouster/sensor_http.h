@@ -15,6 +15,8 @@
 
 #include <memory>
 
+#include "ouster/ouster_client_export.h"
+
 namespace ouster {
 namespace sensor {
 namespace util {
@@ -22,7 +24,7 @@ namespace util {
 /**
  * An interface to communicate with Ouster sensors via http requests
  */
-class SensorHttp {
+class OUSTER_CLIENT_EXPORT SensorHttp {
    protected:
     /**
      * Constructs an http interface to communicate with the sensor.

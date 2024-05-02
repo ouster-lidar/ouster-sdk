@@ -16,6 +16,7 @@
 #include "ouster/defaults.h"
 #include "ouster/types.h"
 #include "ouster/version.h"
+#include "ouster/ouster_client_export.h"
 
 namespace ouster {
 namespace sensor {
@@ -57,7 +58,7 @@ const util::version min_version = {1, 12, 0};
  *
  * @return true on success, otherwise false.
  */
-bool init_logger(const std::string& log_level,
+OUSTER_CLIENT_EXPORT bool init_logger(const std::string& log_level,
                  const std::string& log_file_path = "", bool rotating = false,
                  int max_size_in_bytes = 0, int max_files = 0);
 
@@ -74,7 +75,8 @@ bool init_logger(const std::string& log_level,
  *
  * @return pointer owning the resources associated with the connection.
  */
-std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
+OUSTER_CLIENT_EXPORT std::shared_ptr<client> init_client(
+    const std::string& hostname, int lidar_port,
                                     int imu_port);
 
 /**
@@ -94,7 +96,7 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
  *
  * @return pointer owning the resources associated with the connection.
  */
-std::shared_ptr<client> init_client(
+OUSTER_CLIENT_EXPORT std::shared_ptr<client> init_client(
     const std::string& hostname, const std::string& udp_dest_host,
     lidar_mode ld_mode = MODE_UNSPEC, timestamp_mode ts_mode = TIME_FROM_UNSPEC,
     int lidar_port = 0, int imu_port = 0,
@@ -120,7 +122,7 @@ std::shared_ptr<client> init_client(
  * the sensor, otherwise only the port values within the config object will be
  * used and the rest will be ignored.
  */
-std::shared_ptr<client> mtp_init_client(
+OUSTER_CLIENT_EXPORT std::shared_ptr<client> mtp_init_client(
     const std::string& hostname, const sensor_config& config,
     const std::string& mtp_dest_host, bool main,
     int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
@@ -141,7 +143,7 @@ std::shared_ptr<client> mtp_init_client(
  * LIDAR_DATA) is true if lidar data is ready to read, and (s & IMU_DATA) is
  * true if imu data is ready to read.
  */
-client_state poll_client(const client& cli, int timeout_sec = 1);
+OUSTER_CLIENT_EXPORT client_state poll_client(const client& cli, int timeout_sec = 1);
 
 /**
  * Read lidar data from the sensor. Will not block.
@@ -166,7 +168,7 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
  *
  * @return true if a lidar packet was successfully read.
  */
-bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes);
+OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes);
 
 /**
  * Read lidar data from the sensor. Will not block.
@@ -178,7 +180,7 @@ bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes);
  *
  * @return true if a lidar packet was successfully read.
  */
-bool read_lidar_packet(const client& cli, LidarPacket& packet);
+OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, LidarPacket& packet);
 
 /**
  * Read imu data from the sensor. Will not block.
@@ -190,7 +192,7 @@ bool read_lidar_packet(const client& cli, LidarPacket& packet);
  *
  * @return true if a lidar packet was successfully read.
  */
-bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes);
+OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes);
 
 /**
  * Read imu data from the sensor. Will not block.
@@ -202,7 +204,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes);
  *
  * @return true if an imu packet was successfully read.
  */
-bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
+OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
 
 /**
  * Read imu data from the sensor. Will not block.
@@ -214,7 +216,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  *
  * @return true if an imu packet was successfully read.
  */
-bool read_imu_packet(const client& cli, ImuPacket& packet);
+OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, ImuPacket& packet);
 
 /**
  * Get metadata text blob from the sensor.
@@ -233,7 +235,7 @@ bool read_imu_packet(const client& cli, ImuPacket& packet);
  *
  * @return a text blob of metadata parseable into a sensor_info struct.
  */
-std::string get_metadata(client& cli,
+OUSTER_CLIENT_EXPORT std::string get_metadata(client& cli,
                          int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
                          bool legacy_format = false);
 
@@ -250,7 +252,7 @@ std::string get_metadata(client& cli,
  *
  * @return true if sensor config successfully populated.
  */
-bool get_config(const std::string& hostname, sensor_config& config,
+OUSTER_CLIENT_EXPORT bool get_config(const std::string& hostname, sensor_config& config,
                 bool active = true,
                 int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
@@ -280,7 +282,7 @@ enum config_flags : uint8_t {
  *
  * @return true if config params successfuly set on sensor.
  */
-bool set_config(const std::string& hostname, const sensor_config& config,
+OUSTER_CLIENT_EXPORT bool set_config(const std::string& hostname, const sensor_config& config,
                 uint8_t config_flags = 0,
                 int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
@@ -291,7 +293,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
  *
  * @return the port number.
  */
-int get_lidar_port(const client& cli);
+OUSTER_CLIENT_EXPORT int get_lidar_port(const client& cli);
 
 /**
  * Return the port used to listen for imu UDP data.
@@ -300,7 +302,7 @@ int get_lidar_port(const client& cli);
  *
  * @return the port number.
  */
-int get_imu_port(const client& cli);
+OUSTER_CLIENT_EXPORT int get_imu_port(const client& cli);
 
 /**
  * Check if ip address in multicast range.
@@ -309,7 +311,7 @@ int get_imu_port(const client& cli);
  *
  * @return true if addr is in multicast range.
  */
-bool in_multicast(const std::string& addr);
+OUSTER_CLIENT_EXPORT bool in_multicast(const std::string& addr);
 
 }  // namespace sensor
 }  // namespace ouster

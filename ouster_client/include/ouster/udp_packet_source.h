@@ -31,6 +31,7 @@
 #include "ouster/client.h"
 #include "ouster/impl/ring_buffer.h"
 #include "ouster/types.h"
+#include "ouster/ouster_client_export.h"
 
 namespace ouster {
 namespace sensor {
@@ -77,7 +78,7 @@ using EventSet = std::unordered_set<Event>;
  * next(events) to have consumers wait on specific events, or using
  * multiple queues, one per consumer, as implemented in publisher/subscriber.
  */
-class EventQueue {
+class OUSTER_CLIENT_EXPORT EventQueue {
     mutable std::mutex m;
     mutable std::condition_variable cv;
     std::deque<Event> q;
@@ -233,7 +234,7 @@ class EventQueue {
     }
 };
 
-class Publisher {
+class OUSTER_CLIENT_EXPORT Publisher {
    protected:
     EventSet events_;
     std::shared_ptr<EventQueue> q_;
@@ -293,7 +294,7 @@ class Publisher {
     std::shared_ptr<EventQueue> queue() { return q_; }
 };
 
-class Subscriber {
+class OUSTER_CLIENT_EXPORT Subscriber {
    protected:
     std::shared_ptr<EventQueue> q_;
     std::shared_ptr<RingBufferMap<Event, Packet>> rb_;
@@ -366,7 +367,7 @@ class Subscriber {
     }
 };
 
-class Producer {
+class OUSTER_CLIENT_EXPORT Producer {
    protected:
     std::vector<std::shared_ptr<Publisher>> pubs_;
     std::vector<std::shared_ptr<client>> clients_;
@@ -469,7 +470,8 @@ class Producer {
     size_t capacity() const { return rb_->capacity(); }
 };
 
-class UDPPacketSource : protected Producer, protected Subscriber {
+class OUSTER_CLIENT_EXPORT UDPPacketSource : protected Producer,
+                                             protected Subscriber {
     void _accept_client_events(int id);
 
    public:
@@ -516,7 +518,8 @@ class UDPPacketSource : protected Producer, protected Subscriber {
     using Subscriber::pop;
 };
 
-class BufferedUDPSource : protected Producer, protected Subscriber {
+class OUSTER_CLIENT_EXPORT BufferedUDPSource : protected Producer,
+                                               protected Subscriber {
     BufferedUDPSource();
 
    public:
