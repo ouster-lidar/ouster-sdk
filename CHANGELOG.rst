@@ -2,8 +2,33 @@
 Changelog
 =========
 
-[20240425] [0.11.1]
-=========================
+[20240510] [0.11.1]
+===================
+
+Important notes
+---------------
+
+* [BREAKING] the ``open_source`` method now returns a ``ScanSource`` by default, not a ``MultiScanSource``.
+
+Python SDK
+----------
+
+* Updated the ``open_source`` documentation.
+* Fixed an issue that caused the viz to redraw when the mouse cursor is moved.
+
+ouster_client
+-------------
+
+* Improved the client initialization latency.
+
+mapping
+-------
+
+* Fixed several issues with the documentation.
+
+
+[20240425] [0.11.0]
+===================
 
 Important notes
 ---------------
