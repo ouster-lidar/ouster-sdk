@@ -895,6 +895,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 constexpr double sensitivity = 0.3;
                 viz.camera().yaw(sensitivity * dx);
                 viz.camera().pitch(sensitivity * dy);
+                if (viz.update_on_input()) viz.update();
             } else if (wc.mbutton_down) {
                 // convert from screen coordinated to fractions of window size
                 // TODO: factor out conversion?
@@ -904,8 +905,8 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 dx *= 2.0 / window_diagonal;
                 dy *= 2.0 / window_diagonal;
                 viz.camera().dolly_xy(dx, dy);
+                if (viz.update_on_input()) viz.update();
             }
-            if (viz.update_on_input()) viz.update();
             return true;
         });
 }

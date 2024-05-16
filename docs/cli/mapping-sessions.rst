@@ -4,6 +4,7 @@ Start mapping with the Ouster-CLI
 
 .. _ouster-cli-mapping:
 
+
 Installation
 ------------
 
@@ -29,29 +30,34 @@ Mapping Tools
 After installing the Ouster SDK and mapping dependencies, you can explore various mapping tools
 using a connected Ouster sensor or a PCAP/OSF file.
 
-Use ``ouster-cli`` to view the available commands and options you can use ``--help``. Try the
-following command:
-
-.. code:: bash
-
-        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> --help
-
-Currently, there are two main commands: ``slam`` and ``save``. You can further explore each
-command by accessing their respective submenus using the ``--help`` flag. For example:
+To explore and configure the parameters of the SLAM algorithm, you can use the ``--help`` flag
+to view the available options.
 
 .. code:: bash
 
         ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam --help
 
+The ``slam`` command can be combined with either or both the ``save`` and ``viz`` commands.
+You can further explore each command in detail by accessing their respective submenus
+using the ``--help`` flag.
+
+.. code:: bash
+
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam save --help
+
+.. code:: bash
+
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz --help
+
 
 SLAM Command
 ------------
 
-Simultaneous localization and mapping (SLAM) is a technique that enables a system to construct
+Simultaneous Localization and Mapping (SLAM) is a technique that enables a system to construct
 a map of its surroundings while simultaneously determining its own position on that map.
-The Ouster SDK slam command writes lidar scans with per-column poses into an OSF file, an open-source
-custom file format for which Ouster provides conversion capabilities, allowing for the
-reconstruction of a detailed and precise map later.
+
+We use the slam algorithm to determine the lidar movement trajectory, correct motion
+distortion and reconstruct a detailed and precise point cloud map.
 
 Connect to a sensor or use a PCAP/OSF file :ref:`Download Sample PCAP File <sample-data-download>`
 
@@ -64,7 +70,7 @@ Then execute the following command:
 
 .. code:: bash
 
-        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz -o sample.osf
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz -e exit save sample.osf
 
 .. note::
 
@@ -72,16 +78,80 @@ Then execute the following command:
         <FILENAME> with the actual file path and name of the PCAP/OSF file. Similarly, make the
         necessary substitutions in the subsequent commands.
 
-The terminal will display details such as the output filename and the processing duration. The
-output filename must have the .osf extension in order to be used by the ``save`` command.
 
-You can adjust settings such as point size, color, switch between 2D images, and pause playback in the visualizer, among other options. More details can be found at the :ref:`Ouster Visualizer <viz-run>`
+Save Command
+------------
+
+The ``save`` command stores the lidarscan and the lidar movement trajectory into a OSF file by
+specifying a filename with a .osf extension. This OSF file will be used for accumulated point
+cloud generation and the other post-process tools we offer in the future.
+
+.. code:: bash
+
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam save sample.osf
+
+The ``save`` command can also be used to generated an accumulated point cloud map using a
+SLAM-generated OSF file in LAS (.las), PLY (.ply), or PCD (.pcd) format.
+The output format depends on the extension of the output filename.
+For example, to convert the OSF file we generated using the ``slam`` command to PLY format,
+we can simply use the following:
+
+.. code:: bash
+
+        ouster-cli source sample.osf save output.ply
+
+You can utilize the ``slam`` command with the ``save`` command to directly generate a cumulative
+point cloud map. However, please be aware that this combined process can be resource-intensive.
+We recommend using this approach with a PCAP/OSF file rather than with a live sensor to avoid
+SLAM performance degradation.
+
+.. code:: bash
+
+        ouster-cli source <FILENAME> slam save output.ply
+
+The accumulated point cloud data is automatically split and downsampleed into multiple files to
+prevent exporting a huge size file. The terminal will display details, and you will see the
+following printout for each output file:
+
+.. code:: bash
+
+        Output file: output-000.ply
+        3932160 points accumulated during this period,
+        154228 near points are removed [3.92 %],
+        1475955 down sampling points are removed [37.54 %],
+        2213506 zero range points are removed [56.29 %],
+        88471 points are saved [2.25 %].
+
+Use the ``--help`` flag for more information such as adjusting the minimal range, selecting
+different fields as values, and changing the point cloud downsampling scale etc.
+
+You can use an open source software `CloudCompare`_ to import and view the generated point cloud
+data files.
 
 
-Accumulated Scan in SLAM command visulizer
-------------------------------------------
+Viz Command
+-----------
 
-Within the Ouster Visualizer, there is a visualization feature known as **ScansAccumulator**. This functionality represents a continuation of efforts to visualize lidar data by incorporating SLAM-generated poses stored within the ``LidarScan.pose`` property."
+The ``viz`` command enables visualizing the accumulated point cloud generation during the
+SLAM process. By default, the viz operates in looping mode, meaning the visualiation will
+continuously replay the source file.
+
+.. code:: bash
+
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz
+
+When combining the ``viz`` and ``save`` commands, the saving process will automatically terminate
+after the first iteration, and then the SLAM process restarts for each subsequent lidar scan iteration.
+To end the SLAM and visualization processes after the save operation completes, you can use ``ctrl + c``.
+Alternatively, you can add ``-e exit`` to the ``viz`` command to terminate the process after a
+complete iteration.
+
+.. code:: bash
+
+        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz -e exit save sample.osf
+
+
+**Scans Accumulation**: The viz command allows the user to customize ...
 
 Available view modes
 ~~~~~~~~~~~~~~~~~~~~~
@@ -127,9 +197,10 @@ Dense accumulated clouds view (with every point of a scan)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To obtain the densest view use the ``--accum-num N --accum-every 1`` params where ``N`` is the
-number of clouds to accumulate (``N`` up to 100 is generally small enough to avoid slowing down the viz interface)::
+number of clouds to accumulate (``N`` up to 100 is generally small enough to avoid slowing down
+the viz interface)::
 
-   ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz --accum-num 20 -o sample.osf
+   ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz --accum-num 20 save sample.osf
 
 and the dense accumulated clouds result:
 
@@ -141,51 +212,23 @@ and the dense accumulated clouds result:
 Overall map view (with poses)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-One of the main tasks we frequently need is a preview of the overall map. We can test this by using the generated OSF file, which was created with the above command and contains the SLAM-generated ``LidarScan.pose`` property.
+One of the main tasks we frequently need is a preview of the overall map. We can test this by using
+the generated OSF file, which was created with the above command and contains the
+SLAM-generated ``LidarScan.pose`` property.
 ::
 
    ouster-cli source sample.osf viz --accum-num 20 \
    --accum-every 0 --accum-every-m 10.5 --accum-map -r 0 -e stop
 
 
-Here is a preview example of the overall map generated from the accumulated scan results. By utilizing the '-e stop' option, the visualizer stops once the replay process finishes, displaying the preview of the lidar trajectory:
+Here is a preview example of the overall map generated from the accumulated scan results.
+By utilizing the '-e stop' option, the visualizer stops once the replay process finishes,
+displaying the preview of the lidar trajectory:
 
 .. figure:: /images/scans_accum_map_all_scan.png
 
    Data fully replayed with map and accum enabled (last current scan is displayed here in grey
    palette)
-
-
-Save Command
-------------
-
-The ``save`` command can be used to convert the SLAM-generated OSF file to a point cloud data file
-format such as LAS (.las), PLY (.ply), or PCD (.pcd). The output file format depends on the
-extension of the output filename. Let's use the OSF file generated from the SLAM command
-and convert it to a PLY file:
-
-.. code:: bash
-
-        ouster-cli source sample.osf save output.ply
-
-The ``save`` command automatically splits and downsamples the trajectory-adjusted point cloud into
-several files to prevent exporting a huge size file. The terminal will display details, and you
-will see the following printout for each output file:
-
-.. code:: bash
-
-        Output file: output1.ply
-        3932160 points accumulated during this period,
-        154228 near points are removed [3.92 %],
-        1475955 down sampling points are removed [37.54 %],
-        2213506 zero range points are removed [56.29 %],
-        88471 points are saved [2.25 %].
-
-You can adjust the minimal range, select different fields as values, and change the voxel size by
-referring to the ``--help`` flag for more information.
-
-You can use an open source software `CloudCompare`_ to import and view the generated point cloud
-data files.
 
 
 .. _Networking Guide: https://static.ouster.dev/sensor-docs/image_route1/image_route3/networking_guide/networking_guide.html

@@ -27,9 +27,9 @@ def input_info(test_data_dir):
 
 def test_osf_scan_source_flags(input_osf_file):
     from ouster.sdk.client import ChanField
-    ss = open_source(str(input_osf_file), sensor_idx=0, flags=False)
+    ss = open_source(str(input_osf_file), flags=False)
     assert ss.fields.get(ChanField.FLAGS) is None
-    ss = open_source(str(input_osf_file), sensor_idx=0)
+    ss = open_source(str(input_osf_file))
     assert ss.fields.get(ChanField.FLAGS) is not None
 
 
