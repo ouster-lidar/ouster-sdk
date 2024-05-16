@@ -26,7 +26,7 @@ between consecutive scans
    from ouster.sdk import open_source
    from ouster.mapping.slam import KissBackend
    import numpy as np
-   scans = open_source(pcap_path, sensor_idx=0)
+   scans = open_source(pcap_path)
    slam = KissBackend(scans.metadata, max_range=75, min_range=1, voxel_size=1.0)
    last_scan_pose = np.eye(4)
 
@@ -59,7 +59,7 @@ as well as for demonstration and feedback purposes.
    from functools import partial
    from ouster.viz import SimpleViz, ScansAccumulator
    from ouster.mapping.slam import KissBackend
-   scans = open_source(pcap_path, sensor_idx=0)
+   scans = open_source(pcap_path)
    slam = KissBackend(scans.metadata, max_range=75, min_range=1, voxel_size=1.0)
 
    scans_w_poses = map(partial(slam.update), scans)

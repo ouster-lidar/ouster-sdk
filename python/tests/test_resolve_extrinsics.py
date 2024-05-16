@@ -88,25 +88,24 @@ def test_resolve_extrinscs_using_dir():
 
 
 def test_open_source_with_file_that_has_no_valid_extrinscs():
-    ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT, sensor_idx=0)
+    ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT)
     np.testing.assert_array_equal(ss.metadata.extrinsic, np.eye(4))
 
 
 def test_open_source_with_file_that_has_no_valid_extrinscs_but_supply_array():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT,
-                     sensor_idx=0, extrinsics=np.ones((4, 4)))
+                     extrinsics=np.ones((4, 4)))
     np.testing.assert_array_equal(ss.metadata.extrinsic, np.ones((4, 4)))
 
 
 def test_open_source_with_file_that_has_no_valid_extrinscs_but_supply_extrinscs_path():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT,
-                     sensor_idx=0, extrinsics=EXT_PATH)
+                     extrinsics=EXT_PATH)
     array_cmp = ss.metadata.extrinsic != np.eye(4)
     assert array_cmp.any()
 
 
 def test_open_source_with_file_that_has_valid_extrinscs():
-    ss = open_source(source_url=PCAP_PATH_WITH_EXT,
-                     sensor_idx=0)
+    ss = open_source(source_url=PCAP_PATH_WITH_EXT)
     array_cmp = ss.metadata.extrinsic != np.eye(4)
     assert array_cmp.any()

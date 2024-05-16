@@ -252,18 +252,21 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
     auto timeout_time =
         chrono::steady_clock::now() + chrono::seconds{timeout_sec};
-    std::string status;
 
+    std::string status;
     // TODO: can remove this loop when we drop support for FW 2.4
-    do {
+    while (true) {
         if (chrono::steady_clock::now() >= timeout_time) {
             throw std::runtime_error(
                 "A timeout occurred while waiting for the sensor to "
                 "initialize.");
         }
-        std::this_thread::sleep_for(1s);
         status = sensor_http->sensor_info()["status"].asString();
-    } while (status == "INITIALIZING");
+        if (status != "INITIALIZING") {
+            break;
+        }
+        std::this_thread::sleep_for(1s);
+    }
 
     try {
         auto metadata = sensor_http->metadata();

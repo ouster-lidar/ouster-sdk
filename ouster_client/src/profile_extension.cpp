@@ -112,8 +112,10 @@ void extend_udp_profile_lidar_strings(UDPProfileLidar profile,
         throw std::invalid_argument(
             "Lidar profile of given name already exists");
 
+    // Make sure to only check the string for zero intialization.
+    // The profile enum can be 0 normally (and is for UNKNOWN).
     auto it =
-        std::find_if(begin, end, [](const auto& kv) { return kv.first == 0; });
+        std::find_if(begin, end, [](const auto& kv) { return kv.second == 0; });
 
     if (it == end)
         throw std::runtime_error("Limit of lidar profiles has been reached");
