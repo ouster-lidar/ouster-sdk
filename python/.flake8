@@ -1,0 +1,20 @@
+[flake8]
+max-line-length = 120
+per-file-ignores =
+    tests/*: D
+    docs/*: D
+ignore =
+    # E125, E126, E128 continuation line indentation, yapf doesn't fix this
+    E125,
+    E126,
+    E128,
+    # E251 newlines around equals in keywords, yapf again
+    E251,
+    # E731 assigning a lambda expression
+    E731,
+    # W503 line break before binary operator, yapf again
+    W503,
+    # W504 line break before binary operator, yapf again
+    W504,
+    # E741 "l" and "I" as variables names; not a problem with some static analysis
+    E741

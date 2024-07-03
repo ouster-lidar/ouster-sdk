@@ -23,8 +23,8 @@
 #include <utility>
 #include <vector>
 
-#include "logging.h"
 #include "ouster/impl/client_poller.h"
+#include "ouster/impl/logging.h"
 #include "ouster/impl/netcompat.h"
 #include "ouster/sensor_http.h"
 #include "ouster/types.h"
@@ -261,18 +261,29 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
                 "A timeout occurred while waiting for the sensor to "
                 "initialize.");
         }
-        status = sensor_http->sensor_info()["status"].asString();
+        status = sensor_http->sensor_info(timeout_sec)["status"].asString();
         if (status != "INITIALIZING") {
             break;
         }
         std::this_thread::sleep_for(1s);
     }
 
+    std::string user_data = "";
     try {
-        auto metadata = sensor_http->metadata();
+        user_data = sensor_http->get_user_data(timeout_sec);
+    } catch (const std::runtime_error& e) {
+        if (strcmp(e.what(),
+                   "user data API not supported on this FW version") != 0) {
+            throw e;
+        }
+    }
+
+    try {
+        auto metadata = sensor_http->metadata(timeout_sec);
 
         metadata["ouster-sdk"]["client_version"] = client_version();
         metadata["ouster-sdk"]["output_source"] = "collect_metadata";
+        metadata["user_data"] = user_data;
 
         return metadata;
     } catch (const std::runtime_error& e) {
@@ -288,7 +299,7 @@ Json::Value collect_metadata(const std::string& hostname, int timeout_sec) {
 bool get_config(const std::string& hostname, sensor_config& config, bool active,
                 int timeout_sec) {
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
-    auto res = sensor_http->get_config_params(active);
+    auto res = sensor_http->get_config_params(active, timeout_sec);
     config = parse_config(res);
     return true;
 }
@@ -298,7 +309,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
     auto sensor_http = SensorHttp::create(hostname, timeout_sec);
 
     // reset staged config to avoid spurious errors
-    auto config_params = sensor_http->active_config_params();
+    auto config_params = sensor_http->active_config_params(timeout_sec);
     Json::Value config_params_copy = config_params;
 
     // set all desired config parameters
@@ -332,9 +343,9 @@ bool set_config(const std::string& hostname, const sensor_config& config,
         if (config.udp_dest)
             throw std::invalid_argument(
                 "UDP_DEST_AUTO flag set but provided config has udp_dest");
-        sensor_http->set_udp_dest_auto();
+        sensor_http->set_udp_dest_auto(timeout_sec);
 
-        auto staged = sensor_http->staged_config_params();
+        auto staged = sensor_http->staged_config_params(timeout_sec);
 
         // now we set config_params according to the staged udp_dest from the
         // sensor
@@ -356,20 +367,20 @@ bool set_config(const std::string& hostname, const sensor_config& config,
         // send full string -- depends on older FWs not rejecting a blob even
         // when it contains unknown keys
         auto config_params_str = Json::writeString(builder, config_params);
-        sensor_http->set_config_param(".", config_params_str);
+        sensor_http->set_config_param(".", config_params_str, timeout_sec);
         // reinitialize to make all staged parameters effective
-        sensor_http->reinitialize();
+        sensor_http->reinitialize(timeout_sec);
     }
 
     // save if indicated
     if (config_flags & CONFIG_PERSIST) {
-        sensor_http->save_config_params();
+        sensor_http->save_config_params(timeout_sec);
     }
 
     return true;
 }
 
-std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
+std::string get_metadata(client& cli, int timeout_sec) {
     // Note, this function calls functions that throw std::runtime_error
     // on timeout.
     try {
@@ -385,18 +396,9 @@ std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
     builder["precision"] = 6;
     builder["indentation"] = "    ";
     auto metadata_string = Json::writeString(builder, cli.meta);
-    if (legacy_format) {
-        logger().warn(
-            "The SDK will soon output the non-legacy metadata format by "
-            "default.  If you parse the metadata directly instead of using the "
-            "SDK (which will continue to read both legacy and non-legacy "
-            "formats), please be advised that on the next release you will "
-            "either have to update your parsing or specify legacy_format = "
-            "true to the get_metadata function.");
-    }
 
     // We can't insert this logic into the light init_client since its advantage
-    // is that it doesn't make netowrk calls but we need it to run every time
+    // is that it doesn't make network calls but we need it to run every time
     // there is a valid connection to the sensor So we insert it here
     // TODO: remove after release of FW 3.2/3.3 (sufficient warning)
     sensor_config config;
@@ -413,7 +415,7 @@ std::string get_metadata(client& cli, int timeout_sec, bool legacy_format) {
             "sticking with older FWs, the Ouster SDK will continue to parse "
             "the legacy lidar profile.");
     }
-    return legacy_format ? convert_to_legacy(metadata_string) : metadata_string;
+    return metadata_string;
 }
 
 bool init_logger(const std::string& log_level, const std::string& log_file_path,
@@ -466,8 +468,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
             config_flags |= CONFIG_UDP_DEST_AUTO;
         else
             config.udp_dest = udp_dest_host;
-        if (ld_mode) config.ld_mode = ld_mode;
-        if (ts_mode) config.ts_mode = ts_mode;
+        if (ld_mode) config.lidar_mode = ld_mode;
+        if (ts_mode) config.timestamp_mode = ts_mode;
         if (lidar_port) config.udp_port_lidar = lidar_port;
         if (imu_port) config.udp_port_imu = imu_port;
         if (persist_config) config_flags |= CONFIG_PERSIST;

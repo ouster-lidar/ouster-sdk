@@ -337,18 +337,16 @@ PYBIND11_MODULE(_viz, m) {
              We also keep track of a per-cloud pose to efficiently transform the
              whole point cloud without having to update all ~2048 poses.
              )")
-        .def(
-            "__init__",
-            [](viz::Cloud& self, size_t n, pymatrixd extrinsics) {
-                // expect homogeneous 4x4 pose matrix in 2d or 1d shape
-                check_array(extrinsics, 16, 0, 'F');
-                viz::mat4d extrinsica;
-                std::copy(extrinsics.data(), extrinsics.data() + 16,
-                          extrinsica.data());
-                new (&self) viz::Cloud(n, extrinsica);
-            },
-            py::arg("n"), py::arg("extrinsics") = viz::identity4d,
-            R"(
+        .def(py::init([](size_t n, pymatrixd extrinsics) {
+                 // expect homogeneous 4x4 pose matrix in 2d or 1d shape
+                 check_array(extrinsics, 16, 0, 'F');
+                 viz::mat4d extrinsica;
+                 std::copy(extrinsics.data(), extrinsics.data() + 16,
+                           extrinsica.data());
+                 return new viz::Cloud(n, extrinsica);
+             }),
+             py::arg("n"), py::arg("extrinsics") = viz::identity4d,
+             R"(
                  ``def __init__(self, n_points: int, extrinsics: np.ndarray) -> None:``
 
                  Unstructured point cloud for visualization.
@@ -360,28 +358,26 @@ PYBIND11_MODULE(_viz, m) {
                     extrinsics: sensor extrinsic calibration. 4x4 column-major
                                 homogeneous transformation matrix
              )")
-        .def(
-            "__init__",
-            [](viz::Cloud& self, const sensor::sensor_info& info) {
-                const auto xyz_lut = make_xyz_lut(info);
+        .def(py::init([](const sensor::sensor_info& info) {
+                 const auto xyz_lut = make_xyz_lut(info);
 
-                // make_xyz_lut still outputs doubles
-                Eigen::Array<float, Eigen::Dynamic, 3> direction =
-                    xyz_lut.direction.cast<float>();
-                Eigen::Array<float, Eigen::Dynamic, 3> offset =
-                    xyz_lut.offset.cast<float>();
+                 // make_xyz_lut still outputs doubles
+                 Eigen::Array<float, Eigen::Dynamic, 3> direction =
+                     xyz_lut.direction.cast<float>();
+                 Eigen::Array<float, Eigen::Dynamic, 3> offset =
+                     xyz_lut.offset.cast<float>();
 
-                viz::mat4d extrinsica;
-                std::copy(info.extrinsic.data(), info.extrinsic.data() + 16,
-                          extrinsica.data());
+                 viz::mat4d extrinsica;
+                 std::copy(info.extrinsic.data(), info.extrinsic.data() + 16,
+                           extrinsica.data());
 
-                new (&self)
-                    viz::Cloud{info.format.columns_per_frame,
-                               info.format.pixels_per_column, direction.data(),
-                               offset.data(), extrinsica};
-            },
-            py::arg("metadata"),
-            R"(
+                 return new viz::Cloud{info.format.columns_per_frame,
+                                       info.format.pixels_per_column,
+                                       direction.data(), offset.data(),
+                                       extrinsica};
+             }),
+             py::arg("metadata"),
+             R"(
                  ``def __init__(self, si: SensorInfo) -> None:``
 
                  Structured point cloud for visualization.
@@ -691,20 +687,18 @@ PYBIND11_MODULE(_viz, m) {
 
     py::class_<viz::Cuboid, std::shared_ptr<viz::Cuboid>>(
         m, "Cuboid", "Manages the state of a single cuboid.")
-        .def(
-            "__init__",
-            [](viz::Cuboid& self, pymatrixd pose, py::tuple rgba) {
-                check_array(pose, 16, 2, 'F');
-                viz::mat4d posea;
-                std::copy(pose.data(), pose.data() + 16, posea.data());
+        .def(py::init([](pymatrixd pose, py::tuple rgba) {
+                 check_array(pose, 16, 2, 'F');
+                 viz::mat4d posea;
+                 std::copy(pose.data(), pose.data() + 16, posea.data());
 
-                viz::vec4f ar{0.0, 0.0, 0.0, 1.0};
-                tuple_to_float_array(ar, rgba);
+                 viz::vec4f ar{0.0, 0.0, 0.0, 1.0};
+                 tuple_to_float_array(ar, rgba);
 
-                new (&self) viz::Cuboid{posea, ar};
-            },
-            py::arg("pose"), py::arg("rgba"),
-            R"(
+                 return new viz::Cuboid{posea, ar};
+             }),
+             py::arg("pose"), py::arg("rgba"),
+             R"(
                  Creates cuboid.
 
                  Args:
@@ -746,11 +740,9 @@ PYBIND11_MODULE(_viz, m) {
     py::class_<viz::Label, std::shared_ptr<viz::Label>>(
         m, "Label", "Manages the state of a text label.")
         .def(
-            "__init__",
-            [](viz::Label& self, const std::string& text, double x, double y,
-               double z) {
-                new (&self) viz::Label{text, {x, y, z}};
-            },
+            py::init([](const std::string& text, double x, double y, double z) {
+                return new viz::Label{text, {x, y, z}};
+            }),
             py::arg("text"), py::arg("x"), py::arg("y"), py::arg("z"),
             R"(
                  ``def __init__(self, text: str, x: float, y: float, z: float) -> None:``

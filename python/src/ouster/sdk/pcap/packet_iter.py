@@ -5,7 +5,7 @@ from typing import (Callable, Iterable, Iterator, TypeVar,
 
 from more_itertools import consume
 
-from ouster.sdk.client import (Packet, PacketMultiSource, LidarPacket, ImuPacket, FrameBorder)
+from ouster.sdk.client import (PacketMultiSource, LidarPacket, ImuPacket, FrameBorder, PacketFormat)
 from ouster.sdk.pcap.pcap import MTU_SIZE
 import ouster.sdk.pcap._pcap as _pcap
 
@@ -55,23 +55,6 @@ def ichunked_before(it: Iterable[T],
         consume(c)
 
 
-def ichunked_framed(
-    packets: Iterable[Packet],
-    pred: Callable[[Packet],
-                   bool] = lambda _: True) -> Iterator[Iterator[Packet]]:
-    """Delimit a packets when the frame id changes and pred is true."""
-
-    return ichunked_before(packets, FrameBorder(pred))
-
-
-def n_frames(packets: Iterable[Packet], n: int) -> Iterator[Packet]:
-    for i, frame in enumerate(ichunked_framed(packets)):
-        if i < n:
-            yield from frame
-        else:
-            break
-
-
 # TODO: these currently account for SensorScanSource being based on Scans internally and will
 #       require rework once that has a proper ScansMulti implementation -- Tim T.
 class RecordingPacketSource:
@@ -102,6 +85,11 @@ class RecordingPacketSource:
         self.imu_port = imu_port
         self.use_sll_encapsulation = use_sll_encapsulation
         self.overwrite = overwrite
+        metadata = self.source.metadata
+        if type(metadata) is list:
+            metadata = metadata[self.sensor_idx]
+        self._metadata = metadata
+        self.pf = PacketFormat(metadata)
 
     @property  # type: ignore
     def __class__(self):
@@ -113,11 +101,7 @@ class RecordingPacketSource:
         error = False
         n = 0
 
-        metadata = self.source.metadata
-        if type(metadata) is list:
-            metadata = metadata[self.sensor_idx]
-
-        frame_bound = FrameBorder()
+        frame_bound = FrameBorder(self._metadata)
 
         chunk = 0
         pcap_path = self.prefix_path + f"-{chunk:03}.pcap"
@@ -143,12 +127,12 @@ class RecordingPacketSource:
                         raise ValueError("Unexpected packet type")
 
                     if has_timestamp is None:
-                        has_timestamp = (packet.capture_timestamp is not None)
-                    elif has_timestamp != (packet.capture_timestamp is not None):
+                        has_timestamp = (packet.host_timestamp != 0)
+                    elif has_timestamp != (packet.host_timestamp != 0):
                         raise ValueError("Mixing timestamped/untimestamped packets")
 
-                    ts = packet.capture_timestamp or time.time()
-                    _pcap.record_packet(handle, self.src_ip, self.dst_ip, src_port, dst_port, packet._data, ts)
+                    ts = (packet.host_timestamp / 1e9) or time.time()
+                    _pcap.record_packet(handle, self.src_ip, self.dst_ip, src_port, dst_port, packet.buf, ts)
 
                     if frame_bound(packet):
                         num_frames += 1
@@ -210,8 +194,8 @@ class BagRecordingPacketSource:
                 for next_packet in self.packet_source:
                     idx, packet = next_packet if (type(next_packet) is tuple) else (None, next_packet)
                     if (idx is None) or (idx == self.sensor_idx):
-                        ts = rospy.Time.from_sec(packet.capture_timestamp)
-                        msg = PacketMsg(buf=packet._data.tobytes())
+                        ts = rospy.Time.from_sec(packet.host_timestamp / 1e9)
+                        msg = PacketMsg(buf=packet.buf.tobytes())
                         if isinstance(packet, LidarPacket):
                             outbag.write(self.lidar_topic, msg, ts)
                         elif isinstance(packet, ImuPacket):

@@ -20,7 +20,7 @@ def test_find_plugins(capsys, has_mapping):
     if has_mapping:
         built_in_plugins.extend([
             'ouster.cli.plugins.cli_mapping',
-            'ouster.cli.plugins.cli_source_mapping',
+            'ouster.cli.plugins.source_mapping',
         ])
 
     assert set(built_in_plugins).issubset(plugin_names)

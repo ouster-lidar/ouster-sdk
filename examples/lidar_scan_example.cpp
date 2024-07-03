@@ -60,9 +60,9 @@ int main(int argc, char* argv[]) {
 
     //! [doc-stag-lidarscan-reduced-slots]
     // Finally, you can construct by specifying fields directly
-    static const std::array<std::pair<ChanField, ChanFieldType>, 2>
-        reduced_slots{{{ChanField::RANGE, ChanFieldType::UINT32},
-                       {ChanField::NEAR_IR, ChanFieldType::UINT16}}};
+    static const std::array<ouster::FieldType, 2> reduced_slots{
+        {{ChanField::RANGE, ChanFieldType::UINT32},
+         {ChanField::NEAR_IR, ChanFieldType::UINT16}}};
     auto reduced_fields_scan =
         ouster::LidarScan(w, h, reduced_slots.begin(), reduced_slots.end());
     //! [doc-etag-lidarscan-reduced-slots]
@@ -95,12 +95,12 @@ int main(int argc, char* argv[]) {
 
     // to access a field:
     //! [doc-stag-lidarscan-cpp-fields]
-    auto range = profile_scan.field(ChanField::RANGE);
+    auto range = profile_scan.field<uint32_t>(ChanField::RANGE);
     //! [doc-etag-lidarscan-cpp-fields]
 
     // On dual returns, second returns are often the same field name with 2
     // appended:
-    auto range2 = dual_returns_scan.field(ChanField::RANGE2);
+    auto range2 = dual_returns_scan.field<uint32_t>(ChanField::RANGE2);
 
     std::cerr
         << "\nPrinting first element of received scan headers\n\tframe_id : "
@@ -121,7 +121,8 @@ int main(int argc, char* argv[]) {
     // LidarScan
     std::cerr << "Accessing field that isn't available...";
     try {
-        auto signal_field = reduced_fields_scan.field(ChanField::SIGNAL);
+        auto signal_field =
+            reduced_fields_scan.field<uint32_t>(ChanField::SIGNAL);
         std::cerr << signal_field(0, 0) << std::endl;
     } catch (const std::out_of_range&) {
         std::cerr << " ..received expected out of range error. Continuing..."
@@ -134,10 +135,10 @@ int main(int argc, char* argv[]) {
     auto print_el = [](ouster::LidarScan& scan, std::string label) {
         std::cerr << "Available fields in " << label << "...\n";
         //! [doc-stag-cpp-scan-iter]
-        for (auto it = scan.begin(); it != scan.end(); it++) {
-            auto field = it->first;
-            // auto field_type = it->second;
-            std::cerr << "\t" << to_string(field) << "\n ";
+        for (const auto& kv : scan.fields()) {
+            auto field_name = kv.first;
+            // auto& field = kv.second;
+            std::cerr << "\t" << field_name << "\n ";
         }
         //! [doc-etag-cpp-scan-iter]
         std::cerr << std::endl;

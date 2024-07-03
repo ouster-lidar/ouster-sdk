@@ -14,7 +14,6 @@
 
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
-using ouster::sensor::ChanField;
 using ouster::sensor::ChanFieldType;
 using ouster::sensor::UDPProfileLidar;
 using ouster::sensor::impl::MAX_NUM_PROFILES;
@@ -25,7 +24,7 @@ namespace impl {
 
 // definition copied from lidar_scan.cpp
 struct DefaultFieldsEntry {
-    const std::pair<ChanField, ChanFieldType>* fields;
+    const std::pair<std::string, ChanFieldType>* fields;
     size_t n_fields;
 };
 
@@ -35,7 +34,7 @@ extern Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES>
 
 static void extend_default_scan_fields(
     UDPProfileLidar profile,
-    const std::vector<std::pair<ChanField, ChanFieldType>>& scan_fields) {
+    const std::vector<std::pair<std::string, ChanFieldType>>& scan_fields) {
     auto end = impl::default_scan_fields.end();
     auto it = std::find_if(impl::default_scan_fields.begin(), end,
                            [](const auto& kv) { return kv.first == 0; });
@@ -54,8 +53,8 @@ namespace impl {
 struct ExtendedProfile {
     UDPProfileLidar profile;
     std::string name;
-    std::vector<std::pair<ChanField, ChanFieldType>> slots;
-    std::vector<std::pair<ChanField, FieldInfo>> fields;
+    std::vector<std::pair<std::string, ChanFieldType>> slots;
+    std::vector<std::pair<std::string, FieldInfo>> fields;
     size_t chan_data_size;
 };
 
@@ -69,7 +68,7 @@ std::list<ExtendedProfile> extended_profiles_data{};
 
 // definition copied from parsing.cpp
 struct ProfileEntry {
-    const std::pair<ChanField, FieldInfo>* fields;
+    const std::pair<std::string, FieldInfo>* fields;
     size_t n_fields;
     size_t chan_data_size;
 };
@@ -82,7 +81,7 @@ extern Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles;
 
 static void extend_profile_entries(
     UDPProfileLidar profile,
-    const std::vector<std::pair<ChanField, FieldInfo>>& fields,
+    const std::vector<std::pair<std::string, FieldInfo>>& fields,
     size_t chan_data_size) {
     auto end = impl::profiles.end();
     auto it = std::find_if(impl::profiles.begin(), end,
@@ -123,11 +122,11 @@ void extend_udp_profile_lidar_strings(UDPProfileLidar profile,
     *it = std::make_pair(profile, name);
 }
 
-void add_custom_profile(int profile_nr,  // int as UDPProfileLidar
-                        const std::string& name,
-                        const std::vector<std::pair<int, impl::FieldInfo>>&
-                            fields,  // int as ChanField
-                        size_t chan_data_size) {
+void add_custom_profile(
+    int profile_nr,  // int as UDPProfileLidar
+    const std::string& name,
+    const std::vector<std::pair<std::string, impl::FieldInfo>>& fields,
+    size_t chan_data_size) {
     if (profile_nr == 0)
         throw std::invalid_argument("profile_nr of 0 are not allowed");
 
@@ -138,10 +137,8 @@ void add_custom_profile(int profile_nr,  // int as UDPProfileLidar
         impl::ExtendedProfile profile{
             udp_profile, name, {}, {}, chan_data_size};
         for (auto&& pair : fields) {
-            ChanField chan = static_cast<ChanField>(pair.first);
-
-            profile.slots.emplace_back(chan, pair.second.ty_tag);
-            profile.fields.emplace_back(chan, pair.second);
+            profile.slots.emplace_back(pair.first, pair.second.ty_tag);
+            profile.fields.emplace_back(pair.first, pair.second);
         }
 
         impl::extended_profiles_data.push_back(std::move(profile));

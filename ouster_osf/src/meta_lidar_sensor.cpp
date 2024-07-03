@@ -55,11 +55,10 @@ std::unique_ptr<std::string> restore_lidar_sensor(
 }
 
 LidarSensor::LidarSensor(const sensor_info& si)
-    : sensor_info_(si), metadata_(si.updated_metadata_string()) {}
+    : sensor_info_(si), metadata_(si.to_json_string()) {}
 
 LidarSensor::LidarSensor(const std::string& sensor_metadata)
-    : sensor_info_(sensor::parse_metadata(sensor_metadata)),
-      metadata_(sensor_metadata) {}
+    : sensor_info_(sensor_metadata), metadata_(sensor_metadata) {}
 
 const sensor_info& LidarSensor::info() const { return sensor_info_; }
 

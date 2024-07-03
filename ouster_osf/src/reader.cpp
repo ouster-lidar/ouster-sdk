@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "fb_utils.h"
+#include "ouster/impl/logging.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/file.h"
@@ -18,6 +19,8 @@
 
 using StreamChunksMap =
     std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint64_t>>>;
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
@@ -387,9 +390,11 @@ ChunksRange Reader::chunks() {
 
 Reader::Reader(const std::string& file) : file_{file} {
     if (!file_.valid()) {
-        std::cerr << "ERROR: While openning OSF file. Expected valid() but "
-                     "got file_ = "
-                  << file_.to_string() << std::endl;
+        logger().error(
+            "ERROR: While openning OSF file. "
+            "Expected valid() but "
+            "got file_ = {}",
+            file_.to_string());
         throw std::logic_error("provided OSF file is not a valid OSF file.");
     }
 

@@ -6,9 +6,16 @@
 #include "ouster/osf/metadata.h"
 
 #include "fb_utils.h"
+#include "ouster/impl/logging.h"
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
+
+void RegisterMetadata_internal_error_function_(std::string error) {
+    logger().error(error);
+}
 
 std::string MetadataEntry::repr() const {
     auto b = this->buffer();
@@ -42,13 +49,12 @@ std::unique_ptr<MetadataEntry> MetadataEntry::from_buffer(
     auto& registry = MetadataEntry::get_registry();
     auto registered_type = registry.find(type_str);
     if (registered_type == registry.end()) {
-        std::cout << "UNKNOWN TYPE: " << type_str << std::endl;
+        logger().error("UNKNOWN TYPE: {}", type_str);
         return nullptr;
     }
     auto m = registered_type->second(buf);
     if (m == nullptr) {
-        std::cout << "UNRECOVERABLE FROM BUFFER as type: " << type_str
-                  << std::endl;
+        logger().error("UNRECOVERABLE FROM BUFFER as type: {}", type_str);
         return nullptr;
     }
     return m;
@@ -87,12 +93,12 @@ std::unique_ptr<MetadataEntry> MetadataEntryRef::as_type() const {
     auto& registry = MetadataEntry::get_registry();
     auto registered_type = registry.find(type());
     if (registered_type == registry.end()) {
-        std::cout << "UNKNOWN TYPE FOUND: " << type() << std::endl;
+        logger().error("UNKNOWN TYPE FOUND: {}", type());
         return nullptr;
     }
     auto m = registered_type->second(buffer());
     if (m == nullptr) {
-        std::cout << "UNRECOVERABLE FROM BUFFER: " << to_string() << std::endl;
+        logger().error("UNRECOVERABLE FROM BUFFER: {}", to_string());
         return nullptr;
     }
     m->setId(id());
@@ -121,8 +127,8 @@ uint32_t MetadataStore::add(MetadataEntry& entry) {
         /// the Reader case
         assignId(entry);
     } else if (metadata_entries_.find(entry.id()) != metadata_entries_.end()) {
-        std::cout << "WARNING: MetadataStore: ENTRY EXISTS! id = " << entry.id()
-                  << std::endl;
+        logger().warn("WARNING: MetadataStore: ENTRY EXISTS! id = {}",
+                      entry.id());
         return entry.id();
     } else if (next_meta_id_ == entry.id()) {
         // Find next available next_meta_id_ so we avoid id collisions

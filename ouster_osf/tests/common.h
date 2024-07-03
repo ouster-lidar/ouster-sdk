@@ -98,35 +98,59 @@ std::array<double, N> normal_arr(const double& m, const double& s) {
     return arr;
 }
 
-// set field to random values, with mask_bits specifienging the number of
+template <typename T>
+void set_random(Eigen::Ref<img_t<T>> field_dest, size_t mask_bits = 0) {
+    field_dest = field_dest.unaryExpr([=](T) {
+        double sr = static_cast<double>(std::rand()) / RAND_MAX;
+        return static_cast<T>(
+            sr * static_cast<double>(std::numeric_limits<T>::max()));
+    });
+    if (mask_bits && sizeof(T) * 8 > mask_bits) {
+        field_dest = field_dest.unaryExpr(
+            [=](T a) { return static_cast<T>(a & ((1LL << mask_bits) - 1)); });
+    }
+}
+
+template <typename T>
+void set_random(Eigen::Ref<img_t<float>> field_dest, size_t /*mask_bits*/ = 0) {
+    field_dest = field_dest.unaryExpr([=](float) {
+        double sr = static_cast<double>(std::rand()) / RAND_MAX;
+        return static_cast<float>(
+            sr * static_cast<double>(std::numeric_limits<float>::max()));
+    });
+    // mask bits arent supported for floats
+}
+
+template <typename T>
+void set_random(Eigen::Ref<img_t<double>> field_dest,
+                size_t /*mask_bits*/ = 0) {
+    field_dest = field_dest.unaryExpr([=](double) {
+        double sr = static_cast<double>(std::rand()) / RAND_MAX;
+        return static_cast<double>(
+            sr * static_cast<double>(std::numeric_limits<double>::max()));
+    });
+    // mask bits arent supported for doubles
+}
+
+// set field to random values, with mask_bits specifying the number of
 // bits to mask
 struct set_to_random {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field_dest, size_t mask_bits = 0) {
-        field_dest = field_dest.unaryExpr([=](T) {
-            double sr = static_cast<double>(std::rand()) / RAND_MAX;
-            return static_cast<T>(
-                sr * static_cast<double>(std::numeric_limits<T>::max()));
-        });
-        if (mask_bits && sizeof(T) * 8 > mask_bits) {
-            field_dest = field_dest.unaryExpr([=](T a) {
-                return static_cast<T>(a & ((1LL << mask_bits) - 1));
-            });
-        }
+        set_random<T>(field_dest, mask_bits);
     }
 };
 
 inline void random_lidar_scan_data(LidarScan& ls) {
-    using sensor::ChanField;
     using sensor::ChanFieldType;
 
-    for (auto f : ls) {
-        if (f.first == sensor::ChanField::RANGE ||
-            f.first == sensor::ChanField::RANGE2) {
+    for (auto f : ls.field_types()) {
+        if (f.name == sensor::ChanField::RANGE ||
+            f.name == sensor::ChanField::RANGE2) {
             // Closer to reality that RANGE is just 20bits and not all 32
-            ouster::impl::visit_field(ls, f.first, set_to_random(), 20);
+            ouster::impl::visit_field(ls, f.name, set_to_random(), 20);
         } else {
-            ouster::impl::visit_field(ls, f.first, set_to_random());
+            ouster::impl::visit_field(ls, f.name, set_to_random());
         }
     }
 
@@ -137,7 +161,7 @@ inline void random_lidar_scan_data(LidarScan& ls) {
     const int64_t t_start_p = 100000000000;
     const int64_t dt = 100 * 1000 / (ls.w - 1);
     const int64_t dt_p = 100 * 1000 / (ls.packet_timestamp().size() - 1);
-    for (ptrdiff_t i = 0; i < ls.w; ++i) {
+    for (size_t i = 0; i < ls.w; ++i) {
         if (i == 0)
             ls.timestamp()[i] = t_start;
         else
@@ -146,7 +170,9 @@ inline void random_lidar_scan_data(LidarScan& ls) {
             (std::numeric_limits<uint32_t>::max() / ls.w) * i);
         ls.measurement_id()[i] = static_cast<uint16_t>(
             (std::numeric_limits<uint16_t>::max() / ls.w) * i);
-        ls.pose()[i] = ouster::mat4d::Random();
+
+        Eigen::Ref<img_t<double>> pose = ls.pose().subview(i);
+        pose = ouster::mat4d::Random();
 
         const int32_t pi = i / columns_per_packet;
         if (pi == 0)
@@ -165,9 +191,9 @@ inline LidarScan get_random_lidar_scan(
     return ls;
 }
 
-inline LidarScan get_random_lidar_scan(const size_t w = 1024,
-                                       const size_t h = 64,
-                                       LidarScanFieldTypes field_types = {}) {
+inline LidarScan get_random_lidar_scan(
+    const size_t w = 1024, const size_t h = 64,
+    ouster::LidarScanFieldTypes field_types = {}) {
     LidarScan ls{w, h, field_types.begin(), field_types.end()};
     random_lidar_scan_data(ls);
     return ls;
@@ -177,6 +203,22 @@ inline LidarScan get_random_lidar_scan(const sensor::sensor_info& si) {
     return get_random_lidar_scan(si.format.columns_per_frame,
                                  si.format.pixels_per_column,
                                  si.format.udp_profile_lidar);
+}
+
+template <typename T, typename GEN, typename DISTRIBUTION>
+void randomize_field(ouster::Field& field, GEN& gen, DISTRIBUTION& d) {
+    ArrayView1<T> flat_view = field.reshape(field.size());
+    for (T& v : flat_view) {
+        v = d(gen);
+    }
+}
+
+template <typename T, typename GEN, typename DISTRIBUTION>
+ouster::Field randomized_field(GEN& gen, DISTRIBUTION& d,
+                               std::vector<size_t> shape) {
+    auto field = Field{FieldDescriptor::array<T>(shape)};
+    randomize_field<T>(field, gen, d);
+    return field;
 }
 
 }  // namespace osf

@@ -28,7 +28,7 @@ namespace osf {
  * @return a copy of `ls_src` with transformed fields.
  */
 LidarScan slice_with_cast(const LidarScan& ls_src,
-                          const LidarScanFieldTypes& field_types);
+                          const ouster::LidarScanFieldTypes& field_types);
 
 /**
  * Metadata entry for LidarScanStream to store reference to a sensor and
@@ -48,7 +48,7 @@ class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
      * @param[in] field_types LidarScan fields specs, this argument is optional.
      */
     LidarScanStreamMeta(const uint32_t sensor_meta_id,
-                        const LidarScanFieldTypes field_types = {});
+                        const ouster::LidarScanFieldTypes field_types = {});
 
     /**
      * Return the sensor meta id.
@@ -56,13 +56,6 @@ class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
      * @return The sensor meta id.
      */
     uint32_t sensor_meta_id() const;
-
-    /**
-     * Return the field types.
-     *
-     * @return The field types.
-     */
-    const LidarScanFieldTypes& field_types() const;
 
     /**
      * @copydoc MetadataEntry::buffer
@@ -106,7 +99,7 @@ class LidarScanStreamMeta : public MetadataEntryHelper<LidarScanStreamMeta> {
      * Flat Buffer Reference:
      *   fb/os_sensor/lidar_scan_stream.fbs :: LidarScanStream :: field_types
      */
-    LidarScanFieldTypes field_types_;
+    ouster::LidarScanFieldTypes field_types_;
 };
 
 /** @defgroup OSFTraitsLidarScanStreamMeta Templated struct for traits.*/
@@ -190,7 +183,7 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
      * @param[in] field_types LidarScan fields specs, this argument is optional.
      */
     LidarScanStream(Token key, Writer& writer, const uint32_t sensor_meta_id,
-                    const LidarScanFieldTypes& field_types = {});
+                    const ouster::LidarScanFieldTypes& field_types = {});
 
     /**
      * Return the concrete metadata type.
@@ -226,6 +219,11 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
      * The internal sensor_info data.
      */
     sensor::sensor_info sensor_info_;
+
+    /**
+     * The internal field_types data.
+     */
+    ouster::LidarScanFieldTypes field_types_;
 };
 
 }  // namespace osf

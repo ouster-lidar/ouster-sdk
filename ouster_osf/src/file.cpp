@@ -14,7 +14,10 @@
 
 #include "compat_ops.h"
 #include "fb_utils.h"
+#include "ouster/impl/logging.h"
 #include "ouster/osf/crc32.h"
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
@@ -24,7 +27,7 @@ namespace {
 // Print errors only in DEBUG mode
 #ifndef NDEBUG
 inline void print_error(const std::string& filename, const std::string& msg) {
-    fprintf(stderr, "Error Osf[%s]: %s\n", filename.c_str(), msg.c_str());
+    logger().error("ERROR: Osf[{}]: {}", filename, msg);
 }
 #else
 #define print_error(a, b) ((void)0)

@@ -10,8 +10,9 @@ import numpy as np
 import pytest
 
 from ouster.sdk import client
-from ouster.sdk.client import ChanField, _LidarPacket, _ImuPacket
+from ouster.sdk.client import ChanField, LidarPacket, ImuPacket, PacketFormat, ColHeader, FieldType
 from ouster.sdk.client.core import ClientTimeout
+from ouster.sdk.client._client import Version
 
 pytest.register_assert_rewrite('ouster.sdk.client._digest')
 import ouster.sdk.client._digest as digest  # noqa
@@ -68,24 +69,24 @@ def test_sensor_packet(default_meta: client.SensorInfo) -> None:
                           metadata=default_meta,
                           timeout=5.0,
                           _flush_before_read=False)) as source:
-
+        pf = PacketFormat(source.metadata)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         data = np.random.randint(255,
-                                 size=source._pf.lidar_packet_size,
+                                 size=pf.lidar_packet_size,
                                  dtype=np.uint8)
         sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
         packet = next(iter(source))
-        assert (packet._data == data).all()
-        assert isinstance(packet, _LidarPacket)
+        assert (packet.buf == data).all()
+        assert isinstance(packet, LidarPacket)
 
         data = np.random.randint(255,
-                                 size=source._pf.imu_packet_size,
+                                 size=pf.imu_packet_size,
                                  dtype=np.uint8)
         sock.sendto(data.tobytes(), ("localhost", source.imu_port))
         packet = next(iter(source))
-        assert (packet._data == data).all()
-        assert isinstance(packet, _ImuPacket)
+        assert (packet.buf == data).all()
+        assert isinstance(packet, ImuPacket)
 
 
 def test_sensor_flush(default_meta: client.SensorInfo) -> None:
@@ -96,9 +97,10 @@ def test_sensor_flush(default_meta: client.SensorInfo) -> None:
                           metadata=default_meta,
                           timeout=1.0,
                           _flush_before_read=False)) as source:
+        pf = client.PacketFormat(source.metadata)
         total_packets_sent = 5
         for i in range(total_packets_sent):
-            data = np.zeros((source._pf.lidar_packet_size), dtype=np.uint8)
+            data = np.zeros((pf.lidar_packet_size), dtype=np.uint8)
             data[:] = i
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
@@ -106,7 +108,7 @@ def test_sensor_flush(default_meta: client.SensorInfo) -> None:
         source.flush(flushed_packets)
         for i in range(flushed_packets, total_packets_sent):
             packet = next(iter(source))
-            assert (packet._data == i).all()
+            assert (packet.buf == i).all()
 
 
 def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
@@ -119,7 +121,7 @@ def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
                           timeout=1.0,
                           _flush_before_read=False)) as source:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
+        pf = client.PacketFormat(source.metadata)
         # send packet too small
         sock.sendto(b"hello", ("localhost", source.lidar_port))
         with pytest.raises(client.ClientTimeout):
@@ -127,7 +129,7 @@ def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
 
         # send packet too big
         data = np.random.randint(255,
-                                 size=source._pf.lidar_packet_size + 10,
+                                 size=pf.lidar_packet_size + 10,
                                  dtype=np.uint8)
         sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
         with pytest.raises(client.ClientTimeout):
@@ -146,10 +148,11 @@ def test_sensor_overflow(default_meta: client.SensorInfo) -> None:
                           timeout=1.0,
                           _overflow_err=True,
                           _flush_before_read=False)) as source:
+        pf = client.PacketFormat(source.metadata)
         total_packets_sent = 20
         for i in range(total_packets_sent):
             data = np.random.randint(255,
-                                     size=source._pf.lidar_packet_size,
+                                     size=pf.lidar_packet_size,
                                      dtype=np.uint8)
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
@@ -208,34 +211,35 @@ def test_scans_first_packet(packet: client.LidarPacket,
     scans = iter(client.Scans(packets))
     scan = next(scans)
 
-    h = packet._pf.pixels_per_column
-    w = packet._pf.columns_per_packet
+    pf = PacketFormat(packets.metadata)
+    h = pf.pixels_per_column
+    w = pf.columns_per_packet
 
     is_low_data_rate_profile = (packets.metadata.format.udp_profile_lidar ==
                                 client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
 
     if not is_low_data_rate_profile:  # low data rate profile RANGE is scaled up
-        assert np.array_equal(packet.field(ChanField.RANGE),
+        assert np.array_equal(pf.packet_field(ChanField.RANGE, packet.buf),
                               scan.field(ChanField.RANGE)[:h, :w])
 
-    assert np.array_equal(packet.field(ChanField.REFLECTIVITY),
+    assert np.array_equal(pf.packet_field(ChanField.REFLECTIVITY, packet.buf),
                           scan.field(ChanField.REFLECTIVITY)[:h, :w])
 
     if is_low_data_rate_profile:  # low data rate profile has no SIGNAL
         assert ChanField.SIGNAL not in set(scan.fields)
     else:
-        assert np.array_equal(packet.field(ChanField.SIGNAL),
+        assert np.array_equal(pf.packet_field(ChanField.SIGNAL, packet.buf),
                               scan.field(ChanField.SIGNAL)[:h, :w])
 
     if not is_low_data_rate_profile:  # low data rate profile NEAR_IR is scaled up
-        assert np.array_equal(packet.field(ChanField.NEAR_IR),
+        assert np.array_equal(pf.packet_field(ChanField.NEAR_IR, packet.buf),
                               scan.field(ChanField.NEAR_IR)[:h, :w])
 
-    assert packet.frame_id == scan.frame_id
+    assert pf.frame_id(packet.buf) == scan.frame_id
 
-    assert np.array_equal(packet.timestamp, scan.timestamp[:w])
+    assert np.array_equal(pf.packet_header(ColHeader.TIMESTAMP, packet.buf), scan.timestamp[:w])
 
-    assert np.array_equal(packet.status, scan.status[:w])
+    assert np.array_equal(pf.packet_header(ColHeader.STATUS, packet.buf), scan.status[:w])
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
@@ -299,49 +303,40 @@ def test_scans_dual(packets: client.PacketSource) -> None:
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
 def test_scans_empty_fields(packets: client.PacketSource) -> None:
     """Test batching scans with no fields."""
-    scan = next(iter(client.Scans(packets, fields={})))
+    scan = next(iter(client.Scans(packets, fields=[])))
     assert set(scan.fields) == set()
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
 def test_scans_one_field(packets: client.PacketSource) -> None:
     """Test batching scans with a single field."""
-    fields = {ChanField.FLAGS: np.uint8}
+    fields = [FieldType(ChanField.FLAGS, np.uint8)]
     scan = next(iter(client.Scans(packets, fields=fields)))
 
     assert set(scan.fields) == {ChanField.FLAGS}
     assert scan.field(ChanField.FLAGS).dtype == np.uint8
 
-    with pytest.raises(ValueError):
+    with pytest.raises(IndexError):
         scan.field(ChanField.RANGE)
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
 def test_scans_bad_type(packets: client.PacketSource) -> None:
     """Test batching scans with a type too small for source data."""
-    fields = {ChanField.RANGE: np.uint16}
+    fields = [FieldType(ChanField.RANGE, np.uint16)]
 
     with pytest.raises(ValueError):
         next(iter(client.Scans(packets, fields=fields)))
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0', 'legacy-2.1'])
-def test_scans_bad_field(packets: client.PacketSource) -> None:
-    """Test batching scans with a field not present on source packets."""
-    fields = {ChanField.RANGE2: np.uint32}
-
-    with pytest.raises(IndexError):
-        next(iter(client.Scans(packets, fields=fields)))
-
-
-@pytest.mark.parametrize('test_key', ['legacy-2.0', 'legacy-2.1'])
 def test_scans_raw(packets: client.PacketSource) -> None:
     """Smoke test reading raw channel field data."""
-    fields = {
-        ChanField.RAW32_WORD1: np.uint32,
-        ChanField.RAW32_WORD2: np.uint32,
-        ChanField.RAW32_WORD3: np.uint32
-    }
+    fields = [
+        FieldType(ChanField.RAW32_WORD1, np.uint32),
+        FieldType(ChanField.RAW32_WORD2, np.uint32),
+        FieldType(ChanField.RAW32_WORD3, np.uint32)
+    ]
 
     scans = client.Scans(packets, fields=fields)
 
@@ -354,3 +349,69 @@ def test_scans_raw(packets: client.PacketSource) -> None:
     # just check that raw fields are populated?
     for f in ls[0].fields:
         assert np.count_nonzero(ls[0].field(f)) != 0
+
+
+def test_version_compare() -> None:
+    v1 = Version.from_string("1.2.3")
+    v2 = Version.from_string("1.3.3")
+    v3 = Version.from_string("v1.2.3")
+
+    assert v1 == v3
+    assert v1 != v2
+
+
+def test_version_parse() -> None:
+    v = Version.from_string("v1.2.3")
+    assert v.stage == ""
+    assert v.machine == ""
+    assert v.major == 1
+    assert v.minor == 2
+    assert v.patch == 3
+
+    v2 = Version.from_string("1.2.3")
+    assert v2.major == 1
+    assert v2.minor == 2
+    assert v2.patch == 3
+
+    v = Version.from_string("ousteros-prod-bootes-v1.2.3-rc1+123456")
+    assert v.major == 1
+    assert v.minor == 2
+    assert v.patch == 3
+    assert v.stage == "prod"
+    assert v.machine == "bootes"
+    assert v.prerelease == "rc1"
+    assert v.build == "123456"
+
+    v = Version.from_string("ousteros-prod-bootes-v1.2.3+123456")
+    assert v.major == 1
+    assert v.minor == 2
+    assert v.patch == 3
+    assert v.stage == "prod"
+    assert v.machine == "bootes"
+    assert v.prerelease == ""
+    assert v.build == "123456"
+
+    v = Version.from_string("ousteros-image-prod-aries-v2.0.0-rc.2+20201023140416.staging")
+    assert v.major == 2
+    assert v.minor == 0
+    assert v.patch == 0
+    assert v.stage == "prod"
+    assert v.machine == "aries"
+    assert v.prerelease == "rc.2"
+    assert v.build == "20201023140416.staging"
+
+    # Invalid version strings should parse as all zeros
+    v = Version.from_string("2.3")
+    assert v.major == 0
+    assert v.minor == 0
+    assert v.patch == 0
+
+    v = Version.from_string("a.2.3")
+    assert v.major == 0
+    assert v.minor == 0
+    assert v.patch == 0
+
+    v = Version.from_string("3")
+    assert v.major == 0
+    assert v.minor == 0
+    assert v.patch == 0

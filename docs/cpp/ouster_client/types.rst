@@ -115,8 +115,6 @@ Sensor Info
 
 .. doxygenfunction:: ouster::sensor::default_sensor_info
 
-.. doxygenfunction:: ouster::sensor::parse_metadata
-
 .. doxygenfunction:: ouster::sensor::metadata_from_json
 
 .. doxygenfunction:: ouster::sensor::convert_to_legacy

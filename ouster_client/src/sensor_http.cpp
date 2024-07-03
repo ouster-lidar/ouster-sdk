@@ -13,9 +13,8 @@ using namespace ouster::sensor::impl;
 
 string SensorHttp::firmware_version_string(const string& hostname,
                                            int timeout_sec) {
-    auto http_client =
-        std::make_unique<CurlClient>("http://" + hostname, timeout_sec);
-    return http_client->get("api/v1/system/firmware");
+    auto http_client = std::make_unique<CurlClient>("http://" + hostname);
+    return http_client->get("api/v1/system/firmware", timeout_sec);
 }
 
 version SensorHttp::firmware_version(const string& hostname, int timeout_sec) {
@@ -40,13 +39,15 @@ std::unique_ptr<SensorHttp> SensorHttp::create(const string& hostname,
                 // FW 2.0 doesn't work properly with http
                 return std::make_unique<SensorTcpImp>(hostname);
             case 1:
-                return std::make_unique<SensorHttpImp_2_1>(hostname,
-                                                           timeout_sec);
+                return std::make_unique<SensorHttpImp_2_1>(hostname);
             case 2:
-                return std::make_unique<SensorHttpImp_2_2>(hostname,
-                                                           timeout_sec);
+            case 3:
+                return std::make_unique<SensorHttpImp_2_2>(hostname);
         }
     }
+    if ((fw.major == 2 && fw.minor == 4) || (fw.major == 3 && fw.minor == 0)) {
+        return std::make_unique<SensorHttpImp_2_4_or_3>(hostname);
+    }
 
-    return std::make_unique<SensorHttpImp>(hostname, timeout_sec);
+    return std::make_unique<SensorHttpImp>(hostname);
 }

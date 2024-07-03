@@ -15,7 +15,7 @@ class MultiScanSource(Protocol):
 
     @property
     def metadata(self) -> List[SensorInfo]:
-        """A list of Metadata objects associated with every scan streams."""
+        """A list of 'SensorInfo' objects associated with every scan streams."""
         ...
 
     @property
@@ -42,25 +42,27 @@ class MultiScanSource(Protocol):
         """
         ...
 
-    # Pavlo/Oct19: Optional field, that is currently available only for OSFs and IndexedPcap, and
-    # None everywhere else.
-    # UN/Nov21: I don't understand why this only available in OSF and IndexedPcap source
     @property
-    def fields(self) -> List[FieldTypes]:
+    def field_types(self) -> List[FieldTypes]:
         """Field types are present in the LidarScan objects on read from iterator"""
         ...
 
     @property
+    def fields(self) -> List[List[str]]:
+        """Fields are present in the LidarScan objects on read from iterator"""
+        ...
+
+    @property
     def scans_num(self) -> List[Optional[int]]:
-        """Number of scans available, in case of a live sensor or non-indexable scan source this method
-         returns a None for that stream"""
+        """Number of scans available, in case of a live sensor or non-indexable scan source
+         this method returns a None for that stream"""
         ...
 
     def __len__(self) -> int:
-        """returns the number of scans containe with the scan_source, in case scan_source holds more than
-        one stream then this would measure the number of collated scans across the streams
-        in the case of a live sensor or non-indexable scan source this method throws a TypeError
-        """
+        """returns the number of scans containe with the scan_source, in case scan_source has
+        more than one sensor then this would measure the number of collated scans across the
+        streams in the case of a live sensor or non-indexable scan source this method throws
+        a TypeError exception"""
         ...
 
     def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
@@ -72,7 +74,7 @@ class MultiScanSource(Protocol):
         ...
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], 'MultiScanSource']:
         """Indexed access and slices support"""
         ...
 
@@ -85,4 +87,11 @@ class MultiScanSource(Protocol):
         ...
 
     def single_source(self, stream_idx: int) -> ScanSource:
+        ...
+
+    def _slice_iter(self, key: slice) -> Iterator[List[Optional[LidarScan]]]:
+        ...
+
+    def slice(self, key: slice) -> 'MultiScanSource':
+        """Constructs a MultiScanSource matching the specificed slice"""
         ...

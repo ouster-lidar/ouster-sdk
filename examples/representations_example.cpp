@@ -125,7 +125,8 @@ int main(int argc, char* argv[]) {
 
     if (info.format.udp_profile_lidar ==
         sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        reflectivity = scan.field(sensor::ChanField::REFLECTIVITY);
+        reflectivity = scan.field<uint8_t>(sensor::ChanField::REFLECTIVITY)
+                           .cast<uint32_t>();
     } else if (info.format.udp_profile_lidar ==
                sensor::UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL) {
         reflectivity = scan.field<uint8_t>(sensor::ChanField::REFLECTIVITY)

@@ -1,4 +1,5 @@
 #  type: ignore
+import atexit
 import click
 import re
 import threading
@@ -8,6 +9,7 @@ from ouster.cli.core import cli
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
 from ouster.sdk import open_source
+from ouster.sdk.client import first_valid_packet_ts
 from ouster.sdk.client.core import ClientTimeout
 from ouster.sdk.io_type import (extension_from_io_type, io_type, OusterIoType)
 import ouster.cli.plugins.source_pcap as pcap_cli
@@ -22,7 +24,6 @@ from .source_util import (CoupledTee,
                           source_multicommand,
                           _join_with_conjunction)
 
-
 _source_arg_name: str = 'source'
 
 
@@ -34,47 +35,51 @@ _source_arg_name: str = 'source'
               '--rate',
               default="1",
               help="Playback rate.",
-              type=click.Choice(["0.25", "0.5", "0.75", "1", "1.5", "2", "3"]))
+              type=click.Choice(["0.25", "0.5", "0.75", "1", "1.5", "2", "3", "max"]))
 @click.option("--pause-at",
               default=-1,
               help="Lidar Scan number to pause at")
 @click.option("--accum-num",
-              default=0,
-              help="Integer number of scans to accumulate")
-@click.option("--accum-num",
-              default=0,
-              help="Integer number of scans to accumulate")
+              default=None,
+              type=int,
+              help="Accumulate up to this number of past scans for visualization. "
+                   "Use <= 0 for unlimited. Defaults to 100 if --accum-every or --accum-every-m is set.")
 @click.option("--accum-every",
               default=None,
-              type=float,
-              help="Accumulate every Nth scan")
+              type=int,
+              help="Add a new scan to the accumulator every this number of scans.")
 @click.option("--accum-every-m",
               default=None,
               type=float,
-              help="Accumulate scan every M meters traveled")
-@click.option("--accum-map",
+              help="Add a new scan to the accumulator after this many meters of travel.")
+@click.option("--map", "_map",
               is_flag=True,
-              help="Enable the overall map accumulation mode")
-@click.option("--accum-map-ratio",
-              default=0.001,
-              help="Ratio of random points of every scan to add to an overall map")
+              help="If set, add random points from every scan into an overall map for visualization. "
+                   "Enabled if either --map-ratio or --map-size are set.")
+@click.option("--map-ratio",
+              default=None, type=float,
+              help="Fraction of random points in every scan to add to overall map (0, 1]. [default: 0.01]")
+@click.option("--map-size",
+              default=None, type=int,
+              help="Maximum number of points in overall map before discarding. [default: 1500000]")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
-def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: int, accum_num: int,
+def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: int, accum_num: Optional[int],
                accum_every: Optional[int], accum_every_m: Optional[float],
-               accum_map: bool, accum_map_ratio: float, rate: str) -> SourceCommandCallback:
+               _map: bool, map_ratio: float, map_size: int, rate: str) -> SourceCommandCallback:
     """Visualize LidarScans in a 3D viewer."""
     try:
-        from ouster.sdk.viz import SimpleViz, scans_accum_for_cli
+        from ouster.sdk.viz import SimpleViz, ScansAccumulator
     except ImportError as e:
         raise click.ClickException(str(e))
 
+    source = ctx.scan_source
+    from ouster.sdk.client import ScanSourceAdapter
+    if isinstance(source, ScanSourceAdapter):
+        source = source._scan_source
+
     # ugly workarounds ensue
     if on_eof == 'loop':
-        source = ctx.scan_source
-        from ouster.sdk.client import ScanSourceAdapter
-        if isinstance(source, ScanSourceAdapter):
-            source = source._scan_source
         # NOTE: setting it here instead of at open_source stage because we do not want to propagate
         #       the flag up to `source` command
         source._cycle = True
@@ -82,19 +87,62 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
     if pause and pause_at == -1:
         pause_at = 0
 
+    # Determine how to set the rate
+    if rate == "max":
+        rate = 0.0
+    else:
+        rate = float(rate)
+    if source.is_live:
+        if rate != 1.0:
+            raise click.exceptions.UsageError("Can only set a rate of 1 for live sources")
+        rate = None
+
     ctx.scan_iter, scans = CoupledTee.tee(ctx.scan_iter,
                                           terminate=ctx.terminate_evt)
     metadata = ctx.scan_source.metadata
-    scans_accum = scans_accum_for_cli(metadata,
-                                      accum_num=accum_num,
-                                      accum_every=accum_every,
-                                      accum_every_m=accum_every_m,
-                                      accum_map=accum_map,
-                                      accum_map_ratio=accum_map_ratio)
+
+    # build the accumulator
+    if accum_every_m is not None and accum_every is not None:
+        raise click.exceptions.UsageError("Can only provide one of --accum-every and --accum-every-m")
+
+    if accum_num is not None and accum_num <= 0:
+        accum_num = 1000000
+
+    if accum_every_m is not None or accum_every is not None:
+        if accum_num is None:
+            accum_num = 100
+    elif accum_num is None:
+        accum_num = 0
+
+    if accum_every_m is not None:
+        accum_every = 0
+    elif accum_every is not None:
+        accum_every_m = 0.0
+    else:
+        accum_every = 0 if accum_num is None else 1
+        accum_every_m = 0.0
+
+    if map_ratio is not None or map_size is not None:
+        _map = True
+    map_ratio = 0.01 if map_ratio is None else map_ratio
+    map_size = 1500000 if map_size is None else map_size
+
+    if map_ratio > 1.0 or map_ratio <= 0.0:
+        raise click.exceptions.UsageError("--map-ratio must be in the range (0, 1]")
+    if map_size <= 0:
+        raise click.exceptions.UsageError("--map-size must be greater than 0")
+
+    scans_accum = ScansAccumulator(metadata,
+                            accum_max_num=accum_num,
+                            accum_min_dist_num=accum_every,
+                            accum_min_dist_meters=accum_every_m,
+                            map_enabled=_map,
+                            map_select_ratio=map_ratio,
+                            map_max_points=map_size)
 
     def viz_thread_fn():
         sv = SimpleViz(metadata, scans_accum=scans_accum,
-                       rate=float(rate), pause_at=pause_at, on_eof=on_eof)
+                       rate=rate, pause_at=pause_at, on_eof=on_eof)
         sv.run(scans)
         ctx.terminate_evt.set()
 
@@ -108,6 +156,21 @@ def extract_slice_indices(click_ctx: Optional[click.core.Context],
                           param: Optional[click.core.Argument], value: str):
     """Validate and extract slice indices of the form [start]:[stop][:step]."""
     index_matches = re.findall(r"^(-?\d*):(-?\d*):?(-?\d*)$", value)  # noqa: W605
+    time_index_matches = re.findall(r"^(?:(\d+(?:\.\d+)?)(h|min|s|ms))?"
+                                    r":(?:(\d+(?:\.\d+)?)(h|min|s|ms))?(?::(-?\d*))?$", value)  # noqa: W605
+
+    if time_index_matches and len(time_index_matches[0]) == 5:
+        # it was a time index, convert everything to float seconds and handle units
+        match = time_index_matches[0]
+        multipliers = {}
+        multipliers['h'] = 60.0 * 60.0
+        multipliers['min'] = 60.0
+        multipliers['s'] = 1.0
+        multipliers['ms'] = 0.001
+        start = float(match[0]) * multipliers[match[1]] if match[0] != "" else None
+        end = float(match[2]) * multipliers[match[3]] if match[2] != "" else None
+        skip = int(match[4]) if match[4] != "" else None
+        return start, end, skip
 
     if not index_matches or len(index_matches[0]) != 3:
         raise click.exceptions.BadParameter(
@@ -136,9 +199,97 @@ def extract_slice_indices(click_ctx: Optional[click.core.Context],
 @source_multicommand(type=SourceCommandType.PROCESSOR)
 def source_slice(ctx: SourceCommandContext,
                  indices: Tuple[Optional[int]]) -> SourceCommandCallback:
-    """Slice LidarScans streamed from SOURCE. Use the form [start]:[stop][:step]."""
+    """Slice LidarScans streamed from SOURCE. Use the form [start]:[stop][:step].
+    Optionally can specify start and stop as times relative to the start of the file
+    using the units h (hours), min (minutes), s (seconds), or ms (milliseconds).
+    For example: 10s:20s:2"""
     start, stop, step = indices
-    ctx.scan_iter = islice(ctx.scan_iter, start, stop, step)
+    if type(start) is float:
+        scans = ctx.scan_iter
+
+        def iter():
+            start_time = None
+            counter = 0
+            for scan in scans:
+                scan_time = first_valid_packet_ts(scan)
+                if scan_time == 0 or scan_time is None:
+                    print("WARNING: Scan missing packet timestamps. Yielding scan in time slice anyways.")
+                    yield scan
+                    continue
+                scan_time = scan_time / 1e9
+                if start_time is None:
+                    start_time = scan_time
+                dt = scan_time - start_time
+                if dt >= start:
+                    if not stop or dt <= stop:
+                        if not step or counter % step == 0:
+                            yield scan
+                        counter = counter + 1
+                    else:
+                        return
+
+        ctx.scan_iter = iter()
+    else:
+        ctx.scan_iter = islice(ctx.scan_iter, start, stop, step)
+
+
+@click.command()
+@click.option("-v", "--verbose", is_flag=True, help="Print out additional stats info.")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.CONSUMER)
+def source_stats(ctx: SourceCommandContext, verbose: bool) -> SourceCommandCallback:
+    """Calculate and output various statistics about the scans at this point in the pipeline."""
+    window = ctx.scan_source.metadata.format.column_window
+    scans = ctx.scan_iter
+    count = 0
+    incomplete_count = 0
+    start = None
+    end = None
+    incomplete_scans = []
+    dimensions = {}
+
+    def stats_iter():
+        nonlocal count, incomplete_count, window, verbose, start, end, incomplete_scans, dimensions
+        ns_to_sec = 1.0 / 1000000000.0
+        for scan in scans:
+            time = first_valid_packet_ts(scan)
+            if time != 0.0:
+                if start is None or time < start:
+                    start = time
+                if end is None or time > end:
+                    end = time
+            dimensions[(scan.w, scan.h)] = True
+            if not scan.complete(window):
+                incomplete_count = incomplete_count + 1
+                if verbose:
+                    incomplete_scans.append(f"    #{count} at {time * ns_to_sec}")
+            count = count + 1
+            yield scan
+    ctx.scan_iter = stats_iter()
+
+    def exit_handler():
+        nonlocal count, incomplete_count, start, end, incomplete_scans, dimensions
+        ns_to_sec = 1.0 / 1000000000.0
+        print("Scan Statistics:")
+        print(f"  Count: {count}")
+        dstring = ""
+        for k in dimensions:
+            dstring = dstring + f" {k[0]}x{k[1]}"
+        print(f"  Sizes:{dstring}")
+        if start is None:
+            print("  First Time: No Valid Timestamps")
+            print("  Last Time: No Valid Timestamps")
+            print("  Duration: Unknown")
+        else:
+            print(f"  First Time: {start * ns_to_sec}")
+            print(f"  Last Time: {end * ns_to_sec}")
+            print(f"  Duration: {(end - start) * ns_to_sec} seconds")
+        print(f"  Incomplete Scans: {incomplete_count}")
+        if verbose:
+            for i in incomplete_scans:
+                print(i)
+
+    atexit.register(exit_handler)
 
 
 class SourceMultiCommand(click.MultiCommand):
@@ -157,12 +308,14 @@ class SourceMultiCommand(click.MultiCommand):
             'ANY': {
                 'viz': source_viz,
                 'slice': source_slice,
+                'stats': source_stats
             },
             OusterIoType.SENSOR: {
                 'config': sensor_cli.sensor_config,
                 'metadata': sensor_cli.sensor_metadata,
                 'save': SourceSaveCommand('save', context_settings=dict(ignore_unknown_options=True,
                                                                         allow_extra_args=True)),
+                'userdata': sensor_cli.sensor_userdata,
             },
             OusterIoType.PCAP: {
                 'info': pcap_cli.pcap_info,

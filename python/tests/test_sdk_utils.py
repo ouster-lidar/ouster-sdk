@@ -1,5 +1,8 @@
 import pytest
 import tempfile
+import os
+from tests.conftest import PCAPS_DATA_DIR
+from ouster.sdk.client import SensorInfo
 from os.path import commonprefix
 from pathlib import Path
 from ouster.sdk.util.metadata import resolve_metadata, \
@@ -74,16 +77,30 @@ def test_resolve_metadata_multi():
 
 def test_resolve_metadata_multi_2():
     """It should only files that exist and share a prefix with the data file."""
-    with tempfile.TemporaryDirectory() as directory:
-        dir_path = Path(directory)
-        # create some test files (one representing data, one metadata)
+    # read files with below prefix from PCAPS_DATA_DIR, the serial numbers for metadata on each is different
+    test_data_prefix = 'OS-0-128_v3.0.1_1024x10'
+    assert set(resolve_metadata_multi(os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.pcap'))) == set(
+        [str(os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.2.json')),
+         str(os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.json'))])
 
-        test_data_filename = 'tmpfile'
-        test_meta_filename = 'tmpfile'
-        open(dir_path / test_data_filename, 'a').close()
-        open(dir_path / f'{test_meta_filename}.json', 'a').close()
-        open(dir_path / f'{test_meta_filename}.2.json', 'a').close()
 
-        assert set(resolve_metadata_multi(dir_path / test_data_filename)) == set([
-            str(Path(dir_path) / f'{test_meta_filename}.json'), str(Path(dir_path) / f'{test_meta_filename}.2.json')
-        ])
+def test_resolve_metadata_multi_exception_raised():
+    # read files with below prefix from PCAPS_DATA_DIR, the serial numbers for metadata on each is same
+    test_data_prefix = 'OS-0-128_v3.0.1_1024x10_20240321_125947'
+    test_data_filename = os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.pcap')
+
+    with open(os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.json')) as file:
+        meta_content = file.read()
+        si = SensorInfo(meta_content)
+    metas = set([str(os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.2.json')),
+                 str(os.path.join(PCAPS_DATA_DIR, f'{test_data_prefix}.json'))])
+
+    with pytest.raises(RuntimeError) as excinfo:
+        resolve_metadata_multi(test_data_filename)
+
+    s = ["The following metadata files identified for "
+         f"{test_data_filename} contain configuration for the same sensor {si.sn}. Files: "
+         f"{metas}",
+         "To resolve this, remove the extra metadata file(s) or specify the metadata "
+         "files manually using the --meta option."]
+    assert str(excinfo.value) == "\n".join(s)

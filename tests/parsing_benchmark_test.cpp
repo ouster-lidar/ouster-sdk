@@ -13,7 +13,7 @@
 #include "ouster/types.h"
 #include "util.h"
 
-using ouster::sensor::ChanField;
+using namespace ouster::sensor;
 
 using str_pair = std::pair<std::string, std::string>;
 class ParsingBenchmarkTestFixture : public ::testing::TestWithParam<str_pair> {
@@ -42,7 +42,7 @@ namespace sensor_utils {
 
 struct parse_col {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, ChanField f,
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
                     const sensor::packet_format& pf,
                     const uint8_t* packet_buf) const {
         for (int icol = 0; icol < pf.columns_per_packet; icol++) {
@@ -56,20 +56,20 @@ struct parse_col {
 template <int BlockDim>
 struct parse_block {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, ChanField f,
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
                     const sensor::packet_format& pf,
                     const uint8_t* packet_buf) const {
         pf.block_field<T, BlockDim>(field, f, packet_buf);
     }
 };
 
-using HashMap = std::map<ChanField, size_t>;
+using HashMap = std::map<std::string, size_t>;
 
 // picked up from
 // https://wjngkoh.wordpress.com/2015/03/04/c-hash-function-for-eigen-matrix-and-vector/
 struct matrix_hash {
     template <typename T>
-    void operator()(Eigen::Ref<ouster::img_t<T>> matrix, ChanField f,
+    void operator()(Eigen::Ref<ouster::img_t<T>> matrix, const std::string& f,
                     HashMap& map) const {
         size_t seed = 0;
         for (int i = 0; i < matrix.size(); ++i) {
@@ -83,7 +83,7 @@ struct matrix_hash {
 
 struct set_zero {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> matrix, ChanField) const {
+    void operator()(Eigen::Ref<img_t<T>> matrix, const std::string&) const {
         matrix.setZero();
     }
 };
@@ -104,15 +104,16 @@ TEST_P(ParsingBenchmarkTestFixture, ParseBlockCorrectnessTest) {
     auto parse_and_hash = [&](auto parser) -> HashMap {
         // reset
         pcap.seek(0);
-        impl::foreach_field(ls, set_zero{});
+        impl::foreach_channel_field(ls, pf, set_zero{});
         // parse
         while (pcap.next_packet()) {
             if (pcap.current_info().dst_port == 7502)
-                impl::foreach_field(ls, parser, pf, pcap.current_data());
+                impl::foreach_channel_field(ls, pf, parser, pf,
+                                            pcap.current_data());
         }
 
         HashMap map;
-        impl::foreach_field(ls, matrix_hash{}, map);
+        impl::foreach_channel_field(ls, pf, matrix_hash{}, map);
         return map;
     };
 
@@ -171,7 +172,7 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
     auto parse = [&](auto parser, std::string name) {
         t.start();
         for (const auto& packet : packets)
-            impl::foreach_field(ls, parser, pf, packet.data());
+            impl::foreach_channel_field(ls, pf, parser, pf, packet.data());
         t.stop();
         mv[name](t.elapsed_microseconds());
     };

@@ -2,10 +2,10 @@
 import os
 import numpy as np
 import ouster.sdk.pcap._pcap as _pcap
-from ouster.sdk.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField
+from ouster.sdk.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField, PacketFormat
 import ouster.sdk.client as client
 import ouster.sdk.pcap as pcap
-from ouster.sdk.util import (FusaDualFormat, PacketFormat, default_scan_fields,
+from ouster.sdk.util import (default_scan_fields,
                              resolve_metadata)
 from tests.conftest import PCAPS_DATA_DIR
 
@@ -14,8 +14,8 @@ def test_fusa_parsing_profile():
     dataset_name = 'OS-1-128_767798045_1024x10_20230712_120049'
     meta = open(os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.json')).read()
     si = SensorInfo(meta)
-    packet_format = PacketFormat.from_metadata(si)
-    assert type(packet_format) is FusaDualFormat
+    packet_format = PacketFormat(si)
+    assert packet_format.udp_profile_lidar == UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL
 
 
 def test_fusa_fields():
@@ -23,7 +23,7 @@ def test_fusa_fields():
     meta = open(os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.json')).read()
     si = SensorInfo(meta)
     pcap = _pcap.replay_initialize(os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.pcap'))
-    packet_format = PacketFormat.from_metadata(si)
+    packet_format = PacketFormat(si)
 
     # check preconditions
     assert si.format.columns_per_packet == 16

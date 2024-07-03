@@ -19,9 +19,9 @@
 #include <utility>
 #include <vector>
 
-#include "logging.h"
 #include "ouster/defaults.h"
 #include "ouster/impl/build.h"
+#include "ouster/impl/logging.h"
 #include "ouster/version.h"
 
 namespace ouster {
@@ -72,38 +72,6 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
-
-Table<sensor::ChanField, const char*, 29> chanfield_strings{{
-    {ChanField::RANGE, "RANGE"},
-    {ChanField::RANGE2, "RANGE2"},
-    {ChanField::SIGNAL, "SIGNAL"},
-    {ChanField::SIGNAL2, "SIGNAL2"},
-    {ChanField::REFLECTIVITY, "REFLECTIVITY"},
-    {ChanField::REFLECTIVITY2, "REFLECTIVITY2"},
-    {ChanField::NEAR_IR, "NEAR_IR"},
-    {ChanField::FLAGS, "FLAGS"},
-    {ChanField::FLAGS2, "FLAGS2"},
-    {ChanField::RAW_HEADERS, "RAW_HEADERS"},
-    {ChanField::CUSTOM0, "CUSTOM0"},
-    {ChanField::CUSTOM1, "CUSTOM1"},
-    {ChanField::CUSTOM2, "CUSTOM2"},
-    {ChanField::CUSTOM3, "CUSTOM3"},
-    {ChanField::CUSTOM4, "CUSTOM4"},
-    {ChanField::CUSTOM5, "CUSTOM5"},
-    {ChanField::CUSTOM6, "CUSTOM6"},
-    {ChanField::CUSTOM7, "CUSTOM7"},
-    {ChanField::CUSTOM8, "CUSTOM8"},
-    {ChanField::CUSTOM9, "CUSTOM9"},
-    {ChanField::RAW32_WORD1, "RAW32_WORD1"},
-    {ChanField::RAW32_WORD2, "RAW32_WORD2"},
-    {ChanField::RAW32_WORD3, "RAW32_WORD3"},
-    {ChanField::RAW32_WORD4, "RAW32_WORD4"},
-    {ChanField::RAW32_WORD5, "RAW32_WORD5"},
-    {ChanField::RAW32_WORD6, "RAW32_WORD6"},
-    {ChanField::RAW32_WORD7, "RAW32_WORD7"},
-    {ChanField::RAW32_WORD8, "RAW32_WORD8"},
-    {ChanField::RAW32_WORD9, "RAW32_WORD9"},
-}};
 
 // clang-format off
 Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{{
@@ -185,7 +153,8 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
     return (lhs.udp_dest == rhs.udp_dest &&
             lhs.udp_port_lidar == rhs.udp_port_lidar &&
             lhs.udp_port_imu == rhs.udp_port_imu &&
-            lhs.ts_mode == rhs.ts_mode && lhs.ld_mode == rhs.ld_mode &&
+            lhs.timestamp_mode == rhs.timestamp_mode &&
+            lhs.lidar_mode == rhs.lidar_mode &&
             lhs.operating_mode == rhs.operating_mode &&
             lhs.multipurpose_io_mode == rhs.multipurpose_io_mode &&
             lhs.azimuth_window == rhs.azimuth_window &&
@@ -322,7 +291,7 @@ std::string client_version() {
 /* String conversion */
 
 template <typename K, typename V, size_t N>
-static optional<V> lookup(const impl::Table<K, V, N> table, const K& k) {
+static optional<V> lookup(const impl::Table<K, V, N>& table, const K& k) {
     auto end = table.end();
     auto res = std::find_if(table.begin(), end, [&](const std::pair<K, V>& p) {
         return p.first == k;
@@ -332,7 +301,7 @@ static optional<V> lookup(const impl::Table<K, V, N> table, const K& k) {
 }
 
 template <typename K, size_t N>
-static optional<K> rlookup(const impl::Table<K, const char*, N> table,
+static optional<K> rlookup(const impl::Table<K, const char*, N>& table,
                            const char* v) {
     auto end = table.end();
     auto res = std::find_if(table.begin(), end,
@@ -414,11 +383,6 @@ std::string to_string(AzimuthWindow azimuth_window) {
     return ss.str();
 }
 
-std::string to_string(ChanField field) {
-    auto res = lookup(impl::chanfield_strings, field);
-    return res ? res.value() : "UNKNOWN";
-}
-
 std::string to_string(ChanFieldType ft) {
     switch (ft) {
         case sensor::ChanFieldType::VOID:
@@ -431,6 +395,18 @@ std::string to_string(ChanFieldType ft) {
             return "UINT32";
         case sensor::ChanFieldType::UINT64:
             return "UINT64";
+        case sensor::ChanFieldType::INT8:
+            return "INT8";
+        case sensor::ChanFieldType::INT16:
+            return "INT16";
+        case sensor::ChanFieldType::INT32:
+            return "INT32";
+        case sensor::ChanFieldType::INT64:
+            return "INT64";
+        case sensor::ChanFieldType::FLOAT32:
+            return "FLOAT32";
+        case sensor::ChanFieldType::FLOAT64:
+            return "FLOAT64";
         default:
             return "UNKNOWN";
     }
@@ -438,13 +414,19 @@ std::string to_string(ChanFieldType ft) {
 
 size_t field_type_size(ChanFieldType ft) {
     switch (ft) {
+        case sensor::ChanFieldType::INT8:
         case sensor::ChanFieldType::UINT8:
             return 1;
+        case sensor::ChanFieldType::INT16:
         case sensor::ChanFieldType::UINT16:
             return 2;
+        case sensor::ChanFieldType::INT32:
         case sensor::ChanFieldType::UINT32:
+        case sensor::ChanFieldType::FLOAT32:
             return 4;
+        case sensor::ChanFieldType::INT64:
         case sensor::ChanFieldType::UINT64:
+        case sensor::ChanFieldType::FLOAT64:
             return 8;
         default:
             return 0;
@@ -624,10 +606,10 @@ sensor_config parse_config(const Json::Value& root) {
     if (!root["udp_port_imu"].empty())
         config.udp_port_imu = root["udp_port_imu"].asInt();
     if (!root["timestamp_mode"].empty())
-        config.ts_mode =
+        config.timestamp_mode =
             timestamp_mode_of_string(root["timestamp_mode"].asString());
     if (!root["lidar_mode"].empty())
-        config.ld_mode = lidar_mode_of_string(root["lidar_mode"].asString());
+        config.lidar_mode = lidar_mode_of_string(root["lidar_mode"].asString());
 
     if (!root["azimuth_window"].empty())
         config.azimuth_window =
@@ -791,27 +773,27 @@ sensor_config parse_config(const std::string& config) {
 Json::Value config_to_json(const sensor_config& config) {
     Json::Value root{Json::objectValue};
 
-    if (config.udp_dest) 
+    if (config.udp_dest)
         root["udp_dest"] = config.udp_dest.value();
 
-    if (config.udp_port_lidar) 
+    if (config.udp_port_lidar)
         root["udp_port_lidar"] = config.udp_port_lidar.value();
 
-    if (config.udp_port_imu) 
+    if (config.udp_port_imu)
         root["udp_port_imu"] = config.udp_port_imu.value();
 
-    if (config.ts_mode) 
-        root["timestamp_mode"] = to_string(config.ts_mode.value());
+    if (config.timestamp_mode)
+        root["timestamp_mode"] = to_string(config.timestamp_mode.value());
 
-    if (config.ld_mode) 
-        root["lidar_mode"] = to_string(config.ld_mode.value());
+    if (config.lidar_mode)
+        root["lidar_mode"] = to_string(config.lidar_mode.value());
 
     if (config.operating_mode) {
         auto mode = config.operating_mode.value();
         root["operating_mode"] = to_string(mode);
     }
 
-    if (config.multipurpose_io_mode) 
+    if (config.multipurpose_io_mode)
         root["multipurpose_io_mode"] =
             to_string(config.multipurpose_io_mode.value());
 
@@ -830,59 +812,57 @@ Json::Value config_to_json(const sensor_config& config) {
         } else {
             // jsoncpp < 1.7.7 strips 0s off of exact representation
             // so 2.0 becomes 2
-            // On ubuntu 18.04, the default jsoncpp is 1.7.4-3 Fix was:
-            // https://github.com/open-source-parsers/jsoncpp/pull/547
             // Work around by always casting to int before writing out to json
             int signal_multiplier_int = int(config.signal_multiplier.value());
             root["signal_multiplier"] = signal_multiplier_int;
         }
     }
 
-    if (config.sync_pulse_out_angle) 
+    if (config.sync_pulse_out_angle)
         root["sync_pulse_out_angle"] = config.sync_pulse_out_angle.value();
 
-    if (config.sync_pulse_out_pulse_width) 
+    if (config.sync_pulse_out_pulse_width)
         root["sync_pulse_out_pulse_width"] =
             config.sync_pulse_out_pulse_width.value();
 
-    if (config.nmea_in_polarity) 
+    if (config.nmea_in_polarity)
         root["nmea_in_polarity"] = to_string(config.nmea_in_polarity.value());
 
-    if (config.nmea_baud_rate) 
+    if (config.nmea_baud_rate)
         root["nmea_baud_rate"] = to_string(config.nmea_baud_rate.value());
 
-    if (config.nmea_ignore_valid_char) 
+    if (config.nmea_ignore_valid_char)
         root["nmea_ignore_valid_char"] =
             config.nmea_ignore_valid_char.value() ? 1 : 0;
 
-    if (config.nmea_leap_seconds) 
+    if (config.nmea_leap_seconds)
         root["nmea_leap_seconds"] = config.nmea_leap_seconds.value();
 
-    if (config.sync_pulse_in_polarity) 
+    if (config.sync_pulse_in_polarity)
         root["sync_pulse_in_polarity"] =
             to_string(config.sync_pulse_in_polarity.value());
 
-    if (config.sync_pulse_out_polarity) 
+    if (config.sync_pulse_out_polarity)
         root["sync_pulse_out_polarity"] =
             to_string(config.sync_pulse_out_polarity.value());
 
-    if (config.sync_pulse_out_frequency) 
+    if (config.sync_pulse_out_frequency)
         root["sync_pulse_out_frequency"] =
             config.sync_pulse_out_frequency.value();
 
-    if (config.phase_lock_enable) 
+    if (config.phase_lock_enable)
         root["phase_lock_enable"] = config.phase_lock_enable.value();
 
-    if (config.phase_lock_offset) 
+    if (config.phase_lock_offset)
         root["phase_lock_offset"] = config.phase_lock_offset.value();
 
-    if (config.columns_per_packet) 
+    if (config.columns_per_packet)
         root["columns_per_packet"] = config.columns_per_packet.value();
 
-    if (config.udp_profile_lidar) 
+    if (config.udp_profile_lidar)
         root["udp_profile_lidar"] = to_string(config.udp_profile_lidar.value());
 
-    if (config.udp_profile_imu) 
+    if (config.udp_profile_imu)
         root["udp_profile_imu"] = to_string(config.udp_profile_imu.value());
 
     // Firmware 3.1 and higher options
@@ -911,44 +891,124 @@ std::string to_string(const sensor_config& config) {
     return Json::writeString(builder, root);
 }
 
+PacketValidationFailure LidarPacket::validate(const sensor_info& info,
+                                              const packet_format& format) {
+    if (buf.size() != format.lidar_packet_size) {
+        return PacketValidationFailure::PACKET_SIZE;
+    }
+
+    auto init_id = format.init_id(buf.data());
+    if (info.init_id != 0 && init_id != 0 && init_id != info.init_id) {
+        return PacketValidationFailure::ID;
+    }
+
+    if (info.sn.length() > 0) {
+        auto p_sn = format.prod_sn(buf.data());
+        auto m_sn = std::stoull(info.sn);
+        if (p_sn != 0 && p_sn != m_sn) {
+            return PacketValidationFailure::ID;
+        }
+    }
+    return PacketValidationFailure::NONE;
+}
+
+PacketValidationFailure ImuPacket::validate(const sensor_info& /*info*/,
+                                            const packet_format& format) {
+    if (buf.size() != format.imu_packet_size) {
+        return PacketValidationFailure::PACKET_SIZE;
+    }
+    return PacketValidationFailure::NONE;
+}
+
+product_info product_info::create_product_info(
+    std::string product_info_string) {
+    std::regex product_regex("^(\\w+)-(\\d+|DOME)?(?:-(\\d+))?(?:-((?!SR)\\w+))?-?(SR)?");
+    std::smatch matches;
+    if(product_info_string.length() > 0) {
+        if (regex_search(product_info_string, matches, product_regex) == true) {
+            std::string form_factor = matches.str(1) + matches.str(2);
+            bool short_range = (matches.str(5).length() > 0);
+            auto beam_config = matches.str(4);
+            if(beam_config.length() <= 0) {
+                beam_config = "U";
+            }
+            int beam_count;
+            try {
+                beam_count = stoi(matches.str(3));
+            }
+            catch(const std::exception &e) {
+                beam_count = 0;
+            }
+
+            return product_info(product_info_string,
+                                form_factor,
+                                short_range,
+                                beam_config,
+                                beam_count);
+        } else {
+            throw std::runtime_error("Product Info \"" + product_info_string + "\" is not a recognized product info");
+        }
+    }
+    return product_info();
+}
+
+product_info::product_info() : product_info("", "", false, "", 0) {};
+
+product_info::product_info(std::string product_info_string,
+              std::string form_factor,
+              bool short_range,
+              std::string beam_config,
+              int beam_count) :
+    full_product_info(product_info_string),
+    form_factor(form_factor),
+    short_range(short_range),
+    beam_config(beam_config),
+    beam_count(beam_count) {
+}
+
+bool operator==(const product_info& lhs, const product_info& rhs) {
+    return lhs.full_product_info == rhs.full_product_info &&
+        lhs.form_factor == rhs.form_factor &&
+        lhs.short_range == rhs.short_range &&
+        lhs.beam_config == rhs.beam_config &&
+        lhs.beam_count == rhs.beam_count;
+}
+
+bool operator!=(const product_info& lhs, const product_info& rhs) {
+    return !(lhs == rhs);
+}
+
+std::string to_string(const product_info& info) {
+    std::stringstream output;
+    output << "Product Info: " << std::endl;
+    output << "\tFull Product Info: \"" << info.full_product_info << "\"" << std::endl;
+    output << "\tForm Factor: \"" << info.form_factor << "\"" << std::endl;
+    output << "\tShort Range: \"" << info.short_range << "\"" << std::endl;
+    output << "\tBeam Config: \"" << info.beam_config << "\"" << std::endl;
+    output << "\tBeam Count: \"" << info.beam_count << "\"" << std::endl;
+    return output.str();
+}
 }  // namespace sensor
 
 namespace util {
 
-std::string to_string(const version& v) {
-    if (v == invalid_version) {
-        return "UNKNOWN";
-    }
-
-    std::stringstream ss{};
-    ss << "v" << v.major << "." << v.minor << "." << v.patch;
-    return ss.str();
-}
-
-version version_of_string(const std::string& s) {
-    std::istringstream is{s};
-    char c1, c2, c3;
-    version v;
-
-    is >> c1 >> v.major >> c2 >> v.minor >> c3 >> v.patch;
-
-    if (is && c1 == 'v' && c2 == '.' && c3 == '.')
-        return v;
-    else
-        return invalid_version;
-}
-
 version version_from_string(const std::string& v) {
-    auto rgx = std::regex(R"(v?(\d+).(\d+)\.(\d+))");
+    auto rgx = std::regex(R"((([\w\d]*)-([\w\d]*)-)?v?(\d*)\.(\d*)\.(\d*)-?([\d\w.]*)?\+?([\d\w.]*)?)");
     std::smatch matches;
     std::regex_search(v, matches, rgx);
 
-    if (matches.size() < 4) return invalid_version;
+    if (matches.size() < 9) return invalid_version;
 
     try {
-        return version{static_cast<uint16_t>(stoul(matches[1])),
-                       static_cast<uint16_t>(stoul(matches[2])),
-                       static_cast<uint16_t>(stoul(matches[3]))};
+        version v;
+        v.major = static_cast<uint16_t>(stoul(matches[4]));
+        v.minor = static_cast<uint16_t>(stoul(matches[5]));
+        v.patch = static_cast<uint16_t>(stoul(matches[6]));
+        v.stage = matches[2];
+        v.machine = matches[3];
+        v.prerelease = matches[7];
+        v.build = matches[8];
+        return v;
     } catch (const std::exception&) {
         return invalid_version;
     }

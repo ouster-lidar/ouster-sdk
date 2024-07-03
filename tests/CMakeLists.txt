@@ -169,3 +169,14 @@ set_tests_properties(
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
 )
+
+add_executable(array_view_test array_view_test.cpp)
+target_link_libraries(array_view_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
+add_test(NAME array_view_test COMMAND array_view_test --gtest_output=xml:array_view_test.xml)
+
+add_executable(field_test field_test.cpp)
+target_link_libraries(field_test OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
+add_test(NAME field_test COMMAND field_test --gtest_output=xml:field_test.xml)
+if(NOT MSVC)
+    target_compile_options(field_test PRIVATE -Wno-unused-variable -Wno-unused-but-set-variable)
+endif()

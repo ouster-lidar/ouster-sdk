@@ -24,7 +24,6 @@ from ._viz import magma_palette
 from .core import push_point_viz_handler
 from .core import LidarScanViz
 from .core import SimpleViz
-from .core import scans_accum_for_cli
 from .view_mode import ImageMode
 from .view_mode import CloudMode
 from .view_mode import ImageCloudMode

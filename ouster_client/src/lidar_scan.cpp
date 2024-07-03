@@ -6,15 +6,19 @@
 #include "ouster/lidar_scan.h"
 
 #include <Eigen/Core>
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
 #include <vector>
 
-#include "logging.h"
 #include "ouster/impl/lidar_scan_impl.h"
+#include "ouster/impl/logging.h"
+#include "ouster/strings.h"
 #include "ouster/types.h"
+
+using namespace ouster::strings;
 
 namespace ouster {
 
@@ -29,13 +33,12 @@ enum frame_status_masks : uint64_t {
 
 //! @cond Doxygen_Suppress
 enum frame_status_shifts: uint64_t {
-    FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT = 0,    ///< No shift for thermal shutdown 
+    FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT = 0,    ///< No shift for thermal shutdown
     FRAME_STATUS_SHOT_LIMITING_SHIFT = 4        /// shift 4 for shot limiting
 };
 //! @endcond
 
 // clang-format on
-using sensor::ChanField;
 using sensor::ChanFieldType;
 using sensor::UDPProfileLidar;
 
@@ -50,53 +53,53 @@ namespace impl {
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-static const Table<ChanField, ChanFieldType, 4> legacy_field_slots{
-    {{ChanField::RANGE, ChanFieldType::UINT32},
-     {ChanField::SIGNAL, ChanFieldType::UINT32},
-     {ChanField::NEAR_IR, ChanFieldType::UINT32},
-     {ChanField::REFLECTIVITY, ChanFieldType::UINT32}}};
+static const Table<std::string, ChanFieldType, 4> legacy_field_slots{
+    {{sensor::ChanField::RANGE, ChanFieldType::UINT32},
+     {sensor::ChanField::SIGNAL, ChanFieldType::UINT32},
+     {sensor::ChanField::NEAR_IR, ChanFieldType::UINT32},
+     {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT32}}};
 
-static const Table<ChanField, ChanFieldType, 7> dual_field_slots{{
-    {ChanField::RANGE, ChanFieldType::UINT32},
-    {ChanField::RANGE2, ChanFieldType::UINT32},
-    {ChanField::SIGNAL, ChanFieldType::UINT16},
-    {ChanField::SIGNAL2, ChanFieldType::UINT16},
-    {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
-    {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
-    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+static const Table<std::string, ChanFieldType, 7> dual_field_slots{{
+    {sensor::ChanField::RANGE, ChanFieldType::UINT32},
+    {sensor::ChanField::RANGE2, ChanFieldType::UINT32},
+    {sensor::ChanField::SIGNAL, ChanFieldType::UINT16},
+    {sensor::ChanField::SIGNAL2, ChanFieldType::UINT16},
+    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+    {sensor::ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
+    {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
-static const Table<ChanField, ChanFieldType, 4> single_field_slots{{
-    {ChanField::RANGE, ChanFieldType::UINT32},
-    {ChanField::SIGNAL, ChanFieldType::UINT16},
-    {ChanField::REFLECTIVITY, ChanFieldType::UINT16},
-    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+static const Table<std::string, ChanFieldType, 4> single_field_slots{{
+    {sensor::ChanField::RANGE, ChanFieldType::UINT32},
+    {sensor::ChanField::SIGNAL, ChanFieldType::UINT16},
+    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
-static const Table<ChanField, ChanFieldType, 3> lb_field_slots{{
-    {ChanField::RANGE, ChanFieldType::UINT32},
-    {ChanField::REFLECTIVITY, ChanFieldType::UINT16},
-    {ChanField::NEAR_IR, ChanFieldType::UINT16},
+static const Table<std::string, ChanFieldType, 3> lb_field_slots{{
+    {sensor::ChanField::RANGE, ChanFieldType::UINT32},
+    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
-static const Table<ChanField, ChanFieldType, 5> five_word_slots{{
-    {ChanField::RAW32_WORD1, ChanFieldType::UINT32},
-    {ChanField::RAW32_WORD2, ChanFieldType::UINT32},
-    {ChanField::RAW32_WORD3, ChanFieldType::UINT32},
-    {ChanField::RAW32_WORD4, ChanFieldType::UINT32},
-    {ChanField::RAW32_WORD5, ChanFieldType::UINT32},
+static const Table<std::string, ChanFieldType, 5> five_word_slots{{
+    {sensor::ChanField::RAW32_WORD1, ChanFieldType::UINT32},
+    {sensor::ChanField::RAW32_WORD2, ChanFieldType::UINT32},
+    {sensor::ChanField::RAW32_WORD3, ChanFieldType::UINT32},
+    {sensor::ChanField::RAW32_WORD4, ChanFieldType::UINT32},
+    {sensor::ChanField::RAW32_WORD5, ChanFieldType::UINT32},
 }};
 
-static const Table<ChanField, ChanFieldType, 5> fusa_two_word_slots{{
-    {ChanField::RANGE, ChanFieldType::UINT32},
-    {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
-    {ChanField::NEAR_IR, ChanFieldType::UINT16},
-    {ChanField::RANGE2, ChanFieldType::UINT32},
-    {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
+static const Table<std::string, ChanFieldType, 5> fusa_two_word_slots{{
+    {sensor::ChanField::RANGE, ChanFieldType::UINT32},
+    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+    {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
+    {sensor::ChanField::RANGE2, ChanFieldType::UINT32},
+    {sensor::ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
 }};
 
 struct DefaultFieldsEntry {
-    const std::pair<ChanField, ChanFieldType>* fields;
+    const std::pair<std::string, ChanFieldType>* fields;
     size_t n_fields;
 };
 
@@ -118,8 +121,7 @@ Table<UDPProfileLidar, DefaultFieldsEntry, MAX_NUM_PROFILES> default_scan_fields
 }};
 // clang-format on
 
-static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
-    UDPProfileLidar profile) {
+static LidarScanFieldTypes lookup_scan_fields(UDPProfileLidar profile) {
     auto end = impl::default_scan_fields.end();
     auto it =
         std::find_if(impl::default_scan_fields.begin(), end,
@@ -129,15 +131,23 @@ static std::vector<std::pair<ChanField, ChanFieldType>> lookup_scan_fields(
         throw std::invalid_argument("Unknown lidar udp profile");
 
     auto entry = it->second;
-    return {entry.fields, entry.fields + entry.n_fields};
+    LidarScanFieldTypes field_types;
+    for (size_t i = 0; i < entry.n_fields; i++) {
+        // everything is pixel field for now
+        field_types.emplace_back(entry.fields[i].first, entry.fields[i].second,
+                                 std::vector<size_t>(),
+                                 FieldClass::PIXEL_FIELD);
+    }
+    return field_types;
 }
 
 bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls) {
     using ouster::sensor::logger;
-    ChanFieldType raw_headers_ft = ls.field_type(ChanField::RAW_HEADERS);
-    if (!raw_headers_ft) {
+    if (!ls.has_field(sensor::ChanField::RAW_HEADERS)) {
         return false;
     }
+
+    auto raw_headers_ft = ls.field(sensor::ChanField::RAW_HEADERS).tag();
     // ensure that we can pack headers into the size of a single RAW_HEADERS
     // column
     if (pf.pixels_per_column * sensor::field_type_size(raw_headers_ft) <
@@ -154,55 +164,99 @@ bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls) {
 
 }  // namespace impl
 
+static FieldDescriptor get_field_type_descriptor(const LidarScan& scan,
+                                                 const FieldType& ft) {
+    if (ft.field_class == FieldClass::PIXEL_FIELD) {
+        std::vector<size_t> dims;
+        dims.push_back(scan.h);
+        dims.push_back(scan.w);
+        dims.insert(dims.end(), ft.extra_dims.begin(), ft.extra_dims.end());
+        return FieldDescriptor::array(ft.element_type, dims);
+    } else if (ft.field_class == FieldClass::COLUMN_FIELD) {
+        std::vector<size_t> dims;
+        dims.push_back(scan.w);
+        dims.insert(dims.end(), ft.extra_dims.begin(), ft.extra_dims.end());
+        return FieldDescriptor::array(ft.element_type, dims);
+    } else if (ft.field_class == FieldClass::PACKET_FIELD) {
+        std::vector<size_t> dims;
+        dims.push_back(scan.w / scan.columns_per_packet_ +
+                       (scan.w % scan.columns_per_packet_ ? 1 : 0));
+        dims.insert(dims.end(), ft.extra_dims.begin(), ft.extra_dims.end());
+        return FieldDescriptor::array(ft.element_type, dims);
+    } else {  // FieldClass::SCAN_FIELD
+        return FieldDescriptor::array(ft.element_type, ft.extra_dims);
+    }
+}
+
 // specify sensor:: namespace for doxygen matching
 LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
                      size_t columns_per_packet)
-    : timestamp_{Header<uint64_t>::Zero(w)},
-      packet_timestamp_{Header<uint64_t>::Zero(w / columns_per_packet)},
-      measurement_id_{Header<uint16_t>::Zero(w)},
-      status_{Header<uint32_t>::Zero(w)},
-      pose_(w, mat4d::Identity()),
-      field_types_{std::move(field_types)},
-      w{static_cast<std::ptrdiff_t>(w)},
-      h{static_cast<std::ptrdiff_t>(h)} {
-    for (const auto& ft : field_types_) {
-        if (fields_.count(ft.first) > 0)
-            throw std::invalid_argument("Duplicated fields found");
-        fields_[ft.first] = impl::FieldSlot{ft.second, w, h};
+    : w{w}, h{h}, columns_per_packet_(columns_per_packet) {
+    if (w * h == 0) {
+        throw std::invalid_argument(
+            "Cannot construct non-empty LidarScan with "
+            "zero width or height");
+    }
+
+    for (const auto& ft : field_types) {
+        add_field(ft);
+    }
+
+    timestamp_ = Field{fd_array<uint64_t>(w), FieldClass::COLUMN_FIELD};
+    measurement_id_ = Field{fd_array<uint16_t>(w), FieldClass::COLUMN_FIELD};
+    status_ = Field{fd_array<uint32_t>(w), FieldClass::COLUMN_FIELD};
+    packet_timestamp_ =
+        Field{fd_array<uint64_t>(w / columns_per_packet +
+                                 (w % columns_per_packet ? 1 : 0)),
+              FieldClass::PACKET_FIELD};
+    pose_ = Field{fd_array<double>(w, 4, 4), {}};
+    /**
+     * These may be unnecessary to set to identity
+     */
+    for (size_t i = 0; i < w; ++i) {
+        Eigen::Ref<img_t<double>> pose = pose_.subview(i);
+        pose = mat4d::Identity();
     }
 }
 
 LidarScan::LidarScan(const LidarScan& ls_src,
                      const LidarScanFieldTypes& field_types)
-    : timestamp_(ls_src.timestamp_),
-      packet_timestamp_(ls_src.packet_timestamp_),
-      measurement_id_(ls_src.measurement_id_),
-      status_(ls_src.status_),
-      pose_(ls_src.pose_),
-      field_types_(field_types),
-      w(ls_src.w),
+    : w(ls_src.w),
       h(ls_src.h),
+      columns_per_packet_(ls_src.columns_per_packet_),
       frame_status(ls_src.frame_status),
       frame_id(ls_src.frame_id) {
-    // Initialize fields
-    for (const auto& ft : field_types_) {
-        if (fields_.count(ft.first) > 0)
-            throw std::invalid_argument("Duplicated fields found");
-        fields_[ft.first] = impl::FieldSlot{ft.second, static_cast<size_t>(w),
-                                            static_cast<size_t>(h)};
-    }
-
-    // Copy fields
     for (const auto& ft : field_types) {
-        if (ls_src.field_type(ft.first)) {
-            ouster::impl::visit_field(*this, ft.first,
-                                      ouster::impl::copy_and_cast(), ls_src,
-                                      ft.first);
+        const std::string& name = ft.name;
+        FieldDescriptor dst_desc = get_field_type_descriptor(*this, ft);
+        if (ls_src.has_field(name)) {
+            // either copy cast or error
+            const auto& src_field = ls_src.field(name);
+            const auto& src_desc = src_field.desc();
+            if (src_desc == dst_desc) {
+                fields()[name] = ls_src.field(name);
+            } else {
+                // cast if the dimensions match
+                if (dst_desc.shape != src_desc.shape) {
+                    throw std::invalid_argument(
+                        "Field '" + name +
+                        "' from source scan has dimensions that don't match "
+                        "desired.");
+                }
+                add_field(name, dst_desc, ft.field_class);
+                ouster::impl::visit_field(
+                    *this, name, ouster::impl::copy_and_cast(), ls_src, name);
+            }
         } else {
-            ouster::impl::visit_field(*this, ft.first,
-                                      ouster::impl::zero_field());
+            add_field(name, dst_desc, ft.field_class);
         }
     }
+
+    timestamp_ = ls_src.timestamp_;
+    measurement_id_ = ls_src.measurement_id_;
+    status_ = ls_src.status_;
+    packet_timestamp_ = ls_src.packet_timestamp_;
+    pose_ = ls_src.pose_;
 }
 
 LidarScan::LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile,
@@ -226,35 +280,142 @@ sensor::ThermalShutdownStatus LidarScan::thermal_shutdown() const {
         frame_status_shifts::FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT);
 }
 
-template <typename T,
-          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
-Eigen::Ref<img_t<T>> LidarScan::field(ChanField f) {
-    return fields_.at(f).get<T>();
+Field& LidarScan::field(const std::string& name) { return fields().at(name); }
+
+const Field& LidarScan::field(const std::string& name) const {
+    return fields().at(name);
 }
 
-template <typename T,
-          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
-Eigen::Ref<const img_t<T>> LidarScan::field(ChanField f) const {
-    return fields_.at(f).get<T>();
+bool LidarScan::has_field(const std::string& name) const {
+    return fields().count(name) > 0;
+}
+
+Field& LidarScan::add_field(const FieldType& type) {
+    if (has_field(type.name) > 0) {
+        throw std::invalid_argument("Duplicated field '" + type.name + "'");
+    }
+
+    // no other checking is necessary since the user isnt providing dimensions
+    // that need validation
+    fields()[type.name] =
+        Field(get_field_type_descriptor(*this, type), type.field_class);
+
+    return fields()[type.name];
+}
+
+Field& LidarScan::add_field(const std::string& name, FieldDescriptor desc,
+                            FieldClass field_class) {
+    if (has_field(name) > 0)
+        throw std::invalid_argument("Duplicated field '" + name + "'");
+
+    if (field_class == FieldClass::PIXEL_FIELD) {
+        if (desc.shape.size() < 2)
+            throw std::invalid_argument(
+                "Pixel fields must have at least 2 dimensions");
+        if (desc.shape[0] != h || desc.shape[1] != w)
+            throw std::invalid_argument(
+                "Pixel field shape must match "
+                "LidarScan's width and height. Was " +
+                std::to_string(desc.shape[0]) + "x" +
+                std::to_string(desc.shape[1]) + " vs " + std::to_string(h) +
+                "x" + std::to_string(w));
+    }
+
+    if (field_class == FieldClass::COLUMN_FIELD) {
+        if (desc.shape[0] != w)
+            throw std::invalid_argument(
+                "Column field shape must match "
+                "LidarScan's height. Width was " +
+                std::to_string(desc.shape[0]) + " vs required width of " +
+                std::to_string(w));
+    }
+
+    if (field_class == FieldClass::PACKET_FIELD) {
+        const size_t desired_w =
+            w / columns_per_packet_ + (w % columns_per_packet_ ? 1 : 0);
+        if (desc.shape[0] != desired_w)
+            throw std::invalid_argument(
+                "Packet field shape must match "
+                "number of packets. Width was " +
+                std::to_string(desc.shape[0]) + " vs required width of " +
+                std::to_string(desired_w));
+    }
+
+    fields()[name] = Field{desc, field_class};
+
+    return fields()[name];
+}
+
+// TODO: verify this is sane with python bindings, might be hard to keep alive
+Field LidarScan::del_field(const std::string& name) {
+    if (!has_field(name))
+        throw std::invalid_argument("Attempted deleting non existing field '" +
+                                    name + "'");
+
+    Field ptr;
+    field(name).swap(ptr);
+    fields().erase(name);
+    return ptr;
+}
+
+template <typename T>
+Eigen::Ref<img_t<T>> LidarScan::field(const std::string& name) {
+    return field(name);
+}
+
+template <typename T>
+Eigen::Ref<const img_t<T>> LidarScan::field(const std::string& name) const {
+    return field(name);
 }
 
 // explicitly instantiate for each supported field type
-template Eigen::Ref<img_t<uint8_t>> LidarScan::field(ChanField f);
-template Eigen::Ref<img_t<uint16_t>> LidarScan::field(ChanField f);
-template Eigen::Ref<img_t<uint32_t>> LidarScan::field(ChanField f);
-template Eigen::Ref<img_t<uint64_t>> LidarScan::field(ChanField f);
-template Eigen::Ref<const img_t<uint8_t>> LidarScan::field(ChanField f) const;
-template Eigen::Ref<const img_t<uint16_t>> LidarScan::field(ChanField f) const;
-template Eigen::Ref<const img_t<uint32_t>> LidarScan::field(ChanField f) const;
-template Eigen::Ref<const img_t<uint64_t>> LidarScan::field(ChanField f) const;
 
-ChanFieldType LidarScan::field_type(ChanField f) const {
-    return fields_.count(f) ? fields_.at(f).tag : ChanFieldType::VOID;
+// clang-format off
+template Eigen::Ref<img_t<uint8_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<uint16_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<uint32_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<uint64_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<int8_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<int16_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<int32_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<int64_t>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<float>> LidarScan::field(const std::string& f);
+template Eigen::Ref<img_t<double>> LidarScan::field(const std::string& f);
+template Eigen::Ref<const img_t<uint8_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<uint16_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<uint32_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<uint64_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<int8_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<int16_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<int32_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<int64_t>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<float>> LidarScan::field(const std::string& f) const;
+template Eigen::Ref<const img_t<double>> LidarScan::field(const std::string& f) const;
+// clang-format on
+
+static FieldType get_field_type(const std::string& name, const Field& field) {
+    int offset = 0;
+    if (field.field_class() == FieldClass::PIXEL_FIELD) {
+        offset = 2;
+    } else if ((field.field_class() == FieldClass::COLUMN_FIELD) ||
+               (field.field_class() == FieldClass::PACKET_FIELD)) {
+        offset = 1;
+    }
+    std::vector<size_t> extra_dims;
+    extra_dims.insert(extra_dims.begin(), field.shape().begin() + offset,
+                      field.shape().end());
+    return FieldType(name, field.tag(), extra_dims, field.field_class());
 }
 
-LidarScan::FieldIter LidarScan::begin() const { return field_types_.cbegin(); }
+FieldType LidarScan::field_type(const std::string& name) const {
+    return get_field_type(name, field(name));
+}
 
-LidarScan::FieldIter LidarScan::end() const { return field_types_.cend(); }
+std::unordered_map<std::string, Field>& LidarScan::fields() { return fields_; }
+
+const std::unordered_map<std::string, Field>& LidarScan::fields() const {
+    return fields_;
+}
 
 Eigen::Ref<LidarScan::Header<uint64_t>> LidarScan::timestamp() {
     return timestamp_;
@@ -267,6 +428,7 @@ Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::timestamp() const {
 Eigen::Ref<LidarScan::Header<uint64_t>> LidarScan::packet_timestamp() {
     return packet_timestamp_;
 }
+
 Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::packet_timestamp()
     const {
     return packet_timestamp_;
@@ -274,9 +436,6 @@ Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::packet_timestamp()
 
 uint64_t LidarScan::get_first_valid_packet_timestamp() const {
     int total_packets = packet_timestamp().size();
-    if (total_packets == 0) {
-        return 0;  // prevent a divide by zero
-    }
     int columns_per_packet = w / total_packets;
 
     for (int i = 0; i < total_packets; ++i) {
@@ -293,19 +452,21 @@ uint64_t LidarScan::get_first_valid_packet_timestamp() const {
 Eigen::Ref<LidarScan::Header<uint16_t>> LidarScan::measurement_id() {
     return measurement_id_;
 }
+
 Eigen::Ref<const LidarScan::Header<uint16_t>> LidarScan::measurement_id()
     const {
     return measurement_id_;
 }
 
 Eigen::Ref<LidarScan::Header<uint32_t>> LidarScan::status() { return status_; }
+
 Eigen::Ref<const LidarScan::Header<uint32_t>> LidarScan::status() const {
     return status_;
 }
 
-std::vector<mat4d>& LidarScan::pose() { return pose_; }
+Field& LidarScan::pose() { return pose_; }
 
-const std::vector<mat4d>& LidarScan::pose() const { return pose_; }
+const Field& LidarScan::pose() const { return pose_; }
 
 bool LidarScan::complete(sensor::ColumnWindow window) const {
     const auto& status = this->status();
@@ -328,15 +489,21 @@ bool LidarScan::complete(sensor::ColumnWindow window) const {
 
 bool operator==(const LidarScan& a, const LidarScan& b) {
     return a.frame_id == b.frame_id && a.w == b.w && a.h == b.h &&
-           a.frame_status == b.frame_status && a.fields_ == b.fields_ &&
-           a.field_types_ == b.field_types_ &&
-           (a.timestamp() == b.timestamp()).all() &&
-           (a.measurement_id() == b.measurement_id()).all() &&
-           (a.status() == b.status()).all() && a.pose() == b.pose();
+           a.frame_status == b.frame_status &&
+           a.measurement_id_ == b.measurement_id_ &&
+           a.timestamp_ == b.timestamp_ &&
+           a.packet_timestamp_ == b.packet_timestamp_ && a.pose() == b.pose() &&
+           a.fields() == b.fields();
 }
 
-LidarScanFieldTypes get_field_types(const LidarScan& ls) {
-    return {ls.begin(), ls.end()};
+LidarScanFieldTypes LidarScan::field_types() const {
+    LidarScanFieldTypes ft;
+    for (const auto& kv : fields()) {
+        ft.push_back(get_field_type(kv.first, kv.second));
+    }
+
+    std::sort(ft.begin(), ft.end());
+    return ft;
 }
 
 LidarScanFieldTypes get_field_types(UDPProfileLidar udp_profile_lidar) {
@@ -349,13 +516,27 @@ LidarScanFieldTypes get_field_types(const sensor::sensor_info& info) {
     return get_field_types(info.format.udp_profile_lidar);
 }
 
+std::string to_string(const FieldType& field_type) {
+    std::string out = field_type.name;
+    out += ": ";
+    out += to_string(field_type.element_type);
+    out += " (";
+    int j = 0;
+    for (const auto& d : field_type.extra_dims) {
+        if (j++ > 0) out += ", ";
+        out += std::to_string(d);
+    }
+    out += ") ";
+    out += ouster::to_string(field_type.field_class);
+    return out;
+}
+
 std::string to_string(const LidarScanFieldTypes& field_types) {
     std::stringstream ss;
     ss << "(";
     for (size_t i = 0; i < field_types.size(); ++i) {
         if (i > 0) ss << ", ";
-        ss << sensor::to_string(field_types[i].first) << ":"
-           << sensor::to_string(field_types[i].second);
+        ss << to_string(field_types[i]);
     }
     ss << ")";
     return ss.str();
@@ -363,43 +544,44 @@ std::string to_string(const LidarScanFieldTypes& field_types) {
 
 std::string to_string(const LidarScan& ls) {
     std::stringstream ss;
-    LidarScanFieldTypes field_types(ls.begin(), ls.end());
+    LidarScanFieldTypes field_types = ls.field_types();
     ss << "LidarScan: {h = " << ls.h << ", w = " << ls.w
        << ", packets_per_frame = " << ls.packet_timestamp().size()
        << ", fid = " << ls.frame_id << "," << std::endl
-       << " frame status =  " << std::hex << ls.frame_status << std::dec
+       << " frame status = " << std::hex << ls.frame_status << std::dec
        << ", thermal_shutdown status = " << to_string(ls.thermal_shutdown())
        << ", shot_limiting status = " << to_string(ls.shot_limiting()) << ","
        << std::endl
        << "  field_types = " << to_string(field_types) << "," << std::endl;
 
-    if (!field_types.empty()) {
-        ss << "  fields = [" << std::endl;
-        img_t<uint64_t> key{ls.h, ls.w};
-        for (const auto& ft : ls) {
-            impl::visit_field(ls, ft.first, impl::read_and_cast(), key);
-            ss << "    " << to_string(ft.first) << ":" << to_string(ft.second)
-               << " = (";
-            ss << key.minCoeff() << "; " << key.mean() << "; "
-               << key.maxCoeff();
-            ss << ")," << std::endl;
+    auto read_eigen = [](auto ref, std::stringstream& ss) {
+        ss << "min: " << (double)ref.minCoeff()
+           << "; mean: " << ref.template cast<double>().mean()
+           << "; max: " << (double)ref.maxCoeff();
+    };
+
+    auto read_field = [&read_eigen](const Field& f, const std::string& name,
+                                    std::stringstream& ss) {
+        ss << "    " << name << " type:" << to_string(f.tag()) << " shape: (";
+
+        const auto& shape = f.shape();
+        for (size_t i = 0; i < shape.size(); ++i) {
+            ss << shape[i];
+            if (i < shape.size() - 1) {
+                ss << ", ";
+            }
         }
-        ss << "  ]," << std::endl;
+        ss << ") ";
+
+        FieldView flat_view = f.reshape(1, f.size());
+        impl::visit_field_2d(flat_view, read_eigen, ss);
+        ss << std::endl;
+    };
+
+    for (auto&& kv : ls.fields()) {
+        read_field(kv.second, kv.first, ss);
     }
 
-    const auto& ts = ls.timestamp();
-    ss << "  timestamp = (" << ts.minCoeff() << "; " << ts.mean() << "; "
-       << ts.maxCoeff() << ")," << std::endl;
-    const auto& packet_ts = ls.packet_timestamp();
-    ss << "  packet_timestamp = (" << packet_ts.minCoeff() << "; "
-       << packet_ts.mean() << "; " << packet_ts.maxCoeff() << ")," << std::endl;
-    const auto& mid = ls.measurement_id().cast<uint64_t>();
-    ss << "  measurement_id = (" << mid.minCoeff() << "; " << mid.mean() << "; "
-       << mid.maxCoeff() << ")," << std::endl;
-    const auto& st = ls.status().cast<uint64_t>();
-    ss << "  status = (" << st.minCoeff() << "; " << st.mean() << "; "
-       << st.maxCoeff() << ")" << std::endl;
-    ss << "  poses = (size: " << ls.pose().size() << ")" << std::endl;
     ss << "}";
     return ss.str();
 }
@@ -492,7 +674,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 }
 
 LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
-    return cartesian(scan.field(ChanField::RANGE), lut);
+    return cartesian(scan.field(sensor::ChanField::RANGE), lut);
 }
 
 LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
@@ -529,8 +711,8 @@ namespace {
  */
 struct zero_field_cols {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, ChanField, std::ptrdiff_t start,
-                    std::ptrdiff_t end) const {
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string&,
+                    std::ptrdiff_t start, std::ptrdiff_t end) const {
         field.block(0, start, field.rows(), end - start).setZero();
     }
 };
@@ -550,16 +732,13 @@ void zero_header_cols(LidarScan& ls, std::ptrdiff_t start, std::ptrdiff_t end) {
  */
 struct parse_field_col {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, ChanField f, uint16_t m_id,
-                    const sensor::packet_format& pf,
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
+                    uint16_t m_id, const sensor::packet_format& pf,
                     const uint8_t* col_buf) const {
-        // user defined fields that we shouldn't change
-        if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
-
         // RAW_HEADERS field is populated separately because it has
         // a different processing scheme and doesn't fit into existing field
         // model (i.e. data packed per column rather than per pixel)
-        if (f == ChanField::RAW_HEADERS) return;
+        if (f == sensor::ChanField::RAW_HEADERS) return;
 
         pf.col_field(col_buf, f, field.col(m_id).data(), field.cols());
     }
@@ -587,7 +766,7 @@ uint64_t frame_status(const uint8_t thermal_shutdown,
  */
 struct pack_raw_headers_col {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> rh_field, ChanField,
+    void operator()(Eigen::Ref<img_t<T>> rh_field, const std::string&,
                     const sensor::packet_format& pf, uint16_t col_idx,
                     const uint8_t* packet_buf) const {
         const uint8_t* col_buf = pf.nth_col(col_idx, packet_buf);
@@ -643,15 +822,15 @@ void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
         if (raw_headers) {
             // zero out missing columns if we jumped forward
             if (m_id >= next_headers_m_id) {
-                impl::visit_field(ls, ChanField::RAW_HEADERS, zero_field_cols(),
-                                  ChanField::RAW_HEADERS, next_headers_m_id,
+                impl::visit_field(ls, sensor::ChanField::RAW_HEADERS,
+                                  zero_field_cols{}, "", next_headers_m_id,
                                   m_id);
                 next_headers_m_id = m_id + 1;
             }
 
-            impl::visit_field(ls, ChanField::RAW_HEADERS,
-                              pack_raw_headers_col(), ChanField::RAW_HEADERS,
-                              pf, icol, packet_buf);
+            impl::visit_field(
+                ls, sensor::ChanField::RAW_HEADERS, pack_raw_headers_col(),
+                sensor::ChanField::RAW_HEADERS, pf, icol, packet_buf);
         }
 
         // drop invalid
@@ -659,14 +838,8 @@ void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
 
         // zero out missing columns if we jumped forward
         if (m_id >= next_valid_m_id) {
-            for (const auto& field_type : ls) {
-                if (field_type.first == ChanField::RAW_HEADERS) continue;
-                if (field_type.first >= ChanField::CUSTOM0 &&
-                    field_type.first <= ChanField::CUSTOM9)
-                    continue;
-                impl::visit_field(ls, field_type.first, zero_field_cols(),
-                                  field_type.first, next_valid_m_id, m_id);
-            }
+            impl::foreach_channel_field(ls, pf, zero_field_cols{},
+                                        next_valid_m_id, m_id);
             zero_header_cols(ls, next_valid_m_id, m_id);
             next_valid_m_id = m_id + 1;
         }
@@ -676,7 +849,8 @@ void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
         ls.measurement_id()[m_id] = m_id;
         ls.status()[m_id] = status;
 
-        impl::foreach_field(ls, parse_field_col(), m_id, pf, col_buf);
+        impl::foreach_channel_field(ls, pf, parse_field_col{}, m_id, pf,
+                                    col_buf);
     }
 }
 
@@ -687,12 +861,9 @@ void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
 template <int BlockDim>
 struct parse_field_block {
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, ChanField f,
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
                     const sensor::packet_format& pf,
                     const uint8_t* packet_buf) const {
-        // user defined fields that we shouldn't change
-        if (f >= ChanField::CUSTOM0 && f <= ChanField::CUSTOM9) return;
-
         pf.block_field<T, BlockDim>(field, f, packet_buf);
     }
 };
@@ -702,13 +873,8 @@ void ScanBatcher::_parse_by_block(const uint8_t* packet_buf, LidarScan& ls) {
     const uint16_t first_m_id =
         pf.col_measurement_id(pf.nth_col(0, packet_buf));
     if (first_m_id >= next_valid_m_id) {
-        for (const auto& field_type : ls) {
-            if (field_type.first >= ChanField::CUSTOM0 &&
-                field_type.first <= ChanField::CUSTOM9)
-                continue;
-            impl::visit_field(ls, field_type.first, zero_field_cols(),
-                              field_type.first, next_valid_m_id, first_m_id);
-        }
+        impl::foreach_channel_field(ls, pf, zero_field_cols{}, next_valid_m_id,
+                                    first_m_id);
         zero_header_cols(ls, next_valid_m_id, first_m_id);
         next_valid_m_id = first_m_id + pf.columns_per_packet;
     }
@@ -727,13 +893,16 @@ void ScanBatcher::_parse_by_block(const uint8_t* packet_buf, LidarScan& ls) {
 
     switch (pf.block_parsable()) {
         case 16:
-            impl::foreach_field(ls, parse_field_block<16>{}, pf, packet_buf);
+            impl::foreach_channel_field(ls, pf, parse_field_block<16>{}, pf,
+                                        packet_buf);
             break;
         case 8:
-            impl::foreach_field(ls, parse_field_block<8>{}, pf, packet_buf);
+            impl::foreach_channel_field(ls, pf, parse_field_block<8>{}, pf,
+                                        packet_buf);
             break;
         case 4:
-            impl::foreach_field(ls, parse_field_block<4>{}, pf, packet_buf);
+            impl::foreach_channel_field(ls, pf, parse_field_block<4>{}, pf,
+                                        packet_buf);
             break;
         default:
             throw std::invalid_argument("Invalid block dim for packet format");
@@ -753,7 +922,8 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
                              LidarScan& ls) {
     if (ls.w != w || ls.h != h)
         throw std::invalid_argument("unexpected scan dimensions");
-    if (ls.packet_timestamp().rows() != ls.w / pf.columns_per_packet)
+    if (static_cast<size_t>(ls.packet_timestamp().rows()) !=
+        ls.w / pf.columns_per_packet)
         throw std::invalid_argument("unexpected scan columns_per_packet: " +
                                     std::to_string(pf.columns_per_packet));
 
@@ -764,7 +934,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         this->operator()(cache.data(), cache_packet_ts, ls);
     }
 
-    const uint64_t f_id = pf.frame_id(packet_buf);
+    const int64_t f_id = pf.frame_id(packet_buf);
 
     const bool raw_headers = impl::raw_headers_enabled(pf, ls);
 
@@ -778,21 +948,18 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         const uint8_t f_thermal_shutdown = pf.thermal_shutdown(packet_buf);
         const uint8_t f_shot_limiting = pf.shot_limiting(packet_buf);
         ls.frame_status = frame_status(f_thermal_shutdown, f_shot_limiting);
-    } else if (ls.frame_id == ((f_id + 1) % (pf.max_frame_id + 1))) {
+    } else if (ls.frame_id ==
+               ((f_id + 1) % (static_cast<int64_t>(pf.max_frame_id) + 1))) {
         // drop reordered packets from the previous frame
         return false;
     } else if (ls.frame_id != f_id) {
         // got a packet from a new frame
-        for (const auto& field_type : ls) {
-            auto end_m_id = next_valid_m_id;
-            if (raw_headers && field_type.first == ChanField::RAW_HEADERS) {
-                end_m_id = next_headers_m_id;
-            }
-            if (field_type.first >= ChanField::CUSTOM0 &&
-                field_type.first <= ChanField::CUSTOM9)
-                continue;
-            impl::visit_field(ls, field_type.first, zero_field_cols(),
-                              field_type.first, end_m_id, w);
+        impl::foreach_channel_field(ls, pf, zero_field_cols{}, next_valid_m_id,
+                                    w);
+
+        if (raw_headers) {
+            impl::visit_field(ls, sensor::ChanField::RAW_HEADERS,
+                              zero_field_cols{}, "", next_headers_m_id, w);
         }
 
         // store packet buf and ts data to the cache for later processing
@@ -832,6 +999,26 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
     }
 
     return false;
+}
+
+FieldType::FieldType() {}
+
+FieldType::FieldType(const std::string& name_,
+                     sensor::ChanFieldType element_type_,
+                     const std::vector<size_t> extra_dims_, FieldClass class_)
+    : name(name_),
+      element_type(element_type_),
+      extra_dims(extra_dims_),
+      field_class(class_) {}
+
+bool operator==(const FieldType& a, const FieldType& b) {
+    return a.name == b.name && a.element_type == b.element_type &&
+           a.field_class == b.field_class && a.extra_dims == b.extra_dims;
+}
+
+bool operator!=(const FieldType& a, const FieldType& b) {
+    return a.name != b.name || a.element_type != b.element_type ||
+           a.field_class != b.field_class || a.extra_dims != b.extra_dims;
 }
 
 }  // namespace ouster

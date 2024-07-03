@@ -7,24 +7,25 @@ This module contains more idiomatic wrappers around the lower-level module
 generated using pybind11.
 """
 from contextlib import closing
-from typing import (cast, Dict, Iterable, Iterator, List, Optional, Tuple,
+from typing import (cast, Iterable, Iterator, List, Optional, Tuple,
                     Union, Callable)
 from threading import Thread
 import time
+import logging
 from math import ceil
 import numpy as np
-
 from more_itertools import take
 from typing_extensions import Protocol
 
-from ._client import (SensorInfo, SensorConnection, Client, ClientState,
-                      PacketFormat, LidarScan, ScanBatcher, get_field_types)
+from ._client import (SensorInfo, SensorConnection, Client, ClientState, PacketValidationFailure,
+                      PacketFormat, LidarScan, ScanBatcher, get_field_types, LidarPacket, ImuPacket,
+                      Packet, FieldType)
 
-from .data import (ChanField, FieldDType, ImuPacket,
-                   LidarPacket, Packet, PacketIdError,
-                   FieldTypes)
+from .data import (FieldTypes)
 
 from .scan_source import ScanSource
+
+logger = logging.getLogger("ouster.sdk.client.core")
 
 
 class ClientError(Exception):
@@ -132,7 +133,6 @@ class Sensor(PacketSource):
                  _overflow_err: bool = False,
                  _flush_before_read: bool = True,
                  _flush_frames: int = 5,
-                 _legacy_format: bool = False,
                  soft_id_check: bool = False,
                  _skip_metadata_beam_validation: bool = False) -> None:
         """
@@ -150,7 +150,6 @@ class Sensor(PacketSource):
             _overflow_err: if True, raise ClientOverflow
             _flush_before_read: if True, try to clear buffers before reading
             _flush_frames: the number of frames to skip/flush on start of a new iter
-            _legacy_format: if True, use legacy metadata format
             soft_id_check: if True, don't skip lidar packets buffers on,
             id mismatch (init_id/sn pair),
             _skip_metadata_beam_validation: if True, skip metadata beam angle check
@@ -166,7 +165,6 @@ class Sensor(PacketSource):
         self._cache = None
         self._fetched_meta = ""
         self._flush_frames = _flush_frames
-        self._legacy_format = _legacy_format
 
         self._soft_id_check = soft_id_check
         self._id_error_count = 0
@@ -186,10 +184,8 @@ class Sensor(PacketSource):
         self._cli = Client(self._connection, buf_size,
                            self._pf.lidar_packet_size, buf_size,
                            self._pf.imu_packet_size)
-        self._lidarbuf = LidarPacket(None,
-                                     self._metadata,
-                                     _raise_on_id_check=not self._soft_id_check)
-        self._imubuf = ImuPacket(packet_format=self._pf)
+        self._lidarbuf = LidarPacket(self._pf.lidar_packet_size)
+        self._imubuf = ImuPacket(self._pf.imu_packet_size)
 
         # Use args to avoid capturing self causing circular reference
         self._producer = Thread(target=self._cli.produce)
@@ -213,7 +209,7 @@ class Sensor(PacketSource):
             timeout_sec = ceil(timeout)
         if not self._fetched_meta:
             self._fetched_meta = self._connection.get_metadata(
-                legacy=self._legacy_format, timeout_sec=timeout_sec)
+                timeout_sec=timeout_sec)
             if not self._fetched_meta:
                 raise ClientError("Failed to collect metadata")
 
@@ -242,14 +238,30 @@ class Sensor(PacketSource):
             else:
                 raise ValueError()
         if st & ClientState.LIDAR_DATA:
-            packet = LidarPacket(self._lidarbuf._data, self._metadata,
-                                 self._lidarbuf.capture_timestamp,
-                                 _raise_on_id_check = not self._soft_id_check)
-            if packet.id_error:
+            msg = self._lidarbuf
+            self._lidarbuf = LidarPacket(self._pf.lidar_packet_size)
+            res = msg.validate(self._metadata, self._pf)
+            if res == PacketValidationFailure.PACKET_SIZE:
+                raise ValueError(f"Packet was unexpected size {len(msg.buf)}")
+            if res == PacketValidationFailure.ID:
                 self._id_error_count += 1
-            return packet
+                init_id = self._pf.init_id(msg.buf)
+                prod_sn = self._pf.prod_sn(msg.buf)
+                error_msg = f"Metadata init_id/sn does not match: " \
+                    f"expected by metadata - {self._metadata.init_id}/{self._metadata.sn}, " \
+                    f"but got from packet buffer - {init_id}/{prod_sn}"
+                if not self._soft_id_check:
+                    raise ValueError(error_msg)
+                else:
+                    # Continue with warning. When init_ids/sn doesn't match
+                    # the resulting LidarPacket has high chances to be
+                    # incompatible with data format set in metadata json file
+                    logger.warn(f"LidarPacket validation: {error_msg}")
+            return msg
         elif st & ClientState.IMU_DATA:
-            return self._imubuf
+            msg2 = self._imubuf
+            self._imubuf = ImuPacket(self._pf.imu_packet_size)
+            return msg2
         elif st == ClientState.TIMEOUT:
             raise ClientTimeout(f"No packets received within {self._timeout}s from sensor "
                                 f"{self._hostname} using udp destination {self._metadata.config.udp_dest} "
@@ -301,8 +313,6 @@ class Sensor(PacketSource):
                     yield p
                 else:
                     break
-            except PacketIdError:
-                self._id_error_count += 1
             except ValueError:
                 # bad packet size here: this can happen when
                 # packets are buffered by the OS, not necessarily an error
@@ -337,7 +347,7 @@ class Sensor(PacketSource):
             # check next packet to see if it's the start of a new frame
             st = self._peek()
             if st & ClientState.LIDAR_DATA:
-                frame = self._pf.frame_id(self._lidarbuf._data)
+                frame = self._pf.frame_id(self._lidarbuf.buf)
                 if frame != last_frame:
                     last_frame = frame
                     n_frames -= 1
@@ -404,7 +414,7 @@ class Scans(ScanSource):
                  *,
                  complete: bool = False,
                  timeout: Optional[float] = 2.0,
-                 fields: Optional[Dict[ChanField, FieldDType]] = None,
+                 fields: Optional[List[FieldType]] = None,
                  _max_latency: int = 0) -> None:
         """
         Args:
@@ -419,9 +429,13 @@ class Scans(ScanSource):
         self._timeout = timeout
         self._max_latency = _max_latency
         # used to initialize LidarScan
-        self._fields: FieldTypes = (
+        self._field_types: FieldTypes = (
             fields if fields is not None else
             get_field_types(self._source.metadata.format.udp_profile_lidar))
+
+        self._fields = []
+        for f in self._field_types:
+            self._fields.append(f.name)
 
     def __iter__(self) -> Iterator[LidarScan]:
         """Get an iterator."""
@@ -458,11 +472,12 @@ class Scans(ScanSource):
 
             if self._timeout is not None and (time.monotonic() >=
                                               start_ts + self._timeout):
-                raise ClientTimeout(f"No valid frames received within {self._timeout}s")
+                raise ClientTimeout(
+                    f"No valid frames received within {self._timeout}s")
 
             if isinstance(packet, LidarPacket):
                 ls_write = ls_write or LidarScan(
-                    h, w, self._fields, columns_per_packet)
+                    h, w, self._field_types, columns_per_packet)
 
                 if batch(packet, ls_write):
                     # Got a new frame, return it and start another
@@ -504,7 +519,11 @@ class Scans(ScanSource):
         return False
 
     @property
-    def fields(self) -> FieldTypes:
+    def field_types(self) -> List[FieldType]:
+        return self._field_types
+
+    @property
+    def fields(self) -> List[str]:
         return self._fields
 
     @property
@@ -514,17 +533,23 @@ class Scans(ScanSource):
     def __len__(self) -> int:
         raise TypeError("len is not supported on live or non-indexed sources")
 
-    def _seek(self, int) -> None:
+    def _seek(self, _) -> None:
         raise RuntimeError(
             "can not invoke __getitem__ on non-indexed source")
 
-    def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+    def __getitem__(self, _: Union[int, slice]
+                    ) -> Union[Optional[LidarScan], ScanSource]:
         raise RuntimeError(
             "can not invoke __getitem__ on non-indexed source")
 
     def __del__(self) -> None:
         pass
+
+    def _slice_iter(self, _: slice) -> Iterator[Optional[LidarScan]]:
+        raise NotImplementedError
+
+    def slice(self, _: slice) -> ScanSource:
+        raise NotImplementedError
 
     @classmethod
     def sample(
@@ -577,7 +602,7 @@ class Scans(ScanSource):
             timeout: Optional[float] = 2.0,
             complete: bool = True,
             metadata: Optional[SensorInfo] = None,
-            fields: Optional[Dict[ChanField, FieldDType]] = None) -> 'Scans':
+            fields: Optional[List[FieldType]] = None) -> 'Scans':
         """Stream scans from a sensor.
 
         Will drop frames preemptively to avoid filling up internal buffers and
@@ -609,19 +634,20 @@ class Scans(ScanSource):
 class FrameBorder:
     """Create callable helper that indicates the cross frames packets."""
 
-    def __init__(self, pred: Callable[[Packet], bool] = lambda _: True):
+    def __init__(self, meta: SensorInfo, pred: Callable[[Packet], bool] = lambda _: True):
         self._last_f_id = -1
         self._last_packet_ts = None
         self._last_packet_res = False
         self._pred = pred
+        self._pf = PacketFormat(meta)
 
     def __call__(self, packet: Packet) -> bool:
         if isinstance(packet, LidarPacket):
             # don't examine packets again
-            if (self._last_packet_ts and packet.capture_timestamp and
-                    self._last_packet_ts == packet.capture_timestamp):
+            if (self._last_packet_ts and (packet.host_timestamp != 0) and
+                    self._last_packet_ts == packet.host_timestamp):
                 return self._last_packet_res
-            f_id = packet.frame_id
+            f_id = self._pf.frame_id(packet.buf)
             changed = (self._last_f_id != -1 and f_id != self._last_f_id)
             self._last_packet_res = changed and self._pred(packet)
             self._last_f_id = f_id

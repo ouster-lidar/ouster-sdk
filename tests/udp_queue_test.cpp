@@ -307,12 +307,12 @@ TEST_P(UdpQueuePcapTest, single_client_test) {
     {  // collect packets
         PcapReader pcap(data_dir + "/" + std::get<0>(test_params));
         while (pcap.next_packet()) {
-            if (pcap.current_info().dst_port == info.udp_port_lidar) {
+            if (pcap.current_info().dst_port == info.config.udp_port_lidar) {
                 LidarPacket p(pcap.current_length());
                 std::memcpy(p.buf.data(), pcap.current_data(), p.buf.size());
                 lidar_packets.push_back(std::move(p));
             }
-            if (pcap.current_info().dst_port == info.udp_port_imu) {
+            if (pcap.current_info().dst_port == info.config.udp_port_imu) {
                 ImuPacket p(pcap.current_length());
                 std::memcpy(p.buf.data(), pcap.current_data(), p.buf.size());
                 imu_packets.push_back(std::move(p));
@@ -333,8 +333,9 @@ TEST_P(UdpQueuePcapTest, single_client_test) {
     bool stop = false;
     std::vector<std::shared_ptr<PcapReplay>> replays;
     replays.push_back(std::make_shared<PcapReplay>(
-        data_dir + "/" + std::get<0>(test_params), info.udp_port_lidar,
-        info.udp_port_imu, lidar_port, imu_port));
+        data_dir + "/" + std::get<0>(test_params),
+        info.config.udp_port_lidar.value(), info.config.udp_port_imu.value(),
+        lidar_port, imu_port));
 
     std::thread producer(&BufferedUDPSource::produce, &queue);
     std::thread sensor_emu(&replay, &stop, replays, 1);
@@ -402,8 +403,10 @@ TEST(UdpQueueTest, multi_client_test) {
 
         int n_lidar = 0, n_imu = 0;
         while (pcap.next_packet()) {
-            if (pcap.current_info().dst_port == info.udp_port_lidar) ++n_lidar;
-            if (pcap.current_info().dst_port == info.udp_port_imu) ++n_imu;
+            if (pcap.current_info().dst_port == info.config.udp_port_lidar)
+                ++n_lidar;
+            if (pcap.current_info().dst_port == info.config.udp_port_imu)
+                ++n_imu;
         }
         Event e_lidar{i, client_state::LIDAR_DATA};
         Event e_imu{i, client_state::IMU_DATA};
@@ -413,13 +416,13 @@ TEST(UdpQueueTest, multi_client_test) {
         pcap.reset();
 
         while (pcap.next_packet()) {
-            if (pcap.current_info().dst_port == info.udp_port_lidar) {
+            if (pcap.current_info().dst_port == info.config.udp_port_lidar) {
                 std::memcpy(orig_packets.back(e_lidar).buf.data(),
                             pcap.current_data(),
                             orig_packets.back(e_lidar).buf.size());
                 orig_packets.push(e_lidar);
             }
-            if (pcap.current_info().dst_port == info.udp_port_imu) {
+            if (pcap.current_info().dst_port == info.config.udp_port_imu) {
                 std::memcpy(orig_packets.back(e_imu).buf.data(),
                             pcap.current_data(),
                             orig_packets.back(e_imu).buf.size());
@@ -439,8 +442,8 @@ TEST(UdpQueueTest, multi_client_test) {
         int imu_port = port++;
         auto info = metadata_from_json(data_dir + "/" + p.second);
         replays.push_back(std::make_shared<PcapReplay>(
-            data_dir + "/" + p.first, info.udp_port_lidar, info.udp_port_imu,
-            lidar_port, imu_port));
+            data_dir + "/" + p.first, info.config.udp_port_lidar.value(),
+            info.config.udp_port_imu.value(), lidar_port, imu_port));
 
         auto id = producer.add_client(
             init_client("localhost", lidar_port, imu_port), info, 1.f);

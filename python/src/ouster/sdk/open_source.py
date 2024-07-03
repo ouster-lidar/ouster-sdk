@@ -1,4 +1,5 @@
 from typing import List, Optional, Union
+import os
 import numpy as np
 from pathlib import Path
 from ouster.sdk.client import ScanSource, MultiScanSource
@@ -44,7 +45,7 @@ def open_source(source_url: str, sensor_idx: int = 0, *args,
             of fields of every scan. in case of dual returns profile FLAGS2 will also
             be appended (default is True).
     """
-    source_urls = [url.strip() for url in source_url.split(',') if url.strip()]
+    source_urls = [os.path.expanduser(url.strip()) for url in source_url.split(',') if url.strip()]
 
     if len(source_urls) == 0:
         raise ValueError("No valid source specified")

@@ -261,6 +261,9 @@ std::shared_ptr<MetadataDerived> metadata_pointer_as(
     }
 };
 
+/** @internal */
+void RegisterMetadata_internal_error_function_(std::string error);
+
 /**
  * Registrar class helper to add static from_buffer() function of the concrete
  * derived metadata class to the registry.
@@ -351,9 +354,12 @@ struct RegisterMetadata {
         auto& registry = MetadataEntry::get_registry();
         auto type = metadata_type<MetadataDerived>();
         if (registry.find(type) != registry.end()) {
-            std::cerr << "ERROR: Duplicate metadata type? Already registered "
-                         "type found: "
-                      << type << std::endl;
+            std::stringstream error_string;
+            error_string << "ERROR: Duplicate metadata type?";
+            error_string << "Already registered ";
+            error_string << "type found: ";
+            error_string << type;
+            RegisterMetadata_internal_error_function_(error_string.str());
             return false;
         }
         registry.insert(std::make_pair(type, MetadataDerived::from_buffer));

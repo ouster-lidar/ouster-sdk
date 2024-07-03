@@ -8,10 +8,8 @@ from math import ceil
 from threading import Thread
 
 import ouster.sdk.client as client
-from ouster.sdk.client import PacketMultiSource
+from ouster.sdk.client import PacketMultiSource, SensorInfo, Packet, PacketValidationFailure
 import ouster.sdk.client._client as _client
-from ouster.sdk.client import SensorInfo, PacketIdError
-from ouster.sdk.client.data import Packet, LidarPacket, ImuPacket
 
 
 logger = logging.getLogger("multi-logger")
@@ -95,7 +93,7 @@ class SensorMultiPacketReader(PacketMultiSource):
             timeout_sec = ceil(timeout)
         if not self._fetched_meta:
             self._fetched_meta = [c.get_metadata(
-                legacy=False, timeout_sec=timeout_sec) for c in self._connections]
+                timeout_sec=timeout_sec) for c in self._connections]
             if not all(self._fetched_meta):
                 raise client.ClientError("Failed to collect metadata. UPS :(")
 
@@ -112,14 +110,17 @@ class SensorMultiPacketReader(PacketMultiSource):
                     f"but ClientOverflow can't be raised so we are "
                     f"raising ValueError, hmmm ...")
             if e.state & _client.ClientState.LIDAR_DATA:
-                p = self._cli.packet(e)
-                packet = LidarPacket(
-                    p._data, self._metadata[e.source], p.capture_timestamp)
+                packet = self._cli.packet(e)
+                res = packet.validate(self._metadata[e.source], self._pf[e.source])
+                if res == PacketValidationFailure.ID:
+                    self._id_error_count[e.source] += 1
+                    # todo add option for soft check here
+                    raise ValueError("Metadata init_id/sn does not match")
+                if res == PacketValidationFailure.PACKET_SIZE:
+                    raise ValueError("Unexpected packet size")
                 return (e.source, packet)
             elif e.state & _client.ClientState.IMU_DATA:
-                p = self._cli.packet(e)
-                packet = ImuPacket(
-                    p._data, self._metadata[e.source], p.capture_timestamp)
+                packet = self._cli.packet(e)
                 return (e.source, packet)
             elif e.state == _client.ClientState.TIMEOUT:
                 raise client.ClientTimeout(
@@ -128,9 +129,6 @@ class SensorMultiPacketReader(PacketMultiSource):
                 raise client.ClientError("Client returned ERROR state")
             elif e.state & _client.ClientState.EXIT:
                 return None
-        except PacketIdError as err:
-            self._id_error_count[e.source] += 1
-            raise err
         finally:
             # LidarPacket/ImuPacket ctors may raise but we always want to
             # advance the subscriber so to not overflow
@@ -159,7 +157,7 @@ class SensorMultiPacketReader(PacketMultiSource):
                         yield p
                 else:
                     break
-            except (ValueError, PacketIdError):
+            except (ValueError):
                 # bad packet size here: this can happen when
                 # packets are buffered by the OS, not necessarily an error
                 # same pass as in data.py
@@ -180,7 +178,7 @@ class SensorMultiPacketReader(PacketMultiSource):
         frames_cnt = [n_frames] * len(self.metadata)
         sensor_flushed = [False] * len(self.metadata)
 
-        frame_bound = [client.FrameBorder() for _ in self.metadata]
+        frame_bound = [client.FrameBorder(m) for m in self.metadata]
 
         def flush_impl(p: Tuple[int, client.Packet]) -> bool:
             nonlocal frame_bound
@@ -243,5 +241,5 @@ class SensorMultiPacketReader(PacketMultiSource):
 
     @property
     def id_error_count(self) -> List[int]:
-        """Number of PacketIdError accumulated per connection/sensor"""
+        """Number of packet id check failures accumulated per connection/sensor"""
         return self._id_error_count

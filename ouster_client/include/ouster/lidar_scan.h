@@ -8,27 +8,93 @@
 #include <Eigen/Core>
 #include <chrono>
 #include <cstddef>
-#include <map>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "ouster/defaults.h"
+#include "ouster/field.h"
 #include "ouster/types.h"
 
 namespace ouster {
 
-// forward declarations
-namespace impl {
-struct FieldSlot;
-}
+/*
+ * Description for a field that we desire in a lidar scan
+ */
+struct FieldType {
+    std::string name;                    ///< Name of the field
+    sensor::ChanFieldType element_type;  ///< Type of field elements
+    std::vector<size_t> extra_dims;      ///< Additional dimensions of the field
+    FieldClass field_class =
+        FieldClass::PIXEL_FIELD;  ///< Category of field, determines the
+                                  ///< first dimensions of the field
+
+    /**
+     * Initialize a default FieldType with no name.
+     */
+    FieldType();
+
+    /**
+     * Initialize a lidar scan from another with only the indicated fields.
+     * Casts, zero pads or removes fields from the original scan if necessary.
+     *
+     * @param[in] name_ Name of the field described by the type.
+     * @param[in] element_type_ Primitive type for elements in the field.
+     * @param[in] extra_dims_ Additional dimensions of the field
+     * @param[in] class_ Category of field, determins the first dimensions of
+                         the field
+     */
+    FieldType(const std::string& name_, sensor::ChanFieldType element_type_,
+              const std::vector<size_t> extra_dims_ = {},
+              FieldClass class_ = FieldClass::PIXEL_FIELD);
+
+    /**
+     * Less than operated needed to allow sorting FieldTypes by name
+     *
+     * @param[in] other The FieldType to compare with
+     *
+     * @return if the name is "less than" the provided FieldType
+     */
+    inline bool operator<(const FieldType& other) const {
+        return name < other.name;
+    }
+};
+
+/**
+ * Get string representation of a FieldType.
+ *
+ * @param[in] field_type The field type to get the string representation of.
+ *
+ * @return string representation of the FieldType.
+ */
+std::string to_string(const FieldType& field_type);
+
+/**
+ * Equality for FieldTypes.
+ *
+ * @param[in] a The first type to compare.
+ * @param[in] b The second type to compare.
+ *
+ * @return if a == b.
+ */
+bool operator==(const FieldType& a, const FieldType& b);
+
+/**
+ * Equality for FieldTypes.
+ *
+ * @param[in] a The first type to compare.
+ * @param[in] b The second type to compare.
+ *
+ * @return if a != b.
+ */
+bool operator!=(const FieldType& a, const FieldType& b);
 
 /**
  * Alias for the lidar scan field types
  */
-using LidarScanFieldTypes =
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>;
+using LidarScanFieldTypes = std::vector<FieldType>;
 
 /**
  * Data structure for efficient operations on aggregated lidar data.
@@ -50,13 +116,14 @@ class LidarScan {
     using Points = Eigen::Array<double, Eigen::Dynamic, 3>;
 
    private:
-    Header<uint64_t> timestamp_;
-    Header<uint64_t> packet_timestamp_;
-    Header<uint16_t> measurement_id_;
-    Header<uint32_t> status_;
-    std::vector<mat4d> pose_;
-    std::map<sensor::ChanField, impl::FieldSlot> fields_;
-    LidarScanFieldTypes field_types_;
+    std::unordered_map<std::string, Field> fields_;
+
+    // Required special case "fields"
+    Field timestamp_;
+    Field measurement_id_;
+    Field status_;
+    Field packet_timestamp_;
+    Field pose_;
 
     LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
               size_t columns_per_packet);
@@ -68,7 +135,7 @@ class LidarScan {
      * @warning Members variables: use with caution, some of these will become
      * private.
      */
-    std::ptrdiff_t w{0};
+    size_t w{0};
 
     /**
      * Pointer offsets to deal with strides.
@@ -76,7 +143,12 @@ class LidarScan {
      * @warning Members variables: use with caution, some of these will become
      * private.
      */
-    std::ptrdiff_t h{0};
+    size_t h{0};
+
+    /**
+     * Number of columns contained in each packet making up the scan.
+     */
+    size_t columns_per_packet_{DEFAULT_COLUMNS_PER_PACKET};
 
     /**
      * Frame status - information from the packet header which corresponds to a
@@ -94,10 +166,6 @@ class LidarScan {
      * private.
      */
     int64_t frame_id{-1};
-
-    using FieldIter =
-        decltype(field_types_)::const_iterator;  ///< An STL Iterator of the
-                                                 ///< field types
 
     /** The default constructor creates an invalid 0 x 0 scan. */
     LidarScan();
@@ -156,6 +224,8 @@ class LidarScan {
      * Initialize a lidar scan from another with only the indicated fields.
      * Casts, zero pads or removes fields from the original scan if necessary.
      *
+     * @throw std::invalid_argument if field dimensions are incompatible
+     *
      * @param[in] other The other lidar scan to initialize from.
      * @param[in] fields Fields to have in new lidar scan.
      */
@@ -211,31 +281,102 @@ class LidarScan {
     /**
      * @copydoc ClientLidarScanField
      */
-    template <typename T = uint32_t,
-              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
-    Eigen::Ref<img_t<T>> field(sensor::ChanField f);
+    template <typename T>
+    Eigen::Ref<img_t<T>> field(const std::string& f);
 
     /**
      * @copydoc ClientLidarScanField
      */
-    template <typename T = uint32_t,
-              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
-    Eigen::Ref<const img_t<T>> field(sensor::ChanField f) const;
+    template <typename T>
+    Eigen::Ref<const img_t<T>> field(const std::string& f) const;
+
+    /**
+     * @defgroup ClientLidarScanFieldString Access fields in a lidar scan
+     * Access a lidar data field.
+     *
+     * @param[in] name string key of the field to access
+     *
+     * @return Field reference of the requested field
+     */
+
+    /**
+     * @copydoc ClientLidarScanFieldString
+     */
+    Field& field(const std::string& name);
+
+    /**
+     * @copydoc ClientLidarScanFieldString
+     */
+    const Field& field(const std::string& name) const;
+
+    /**
+     * Check if a field exists
+     *
+     * @param[in] name string key of the field to check
+     *
+     * @return true if the lidar scan has the field, else false
+     */
+    bool has_field(const std::string& name) const;
+
+    /**
+     * Add a new zero-filled field to lidar scan.
+     *
+     * @throw std::invalid_argument if key duplicates a preexisting field, or
+     *        if flags dimensional requirements are not met
+     *
+     * @param[in] name string key of the field to add
+     * @param[in] d descriptor of the field to add
+     * @param[in] field_class class to be assigned to the field, e.g.
+     * PIXEL_FIELD
+     *
+     * @return field
+     */
+    Field& add_field(const std::string& name, FieldDescriptor d,
+                     FieldClass field_class = FieldClass::PIXEL_FIELD);
+
+    /**
+     * Add a new zero-filled field to lidar scan.
+     *
+     * @throw std::invalid_argument if key duplicates a preexisting field
+     *
+     * @param[in] type descriptor of the field to add
+     *
+     * @return field
+     */
+    Field& add_field(const FieldType& type);
+
+    /**
+     * Release the field and remove it from lidar scan
+     *
+     * @throw std::invalid_argument if field under key does not exist
+     *
+     * @param[in] name string key of the field to remove
+     */
+    Field del_field(const std::string& name);
 
     /**
      * Get the type of the specified field.
      *
-     * @param[in] f the field to query.
+     * @param[in] name the string key of the field to query.
      *
-     * @return the type tag associated with the field.
+     * @return the type associated with the field.
      */
-    sensor::ChanFieldType field_type(sensor::ChanField f) const;
+    FieldType field_type(const std::string& name) const;
 
-    /** A const forward iterator over field / type pairs. */
-    FieldIter begin() const;
+    /**
+     * Get the FieldType of all fields in the scan
+     *
+     * @return the type associated with every field in the scan
+     */
+    LidarScanFieldTypes field_types() const;
 
-    /** @copydoc begin() */
-    FieldIter end() const;
+    /**
+     * Reference to the internal fields map
+     */
+    std::unordered_map<std::string, Field>& fields();
+
+    /** @copydoc fields() */
+    const std::unordered_map<std::string, Field>& fields() const;
 
     /**
      * Access the measurement timestamp headers.
@@ -291,13 +432,14 @@ class LidarScan {
     Eigen::Ref<const Header<uint32_t>> status() const;
 
     /**
-     * Access the vector of poses (per each timestamp).
-     *
-     * @return a reference to vector with poses (4x4) homogeneous.
+     * Access the array of poses (per each timestamp). Cast to
+     * ArrayView3<double> in order to access as 3d
+     * @return 3d field of homogenous pose matrices, shaped (w, 4, 4).
      */
-    std::vector<mat4d>& pose();
+    Field& pose();
+
     /** @copydoc pose() */
-    const std::vector<mat4d>& pose() const;
+    const Field& pose() const;
 
     /**
      * Assess completeness of scan.
@@ -317,15 +459,6 @@ class LidarScan {
  * @return string representation of the lidar scan field types.
  */
 std::string to_string(const LidarScanFieldTypes& field_types);
-
-/**
- * Get the lidar scan field types from a lidar scan
- *
- * @param[in] ls The lidar scan to get the lidar scan field types from.
- *
- * @return The lidar scan field types
- */
-LidarScanFieldTypes get_field_types(const LidarScan& ls);
 
 /**
  * Get the lidar scan field types from lidar profile
@@ -517,8 +650,8 @@ inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
  * LidarScan.
  */
 class ScanBatcher {
-    std::ptrdiff_t w;
-    std::ptrdiff_t h;
+    size_t w;
+    size_t h;
     uint16_t next_valid_m_id;
     uint16_t next_headers_m_id;
     uint16_t next_valid_packet_id;

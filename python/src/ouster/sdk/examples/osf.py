@@ -1,6 +1,5 @@
 import argparse
 import os
-import numpy as np
 
 
 def osf_read_scans(osf_file: str) -> None:
@@ -109,18 +108,14 @@ def osf_slice_scans(osf_file: str) -> None:
 
     # New field types should be a subset of fields in encoded LidarScan so we just assume that
     # RANGE, SIGNAL and REFLECTIVITY fields will be present in the input OSF file.
-    new_field_types = dict({
-        client.ChanField.RANGE: np.dtype('uint32'),
-        client.ChanField.SIGNAL: np.dtype('uint16'),
-        client.ChanField.REFLECTIVITY: np.dtype('uint16')
-    })
+    fields_to_write = [client.ChanField.RANGE, client.ChanField.SIGNAL, client.ChanField.REFLECTIVITY]
 
     output_file_base = os.path.splitext(os.path.basename(osf_file))[0]
     output_file = output_file_base + '_sliced.osf'
 
     # Create Writer with a subset of fields to save (i.e. slicing will happen
     # automatically on write)
-    writer = osf.Writer(output_file, scans.metadata, new_field_types)
+    writer = osf.Writer(output_file, scans.metadata, fields_to_write)
 
     # Read scans and write back
     for ts, scan in scans.withTs():

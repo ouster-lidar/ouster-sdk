@@ -1,4 +1,4 @@
-# Define forwards-compatible imported target for old platforms (Ubuntu 18.04)
+# Define forwards-compatible imported target for old platforms
 # Note: curl from VCPKG appears to completely ignore curl find modules despite
 # CMAKE_MODULE_PATH settings
 

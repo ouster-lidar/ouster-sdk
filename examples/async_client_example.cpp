@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
     auto metadata = sensor::get_metadata(*handle);
 
     // Raw metadata can be parsed into a `sensor_info` struct
-    sensor::sensor_info info = sensor::parse_metadata(metadata);
+    sensor::sensor_info info(metadata);
 
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
@@ -120,8 +120,9 @@ int main(int argc, char* argv[]) {
      * UDP socket.
      */
 
-    // buffer to store raw packet data
-    auto packet_buf = std::make_unique<uint8_t[]>(UDP_BUF_SIZE);
+    // Place to store raw packets as they pass between threads
+    ouster::sensor::LidarPacket lidar_packet(pf.lidar_packet_size);
+    ouster::sensor::ImuPacket imu_packet(pf.imu_packet_size);
 
     /*
     In this example we spin two threads one to receive lidar packets while the
@@ -159,7 +160,7 @@ int main(int argc, char* argv[]) {
                 std::unique_lock<std::mutex> lock(mtx);
                 receiving_cv.wait(
                     lock, [&packet_processed] { return packet_processed; });
-                if (!sensor::read_lidar_packet(*handle, packet_buf.get(), pf)) {
+                if (!sensor::read_lidar_packet(*handle, lidar_packet)) {
                     FATAL("Failed to read a packet of the expected size!");
                 }
                 packet_processed = false;
@@ -171,7 +172,7 @@ int main(int argc, char* argv[]) {
                 std::unique_lock<std::mutex> lock(mtx);
                 receiving_cv.wait(
                     lock, [&packet_processed] { return packet_processed; });
-                sensor::read_imu_packet(*handle, packet_buf.get(), pf);
+                sensor::read_imu_packet(*handle, imu_packet);
                 // we are not going to processor imu data
                 // so we will keep packet_processed set to true
             }
@@ -184,7 +185,7 @@ int main(int argc, char* argv[]) {
             processing_cv.wait(
                 lock, [&packet_processed] { return !packet_processed; });
             // batcher will return "true" when the current scan is complete
-            if (batch_to_scan(packet_buf.get(), scan)) {
+            if (batch_to_scan(lidar_packet, scan)) {
                 // retry until we receive a full set of valid measurements
                 // (accounting for azimuth_window settings if any)
                 if (scan.complete(info.format.column_window)) {
@@ -213,7 +214,8 @@ int main(int argc, char* argv[]) {
 
 void display_scan_summary(const LidarScan& scan) {
     // channel fields can be queried as well
-    auto n_valid_first_returns = (scan.field(sensor::RANGE) != 0).count();
+    auto n_valid_first_returns =
+        (scan.field<uint32_t>(sensor::ChanField::RANGE) != 0).count();
 
     // LidarScan also provides access to header information such as
     // status and timestamp

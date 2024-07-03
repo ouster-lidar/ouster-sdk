@@ -18,11 +18,12 @@ from ouster.sdk.client import ClientError, init_logger
 
 from .util import util_group
 
+from threadpoolctl import threadpool_limits
+
 this_package_name = 'ouster-sdk'
 APP_NAME = 'ouster'
 TRACEBACK = False
 TRACEBACK_FLAG = '--traceback'
-
 
 logger = logging.getLogger("cli-args-logger")
 
@@ -172,6 +173,12 @@ def find_plugins(show_traceback: bool = False):
 
 def run(args=None) -> None:
     exit_code = None
+
+    # Set openblas and friends to only use 1 thread to avoid threadpool busywaiting issues
+    # The busywaiting in openblas was taking a viz from less than a half a core to 3
+    # The small matrices/vectors we are using with BLAS are generally not conducive to
+    # multithreading anyways
+    threadpool_limits(limits=1, user_api='blas')
 
     if platform.system() == "Windows":
         client_log_dir = os.getenv("LOCALAPPDATA")
