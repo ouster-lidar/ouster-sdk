@@ -8,10 +8,13 @@
 #include <sstream>
 
 #include "fb_utils.h"
+#include "ouster/impl/logging.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/layout_streaming.h"
 #include "ouster/osf/stream_lidar_scan.h"
+
+using namespace ouster::sensor;
 
 constexpr size_t MAX_CHUNK_SIZE = 500 * 1024 * 1024;
 
@@ -42,18 +45,21 @@ Writer::Writer(const std::string& filename, uint32_t chunk_size)
 
 Writer::Writer(const std::string& filename,
                const ouster::sensor::sensor_info& info,
-               const LidarScanFieldTypes& field_types, uint32_t chunk_size)
+               const std::vector<std::string>& desired_fields,
+               uint32_t chunk_size)
     : Writer(filename, std::vector<ouster::sensor::sensor_info>{info},
-             field_types, chunk_size) {}
+             desired_fields, chunk_size) {}
 
 Writer::Writer(const std::string& filename,
                const std::vector<ouster::sensor::sensor_info>& info,
-               const LidarScanFieldTypes& field_types, uint32_t chunk_size)
+               const std::vector<std::string>& desired_fields,
+               uint32_t chunk_size)
     : Writer(filename, chunk_size) {
     sensor_info_ = info;
     for (uint32_t i = 0; i < info.size(); i++) {
         lidar_meta_id_[i] = add_metadata(ouster::osf::LidarSensor(info[i]));
-        field_types_.push_back(field_types);
+        field_types_.push_back({});
+        desired_fields_.push_back(desired_fields);
     }
 }
 
@@ -68,10 +74,11 @@ const ouster::sensor::sensor_info Writer::sensor_info(int stream_index) const {
 uint32_t Writer::sensor_info_count() const { return sensor_info_.size(); }
 
 uint32_t Writer::add_sensor(const ouster::sensor::sensor_info& info,
-                            const LidarScanFieldTypes& field_types) {
+                            const std::vector<std::string>& desired_fields) {
     lidar_meta_id_[lidar_meta_id_.size()] =
         add_metadata(ouster::osf::LidarSensor(info));
-    field_types_.push_back(field_types);
+    field_types_.push_back({});
+    desired_fields_.push_back(desired_fields);
     sensor_info_.push_back(info);
     return lidar_meta_id_.size() - 1;
 }
@@ -81,14 +88,67 @@ void Writer::_save(uint32_t stream_index, const LidarScan& scan,
     if (stream_index < lidar_meta_id_.size()) {
         auto item = lidar_streams_.find(stream_index);
         if (item == lidar_streams_.end()) {
-            const auto& fields = field_types_[stream_index].size()
-                                     ? field_types_[stream_index]
-                                     : get_field_types(scan);
+            // build list of field types from provided or the first scan
+            std::vector<ouster::FieldType> field_types;
+            if (desired_fields_[stream_index].size() == 0) {
+                field_types = scan.field_types();
+            } else {
+                for (const auto& desired : desired_fields_[stream_index]) {
+                    if (!scan.has_field(desired)) {
+                        throw std::invalid_argument("Required field '" +
+                                                    desired +
+                                                    "' is missing from scan.");
+                    }
+                    field_types.push_back(scan.field_type(desired));
+                }
+            }
+            field_types_[stream_index] = field_types;
+
             lidar_streams_[stream_index] =
                 std::make_unique<ouster::osf::LidarScanStream>(
                     LidarScanStream::Token(), *this,
-                    lidar_meta_id_[stream_index], fields);
+                    lidar_meta_id_[stream_index], field_types);
         }
+
+        // enforce that this scan meets our expected field types and that
+        // dimensions didnt change when required to be the same
+        for (const auto& ft : field_types_[stream_index]) {
+            const auto& field = scan.fields().find(ft.name);
+            if (field == scan.fields().end()) {
+                throw std::invalid_argument("Required field '" + ft.name +
+                                            "' is missing from scan.");
+            }
+
+            if (ft.element_type != field->second.tag()) {
+                throw std::invalid_argument(
+                    "Field '" + ft.name + "' has changed from '" +
+                    sensor::to_string(ft.element_type) + "' to '" +
+                    sensor::to_string(field->second.tag()) +
+                    "'. Field types cannot change between saved scans from the "
+                    "same sensor.");
+            }
+
+            if (ft.field_class != field->second.field_class()) {
+                throw std::invalid_argument(
+                    "Field '" + ft.name + "' has changed from '" +
+                    to_string(ft.field_class) + "' to '" +
+                    to_string(field->second.field_class()) +
+                    "'. Field class cannot change between saved scans from the "
+                    "same sensor.");
+            }
+
+            // Dimensions should not change for pixel fields between scans
+            if (ft.field_class == FieldClass::PIXEL_FIELD) {
+                if (ft != scan.field_type(ft.name)) {
+                    throw std::invalid_argument(
+                        "Field '" + ft.name +
+                        "' dimensions have changed. Pixel field dimensions "
+                        "cannot change for between saved scans from the same "
+                        "sensor.");
+                }
+            }
+        }
+
         lidar_streams_[stream_index]->save(time, scan);
     } else {
         throw std::logic_error("ERROR: Bad Stream ID");
@@ -147,7 +207,7 @@ uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
         throw std::logic_error("ERROR: Hmm, Writer is finished.");
     }
     if (size == 0) {
-        std::cout << "nothing to append!!!\n";
+        logger().info("Writer::append has nothing to append");
         return 0;
     }
     uint64_t saved_bytes = buffer_to_file(buf, size, file_name_, true);
@@ -247,15 +307,15 @@ void Writer::close() {
             header_size_) {
             finished_ = true;
         } else {
-            std::cerr << "ERROR: Can't finish OSF file!"
-                         "Recorded header of "
-                         "different sizes ..."
-                      << std::endl;
+            logger().error(
+                "ERROR: Can't finish OSF file!"
+                "Recorded header of "
+                "different sizes ...");
         }
     } else {
-        std::cerr << "ERROR: Oh, why we are here and "
-                     "didn't finish correctly?"
-                  << std::endl;
+        logger().error(
+            "ERROR: Oh, why we are here and "
+            "didn't finish correctly?");
     }
 }
 
@@ -268,9 +328,9 @@ Writer::~Writer() { close(); }
 void ChunkBuilder::save_message(const uint32_t stream_id, const ts_t ts,
                                 const std::vector<uint8_t>& msg_buf) {
     if (finished_) {
-        std::cerr
-            << "ERROR: ChunkBuilder is finished and can't accept new messages!"
-            << std::endl;
+        logger().error(
+            "ERROR: ChunkBuilder is finished "
+            "and can't accept new messages!");
         return;
     }
 

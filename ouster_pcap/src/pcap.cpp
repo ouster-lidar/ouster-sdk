@@ -41,6 +41,8 @@
 #include <fstream>
 #include <stdexcept>
 
+#include "ip_reassembler.h"
+
 using us = std::chrono::microseconds;
 using timepoint = std::chrono::system_clock::time_point;
 using namespace Tins;
@@ -57,8 +59,7 @@ struct pcap_impl {
         pcap_reader;  ///< Object that holds the unified pcap reader
     FILE* pcap_reader_internals;
     Tins::Packet packet_cache;
-    Tins::IPv4Reassembler
-        reassembler;  ///< The reassembler mainly for lidar packets
+    IPv4Reassembler2 reassembler;  ///< The reassembler mainly for lidar packets
     bool have_new_packet;
     int encap_proto;
 };
@@ -133,8 +134,9 @@ size_t PcapReader::next_packet() {
                 if ((ip && ip->protocol() == PROTOCOL_UDP) ||
                     (ipv6 && ipv6->next_header() == PROTOCOL_UDP)) {
                     // reassm is also used in the while loop
-                    reassm = (impl->reassembler.process(*pdu) !=
-                              IPv4Reassembler::FRAGMENTED);
+                    reassm = (impl->reassembler.process(
+                                  impl->packet_cache.timestamp(), *pdu) !=
+                              IPv4Reassembler2::FRAGMENTED);
                     if (reassm) {
                         info.fragments_in_packet = reassm_packets;
                         info.encapsulation_protocol = impl->encap_proto;

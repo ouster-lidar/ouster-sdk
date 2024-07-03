@@ -6,9 +6,12 @@
 #include "ouster/osf/reader.h"
 
 #include <gtest/gtest.h>
+#include <spdlog/logger.h>
+#include <spdlog/sinks/ostream_sink.h>
 
 #include "common.h"
 #include "osf_test.h"
+#include "ouster/impl/logging.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/stream_lidar_scan.h"
@@ -307,14 +310,21 @@ TEST_F(ReaderTest, MetadataFromBufferTest) {
 
     std::vector<uint8_t> buf;
     std::stringstream output_stream;
-    std::streambuf* old_output_stream = std::cout.rdbuf();
+    auto ostream_sink = std::make_shared<
+        spdlog::sinks::ostream_sink<spdlog::details::null_mutex>>(
+        output_stream);
+    ouster::sensor::impl::Logger::instance().configure_generic_sink(
+        ostream_sink, "info");
 
-    std::cout.rdbuf(output_stream.rdbuf());
     auto result = sensor->from_buffer(buf, "NON EXISTENT");
-    std::cout.rdbuf(old_output_stream);
-    EXPECT_EQ(output_stream.str(), "UNKNOWN TYPE: NON EXISTENT\n");
+
+    std::string output_error = output_stream.str();
+    auto error_loc = output_error.find("[error]");
+    EXPECT_NE(error_loc, std::string::npos);
+
+    output_error = output_error.substr(error_loc);
+    EXPECT_EQ(output_error, "[error] UNKNOWN TYPE: NON EXISTENT\n");
     EXPECT_EQ(result, nullptr);
-    std::cout.rdbuf(old_output_stream);
 
     result = sensor->from_buffer(sensor->buffer(),
                                  "ouster/v1/os_sensor/LidarSensor");

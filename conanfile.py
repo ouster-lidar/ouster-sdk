@@ -1,12 +1,14 @@
 import os
 import re
-from conans import ConanFile, CMake, tools
+from conan import ConanFile
+from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
+from conan.tools.files import collect_libs, load
+from conan.tools.scm import Git
 
-from pprint import pformat
 
-
-class OusterSDKConan(ConanFile):
+class ousterSdkRecipe(ConanFile):
     name = "ouster_sdk"
+    package_type = "library"
     license = "BSD 3-Clause License"
     author = "Ouster, Inc."
     url = "https://github.com/ouster-lidar/ouster_example"
@@ -33,7 +35,6 @@ class OusterSDKConan(ConanFile):
         "eigen_max_align_bytes": False,
     }
 
-    generators = "cmake_paths", "cmake_find_package"
     exports_sources = [
         "cmake/*",
         "conan/*",
@@ -49,27 +50,34 @@ class OusterSDKConan(ConanFile):
         "README.rst"
     ]
 
-    # https://docs.conan.io/en/1.51/howtos/capture_version.html#how-to-capture-package-version-from-text-or-build-files
+    # https://docs.conan.io/2/reference/conanfile/methods/set_version.html
     def set_version(self):
-        content = tools.load(os.path.join(self.recipe_folder, "CMakeLists.txt"))
-        version = re.search(r"set\(OusterSDK_VERSION_STRING (.*)\)", content).group(1)
+        content = load(self, os.path.join(self.recipe_folder, "CMakeLists.txt"))
+        version = re.search("set\(OusterSDK_VERSION_STRING (.*)\)", content).group(1)
         self.version = version.strip()
 
     def config_options(self):
         if self.settings.os == "Windows":
-            del self.options.fPIC
+            self.options.rm_safe("fPIC")
+
+    def configure(self):
+        if self.options.shared:
+            self.options.rm_safe("fPIC")
 
     def requirements(self):
-         # not required directly here but because boost and openssl pulling
-         # slightly different versions of zlib we need to set it
-         # here explicitly
+        # not required directly here but because boost and openssl pulling
+        # slightly different versions of zlib we need to set it
+        # here explicitly
         self.requires("zlib/1.3")
 
-        self.requires("eigen/3.4.0")
+        # Since Eigen is a header only library, and the SDK includes Eigen
+        # headers in its headers, we must set transitive_headers=True so that
+        # packages consuming the SDK will also have access to the Eigen headers.
+        self.requires("eigen/3.4.0", transitive_headers=True)
         self.requires("jsoncpp/1.9.5")
-        self.requires("spdlog/1.11.0")
-        self.requires("fmt/9.1.0")
-        self.requires("libcurl/7.84.0")
+        self.requires("spdlog/1.12.0")
+        self.requires("fmt/9.1.0", override=True)
+        self.requires("libcurl/7.86.0")
 
         if self.options.build_pcap:
             self.requires("libtins/4.3")
@@ -86,41 +94,45 @@ class OusterSDKConan(ConanFile):
             # maybe needed for cpp examples, but not for the lib
             # self.requires("tclap/1.2.4")
 
-    def configure_cmake(self):
-        cmake = CMake(self)
-        cmake.definitions["BUILD_VIZ"] = self.options.build_viz
-        cmake.definitions["BUILD_PCAP"] = self.options.build_pcap
-        cmake.definitions["BUILD_OSF"] = self.options.build_osf
-        cmake.definitions["OUSTER_USE_EIGEN_MAX_ALIGN_BYTES_32"] = self.options.eigen_max_align_bytes
-        # alt way, but we use CMAKE_TOOLCHAIN_FILE in other pipeline so avoid overwrite
-        # cmake.definitions["CMAKE_TOOLCHAIN_FILE"] = os.path.join(self.build_folder, "conan_paths.cmake")
-        cmake.definitions[
-            "CMAKE_PROJECT_ouster_example_INCLUDE"] = os.path.join(
-                self.build_folder, "conan_paths.cmake")
-        cmake.definitions["BUILD_SHARED_LIBS"] = True if self.options.shared else False
-        cmake.definitions["CMAKE_POSITION_INDEPENDENT_CODE"] = (
+    def build_requirements(self):
+        if self.options.build_osf:
+            self.build_requires("flatbuffers/<host_version>")
+
+    def layout(self):
+        cmake_layout(self)
+
+    def generate(self):
+        deps = CMakeDeps(self)
+        deps.generate()
+        tc = CMakeToolchain(self)
+        tc.variables["BUILD_VIZ"] = self.options.build_viz
+        tc.variables["BUILD_PCAP"] = self.options.build_pcap
+        tc.variables["BUILD_OSF"] = self.options.build_osf
+        tc.variables[
+            "OUSTER_USE_EIGEN_MAX_ALIGN_BYTES_32"
+        ] = self.options.eigen_max_align_bytes
+        tc.variables["BUILD_SHARED_LIBS"] = True if self.options.shared else False
+        tc.variables["CMAKE_POSITION_INDEPENDENT_CODE"] = (
             True if "fPIC" in self.options and self.options.fPIC else False
         )
 
         # we use this option until we remove nonstd::optional from SDK codebase (soon)
         if self.options.ensure_cpp17:
-            cmake.definitions["CMAKE_CXX_STANDARD"] = 17
+            tc.variables["CMAKE_CXX_STANDARD"] = 17
 
-        self.output.info("Cmake definitions: ")
-        self.output.info(pformat(cmake.definitions))
-        cmake.configure()
-        return cmake
+        tc.generate()
 
     def build(self):
-        cmake = self.configure_cmake()
+        cmake = CMake(self)
+        cmake.configure()
         cmake.build()
 
     def package(self):
-        cmake = self.configure_cmake()
+        cmake = CMake(self)
         cmake.install()
 
     def package_info(self):
-        self.cpp_info.libs = tools.collect_libs(self)
+        self.cpp_info.libs = collect_libs(self)
         self.cpp_info.includedirs = [
             "include",
             "include/optional-lite"
@@ -129,8 +141,14 @@ class OusterSDKConan(ConanFile):
             "lib/cmake/OusterSDK/OusterSDKConfig.cmake"
         )
 
+        self.cpp_info.set_property(
+            "cmake_build_modules",
+            [os.path.join("lib", "cmake", "OusterSDK", "OusterSDKConfig.cmake")],
+        )
         self.cpp_info.set_property("cmake_file_name", "OusterSDK")
+        self.cpp_info.set_property("cmake_target_name", "OusterSDK")
 
+        # TODO: to remove in conan v2 once cmake_find_package* generators removed
         self.cpp_info.filenames["cmake_find_package"] = "OusterSDK"
         self.cpp_info.filenames["cmake_find_package_multi"] = "OusterSDK"
         self.cpp_info.names["cmake_find_package"] = "OusterSDK"

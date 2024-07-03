@@ -250,21 +250,30 @@ def pcap_read_packets(
 ) -> None:
     """Basic read packets example from pcap file. """
     # [doc-stag-pcap-read-packets]
+    packet_format = client.PacketFormat(metadata)
     for packet in source:
         if isinstance(packet, client.LidarPacket):
             # Now we can process the LidarPacket. In this case, we access
             # the measurement ids, timestamps, and ranges
-            measurement_ids = packet.measurement_id
-            timestamps = packet.timestamp
-            ranges = packet.field(client.ChanField.RANGE)
+            measurement_ids = packet_format.packet_header(client.ColHeader.MEASUREMENT_ID, packet.buf)
+            timestamps = packet_format.packet_header(client.ColHeader.TIMESTAMP, packet.buf)
+            ranges = packet_format.packet_field(client.ChanField.RANGE, packet.buf)
             print(f'  encoder counts = {measurement_ids.shape}')
             print(f'  timestamps = {timestamps.shape}')
             print(f'  ranges = {ranges.shape}')
 
         elif isinstance(packet, client.ImuPacket):
             # and access ImuPacket content
-            print(f'  acceleration = {packet.accel}')
-            print(f'  angular_velocity = {packet.angular_vel}')
+            ax = packet_format.imu_la_x(packet.buf)
+            ay = packet_format.imu_la_y(packet.buf)
+            az = packet_format.imu_la_z(packet.buf)
+
+            wx = packet_format.imu_av_x(packet.buf)
+            wy = packet_format.imu_av_y(packet.buf)
+            wz = packet_format.imu_av_z(packet.buf)
+
+            print(f'  acceleration = {ax}, {ay}, {az}')
+            print(f'  angular_velocity = {wx}, {wy}, {wz}')
     # [doc-etag-pcap-read-packets]
 
 

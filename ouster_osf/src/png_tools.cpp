@@ -13,12 +13,15 @@
 #include <iostream>
 #include <memory>
 
+#include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
 
-/*
+/**
  * Effect of png_set_compression(comp level):
  * - (no png out):     2s, n/a
  * - comp level 1:    39s, 648M  (60% speedup vs default, 10% size increase)
@@ -29,7 +32,7 @@ namespace osf {
  * - libpng default:  98s, 586M
  * - comp level 9:   328s, 580M
  *
- * TODO: investigate other zlib options
+ * @todo investigate other zlib options
  */
 static constexpr int PNG_OSF_ZLIB_COMPRESSION_LEVEL = 4;
 
@@ -57,10 +60,43 @@ struct VectorReader {
  * Error callback that will be fired on libpng errors
  */
 void png_osf_error(png_structp png_ptr, png_const_charp msg) {
-    std::cout << "ERROR libpng osf: " << msg << std::endl;
+    logger().error("ERROR libpng osf: {}", msg);
     longjmp(png_jmpbuf(png_ptr), 1);
 };
 
+/** @internal */
+inline void print_incompatable_image_size(png_uint_32 actual_width,
+                                          png_uint_32 actual_height,
+                                          png_uint_32 expected_width,
+                                          png_uint_32 expected_height) {
+    logger().error(
+        "ERROR: img contains data of incompatible size: "
+        " {}x{}, expected: {}x{}",
+        actual_width, actual_height, expected_width, expected_height);
+}
+
+/** @internal */
+inline void print_bad_sample_depth(int actual, int expected) {
+    logger().error(
+        "ERROR: encoded img contains data "
+        "with incompatible sample_depth: {}"
+        ", expected: {}",
+        actual, expected);
+}
+
+/** @internal */
+inline void print_bad_color_type(int actual, int expected) {
+    logger().error(
+        "ERROR: encoded img contains data with incompatible "
+        "color type: {}, expected: {}",
+        actual, expected);
+}
+
+inline void print_bad_pixel_size() {
+    logger().error(
+        "WARNING: Attempt to decode image"
+        " of bigger pixel size");
+}
 /**
  * Custom png_write handler to write data to std::vector buffer
  */
@@ -96,13 +132,13 @@ bool png_osf_write_init(png_structpp png_ptrp, png_infopp png_info_ptrp) {
     *png_ptrp = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr,
                                         png_osf_error, png_osf_error);
     if (!*png_ptrp) {
-        std::cout << "ERROR: no png_ptr\n";
+        logger().error("ERROR: no png_ptr");
         return true;
     }
 
     *png_info_ptrp = png_create_info_struct(*png_ptrp);
     if (!*png_info_ptrp) {
-        std::cout << "ERROR: no png_info_ptr\n";
+        logger().error("ERROR: no png_info_ptr");
         png_destroy_write_struct(png_ptrp, nullptr);
         return true;
     }
@@ -117,13 +153,13 @@ bool png_osf_read_init(png_structpp png_ptrp, png_infopp png_info_ptrp) {
     *png_ptrp = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr,
                                        png_osf_error, png_osf_error);
     if (!*png_ptrp) {
-        std::cout << "ERROR: no png_ptr\n";
+        logger().error("ERROR: no png_ptr");
         return true;
     }
 
     *png_info_ptrp = png_create_info_struct(*png_ptrp);
     if (!*png_info_ptrp) {
-        std::cout << "ERROR: no png_info_ptr\n";
+        logger().error("ERROR: no png_info_ptr");
         png_destroy_read_struct(png_ptrp, nullptr, nullptr);
         return true;
     }
@@ -631,18 +667,17 @@ void fieldEncodeMulti(const LidarScan& lidar_scan,
         auto err = fieldEncode(lidar_scan, field_types[i], px_offset, scan_data,
                                scan_idxs[i]);
         if (err) {
-            std::cerr << "ERROR: fieldEncode: Can't encode field ["
-                      << sensor::to_string(field_types[i])
-                      << "] (in "
-                         "fieldEncodeMulti)"
-                      << std::endl;
+            logger().error(
+                "ERROR: fieldEncode: Can't encode field [{}]"
+                "(in fieldEncodeMulti)",
+                field_types[i].first);
         }
     }
 }
 
 bool fieldEncode(
     const LidarScan& lidar_scan,
-    const std::pair<sensor::ChanField, sensor::ChanFieldType> field_type,
+    const std::pair<std::string, sensor::ChanFieldType>& field_type,
     const std::vector<int>& px_offset, ScanData& scan_data, size_t scan_idx) {
     if (scan_idx >= scan_data.size()) {
         throw std::invalid_argument(
@@ -672,49 +707,50 @@ bool fieldEncode(
                                    px_offset);
             break;
         default:
-            std::cerr << "ERROR: fieldEncode: UNKNOWN: ChanFieldType not yet "
-                         "implemented"
-                      << std::endl;
+            logger().error(
+                "ERROR: fieldEncode: UNKNOWN:"
+                "ChanFieldType not yet "
+                "implemented");
             break;
     }
     if (res) {
-        std::cerr << "ERROR: fieldEncode: Can't encode field "
-                  << sensor::to_string(field_type.first) << std::endl;
+        logger().error("ERROR: fieldEncode: Can't encode field {}",
+                       field_type.first);
     }
     return res;
 }
 
 ScanData scanEncode(const LidarScan& lidar_scan,
-                    const std::vector<int>& px_offset) {
+                    const std::vector<int>& px_offset,
+                    const LidarScanFieldTypes& field_types) {
 #ifdef OUSTER_OSF_NO_THREADING
-    return scanEncodeFieldsSingleThread(lidar_scan, px_offset,
-                                        {lidar_scan.begin(), lidar_scan.end()});
+    return scanEncodeFieldsSingleThread(lidar_scan, px_offset, field_types);
 #else
-    return scanEncodeFields(lidar_scan, px_offset,
-                            {lidar_scan.begin(), lidar_scan.end()});
+    return scanEncodeFields(lidar_scan, px_offset, field_types);
 #endif
 }
 
 // ========== Decode Functions ===================================
 
 bool scanDecode(LidarScan& lidar_scan, const ScanData& scan_data,
-                const std::vector<int>& px_offset) {
+                const std::vector<int>& px_offset,
+                const ouster::LidarScanFieldTypes& field_types) {
 #ifdef OUSTER_OSF_NO_THREADING
-    return scanDecodeFieldsSingleThread(lidar_scan, scan_data, px_offset);
+    return scanDecodeFieldsSingleThread(lidar_scan, scan_data, px_offset,
+                                        field_types);
 #else
-    return scanDecodeFields(lidar_scan, scan_data, px_offset);
+    return scanDecodeFields(lidar_scan, scan_data, px_offset, field_types);
 #endif
 }
 
 bool fieldDecode(
     LidarScan& lidar_scan, const ScanData& scan_data, size_t start_idx,
-    const std::pair<sensor::ChanField, sensor::ChanFieldType> field_type,
+    const std::pair<std::string, sensor::ChanFieldType>& field_type,
     const std::vector<int>& px_offset) {
     switch (field_type.second) {
         case sensor::ChanFieldType::UINT8:
             return decode8bitImage(lidar_scan.field<uint8_t>(field_type.first),
                                    scan_data[start_idx], px_offset);
-            return true;
         case sensor::ChanFieldType::UINT16:
             return decode16bitImage(
                 lidar_scan.field<uint16_t>(field_type.first),
@@ -727,11 +763,11 @@ bool fieldDecode(
             return decode64bitImage(
                 lidar_scan.field<uint64_t>(field_type.first),
                 scan_data[start_idx], px_offset);
-            return true;
         default:
-            std::cout << "ERROR: fieldDecode: UNKNOWN: ChanFieldType not yet "
-                         "implemented"
-                      << std::endl;
+            logger().error(
+                "ERROR: fieldDecode: UNKNOWN:"
+                "ChanFieldType not yet "
+                "implemented");
             return true;
     }
     return true;  // ERROR
@@ -751,29 +787,36 @@ bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
         auto err = fieldDecode(lidar_scan, scan_data, scan_idxs[i],
                                field_types[i], px_offset);
         if (err) {
-            std::cerr << "ERROR: fieldDecodeMulti: Can't decode field ["
-                      << sensor::to_string(field_types[i]) << "]" << std::endl;
+            logger().error(
+                "ERROR: fieldDecodeMulti: "
+                "Can't decode field [{}]",
+                field_types[i].first);
         }
         res_err = res_err || err;
     }
     return res_err;
 }
 #ifdef OUSTER_OSF_NO_THREADING
-bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
-                                  const ScanData& scan_data,
-                                  const std::vector<int>& px_offset) {
-    size_t fields_cnt = std::distance(lidar_scan.begin(), lidar_scan.end());
+bool scanDecodeFieldsSingleThread(
+    LidarScan& lidar_scan, const ScanData& scan_data,
+    const std::vector<int>& px_offset,
+    const ouster::LidarScanFieldTypes& field_types) {
+    size_t fields_cnt = lidar_scan.fields().size();
     if (scan_data.size() != fields_cnt) {
-        std::cerr << "ERROR: lidar_scan data contains # of channels: "
-                  << scan_data.size() << ", expected: " << fields_cnt
-                  << " for OSF_EUDP" << std::endl;
+        logger().error(
+            "ERROR: lidar_scan data contains # of channels: {}"
+            ", expected: {} for OSF_EUDP",
+            scan_data.size(), fields_cnt);
         return true;
     }
     size_t next_idx = 0;
-    for (auto f : lidar_scan) {
-        if (fieldDecode(lidar_scan, scan_data, next_idx, f, px_offset)) {
-            std::cout << "ERROR: scanDecodeFields: Failed to decode field"
-                      << std::endl;
+    for (auto ft : field_types) {
+        auto& f = lidar_scan.field(ft.name);
+        if (fieldDecode(lidar_scan, scan_data, next_idx,
+                        {ft.name, ft.element_type}, px_offset)) {
+            logger().error(
+                "ERROR: scanDecodeFields:"
+                "Failed to decode field");
             return true;
         }
         ++next_idx;
@@ -784,13 +827,14 @@ bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
 // TWS 20240301 TODO: determine if we can deduplicate this code (see
 // scanEncodeFields)
 bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
-                      const std::vector<int>& px_offset) {
-    LidarScanFieldTypes field_types(lidar_scan.begin(), lidar_scan.end());
+                      const std::vector<int>& px_offset,
+                      const ouster::LidarScanFieldTypes& field_types) {
     size_t fields_num = field_types.size();
     if (scan_data.size() != fields_num) {
-        std::cerr << "ERROR: lidar_scan data contains # of channels: "
-                  << scan_data.size() << ", expected: " << fields_num
-                  << " for OSF EUDP" << std::endl;
+        logger().error(
+            "ERROR: lidar_scan data contains # of channels: "
+            "{}, expected: {} for OSF EUDP",
+            scan_data.size(), fields_num);
         return true;
     }
 
@@ -813,7 +857,8 @@ bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
         std::vector<size_t> thread_idxs{};
         for (size_t i = 0; i < per_thread_num && i + start_idx < fields_num;
              ++i) {
-            thread_fields.push_back(field_types[start_idx + i]);
+            thread_fields.push_back({field_types[start_idx + i].name,
+                                     field_types[start_idx + i].element_type});
             thread_idxs.push_back(scan_idx);
             scan_idx += 1;  // for UINT64 can be 2 (NOT IMPLEMENTED YET)
         }
@@ -899,24 +944,19 @@ bool decode24bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout << "ERROR: img contains data of incompatible size: " << width
-                  << "x" << height << ", expected: " << img.cols() << "x"
-                  << img.rows() << std::endl;
+        print_incompatable_image_size(width, height,
+                                      static_cast<png_uint_32>(img.cols()),
+                                      static_cast<png_uint_32>(img.rows()));
         return true;
     }
 
     if (sample_depth != 8) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "sample_depth: "
-                  << sample_depth << ", expected: 8" << std::endl;
+        print_bad_sample_depth(sample_depth, 8);
         return true;
     }
 
     if (color_type != PNG_COLOR_TYPE_RGB) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "color type: "
-                  << color_type << ", expected: " << PNG_COLOR_TYPE_RGB
-                  << std::endl;
+        print_bad_color_type(color_type, PNG_COLOR_TYPE_RGB);
         return true;
     }
 
@@ -971,8 +1011,7 @@ template <typename T>
 bool decode32bitImage(Eigen::Ref<img_t<T>> img,
                       const ScanChannelData& channel_buf) {
     if (sizeof(T) < 4) {
-        std::cerr << "WARNING: Attempt to decode image of bigger pixel size"
-                  << std::endl;
+        print_bad_pixel_size();
     }
     // libpng main structs
     png_structp png_ptr;
@@ -1008,24 +1047,19 @@ bool decode32bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout << "ERROR: img contains data of incompatible size: " << width
-                  << "x" << height << ", expected: " << img.cols() << "x"
-                  << img.rows() << std::endl;
+        print_incompatable_image_size(width, height,
+                                      static_cast<png_uint_32>(img.cols()),
+                                      static_cast<png_uint_32>(img.rows()));
         return true;
     }
 
     if (sample_depth != 8) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "sample_depth: "
-                  << sample_depth << ", expected: 8" << std::endl;
+        print_bad_sample_depth(sample_depth, 8);
         return true;
     }
 
     if (color_type != PNG_COLOR_TYPE_RGB_ALPHA) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "color type: "
-                  << color_type << ", expected: " << PNG_COLOR_TYPE_RGB_ALPHA
-                  << std::endl;
+        print_bad_color_type(color_type, PNG_COLOR_TYPE_RGB_ALPHA);
         return true;
     }
 
@@ -1081,8 +1115,7 @@ template <typename T>
 bool decode64bitImage(Eigen::Ref<img_t<T>> img,
                       const ScanChannelData& channel_buf) {
     if (sizeof(T) < 8) {
-        std::cerr << "WARNING: Attempt to decode image of bigger pixel size"
-                  << std::endl;
+        print_bad_pixel_size();
     }
     // libpng main structs
     png_structp png_ptr;
@@ -1118,24 +1151,21 @@ bool decode64bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout << "ERROR: img contains data of incompatible size: " << width
-                  << "x" << height << ", expected: " << img.cols() << "x"
-                  << img.rows() << std::endl;
+        print_incompatable_image_size(width, height,
+                                      static_cast<png_uint_32>(img.cols()),
+                                      static_cast<png_uint_32>(img.rows()));
+
         return true;
     }
 
     if (sample_depth != 16) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "sample_depth: "
-                  << sample_depth << ", expected: 16" << std::endl;
+        print_bad_sample_depth(sample_depth, 16);
         return true;
     }
 
     if (color_type != PNG_COLOR_TYPE_RGB_ALPHA) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "color type: "
-                  << color_type << ", expected: " << PNG_COLOR_TYPE_RGB_ALPHA
-                  << std::endl;
+        print_bad_color_type(color_type, PNG_COLOR_TYPE_RGB_ALPHA);
+
         return true;
     }
 
@@ -1197,8 +1227,7 @@ template <typename T>
 bool decode16bitImage(Eigen::Ref<img_t<T>> img,
                       const ScanChannelData& channel_buf) {
     if (sizeof(T) < 2) {
-        std::cerr << "WARNING: Attempt to decode image of bigger pixel size"
-                  << std::endl;
+        print_bad_pixel_size();
     }
     // libpng main structs
     png_structp png_ptr;
@@ -1234,24 +1263,19 @@ bool decode16bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout << "ERROR: img contains data of incompatible size: " << width
-                  << "x" << height << ", expected: " << img.cols() << "x"
-                  << img.rows() << std::endl;
+        print_incompatable_image_size(width, height,
+                                      static_cast<png_uint_32>(img.cols()),
+                                      static_cast<png_uint_32>(img.rows()));
         return true;
     }
 
     if (sample_depth != 16) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "sample_depth: "
-                  << sample_depth << ", expected: 16" << std::endl;
+        print_bad_sample_depth(sample_depth, 16);
         return true;
     }
 
     if (color_type != PNG_COLOR_TYPE_GRAY) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "color type: "
-                  << color_type << ", expected: " << PNG_COLOR_TYPE_GRAY
-                  << std::endl;
+        print_bad_color_type(color_type, PNG_COLOR_TYPE_GRAY);
         return true;
     }
 
@@ -1338,24 +1362,19 @@ bool decode8bitImage(Eigen::Ref<img_t<T>> img,
     // Sanity checks for encoded PNG size
     if (width != static_cast<png_uint_32>(img.cols()) ||
         height != static_cast<png_uint_32>(img.rows())) {
-        std::cout << "ERROR: img contains data of incompatible size: " << width
-                  << "x" << height << ", expected: " << img.cols() << "x"
-                  << img.rows() << std::endl;
+        print_incompatable_image_size(width, height,
+                                      static_cast<png_uint_32>(img.cols()),
+                                      static_cast<png_uint_32>(img.rows()));
         return true;
     }
 
     if (sample_depth != 8) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "sample_depth: "
-                  << sample_depth << ", expected: 16" << std::endl;
+        print_bad_sample_depth(sample_depth, 8);
         return true;
     }
 
     if (color_type != PNG_COLOR_TYPE_GRAY) {
-        std::cout << "ERROR: encoded img contains data with incompatible "
-                     "color type: "
-                  << color_type << ", expected: " << PNG_COLOR_TYPE_GRAY
-                  << std::endl;
+        print_bad_color_type(color_type, PNG_COLOR_TYPE_GRAY);
         return true;
     }
 
@@ -1379,6 +1398,87 @@ template bool decode8bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
                                         const ScanChannelData&);
 template bool decode8bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
                                         const ScanChannelData&);
+
+ScanChannelData encodeField(const ouster::Field& field) {
+    ScanChannelData buffer;
+
+    // do not compress, flat fields "compressed" size is greater than original
+    if (field.shape().size() == 1) {
+        buffer.resize(field.bytes());
+        std::memcpy(buffer.data(), field, field.bytes());
+        return buffer;
+    }
+
+    FieldView view = uint_view(field);
+    // collapse shape
+    if (view.shape().size() > 2) {
+        size_t rows = view.shape()[0];
+        size_t cols = view.size() / rows;
+        view = view.reshape(rows, cols);
+    }
+
+    bool res = true;
+    switch (view.tag()) {
+        case sensor::ChanFieldType::UINT8:
+            res = encode8bitImage<uint8_t>(buffer, view);
+            break;
+        case sensor::ChanFieldType::UINT16:
+            res = encode16bitImage<uint16_t>(buffer, view);
+            break;
+        case sensor::ChanFieldType::UINT32:
+            res = encode32bitImage<uint32_t>(buffer, view);
+            break;
+        case sensor::ChanFieldType::UINT64:
+            res = encode64bitImage<uint64_t>(buffer, view);
+            break;
+        default:
+            break;
+    }
+
+    if (res) {
+        throw std::runtime_error("encodeField: could not encode field");
+    }
+
+    return buffer;
+}
+
+void decodeField(ouster::Field& field, const ScanChannelData& buffer) {
+    // 1d case, uncompressed
+    if (field.shape().size() == 1) {
+        std::memcpy(field, buffer.data(), buffer.size());
+        return;
+    }
+
+    FieldView view = uint_view(field);
+    // collapse shape
+    if (view.shape().size() > 2) {
+        size_t rows = view.shape()[0];
+        size_t cols = view.size() / rows;
+        view = view.reshape(rows, cols);
+    }
+
+    bool res = true;
+    switch (view.tag()) {
+        case sensor::ChanFieldType::UINT8:
+            res = decode8bitImage<uint8_t>(view, buffer);
+            break;
+        case sensor::ChanFieldType::UINT16:
+            res = decode16bitImage<uint16_t>(view, buffer);
+            break;
+        case sensor::ChanFieldType::UINT32:
+            res = decode32bitImage<uint32_t>(view, buffer);
+            break;
+        case sensor::ChanFieldType::UINT64:
+            res = decode64bitImage<uint64_t>(view, buffer);
+            break;
+        default:
+            break;
+    }
+
+    if (res) {
+        throw std::runtime_error("decodeField: could not decode field");
+    }
+}
 
 }  // namespace osf
 }  // namespace ouster

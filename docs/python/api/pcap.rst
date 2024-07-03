@@ -1,8 +1,8 @@
-=========================
-Module :mod:`ouster.pcap`
-=========================
+=============================
+Module :mod:`ouster.sdk.pcap`
+=============================
 
-.. automodule:: ouster.pcap
+.. automodule:: ouster.sdk.pcap
 
 .. autofunction:: record
 

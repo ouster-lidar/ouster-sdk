@@ -1,0 +1,34 @@
+namespace ouster.osf.v2;
+
+// sensor::ChanFieldType enum mapping
+enum CHAN_FIELD_TYPE:uint8 {
+    VOID = 0,
+    UINT8 = 1,
+    UINT16 = 2,
+    UINT32 = 3,
+    UINT64 = 4,
+    INT8 = 5,
+    INT16 = 6,
+    INT32 = 7,
+    INT64 = 8,
+    FLOAT32 = 9,
+    FLOAT64 = 10
+}
+
+// int64 because of this: https://github.com/google/flatbuffers/issues/5161
+enum FIELD_CLASS:int64 {
+    NONE = 0,
+    PIXEL_FIELD = 1,
+    COLUMN_FIELD = 2,
+    PACKET_FIELD = 3,
+    SCAN_FIELD = 4
+}
+
+table Field {
+    name:string;
+    tag:CHAN_FIELD_TYPE;
+    shape:[uint64];
+    field_class:FIELD_CLASS;
+    data:[uint8];
+    bytes:uint64;
+}

@@ -14,30 +14,59 @@ Note:
 """
 # flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
 
+import numpy as np
 from numpy import ndarray
-from typing import (ClassVar, Dict, Iterator, List, Optional, overload, Tuple)
+from typing import (Any, ClassVar, Dict, Iterator, List, Optional, overload, Tuple)
 
 from .data import (BufferT, ColHeader, FieldDType, FieldTypes)
 
 
-class _Packet:
-    _host_timestamp: int
-    capture_timestamp: Optional[float]
+class PacketValidationFailure:
+    NONE: ClassVar[PacketValidationFailure]
+    ID: ClassVar[PacketValidationFailure]
+    PACKET_SIZE: ClassVar[PacketValidationFailure]
 
-    def __init__(self, size: int) -> None:
+    __members__: ClassVar[Dict[str, PacketValidationFailure]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
         ...
 
     @property
-    def _data(self) -> ndarray:
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> PacketValidationFailure:
         ...
 
 
-class _LidarPacket(_Packet):
-    pass
+class Packet:
+    host_timestamp: int
+    capture_timestamp: Optional[float]
+
+    def __init__(self, size: int = ...) -> None:
+        ...
+
+    @property
+    def buf(self) -> ndarray:
+        ...
 
 
-class _ImuPacket(_Packet):
-    pass
+class LidarPacket(Packet):
+    def validate(self, metadata: SensorInfo, packet_format: PacketFormat) -> PacketValidationFailure:
+        ...
+
+
+class ImuPacket(Packet):
+    def validate(self, metadata: SensorInfo, packet_format: PacketFormat) -> PacketValidationFailure:
+        ...
 
 
 class Event:
@@ -71,10 +100,10 @@ class SensorConnection:
     def poll(self, timeout_sec: int) -> ClientState:
         ...
 
-    def read_lidar_packet(self, packet: _LidarPacket, pf: PacketFormat) -> bool:
+    def read_lidar_packet(self, packet: LidarPacket, pf: PacketFormat) -> bool:
         ...
 
-    def read_imu_packet(self, packet: _ImuPacket, pf: PacketFormat) -> bool:
+    def read_imu_packet(self, packet: ImuPacket, pf: PacketFormat) -> bool:
         ...
 
     @property
@@ -85,7 +114,7 @@ class SensorConnection:
     def imu_port(self) -> int:
         ...
 
-    def get_metadata(self, timeout_sec: int, legacy: bool) -> str:
+    def get_metadata(self, timeout_sec: int) -> str:
         ...
 
     def shutdown(self) -> None:
@@ -118,7 +147,7 @@ class UDPPacketSource:
     def pop(self, timeout_sec: float) -> Event:
         ...
 
-    def packet(self, e: Event) -> _Packet:
+    def packet(self, e: Event) -> Packet:
         ...
 
     def advance(self, e: Event) -> None:
@@ -162,15 +191,15 @@ class Client:
     def pop(self, timeout_sec: float) -> ClientState:
         ...
 
-    def packet(self, st: ClientState) -> _Packet:
+    def packet(self, st: ClientState) -> Packet:
         ...
 
     def advance(self, st: ClientState) -> None:
         ...
 
     def consume(self,
-                lidarp: _LidarPacket,
-                imup: _ImuPacket,
+                lidarp: LidarPacket,
+                imup: ImuPacket,
                 timeout_sec: float) -> ClientState:
         ...
 
@@ -218,11 +247,17 @@ class ClientState:
         ...
 
 
+class ProductInfo:
+    full_product_info: str
+    form_factor: str
+    short_range: bool
+    beam_config: str
+    beam_count: int
+
+
 class SensorInfo:
-    hostname: str
     sn: str
     fw_rev: str
-    mode: LidarMode
     prod_line: str
     format: DataFormat
     beam_azimuth_angles: List[float]
@@ -233,25 +268,28 @@ class SensorInfo:
     beam_to_lidar_transform: ndarray
     extrinsic: ndarray
     init_id: int
-    udp_port_lidar: int
-    udp_port_imu: int
     build_date: str
     image_rev: str
     prod_pn: str
     status: str
     cal: SensorCalibration
     config: SensorConfig
+    user_data: str
 
     @classmethod
     def from_default(cls, mode: LidarMode) -> SensorInfo:
         ...
 
     @classmethod
-    def original_string(cls) -> str:
+    def to_json_string(cls) -> str:
         ...
 
     @classmethod
-    def updated_metadata_string(cls) -> str:
+    def get_version(self) -> Version:
+        ...
+
+    @classmethod
+    def get_product_info(self) -> ProductInfo:
         ...
 
     @classmethod
@@ -283,6 +321,9 @@ class DataFormat:
 
 
 class PacketFormat:
+    def __init__(self, metadata: SensorInfo) -> None:
+        ...
+
     @property
     def lidar_packet_size(self) -> int:
         ...
@@ -352,16 +393,16 @@ class PacketFormat:
         ...
 
     @property
-    def fields(self) -> Iterator[ChanField]:
+    def fields(self) -> Iterator[str]:
         ...
 
-    def field_value_mask(self, field: ChanField) -> int:
+    def field_value_mask(self, field: str) -> int:
         ...
 
-    def field_bitness(self, field: ChanField) -> int:
+    def field_bitness(self, field: str) -> int:
         ...
 
-    def packet_field(self, field: ChanField, buf: BufferT) -> ndarray:
+    def packet_field(self, field: str, buf: BufferT) -> ndarray:
         ...
 
     def packet_header(self, header: ColHeader, buf: BufferT) -> ndarray:
@@ -399,6 +440,10 @@ class PacketFormat:
         ...
 
     @staticmethod
+    def from_metadata(info: SensorInfo) -> PacketFormat:
+        ...
+
+    @staticmethod
     def from_profile(udp_profile_lidar: UDPProfileLidar,
                      pixels_per_column: int,
                      columns_per_packet: int) -> PacketFormat:
@@ -416,26 +461,26 @@ class PacketWriter(PacketFormat):
                      columns_per_packet: int) -> PacketWriter:
         ...
 
-    def set_col_timestamp(self, packet: _LidarPacket, col_idx: int, ts: int) -> None:
+    def set_col_timestamp(self, packet: LidarPacket, col_idx: int, ts: int) -> None:
         ...
 
     def set_col_measurement_id(self,
-                               packet: _LidarPacket,
+                               packet: LidarPacket,
                                col_idx: int,
                                m_id: int) -> None:
         ...
 
-    def set_col_status(self, packet: _LidarPacket, col_idx: int, status: int) -> None:
+    def set_col_status(self, packet: LidarPacket, col_idx: int, status: int) -> None:
         ...
 
-    def set_frame_id(self, packet: _LidarPacket, frame_id: int) -> None:
+    def set_frame_id(self, packet: LidarPacket, frame_id: int) -> None:
         ...
 
-    def set_field(self, packet: _LidarPacket, chan: ChanField, field: ndarray) -> None:
+    def set_field(self, packet: LidarPacket, chan: str, field: ndarray) -> None:
         ...
 
 
-def scan_to_packets(ls: LidarScan, pw: PacketWriter, init_id: int, prod_sn: int) -> List[_LidarPacket]:
+def scan_to_packets(ls: LidarScan, pw: PacketWriter, init_id: int, prod_sn: int) -> List[LidarPacket]:
     ...
 
 
@@ -455,14 +500,6 @@ class LidarMode:
         ...
 
     def __int__(self) -> int:
-        ...
-
-    @property
-    def cols(self) -> int:
-        ...
-
-    @property
-    def frequency(self) -> int:
         ...
 
     @property
@@ -667,59 +704,6 @@ class NMEABaudRate:
         ...
 
 
-class ChanField:
-    RANGE: ClassVar[ChanField]
-    RANGE2: ClassVar[ChanField]
-    SIGNAL: ClassVar[ChanField]
-    SIGNAL2: ClassVar[ChanField]
-    REFLECTIVITY: ClassVar[ChanField]
-    REFLECTIVITY2: ClassVar[ChanField]
-    FLAGS: ClassVar[ChanField]
-    FLAGS2: ClassVar[ChanField]
-    NEAR_IR: ClassVar[ChanField]
-    RAW_HEADERS: ClassVar[ChanField]
-    CUSTOM0: ClassVar[ChanField]
-    CUSTOM1: ClassVar[ChanField]
-    CUSTOM2: ClassVar[ChanField]
-    CUSTOM3: ClassVar[ChanField]
-    CUSTOM4: ClassVar[ChanField]
-    CUSTOM5: ClassVar[ChanField]
-    CUSTOM6: ClassVar[ChanField]
-    CUSTOM7: ClassVar[ChanField]
-    CUSTOM8: ClassVar[ChanField]
-    CUSTOM9: ClassVar[ChanField]
-    RAW32_WORD1: ClassVar[ChanField]
-    RAW32_WORD2: ClassVar[ChanField]
-    RAW32_WORD3: ClassVar[ChanField]
-    RAW32_WORD4: ClassVar[ChanField]
-    RAW32_WORD5: ClassVar[ChanField]
-    RAW32_WORD6: ClassVar[ChanField]
-    RAW32_WORD7: ClassVar[ChanField]
-    RAW32_WORD8: ClassVar[ChanField]
-    RAW32_WORD9: ClassVar[ChanField]
-
-    __members__: ClassVar[Dict[str, ChanField]]
-    values: ClassVar[Iterator[ChanField]]
-
-    def __init__(self, code: int) -> None:
-        ...
-
-    def __int__(self) -> int:
-        ...
-
-    @property
-    def name(self) -> str:
-        ...
-
-    @property
-    def value(self) -> int:
-        ...
-
-    @classmethod
-    def from_string(cls, s: str) -> ChanField:
-        ...
-
-
 class UDPProfileLidar:
     PROFILE_LIDAR_LEGACY: ClassVar[UDPProfileLidar]
     PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL: ClassVar[UDPProfileLidar]
@@ -838,6 +822,7 @@ class SensorCalibration:
     reflectivity_status: Optional[bool]
     reflectivity_timestamp: Optional[str]
 
+
 class SensorConfig:
     udp_dest: Optional[str]
     udp_port_lidar: Optional[int]
@@ -875,8 +860,33 @@ class SensorConfig:
     def __init__(self, config_string: str) -> None:
         ...
 
-def convert_to_legacy(metadata: str) -> str:
-    ...
+
+class FieldClass:
+    PIXEL_FIELD: ClassVar[FieldClass]
+    COLUMN_FIELD: ClassVar[FieldClass]
+    PACKET_FIELD: ClassVar[FieldClass]
+
+    __members__: ClassVar[Dict[str, FieldClass]]
+    values: ClassVar[Iterator[FieldClass]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> FieldClass:
+        ...
+
 
 def init_logger(log_level: str,
                 log_file_path: str = ...,
@@ -901,6 +911,10 @@ class Version:
     major: int
     minor: int
     patch: int
+    stage: str
+    machine: str
+    prerelease: str
+    build: str
 
     def __init__(self) -> None:
         ...
@@ -913,6 +927,16 @@ class Version:
 
     @classmethod
     def from_string(cls, s: str) -> Version:
+        ...
+
+
+class FieldType:
+    name: str
+    element_type: Any
+    extra_dims: Tuple[int, ...]
+    field_class: FieldClass
+
+    def __init__(self, name: str, dtype: Any, extra_dims: Tuple[int, ...] = (), field_class: FieldClass = FieldClass.PIXEL_FIELD):
         ...
 
 
@@ -934,12 +958,7 @@ class LidarScan:
         ...
 
     @overload
-    def __init__(self, h: int, w: int, fields: Dict[ChanField,
-                                                    FieldDType]) -> None:
-        ...
-
-    @overload
-    def __init__(self, h: int, w: int, fields: Dict[ChanField, FieldDType], columns_per_packet: int) -> None:
+    def __init__(self, h: int, w: int, fields: List[FieldType], columns_per_packet: int = ...) -> None:
         ...
 
     @overload
@@ -947,7 +966,7 @@ class LidarScan:
         ...
 
     @overload
-    def __init__(self, scan: LidarScan, fields: Dict[ChanField, FieldDType]) -> None:
+    def __init__(self, scan: LidarScan, fields: List[FieldType]) -> None:
         ...
 
     @property
@@ -957,7 +976,6 @@ class LidarScan:
     @property
     def h(self) -> int:
         ...
-
 
     def thermal_shutdown(self) -> int:
         ...
@@ -969,7 +987,34 @@ class LidarScan:
     def packet_timestamp(self) -> ndarray:
         ...
 
-    def field(self, field: ChanField) -> ndarray:
+    @overload
+    def field(self, field: str) -> ndarray:
+        ...
+
+    @overload
+    def field(self, name: str) -> ndarray:
+        ...
+
+    @property
+    def field_types(self) -> List[FieldType]:
+        ...
+        
+    @overload
+    def add_field(self, field_type: FieldType) -> ndarray:
+        ...
+
+    @overload
+    def add_field(self, name: str, array: ndarray, field_class: FieldClass = ...) -> ndarray:
+        ...
+
+    @overload
+    def add_field(self, name: str, dtype: FieldDType, shape: Tuple[int, ...], field_class: FieldClass = ...) -> ndarray:
+        ...
+
+    def del_field(self, name: str) -> ndarray:
+        ...
+
+    def field_class(self, name: str) -> FieldClass:
         ...
 
     @property
@@ -992,7 +1037,7 @@ class LidarScan:
         ...
 
     @property
-    def fields(self) -> Iterator[ChanField]:
+    def fields(self) -> Iterator[str]:
         ...
 
 
@@ -1064,7 +1109,7 @@ class ScanBatcher:
         ...
 
     @overload
-    def __call__(self, packet: _LidarPacket, ls: LidarScan) -> bool:
+    def __call__(self, packet: LidarPacket, ls: LidarScan) -> bool:
         ...
 
 
@@ -1114,20 +1159,20 @@ class FieldInfo:
         ...
 
     offset: int
-    mask:   int
-    shift:  int
+    mask: int
+    shift: int
+
 
 def add_custom_profile(profile_nr: int,
                        name: str,
-                       fields: List[Tuple[int, FieldInfo]],
+                       fields: List[Tuple[str, FieldInfo]],
                        chan_data_size: int) -> None:
     ...
 
-@overload
-def get_field_types(scan: LidarScan) -> FieldTypes: ...
 
 @overload
-def get_field_types(info: SensorInfo) -> FieldTypes: ...
+def get_field_types(info: SensorInfo) -> List[FieldType]: ...
+
 
 @overload
-def get_field_types(udp_profile_lidar: UDPProfileLidar) -> FieldTypes: ...
+def get_field_types(udp_profile_lidar: UDPProfileLidar) -> List[FieldType]: ...

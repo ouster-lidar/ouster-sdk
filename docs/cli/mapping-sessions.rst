@@ -116,14 +116,24 @@ following printout for each output file:
 .. code:: bash
 
         Output file: output-000.ply
+        Point Cloud status info
         3932160 points accumulated during this period,
-        154228 near points are removed [3.92 %],
-        1475955 down sampling points are removed [37.54 %],
-        2213506 zero range points are removed [56.29 %],
-        88471 points are saved [2.25 %].
+        1629212 down sampling points are removed [41.43 %],
+        2213506 out range points are removed [56.29 %],
+        89442 points are saved [2.27 %]
 
-Use the ``--help`` flag for more information such as adjusting the minimal range, selecting
-different fields as values, and changing the point cloud downsampling scale etc.
+
+Use the ``--help`` flag for more information such as selecting different fields as values,
+and changing the point cloud downsampling scale etc.
+
+To filter out the point cloud, you can using the ``clip`` command. Coverting the SLAM output OSF
+file to a PLY file and keep only the point within 20 to 80 meteter range you can run:
+
+.. code:: bash
+
+        ouster-cli source sample.osf clip --min-range 20 --max-range 80 save clipped_output.ply
+
+More details about the clip command usage can be found in the :ref:`Clip Command <ouster-cli-clip>`
 
 You can use an open source software `CloudCompare`_ to import and view the generated point cloud
 data files.
@@ -213,12 +223,13 @@ Overall map view (with poses)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 One of the main tasks we frequently need is a preview of the overall map. We can test this by using
-the generated OSF file, which was created with the above command and contains the
-SLAM-generated ``LidarScan.pose`` property.
+the SLAM-generated OSF file, which was created with the above command and contains the
+SLAM trajectory in ``LidarScan.pose``. If you are using a SLAM-generated OSF, you can directly use
+viz with scan accumulator feature without appending the ``slam`` option.
 ::
 
    ouster-cli source sample.osf viz --accum-num 20 \
-   --accum-every 0 --accum-every-m 10.5 --accum-map -r 0 -e stop
+   --accum-every 0 --accum-every-m 10.5 --accum-map -r 3 -e stop
 
 
 Here is a preview example of the overall map generated from the accumulated scan results.

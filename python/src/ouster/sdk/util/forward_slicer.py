@@ -33,32 +33,50 @@ class ForwardSlicer:
         return slice(start, stop, step)
 
     @staticmethod
-    def slice(data_iter: Iterator, key: slice):
+    def _stepper(data_iter, start, stop, step) -> Iterator:
+        if step < 0:
+            # align with the end
+            step = -step
+            aligned_start = (stop - 1) - (stop - start) // step * step
+            if aligned_start < start:
+                aligned_start += step
+            for _ in range(aligned_start - start):
+                next(data_iter)
+        count = 0
+        while count < stop - start:
+            try:
+                count += 1
+                yield next(data_iter)
+                for _ in range(step - 1):
+                    count += 1
+                    next(data_iter)
+            except StopIteration:
+                break
+
+    @staticmethod
+    def slice_iter(data_iter: Iterator, key: slice) -> Iterator:
         """
         Performs forward slicing on a dataset with step
 
         Parameters:
         - key: must be a normalized slice key with relation to the used data_iter.
             a normalized slice key is one where key.start < key.stop and no non-values
+
+        Returns:
+            Iterator: an iterator scoped to the input key
         """
+        return ForwardSlicer._stepper(data_iter, key.start, key.stop, key.step)
 
-        def _stepper(data_iter, start, stop, step):
-            out = []
-            if step < 0:
-                # align with the end
-                step = -step
-                aligned_start = (stop - 1) - (stop - start) // step * step
-                if aligned_start < start:
-                    aligned_start += step
-                for _ in range(aligned_start - start):
-                    next(data_iter)
-            while True:
-                try:
-                    out.append(next(data_iter))
-                    for _ in range(step - 1):
-                        next(data_iter)
-                except StopIteration:
-                    break
-            return out
+    @staticmethod
+    def slice(data_iter: Iterator, key: slice) -> list:
+        """
+        Performs forward slicing on a dataset with step
 
-        return _stepper(data_iter, key.start, key.stop, key.step)
+        Parameters:
+        - key: must be a normalized slice key with relation to the used data_iter.
+            a normalized slice key is one where key.start < key.stop and no non-values
+
+        Returns:
+            List: a list of items scoped to the input key
+        """
+        return [*ForwardSlicer._stepper(data_iter, key.start, key.stop, key.step)]

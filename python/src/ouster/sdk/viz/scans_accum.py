@@ -27,7 +27,7 @@ import ouster.sdk.client as client
 from ouster.sdk.client import ChanField
 import ouster.sdk.util.pose_util as pu
 
-from .view_mode import (CloudMode, ReflMode, SimpleMode,
+from .view_mode import (CloudMode, ReflMode, SimpleMode, RGBMode,
                         is_norm_reflectivity_mode, CloudPaletteItem)
 
 logger = logging.getLogger("viz-accum-logger")
@@ -176,11 +176,13 @@ class ScansAccumulator:
             SimpleMode(ChanField.RANGE, info=self._metas[self._sensor_idx]),
         ]
 
-        # index of available modes "pens" to get colors for point clouds
-        # start with all _cloud_modes and then check on every seen scan
-        # that is used for map/accum that we can still use available
-        # modes on such scans
-        self._available_modes: List[int] = list(range(len(self._cloud_modes)))
+        self._amended_fields: List[str] = [ChanField.RANGE, ChanField.RANGE2,
+                                          ChanField.SIGNAL, ChanField.SIGNAL2,
+                                          ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2,
+                                          ChanField.NEAR_IR,
+                                          ChanField.FLAGS, ChanField.FLAGS2]
+
+        self._populate_cloud_modes()
 
         # init view cloud mode toggle
         self._cloud_mode_ind = 0
@@ -211,6 +213,7 @@ class ScansAccumulator:
 
         # initialize MAP structs
         map_init_points_num = MAP_INIT_POINTS_NUM if self._map_enabled else 0
+        map_init_points_num = min(self._map_max_points, map_init_points_num)
         self._map_xyz = np.zeros((map_init_points_num, 3),
                                  dtype=np.float32,
                                  order='F')
@@ -266,6 +269,13 @@ class ScansAccumulator:
 
         if point_viz:
             self.set_point_viz(point_viz)
+
+    def _populate_cloud_modes(self) -> None:
+        # index of available modes "pens" to get colors for point clouds
+        # start with all _cloud_modes and then check on every seen scan
+        # that is used for map/accum that we can still use available
+        # modes on such scans
+        self._available_modes: List[int] = list(range(len(self._cloud_modes)))
 
     def set_point_viz(self, point_viz: PointViz):
         """Initialize point viz and cloud components."""
@@ -702,6 +712,33 @@ class ScansAccumulator:
         else:
             self._osd.set_text("")
 
+    def _amend_view_modes(self, scan: client.LidarScan) -> None:
+        # Look for any new field that doesn't have a view mode associated with yet
+        # NOTE: we don't currently handle edge cases like removing a view mode if
+        # the field associated with it was dropped or deleted.
+        # Another situation that is not currently handled if there are more than one
+        # field that share the same name but could have different dimensions. In the
+        # current code the first field to appear will acquire the view mode.
+        # Will handle all these edge cases in "LidarScanViz Reforms" work.
+        amended_fields_length = len(self._amended_fields)   # save the value
+        for field_name in scan.fields:
+            if field_name not in self._amended_fields:
+                # we encountered new field
+                field = scan.field(field_name)
+                # for now only consider 2D + 3D
+                if np.ndim(field) == 2:
+                    self._cloud_modes.extend([
+                        SimpleMode(field_name, info=self.metadata[0])])
+                    self._amended_fields.append(field_name)
+                elif np.ndim(field) == 3 and field.shape[2] == 3:
+                    self._cloud_modes.extend([
+                        RGBMode(field_name, info=self.metadata[0])])
+                    self._amended_fields.append(field_name)
+                # else any other shape we simply skip over
+
+        if amended_fields_length != len(self._amended_fields):
+            self._populate_cloud_modes()
+
     @no_type_check
     def update(self,
                scan: Union[client.LidarScan,
@@ -715,6 +752,8 @@ class ScansAccumulator:
             self._scan_num = scan_num
         else:
             self._scan_num += 1
+
+        self._amend_view_modes(scan)
 
         logger.debug("update_scan: scan_num = %d", self._scan_num)
 
@@ -911,7 +950,7 @@ class ScansAccumulator:
         sel_flag = ls.field(client.ChanField.RANGE) != 0
         nzi, nzj = np.nonzero(sel_flag)
         nzc = np.random.choice(len(nzi),
-                               int(self._map_select_ratio * len(nzi)),
+                               min(int(self._map_select_ratio * len(nzi)), self._map_max_points),
                                replace=False)
         row_sel, col_sel = nzi[nzc], nzj[nzc]
         xyz = self._xyzlut[0](ls.field(client.ChanField.RANGE))

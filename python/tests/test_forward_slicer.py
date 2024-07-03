@@ -99,7 +99,23 @@ def sliceable_fixture():
     (None, None, -2),
     (None, None, -3),
 ])
-def test_sliceable(sliceable_fixture, start, stop, step):
+def test_forward_slicer_valid(sliceable_fixture, start, stop, step):
     ref_sliceable, test_sliceable = sliceable_fixture
     ss = slice(start, stop, step)
-    assert ref_sliceable[ss] == test_sliceable[ss], f"Failed test case with the slice [{start}:{stop}:{step}]"
+    assert ref_sliceable[ss] == test_sliceable[ss], \
+        f"Failed test case with the slice [{start}:{stop}:{step}]"
+
+
+@pytest.mark.parametrize("start, stop, step", [
+    (None, None, 0),
+    (None, 8, 0),
+    (3, None, 0),
+    (3, 8, 0),
+    (-3, -8, 0),
+])
+def test_forward_slicer_zero_step_throws(sliceable_fixture, start, stop, step):
+    _, test_sliceable = sliceable_fixture
+    ss = slice(start, stop, step)
+    with pytest.raises(ValueError) as ex:
+        _ = test_sliceable[ss]
+    assert str(ex.value) == "slice step cannot be zero"

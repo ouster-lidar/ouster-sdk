@@ -21,8 +21,21 @@ Quick links
 
     Ouster SDK CLI visualization of OS1 128 Rev 7 sample data
 
-Compatibility with FW
----------------------
+Supported Devices
+-----------------
+
+The sdk supports the following Ouster sensors:
+
+* OS0_
+* OS1_
+* OS2_
+* OSDome_
+
+You can obtain detailed specs sheets for the sensors and obtain updated
+firmware through the website downloads_ section.
+
+Compatibility with Firmware (FW)
+--------------------------------
 
 The Ouster SDK currently provides backwards compatibility with any FW 2.0 and later for all
 releases. Older SDK versions are not, however, generally forward-compatible with later FW releases,
@@ -82,3 +95,8 @@ announcements`_
 .. _Changelog: https://github.com/ouster-lidar/ouster_example/blob/master/CHANGELOG.rst
 .. _Ouster ROS 1 driver: https://github.com/ouster-lidar/ouster-ros
 .. _Lifecycle Policies: https://github.com/ouster-lidar/ouster_example/discussions/532
+.. _OS0: https://ouster.com/products/hardware/os0-lidar-sensor
+.. _OS1: https://ouster.com/products/hardware/os1-lidar-sensor
+.. _OS2: https://ouster.com/products/hardware/os2-lidar-sensor
+.. _OSDome: https://ouster.com/products/hardware/osdome-lidar-sensor
+.. _downloads: https://ouster.com/downloads

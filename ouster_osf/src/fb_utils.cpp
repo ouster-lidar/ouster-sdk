@@ -8,8 +8,11 @@
 #include <fstream>
 #include <iostream>
 
+#include "ouster/impl/logging.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
@@ -68,7 +71,7 @@ uint64_t buffer_to_file(const uint8_t* buf, const uint64_t size,
         file_stream.close();
         saved_size = size + 4;
     } else {
-        std::cerr << "fail to open " << filename << std::endl;
+        logger().error("ERROR: Failed to open {} for writing", filename);
     }
     return saved_size;
 }
@@ -126,7 +129,7 @@ uint64_t finish_osf_file(const std::string& filename,
 
         file_stream.close();
     } else {
-        std::cout << "fail to open " << filename << std::endl;
+        logger().error("ERROR: Failed to open {} for writing", filename);
     }
 
     return saved_size;

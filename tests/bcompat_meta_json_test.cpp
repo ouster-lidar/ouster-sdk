@@ -23,7 +23,7 @@ inline std::string getenvs(const std::string& var) {
     return res ? std::string{res} : std::string{};
 }
 
-void sinfo_populator(sensor_info& info, const std::string& name,
+void sinfo_populator(sensor_info& info, const std::string& /*name*/,
                      const std::string& sn, const std::string& fw_rev,
                      const lidar_mode mode, const std::string& prod_line,
                      const data_format& format,
@@ -34,15 +34,14 @@ void sinfo_populator(sensor_info& info, const std::string& name,
                      const ouster::mat4d& imu_to_sensor_transform,
                      const ouster::mat4d& lidar_to_sensor_transform,
                      const ouster::mat4d& extrinsic, const int init_id,
-                     const int udp_port_lidar, const int udp_port_imu,
+                     const nonstd::optional<int> udp_port_lidar,
+                     const nonstd::optional<int> udp_port_imu,
                      const std::string& build_date,
                      const std::string& image_rev, const std::string& prod_pn,
                      const std::string& status, const calibration_status& cal,
                      const sensor_config& config) {
-    info.name = name;
     info.sn = sn;
     info.fw_rev = fw_rev;
-    info.mode = mode;
     info.prod_line = prod_line;
     info.format = format;
     info.beam_azimuth_angles = beam_azimuth_angles;
@@ -53,14 +52,15 @@ void sinfo_populator(sensor_info& info, const std::string& name,
     info.lidar_to_sensor_transform = lidar_to_sensor_transform;
     info.extrinsic = extrinsic;
     info.init_id = init_id;
-    info.udp_port_lidar = udp_port_lidar;
-    info.udp_port_imu = udp_port_imu;
     info.build_date = build_date;
     info.image_rev = image_rev;
     info.prod_pn = prod_pn;
     info.status = status;
     info.cal = cal;
     info.config = config;
+    info.config.lidar_mode = mode;
+    info.config.udp_port_lidar = udp_port_lidar;
+    info.config.udp_port_imu = udp_port_imu;
 }
 
 static sensor_info si_1_12_os1_991913000010_64;
@@ -148,8 +148,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
-        config.ld_mode = lidar_mode::MODE_1024x10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_port_imu = 60023;
         config.udp_port_lidar = 60823;
         config.sync_pulse_in_polarity = Polarity::POLARITY_ACTIVE_HIGH;
@@ -200,8 +200,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2019-05-02T20:17:32Z",
             "ousteros-image-prod-aries-v1.12.0-20190502211317",
             "840-101855-02",
@@ -225,8 +225,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2019-05-02T20:17:32Z",
             "ousteros-image-prod-aries-v1.12.0-20190502211317",
             "840-101855-02",
@@ -238,7 +238,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config = sensor_config{};
         config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.azimuth_window = std::make_pair(0, 36000);
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
@@ -249,7 +249,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="169.254.91.92";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502;
@@ -293,8 +293,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2019-11-04T23:58:36Z",
             "ousteros-image-prod-aries-v1.13.0-20191105025459",
             "840-101855-02",
@@ -318,8 +318,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2019-11-04T23:58:36Z",
             "ousteros-image-prod-aries-v1.13.0-20191105025459",
             "840-101855-02",
@@ -343,8 +343,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2020-02-13T17:22:02Z",
             "ousteros-image-prod-aries-v1.14.0-beta.1+ci+git+beta2@6cccd783ea+dev_fw_PR-884-20200213171907-staging",
             "840-102144-A",
@@ -368,8 +368,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2020-02-13T17:22:02Z",
             "ousteros-image-prod-aries-v1.14.0-beta.1+ci+git+beta2@6cccd783ea+dev_fw_PR-884-20200213171907-staging",
             "840-102144-A",
@@ -393,8 +393,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2020-02-11T00:14:48Z",
             "ousteros-image-prod-aries-v1.14.0-beta.1+ci+git+master@de6f92cb16-20200211001242-staging",
             "840-101855-02",
@@ -418,8 +418,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2020-02-11T00:14:48Z",
             "ousteros-image-prod-aries-v1.14.0-beta.1+ci+git+master@de6f92cb16-20200211001242-staging",
             "840-101855-02",
@@ -443,8 +443,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "",
             "",
             "",
@@ -468,8 +468,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2020-10-23T14:05:18Z",
             "ousteros-image-prod-aries-v2.0.0-rc.2+20201023140416.staging",
             "840-102145-B",
@@ -493,8 +493,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1, }),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2020-11-24T06:51:26Z",
             "ousteros-image-prod-aries-v2.0.0+20201124065024",
             "840-102145-A",
@@ -506,7 +506,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config = sensor_config{};
         config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
@@ -519,7 +519,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="169.254.91.92";
         config.udp_port_imu = 55824;
         config.udp_port_lidar = 55426;
@@ -563,8 +563,8 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             mkmat4d({ -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1,}),
             mkmat4d({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, }),
             0,
-            0,
-            0,
+            {},
+            {},
             "2021-07-27T22:34:53Z",
             "ousteros-image-prod-aries-v2.1.2+20210727223313.patch-v2.1.2",
             "840-101396-03",
@@ -576,7 +576,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config = sensor_config{};
         config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
@@ -590,7 +590,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502; 
@@ -648,7 +648,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
@@ -662,7 +662,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="192.168.88.254";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502; 
@@ -722,7 +722,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
@@ -736,7 +736,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="192.168.1.80";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502; 
@@ -770,7 +770,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config = sensor_config{};
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_INPUT_NMEA_UART;
         config.nmea_baud_rate = NMEABaudRate::BAUD_115200;
         config.nmea_ignore_valid_char = false;
@@ -785,7 +785,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 10;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_SYNC_PULSE_IN;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_SYNC_PULSE_IN;
         config.udp_dest="10.0.0.167";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502; 
@@ -869,7 +869,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config = sensor_config{};
         config.azimuth_window = std::make_pair<int, int>(0, 360000);
         config.columns_per_packet = 16;
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
@@ -884,7 +884,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="10.0.0.167";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502; 
@@ -943,7 +943,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config = sensor_config{};
         config.azimuth_window = std::make_pair<int, int>(583, 39402);
         config.columns_per_packet = 16;
-        config.ld_mode = lidar_mode::MODE_1024x10;
+        config.lidar_mode = lidar_mode::MODE_1024x10;
         config.multipurpose_io_mode = MultipurposeIOMode::MULTIPURPOSE_OFF;
         config.nmea_baud_rate = NMEABaudRate::BAUD_9600;
         config.nmea_ignore_valid_char = false;
@@ -958,7 +958,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.sync_pulse_out_polarity = Polarity::POLARITY_ACTIVE_HIGH;
         config.sync_pulse_out_pulse_width = 10;
-        config.ts_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
+        config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_dest="10.0.0.167";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502; 
@@ -1033,15 +1033,14 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     auto data_dir = getenvs("DATA_DIR");
 
     // parse json file
-    const sensor_info si = metadata_from_json(data_dir + "/" + param + ".json");
+    sensor_info si = metadata_from_json(data_dir + "/" + param + ".json");
 
     // compare with previously parsed struct from bcompat_sensor_info_data.h
     const sensor_info si_expected = *(expected_sensor_infos.at(param));
 
-    EXPECT_EQ(si.name, si_expected.name);
     EXPECT_EQ(si.sn, si_expected.sn);
     EXPECT_EQ(si.fw_rev, si_expected.fw_rev);
-    EXPECT_EQ(si.mode, si_expected.mode);
+    EXPECT_EQ(si.config.lidar_mode, si_expected.config.lidar_mode);
     EXPECT_EQ(si.prod_line, si_expected.prod_line);
 
     EXPECT_EQ(si.format.pixels_per_column,
@@ -1065,8 +1064,8 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
               si_expected.lidar_to_sensor_transform);
     EXPECT_EQ(si.extrinsic, si_expected.extrinsic);
     EXPECT_EQ(si.init_id, si_expected.init_id);
-    EXPECT_EQ(si.udp_port_lidar, si_expected.udp_port_lidar);
-    EXPECT_EQ(si.udp_port_imu, si_expected.udp_port_imu);
+    EXPECT_EQ(si.config.udp_port_lidar, si_expected.config.udp_port_lidar);
+    EXPECT_EQ(si.config.udp_port_imu, si_expected.config.udp_port_imu);
     EXPECT_EQ(si.build_date, si_expected.build_date);
     EXPECT_EQ(si.image_rev, si_expected.image_rev);
     EXPECT_EQ(si.prod_pn, si_expected.prod_pn);
@@ -1074,8 +1073,7 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     EXPECT_EQ(si.cal, si_expected.cal);
     EXPECT_EQ(si.config, si_expected.config);
 
-    EXPECT_TRUE(si !=
-                si_expected);  // si_expected won't have original string set
+    EXPECT_TRUE(si == si_expected);
     EXPECT_TRUE(si.has_fields_equal(si_expected));  // but the rest is the same
 }
 

@@ -26,23 +26,25 @@ def input_info(test_data_dir):
 
 
 def test_osf_scan_source_flags(input_osf_file):
+    """TWS 20240614: previously, the flags kwarg would affect whether
+    FLAGS/FLAGS2 were added to scans read from OSF. Now it has no effect."""
     from ouster.sdk.client import ChanField
-    ss = open_source(str(input_osf_file), flags=False)
-    assert ss.fields.get(ChanField.FLAGS) is None
-    ss = open_source(str(input_osf_file))
-    assert ss.fields.get(ChanField.FLAGS) is not None
+    scan_source = open_source(str(input_osf_file), flags=False)
+    assert ChanField.FLAGS not in scan_source.fields
+    scan_source = open_source(str(input_osf_file), flags=True)
+    assert ChanField.FLAGS not in scan_source.fields
 
 
 # Test that we can save a subset of scan fields and that it errors
 # if you try and save a scan missing fields in the metadata
 def test_writer_quick(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
-    save_fields = {}
-    save_fields[client.ChanField.REFLECTIVITY] = np.uint32
-    save_fields[client.ChanField.RANGE] = np.uint32
+    save_fields = [
+        client.ChanField.REFLECTIVITY,
+        client.ChanField.RANGE
+    ]
 
-    error_fields = {}
-    error_fields[client.ChanField.RANGE] = np.uint32
+    error_fields = [client.FieldType(client.ChanField.RANGE, np.uint32)]
     with osf.Writer(str(file_name), input_info, save_fields) as writer:
         scan = client.LidarScan(128, 1024)
         scan.field(client.ChanField.REFLECTIVITY)[:] = 123

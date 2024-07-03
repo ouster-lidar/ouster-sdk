@@ -65,21 +65,21 @@ int main(int argc, char* argv[]) {
      * accurate point clouds.
      */
     std::cerr << "Gathering metadata..." << std::endl;
-    auto metadata = sensor::get_metadata(*handle, 10, false);
+    auto metadata = sensor::get_metadata(*handle, 10);
 
     // Raw metadata can be parsed into a `sensor_info` struct
-    sensor::sensor_info info = sensor::parse_metadata(metadata);
+    sensor::sensor_info info(metadata);
 
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
 
     ouster::sensor::ColumnWindow column_window = info.format.column_window;
 
-    // The dedicated firmware_version_from_metadata API works across firmwares
-    auto fw_ver = sensor::firmware_version_from_metadata(metadata);
+    auto fw_ver = info.get_version();
 
-    std::cerr << "  Firmware version:  " << to_string(fw_ver)
-              << "\n  Serial number:     " << info.sn
+    std::cerr << "  Firmware version:  " << fw_ver.major << "." << fw_ver.minor
+              << "." << fw_ver.patch;
+    std::cerr << "\n  Serial number:     " << info.sn
               << "\n  Product line:      " << info.prod_line
               << "\n  Scan dimensions:   " << w << " x " << h
               << "\n  Column window:     [" << column_window.first << ", "
@@ -153,7 +153,8 @@ int main(int argc, char* argv[]) {
         clouds.push_back(ouster::cartesian(scan, lut));
 
         // channel fields can be queried as well
-        auto n_valid_first_returns = (scan.field(sensor::RANGE) != 0).count();
+        auto n_valid_first_returns =
+            (scan.field<uint32_t>(sensor::ChanField::RANGE) != 0).count();
 
         // LidarScan also provides access to header information such as
         // status and timestamp

@@ -136,7 +136,7 @@ def canvas_set_image_data(pic: o3d.geometry.TriangleMesh,
     np.copyto(pic_img_data, img_data)
 
 
-def range_for_field(f: client.ChanField) -> client.ChanField:
+def range_for_field(f: str) -> str:
     if f in (client.ChanField.RANGE2, client.ChanField.SIGNAL2,
              client.ChanField.REFLECTIVITY2):
         return client.ChanField.RANGE2
@@ -248,7 +248,7 @@ def viewer_3d(scans: client.Scans, paused: bool = False) -> None:
             ts = time.monotonic()
 
             # update data at scan frequency to avoid blocking the rendering thread
-            if not paused and ts - last_ts >= 1 / metadata.mode.frequency:
+            if not paused and ts - last_ts >= 1 / metadata.format.fps:
                 scan = next(scans_iter)
                 update_data(vis)
                 last_ts = ts

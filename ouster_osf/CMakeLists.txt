@@ -102,7 +102,6 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/operations.cpp
                               src/json_utils.cpp
                               src/fb_utils.cpp
-                              src/pcap_source.cpp
                               src/writer.cpp
 )
 

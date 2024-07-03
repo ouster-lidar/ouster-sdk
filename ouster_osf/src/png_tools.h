@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "os_sensor/common_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
 #include "ouster/lidar_scan.h"
 
@@ -22,7 +23,7 @@ using ScanData = std::vector<ScanChannelData>;
 
 // FieldTypes container
 using LidarScanFieldTypes =
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>;
+    std::vector<std::pair<std::string, sensor::ChanFieldType>>;
 
 /**
  * libpng only versions for Encode/Decode LidarScan to PNG buffers
@@ -39,21 +40,25 @@ using LidarScanFieldTypes =
  * @param[in] scan_data PNG buffers to decode.
  * @param[in] px_offset Pixel shift per row used to reconstruct staggered range
  *                      image form.
+ * @param[in] fields Fields to deserialize in the correct order.
  * @return false (0) if operation is successful true (1) if error occured
  */
 bool scanDecode(LidarScan& lidar_scan, const ScanData& scan_data,
-                const std::vector<int>& px_offset);
+                const std::vector<int>& px_offset,
+                const ouster::LidarScanFieldTypes& fields);
 
 #ifdef OUSTER_OSF_NO_THREADING
 /// Decoding eUDP LidarScan
 // TODO[pb]: Make decoding of just some fields from scan data?? Not now ...
 bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
                                   const ScanData& scan_data,
-                                  const std::vector<int>& px_offset);
+                                  const std::vector<int>& px_offset,
+                                  const ouster::LidarScanFieldTypes& fields);
 #else
 /// Decoding eUDP LidarScan, multithreaded version
 bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
-                      const std::vector<int>& px_offset);
+                      const std::vector<int>& px_offset,
+                      const ouster::LidarScanFieldTypes& fields);
 #endif
 
 /**
@@ -71,7 +76,7 @@ bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
  */
 bool fieldDecode(
     LidarScan& lidar_scan, const ScanData& scan_data, size_t scan_idx,
-    const std::pair<sensor::ChanField, sensor::ChanFieldType> field_type,
+    const std::pair<std::string, sensor::ChanFieldType>& field_type,
     const std::vector<int>& px_offset);
 
 /**
@@ -243,10 +248,12 @@ bool decode64bitImage(Eigen::Ref<img_t<T>> img,
  * @param[in] lidar_scan The LidarScan object to encode.
  * @param[in] px_offset Pixel shift per row used to
  *                      destaggered LidarScan data.
+ * @param[in] field_types the list of fields to encode.
  * @return encoded PNG buffers, empty() if error occured.
  */
 ScanData scanEncode(const LidarScan& lidar_scan,
-                    const std::vector<int>& px_offset);
+                    const std::vector<int>& px_offset,
+                    const LidarScanFieldTypes& field_types);
 
 #ifdef OUSTER_OSF_NO_THREADING
 /**
@@ -256,6 +263,7 @@ ScanData scanEncode(const LidarScan& lidar_scan,
  * @param[in] lidar_scan A lidar scan object to encode.
  * @param[in] px_offset Pixel shift per row used to construct de-staggered range
  *                      image form.
+ * @param[in] field_types the list of fields to encode.
  * @return Encoded PNGs in ScanData in order of field_types.
  */
 ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
@@ -291,7 +299,7 @@ ScanData scanEncodeFields(const LidarScan& lidar_scan,
  */
 bool fieldEncode(
     const LidarScan& lidar_scan,
-    const std::pair<sensor::ChanField, sensor::ChanFieldType> field_type,
+    const std::pair<std::string, sensor::ChanFieldType>& field_type,
     const std::vector<int>& px_offset, ScanData& scan_data, size_t scan_idx);
 
 /**
@@ -445,6 +453,25 @@ bool encode64bitImage(ScanChannelData& res_buf,
 template <typename T>
 bool encode64bitImage(ScanChannelData& res_buf,
                       const Eigen::Ref<const img_t<T>>& img);
+
+/**
+ * Encode Field into a data buffer.
+ * May use png compression, depending on field dimensionality.
+ *
+ * @param[in] field field to encode
+ *
+ * @return output buffer
+ */
+ScanChannelData encodeField(const ouster::Field& field);
+
+/**
+ * Decode Field from a data buffer.
+ * May use png compression, depending on field dimensionality.
+ *
+ * @param[inout] field field to store result in
+ * @param[in] buffer buffer to decode
+ */
+void decodeField(ouster::Field& field, const ScanChannelData& buffer);
 
 }  // namespace osf
 }  // namespace ouster

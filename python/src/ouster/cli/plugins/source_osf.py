@@ -69,7 +69,7 @@ def osf_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context, n: in
     index = 0
     for sensor_id, sensor_meta in msensors.items():
         if index == n:
-            print(sensor_meta.info.original_string())
+            print(sensor_meta.info.to_json_string())
             return
         index = index + 1
 
@@ -96,7 +96,6 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
-    from ouster.sdk.client._client import get_field_types
     from ouster.sdk.osf._osf import LidarScanStream
     import os
 
@@ -153,15 +152,15 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
                     obj["start"] = msg.ts
                     obj["end"] = msg.ts
                     obj["type"] = reader.meta_store[msg.id].type
-                    obj["fields"] = get_field_types(ls)
+                    obj["fields"] = ls.field_types
                     obj["sensor"] = sensors[reader.meta_store[msg.id].sensor_meta_id]
                     lidar_streams[msg.id] = obj
                 else:
                     obj = lidar_streams[msg.id]
                     obj["count"] = obj["count"] + 1
                     obj["end"] = max(obj["end"], msg.ts)
-                    if get_field_types(ls) != obj["fields"]:
-                        print("WARNING: fields not equal!")
+                    if obj["fields"] is not None and ls.field_types != obj["fields"]:
+                        print("WARNING: fields changed for a sensor over the course of the file!")
                         obj["fields"] = None
 
     print(f"Filename: {file}\nLayout: {orig_layout}")
@@ -186,7 +185,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         print(f"  Duration: {end-start} seconds")
         print(f"  Rate: {count/(end-start)} Hz")
         print(f"  Product Line: {sensor.prod_line}")
-        print(f"  Sensor Mode: {sensor.mode}")
+        print(f"  Sensor Mode: {sensor.config.lidar_mode}")
         if verbose:
             print(f"  Sensor SN: {sensor.sn}")
             print(f"  Sensor FW Rev: {sensor.fw_rev}")
@@ -195,7 +194,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
                 print("  NO CONSISTENT FIELD TYPE")
             else:
                 for f in stream["fields"]:
-                    print(f"    {f}:{stream['fields'][f]}")
+                    print(f"    {f}")
 
     for k in other_streams:
         stream = other_streams[k]
@@ -244,7 +243,6 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
         raise click.ClickException("Error: " + str(e))
 
     # NOTE[pb]: Mypy quirks or some of our Python packages structure quirks, idk :(
-    from ouster.sdk.client._client import get_field_types
     from ouster.sdk.util.parsing import scan_to_packets, packets_to_scan, cut_raw32_words  # type: ignore
 
     reader = osf.Reader(file)
@@ -296,7 +294,7 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
                             packets = scan_to_packets(ls, sinfo)
 
                             # recovered lidar scan
-                            field_types = get_field_types(ls)
+                            field_types = ls.field_types
                             ls_rec = packets_to_scan(
                                 packets, sinfo, fields=field_types)
 

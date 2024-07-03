@@ -33,39 +33,74 @@ keyboard:
 ..
    [start-simple-viz-keymap]
 
-Keyboard controls:
+Keyboard Controls
+-----------------
+
+**Camera***
     ================ ===============================================
         Key          What it does
     ================ ===============================================
-    ``o``            Toggle on-screen display
-    ``p / P``        Increase/decrease point size
-    ``m / M``        Cycle point cloud coloring mode
-    ``f / F``        Cycle point cloud color palette
-    ``b / B``        Cycle top 2D image
-    ``n / N``        Cycle bottom 2D image
-    ``R``            Reset camera
-    ``ctr-r``        Set camera to the birds-eye view
-    ``u``            Toggle camera mode FOLLOW/FIXED
-    ``e / E``        Increase/decrease size of displayed 2D images
-    ``' / "``        Increase/decrease spacing in range markers
+    ``shift``        Camera Translation with mouse drag
     ``w``            Camera pitch up
     ``s``            Camera pitch down
     ``a``            Camera yaw left
     ``d``            Camera yaw right
-    ``1``            Toggle first return point cloud visibility
-    ``2``            Toggle second return point cloud visibility
-    ``0``            Toggle orthographic camera
+    ``R``            Reset camera
+    ``ctr-r``        Set camera to the birds-eye view
+    ``u``            Toggle camera mode FOLLOW/FIXED
     ``= / -``        Dolly in/out
-    ``?``            Prints key bindings
+    ``0``            Toggle orthographic camera
+    ================ ===============================================
+
+**Playback**
+    ================ ===============================================
+        Key          What it does
+    ================ ===============================================
     ``space``        Toggle pause
-    ``esc``          Exit visualization
     ``. / ,``        Step one frame forward/back
     ``ctrl + . / ,`` Step 10 frames forward/back
     ``> / <``        Increase/decrease playback rate (during replay)
-    ``shift``        Camera Translation with mouse drag
+    ================ ===============================================
+
+**2D View**
+    ================ ===============================================
+        Key          What it does
+    ================ ===============================================
+    ``b / B``        Cycle top 2D image
+    ``n / N``        Cycle bottom 2D image
+    ``e / E``        Increase/decrease size of displayed 2D images
+    ================ ===============================================
+
+**3D View**
+    ================ ===============================================
+        Key          What it does
+    ================ ===============================================
+    ``p / P``        Increase/decrease point size
+    ``m / M``        Cycle point cloud coloring mode
+    ``f / F``        Cycle point cloud color palette
+    ``1``            Toggle first return point cloud visibility
+    ``6``            Toggle scans accumulation view mode (ACCUM)
+    ``7``            Toggle overall map view mode (MAP)
+    ``8``            Toggle poses/trajectory view mode (TRACK)
+    ``2``            Toggle second return point cloud visibility
+    ``9``            Show axes
+    ``' / "``        Increase/decrease spacing in range markers
+    ``ctrl + '``     Increase thickness of range markers
+    ``c``            Cycle current highlight mode
+    ``j / J``        Increase/decrease point size of accumulated clouds or map
+    ``k / K``        Cycle point cloud coloring mode of accumulated clouds or map
+    ``g / G``        Cycle point cloud color palette of accumulated clouds or map
+    ================ ===============================================
+
+**Other**
+    ================ ===============================================
+        Key          What it does
+    ================ ===============================================
+    ``o``            Toggle on-screen display
+    ``?``            Print keys to standard out
     ``shift+z``      Save a screenshot of the current view
     ``shift+x``      Toggle a continuous saving of screenshots
-    ``?``            Print keys to standard out
+    ``esc``          Exit
     ================ ===============================================
 
 ..

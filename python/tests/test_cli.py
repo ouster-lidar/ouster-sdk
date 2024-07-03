@@ -3,6 +3,7 @@ import os
 from glob import glob
 from pathlib import Path
 import pytest
+import subprocess
 import sys
 import json
 import tempfile
@@ -219,7 +220,7 @@ def test_source_good_command(runner):
     # we don't expect this to succeed because there is no such sensor
     # so we should see exit code 1
     result = runner.invoke(core.cli, ['source', '127.0.0.1', 'config'])
-    assert "Error: CurlClient::execute_get failed" in result.output
+    assert "Error: CurlClient::execute_request failed" in result.output
     assert result.exit_code == 1
 
 
@@ -245,7 +246,7 @@ def test_source_config(runner):
     # we don't expect this to succeed because there is no such sensor
     # so we should see exit code 1
     result = runner.invoke(core.cli, ['source', '127.0.0.1', 'config'])
-    assert "Error: CurlClient::execute_get failed" in result.output
+    assert "Error: CurlClient::execute_request failed" in result.output
     assert result.exit_code == 1
 
 
@@ -253,7 +254,7 @@ def test_source_metadata():
     """It should attempt to get metadata (and fail when there is no sensor)"""
     runner = CliRunner()
     result = runner.invoke(core.cli, ['source', '127.0.0.1', 'metadata'])
-    assert "Error: CurlClient::execute_get failed" in result.output
+    assert "Error: CurlClient::execute_request failed" in result.output
     assert result.exit_code == 1
 
 
@@ -299,27 +300,33 @@ def test_source_pcap_slice_help_2(test_pcap_file, runner):
     assert "Error: Invalid value for 'INDICES'" in result.output
 
 
-def source_pcap_slice_impl(test_pcap_file, runner, command, packets):
+def source_pcap_slice_impl(test_pcap_file, runner, command, packets, should_fail=False):
     try:
+        pcap_filename = None
         with tempfile.NamedTemporaryFile(delete=False) as f:
             pass
         result = runner.invoke(core.cli, ['source', test_pcap_file, 'slice',
                                           command, 'save', '-p', f.name, ".pcap"])
         # FIXME! Written file paths should be logged in output.
         # assert f'Writing: {f.name}' in result.output
+        print(result.output)
+        if should_fail:
+            assert result.exit_code != 0
+            return
         assert result.exit_code == 0
         pcaps_generated = glob(f'{f.name}_*.pcap')
         assert len(pcaps_generated) == 1
         pcap_filename = pcaps_generated[0]
         result2 = runner.invoke(core.cli, ['source', pcap_filename, 'info'])
-        assert result2.exit_code == 0
         print(result2.output)
+        assert result2.exit_code == 0
         assert "Packets read:  " + packets in result2.output
     finally:
-        json_filename = pcap_filename[:-4] + 'json'
         os.unlink(f'{f.name}')
-        os.unlink(pcap_filename)
-        os.unlink(json_filename)
+        if pcap_filename is not None:
+            json_filename = pcap_filename[:-4] + 'json'
+            os.unlink(pcap_filename)
+            os.unlink(json_filename)
 
 
 def test_source_pcap_slice(test_pcap_file, runner):
@@ -332,6 +339,17 @@ def test_source_pcap_slice(test_pcap_file, runner):
     source_pcap_slice_impl(test_pcap_file, runner, "2:", "0")
     source_pcap_slice_impl(test_pcap_file, runner, "1::", "0")
     source_pcap_slice_impl(test_pcap_file, runner, "1::1", "0")
+    source_pcap_slice_impl(test_pcap_file, runner, "0s::1", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "0min:1h:1", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "10ms:", "0")
+    source_pcap_slice_impl(test_pcap_file, runner, "0s::2", "64")
+    source_pcap_slice_impl(test_pcap_file, runner, "1s::1", "0")
+    source_pcap_slice_impl(test_pcap_file, runner, "1s::", "0")
+
+    # add some bad cases that should error
+    fail_cases = [":1s:1", "1s:1:", "'-1s::'", "0:1s", "1.5:3.5", ".s:0.s", "0::0", ".:.:3", "::-1", "3:1"]
+    for case in fail_cases:
+        source_pcap_slice_impl(test_pcap_file, runner, case, "0", True)
 
 
 def test_source_pcap_save_no_filename(test_pcap_file, runner, tmp_path):
@@ -424,6 +442,17 @@ def test_discover(runner):
     result = runner.invoke(core.cli, ['discover', '--help'])
     assert "Usage: cli discover [OPTIONS]" in result.output
     assert result.exit_code == 0
+
+
+def test_source_stats(test_pcap_file, runner):
+    """ouster-cli source ... stats should display correct stats."""
+    result = subprocess.run(["ouster-cli", "source", test_pcap_file, "stats"],
+                            capture_output=True, check=True, text=True)
+    assert "Count: 1" in result.stdout
+    assert "First Time: 1650408693" in result.stdout
+    assert "Sizes: 1024x128" in result.stdout
+    assert "Incomplete Scans" in result.stdout
+    assert result.returncode == 0
 
 
 def test_source_osf(runner, has_mapping) -> None:

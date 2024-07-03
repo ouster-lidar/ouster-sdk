@@ -1,9 +1,13 @@
-from typing import Iterator, List, Union, Optional
-import typing
+from typing import Iterator, List, Union, Optional, cast
+
+from ._client import SensorInfo, LidarScan
+from ouster.sdk.util.forward_slicer import ForwardSlicer
 from .scan_source import ScanSource
 from .multi_scan_source import MultiScanSource
-from ._client import SensorInfo, LidarScan
 from .data import FieldTypes
+
+# TODO: since we have more than one adapter we out to rename this class
+# to something specific
 
 
 class ScanSourceAdapter(ScanSource):
@@ -11,7 +15,8 @@ class ScanSourceAdapter(ScanSource):
 
     def __init__(self, scan_source: MultiScanSource, stream_idx: int = 0) -> None:
         if stream_idx < 0 or stream_idx >= scan_source.sensors_count:
-            raise ValueError(f"stream_idx needs to be within the range [0, {scan_source.sensors_count})")
+            raise ValueError(
+                f"stream_idx needs to be within the range [0, {scan_source.sensors_count})")
         self._scan_source = scan_source
         self._stream_idx = stream_idx
 
@@ -45,8 +50,12 @@ class ScanSourceAdapter(ScanSource):
         return self._scan_source.is_indexed
 
     @property
-    def fields(self) -> FieldTypes:
+    def field_types(self) -> FieldTypes:
         """Field types are present in the LidarScan objects on read from iterator"""
+        return self._scan_source.field_types[self._stream_idx]
+
+    @property
+    def fields(self) -> List[str]:
         return self._scan_source.fields[self._stream_idx]
 
     @property
@@ -57,7 +66,8 @@ class ScanSourceAdapter(ScanSource):
 
     def __len__(self) -> int:
         if self.scans_num is None:
-            raise TypeError("len is not supported on live or non-indexed sources")
+            raise TypeError(
+                "len is not supported on live or non-indexed sources")
         return self.scans_num
 
     # NOTE: we need to consider a case without collation of scans
@@ -75,22 +85,41 @@ class ScanSourceAdapter(ScanSource):
         raise NotImplementedError
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], ScanSource]:
         """Indexed access and slices support"""
         if isinstance(key, int):
-            return self._scan_source[key][self._stream_idx]
-        elif isinstance(key, slice):
             scans_list = self._scan_source[key]
-            scans_list = typing.cast(List[List[Optional[LidarScan]]], scans_list)
-            return [ls[self._stream_idx] for ls in scans_list] if scans_list else None
+            scans_list = cast(List[Optional[LidarScan]], scans_list)
+            return scans_list[self._stream_idx]
+        elif isinstance(key, slice):
+            return self.slice(key)
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")
 
-    # TODO: should this actually the parent scan source? any object why not
     def close(self) -> None:
         """Release the underlying resource, if any."""
-        self._scan_source.close()
+        pass
 
     def __del__(self) -> None:
         """Automatic release of any underlying resource."""
         self.close()
+
+    def _slice_iter(self, key: slice) -> Iterator[Optional[LidarScan]]:
+        L = len(self)
+        k = ForwardSlicer.normalize(key, L)
+        count = k.stop - k.start
+        if count <= 0:
+            return iter(())
+        return ForwardSlicer.slice_iter(iter(self), k)
+
+    def slice(self, key: slice) -> ScanSource:
+        # NOTE: rather than creating a SlicedScanSource use the combination
+        # of two decorators to achieve the same functionality
+        from ouster.sdk.client.multi_sliced_scan_source import MultiSlicedScanSource
+        L = len(self)
+        k = ForwardSlicer.normalize(key, L)
+        if k.step < 0:
+            raise TypeError("slice() can't work with negative step")
+        sliced = MultiSlicedScanSource(self._scan_source, k)        # type: ignore
+        scan_source = ScanSourceAdapter(sliced, self._stream_idx)   # type: ignore
+        return cast(ScanSource, scan_source)

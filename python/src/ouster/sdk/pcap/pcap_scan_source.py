@@ -1,7 +1,8 @@
-from typing import List, Optional, Tuple, Union
+from typing import Iterator, List, Optional, Tuple, Union
 
 from ouster.sdk.client import LidarScan, first_valid_packet_ts
 from ouster.sdk.client import ScansMulti     # type: ignore
+from ouster.sdk.client import MultiScanSource
 from ouster.sdk.client.multi import collate_scans   # type: ignore
 from ouster.sdk.util import (resolve_field_types, resolve_metadata_multi,
                              ForwardSlicer, progressbar)    # type: ignore
@@ -76,16 +77,11 @@ class PcapScanSource(ScansMulti):
         super().__init__(self._source, dt=dt, complete=complete,
                          cycle=cycle, fields=field_types)
 
-        # TODO[IMPORTANT]: there is a bug with collate scans in which it always
-        # skips the first frame
-        def collate_scans_itr(scans_itr):
-            return collate_scans(scans_itr, self.sensors_count,
-                                 first_valid_packet_ts, dt=self._dt)
-
         if index:
             self._frame_offset = []
             pi = self._source._index    # type: ignore
-            scans_itr = collate_scans_itr(self._scans_iter(True, False, False))
+            scans_itr = self._collated_scans_itr(
+                self._scans_iter(True, False, True))
             # scans count in first source
             scans_count = len(pi.frame_id_indices[0])   # type: ignore
             for scan_idx, scans in enumerate(scans_itr):
@@ -94,6 +90,10 @@ class PcapScanSource(ScansMulti):
                 self._frame_offset.append(min([v for v in offsets if v]))
                 progressbar(scan_idx, scans_count, "", "indexed")
             print("\nfinished building index")
+
+    def _collated_scans_itr(self, scans_itr):
+        return collate_scans(scans_itr, self.sensors_count,
+                             first_valid_packet_ts, dt=self._dt)
 
     @property
     def scans_num(self) -> List[Optional[int]]:
@@ -108,7 +108,7 @@ class PcapScanSource(ScansMulti):
         return len(self._frame_offset)
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], MultiScanSource]:
 
         if not self.is_indexed:
             raise TypeError(
@@ -123,24 +123,34 @@ class PcapScanSource(ScansMulti):
             offset = self._frame_offset[key]
             self._source.seek(offset)   # type: ignore
             scans_itr = self._scans_iter(False, False, True)
-            return next(collate_scans(scans_itr, self.sensors_count,
-                                      first_valid_packet_ts, dt=self._dt))
+            return next(self._collated_scans_itr(scans_itr))
 
         if isinstance(key, slice):
-            L = len(self)
-            k = ForwardSlicer.normalize(key, L)
-            count = k.stop - k.start
-            if count <= 0:
-                return []
-            offset = self._frame_offset[k.start]
-            self._source.seek(offset)   # type: ignore
-            scans_itr = collate_scans(self._scans_iter(False, False, True),
-                                      self.sensors_count,
-                                      first_valid_packet_ts,
-                                      dt=self._dt)
-            result = [scan for idx, scan in ForwardSlicer.slice(
-                enumerate(scans_itr), k) if idx < count]
-            return result if k.step > 0 else list(reversed(result))
+            return self.slice(key)
 
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")
+
+    def _slice_iter(self, key: slice) -> Iterator[List[Optional[LidarScan]]]:
+        # NOTE: In this method if key.step was negative, this won't be
+        # result in the output being reversed, it is the responsibility of
+        # the caller to accumulate the results into a vector then return them.
+        L = len(self)
+        k = ForwardSlicer.normalize(key, L)
+        count = k.stop - k.start
+        if count <= 0:
+            return iter(())
+        offset = self._frame_offset[k.start]
+        self._source.seek(offset)   # type: ignore
+        scans_itr = self._collated_scans_itr(
+            self._scans_iter(False, False, True))
+        return ForwardSlicer.slice_iter(scans_itr, k)
+
+    def slice(self, key: slice) -> MultiScanSource:
+        """Constructs a MultiScanSource matching the specificed slice"""
+        from ouster.sdk.client.multi_sliced_scan_source import MultiSlicedScanSource
+        L = len(self)
+        k = ForwardSlicer.normalize(key, L)
+        if k.step < 0:
+            raise TypeError("slice() can't work with negative step")
+        return MultiSlicedScanSource(self, k)

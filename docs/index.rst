@@ -12,7 +12,6 @@
    :hidden:
 
    Developer Quick Start <python/quickstart>
-   Using ScanSource API <python/using-scan-source>
    Examples <python/examples/index>
    SLAM Quickstart <python/slam-api-example>
    Point Cloud Visualizer <python/viz/index>
@@ -49,6 +48,7 @@
    Getting Started <cli/getting-started>
    Sample Sessions <cli/sample-sessions>
    Common Use Cases <cli/common-use-cases>
+   Clip Sessions <cli/clip-sessions>
    Mapping Sessions <cli/mapping-sessions>
 
 .. toctree::

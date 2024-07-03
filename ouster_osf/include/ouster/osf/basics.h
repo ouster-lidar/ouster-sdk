@@ -15,6 +15,7 @@
 #include "ouster/types.h"
 
 // OSF basic types for LidarSensor and LidarScan/Imu Streams
+#include "os_sensor/common_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
 #include "os_sensor/lidar_sensor_generated.h"
 
@@ -147,37 +148,6 @@ bool check_prefixed_size_block_crc(
     const uint32_t max_size = std::numeric_limits<uint32_t>::max());
 
 /** @defgroup OsfBatchingFunctions Osf Batching Functions. */
-
-/**
- * Makes the closure to batch lidar_packets and emit LidarScan object.
- * Result returned through callback handler(ts, LidarScan).
- * LidarScan uses user modified field types
- *
- * @ingroup OsfBatchingFunctions
- *
- * @param[in] info The sensor metadata to use.
- * @param[in] ls_field_types The field types to use.
- * @param[in] handler  The callback to use on the results.
- * @return Closure to batch and emit LidarScan objects.
- */
-std::function<void(const osf::ts_t, const uint8_t*)> make_build_ls(
-    const ouster::sensor::sensor_info& info,
-    const LidarScanFieldTypes& ls_field_types,
-    std::function<void(const ts_t, const ouster::LidarScan&)> handler);
-
-/**
- * The above make_build_ls() function overload. In this function, LidarScan
- * uses default field types by the profile
- *
- * @ingroup OsfBatchingFunctions
- *
- * @param[in] info The sensor metadata to use.
- * @param[in] handler  The callback to use on the results.
- * @return Closure to batch and emit LidarScan objects.
- */
-std::function<void(const osf::ts_t, const uint8_t*)> make_build_ls(
-    const ouster::sensor::sensor_info& info,
-    std::function<void(const ts_t, const ouster::LidarScan&)> handler);
 
 }  // namespace osf
 }  // namespace ouster

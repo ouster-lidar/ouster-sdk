@@ -24,15 +24,12 @@ class MultiLidarScanViz:
         RANGE = 1
         SIGNAL = 2
         NEAR_IR = 3
-        RGB = 4
 
     _mode_to_channels: Dict[CloudMode, List[ChanField]] = {
         CloudMode.RANGE: [ChanField.RANGE],
         CloudMode.REFLECTIVITY: [ChanField.REFLECTIVITY],
         CloudMode.SIGNAL: [ChanField.SIGNAL],
-        CloudMode.NEAR_IR: [ChanField.NEAR_IR],
-        CloudMode.RGB:
-        [ChanField.CUSTOM0, ChanField.CUSTOM1, ChanField.CUSTOM2]
+        CloudMode.NEAR_IR: [ChanField.NEAR_IR]
     }
 
     class ImagesLayout(Enum):
@@ -365,31 +362,6 @@ class MultiLidarScanViz:
                     self._clouds[idx].set_key(key_data)
                     self._images[idx].set_image(
                         client.destagger(self._metas[idx], key_data))
-                elif self._cloud_mode == MultiLidarScanViz.CloudMode.RGB:
-                    r = ls.field(ChanField.CUSTOM0)
-                    g = ls.field(ChanField.CUSTOM1)
-                    b = ls.field(ChanField.CUSTOM2)
-
-                    normalizer = 255
-
-                    # for types other than uint8 for RED, GREEN, BLUE channels
-                    # we try to check are there really value bigger than 255
-                    if (r.dtype != np.uint8 or g.dtype != np.uint8
-                            or b.dtype != np.uint8):
-                        max_rgb = np.max((np.max(r), np.max(g), np.max(b)))
-                        if max_rgb > 255:
-                            normalizer = 65535
-
-                    r = (r / normalizer).clip(0, 1.0).astype(np.float32)
-                    g = (g / normalizer).clip(0, 1.0).astype(np.float32)
-                    b = (b / normalizer).clip(0, 1.0).astype(np.float32)
-
-                    rgb_data = np.dstack((r, g, b))
-
-                    self._clouds[idx].set_key(rgb_data)
-                    self._images[idx].set_image(
-                        client.destagger(self._metas[idx], rgb_data))
-
             else:
                 key_zeros = np.zeros(
                     (self._metas[idx].format.pixels_per_column,
@@ -432,7 +404,6 @@ class MultiLidarScanViz:
 
             if (self._ae_enabled and self._cloud_mode not in [
                     MultiLidarScanViz.CloudMode.REFLECTIVITY,
-                    MultiLidarScanViz.CloudMode.RGB
             ]):
                 ae_str = '(AE)'
             else:

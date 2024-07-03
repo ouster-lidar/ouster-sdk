@@ -97,7 +97,7 @@ def fetch_metadata(hostname: str) -> None:
         print(f"  serial no:        {source.metadata.sn}")
         print(f"  firmware version: {source.metadata.fw_rev}")
         print(f"  product line:     {source.metadata.prod_line}")
-        print(f"  lidar mode:       {source.metadata.mode}")
+        print(f"  lidar mode:       {source.metadata.config.lidar_mode}")
         print(f"Writing to: {hostname}.json")
 
         # write metadata to disk
@@ -150,7 +150,7 @@ def filter_3d_by_range_and_azimuth(hostname: str,
                                       (range_min * 1000))
 
     # get first 3/4 of scan
-    to_col = math.floor(metadata.mode.cols * 3 / 4)
+    to_col = math.floor(metadata.format.columns_per_frame * 3 / 4)
     xyz_filtered = xyz_filtered[:, 0:to_col, :]
     # [doc-etag-filter-3d]
 
@@ -260,7 +260,7 @@ def record_pcap(hostname: str,
         # make a descriptive filename for metadata/pcap files
         time_part = datetime.now().strftime("%Y%m%d_%H%M%S")
         meta = source.metadata
-        fname_base = f"{meta.prod_line}_{meta.sn}_{meta.mode}_{time_part}"
+        fname_base = f"{meta.prod_line}_{meta.sn}_{meta.config.lidar_mode}_{time_part}"
 
         print(f"Saving sensor metadata to: {fname_base}.json")
         source.write_metadata(f"{fname_base}.json")

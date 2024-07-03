@@ -48,14 +48,14 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
 
     std::string output_osf_filename = tmp_file("writer_simple.osf");
 
-    std::string sinfo_str = sinfo.updated_metadata_string();
+    std::string sinfo_str = sinfo.to_json_string();
 
     // Writing LidarScan
     Writer writer(output_osf_filename);
     writer.set_metadata_id("test_session");
     EXPECT_EQ(writer.chunks_layout(), ChunksLayout::LAYOUT_STREAMING);
 
-    writer.add_sensor(sinfo, get_field_types(sinfo));
+    writer.add_sensor(sinfo);
     writer.save(0, ls, ts_t{123});
     writer.close();
 
@@ -81,7 +81,7 @@ TEST_F(WriterTest, WriteSingleLidarScan) {
 
     // Use first sensor and get its sensor_info
     auto sinfo_recovered = sensors.begin()->second->info();
-    EXPECT_EQ(sinfo_recovered.original_string(), sinfo_str);
+    EXPECT_EQ(sinfo_recovered.to_json_string(), sinfo_str);
 
     auto metadata_recovered = sensors.begin()->second->metadata();
     EXPECT_EQ(metadata_recovered, sinfo_str);
@@ -94,7 +94,7 @@ TEST_F(WriterTest, WriteLidarSensorWithExtrinsics) {
     std::string output_osf_filename =
         tmp_file("writer_lidar_sensor_extrinsics.osf");
 
-    std::string sinfo_str = sinfo.original_string();
+    std::string sinfo_str = sinfo.to_json_string();
 
     sinfo.extrinsic(0, 3) = 10.0;
     sinfo.extrinsic(0, 1) = 0.756;
@@ -143,14 +143,14 @@ TEST_F(WriterTest, WriteSingleLidarScanStreamingLayout) {
 
     std::string output_osf_filename = tmp_file("writer_simple_streaming.osf");
 
-    std::string sinfo_str = sinfo.updated_metadata_string();
+    std::string sinfo_str = sinfo.to_json_string();
 
     // Writing LidarScan
     Writer writer(output_osf_filename);
     writer.set_metadata_id("test_session");
     EXPECT_EQ(writer.chunks_layout(), ChunksLayout::LAYOUT_STREAMING);
 
-    writer.add_sensor(sinfo, get_field_types(sinfo));
+    writer.add_sensor(sinfo);
     writer.save(0, ls, ts_t{123});
     writer.close();
 
@@ -187,7 +187,7 @@ TEST_F(WriterTest, WriteSingleLidarScanStreamingLayout) {
 
     // Use first sensor and get its sensor_info
     auto sinfo_recovered = sensors.begin()->second->info();
-    EXPECT_EQ(sinfo_recovered.original_string(), sinfo_str);
+    EXPECT_EQ(sinfo_recovered.to_json_string(), sinfo.to_json_string());
 
     auto metadata_recovered = sensors.begin()->second->metadata();
     EXPECT_EQ(metadata_recovered, sinfo_str);
@@ -199,23 +199,21 @@ TEST_F(WriterTest, WriteSlicedLidarScan) {
     LidarScan ls = get_random_lidar_scan(sinfo);
 
     // Subset of fields to leave in LidarScan
-    LidarScanFieldTypes field_types;
-    field_types.emplace_back(sensor::ChanField::RANGE,
-                             ls.field_type(sensor::ChanField::RANGE));
-    field_types.emplace_back(sensor::ChanField::REFLECTIVITY,
-                             ls.field_type(sensor::ChanField::REFLECTIVITY));
+    ouster::LidarScanFieldTypes field_types;
+    field_types.emplace_back(ls.field_type(sensor::ChanField::RANGE));
+    field_types.emplace_back(ls.field_type(sensor::ChanField::REFLECTIVITY));
 
     // Make a reduced field LidarScan
     ls = slice_with_cast(ls, field_types);
 
-    EXPECT_EQ(field_types.size(), std::distance(ls.begin(), ls.end()));
+    EXPECT_EQ(field_types.size(), ls.field_types().size());
 
     std::string output_osf_filename = tmp_file("writer_sliced.osf");
 
-    std::string sinfo_str = sinfo.updated_metadata_string();
+    std::string sinfo_str = sinfo.to_json_string();
 
     // Writing LidarScan
-    Writer writer(output_osf_filename, sinfo, field_types);
+    Writer writer(output_osf_filename, sinfo, {"RANGE", "REFLECTIVITY"});
     writer.set_metadata_id("test_session");
     writer.save(0, ls, ts_t{123});
     writer.close();
@@ -231,8 +229,7 @@ TEST_F(WriterTest, WriteSlicedLidarScan) {
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 
-    EXPECT_EQ(field_types.size(),
-              std::distance(ls_recovered->begin(), ls_recovered->end()));
+    EXPECT_EQ(field_types.size(), ls_recovered->field_types().size());
 
     EXPECT_TRUE(ls_recovered);
     EXPECT_EQ(*ls_recovered, ls);
@@ -245,7 +242,7 @@ TEST_F(WriterTest, WriteSlicedLidarScan) {
 
     // Use first sensor and get its sensor_info
     auto sinfo_recovered = sensors.begin()->second->info();
-    EXPECT_EQ(sinfo_recovered.original_string(), sinfo_str);
+    EXPECT_EQ(sinfo_recovered.to_json_string(), sinfo.to_json_string());
 
     auto metadata_recovered = sensors.begin()->second->metadata();
     EXPECT_EQ(metadata_recovered, sinfo_str);
@@ -263,7 +260,7 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
     field_types.emplace_back(sensor::ChanField::SIGNAL,
                              sensor::ChanFieldType::UINT16);
     field_types.emplace_back(sensor::ChanField::REFLECTIVITY,
-                             sensor::ChanFieldType::UINT8);
+                             sensor::ChanFieldType::UINT16);
 
     std::cout << "LidarScan field_types: " << ouster::to_string(field_types)
               << std::endl;
@@ -272,15 +269,15 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
     // that will be compared with a recovered LidarScan from OSF
     auto ls_reference = slice_with_cast(ls_orig, field_types);
 
-    EXPECT_EQ(field_types.size(),
-              std::distance(ls_reference.begin(), ls_reference.end()));
+    EXPECT_EQ(field_types.size(), ls_reference.field_types().size());
 
     std::string output_osf_filename = tmp_file("writer_sliced_legacy.osf");
 
-    std::string sinfo_str = sinfo.updated_metadata_string();
+    std::string sinfo_str = sinfo.to_json_string();
 
     // Writing LidarScan with custom field types
-    Writer writer(output_osf_filename, sinfo, field_types);
+    Writer writer(output_osf_filename, sinfo,
+                  {"RANGE", "SIGNAL", "REFLECTIVITY"});
     writer.set_metadata_id("test_session");
 
     writer.save(0, ls_orig, ts_t{123});
@@ -297,10 +294,9 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
 
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
 
-    EXPECT_EQ(field_types.size(),
-              std::distance(ls_recovered->begin(), ls_recovered->end()));
-
     EXPECT_TRUE(ls_recovered);
+
+    EXPECT_EQ(field_types.size(), ls_recovered->field_types().size());
 
     EXPECT_EQ(*ls_recovered, ls_reference);
 
@@ -312,7 +308,7 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
 
     // Use first sensor and get its sensor_info
     auto sinfo_recovered = sensors.begin()->second->info();
-    EXPECT_EQ(sinfo_recovered.original_string(), sinfo_str);
+    EXPECT_EQ(sinfo_recovered.to_json_string(), sinfo.to_json_string());
 
     auto metadata_recovered = sensors.begin()->second->metadata();
     EXPECT_EQ(metadata_recovered, sinfo_str);
@@ -339,9 +335,9 @@ TEST_F(WriterTest, WriteCustomLidarScanWithFlags) {
                                         sensor::ChanFieldType::UINT8);
     field_types_with_flags.emplace_back(sensor::ChanField::FLAGS2,
                                         sensor::ChanFieldType::UINT8);
-    field_types_with_flags.emplace_back(sensor::ChanField::CUSTOM0,
+    field_types_with_flags.emplace_back("CUSTOM0",
                                         sensor::ChanFieldType::UINT64);
-    field_types_with_flags.emplace_back(sensor::ChanField::CUSTOM7,
+    field_types_with_flags.emplace_back("CUSTOM7",
                                         sensor::ChanFieldType::UINT16);
 
     LidarScan ls = get_random_lidar_scan(sinfo.format.columns_per_frame,
@@ -363,19 +359,15 @@ TEST_F(WriterTest, WriteCustomLidarScanWithFlags) {
 
     // Check that we have non zero CUSTOM7
     img_t<uint16_t> custom{ls.h, ls.w};
-    impl::visit_field(ls, sensor::ChanField::CUSTOM7,
-                      ouster::impl::read_and_cast(), custom);
+    impl::visit_field(ls, "CUSTOM7", ouster::impl::read_and_cast(), custom);
     EXPECT_FALSE((custom == 0).all());
 
-    EXPECT_EQ(field_types_with_flags.size(),
-              std::distance(ls.begin(), ls.end()));
+    EXPECT_EQ(field_types_with_flags.size(), ls.field_types().size());
 
     std::string output_osf_filename = tmp_file("writer_with_flags.osf");
 
-    std::string sinfo_str = sinfo.original_string();
-
     // Writing LidarScan
-    Writer writer(output_osf_filename, sinfo, get_field_types(ls));
+    Writer writer(output_osf_filename, sinfo);
     writer.set_metadata_id("test_session");
     writer.save(0, ls, ts_t{123});
     writer.close();
@@ -394,7 +386,7 @@ TEST_F(WriterTest, WriteCustomLidarScanWithFlags) {
     EXPECT_TRUE(ls_recovered);
 
     EXPECT_EQ(field_types_with_flags.size(),
-              std::distance(ls_recovered->begin(), ls_recovered->end()));
+              ls_recovered->field_types().size());
 
     EXPECT_EQ(*ls_recovered, ls);
 
@@ -523,6 +515,49 @@ TEST_F(WriterTest, FileNameOnlyWriterTest) {
     osf::Writer writer("FOOBARBAT");
     EXPECT_EQ(writer.filename(), "FOOBARBAT");
     EXPECT_EQ(writer.metadata_id(), "ouster_sdk");
+}
+
+TEST_F(WriterTest, WriteCustomFieldsTest) {
+    const sensor_info sinfo = sensor::metadata_from_json(
+        path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
+    LidarScan ls = get_random_lidar_scan(sinfo);
+    auto& f1 =
+        ls.add_field("custom_field_1", fd_array<double>(85, 129, 344), {});
+    auto& f2 = ls.add_field("custom_field_2", fd_array<uint16_t>(111, 333), {});
+
+    std::random_device rd;
+    std::mt19937 gen{rd()};
+    std::normal_distribution<double> nd_d{100.0, 10.0};
+    std::uniform_int_distribution<uint16_t> ud_u8{0, 150};
+    randomize_field<double>(f1, gen, nd_d);
+    randomize_field<uint16_t>(f2, gen, ud_u8);
+
+    std::string output_osf_filename = tmp_file("writer_simple.osf");
+
+    std::string sinfo_str = sinfo.to_json_string();
+
+    // Writing LidarScan
+    Writer writer(output_osf_filename);
+    writer.set_metadata_id("test_session");
+    EXPECT_EQ(writer.chunks_layout(), ChunksLayout::LAYOUT_STREAMING);
+
+    writer.add_sensor(sinfo);
+    writer.save(0, ls, ts_t{123});
+    writer.close();
+
+    OsfFile osf_file(output_osf_filename);
+    EXPECT_TRUE(osf_file.good());
+
+    Reader reader(osf_file);
+    EXPECT_EQ(reader.metadata_id(), "test_session");
+
+    auto msg_it = reader.messages().begin();
+    EXPECT_NE(msg_it, reader.messages().end());
+
+    auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
+
+    EXPECT_TRUE(ls_recovered);
+    EXPECT_EQ(*ls_recovered, ls);
 }
 
 }  // namespace

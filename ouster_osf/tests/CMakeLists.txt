@@ -13,7 +13,6 @@ set(OSF_TESTS_SOURCES png_tools_test.cpp
                       file_ops_test.cpp
                       reader_test.cpp
                       operations_test.cpp
-                      pcap_source_test.cpp
                       basics_test.cpp
                       meta_streaming_info_test.cpp
 )
