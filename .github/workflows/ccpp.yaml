@@ -13,3 +13,13 @@ jobs:
       run: cmake . -B build
     - name: cmake build
       run: cmake --build build -j2
+  linux-python-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install python
+      run: sudo apt install python3 python3-pip
+    - name: go into path
+      run: cd python
+    - name: build python
+      run: python3 -m pip install -e .
