@@ -10,7 +10,7 @@ jobs:
     - name: install deps
       run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev
     - name: cmake configure for realsies
-      run: cmake . -B build -D DBUILD_TESTING=ON BUILD_EXAMPLES=ON
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
       run: cmake --build build -j2
     - name: run tests
@@ -25,11 +25,11 @@ jobs:
       run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev
     - name: install python-deps
       run: pip3 install pytest mypy flake8
-    - name: lint
-      run: cd python && mypy ./src ./tests && flake8
     - name: go into path
       run: cd python
     - name: build python
       run: cd python && sudo python3 -m pip install -e .
+    - name: lint
+      run: cd python && mypy ./src ./tests && flake8
     - name: run tests
       run: cd python/tests && pytest
