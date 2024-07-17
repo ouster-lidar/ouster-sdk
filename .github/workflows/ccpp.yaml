@@ -22,4 +22,4 @@ jobs:
     - name: go into path
       run: cd python
     - name: build python
-      run: cd python && python3 -m pip install -e .
+      run: cd python && sudo python3 -m pip install -e .
