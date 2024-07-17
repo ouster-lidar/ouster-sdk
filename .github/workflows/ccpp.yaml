@@ -14,7 +14,7 @@ jobs:
     - name: cmake build
       run: cmake --build build -j2
     - name: run tests
-      run: cd build/tests/ && ctest -j2
+      run: cd build/ && ctest -j2
   linux-python-build:
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +28,7 @@ jobs:
     - name: go into path
       run: cd python
     - name: build python
-      run: cd python && sudo python3 -m pip install -e .
+      run: cd python && sudo python3 -m pip install -e .[test]
     - name: lint
       run: cd python && mypy ./src ./tests && flake8
     - name: run tests
