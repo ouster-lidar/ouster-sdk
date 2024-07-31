@@ -83,7 +83,7 @@ jobs:
     - name: install deps
       run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers
     - name: install python-deps
-      run: pip3 install pytest pytest-xdist
+      run: pip3 install pytest pytest-xdist --break-system-packages
     - name: build python
       run: cd python && python3 -m pip install -e .[test]
     - name: run tests
