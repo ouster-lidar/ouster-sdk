@@ -53,7 +53,7 @@ jobs:
       uses: johnwason/vcpkg-action@v6
       id: vcpkg
       with:
-        pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
+        pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers gtest
         triplet: x64-windows
         revision: 2024.04.26
         token: ${{ github.token }}
