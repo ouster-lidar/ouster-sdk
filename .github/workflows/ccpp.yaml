@@ -55,10 +55,11 @@ jobs:
       with:
         pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
         triplet: x64-windows
+        revision: 2024.04.26
         token: ${{ github.token }}
         github-binarycache: true
-    - name: cmake configure for realsies
-      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+    - name: cmake configure
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
@@ -80,9 +81,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers
-    - name: install pip
-      run: python3 -m ensurepip --upgrade
+      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers pip
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
     - name: build python
