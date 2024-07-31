@@ -81,7 +81,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers pip
+      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
     - name: build python
