@@ -39,8 +39,14 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v1
-    - name: install deps
-      run: ${{ github.workspace }}/vcpkg/vcpkg install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
+    - name: vcpkg build
+      uses: johnwason/vcpkg-action@v6
+      id: vcpkg
+      with:
+        pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
+        triplet: x64-windows-release
+        token: ${{ github.token }}
+        github-binarycache: true
     - name: lint
       run: ./clang-linting.sh
     - name: cmake configure for realsies
@@ -54,7 +60,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog
+      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers
     - name: lint
       run: ./clang-linting.sh
     - name: cmake configure for realsies
