@@ -59,7 +59,7 @@ jobs:
         token: ${{ github.token }}
         github-binarycache: true
     - name: cmake configure
-      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
       env:
         VCPKG_ROOT: D:/a/ouster_example/ouster_example/vcpkg
     - name: cmake build
