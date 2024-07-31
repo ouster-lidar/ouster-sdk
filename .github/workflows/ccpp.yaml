@@ -25,7 +25,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: install deps
       run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev libgtest-dev clang-format
-    - name: cmake configure for realsies
+    - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
       run: cmake --build build -j4
@@ -41,8 +41,6 @@ jobs:
       run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
-    - name: go into path
-      run: cd python
     - name: build python
       run: cd python && sudo python3 -m pip install -e .[test]
     - name: run tests
@@ -71,9 +69,21 @@ jobs:
     - uses: actions/checkout@v1
     - name: install deps
       run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers googletest
-    - name: cmake configure for realsies
+    - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
       run: cmake --build build -j3
     - name: run tests
       run: cd build/ && ctest -j3
+  mac-python-build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers googletest python3-pip
+    - name: install python-deps
+      run: pip3 install pytest pytest-xdist
+    - name: build python
+      run: cd python && python3 -m pip install -e .[test]
+    - name: run tests
+      run: cd python/tests && pytest -n4
