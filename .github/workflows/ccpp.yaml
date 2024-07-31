@@ -14,9 +14,9 @@ jobs:
     - name: cmake configure for realsies
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
-      run: cmake --build build -j2
+      run: cmake --build build -j4
     - name: run tests
-      run: cd build/ && ctest -j2
+      run: cd build/ && ctest -j4
   linux-python-build:
     runs-on: ubuntu-latest
     steps:
@@ -35,3 +35,31 @@ jobs:
       run: cd python && mypy ./src ./tests && flake8
     - name: run tests
       run: cd python/tests && pytest
+  windows-build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: ${{ github.workspace }}/vcpkg/vcpkg install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
+    - name: lint
+      run: ./clang-linting.sh
+    - name: cmake configure for realsies
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
+    - name: cmake build
+      run: cmake --build build -j4
+    - name: run tests
+      run: cd build/ && ctest -j4
+  mac-build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog
+    - name: lint
+      run: ./clang-linting.sh
+    - name: cmake configure for realsies
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
+    - name: cmake build
+      run: cmake --build build -j3
+    - name: run tests
+      run: cd build/ && ctest -j3
