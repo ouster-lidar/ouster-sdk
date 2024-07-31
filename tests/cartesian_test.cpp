@@ -8,6 +8,8 @@
 #include <Eigen/Eigen>
 #include <numeric>
 #include <random>
+#include <iomanip>
+
 
 #include "ouster/lidar_scan.h"
 #include "util.h"
