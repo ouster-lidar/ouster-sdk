@@ -9,6 +9,7 @@
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <chrono>
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <cstdint>
 
