@@ -8,6 +8,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <cassert>
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <stdexcept>
 #include <string>
