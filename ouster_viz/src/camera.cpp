@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #define _USE_MATH_DEFINES
-#include <cmath>
+#include <math.h>
 #include <cstdint>
 
 #include "ouster/point_viz.h"
