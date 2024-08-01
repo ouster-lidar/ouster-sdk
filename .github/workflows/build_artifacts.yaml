@@ -1,0 +1,22 @@
+name: C/C++ CI
+
+on: [push]
+
+jobs:
+  linux-build-artifact:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev libgtest-dev clang-format cpack
+    - name: cmake configure
+      run: cmake . -B build
+    - name: cmake build
+      run: cmake --build build -j4
+    - name: cpack build
+      run: cd build && cpack --config CPackConfig.cmake
+    - name: Archive debian
+      uses: actions/upload-artifact@v4
+      with:
+        name: debian
+        path: build/*.deb
