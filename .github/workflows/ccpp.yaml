@@ -63,7 +63,7 @@ jobs:
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
-      run: cd build/ && ctest -j4 -C Release
+      run: cd build/ && ctest -j4 -C Debug
   windows-python-build:
     runs-on: windows-latest
     steps:
