@@ -63,7 +63,28 @@ jobs:
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
-      run: cd build/ && ctest -j4
+      run: cd build/ && ctest -j4 -C Release
+  windows-python-build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: vcpkg build
+      uses: johnwason/vcpkg-action@v6
+      id: vcpkg
+      with:
+        pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers gtest
+        triplet: x64-windows
+        revision: 2024.04.26
+        token: ${{ github.token }}
+        github-binarycache: true
+    - name: install python-deps
+      run: pip3 install pytest pytest-xdist
+    - name: build python
+      run: cd python && python3 -m pip install -e .[test]
+      env:
+        OUSTER_SDK_CMAKE_ARGS: '-DCMAKE_TOOLCHAIN_FILE=D:/a/ouster_example/ouster_example/vcpkg/scripts/buildsystems/vcpkg.cmake'
+    - name: run tests
+      run: cd python/tests && pytest -n3
   mac-build:
     runs-on: macos-latest
     steps:
