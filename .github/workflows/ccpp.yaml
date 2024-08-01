@@ -30,7 +30,7 @@ jobs:
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
-      run: cd build/ && ctest -j4
+      run: cd build/ && ctest -j4 --output-on-failure
   linux-python-build:
     runs-on: ubuntu-latest
     steps:
@@ -63,7 +63,7 @@ jobs:
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
-      run: cd build/ && ctest -j4 -C Debug
+      run: cd build/ && ctest -j4 -C Debug --output-on-failure
   windows-python-build:
     runs-on: windows-latest
     steps:
@@ -97,7 +97,7 @@ jobs:
     - name: cmake build
       run: cmake --build build -j3
     - name: run tests
-      run: cd build/ && ctest -j3
+      run: cd build/ && ctest -j3 --output-on-failure
   mac-python-build:
     runs-on: macos-latest
     steps:
