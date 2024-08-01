@@ -8,7 +8,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev libgtest-dev clang-format cpack
+      run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev libgtest-dev clang-format
     - name: cmake configure
       run: cmake . -B build
     - name: cmake build
