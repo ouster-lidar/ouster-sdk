@@ -7,8 +7,7 @@
 
 #include <Eigen/Core>
 #include <algorithm>
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
@@ -18,6 +17,10 @@
 #include "ouster/impl/logging.h"
 #include "ouster/strings.h"
 #include "ouster/types.h"
+
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
 
 using namespace ouster::strings;
 
