@@ -15,6 +15,7 @@
 #include <direct.h>
 #include <fcntl.h>
 #include <io.h>
+#include <share.h>
 #include <shlwapi.h>
 #include <tchar.h>
 #include <windows.h>
