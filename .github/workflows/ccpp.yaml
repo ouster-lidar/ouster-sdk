@@ -69,6 +69,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - uses: seanmiddleditch/gha-setup-ninja@master
+    - uses: ilammy/msvc-dev-cmd@v1
     - name: vcpkg build
       uses: johnwason/vcpkg-action@v6
       id: vcpkg
