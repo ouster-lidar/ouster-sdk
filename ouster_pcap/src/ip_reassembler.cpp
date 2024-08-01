@@ -29,31 +29,29 @@
 
 #include "ip_reassembler.h"
 
+#include <tins/arp.h>
 #include <tins/constants.h>
 #include <tins/detail/pdu_helpers.h>
-#include <tins/ip.h>
-
-#include <tins/ip.h>
-#include <tins/ethernetII.h>
-#include <tins/ieee802_3.h>
-#include <tins/radiotap.h>
 #include <tins/dot11/dot11_base.h>
+#include <tins/dot1q.h>
+#include <tins/eapol.h>
+#include <tins/ethernetII.h>
+#include <tins/icmp.h>
+#include <tins/icmpv6.h>
+#include <tins/ieee802_3.h>
+#include <tins/ip.h>
+#include <tins/ipsec.h>
 #include <tins/ipv6.h>
+#include <tins/loopback.h>
+#include <tins/mpls.h>
+#include <tins/pdu_allocator.h>
+#include <tins/ppi.h>
+#include <tins/pppoe.h>
+#include <tins/radiotap.h>
+#include <tins/rawpdu.h>
+#include <tins/sll.h>
 #include <tins/tcp.h>
 #include <tins/udp.h>
-#include <tins/ipsec.h>
-#include <tins/icmp.h>
-#include <tins/loopback.h>
-#include <tins/sll.h>
-#include <tins/ppi.h>
-#include <tins/icmpv6.h>
-#include <tins/mpls.h>
-#include <tins/arp.h>
-#include <tins/eapol.h>
-#include <tins/rawpdu.h>
-#include <tins/dot1q.h>
-#include <tins/pppoe.h>
-#include <tins/pdu_allocator.h>
 using std::make_pair;
 
 namespace Tins {
@@ -116,10 +114,9 @@ bool IPv4Stream2::is_complete() const {
     return fragments_.begin()->offset() == 0;
 }
 
-static Tins::PDU* pdu_from_flag2(Constants::IP::e flag,
-                         const uint8_t* buffer,
-                         uint32_t size,
-                         bool rawpdu_on_no_match = true) {
+static Tins::PDU* pdu_from_flag2(Constants::IP::e flag, const uint8_t* buffer,
+                                 uint32_t size,
+                                 bool rawpdu_on_no_match = true) {
     switch (flag) {
         case Constants::IP::PROTO_IPIP:
             return new Tins::IP(buffer, size);
