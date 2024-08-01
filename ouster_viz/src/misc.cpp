@@ -8,8 +8,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <cassert>
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,6 +17,10 @@
 #include "common.h"
 #include "glfw.h"
 #include "ouster/point_viz.h"
+
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
 
 namespace ouster {
 namespace viz {

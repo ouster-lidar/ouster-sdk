@@ -9,11 +9,14 @@
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <chrono>
-#define _USE_MATH_DEFINES
-#include <math.h>
+#include <cmath>
 #include <cstdint>
 
 #include "ouster/point_viz.h"
+
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
 
 namespace ouster {
 namespace viz {
