@@ -9,7 +9,7 @@
 #include <Eigen/Geometry>
 #include <cassert>
 #define _USE_MATH_DEFINES
-#include <cmath>
+#include <math.h>
 #include <stdexcept>
 #include <string>
 #include <vector>
