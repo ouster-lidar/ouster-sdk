@@ -1,6 +1,6 @@
-name: C/C++ CI
+name: Lint Build and Test
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   lint:
