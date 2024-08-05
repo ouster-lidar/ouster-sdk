@@ -59,7 +59,7 @@ jobs:
         token: ${{ github.token }}
         github-binarycache: true
     - name: cmake configure
-      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster_example/ouster_example/vcpkg/scripts/buildsystems/vcpkg.cmake
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
@@ -84,7 +84,7 @@ jobs:
     - name: build python
       run: cd python && python3 -m pip install -e .[test]
       env:
-        OUSTER_SDK_CMAKE_ARGS: '-DCMAKE_TOOLCHAIN_FILE=D:/a/ouster_example/ouster_example/vcpkg/scripts/buildsystems/vcpkg.cmake'
+        OUSTER_SDK_CMAKE_ARGS: '-DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake'
     - name: run tests
       run: cd python/tests && pytest -n3
   mac-build:
