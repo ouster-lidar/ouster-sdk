@@ -251,7 +251,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     click.echo(f"  filename: {os.path.basename(file)}")
     click.echo(f"  md5: {hash}")
     click.echo(f"  size: {os.path.getsize(file) / 2**30:.3f} GB")
-    click.echo(f"  mode: {info.mode}")
+    click.echo(f"  mode: {info.config.lidar_mode}")
     click.echo(f"  prod line: {info.prod_line}")
     click.echo(f"  col window: {info.format.column_window}")
 
@@ -435,9 +435,10 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     for idx, (conf, meta) in enumerate(zip(configs, packet_source.metadata)):
         click.echo(f"sensor [{idx}] = ")
-        click.echo(f"  {'Model':<20}: {meta.prod_line} {meta.fw_rev} {meta.mode}")
+        click.echo(f"  {'Model':<20}: {meta.prod_line} {meta.fw_rev} {meta.config.lidar_mode}")
         click.echo(f"  {'SN':<20}: {meta.sn}")
-        click.echo(f"  {'hostname':<20}: {meta.hostname}")
+        hostname = f"os-{meta.sn}.local"
+        click.echo(f"  {'hostname':<20}: {hostname}")
         for prop in [
                 "udp_dest", "udp_port_lidar", "udp_port_imu", "lidar_mode",
                 "azimuth_window", "udp_profile_lidar"
@@ -530,7 +531,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     for idx, info in enumerate(data_source.metadata):
         click.echo(
-            f"Receiving data [{idx}]: {info.prod_line}, {info.mode}, "
+            f"Receiving data [{idx}]: {info.prod_line}, {info.config.lidar_mode}, "
             f"{info.format.udp_profile_lidar}, {info.format.column_window}, "
             f"[{flags}] ...")
 
@@ -697,7 +698,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
             click.echo("  sensors:")
             for idx, info in enumerate(data_source.metadata):
                 click.echo(
-                    f"      {idx:<5}: {info.prod_line}, {info.mode}, "
+                    f"      {idx:<5}: {info.prod_line}, {info.config.lidar_mode}, "
                     f"{info.format.udp_profile_lidar}, {info.format.column_window}"
                 )
 
@@ -732,7 +733,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
         # one line summary for spreadsheets use (only for single sensor)
         if len(data_source.metadata) == 1:
             info = data_source.metadata[0]
-            click.echo(f"-,{info.prod_line},{info.mode},"
+            click.echo(f"-,{info.prod_line},{info.config.lidar_mode},"
                        f"{info.format.udp_profile_lidar},"
                        f"{flags},"
                        f"{sum(total_packets)},"
