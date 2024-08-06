@@ -14,7 +14,6 @@ target_include_directories(ouster_pcap PUBLIC
 CodeCoverageFunctionality(ouster_pcap)
 
 if(WIN32)
-  target_compile_options(ouster_pcap PRIVATE /wd4200)
   target_link_libraries(ouster_pcap PUBLIC ws2_32)
 endif()
 target_link_libraries(ouster_pcap

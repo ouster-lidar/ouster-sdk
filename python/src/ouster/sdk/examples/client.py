@@ -127,9 +127,9 @@ def filter_3d_by_range_and_azimuth(hostname: str,
     plt.figure()
     ax = plt.axes(projection='3d')
     r = 3
-    ax.set_xlim3d([-r, r])
-    ax.set_ylim3d([-r, r])
-    ax.set_zlim3d([-r, r])
+    ax.set_xlim3d([-r, r])  # type: ignore
+    ax.set_ylim3d([-r, r])  # type: ignore
+    ax.set_zlim3d([-r, r])  # type: ignore
 
     plt.title("Filtered 3D Points from {}".format(hostname))
 
@@ -155,7 +155,7 @@ def filter_3d_by_range_and_azimuth(hostname: str,
     # [doc-etag-filter-3d]
 
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz_filtered, 3)]
-    ax.scatter(x, y, z, c=z / max(z), s=0.2)
+    ax.scatter(x, y, z, c=z / max(z), s=0.2)  # type: ignore
     plt.show()
 
 
@@ -210,9 +210,9 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     plt.figure()
     ax = plt.axes(projection='3d')
     r = 3
-    ax.set_xlim3d([-r, r])
-    ax.set_ylim3d([-r, r])
-    ax.set_zlim3d([-r, r])
+    ax.set_xlim3d([-r, r])  # type: ignore
+    ax.set_ylim3d([-r, r])  # type: ignore
+    ax.set_zlim3d([-r, r])  # type: ignore
 
     plt.title("3D Points from {}".format(hostname))
 
@@ -224,7 +224,7 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
 
     # graph xyz
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
-    ax.scatter(x, y, z, c=z / max(z), s=0.2)
+    ax.scatter(x, y, z, c=z / max(z), s=0.2)  # type: ignore
     plt.show()
 
 

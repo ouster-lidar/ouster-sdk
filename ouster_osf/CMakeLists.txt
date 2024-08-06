@@ -128,7 +128,6 @@ target_link_libraries(ouster_osf
 target_include_directories(ouster_osf PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${EIGEN3_INCLUDE_DIR}
 )
 add_dependencies(ouster_osf cpp_gen)
 add_library(OusterSDK::ouster_osf ALIAS ouster_osf)

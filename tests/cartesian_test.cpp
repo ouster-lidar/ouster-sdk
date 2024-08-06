@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <Eigen/Eigen>
+#include <iomanip>
 #include <numeric>
 #include <random>
 

@@ -178,6 +178,7 @@ def install_requires():
         install_requires.append(temp)
     return install_requires
 
+
 if __name__ == "__main__":
     setup(
         name='ouster-sdk',

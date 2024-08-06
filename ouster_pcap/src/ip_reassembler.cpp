@@ -29,10 +29,29 @@
 
 #include "ip_reassembler.h"
 
+#include <tins/arp.h>
 #include <tins/constants.h>
 #include <tins/detail/pdu_helpers.h>
+#include <tins/dot11/dot11_base.h>
+#include <tins/dot1q.h>
+#include <tins/eapol.h>
+#include <tins/ethernetII.h>
+#include <tins/icmp.h>
+#include <tins/icmpv6.h>
+#include <tins/ieee802_3.h>
 #include <tins/ip.h>
-
+#include <tins/ipsec.h>
+#include <tins/ipv6.h>
+#include <tins/loopback.h>
+#include <tins/mpls.h>
+#include <tins/pdu_allocator.h>
+#include <tins/ppi.h>
+#include <tins/pppoe.h>
+#include <tins/radiotap.h>
+#include <tins/rawpdu.h>
+#include <tins/sll.h>
+#include <tins/tcp.h>
+#include <tins/udp.h>
 using std::make_pair;
 
 namespace Tins {
@@ -95,6 +114,35 @@ bool IPv4Stream2::is_complete() const {
     return fragments_.begin()->offset() == 0;
 }
 
+static Tins::PDU* pdu_from_flag2(Constants::IP::e flag, const uint8_t* buffer,
+                                 uint32_t size,
+                                 bool rawpdu_on_no_match = true) {
+    switch (flag) {
+        case Constants::IP::PROTO_IPIP:
+            return new Tins::IP(buffer, size);
+        case Constants::IP::PROTO_TCP:
+            return new Tins::TCP(buffer, size);
+        case Constants::IP::PROTO_UDP:
+            return new Tins::UDP(buffer, size);
+        case Constants::IP::PROTO_ICMP:
+            return new Tins::ICMP(buffer, size);
+        case Constants::IP::PROTO_ICMPV6:
+            return new Tins::ICMPv6(buffer, size);
+        case Constants::IP::PROTO_IPV6:
+            return new Tins::IPv6(buffer, size);
+        case Constants::IP::PROTO_AH:
+            return new Tins::IPSecAH(buffer, size);
+        case Constants::IP::PROTO_ESP:
+            return new Tins::IPSecESP(buffer, size);
+        default:
+            break;
+    }
+    if (rawpdu_on_no_match) {
+        return new Tins::RawPDU(buffer, size);
+    }
+    return 0;
+}
+
 PDU* IPv4Stream2::allocate_pdu() const {
     PDU::serialization_type buffer;
     buffer.reserve(total_size_);
@@ -108,7 +156,7 @@ PDU* IPv4Stream2::allocate_pdu() const {
         expected = it->offset() + it->payload().size();
         buffer.insert(buffer.end(), it->payload().begin(), it->payload().end());
     }
-    return Internals::pdu_from_flag(
+    return pdu_from_flag2(
         static_cast<Constants::IP::e>(first_fragment_.protocol()),
         buffer.empty() ? 0 : &buffer[0], static_cast<uint32_t>(buffer.size()));
 }

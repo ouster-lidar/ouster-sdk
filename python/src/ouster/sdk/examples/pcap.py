@@ -94,9 +94,9 @@ def pcap_display_xyz_points(source: client.PacketSource,
     plt.figure()
     ax = plt.axes(projection='3d')
     r = 6
-    ax.set_xlim3d([-r, r])
-    ax.set_ylim3d([-r, r])
-    ax.set_zlim3d([-r, r])
+    ax.set_xlim3d([-r, r])  # type: ignore
+    ax.set_ylim3d([-r, r])  # type: ignore
+    ax.set_zlim3d([-r, r])  # type: ignore
 
     plt.title("3D Points XYZ for scan")
 
@@ -107,7 +107,7 @@ def pcap_display_xyz_points(source: client.PacketSource,
     key = scan.field(client.ChanField.REFLECTIVITY)
 
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
-    ax.scatter(x, y, z, c=normalize(key.flatten()), s=0.2)
+    ax.scatter(x, y, z, c=normalize(key.flatten()), s=0.2)  # type: ignore
     plt.show()
     # [doc-etag-pcap-plot-xyz-points]
 

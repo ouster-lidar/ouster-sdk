@@ -314,9 +314,15 @@ TEST_F(OsfPngToolsTest, InternalsTest) {
     EXPECT_NE(error_loc, std::string::npos);
     output_error = output_error.substr(error_loc);
     EXPECT_TRUE(error_caught);
+#ifdef _WIN32
+    EXPECT_EQ(output_error,
+              "[error] ERROR libpng osf: Also Checkout Porcupine Tree"
+              " - Arriving Somewhere But Not Here\r\n");
+#else
     EXPECT_EQ(output_error,
               "[error] ERROR libpng osf: Also Checkout Porcupine Tree"
               " - Arriving Somewhere But Not Here\n");
+#endif
 }
 
 #ifndef OUSTER_OSF_NO_THREADING

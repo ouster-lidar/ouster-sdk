@@ -323,7 +323,11 @@ TEST_F(ReaderTest, MetadataFromBufferTest) {
     EXPECT_NE(error_loc, std::string::npos);
 
     output_error = output_error.substr(error_loc);
+#ifdef _WIN32
+    EXPECT_EQ(output_error, "[error] UNKNOWN TYPE: NON EXISTENT\r\n");
+#else
     EXPECT_EQ(output_error, "[error] UNKNOWN TYPE: NON EXISTENT\n");
+#endif
     EXPECT_EQ(result, nullptr);
 
     result = sensor->from_buffer(sensor->buffer(),

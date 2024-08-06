@@ -64,7 +64,7 @@ class IPv4Fragment2 {
     uint16_t offset_;
 };
 
-class TINS_API IPv4Stream2 {
+class IPv4Stream2 {
    public:
     IPv4Stream2();
 
@@ -119,7 +119,7 @@ class TINS_API IPv4Stream2 {
  * });
  * \endcode
  */
-class TINS_API IPv4Reassembler2 {
+class IPv4Reassembler2 {
    public:
     /**
      * The status of each processed packet.
