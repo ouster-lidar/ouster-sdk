@@ -169,6 +169,7 @@ int main(int argc, char* argv[]) {
               << std::endl;
 
     // 5. getting IMU
+    std::cerr << "\n5. Getting IMU data..." << std::endl;
     sensor::packet_format pf = sensor::get_format(info);
     ouster::sensor_utils::read_packet(*handle, packet_buf.get(), UDP_BUF_SIZE);
     std::cout << "IMU Timestamp: " << pf.imu_gyro_ts(packet_buf.get()) << " ns" << std::endl;
