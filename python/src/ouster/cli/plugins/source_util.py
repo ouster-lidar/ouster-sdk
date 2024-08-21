@@ -153,7 +153,7 @@ Error: {err_msg}
 Please verify that ROS Python modules are available.
 
 The best option is to try to install unofficial rospy packages that work
-with Python 3.8 on Ubuntu 18.04/20.04 and Debian 10 without ROS:
+with Python 3.8 on Ubuntu 20.04 and Debian 10 without ROS:
 
     pip install --extra-index-url https://rospypi.github.io/simple/ rospy rosbag tf2_ros
 

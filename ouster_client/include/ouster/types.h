@@ -63,11 +63,10 @@ enum lidar_mode {
     MODE_512x10,      ///< lidar mode: 10 scans of 512 columns per second
     MODE_512x20,      ///< lidar mode: 20 scans of 512 columns per second
     MODE_1024x10,     ///< lidar mode: 10 scans of 1024 columns per second
-    MODE_1024x20,     ///< lidar mode: 20 scans of 1024 columsn per second
+    MODE_1024x20,     ///< lidar mode: 20 scans of 1024 columns per second
     MODE_2048x10,     ///< lidar mode: 10 scans of 2048 columns per second
     MODE_4096x5       ///< lidar mode: 5 scans of 4096 columns per second. Only
                       ///< available on select sensors
-
 };
 
 /**
@@ -230,7 +229,7 @@ enum ShotLimitingStatus {
     SHOT_LIMITING_NORMAL = 0x00,    ///< Normal operation
     SHOT_LIMITING_IMMINENT = 0x01,  ///< Shot limiting imminent
     SHOT_LIMITING_REDUCTION_0_10 =
-        0x02,  //< Shot limiting reduction by 0 to 10%
+        0x02,  ///< Shot limiting reduction by 0 to 10%
     SHOT_LIMITING_REDUCTION_10_20 =
         0x03,  ///< Shot limiting reduction by 10 to 20%
     SHOT_LIMITING_REDUCTION_20_30 =
@@ -262,12 +261,12 @@ using ColumnWindow = std::pair<int, int>;
  * Struct for sensor configuration parameters.
  */
 struct sensor_config {
-    optional<std::string> udp_dest;  ///< The destination address for the
-                                     ///< lidar/imu data to be sent to
-    optional<int> udp_port_lidar;    ///< The destination port for the lidar
-                                     ///< data to be sent to
-    optional<int> udp_port_imu;      ///< The destination port for the imu data
-                                     ///< to be sent to
+    optional<std::string> udp_dest;     ///< The destination address for the
+                                        ///< lidar/imu data to be sent to
+    optional<uint16_t> udp_port_lidar;  ///< The destination port for the lidar
+                                        ///< data to be sent to
+    optional<uint16_t> udp_port_imu;    ///< The destination port for the imu
+                                        ///< data to be sent to
 
     // TODO: replace ts_mode and ld_mode when timestamp_mode and
     // lidar_mode get changed to CapsCase
@@ -275,13 +274,13 @@ struct sensor_config {
      * The timestamp mode for the sensor to use.
      * Refer to timestamp_mode for more details.
      */
-    optional<timestamp_mode> ts_mode;
+    optional<sensor::timestamp_mode> timestamp_mode;
 
     /**
      * The lidar mode for the sensor to use.
      * Refer to lidar_mode for more details.
      */
-    optional<lidar_mode> ld_mode;
+    optional<sensor::lidar_mode> lidar_mode;
 
     /**
      * The operating mode for the sensor to use.
@@ -435,18 +434,106 @@ struct calibration_status {
     optional<std::string> reflectivity_timestamp;
 };
 
+/** Stores parsed information about the prod line */
+class product_info {
+   public:
+    /**
+     * The original full product line string.
+     */
+    const std::string full_product_info;
+
+    /**
+     * The form factor of the sensor. This will
+     * look like: "OS1" or "OS2" and such.
+     */
+    const std::string form_factor;
+
+    /**
+     * Is the sensor a short range build or not.
+     */
+    const bool short_range;
+
+    /**
+     * The beam configuration of the sensor.
+     */
+    const std::string beam_config;
+
+    /**
+     * The number of beams on the sensor.
+     */
+    const int beam_count;
+
+    /**
+     * Static method used to create product_info classes.
+     *
+     * @throws std::runtime_error on a bad product info line.
+     *
+     * @param[in] product_info_string The product info string to create
+     *                                the product_info class from.
+     * @return The new product_info class.
+     */
+    static product_info create_product_info(std::string product_info_string);
+
+    /**
+     * Default constructor for product_info that
+     * sets everything to blank.
+     */
+    product_info();
+
+   protected:
+    /**
+     * Constructor to initialize each of the members off of.
+     *
+     * @internal
+     *
+     * @param[in] product_info_string The full product line string.
+     * @param[in] form_factor The sensor form factor.
+     * @param[in] short_range If the sensor is short range or not.
+     * @param[in] beam_config The beam configuration for the sensor.
+     * @param[in] beam_count The number of beams for a sensor.
+     */
+    product_info(std::string product_info_string, std::string form_factor,
+                 bool short_range, std::string beam_config, int beam_count);
+};
+
+/**
+ * Equality for product_info.
+ *
+ * @param[in] lhs The first object to compare.
+ * @param[in] rhs The second object to compare.
+ *
+ * @return lhs == rhs
+ */
+bool operator==(const product_info& lhs, const product_info& rhs);
+
+/**
+ * In-Equality for product_info.
+ *
+ * @param[in] lhs The first object to compare.
+ * @param[in] rhs The second object to compare.
+ *
+ * @return lhs != rhs
+ */
+bool operator!=(const product_info& lhs, const product_info& rhs);
+
+/**
+ * Get string representation of a product info.
+ *
+ * @param[in] info Product Info to get the string representation from.
+ *
+ * @return string representation of the product info.
+ */
+std::string to_string(const product_info& info);
+
 /** Stores parsed information from metadata and */
 struct OUSTER_CLIENT_EXPORT sensor_info {
     // clang-format off
-    std::string
-        name{};                 ///< user-convenience client-side assignable name, corresponds
-                                ///< to hostname in metadata.json if present
     std::string sn{};           ///< sensor serial number corresponding to prod_sn in
                                 ///< metadata.json
     std::string
         fw_rev{};               ///< fw revision corresponding to build_rev in metadata.json
-    lidar_mode mode{};          ///< lidar mode of sensor
     std::string prod_line{};    ///< prod line
+
     data_format format{};       ///< data format of sensor
     std::vector<double>
         beam_azimuth_angles{};  ///< beam azimuth angles for 3D projection
@@ -462,43 +549,44 @@ struct OUSTER_CLIENT_EXPORT sensor_info {
     mat4d lidar_to_sensor_transform =
         mat4d::Zero();          ///< transform between lidar and sensor
                                 ///< coordinate frames
-    // TODO read extrinsic from metadata.json in the future
     mat4d extrinsic =
         mat4d::Zero();          ///< user-convenience client-side assignable extrinsic
                                 ///< matrix, currently is not read from metadata.json
     uint32_t init_id{};         ///< initialization ID updated every reinit
-    uint16_t udp_port_lidar{};  ///< the lidar destination port
-    uint16_t udp_port_imu{};    ///< the imu destination port
 
     std::string build_date{};   ///< build date from FW sensor_info
     std::string image_rev{};    ///< image rev from FW sensor_info
     std::string prod_pn{};      ///< prod pn
     std::string status{};       ///< sensor status at time of pulling metadata
 
-    calibration_status cal{};  ///< sensor calibration
-    sensor_config config{};    ///< parsed sensor config if available from metadata
+    calibration_status cal{};   ///< sensor calibration
+    sensor_config config{};     ///< parsed sensor config if available from metadata
+    std::string user_data{};    ///< userdata from sensor if available
 
     /* Constructor from metadata */
-    sensor_info(const std::string& metadata, bool skip_beam_validation = false);
+    explicit sensor_info(const std::string& metadata, bool skip_beam_validation = false);
 
     /* Empty constructor -- keep for  */
     sensor_info();
 
-    /* Return original metadata string should sensor_info have been
-     * constructed from one  -- this string will be **unchanged** and
-     * will not reflect the changes to fields made to sensor_info*/
-    std::string original_string() const;
-
     /* Return an updated version of the metadata string reflecting any
      * changes to the sensor_info.
      * Errors out if changes are incompatible but does not check for validity */
-    std::string updated_metadata_string() const;
+    std::string to_json_string() const;
+    
+    /**
+     * Parse and return version info about this sensor.
+     *
+     * @return sensor version info
+     */
+    ouster::util::version get_version() const;
+
+    product_info get_product_info() const;
 
     bool has_fields_equal(const sensor_info& other) const;
 
    private:
-    std::string
-        original_metadata_string{};  ///< string from which values were parsed
+    bool was_legacy_ = false;
     // clang-format on
 };
 
@@ -826,24 +914,6 @@ OUSTER_CLIENT_EXPORT std::string to_string(ThermalShutdownStatus thermal_shutdow
 OUSTER_CLIENT_EXPORT void check_signal_multiplier(const double signal_multiplier);
 
 /**
- * Parse metadata text blob from the sensor into a sensor_info struct.
- *
- * String and vector fields will have size 0 if the parameter cannot
- * be found or parsed, while lidar_mode will be set to 0 (invalid).
- *
- * @throw runtime_error if the text is not valid json
- *
- * @param[in] metadata a text blob returned by get_metadata from client.h.
- * @param[in] skip_beam_validation whether to skip validation on metdata - not
- *                                 for use on recorded data or metadata
- *                                 from sensors
- *
- * @return a sensor_info struct populated with a subset of the metadata.
- */
-OUSTER_CLIENT_EXPORT sensor_info parse_metadata(const std::string& metadata,
-                           bool skip_beam_validation = false);
-
-/**
  * Parse metadata given path to a json file.
  *
  * @throw runtime_error if json file does not exist or is malformed.
@@ -897,15 +967,6 @@ OUSTER_CLIENT_EXPORT sensor_config parse_config(const std::string& config);
 OUSTER_CLIENT_EXPORT std::string to_string(const sensor_config& config);
 
 /**
- * Convert non-legacy string representation of metadata to legacy.
- *
- * @param[in] metadata non-legacy string representation of metadata.
- *
- * @return legacy string representation of metadata.
- */
-OUSTER_CLIENT_EXPORT std::string convert_to_legacy(const std::string& metadata);
-
-/**
  * Get a string representation of sensor calibration. Only set fields will be
  * represented.
  *
@@ -929,63 +990,56 @@ OUSTER_CLIENT_EXPORT std::string client_version();
  *
  * @return version corresponding to the string, or invalid_version on error.
  */
-OUSTER_CLIENT_EXPORT ouster::util::version firmware_version_from_metadata(
-    const std::string& metadata);
+[[deprecated("Use sensor_info::get_version() instead")]] OUSTER_CLIENT_EXPORT ouster::util::version
+firmware_version_from_metadata(const std::string& metadata);
 
 // clang-format off
+typedef const char* cf_type;
 /** Tag to identitify a paricular value reported in the sensor channel data
  * block. */
-enum ChanField {
-    RANGE = 1,            ///< 1st return range in mm
-    RANGE2 = 2,           ///< 2nd return range in mm
-    INTENSITY = 3,        ///< @deprecated Use SIGNAL instead
-    SIGNAL = 3,           ///< 1st return signal in photons
-    SIGNAL2 = 4,          ///< 2nd return signal in photons
-    REFLECTIVITY = 5,     ///< 1st return reflectivity, calibrated by range and sensor
+namespace ChanField {
+    static constexpr cf_type RANGE = "RANGE";            ///< 1st return range in mm
+    static constexpr cf_type RANGE2 = "RANGE2";           ///< 2nd return range in mm
+    static constexpr cf_type SIGNAL = "SIGNAL";           ///< 1st return signal in photons
+    static constexpr cf_type SIGNAL2 = "SIGNAL2";          ///< 2nd return signal in photons
+    static constexpr cf_type REFLECTIVITY = "REFLECTIVITY";     ///< 1st return reflectivity, calibrated by range and sensor
                           ///< sensitivity in FW 2.1+. See sensor docs for more details
-    REFLECTIVITY2 = 6,    ///< 2nd return reflectivity, calibrated by range and sensor
+    static constexpr cf_type REFLECTIVITY2 = "REFLECTIVITY2";    ///< 2nd return reflectivity, calibrated by range and sensor
                           ///< sensitivity in FW 2.1+. See sensor docs for more details
-    AMBIENT = 7,          ///< @deprecated Use NEAR_IR instead
-    NEAR_IR = 7,          ///< near_ir in photons
-    FLAGS = 8,            ///< 1st return flags
-    FLAGS2 = 9,           ///< 2nd return flags
-    RAW_HEADERS = 40,     ///< raw headers for packet/footer/column for dev use
-    RAW32_WORD5 = 45,     ///< raw word access to packet for dev use
-    RAW32_WORD6 = 46,     ///< raw word access to packet for dev use
-    RAW32_WORD7 = 47,     ///< raw word access to packet for dev use
-    RAW32_WORD8 = 48,     ///< raw word access to packet for dev use
-    RAW32_WORD9 = 49,     ///< raw word access to packet for dev use
-    CUSTOM0 = 50,         ///< custom user field
-    CUSTOM1 = 51,         ///< custom user field
-    CUSTOM2 = 52,         ///< custom user field
-    CUSTOM3 = 53,         ///< custom user field
-    CUSTOM4 = 54,         ///< custom user field
-    CUSTOM5 = 55,         ///< custom user field
-    CUSTOM6 = 56,         ///< custom user field
-    CUSTOM7 = 57,         ///< custom user field
-    CUSTOM8 = 58,         ///< custom user field
-    CUSTOM9 = 59,         ///< custom user field
-    RAW32_WORD1 = 60,     ///< raw word access to packet for dev use
-    RAW32_WORD2 = 61,     ///< raw word access to packet for dev use
-    RAW32_WORD3 = 62,     ///< raw word access to packet for dev use
-    RAW32_WORD4 = 63,     ///< raw word access to packet for dev use
-    CHAN_FIELD_MAX = 64,  ///< max which allows us to introduce future fields
+    
+    static constexpr cf_type NEAR_IR = "NEAR_IR";          ///< near_ir in photons
+    static constexpr cf_type FLAGS = "FLAGS";            ///< 1st return flags
+    static constexpr cf_type FLAGS2 = "FLAGS2";           ///< 2nd return flags
+    static constexpr cf_type RAW_HEADERS = "RAW_HEADERS";     ///< raw headers for packet/footer/column for dev use
+    static constexpr cf_type RAW32_WORD5 = "RAW32_WORD5";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD6 = "RAW32_WORD6";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD7 = "RAW32_WORD7";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD8 = "RAW32_WORD8";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD9 = "RAW32_WORD9";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD1 = "RAW32_WORD1";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD2 = "RAW32_WORD2";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD3 = "RAW32_WORD3";     ///< raw word access to packet for dev use
+    static constexpr cf_type RAW32_WORD4 = "RAW32_WORD4";     ///< raw word access to packet for dev use
 };
 // clang-format on
 
 /**
- * Get string representation of a channel field.
- *
- * @param[in] field The field to get the string representation of.
- *
- * @return string representation of the channel field.
- */
-OUSTER_CLIENT_EXPORT std::string to_string(ChanField field);
-
-/**
  * Types of channel fields.
  */
-enum ChanFieldType { VOID = 0, UINT8, UINT16, UINT32, UINT64 };
+enum ChanFieldType {
+    VOID = 0,
+    UINT8 = 1,
+    UINT16 = 2,
+    UINT32 = 3,
+    UINT64 = 4,
+    INT8 = 5,
+    INT16 = 6,
+    INT32 = 7,
+    INT64 = 8,
+    FLOAT32 = 9,
+    FLOAT64 = 10,
+    UNREGISTERED = 100
+};
 
 /**
  * Get the size of the ChanFieldType in bytes.
@@ -1021,17 +1075,16 @@ OUSTER_CLIENT_EXPORT std::string to_string(ChanFieldType ft);
 class OUSTER_CLIENT_EXPORT packet_format {
    protected:
     template <typename T>
-    T px_field(const uint8_t* px_buf, ChanField i) const;
+    T px_field(const uint8_t* px_buf, const std::string& i) const;
 
     template <typename T, typename SRC, int N>
-    void block_field_impl(Eigen::Ref<img_t<T>> field, ChanField i,
+    void block_field_impl(Eigen::Ref<img_t<T>> field, const std::string& i,
                           const uint8_t* packet_buf) const;
 
     struct Impl;
     std::shared_ptr<const Impl> impl_;
 
-    std::vector<std::pair<sensor::ChanField, sensor::ChanFieldType>>
-        field_types_;
+    std::vector<std::pair<std::string, sensor::ChanFieldType>> field_types_;
 
    public:
     packet_format(UDPProfileLidar udp_profile_lidar, size_t pixels_per_column,
@@ -1139,7 +1192,7 @@ class OUSTER_CLIENT_EXPORT packet_format {
      * @return a type tag specifying the bitwidth of the requested field or
      * ChannelFieldType::VOID if it is not supported by the packet format.
      */
-    ChanFieldType field_type(ChanField f) const;
+    ChanFieldType field_type(const std::string& f) const;
 
     /**
      * A const forward iterator over field / type pairs.
@@ -1210,7 +1263,7 @@ class OUSTER_CLIENT_EXPORT packet_format {
     /**
      * Copy the specified channel field out of a packet measurement block.
      *
-     * @tparam T T should be an unsigned integer type large enough to store
+     * @tparam T T should be a numeric type large enough to store
      * values of the specified field. Otherwise, data will be truncated.
      *
      * @param[in] col_buf a measurement block pointer returned by `nth_col()`.
@@ -1218,9 +1271,8 @@ class OUSTER_CLIENT_EXPORT packet_format {
      * @param[out] dst destination array of size pixels_per_column * dst_stride.
      * @param[in] dst_stride stride for writing to the destination array.
      */
-    template <typename T,
-              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
-    void col_field(const uint8_t* col_buf, ChanField f, T* dst,
+    template <typename T>
+    void col_field(const uint8_t* col_buf, const std::string& f, T* dst,
                    int dst_stride = 1) const;
 
     /**
@@ -1235,16 +1287,15 @@ class OUSTER_CLIENT_EXPORT packet_format {
      * Faster traversal than col_field, but has to copy the entire packet all at
      * once.
      *
-     * @tparam T T should be an unsigned integer type large enough to store
+     * @tparam T T should be a numeric type large enough to store
      * values of the specified field. Otherwise, data will be truncated.
      *
      * @param[out] field destination eigen array
      * @param[in] f the channel field to copy.
      * @param[in] lidar_buf the lidar buffer.
      */
-    template <typename T, int BlockDim,
-              typename std::enable_if<std::is_unsigned<T>::value, T>::type = 0>
-    void block_field(Eigen::Ref<img_t<T>> field, ChanField f,
+    template <typename T, int BlockDim>
+    void block_field(Eigen::Ref<img_t<T>> field, const std::string& f,
                      const uint8_t* lidar_buf) const;
 
     // Per-pixel channel data block accessors
@@ -1346,7 +1397,7 @@ class OUSTER_CLIENT_EXPORT packet_format {
      *
      * @return mask of possible values
      */
-    uint64_t field_value_mask(ChanField f) const;
+    uint64_t field_value_mask(const std::string& f) const;
 
     /**
      * Get number of bits in the channel field
@@ -1355,7 +1406,7 @@ class OUSTER_CLIENT_EXPORT packet_format {
      *
      * @return number of bits
      */
-    int field_bitness(ChanField f) const;
+    int field_bitness(const std::string& f) const;
 };
 
 /** @defgroup OusterClientTypeGetFormat Get Packet Format functions */
@@ -1406,18 +1457,49 @@ struct Packet {
     }
 };
 
+/*
+ * Reasons for failure of packet validation.
+ */
+enum class PacketValidationFailure {
+    NONE = 0,         ///< No validation errors were found
+    PACKET_SIZE = 1,  ///< The packet size does not match the expected size
+    ID = 2            ///< The prod_sn or init_id does not match the metadata
+};
+
 /**
  * Encapsulate a lidar packet buffer and attributes associated with it.
  */
-struct LidarPacket : public Packet {
+struct OUSTER_CLIENT_EXPORT LidarPacket : public Packet {
     using Packet::Packet;
+
+    /**
+     * Validates that the packet matches the expected format and metadata.
+     *
+     * @param[in] info   expected sensor metadata
+     * @param[in] format   expected packet_format
+     *
+     * @return a PacketValdationFailure with either NONE or a failure reason.
+     */
+    PacketValidationFailure validate(const sensor_info& info,
+                                     const packet_format& format);
 };
 
 /**
  * Encapsulate an imu packet buffer and attributes associated with it.
  */
-struct ImuPacket : public Packet {
+struct OUSTER_CLIENT_EXPORT ImuPacket : public Packet {
     using Packet::Packet;
+
+    /**
+     * Validates that the packet matches the expected format and metadata.
+     *
+     * @param[in] info   expected sensor metadata
+     * @param[in] format   expected packet_format
+     *
+     * @return a PacketValdationFailure with either NONE or a failure reason.
+     */
+    PacketValidationFailure validate(const sensor_info& info,
+                                     const packet_format& format);
 };
 
 namespace impl {

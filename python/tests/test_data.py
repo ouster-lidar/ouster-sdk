@@ -6,139 +6,117 @@ Tests for lidar data parsing.
 
 Checks that the output of parsing hasn't changed unexpectedly.
 """
-import os
-import json
 from copy import deepcopy
 
 import numpy as np
 import pytest
 
 from ouster.sdk import client
-from ouster.sdk.client import _client
-from ouster.sdk.pcap import _pcap
-
-from tests.conftest import PCAPS_DATA_DIR
+from ouster.sdk.client._client import scan_to_packets
+from ouster.sdk.client import PacketValidationFailure, PacketFormat, PacketWriter, FieldType
 
 
 def test_make_packets(meta: client.SensorInfo) -> None:
-    pf = _client.PacketFormat.from_info(meta)
+    pf = PacketFormat.from_info(meta)
 
-    client.ImuPacket(bytes(pf.imu_packet_size), meta)
-    client.ImuPacket(bytearray(pf.imu_packet_size), meta)
+    p1 = client.ImuPacket()
+    p2 = client.ImuPacket(pf.imu_packet_size)
 
-    with pytest.raises(ValueError):
-        client.ImuPacket(bytes(), meta)
+    p3 = client.LidarPacket()
+    p4 = client.LidarPacket(pf.lidar_packet_size)
 
-    with pytest.raises(ValueError):
-        client.ImuPacket(bytes(pf.imu_packet_size - 1), meta)
+    assert p1.validate(meta, pf) == PacketValidationFailure.PACKET_SIZE
+    assert p2.validate(meta, pf) == PacketValidationFailure.NONE
 
-    client.LidarPacket(bytes(pf.lidar_packet_size), meta)
-    client.LidarPacket(bytearray(pf.lidar_packet_size), meta)
-
-    with pytest.raises(ValueError):
-        client.LidarPacket(bytes(), meta)
-
-    with pytest.raises(ValueError):
-        client.LidarPacket(bytes(pf.lidar_packet_size - 1), meta)
+    assert p3.validate(meta, pf) == PacketValidationFailure.PACKET_SIZE
+    assert p4.validate(meta, pf) == PacketValidationFailure.NONE
 
 
 def test_imu_packet(meta: client.SensorInfo) -> None:
-    pf = _client.PacketFormat.from_info(meta)
+    pf = PacketFormat.from_info(meta)
 
-    p = client.ImuPacket(bytes(pf.imu_packet_size), meta)
+    p = client.ImuPacket(pf.imu_packet_size)
 
-    assert p.sys_ts == 0
-    assert p.accel_ts == 0
-    assert p.gyro_ts == 0
-    assert np.array_equal(p.accel, np.array([0.0, 0.0, 0.0]))
-    assert np.array_equal(p.angular_vel, np.array([0.0, 0.0, 0.0]))
-
-    with pytest.raises(AttributeError):
-        p.accel_ts = 0  # type: ignore
+    assert pf.imu_sys_ts(p.buf) == 0
+    assert pf.imu_accel_ts(p.buf) == 0
+    assert pf.imu_gyro_ts(p.buf) == 0
+    assert pf.imu_av_x(p.buf) == 0.0
+    assert pf.imu_av_y(p.buf) == 0.0
+    assert pf.imu_av_z(p.buf) == 0.0
+    assert pf.imu_la_x(p.buf) == 0.0
+    assert pf.imu_la_y(p.buf) == 0.0
+    assert pf.imu_la_z(p.buf) == 0.0
 
 
 def test_lidar_packet(meta: client.SensorInfo) -> None:
     """Test reading and writing values from empty packets."""
-    pf = _client.PacketFormat.from_info(meta)
-    p = client.LidarPacket(bytes(pf.lidar_packet_size), meta)
+    pf = PacketFormat(meta)
+    p = client.LidarPacket(pf.lidar_packet_size)
     w = pf.columns_per_packet
     h = pf.pixels_per_column
 
     scan_has_signal = (meta.format.udp_profile_lidar !=
                        client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8)
 
-    assert len(
-        client.ChanField.__members__) == 29, "Don't forget to update tests!"
-    assert np.array_equal(p.field(client.ChanField.RANGE), np.zeros((h, w)))
-    assert np.array_equal(p.field(client.ChanField.REFLECTIVITY),
+    assert np.array_equal(pf.packet_field(client.ChanField.RANGE, p.buf), np.zeros((h, w)))
+    assert np.array_equal(pf.packet_field(client.ChanField.REFLECTIVITY, p.buf),
                           np.zeros((h, w)))
-    assert np.array_equal(p.field(client.ChanField.NEAR_IR), np.zeros((h, w)))
+    assert np.array_equal(pf.packet_field(client.ChanField.NEAR_IR, p.buf), np.zeros((h, w)))
 
     if scan_has_signal:
-        assert np.array_equal(p.field(client.ChanField.SIGNAL), np.zeros(
+        assert np.array_equal(pf.packet_field(client.ChanField.SIGNAL, p.buf), np.zeros(
             (h, w)))
 
     assert len(
         client.ColHeader.__members__) == 5, "Don't forget to update tests!"
-    assert np.array_equal(p.timestamp, np.zeros(w))
-    assert np.array_equal(p.measurement_id, np.zeros(w))
-    assert np.array_equal(p.status, np.zeros(w))
+    assert np.array_equal(pf.packet_header(client.ColHeader.TIMESTAMP, p.buf), np.zeros(w))
+    assert np.array_equal(pf.packet_header(client.ColHeader.MEASUREMENT_ID, p.buf), np.zeros(w))
+    assert np.array_equal(pf.packet_header(client.ColHeader.STATUS, p.buf), np.zeros(w))
 
-    assert p.frame_id == 0
-
-    # should not be able to modify packet data
-    with pytest.raises(ValueError):
-        p.field(client.ChanField.REFLECTIVITY)[0] = 1
-
-    with pytest.raises(ValueError):
-        p.measurement_id[0] = 1
-
-    with pytest.raises(ValueError):
-        p.status[:] = 1
-
-    with pytest.raises(AttributeError):
-        p.frame_id = 1  # type: ignore
+    assert pf.frame_id(p.buf) == 0
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_read_legacy_packet(packet: client.LidarPacket) -> None:
+def test_read_legacy_packet(packet: client.LidarPacket, packets: client.PacketSource) -> None:
     """Read some arbitrary values from a packet and check header invariants."""
-    assert packet.field(client.ChanField.RANGE)[-1, 0] == 12099
-    assert packet.field(client.ChanField.REFLECTIVITY)[-1, 0] == 1017
-    assert packet.field(client.ChanField.SIGNAL)[-1, 0] == 6
-    assert packet.field(client.ChanField.NEAR_IR)[-1, 0] == 13
+    pf = client.PacketFormat(packets.metadata)
+    assert pf.packet_field(client.ChanField.RANGE, packet.buf)[-1, 0] == 12099
+    assert pf.packet_field(client.ChanField.REFLECTIVITY, packet.buf)[-1, 0] == 1017
+    assert pf.packet_field(client.ChanField.SIGNAL, packet.buf)[-1, 0] == 6
+    assert pf.packet_field(client.ChanField.NEAR_IR, packet.buf)[-1, 0] == 13
 
-    assert np.all(np.diff(packet.timestamp) > 0)
-    assert np.all(np.diff(packet.measurement_id) == 1)
-    assert packet.packet_type == 0
-    assert packet.frame_id == 5424
-    assert packet.init_id == 0
-    assert packet.prod_sn == 0
-    assert packet.shot_limiting == 0
-    assert packet.thermal_shutdown == 0
+    assert np.all(np.diff(pf.packet_header(client.ColHeader.TIMESTAMP, packet.buf)) > 0)
+    assert np.all(np.diff(pf.packet_header(client.ColHeader.MEASUREMENT_ID, packet.buf)) == 1)
+    assert pf.packet_type(packet.buf) == 0
+    assert pf.frame_id(packet.buf) == 5424
+    assert pf.init_id(packet.buf) == 0
+    assert pf.prod_sn(packet.buf) == 0
+    assert pf.shot_limiting(packet.buf) == 0
+    assert pf.thermal_shutdown(packet.buf) == 0
     # in 1024xN mode, the angle between measurements is exactly 88 encoder ticks
-    assert np.all(packet.status == 0xffffffff)
+    assert np.all(pf.packet_header(client.ColHeader.STATUS, packet.buf) == 0xffffffff)
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_read_single_return_packet(packet: client.LidarPacket) -> None:
+def test_read_single_return_packet(packet: client.LidarPacket, packets: client.PacketSource) -> None:
     """Read some arbitrary values from packet and check header invariants."""
-    assert packet.field(client.ChanField.RANGE)[-1, 0] == 11610
-    assert packet.field(client.ChanField.REFLECTIVITY)[-1, 0] == 11
-    assert packet.field(client.ChanField.SIGNAL)[-1, 0] == 34
-    assert packet.field(client.ChanField.NEAR_IR)[-1, 0] == 393
+    pf = client.PacketFormat(packets.metadata)
+    assert pf.packet_field(client.ChanField.RANGE, packet.buf)[-1, 0] == 11610
+    assert pf.packet_field(client.ChanField.REFLECTIVITY, packet.buf)[-1, 0] == 11
+    assert pf.packet_field(client.ChanField.SIGNAL, packet.buf)[-1, 0] == 34
+    assert pf.packet_field(client.ChanField.NEAR_IR, packet.buf)[-1, 0] == 393
 
-    assert np.all(np.diff(packet.timestamp) > 0)
-    assert np.all(np.diff(packet.measurement_id) == 1)
-    assert packet.packet_type == 1
-    assert packet.frame_id == 1259
-    assert packet.init_id == 5431293
-    assert packet.prod_sn == 992210000957
-    assert packet.shot_limiting == 0
-    assert packet.thermal_shutdown == 0
+    assert np.all(np.diff(pf.packet_header(client.ColHeader.TIMESTAMP, packet.buf)) > 0)
+    assert np.all(np.diff(pf.packet_header(client.ColHeader.MEASUREMENT_ID, packet.buf)) == 1)
+    assert pf.packet_type(packet.buf) == 1
+    assert pf.frame_id(packet.buf) == 1259
+    assert pf.init_id(packet.buf) == 5431293
+    assert pf.prod_sn(packet.buf) == 992210000957
+    assert pf.shot_limiting(packet.buf) == 0
+    assert pf.thermal_shutdown(packet.buf) == 0
 
     # Changes from LEGACY
-    assert np.all(packet.status == 0x01)
+    assert np.all(pf.packet_header(client.ColHeader.STATUS, packet.buf) == 0x01)
 
 
 def test_lidarscan_init() -> None:
@@ -358,32 +336,27 @@ def test_scan_single_return() -> None:
 
 def test_scan_empty() -> None:
     """Sanity check scan with no fields."""
-    ls = client.LidarScan(32, 1024, {})
-
-    assert set(ls.fields) == set()
-
-    for f in client.ChanField.values:
-        with pytest.raises(ValueError):
-            ls.field(f)
+    ls = client.LidarScan(32, 1024, [])
+    assert ls.fields == []
 
 
 def test_scan_custom() -> None:
     """Sanity check scan with a custom set of fields."""
     ls = client.LidarScan(
-        32, 1024, {
-            client.ChanField.SIGNAL: np.uint16,
-            client.ChanField.FLAGS: np.uint8,
-            client.ChanField.CUSTOM0: np.uint32
-        })
+        32, 1024, [
+            FieldType(client.ChanField.SIGNAL, np.uint16),
+            FieldType(client.ChanField.FLAGS, np.uint8),
+            FieldType("custom0", np.uint32)
+        ])
 
     assert set(ls.fields) == {
         client.ChanField.SIGNAL, client.ChanField.FLAGS,
-        client.ChanField.CUSTOM0
+        "custom0"
     }
     assert ls.field(client.ChanField.SIGNAL).dtype == np.uint16
-    assert ls.field(client.ChanField.CUSTOM0).dtype == np.uint32
+    assert ls.field("custom0").dtype == np.uint32
 
-    with pytest.raises(ValueError):
+    with pytest.raises(IndexError):
         ls.field(client.ChanField.RANGE)
 
 
@@ -395,9 +368,9 @@ def test_scan_eq_fields() -> None:
     ls2 = client.LidarScan(
         32, 1024,
         client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
-    ls3 = client.LidarScan(32, 1024, {client.ChanField.SIGNAL: np.uint32})
-    ls4 = client.LidarScan(32, 1024, {client.ChanField.SIGNAL: np.uint16})
-    ls5 = client.LidarScan(32, 1024, {})
+    ls3 = client.LidarScan(32, 1024, [FieldType(client.ChanField.SIGNAL, np.uint32)])
+    ls4 = client.LidarScan(32, 1024, [FieldType(client.ChanField.SIGNAL, np.uint16)])
+    ls5 = client.LidarScan(32, 1024, [])
 
     assert ls0 == ls1
     assert not (ls0 != ls1)  # should be implemented using __eq__
@@ -472,20 +445,20 @@ def test_scan_copy_eq() -> None:
 def test_scan_eq_with_custom_fields() -> None:
     """Test equality with custom fields."""
 
-    ls0 = client.LidarScan(32, 512, {
-        client.ChanField.CUSTOM0: np.uint32,
-        client.ChanField.CUSTOM4: np.uint8
-    })
+    ls0 = client.LidarScan(32, 512, [
+        FieldType("custom0", np.uint32),
+        FieldType("custom4", np.uint8)
+    ])
 
     ls1 = deepcopy(ls0)
 
-    ls0.field(client.ChanField.CUSTOM0)[:] = 100
+    ls0.field("custom0")[:] = 100
 
     ls2 = deepcopy(ls0)
 
     assert np.count_nonzero(
-        ls2.field(client.ChanField.CUSTOM0) == 100) == ls0.h * ls0.w
-    assert np.count_nonzero(ls2.field(client.ChanField.CUSTOM4) == 100) == 0
+        ls2.field("custom0") == 100) == ls0.h * ls0.w
+    assert np.count_nonzero(ls2.field("custom4") == 100) == 0
 
     assert ls1 is not ls0
     assert ls1 != ls0
@@ -494,82 +467,82 @@ def test_scan_eq_with_custom_fields() -> None:
 
 def test_scan_copy_extension() -> None:
     """ Verify we can clone a scan and null pad missing desired fields """
-    ls0 = client.LidarScan(32, 512, {
-        client.ChanField.CUSTOM4: np.uint8
-    })
+    ls0 = client.LidarScan(32, 512, [
+        FieldType("custom4", np.uint8)
+    ])
 
-    ls0.field(client.ChanField.CUSTOM4)[:] = 123
+    ls0.field("custom4")[:] = 123
 
-    ls1 = client.LidarScan(ls0, {
-        client.ChanField.CUSTOM0: np.uint32,
-        client.ChanField.CUSTOM4: np.uint8
-    })
+    ls1 = client.LidarScan(ls0, [
+        FieldType("custom0", np.uint32),
+        FieldType("custom4", np.uint8)
+    ])
 
-    assert len(list(ls1.fields)) == 2
-    assert np.count_nonzero(ls1.field(client.ChanField.CUSTOM0)[0, 0]) == 0
+    assert len(list(ls1.fields)) == 2, ls1.fields
+    assert np.count_nonzero(ls1.field("custom0")[0, 0]) == 0
     assert np.count_nonzero(
-        ls1.field(client.ChanField.CUSTOM4) == 123) == ls1.h * ls1.w
+        ls1.field("custom4") == 123) == ls1.h * ls1.w
 
 
 def test_scan_copy_retraction() -> None:
     """ Verify we can clone a scan and remove undesired fields """
-    ls0 = client.LidarScan(32, 512, {
-        client.ChanField.CUSTOM0: np.uint32,
-        client.ChanField.CUSTOM4: np.uint8
-    })
+    ls0 = client.LidarScan(32, 512, [
+        FieldType("custom0", np.uint32),
+        FieldType("custom4", np.uint8)
+    ])
 
-    ls0.field(client.ChanField.CUSTOM0)[:] = 100
-    ls0.field(client.ChanField.CUSTOM4)[:] = 123
+    ls0.field("custom0")[:] = 100
+    ls0.field("custom4")[:] = 123
 
-    ls1 = client.LidarScan(ls0, {
-        client.ChanField.CUSTOM0: np.uint32,
-    })
+    ls1 = client.LidarScan(ls0, [
+        FieldType("custom0", np.uint32),
+    ])
 
     assert ls0.h == ls1.h
     assert ls0.w == ls1.w
 
     assert len(list(ls1.fields)) == 1
     assert np.count_nonzero(
-        ls1.field(client.ChanField.CUSTOM0) == 100) == ls1.h * ls1.w
-    with pytest.raises(ValueError):
-        ls1.field(client.ChanField.CUSTOM4)[0, 0] == 100
+        ls1.field("custom0") == 100) == ls1.h * ls1.w
+    with pytest.raises(IndexError):
+        ls1.field("custom4")[0, 0] == 100
 
 
 def test_scan_copy_cast() -> None:
     """ Verify we can clone a scan and cast between field types """
-    ls0 = client.LidarScan(32, 512, {
-        client.ChanField.CUSTOM0: np.uint32,
-        client.ChanField.CUSTOM4: np.uint8
-    })
+    ls0 = client.LidarScan(32, 512, [
+        FieldType("custom0", np.uint32),
+        FieldType("custom4", np.uint8)
+    ])
 
-    ls0.field(client.ChanField.CUSTOM0)[:] = 2 ** 16 - 1
-    ls0.field(client.ChanField.CUSTOM4)[:] = 255
+    ls0.field("custom0")[:] = 2 ** 16 - 1
+    ls0.field("custom4")[:] = 255
 
-    ls1 = client.LidarScan(ls0, {
-        client.ChanField.CUSTOM0: np.uint8,
-        client.ChanField.CUSTOM4: np.uint16
-    })
+    ls1 = client.LidarScan(ls0, [
+        FieldType("custom0", np.uint8),
+        FieldType("custom4", np.uint16)
+    ])
 
     assert ls0.h == ls1.h
     assert ls0.w == ls1.w
 
     assert len(list(ls1.fields)) == 2
-    assert ls1.field(client.ChanField.CUSTOM0).dtype == np.uint8
-    assert ls1.field(client.ChanField.CUSTOM4).dtype == np.uint16
+    assert ls1.field("custom0").dtype == np.uint8
+    assert ls1.field("custom4").dtype == np.uint16
     assert np.count_nonzero(
-        ls1.field(client.ChanField.CUSTOM0) == 255) == ls1.h * ls1.w
+        ls1.field("custom0") == 255) == ls1.h * ls1.w
     assert np.count_nonzero(
-        ls1.field(client.ChanField.CUSTOM4) == 255) == ls1.h * ls1.w
+        ls1.field("custom4") == 255) == ls1.h * ls1.w
 
 
 def test_scan_copy() -> None:
-    ls0 = client.LidarScan(32, 512, {
-        client.ChanField.CUSTOM0: np.uint32,
-        client.ChanField.CUSTOM4: np.uint8
-    })
+    ls0 = client.LidarScan(32, 512, [
+        FieldType("custom0", np.uint32),
+        FieldType("custom4", np.uint8)
+    ])
 
-    ls0.field(client.ChanField.CUSTOM0)[:] = 100
-    ls0.field(client.ChanField.CUSTOM4)[:] = 123
+    ls0.field("custom0")[:] = 100
+    ls0.field("custom4")[:] = 123
 
     ls1 = client.LidarScan(ls0)
 
@@ -578,131 +551,18 @@ def test_scan_copy() -> None:
 
     assert len(list(ls1.fields)) == 2
     assert np.count_nonzero(
-        ls1.field(client.ChanField.CUSTOM0) == 100) == ls1.h * ls1.w
+        ls1.field("custom0") == 100) == ls1.h * ls1.w
     assert np.count_nonzero(
-        ls1.field(client.ChanField.CUSTOM4) == 123) == ls1.h * ls1.w
-
-
-def test_error_eq() -> None:
-    assert client.PacketSizeError("abc") == client.PacketSizeError("abc")
-
-
-def test_lidar_packet_validator() -> None:
-    """LidarPacketValidator should be capable of the same init_id/sn check as LidarPacket."""
-    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
-    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
-    metadata = client.SensorInfo(open(meta_file_path).read())
-
-    metadata2 = deepcopy(metadata)
-    metadata2.init_id = 1234
-    metadata2.sn = "5678"
-
-    validator = client.LidarPacketValidator(metadata2)
-    pcap_handle = _pcap.replay_initialize(pcap_file_path)
-    buf = bytearray(2**16)
-    info = _pcap.packet_info()
-    _pcap.next_packet_info(pcap_handle, info)
-    n_bytes = _pcap.read_packet(pcap_handle, buf)
-    errors = validator.check_packet(buf, n_bytes)
-    assert n_bytes == 8448
-    try:
-        # LidarPacket constructor should throw the same error if _raise_on_id_check is True
-        client.LidarPacket(buf, metadata2, None, _raise_on_id_check=True)
-    except client.data.PacketIdError as e:
-        assert type(errors) is list
-        assert len(errors) == 1
-        assert str(e) == str(errors[0])
-        assert str(e) == "Metadata init_id/sn does not match: expected by metadata \
-- 1234/5678, but got from packet buffer - 5431292/122150000150"
-        pass
-    else:
-        assert False, "Expected an exception to be raised by client.LidarPacket."
-    finally:
-        _pcap.replay_uninitialize(pcap_handle)
-
-
-def test_lidar_packet_validator_2() -> None:
-    """LidarPacketValidator check_packet should return None if there are no issues."""
-    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
-    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
-    metadata = client.SensorInfo(open(meta_file_path).read())
-
-    metadata2 = deepcopy(metadata)
-
-    validator = client.LidarPacketValidator(metadata2)
-    pcap_handle = _pcap.replay_initialize(pcap_file_path)
-    buf = bytearray(2**16)
-    info = _pcap.packet_info()
-    _pcap.next_packet_info(pcap_handle, info)
-    n_bytes = _pcap.read_packet(pcap_handle, buf)
-    assert n_bytes == 8448
-    assert validator.check_packet(buf, n_bytes) == []
-    _pcap.replay_uninitialize(pcap_handle)
-
-
-def test_lidar_packet_validator_3() -> None:
-    """LidarPacketValidator check_packet should identify a packet
-    that's the wrong size according to the lidar UDP profile."""
-    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
-    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
-    metadata = client.SensorInfo(open(meta_file_path).read())
-
-    metadata2 = deepcopy(metadata)
-    metadata2.format.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
-
-    validator = client.LidarPacketValidator(metadata2)
-    pcap_handle = _pcap.replay_initialize(pcap_file_path)
-    buf = bytearray(2**16)
-    info = _pcap.packet_info()
-    _pcap.next_packet_info(pcap_handle, info)
-    n_bytes = _pcap.read_packet(pcap_handle, buf)
-    assert n_bytes == 8448
-    errors = validator.check_packet(buf, n_bytes)
-    assert len(errors) == 1
-    assert type(errors[0]) is client.PacketSizeError
-    assert str(errors[0]) == 'Expected a packet of size 41216 but got a buffer of size 8448'
-    _pcap.replay_uninitialize(pcap_handle)
-
-
-def test_lidar_packet_validator_4() -> None:
-    """LidarPacketValidator check_packet should identify a packet
-    that's the wrong size according to the data format."""
-    meta_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
-    pcap_file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
-    meta_json = json.load(open(meta_file_path))
-    meta_json['data_format']['columns_per_frame'] = 4096
-    meta_json['data_format']['pixels_per_column'] = 16
-    meta_json['data_format']['pixel_shift_by_row'] = [0] * 16
-    meta_json['beam_altitude_angles'] = [1] * 16
-    meta_json['beam_azimuth_angles'] = [1] * 16
-    meta_json['prod_sn'] = '1234'
-    metadata2 = client.SensorInfo(json.dumps(meta_json))
-
-    validator = client.LidarPacketValidator(metadata2)
-    pcap_handle = _pcap.replay_initialize(pcap_file_path)
-    buf = bytearray(2**16)
-    info = _pcap.packet_info()
-    _pcap.next_packet_info(pcap_handle, info)
-    n_bytes = _pcap.read_packet(pcap_handle, buf)
-    assert n_bytes == 8448
-    errors = validator.check_packet(buf, n_bytes)
-    assert len(errors) == 2
-    assert type(errors[0]) is client.PacketIdError
-    assert str(
-        errors[0]) == 'Metadata init_id/sn does not match: expected by metadata - \
-5431292/1234, but got from packet buffer - 5431292/122150000150'
-    assert type(errors[1]) is client.PacketSizeError
-    assert str(errors[1]) == 'Expected a packet of size 1280 but got a buffer of size 8448'
-    _pcap.replay_uninitialize(pcap_handle)
+        ls1.field("custom4") == 123) == ls1.h * ls1.w
 
 
 def test_packet_writer_bindings(meta: client.SensorInfo) -> None:
-    pf = _client.PacketFormat.from_info(meta)
-    packet = client.LidarPacket(packet_format=pf)
+    pf = PacketFormat.from_info(meta)
+    packet = client.LidarPacket(pf.lidar_packet_size)
 
-    pw = _client.PacketWriter.from_info(meta)
+    pw = PacketWriter.from_info(meta)
     pw.set_frame_id(packet, 700)
-    assert pf.frame_id(packet._data) == 700
+    assert pf.frame_id(packet.buf) == 700
 
     with pytest.raises(ValueError):
         pw.set_col_timestamp(packet, pw.columns_per_packet, 100)
@@ -720,12 +580,12 @@ def test_packet_writer_bindings(meta: client.SensorInfo) -> None:
         assert False, "setting cols up to columns_per_packet should not raise"
 
     for dt in [np.uint8, np.uint16, np.uint32, np.uint64]:
-        p = client.LidarPacket(packet_format=pf)
-        for chan in p.fields:
-            if chan in [_client.ChanField.RAW32_WORD1,
-                        _client.ChanField.RAW32_WORD2,
-                        _client.ChanField.RAW32_WORD3,
-                        _client.ChanField.RAW32_WORD4]:
+        p = client.LidarPacket(pf.lidar_packet_size)
+        for chan in pf.fields:
+            if chan in [client.ChanField.RAW32_WORD1,
+                        client.ChanField.RAW32_WORD2,
+                        client.ChanField.RAW32_WORD3,
+                        client.ChanField.RAW32_WORD4]:
                 continue
             # mypy is going nuts with mask notation
             value_mask = pw.field_value_mask(chan) & np.iinfo(dt).max  # type: ignore
@@ -737,16 +597,150 @@ def test_packet_writer_bindings(meta: client.SensorInfo) -> None:
             s = hex(value_mask)
             assert np.any(field > 0), f"{chan}, {dt}, {s}"
             pw.set_field(p, chan, field)
-            assert np.all(pw.packet_field(chan, p._data) == field), f"{chan}, {dt}, {s}"
+            assert np.all(pw.packet_field(chan, p.buf) == field), f"{chan}, {dt}, {s}"
 
     columns_per_frame = meta.format.columns_per_frame
     ls = client.LidarScan(pf.pixels_per_column, columns_per_frame,
                           pf.udp_profile_lidar, pf.columns_per_packet)
     # all fields are invalid, expect zero packets
-    packets = _client.scan_to_packets(ls, pw, 0, 0)
+    packets = scan_to_packets(ls, pw, 0, 0)
     assert len(packets) == 0
 
     expected_packets = columns_per_frame / pf.columns_per_packet
     ls.status[:] = 0x1
-    packets = _client.scan_to_packets(ls, pw, 0, 0)
+    packets = scan_to_packets(ls, pw, 0, 0)
     assert len(packets) == expected_packets
+
+
+def test_to_string_doesnt_cause_fp_exception():
+    """It shouldn't crash with a floating point exception when std::to_string(LidarScan&) is called."""
+    str(client.LidarScan(1024, 128, client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL))
+
+
+def test_scan_float_double() -> None:
+    """Test that we can add float fields and that setting floats in them works."""
+    ls = client.LidarScan(
+        64, 1024,
+        client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+
+    ls.add_field("f32", np.float32, (), client.FieldClass.PIXEL_FIELD)
+    ls.add_field("f64", np.float64, (), client.FieldClass.PIXEL_FIELD)
+
+    ls.field("f32")[:] = 3.3
+    ls.field("f64")[:] = 6.6
+
+    assert ls.field("f32")[1, 1] == np.float32(3.3)
+    assert ls.field("f64")[1, 1] == 6.6
+
+
+def test_scan_int() -> None:
+    """Test that we can add int fields and that setting ints in them works."""
+    ls = client.LidarScan(
+        64, 1024,
+        client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+
+    ls.add_field("i8", np.int8, (), client.FieldClass.PIXEL_FIELD)
+    ls.add_field("i16", np.int16, (), client.FieldClass.PIXEL_FIELD)
+    ls.add_field("i32", np.int32, (), client.FieldClass.PIXEL_FIELD)
+    ls.add_field("i64", np.int64, (), client.FieldClass.PIXEL_FIELD)
+
+    ls.field("i8")[:] = 0x7FF
+    ls.field("i8")[1, 2] = -2
+    ls.field("i16")[:] = 0x7FFFF
+    ls.field("i16")[1, 2] = -2
+    ls.field("i32")[:] = 0x7FFFFFFF
+    ls.field("i32")[1, 2] = -2
+    ls.field("i64")[:] = 0x7FFFFFFFFFFFFFFF
+    ls.field("i64")[1, 2] = -2
+
+    assert ls.field("i8")[1, 1] == -1
+    assert ls.field("i8")[1, 2] == -2
+    assert ls.field("i16")[1, 1] == -1
+    assert ls.field("i16")[1, 2] == -2
+    assert ls.field("i32")[1, 1] == 0x7FFFFFFF
+    assert ls.field("i32")[1, 2] == -2
+    assert ls.field("i64")[1, 1] == 0x7FFFFFFFFFFFFFFF
+    assert ls.field("i64")[1, 2] == -2
+
+
+def test_lidarscan_3d_field() -> None:
+    """It should allow adding a 3d field."""
+    h, w, d = 64, 1024, 3
+    field_types = [
+        client.FieldType(client.ChanField.RANGE, np.uint32, (d,), client.FieldClass.PIXEL_FIELD)
+    ]
+    ls = client.LidarScan(h, w, field_types)
+    assert ls.fields == [client.ChanField.RANGE]
+    range_field = ls.field(client.ChanField.RANGE)
+    assert range_field.dtype == np.uint32
+    assert range_field.shape == (h, w, d)
+
+
+def test_lidarscan_add_field_3d_field() -> None:
+    """It should allow adding a 3d field."""
+    h, w, d = 64, 1024, 3
+    ls = client.LidarScan(h, w, [])
+    ls.add_field(client.ChanField.RANGE, np.uint32, (d,), client.FieldClass.PIXEL_FIELD)
+    assert ls.fields == [client.ChanField.RANGE]
+    range_field = ls.field(client.ChanField.RANGE)
+    assert range_field.dtype == np.uint32
+    assert range_field.shape == (h, w, 3)
+
+
+def test_lidarscan_add_field_default_pixel() -> None:
+    """FieldType flags should be PIXEL by default."""
+    ft = client.FieldType(client.ChanField.RANGE, np.uint32, ())
+    assert ft.field_class == client.FieldClass.PIXEL_FIELD
+    # it's mutable
+    ft.field_class = client.FieldClass.COLUMN_FIELD
+    assert ft.field_class == client.FieldClass.COLUMN_FIELD
+
+    # the constructor sets it
+    ft = client.FieldType(client.ChanField.RANGE, np.uint32, (), client.FieldClass.COLUMN_FIELD)
+    assert ft.field_class == client.FieldClass.COLUMN_FIELD
+
+
+def test_lidarscan_fieldtype_name() -> None:
+    """FieldType name should be accessible."""
+    ft = client.FieldType(client.ChanField.RANGE, np.uint32, ())
+    assert ft.name == client.ChanField.RANGE
+
+    # it's mutable
+    newname = 'foobar'
+    ft.name = newname
+    assert ft.name == newname
+
+
+def test_lidarscan_fieldtype_extra_dims() -> None:
+    """FieldType extra_dims should be accessible."""
+    extra_dims = (1, 2, 3)
+    ft = client.FieldType(client.ChanField.RANGE, np.uint32, extra_dims)
+    print(ft.extra_dims)
+    assert ft.extra_dims == extra_dims
+
+    # it's mutable
+    extra_dims = (4, 5, 6)
+    ft.extra_dims = extra_dims
+    assert ft.extra_dims == extra_dims
+
+
+def test_lidarscan_fieldtype_dtype() -> None:
+    """FieldType element_type should be accessible"""
+    ft = client.FieldType(client.ChanField.RANGE, np.uint32, ())
+    assert ft.element_type is np.dtype(np.uint32)
+
+    # it's mutable
+    ft.element_type = np.dtype(np.uint8)
+    assert ft.element_type is np.dtype(np.uint8)
+
+
+def test_lidarscan_add_field_with_value() -> None:
+    """LidarScan.add_field should accept an array to be used as the field's
+    initial value"""
+    h, w = 64, 1024
+    ls = client.LidarScan(h, w, [])
+    assert client.ChanField.RANGE not in ls.fields
+    with pytest.raises(IndexError):
+        ls.field(client.ChanField.RANGE)
+    ls.add_field(client.ChanField.RANGE, np.ones((h, w), np.int16))
+    assert ls.field(client.ChanField.RANGE).all()

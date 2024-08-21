@@ -40,25 +40,31 @@ class SensorTcpImp : public util::SensorHttp {
     /**
      * Queries the sensor metadata.
      *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     *
      * @return returns a Json object of the sensor metadata.
      */
-    Json::Value metadata() const override;
+    Json::Value metadata(int timeout_sec = 1) const override;
 
     /**
      * Queries the sensor_info.
      *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     *
      * @return returns a Json object representing the sensor_info.
      */
-    Json::Value sensor_info() const override;
+    Json::Value sensor_info(int timeout_sec = 1) const override;
 
     /**
      * Queries active/staged configuration on the sensor
      *
      * @param[in] active if true retrieve active, otherwise get staged configs.
+     * @param[in] timeout_sec The timeout for the request in seconds.
      *
      * @return a string represnting the active or staged config
      */
-    std::string get_config_params(bool active) const override;
+    std::string get_config_params(bool active,
+                                  int timeout_sec = 1) const override;
 
     /**
      * Set the value of a specfic configuration on the sensor, the changed
@@ -66,59 +72,114 @@ class SensorTcpImp : public util::SensorHttp {
      *
      * @param[in] key name of the config to change.
      * @param[in] value the new value to set for the selected configuration.
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    void set_config_param(const std::string& key,
-                          const std::string& value) const override;
+    void set_config_param(const std::string& key, const std::string& value,
+                          int timeout_sec = 1) const override;
 
     /**
      * Retrieves the active configuration on the sensor
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value active_config_params() const override;
+    Json::Value active_config_params(int timeout_sec = 1) const override;
 
     /**
      * Retrieves the staged configuration on the sensor
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value staged_config_params() const override;
+    Json::Value staged_config_params(int timeout_sec = 1) const override;
 
     /**
      * Enables automatic assignment of udp destination ports.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    void set_udp_dest_auto() const override;
+    void set_udp_dest_auto(int timeout_sec = 1) const override;
 
     /**
      * Retrieves beam intrinsics of the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value beam_intrinsics() const override;
+    Json::Value beam_intrinsics(int timeout_sec = 1) const override;
 
     /**
      * Retrieves imu intrinsics of the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value imu_intrinsics() const override;
+    Json::Value imu_intrinsics(int timeout_sec = 1) const override;
 
     /**
      * Retrieves lidar intrinsics of the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value lidar_intrinsics() const override;
+    Json::Value lidar_intrinsics(int timeout_sec = 1) const override;
 
     /**
      * Retrieves lidar data format.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value lidar_data_format() const override;
+    Json::Value lidar_data_format(int timeout_sec = 1) const override;
 
     /**
      * Gets the calibaration status of the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value calibration_status() const override;
+    Json::Value calibration_status(int timeout_sec = 1) const override;
 
     /**
      * Restarts the sensor applying all staged configurations.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    void reinitialize() const override;
+    void reinitialize(int timeout_sec = 1) const override;
 
     /**
      * Persist active configuration parameters to the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    void save_config_params() const override;
+    void save_config_params(int timeout_sec = 1) const override;
+
+    /**
+     * Gets the user data stored on the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     */
+    std::string get_user_data(int timeout_sec = 1) const override;
+
+    /**
+     * Gets the user data stored on the sensor and the retention policy.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     */
+    util::UserDataAndPolicy get_user_data_and_policy(
+        int timeout_sec = 1) const override;
+
+    /**
+     * Sets the user data stored on the sensor.
+     *
+     * @param[in] data Value of userdata to set on the sensor.
+     * @param[in] keep_on_config_delete If true, keep the userdata when
+                                        configuration is deleted from the sensor
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     */
+    void set_user_data(const std::string& data,
+                       bool keep_on_config_delete = true,
+                       int timeout_sec = 1) const override;
+
+    /**
+     * Deletes the user data stored on the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     */
+    void delete_user_data(int timeout_sec = 1) const override;
 
    private:
     SOCKET cfg_socket(const char* addr);

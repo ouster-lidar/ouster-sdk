@@ -1,4 +1,4 @@
-from typing import List, Optional, Union, cast, Iterator, Tuple
+from typing import Optional, Union, cast, Iterator, Tuple, List
 
 from ouster.sdk import client
 from ouster.sdk.client.data import FieldTypes
@@ -106,8 +106,16 @@ class Scans(ScanSource):
         return False    # TODO: for now we just use False no matter what
 
     @property
-    def fields(self) -> FieldTypes:
+    def field_types(self) -> FieldTypes:
         return client.get_field_types(self.metadata)
+
+    @property
+    def fields(self) -> List[str]:
+        l = []
+        for ft in client.get_field_types(self.metadata):
+            l.append(ft.name)
+        l.sort()
+        return l
 
     @property
     def scans_num(self) -> Optional[int]:
@@ -116,12 +124,18 @@ class Scans(ScanSource):
     def __len__(self) -> int:
         raise NotImplementedError  # TODO: implement
 
-    def _seek(self, key: int) -> None:
+    def _seek(self, _: int) -> None:
         pass
 
-    def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+    def __getitem__(self, _: Union[int, slice]
+                    ) -> Union[Optional[LidarScan], ScanSource]:
         raise NotImplementedError
 
     def __del__(self) -> None:
         pass
+
+    def _slice_iter(self, _: slice) -> Iterator[Optional[LidarScan]]:
+        raise NotImplementedError
+
+    def slice(self, _: slice) -> 'ScanSource':
+        raise NotImplementedError

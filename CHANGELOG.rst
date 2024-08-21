@@ -2,8 +2,115 @@
 Changelog
 =========
 
+[20240702] [0.12.0]
+===================
+
+**Important: ouster-sdk installed from pypi now requires glibc >= 2.28.**
+
+ouster_client/Python SDK
+------------------------
+
+* Add support for adding custom fields to ``LidarScan`` s with ``add_field`` and ``del_field``
+* Added per-request timeout arguments to ``SensorHttp``
+* Added sensor user_data to ``sensor_info/SensorInfo`` and metadata files
+* Removed ``updated_metadata_string()`` and ``original_string()`` from ``sensor_info``
+* Added ``to_json_string()`` to ``sensor_info`` to convert a ``sensor_info`` to a non-legacy
+  metadata JSON string
+* Unified Python and C++ ``Packet`` and ``PacketFormat`` classes
+* Added ``validate`` function to ``LidarPacket`` and ``ImuPacket`` to check for ID and size mismatches
+* [BREAKING] LidarScan's width and height have been switched to size_t from ptrdiff_t in C++
+* Refactor metadata parsing
+* Add ``get_version`` to ``sensor_info/SensorInfo`` to retrieve parsed version information
+* Add ``get_product_info`` to ``sensor_info/SensorInfo`` to retrieve parsed lidar model information
+* Raise an exception rather than throw an unrelated error when multiple viable metadata files are found for a given PCAP
+* Add ability to slice a scan source, returning a new sliced ScanSource
+
+* [BREAKING] Removed ``hostname`` in Python ``SensorInfo`` and ``name`` from C++ ``sensor_info``
+* [BREAKING] Removed ``udp_port_lidar``, ``udp_port_imu`` and ``mode`` from C++ ``sensor_info``
+* [BREAKING] Deprecated ``udp_port_lidar``, ``udp_port_imu`` and ``mode`` in Python ``SensorInfo``.
+  These fields now point to the equivalent fields inside of ``SensorInfo::config``.
+* [BREAKING] Removed ``cols`` and ``frequency`` from ``LidarMode`` in Python
+* [BREAKING] Deprecated ```data``` and ``capture_timestamp`` from Python ``Packet``
+* [BREAKING] Removed methods from Python ``ImuPacket`` and ``LidarPacket`` classes that simply wrapped ``PacketFormat``
+* [BREAKING] Removed ``begin()`` and ``end()`` iterators of ``LidarScan`` in C++
+* [BREAKING] Remove deprecated package stubs added in previous 0.11 release.
+* [BREAKING] Replaced integer backed ``ChanField`` enumerations with strings.
+* [BREAKING] Removed ``CUSTOM0`` through ``CUSTOM9`` ChanField enumerations.
+* [BREAKING] Extra fields in sensor metadata are now ignored and discarded if saved from the resulting ``sensor_info/SensorInfo``
+
+* [BUGFIX] Prevent last scan from being emitted twice for PCAP 
+* [BUGFIX] Fix corrupted packets due to poor handling of fragmented packet drop in PCAPs
+* [BUGFIX] Fix possible crash when working with custom UDPProfileLidars
+
+ouster_viz
+----------
+* Support viewing custom ``LidarScan`` fields in viz
+* Support viewing custom ``LidarScan`` 3 channel fields in viz as RGB
+
+* [BUGFIX] Prevent OpenBLAS from using high amounts of CPU spin waiting
+
+ouster_osf
+----------
+
+* Support saving custom ``LidarScan`` fields to OSF files
+
+* [BREAKING] OsfWriter now takes in an optional list of fields to save rather than a list of fields and ChanFieldTypes to cast to
+
+ouster-cli
+----------
+
+* Added support for slicing using time to ``ouster-cli source ... slice`` 
+* Add sensor ``ouster-cli source ... userdata`` command to set and retrieve userdata on a sensor
+* Add chainable ``ouster-cli source ... stats`` command
+* Add chainable ``ouster-cli source ... clip`` command to discard points outside a provided range
+* Add ``--rate max`` option to ``ouster-cli source ... viz```
+* Improve argument naming and descriptions for ``ouster-cli source ... viz`` map and accum options
+
+* [BUGFIX] Prevent dropped frames from live sensors by consuming scans as fast as they come in rather than sleeping
+
+mapping
+-------
+
+* Move mapping into the sdk as ``ouster.sdk.mapping``
+* Better handle looping while mapping
+* Improve automatic downsample voxel size calculation
+
+other
+-----
+
+* Updated VCPKG libraries to 2024.04.26
+
+[20240510] [0.11.1]
+===================
+
+Important notes
+---------------
+
+* [BREAKING] the ``open_source`` method now returns a ``ScanSource`` by default, not a ``MultiScanSource``.
+
+Python SDK
+----------
+
+* Updated the ``open_source`` documentation.
+* Fixed an issue that caused the viz to redraw when the mouse cursor is moved.
+* [BREAKING] The python slice ``[::]`` operator now returns a ``MultiScanSource`` / ``ScanSource``
+  instead of a ``List``. Thus, invoking a ``scan_source[x:x+n]`` yields a fully functional scan source
+  that is scoped to the range ``[x, x+n]``.
+* [BREAKING] The python slice ``[::]`` operator no longer support negative step
+
+ouster_client
+-------------
+
+* Improved the client initialization latency.
+
+mapping
+-------
+
+* Fixed several issues with the documentation.
+
+
 [20240425] [0.11.0]
-=========================
+===================
 
 Important notes
 ---------------

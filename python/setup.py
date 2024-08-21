@@ -5,21 +5,23 @@ import platform
 import shlex
 import shutil
 import subprocess
+import json
 
 from setuptools import setup, find_namespace_packages, Extension
 from setuptools.command.build_ext import build_ext
 from setuptools.command.sdist import sdist
 from wheel.bdist_wheel import bdist_wheel
 
-# use SDK source location from environment or try to guess
 SRC_PATH = os.path.dirname(os.path.abspath(__file__))
-OUSTER_SDK_PATH = os.getenv('OUSTER_SDK_PATH')
-if OUSTER_SDK_PATH is None:
-    OUSTER_SDK_PATH = os.path.join(SRC_PATH, "sdk")
-if not os.path.exists(OUSTER_SDK_PATH):
-    OUSTER_SDK_PATH = os.path.dirname(SRC_PATH)
-if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
-    raise RuntimeError("Could not guess OUSTER_SDK_PATH")
+if __name__ == "__main__":
+    # use SDK source location from environment or try to guess
+    OUSTER_SDK_PATH = os.getenv('OUSTER_SDK_PATH')
+    if OUSTER_SDK_PATH is None:
+        OUSTER_SDK_PATH = os.path.join(SRC_PATH, "sdk")
+    if not os.path.exists(OUSTER_SDK_PATH):
+        OUSTER_SDK_PATH = os.path.dirname(SRC_PATH)
+    if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
+        raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 
 
 # https://packaging.python.org/en/latest/guides/single-sourcing-package-version/
@@ -155,79 +157,87 @@ def install_requires():
         'requests >=2.0, <3',
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
-        # scipy is not supported on Mac M1 with Mac OS < 12.0
-        'scipy >=1.7, <2;platform_system != "Darwin" or platform_machine != "arm64" or platform_version >= "21.0.0"',
+        'laspy >=2.5.0, <3',
         'typing-extensions >=3.7.4.3',
+        'threadpoolctl >=3.5.0',
         'Pillow >=9.2',
         'packaging',
-        'setuptools; python_version >= "3.12"',
+        'setuptools; python_version >= "3.12"'
     ]
-    env = os.environ.copy()
-    skip_mapping = env.get('OUSTER_SDK_SKIP_MAPPING')
-    if not skip_mapping:
-        install_requires.append('ouster-mapping==0.2.0; python_version >= "3.8" and python_version <= "3.12"')
 
+    # PUT ALL MAPPING REQUIREMENTS INSIDE OF THE requirements.json file
+    with open(os.path.join(SRC_PATH,
+                           "src",
+                           "ouster",
+                           "sdk",
+                           "mapping",
+                           "requirements.json")) as f:
+        mapping_reqs = json.loads(f.read())
+    for item in mapping_reqs:
+        temp = f"{item} {mapping_reqs[item]['version']}; {mapping_reqs[item]['marker']}"
+        install_requires.append(temp)
     return install_requires
 
 
-setup(
-    name='ouster-sdk',
-    url='https://github.com/ouster-lidar/ouster_example',
-    # read from top-level sdk CMakeLists.txt
-    version=parse_version(),
-    package_dir={'': 'src'},
-    packages=find_namespace_packages(where='src', include='ouster.*'),
-    package_data={
-        'ouster.sdk.client': ['py.typed', '_client.pyi'],
-        'ouster.sdk.pcap': ['py.typed', '_pcap.pyi'],
-        'ouster.sdk.osf': ['py.typed', '_osf.pyi'],
-        'ouster.sdk.viz': ['py.typed', '_viz.pyi'],
-        'ouster.sdk.bag': ['py.typed']
-    },
-    author='Ouster Sensor SDK Developers',
-    author_email='oss@ouster.io',
-    description='Ouster Sensor SDK',
-    license='BSD 3-Clause License',
-    ext_modules=[
-        CMakeExtension('ouster.*'),
-    ],
-    cmdclass={
-        'build_ext': CMakeBuild,
-        'sdist': sdk_sdist,
-        'bdist_wheel': sdk_bdist_wheel,
-    },
-    zip_safe=False,
-    python_requires='>=3.8, <4',
-    install_requires=install_requires(),
-    extras_require={
-        'test': [
-            'pytest >=7.0, <8',
-            'pytest-asyncio',
-            'flask==2.2.5'
+if __name__ == "__main__":
+    setup(
+        name='ouster-sdk',
+        url='https://github.com/ouster-lidar/ouster_example',
+        # read from top-level sdk CMakeLists.txt
+        version=parse_version(),
+        package_dir={'': 'src'},
+        packages=find_namespace_packages(where='src', include='ouster.*'),
+        package_data={
+            'ouster.sdk.client': ['py.typed', '_client.pyi'],
+            'ouster.sdk.pcap': ['py.typed', '_pcap.pyi'],
+            'ouster.sdk.osf': ['py.typed', '_osf.pyi'],
+            'ouster.sdk.viz': ['py.typed', '_viz.pyi'],
+            'ouster.sdk.mapping': ['py.typed', 'requirements.json'],
+            'ouster.sdk.bag': ['py.typed']
+        },
+        author='Ouster Sensor SDK Developers',
+        author_email='oss@ouster.io',
+        description='Ouster Sensor SDK',
+        license='BSD 3-Clause License',
+        ext_modules=[
+            CMakeExtension('ouster.*'),
         ],
-        'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
-        'docs': [
-            'Sphinx >=3.5',
-            'sphinx-autodoc-typehints ==1.17.0',
-            'sphinx-rtd-theme ==1.0.0',
-            'sphinx-copybutton ==0.5.0',
-            'docutils <0.18',
-            'sphinx-tabs ==3.3.1',
-            'breathe ==4.33.1',
-            'sphinx-rtd-size'
-        ],
-        'examples': [
-            'matplotlib',
-            'opencv-python',
-            'laspy',
-            'PyQt5; platform_system=="Windows"',
-        ],
-    },
-    entry_points={'console_scripts':
-        [
-            'simple-viz=ouster.sdk.simple_viz:main',                        # TODO[UN]: do we need to keep?
-            'convert-meta-to-legacy=ouster.sdk.convert_to_legacy:main',     # TODO[UN]: do we need to keep?
-            'ouster-cli=ouster.cli.core:run'
-        ]
-    }
-)
+        cmdclass={
+            'build_ext': CMakeBuild,
+            'sdist': sdk_sdist,
+            'bdist_wheel': sdk_bdist_wheel,
+        },
+        zip_safe=False,
+        python_requires='>=3.8, <4',
+        install_requires=install_requires(),
+        extras_require={
+            'test': [
+                'pytest >=7.0, <8',
+                'pytest-asyncio',
+                'flask==2.2.5'
+            ],
+            'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
+            'docs': [
+                'Sphinx >=3.5',
+                'sphinx-autodoc-typehints ==1.17.0',
+                'sphinx-rtd-theme ==1.0.0',
+                'sphinx-copybutton ==0.5.0',
+                'docutils <0.18',
+                'sphinx-tabs ==3.3.1',
+                'breathe ==4.33.1',
+                'sphinx-rtd-size'
+            ],
+            'examples': [
+                'matplotlib',
+                'opencv-python',
+                'laspy',
+                'PyQt5; platform_system=="Windows"',
+            ],
+        },
+        entry_points={'console_scripts':
+            [
+                'simple-viz=ouster.sdk.simple_viz:main',                     # TODO[UN]: do we need to keep?
+                'ouster-cli=ouster.cli.core:run'
+            ]
+        }
+    )

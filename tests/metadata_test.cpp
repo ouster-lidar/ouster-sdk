@@ -7,6 +7,9 @@
 #include <json/json.h>
 
 #include <fstream>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "ouster/types.h"
 #include "ouster/util.h"
@@ -105,27 +108,6 @@ INSTANTIATE_TEST_CASE_P(
         "ouster-studio-reduced-config-v1"));
 // clang-format on
 
-TEST_P(MetaFiles, origStringTestMetadata) {
-    std::string param = GetParam();
-
-    auto data_dir = getenvs("DATA_DIR");
-    auto json_file = data_dir + param + ".json";
-
-    ouster::sensor::sensor_info si =
-        ouster::sensor::metadata_from_json(json_file);
-
-    std::stringstream buf{};
-    std::ifstream ifs{};
-    ifs.open(json_file);
-    buf << ifs.rdbuf();
-    ifs.close();
-
-    si.mode = ouster::sensor::lidar_mode::MODE_4096x5;
-    si.build_date = "FAKEBUILDDATE";
-
-    EXPECT_EQ(si.original_string(), buf.str());
-}
-
 TEST_P(MetaFiles, combinedTestMetadata) {
     std::string param = GetParam();
 
@@ -137,73 +119,202 @@ TEST_P(MetaFiles, combinedTestMetadata) {
     // Make si new -- change a few values
     auto si_new = si_orig;
     si_new.init_id = 5;
-    si_new.mode = ouster::sensor::lidar_mode::MODE_4096x5;
+    si_new.config.lidar_mode = ouster::sensor::lidar_mode::MODE_4096x5;
     si_new.format.fps = 47289;  // fps is an addition instead of a replacement
     si_new.beam_altitude_angles[5] = 0.01;
 
     // Make sure they aren't somehow the same
-    EXPECT_NE(si_new.mode, si_orig.mode);
+    EXPECT_NE(si_new.config.lidar_mode, si_orig.config.lidar_mode);
     EXPECT_NE(si_new.init_id, si_orig.init_id);
     EXPECT_NE(si_new.format.fps, si_orig.format.fps);
     EXPECT_NE(si_new.beam_altitude_angles, si_orig.beam_altitude_angles);
 
-    auto si_new_updated_string = si_new.updated_metadata_string();
-    auto si_roundtrip = ouster::sensor::parse_metadata(si_new_updated_string);
+    auto si_new_updated_string = si_new.to_json_string();
+    auto si_roundtrip = ouster::sensor::sensor_info(si_new_updated_string);
 
-    EXPECT_EQ(si_new.mode, si_roundtrip.mode);
+    EXPECT_EQ(si_new.config.lidar_mode, si_roundtrip.config.lidar_mode);
     EXPECT_EQ(si_new.init_id, si_roundtrip.init_id);
     EXPECT_EQ(si_new.format.fps, si_roundtrip.format.fps);
     EXPECT_EQ(si_new.beam_altitude_angles, si_roundtrip.beam_altitude_angles);
+}
 
-    Json::Value root{};
-    Json::CharReaderBuilder builder{};
-    std::string errors{};
-    std::stringstream ss{si_new_updated_string};
+class product_info_test : public ouster::sensor::product_info {
+   public:
+    product_info_test(std::string product_info_string, std::string form_factor,
+                      bool short_range, std::string beam_config, int beam_count)
+        : ouster::sensor::product_info(product_info_string, form_factor,
+                                       short_range, beam_config, beam_count){};
+};
 
-    Json::parseFromStream(builder, ss, &root, &errors);
+TEST(Util, TestProdlineDecoder) {
+    EXPECT_EQ(ouster::sensor::product_info(), ouster::sensor::product_info());
+    EXPECT_EQ(
+        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"),
+        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"));
+    EXPECT_NE(
+        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"),
+        ouster::sensor::product_info());
+    EXPECT_NE(
+        ouster::sensor::product_info::create_product_info("OS-0-128"),
+        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"));
+    EXPECT_NE(
+        ouster::sensor::product_info::create_product_info("OS-0-128-BH02"),
+        ouster::sensor::product_info::create_product_info("OS-0-128-BH02-SR"));
 
-    auto changed_json = root["ouster-sdk"]["changed_fields"];
-
-    auto find_changed = [&changed_json](auto str1, auto str2) {
-        return (std::find(changed_json.begin(), changed_json.end(), str1) !=
-                    changed_json.end() ||
-                std::find(changed_json.begin(), changed_json.end(), str2) !=
-                    changed_json.end());
-    };
-
-    EXPECT_TRUE(
-        find_changed("sensor_info.initialization_id", "initialization_id"));
-
-    if (param.substr(0, 4) == "1_12" || param.substr(0, 4) == "1_13" ||
-        param == "ouster-studio-reduced-config-v1") {
-        // 1_12 and 1_13 did not have data_format at all
-        EXPECT_TRUE(find_changed("data_format", "lidar_data_format"));
-    } else {
-        // 1.14+ have data_format so only fps changes
-        EXPECT_TRUE(find_changed("data_format.fps", "lidar_data_format.fps"));
+    bool error_recieved = false;
+    try {
+        ouster::sensor::product_info::create_product_info("DEADBEEF");
+    } catch (const std::runtime_error& e) {
+        EXPECT_EQ(std::string(e.what()),
+                  "Product Info \"DEADBEEF\" is not a recognized product info");
+        error_recieved = true;
     }
-    EXPECT_TRUE(find_changed("lidar_mode", "config_params.lidar_mode"));
-    EXPECT_TRUE(find_changed("beam_intrinsics.beam_altitude_angles",
-                             "beam_altitude_angles"));
+    EXPECT_TRUE(error_recieved);
 
-    if (param == "ouster-studio-reduced-config-v1") {
-        EXPECT_TRUE(changed_json.size() == 12);
-    } else {
-        if (std::find(changed_json.begin(), changed_json.end(), "ouster-sdk") !=
-            changed_json.end()) {
-            // check indicates non-legacy format
-            if (param.substr(0, 4) == "1_12" || param.substr(0, 4) == "1_13") {
-                // udp_dest and operating_mode are new
-                EXPECT_TRUE(changed_json.size() == 7);
-            } else {
-                // expect ouster-sdk along with the main 4
-                EXPECT_TRUE(changed_json.size() == 5);
-            }
+    auto bad_count = ouster::sensor::product_info::create_product_info(
+        "OS-0-STUFF HERE-BH02-SR");
+    EXPECT_EQ(bad_count.beam_count, 0);
 
-        } else {
-            // mode, init_id, data_format.fps (or data_format itself),
-            // beam_altitude_angles
-            EXPECT_TRUE(changed_json.size() == 4);
-        }
+    std::vector<std::pair<std::string, product_info_test>> test_product_infos =
+        {std::make_pair(
+             "FOOBAR-1234",
+             product_info_test("FOOBAR-1234", "FOOBAR1234", false, "U", 0)),
+         std::make_pair("OS-0-128",
+                        product_info_test("OS-0-128", "OS0", false, "U", 128)),
+         std::make_pair(
+             "OS-0-128-BH02-SR",
+             product_info_test("OS-0-128-BH02-SR", "OS0", true, "BH02", 128)),
+         std::make_pair("OS-0-32-AH02", product_info_test("OS-0-32-AH02", "OS0",
+                                                          false, "AH02", 32)),
+         std::make_pair("OS-0-32-BH02", product_info_test("OS-0-32-BH02", "OS0",
+                                                          false, "BH02", 32)),
+         std::make_pair("OS-0-32-G",
+                        product_info_test("OS-0-32-G", "OS0", false, "G", 32)),
+         std::make_pair("OS-0-32-U0", product_info_test("OS-0-32-U0", "OS0",
+                                                        false, "U0", 32)),
+         std::make_pair("OS-0-32-U1", product_info_test("OS-0-32-U1", "OS0",
+                                                        false, "U1", 32)),
+         std::make_pair("OS-0-32-U2", product_info_test("OS-0-32-U2", "OS0",
+                                                        false, "U2", 32)),
+         std::make_pair("OS-0-32-U3", product_info_test("OS-0-32-U3", "OS0",
+                                                        false, "U3", 32)),
+         std::make_pair("OS-0-64-AH", product_info_test("OS-0-64-AH", "OS0",
+                                                        false, "AH", 64)),
+         std::make_pair("OS-0-64-BH", product_info_test("OS-0-64-BH", "OS0",
+                                                        false, "BH", 64)),
+         std::make_pair("OS-0-64-G",
+                        product_info_test("OS-0-64-G", "OS0", false, "G", 64)),
+         std::make_pair("OS-0-64-U02", product_info_test("OS-0-64-U02", "OS0",
+                                                         false, "U02", 64)),
+         std::make_pair("OS-0-64-U13", product_info_test("OS-0-64-U13", "OS0",
+                                                         false, "U13", 64)),
+         std::make_pair("OS-1-128",
+                        product_info_test("OS-1-128", "OS1", false, "U", 128)),
+         std::make_pair("OS-1-128-SR", product_info_test("OS-1-128-SR", "OS1",
+                                                         true, "U", 128)),
+         std::make_pair("OS-1-16-A1", product_info_test("OS-1-16-A1", "OS1",
+                                                        false, "A1", 16)),
+         std::make_pair("OS-1-16-U0", product_info_test("OS-1-16-U0", "OS1",
+                                                        false, "U0", 16)),
+         std::make_pair("OS-1-32-A02", product_info_test("OS-1-32-A02", "OS1",
+                                                         false, "A02", 32)),
+         std::make_pair("OS-1-32-BH02", product_info_test("OS-1-32-BH02", "OS1",
+                                                          false, "BH02", 32)),
+         std::make_pair("OS-1-32-BH13", product_info_test("OS-1-32-BH13", "OS1",
+                                                          false, "BH13", 32)),
+         std::make_pair("OS-1-32-C",
+                        product_info_test("OS-1-32-C", "OS1", false, "C", 32)),
+         std::make_pair("OS-1-32-G",
+                        product_info_test("OS-1-32-G", "OS1", false, "G", 32)),
+         std::make_pair("OS-1-32-U0", product_info_test("OS-1-32-U0", "OS1",
+                                                        false, "U0", 32)),
+         std::make_pair("OS-1-32-U1", product_info_test("OS-1-32-U1", "OS1",
+                                                        false, "U1", 32)),
+         std::make_pair("OS-1-32-U2", product_info_test("OS-1-32-U2", "OS1",
+                                                        false, "U2", 32)),
+         std::make_pair("OS-1-32-U3", product_info_test("OS-1-32-U3", "OS1",
+                                                        false, "U3", 32)),
+         std::make_pair("OS-1-64",
+                        product_info_test("OS-1-64", "OS1", false, "U", 64)),
+         std::make_pair("OS-1-64-AH", product_info_test("OS-1-64-AH", "OS1",
+                                                        false, "AH", 64)),
+         std::make_pair("OS-1-64-BH", product_info_test("OS-1-64-BH", "OS1",
+                                                        false, "BH", 64)),
+         std::make_pair("OS-1-64-G",
+                        product_info_test("OS-1-64-G", "OS1", false, "G", 64)),
+         std::make_pair("OS-1-64-U02", product_info_test("OS-1-64-U02", "OS1",
+                                                         false, "U02", 64)),
+         std::make_pair("OS-1-64-U13", product_info_test("OS-1-64-U13", "OS1",
+                                                         false, "U13", 64)),
+         std::make_pair("OS-2-128",
+                        product_info_test("OS-2-128", "OS2", false, "U", 128)),
+         std::make_pair("OS-2-32-BH02", product_info_test("OS-2-32-BH02", "OS2",
+                                                          false, "BH02", 32)),
+         std::make_pair("OS-2-32-G",
+                        product_info_test("OS-2-32-G", "OS2", false, "G", 32)),
+         std::make_pair("OS-2-32-U0", product_info_test("OS-2-32-U0", "OS2",
+                                                        false, "U0", 32)),
+         std::make_pair("OS-2-32-U2", product_info_test("OS-2-32-U2", "OS2",
+                                                        false, "U2", 32)),
+         std::make_pair("OS-2-64-BH", product_info_test("OS-2-64-BH", "OS2",
+                                                        false, "BH", 64)),
+         std::make_pair("OS-2-64-G",
+                        product_info_test("OS-2-64-G", "OS2", false, "G", 64)),
+         std::make_pair("OS-2-64-U02", product_info_test("OS-2-64-U02", "OS2",
+                                                         false, "U02", 64)),
+         std::make_pair(
+             "OS-DOME-128",
+             product_info_test("OS-DOME-128", "OSDOME", false, "U", 128)),
+         std::make_pair(
+             "OS-DOME-32-AH02",
+             product_info_test("OS-DOME-32-AH02", "OSDOME", false, "AH02", 32)),
+         std::make_pair(
+             "OS-DOME-32-AH13",
+             product_info_test("OS-DOME-32-AH13", "OSDOME", false, "AH13", 32)),
+         std::make_pair(
+             "OS-DOME-32-BH02",
+             product_info_test("OS-DOME-32-BH02", "OSDOME", false, "BH02", 32)),
+         std::make_pair(
+             "OS-DOME-32-BH13",
+             product_info_test("OS-DOME-32-BH13", "OSDOME", false, "BH13", 32)),
+         std::make_pair(
+             "OS-DOME-32-G",
+             product_info_test("OS-DOME-32-G", "OSDOME", false, "G", 32)),
+         std::make_pair(
+             "OS-DOME-32-U0",
+             product_info_test("OS-DOME-32-U0", "OSDOME", false, "U0", 32)),
+         std::make_pair(
+             "OS-DOME-32-U1",
+             product_info_test("OS-DOME-32-U1", "OSDOME", false, "U1", 32)),
+         std::make_pair(
+             "OS-DOME-32-U2",
+             product_info_test("OS-DOME-32-U2", "OSDOME", false, "U2", 32)),
+         std::make_pair(
+             "OS-DOME-32-U3",
+             product_info_test("OS-DOME-32-U3", "OSDOME", false, "U3", 32)),
+         std::make_pair(
+             "OS-DOME-64-AH",
+             product_info_test("OS-DOME-64-AH", "OSDOME", false, "AH", 64)),
+         std::make_pair(
+             "OS-DOME-64-BH",
+             product_info_test("OS-DOME-64-BH", "OSDOME", false, "BH", 64)),
+         std::make_pair(
+             "OS-DOME-64-G",
+             product_info_test("OS-DOME-64-G", "OSDOME", false, "G", 64)),
+         std::make_pair(
+             "OS-DOME-64-U02",
+             product_info_test("OS-DOME-64-U02", "OSDOME", false, "U02", 64)),
+         std::make_pair(
+             "OS-DOME-64-U13",
+             product_info_test("OS-DOME-64-U13", "OSDOME", false, "U13", 64))};
+
+    for (auto it : test_product_infos) {
+        auto actual =
+            ouster::sensor::product_info::create_product_info(it.first);
+        std::cout << "Comparing:" << std::endl;
+        std::cout << to_string(actual);
+        std::cout << "To:" << std::endl;
+        std::cout << to_string((ouster::sensor::product_info)it.second);
+        EXPECT_EQ(actual, (ouster::sensor::product_info)it.second);
     }
 }

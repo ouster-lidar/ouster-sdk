@@ -8,25 +8,20 @@
 #include <algorithm>
 #include <sstream>
 
+#include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/basics.h"
+#include "ouster/strings.h"
 #include "ouster/types.h"
 #include "png_tools.h"
+
+using namespace ouster::sensor;
+using namespace ouster::strings;
 
 namespace ouster {
 namespace osf {
 
 namespace {
-
-gen::CHAN_FIELD to_osf_enum(sensor::ChanField f) {
-    // TODO[pb]: When we start diverging add a better mapping.
-    return static_cast<gen::CHAN_FIELD>(f);
-}
-
-sensor::ChanField from_osf_enum(gen::CHAN_FIELD f) {
-    // TODO[pb]: When we start diverging add a better mapping.
-    return static_cast<sensor::ChanField>(f);
-}
 
 gen::CHAN_FIELD_TYPE to_osf_enum(sensor::ChanFieldType f) {
     // TODO[pb]: When we start diverging add a better mapping.
@@ -38,16 +33,28 @@ sensor::ChanFieldType from_osf_enum(gen::CHAN_FIELD_TYPE ft) {
     return static_cast<sensor::ChanFieldType>(ft);
 }
 
+gen::FIELD_CLASS to_osf_enum(ouster::FieldClass ff) {
+    return static_cast<gen::FIELD_CLASS>(ff);
+}
+
+ouster::FieldClass from_osf_enum(gen::FIELD_CLASS ff) {
+    return static_cast<ouster::FieldClass>(ff);
+}
+
 }  // namespace
 
 bool poses_present(const LidarScan& ls) {
-    return std::find_if_not(ls.pose().begin(), ls.pose().end(),
-                            [](const mat4d& m) { return m.isIdentity(); }) !=
-           ls.pose().end();
+    auto&& pose = ls.pose();
+    ouster::mat4d mat;
+    for (size_t i = 0, end = pose.shape()[0]; i < end; ++i) {
+        std::memcpy(mat.data(), pose.subview(i).get(), sizeof(double) * 16);
+        if (!mat.isIdentity()) return true;
+    }
+    return false;
 }
 
 LidarScan slice_with_cast(const LidarScan& ls_src,
-                          const LidarScanFieldTypes& field_types) {
+                          const ouster::LidarScanFieldTypes& field_types) {
     LidarScan ls_dest{static_cast<std::size_t>(ls_src.w),
                       static_cast<std::size_t>(ls_src.h), field_types.begin(),
                       field_types.end()};
@@ -58,18 +65,17 @@ LidarScan slice_with_cast(const LidarScan& ls_src,
     ls_dest.timestamp() = ls_src.timestamp();
     ls_dest.measurement_id() = ls_src.measurement_id();
     ls_dest.status() = ls_src.status();
-    ls_dest.pose() = ls_src.pose();
     ls_dest.packet_timestamp() = ls_src.packet_timestamp();
+    ls_dest.pose() = ls_src.pose();
 
     // Copy fields
     for (const auto& ft : field_types) {
-        if (ls_src.field_type(ft.first)) {
-            ouster::impl::visit_field(ls_dest, ft.first,
+        if (ls_src.has_field(ft.name)) {
+            ouster::impl::visit_field(ls_dest, ft.name,
                                       ouster::impl::copy_and_cast(), ls_src,
-                                      ft.first);
+                                      ft.name);
         } else {
-            throw std::invalid_argument("Required field '" +
-                                        sensor::to_string(ft.first) +
+            throw std::invalid_argument("Required field '" + ft.name +
                                         "' is missing from scan.");
         }
     }
@@ -105,27 +111,157 @@ flatbuffers::Offset<flatbuffers::Vector<const T*>> CreateVectorOfStructs(
     return res_off;
 }
 
+flatbuffers::Offset<gen::Field> create_osf_field(
+    flatbuffers::FlatBufferBuilder& fbb, const std::string& name,
+    const Field& f) {
+    ScanChannelData data = encodeField(f);
+    std::vector<uint64_t> shape{f.shape().begin(), f.shape().end()};
+    return gen::CreateFieldDirect(fbb, name.c_str(), to_osf_enum(f.tag()),
+                                  &shape, to_osf_enum(f.field_class()), &data,
+                                  f.bytes());
+}
+
+using nonstd::make_optional;
+using nonstd::nullopt;
+using nonstd::optional;
+
+namespace impl {
+template <typename K, typename V, size_t N>
+using Table = std::array<std::pair<K, V>, N>;
+}
+
+template <typename K, typename V, size_t N>
+static optional<V> lookup(const impl::Table<K, V, N> table, const K& k) {
+    auto end = table.end();
+    auto res = std::find_if(table.begin(), end, [&](const std::pair<K, V>& p) {
+        return p.first == k;
+    });
+
+    return res == end ? nullopt : make_optional<V>(res->second);
+}
+
+template <typename K, size_t N>
+static optional<K> rlookup(const impl::Table<K, const char*, N> table,
+                           const char* v) {
+    auto end = table.end();
+    auto res = std::find_if(
+        table.begin(), end, [&](const std::pair<K, const char*>& p) {
+            return p.second && std::strcmp(p.second, v) == 0;
+        });
+
+    return res == end ? nullopt : make_optional<K>(res->first);
+}
+
+// mapping of channel name to osf ChanField
+static impl::Table<ouster::osf::gen::CHAN_FIELD, const char*, 29>
+    chanfield_strings{{
+        {ouster::osf::gen::CHAN_FIELD::RANGE, ChanField::RANGE},
+        {ouster::osf::gen::CHAN_FIELD::RANGE2, ChanField::RANGE2},
+        {ouster::osf::gen::CHAN_FIELD::SIGNAL, ChanField::SIGNAL},
+        {ouster::osf::gen::CHAN_FIELD::SIGNAL2, ChanField::SIGNAL2},
+        {ouster::osf::gen::CHAN_FIELD::REFLECTIVITY, ChanField::REFLECTIVITY},
+        {ouster::osf::gen::CHAN_FIELD::REFLECTIVITY2, ChanField::REFLECTIVITY2},
+        {ouster::osf::gen::CHAN_FIELD::NEAR_IR, ChanField::NEAR_IR},
+        {ouster::osf::gen::CHAN_FIELD::FLAGS, ChanField::FLAGS},
+        {ouster::osf::gen::CHAN_FIELD::FLAGS2, ChanField::FLAGS2},
+        {ouster::osf::gen::CHAN_FIELD::RAW_HEADERS, ChanField::RAW_HEADERS},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM0, "CUSTOM0"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM1, "CUSTOM1"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM2, "CUSTOM2"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM3, "CUSTOM3"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM4, "CUSTOM4"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM5, "CUSTOM5"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM6, "CUSTOM6"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM7, "CUSTOM7"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM8, "CUSTOM8"},
+        {ouster::osf::gen::CHAN_FIELD::CUSTOM9, "CUSTOM9"},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD1, ChanField::RAW32_WORD1},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD2, ChanField::RAW32_WORD2},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD3, ChanField::RAW32_WORD3},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD4, ChanField::RAW32_WORD4},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD5, ChanField::RAW32_WORD5},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD6, ChanField::RAW32_WORD6},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD7, ChanField::RAW32_WORD7},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD8, ChanField::RAW32_WORD8},
+        {ouster::osf::gen::CHAN_FIELD::RAW32_WORD9, ChanField::RAW32_WORD9},
+    }};
+
+nonstd::optional<gen::CHAN_FIELD> to_osf_enum(const std::string& f) {
+    // TODO[pb]: When we start diverging add a better mapping.
+    return rlookup(chanfield_strings, f.c_str());
+}
+
+std::string from_osf_enum(gen::CHAN_FIELD f) {
+    // TODO[pb]: When we start diverging add a better mapping.
+    return lookup(chanfield_strings, f).value();
+}
+
 flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
     flatbuffers::FlatBufferBuilder& fbb, const LidarScan& lidar_scan,
     const ouster::sensor::sensor_info& info,
-    const LidarScanFieldTypes meta_field_types) {
-    auto ls = lidar_scan;
-    if (!meta_field_types.empty()) {
-        // Make a reduced field LidarScan (erroring if we are missing anything)
-        ls = slice_with_cast(lidar_scan, meta_field_types);
+    const ouster::LidarScanFieldTypes meta_field_types) {
+    const auto& ls = lidar_scan;
+
+    // Prepare field_types for LidarScanMsg
+    std::vector<flatbuffers::Offset<gen::Field>> custom_fields;
+    std::vector<std::pair<ouster::osf::gen::CHAN_FIELD, std::string>>
+        standard_fields_to_sort;
+    for (const auto& f : ls.fields()) {
+        // if we have meta_field_types ignore fields not in it
+        if (meta_field_types.size()) {
+            bool found = false;
+            for (const auto& mft : meta_field_types) {
+                if (mft.name == f.first) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                continue;
+            }
+        }
+        // if the field is custom, add it as custom
+        auto enum_value = to_osf_enum(f.first);  // optional
+        if (!enum_value) {
+            custom_fields.push_back(create_osf_field(fbb, f.first, f.second));
+        } else {
+            // otherwise add it to field types and then scan encode those
+            standard_fields_to_sort.emplace_back(enum_value.value(), f.first);
+        }
     }
+
+    // because older OSF readers are broken, we need to sort the standard fields
+    // by value...
+    std::sort(standard_fields_to_sort.begin(), standard_fields_to_sort.end());
+
+    // now actually build our arrays from the sorted one
+    std::vector<ouster::osf::gen::ChannelField> field_types;
+    std::vector<std::pair<std::string, ouster::sensor::ChanFieldType>>
+        standard_fields;
+    for (const auto& f : standard_fields_to_sort) {
+        const auto& field = ls.field(f.second);
+        field_types.push_back(
+            ouster::osf::gen::ChannelField(f.first, to_osf_enum(field.tag())));
+        standard_fields.push_back({f.second, field.tag()});
+    }
+
+    // error if we are missing a required field
+    for (const auto& mft : meta_field_types) {
+        if (ls.fields().find(mft.name) == ls.fields().end()) {
+            throw std::invalid_argument("Required field '" + mft.name +
+                                        "' is missing from scan.");
+        }
+    }
+
     // Encode LidarScan to PNG buffers
-    ScanData scan_data = scanEncode(ls, info.format.pixel_shift_by_row);
+    ScanData scan_data =
+        scanEncode(ls, info.format.pixel_shift_by_row, standard_fields);
     // Prepare PNG encoded channels for LidarScanMsg.channels vector
     std::vector<flatbuffers::Offset<gen::ChannelData>> channels;
     for (const auto& channel_data : scan_data) {
         channels.emplace_back(gen::CreateChannelDataDirect(fbb, &channel_data));
     }
-    // Prepare field_types for LidarScanMsg
-    std::vector<ouster::osf::gen::ChannelField> field_types;
-    for (const auto& f : ls) {
-        field_types.emplace_back(to_osf_enum(f.first), to_osf_enum(f.second));
-    }
+
     auto channels_off =
         fbb.CreateVector<::flatbuffers::Offset<gen::ChannelData>>(channels);
     auto field_types_off = osf::CreateVectorOfStructs<gen::ChannelField>(
@@ -137,14 +273,23 @@ flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
     auto status_off = fbb.CreateVector<uint32_t>(ls.status().data(), ls.w);
     flatbuffers::Offset<flatbuffers::Vector<double>> pose_off = 0;
     if (poses_present(ls)) {
-        pose_off = fbb.CreateVector<double>(ls.pose().data()->data(),
-                                            ls.pose().size() * 16);
+        pose_off = fbb.CreateVector<double>(ls.pose().get<double>(),
+                                            ls.pose().bytes() / sizeof(double));
     }
     auto packet_timestamp_id_off = fbb.CreateVector<uint64_t>(
         ls.packet_timestamp().data(), ls.packet_timestamp().size());
-    return gen::CreateLidarScanMsg(
-        fbb, channels_off, field_types_off, timestamp_off, measurement_id_off,
-        status_off, ls.frame_id, pose_off, packet_timestamp_id_off);
+
+    flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<gen::Field>>>
+        custom_fields_off = 0;
+    if (custom_fields.size()) {
+        custom_fields_off =
+            fbb.CreateVector<flatbuffers::Offset<gen::Field>>(custom_fields);
+    }
+
+    return gen::CreateLidarScanMsg(fbb, channels_off, field_types_off,
+                                   timestamp_off, measurement_id_off,
+                                   status_off, ls.frame_id, pose_off,
+                                   packet_timestamp_id_off, custom_fields_off);
 }
 
 std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
@@ -157,13 +302,15 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
     uint32_t height = info.format.pixels_per_column;
 
     // read field_types
-    LidarScanFieldTypes field_types;
+    ouster::LidarScanFieldTypes field_types;
     if (ls_msg->field_types() && ls_msg->field_types()->size()) {
         std::transform(
             ls_msg->field_types()->begin(), ls_msg->field_types()->end(),
             std::back_inserter(field_types), [](const gen::ChannelField* p) {
-                return std::make_pair(from_osf_enum(p->chan_field()),
-                                      from_osf_enum(p->chan_field_type()));
+                return FieldType{from_osf_enum(p->chan_field()),
+                                 from_osf_enum(p->chan_field_type()),
+                                 {},
+                                 FieldClass::PIXEL_FIELD};
             });
     }
 
@@ -181,9 +328,11 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
                 ls->timestamp()[i] = msg_ts_vec->Get(i);
             }
         } else if (msg_ts_vec->size() != 0) {
-            std::cout << "ERROR: LidarScanMsg has header_timestamp of length: "
-                      << msg_ts_vec->size() << ", expected: " << ls->w
-                      << std::endl;
+            logger().error(
+                "ERROR: LidarScanMsg has "
+                "header_timestamp of length: "
+                "{}, expected: {}",
+                msg_ts_vec->size(), ls->w);
             return nullptr;
         }
     }
@@ -196,9 +345,11 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
                 ls->measurement_id()[i] = msg_mid_vec->Get(i);
             }
         } else if (msg_mid_vec->size() != 0) {
-            std::cout
-                << "ERROR: LidarScanMsg has header_measurement_id of length: "
-                << msg_mid_vec->size() << ", expected: " << ls->w << std::endl;
+            logger().error(
+                "ERROR: LidarScanMsg has "
+                "header_measurement_id of length: "
+                "{}, expected: {}",
+                msg_mid_vec->size(), ls->w);
             return nullptr;
         }
     }
@@ -211,9 +362,11 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
                 ls->status()[i] = msg_status_vec->Get(i);
             }
         } else if (msg_status_vec->size() != 0) {
-            std::cout << "ERROR: LidarScanMsg has header_status of length: "
-                      << msg_status_vec->size() << ", expected: " << ls->w
-                      << std::endl;
+            logger().error(
+                "ERROR: LidarScanMsg has "
+                "header_status of length: "
+                "{}, expected: {}",
+                msg_status_vec->size(), ls->w);
             return nullptr;
         }
     }
@@ -221,18 +374,15 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
     // Set poses per column
     auto pose_vec = ls_msg->pose();
     if (pose_vec) {
-        if (static_cast<uint32_t>(ls->pose().size() * 16) == pose_vec->size()) {
-            for (uint32_t i = 0; i < static_cast<uint32_t>(ls->pose().size());
-                 ++i) {
-                for (uint32_t el = 0; el < 16; ++el) {
-                    *(ls->pose()[i].data() + el) = pose_vec->Get(i * 16 + el);
-                }
-            }
+        auto& pose = ls->pose();
+        if (static_cast<uint32_t>(pose.size()) == pose_vec->size()) {
+            std::memcpy(pose.get<double>(), pose_vec->Data(), pose.bytes());
         } else if (pose_vec->size() != 0) {
-            std::cout << "ERROR: LidarScanMsg has pose of length: "
-                      << pose_vec->size()
-                      << ", expected: " << (ls->pose().size() * 16)
-                      << std::endl;
+            logger().error(
+                "ERROR: LidarScanMsg has "
+                "pose of length: "
+                "{}, expected: {}",
+                pose_vec->size(), pose.size());
             return nullptr;
         }
     }
@@ -246,10 +396,11 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
                 ls->packet_timestamp()[i] = packet_ts_vec->Get(i);
             }
         } else if (packet_ts_vec->size() != 0) {
-            std::cout << "ERROR: LidarScanMsg has packet_timestamp of length: "
-                      << packet_ts_vec->size()
-                      << ", expected: " << ls->packet_timestamp().size()
-                      << std::endl;
+            logger().error(
+                "ERROR: LidarScanMsg has "
+                "packet_timestamp of length: "
+                "{}, expected: {}",
+                packet_ts_vec->size(), ls->packet_timestamp().size());
             return nullptr;
         }
     }
@@ -257,8 +408,9 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
     // Fill Scan Data with scan channels
     auto msg_scan_vec = ls_msg->channels();
     if (!msg_scan_vec || !msg_scan_vec->size()) {
-        std::cout
-            << "ERROR: lidar_scan msg doesn't have scan field or it's empty.\n";
+        logger().error(
+            "ERROR: lidar_scan msg doesn't "
+            "have scan field or it's empty.");
         return nullptr;
     }
     ScanData scan_data;
@@ -268,23 +420,41 @@ std::unique_ptr<ouster::LidarScan> restore_lidar_scan(
     }
 
     // Decode PNGs data to LidarScan
-    if (scanDecode(*ls, scan_data, info.format.pixel_shift_by_row)) {
+    if (scanDecode(*ls, scan_data, info.format.pixel_shift_by_row,
+                   field_types)) {
         return nullptr;
+    }
+
+    auto msg_custom_fields = ls_msg->custom_fields();
+    if (msg_custom_fields && msg_custom_fields->size()) {
+        for (uint32_t i = 0; i < msg_custom_fields->size(); ++i) {
+            auto custom_field = msg_custom_fields->Get(i);
+
+            std::string name{custom_field->name()->c_str()};
+            ChanFieldType tag = from_osf_enum(custom_field->tag());
+            std::vector<size_t> shape{custom_field->shape()->begin(),
+                                      custom_field->shape()->end()};
+            auto desc = FieldDescriptor::array(tag, shape);
+            ouster::FieldClass field_class =
+                from_osf_enum(custom_field->field_class());
+            auto& field = ls->add_field(name, desc, field_class);
+
+            std::vector<uint8_t> encoded{custom_field->data()->begin(),
+                                         custom_field->data()->end()};
+            decodeField(field, encoded);
+        }
     }
 
     return ls;
 }
 
-LidarScanStreamMeta::LidarScanStreamMeta(const uint32_t sensor_meta_id,
-                                         const LidarScanFieldTypes field_types)
+LidarScanStreamMeta::LidarScanStreamMeta(
+    const uint32_t sensor_meta_id,
+    const ouster::LidarScanFieldTypes field_types)
     : sensor_meta_id_{sensor_meta_id},
       field_types_{field_types.begin(), field_types.end()} {}
 
 uint32_t LidarScanStreamMeta::sensor_meta_id() const { return sensor_meta_id_; }
-
-const LidarScanFieldTypes& LidarScanStreamMeta::field_types() const {
-    return field_types_;
-}
 
 std::vector<uint8_t> LidarScanStreamMeta::buffer() const {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(512);
@@ -292,7 +462,11 @@ std::vector<uint8_t> LidarScanStreamMeta::buffer() const {
     // Make and store field_types with details for LidarScanStream
     std::vector<ouster::osf::gen::ChannelField> field_types;
     for (const auto& ft : field_types_) {
-        field_types.emplace_back(to_osf_enum(ft.first), to_osf_enum(ft.second));
+        auto field_enum = to_osf_enum(ft.name);
+        if (field_enum) {
+            field_types.emplace_back(field_enum.value(),
+                                     to_osf_enum(ft.element_type));
+        }
     }
 
     auto field_types_off = osf::CreateVectorOfStructs<gen::ChannelField>(
@@ -314,13 +488,15 @@ std::unique_ptr<MetadataEntry> LidarScanStreamMeta::from_buffer(
     auto sensor_meta_id = lidar_scan_stream->sensor_id();
 
     auto field_types_vec = lidar_scan_stream->field_types();
-    LidarScanFieldTypes field_types;
+    ouster::LidarScanFieldTypes field_types;
     if (field_types_vec && field_types_vec->size()) {
         std::transform(
             field_types_vec->begin(), field_types_vec->end(),
             std::back_inserter(field_types), [](const gen::ChannelField* p) {
-                return std::make_pair(from_osf_enum(p->chan_field()),
-                                      from_osf_enum(p->chan_field_type()));
+                return ouster::FieldType{from_osf_enum(p->chan_field()),
+                                         from_osf_enum(p->chan_field_type()),
+                                         {},
+                                         FieldClass::PIXEL_FIELD};
             });
     }
 
@@ -335,8 +511,7 @@ std::string LidarScanStreamMeta::repr() const {
     bool first = true;
     for (const auto& f : field_types_) {
         if (!first) ss << ", ";
-        ss << sensor::to_string(f.first) << ":"
-           << ouster::sensor::to_string(f.second);
+        ss << f.name << ":" << ouster::sensor::to_string(f.element_type);
         first = false;
     }
     ss << "}";
@@ -347,10 +522,11 @@ std::string LidarScanStreamMeta::repr() const {
 
 LidarScanStream::LidarScanStream(Token /*key*/, Writer& writer,
                                  const uint32_t sensor_meta_id,
-                                 const LidarScanFieldTypes& field_types)
+                                 const ouster::LidarScanFieldTypes& field_types)
     : writer_{writer},
       meta_(sensor_meta_id, field_types),
-      sensor_meta_id_(sensor_meta_id) {
+      sensor_meta_id_(sensor_meta_id),
+      field_types_(field_types) {
     // Note key is ignored and just used to gatekeep.
     // Check sensor and get sensor_info
     auto sensor_meta_entry = writer.get_metadata<LidarSensor>(sensor_meta_id_);
@@ -375,8 +551,8 @@ void LidarScanStream::save(const ouster::osf::ts_t ts,
 
 std::vector<uint8_t> LidarScanStream::make_msg(const LidarScan& lidar_scan) {
     flatbuffers::FlatBufferBuilder fbb = flatbuffers::FlatBufferBuilder(32768);
-    auto ls_msg_offset = create_lidar_scan_msg(fbb, lidar_scan, sensor_info_,
-                                               meta_.field_types());
+    auto ls_msg_offset =
+        create_lidar_scan_msg(fbb, lidar_scan, sensor_info_, field_types_);
     fbb.FinishSizePrefixed(ls_msg_offset);
     const uint8_t* buf = fbb.GetBufferPointer();
     const size_t size = fbb.GetSize();

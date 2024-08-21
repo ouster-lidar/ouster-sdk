@@ -15,12 +15,16 @@ namespace ouster {
 namespace util {
 
 struct version {
-    uint16_t major;  ///< Major version number
-    uint16_t minor;  ///< Minor version number
-    uint16_t patch;  ///< Patch(or revision) version number
+    uint16_t major;          ///< Major version number
+    uint16_t minor;          ///< Minor version number
+    uint16_t patch;          ///< Patch(or revision) version number
+    std::string stage;       ///< Release stage name, if present.
+    std::string machine;     ///< Machine name, if present.
+    std::string prerelease;  ///< Prerelease name (e.g. rc1), if present.
+    std::string build;       ///< Build info, if present. Often a date string.
 };
 
-const version invalid_version = {0, 0, 0};
+const version invalid_version = {0, 0, 0, "", "", "", ""};
 
 /** \defgroup ouster_client_version_operators Ouster Client version.h Operators
  * @{
@@ -34,7 +38,9 @@ const version invalid_version = {0, 0, 0};
  * @return If the versions are the same.
  */
 inline bool operator==(const version& u, const version& v) {
-    return u.major == v.major && u.minor == v.minor && u.patch == v.patch;
+    return u.major == v.major && u.minor == v.minor && u.patch == v.patch &&
+           u.stage == v.stage && u.machine == v.machine && u.build == v.build &&
+           u.prerelease == v.prerelease;
 }
 
 /**
@@ -94,26 +100,9 @@ inline bool operator>(const version& u, const version& v) { return !(u <= v); }
 /** @}*/
 
 /**
- * Get string representation of a version.
- *
- * @param[in] v version.
- *
- * @return string representation of the version.
- */
-std::string to_string(const version& v);
-
-/**
- * Get version from string.
- *
- * @param[in] s string.
- *
- * @return version corresponding to the string, or invalid_version on error.
- */
-[[deprecated("Use version_from_string instead")]] version version_of_string(
-    const std::string& s);
-
-/**
- * Get version from string.
+ * Get version from string. Parses strings of the format:
+ * STAGE-MACHINE-vMAJOR.MINOR.PATCH-PRERELEASE+BUILD
+ * Requires at least major.minor.patch to return a valid version.
  *
  * @param[in] ver string.
  *

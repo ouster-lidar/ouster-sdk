@@ -203,11 +203,10 @@ bool _parse_json(const std::string& json, Json::Value& root) {
 
 ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
     ouster::sensor::sensor_info new_metadata;
-    new_metadata.name = "Foobar";
     new_metadata.sn = "DEADBEEF";
     new_metadata.fw_rev = "sqrt(-1) friends";
-    new_metadata.mode = ouster::sensor::MODE_512x10;
-    new_metadata.prod_line = "LEEROY JENKINS";
+    new_metadata.config.lidar_mode = ouster::sensor::MODE_512x10;
+    new_metadata.prod_line = "OS-1-128";
 
     new_metadata.format.pixels_per_column = 5;
     new_metadata.format.columns_per_packet = 2 + start_number;
@@ -231,8 +230,8 @@ ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
     new_metadata.lidar_origin_to_beam_origin_mm = 22 + start_number;
 
     new_metadata.init_id = 23 + start_number;
-    new_metadata.udp_port_lidar = 24 + start_number;
-    new_metadata.udp_port_imu = 25 + start_number;
+    new_metadata.config.udp_port_lidar = 24 + start_number;
+    new_metadata.config.udp_port_imu = 25 + start_number;
 
     new_metadata.build_date = "Made in SAN FRANCISCO";
     new_metadata.image_rev = "IDK, ask someone else";
@@ -302,7 +301,7 @@ TEST_F(OperationsTest, MetadataRewriteTestSimple) {
     EXPECT_NE(test_root, output_root);
 
     Json::Value new_root{};
-    EXPECT_TRUE(_parse_json(new_metadata.updated_metadata_string(), new_root));
+    EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
 
     EXPECT_EQ(new_root,
               output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
@@ -333,9 +332,9 @@ TEST_F(OperationsTest, MetadataRewriteTestMulti) {
     EXPECT_NE(test_root, output_root);
 
     Json::Value new_root{};
-    EXPECT_TRUE(_parse_json(new_metadata.updated_metadata_string(), new_root));
+    EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
     Json::Value new_root2{};
-    auto temp_string = new_metadata2.updated_metadata_string();
+    auto temp_string = new_metadata2.to_json_string();
     EXPECT_TRUE(_parse_json(temp_string, new_root2));
 
     EXPECT_EQ(new_root,
@@ -375,7 +374,7 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
     EXPECT_NE(test_root, output_root);
 
     Json::Value new_root{};
-    EXPECT_TRUE(_parse_json(new_metadata.updated_metadata_string(), new_root));
+    EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
 
     EXPECT_EQ(output_root["metadata"]["entries"][0]["buffer"],
               "LidarScanStreamMeta: sensor_id = 12345678, field_types = {}");

@@ -10,16 +10,15 @@ include(GenerateExportHeader)
 add_library(ouster_client src/client.cpp src/types.cpp src/sensor_info.cpp src/netcompat.cpp src/lidar_scan.cpp
   src/image_processing.cpp src/udp_packet_source.cpp src/parsing.cpp
   src/sensor_http.cpp src/sensor_http_imp.cpp src/sensor_tcp_imp.cpp src/logging.cpp
-  src/profile_extension.cpp
-  src/util.cpp)
+  src/field.cpp src/profile_extension.cpp src/util.cpp)
 target_link_libraries(ouster_client
   PUBLIC
     Eigen3::Eigen
-    $<BUILD_INTERFACE:ouster_build>
-  PRIVATE
-    CURL::libcurl
     jsoncpp_lib
-    spdlog::spdlog)
+    $<BUILD_INTERFACE:ouster_build>
+    spdlog::spdlog
+  PRIVATE
+    CURL::libcurl)
 target_compile_definitions(ouster_client PRIVATE EIGEN_MPL2_ONLY)
 CodeCoverageFunctionality(ouster_client)
 

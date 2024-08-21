@@ -154,7 +154,7 @@ Error: {err_msg}
 Please verify that ROS Python modules are available.
 
 The best option is to try to install unofficial rospy packages that work
-with Python 3.8 on Ubuntu 18.04/20.04 and Debian 10 without ROS:
+with Python 3.8 on Ubuntu 20.04 and Debian 10 without ROS:
 
     pip install --extra-index-url https://rospypi.github.io/simple/ rospy rosbag tf2_ros
 
@@ -328,28 +328,6 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
         f.write(json.dumps(report, indent=4))
 
 
-@util_group.command()
-@click.option('-o', 'output_path', required=False, help='Name of output file')
-@click.argument('meta', required=True, type=click.Path(exists=True))
-def convert_metadata_to_legacy(meta: str, output_path: Optional[str]) -> None:
-    """Convert nonlegacy metadata to legacy format
-
-    The supplied metadata should be of nonlegacy form. Output will print to screen.
-    Legacy metadata will error out by complaining it is an invalid non-legacy format.
-
-    """
-
-    with open(meta) as json:
-        output = client.convert_to_legacy(json.read())
-        if output_path is None:
-            click.echo(output)
-        else:
-            click.echo(f"Reading metadata from: {meta} and outputting converted "
-                       f"legacy metadata to: {output_path}")
-            with open(output_path, "w") as outfile:
-                outfile.write(output)
-
-
 @util_group.command(name="benchmark-sensor")
 @click.argument('hostname', required=True, type=str)
 @click.option('-l', '--lidar-port', type=int, default=None, help="Lidar port")
@@ -512,7 +490,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
         data_source = packet_source
         is_scan_source = False
 
-    frame_bound = [client.FrameBorder() for _ in data_source.metadata]
+    frame_bound = [client.FrameBorder(m) for m in data_source.metadata]
 
     now = time.monotonic()
     last_scan_ts = [now for _ in data_source.metadata]

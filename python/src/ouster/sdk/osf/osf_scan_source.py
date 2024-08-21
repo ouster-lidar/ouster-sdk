@@ -23,7 +23,6 @@ class OsfScanSource(MultiScanSource):
         complete: bool = False,
         index: bool = False,
         cycle: bool = False,
-        flags: bool = True,
         **kwargs
     ) -> None:
         """
@@ -37,9 +36,6 @@ class OsfScanSource(MultiScanSource):
                 file enabling len, index and slice operations on the scan source, if
                 the flag is set to False indexing is skipped (default is False).
             cycle: repeat infinitely after iteration is finished (default is False)
-            flags: when this option is set, the FLAGS field will be added to the list
-                of fields of every scan, in case of dual returns FLAGS2 will also be
-                 appended (default is True).
 
         Remarks:
             In case the OSF file didn't have builtin-index and the index flag was
@@ -100,18 +96,30 @@ class OsfScanSource(MultiScanSource):
                 self._stream_sensor_idx[stream_id] = self._sensor_idx[
                     stream_meta.sensor_meta_id]
 
-        def append_flags(ftypes: Dict, flags: bool) -> Dict:
-            import numpy as np
-            if flags:
-                ftypes.update({client.ChanField.FLAGS: np.uint8})
-                if client.ChanField.RANGE2 in ftypes:
-                    ftypes.update({client.ChanField.FLAGS2: np.uint8})
-            return ftypes
-
+        # get the first scan
         scan_streams = self._reader.meta_store.find(LidarScanStream)
         self._stream_ids = [mid for mid, _ in scan_streams.items()]
-        self._fields = [append_flags(lss.field_types, flags)
-                        for _, lss in scan_streams.items()]
+
+        self._field_types = []
+        self._fields = []
+        for sid, mid in enumerate(self._stream_ids):
+            ts_start = self._reader.ts_by_message_idx(mid, 0)
+            if ts_start is None:
+                # There are no messages in this stream,
+                # so there are no fields for this stream.
+                self._field_types.append([])
+                self._fields.append([])
+                continue
+            for idx, scan in self._scans_iter(ts_start, ts_start, False):
+                if idx == sid:
+                    fts = scan.field_types
+                    self._field_types.append(fts)
+                    l = []
+                    for ft in fts:
+                        l.append(ft.name)
+                    self._fields.append(l)
+                    break
+
         # TODO: the following two properties (_scans_num, _len) are computed on
         # load but should rather be provided directly through OSF API. Obtain
         # these values directly from OSF API once implemented.
@@ -185,8 +193,6 @@ class OsfScanSource(MultiScanSource):
                 window = self.metadata[idx].format.column_window
                 scan = cast(LidarScan, ls)
                 if not self._complete or scan.complete(window):
-                    if set(scan.fields) != set(self._fields[idx].keys()):
-                        scan = client.LidarScan(scan, self._fields[idx])
                     yield idx, scan
 
     @property
@@ -210,9 +216,12 @@ class OsfScanSource(MultiScanSource):
         return self._indexed
 
     @property
-    def fields(self) -> List[client.FieldTypes]:
-        """Field types are present in the LidarScan objects on read from iterator"""
+    def fields(self) -> List[List[str]]:
         return self._fields
+
+    @property
+    def field_types(self) -> List[client.FieldTypes]:
+        return self._field_types
 
     @property
     def scans_num(self) -> List[Optional[int]]:
@@ -234,7 +243,7 @@ class OsfScanSource(MultiScanSource):
         ...
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], MultiScanSource]:
 
         if not self.is_indexed:
             raise TypeError(
@@ -257,21 +266,7 @@ class OsfScanSource(MultiScanSource):
                                       first_valid_packet_ts, dt=self._dt))
 
         if isinstance(key, slice):
-            L = len(self)
-            k = ForwardSlicer.normalize(key, L)
-            count = k.stop - k.start
-            if count <= 0:
-                return []
-            ts_start = min([self._reader.ts_by_message_idx(mid, k.start)
-                           for mid in self._stream_ids])
-            ts_stop = max([self._reader.ts_by_message_idx(mid, k.stop - 1)
-                          for mid in self._stream_ids])
-            scans_itr = collate_scans(self._scans_iter(ts_start, ts_stop, False),
-                                      self.sensors_count, first_valid_packet_ts,
-                                      dt=self._dt)
-            result = [scan for idx, scan in ForwardSlicer.slice(
-                enumerate(scans_itr), k) if idx < count]
-            return result if k.step > 0 else list(reversed(result))
+            return self.slice(key)
 
         raise TypeError(
             f"indices must be integer or slice, not {type(key).__name__}")
@@ -292,3 +287,30 @@ class OsfScanSource(MultiScanSource):
     def single_source(self, stream_idx: int) -> ScanSource:
         from ouster.sdk.client.scan_source_adapter import ScanSourceAdapter
         return ScanSourceAdapter(self, stream_idx)
+
+    def _slice_iter(self, key: slice) -> Iterator[List[Optional[LidarScan]]]:
+        # NOTE: In this method if key.step was negative, this won't be
+        # result in the output being reversed, it is the responisbility of
+        # the caller to accumelate the results into a vector then return them.
+        L = len(self)
+        k = ForwardSlicer.normalize(key, L)
+        count = k.stop - k.start
+        if count <= 0:
+            return iter(())
+        ts_start = min([self._reader.ts_by_message_idx(mid, k.start)
+                        for mid in self._stream_ids])
+        ts_stop = max([self._reader.ts_by_message_idx(mid, k.stop - 1)
+                       for mid in self._stream_ids])
+        scans_itr = collate_scans(self._scans_iter(ts_start, ts_stop, False),
+                                  self.sensors_count, first_valid_packet_ts,
+                                  dt=self._dt)
+        return ForwardSlicer.slice_iter(scans_itr, k)
+
+    def slice(self, key: slice) -> 'MultiScanSource':
+        """Constructs a MultiScanSource matching the specificed slice"""
+        from ouster.sdk.client.multi_sliced_scan_source import MultiSlicedScanSource
+        L = len(self)
+        k = ForwardSlicer.normalize(key, L)
+        if k.step < 0:
+            raise TypeError("slice() can't work with negative step")
+        return MultiSlicedScanSource(self, k)

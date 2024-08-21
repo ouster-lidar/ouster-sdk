@@ -1,0 +1,115 @@
+name: Lint Build and Test
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev libgtest-dev clang-format
+    - name: cpp-lint
+      run: ./clang-linting.sh
+    - name: install python
+      run: sudo apt install python3 python3-pip
+    - name: install python-deps one
+      run: cd python && python3 setup.py egg_info && pip3 install `grep -v '^\[' src/*.egg-info/requires.txt`
+    - name: install python-deps
+      run: pip3 install mypy flake8
+    - name: python-lint
+      run: cd python && mypy ./src ./tests && flake8
+  linux-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev libgtest-dev clang-format
+    - name: cmake configure
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
+    - name: cmake build
+      run: cmake --build build -j4
+    - name: run tests
+      run: cd build/ && ctest -j4 --output-on-failure
+  linux-python-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install python
+      run: sudo apt install python3 python3-pip
+    - name: install deps
+      run: sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev libflatbuffers-dev
+    - name: install python-deps
+      run: pip3 install pytest pytest-xdist
+    - name: build python
+      run: cd python && sudo python3 -m pip install -e .[test]
+    - name: run tests
+      run: cd python/tests && pytest -n4
+  windows-build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: vcpkg build
+      uses: johnwason/vcpkg-action@v6
+      id: vcpkg
+      with:
+        pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers gtest
+        triplet: x64-windows
+        revision: 2024.04.26
+        token: ${{ github.token }}
+        github-binarycache: true
+    - name: cmake configure
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake
+    - name: cmake build
+      run: cmake --build build -j4
+    - name: run tests
+      run: cd build/ && ctest -j4 -C Debug --output-on-failure
+  windows-python-build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: seanmiddleditch/gha-setup-ninja@master
+    - uses: ilammy/msvc-dev-cmd@v1
+    - name: vcpkg build
+      uses: johnwason/vcpkg-action@v6
+      id: vcpkg
+      with:
+        pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers gtest
+        triplet: x64-windows
+        revision: 2024.04.26
+        token: ${{ github.token }}
+        github-binarycache: true
+    - name: install python-deps
+      run: pip3 install pytest pytest-xdist
+    - name: build python
+      run: cd python && python3 -m pip install -e .[test]
+      env:
+        OUSTER_SDK_CMAKE_ARGS: '-DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake'
+    - name: run tests
+      run: cd python/tests && pytest -n3
+  mac-build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers googletest
+    - name: cmake configure
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
+    - name: cmake build
+      run: cmake --build build -j3
+    - name: run tests
+      run: cd build/ && ctest -j3 --output-on-failure
+  mac-python-build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: install deps
+      run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers
+    - name: install python-deps
+      run: pip3 install pytest pytest-xdist --break-system-packages
+    - name: build python
+      run: cd python && python3 -m pip install -e .[test] --break-system-packages
+    - name: set netparams
+      run: sudo sysctl -w net.inet.udp.maxdgram=65535
+    - name: run tests
+      run: cd python/tests && pytest -n3

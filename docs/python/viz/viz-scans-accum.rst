@@ -52,21 +52,18 @@ Keyboard controls available with **ScansAccumulator**:
 Use in Ouster SDK CLI
 ^^^^^^^^^^^^^^^^^^^^^^
 
-**ScansAccumulator** is present in every CLI viz call, no matter the source of data or way of
-calling it.It's in live ``sensor viz``, ``pcap record --viz``, ``osf viz``, ``mapping viz`` and
-``pcap viz`` as well as all ``source SOURCE`` versions of those commands. Everywhere the same set of
-CLI parameters control the behavior of the **ScansAccumulator**.
+**ScansAccumulator** is accessible when visualizing data with ``ouster-cli`` using the ``viz`` command.
 
+Here are the ``viz`` command options that affect it:
 
-Works for data sources with/without poses:
-
-  * ``--accum-num N`` - accumulate *N* scans (default: ``0``)
-  * ``--accum-every K`` - accumulate every *Kth* scan (default: ``1``)
-  * ``--accum-every-m M`` - accumulate a scan every *Mth* meters traveled (default: ``None``)
-  * ``--accum-map`` - enable the overall map accumulation, select some percentage of points from
-    every scan (default: disabled)
-  * ``--accum-map-ratio R`` - set *R* as a ratio of points to randomly select from every scan
-    (default: ``0.001`` (*0.1%*))
+  * ``--accum-num INTEGER`` - Accumulate up to this number of past scans for visualization.
+    Use <= 0 for unlimited. Defaults to 100 if ``--accum-every`` or ``--accum-every-m`` is set.
+  * ``--accum-every INTEGER`` - Add a new scan to the accumulator every this number of scans.
+  * ``--accum-every-m FLOAT`` - Add a new scan to the accumulator after this many meters of travel.
+  * ``--map`` - If set, add random points from every scan into an overall map for visualization.
+    Enabled if either ``--map-ratio`` or ``--map-size`` are set.
+  * ``--map-ratio R`` - Fraction of random points in every scan to add to overall map (0, 1]. [default: 0.01]
+  * ``--map-size N`` - Maximum number of points in overall map before discarding. [default: 1500000]
 
 
 Examples of the CLI commands:
@@ -93,8 +90,8 @@ Overall map view (with poses)
 One of the main task that we often needed was a preview of the overall map from the OSF with poses
 for example::
 
-   ouster-cli osf viz OS-0-128_v3.0.1_1024x10_20230415_152307-000.osf --accum-num 20 \
-   --accum-every 0 --accum-every-m 10.5 --accum-map -r 0 -e stop
+   ouster-cli source OS-0-128_v3.0.1_1024x10_20230415_152307-000.osf viz --accum-num 20 \
+   --accum-every 0 --accum-every-m 10.5 --map -e stop
 
 
 And here is the final result when viz is done and stopped (``-e stop``) after playing the whole file:
@@ -122,7 +119,7 @@ Programmatic use with (and without) PointViz
 With ``point_viz: PointViz`` object the ``ScansAccumulator`` can be used as a regular
 ``LidarScanViz`` and passed directly to ``SimpleViz``::
 
-   from ouster.viz import PointViz, add_default_controls, ScansAccumulator
+   from ouster.sdk.viz import PointViz, add_default_controls, ScansAccumulator, SimpleViz
 
    point_viz = PointViz("SimpleViz usecase")
    add_default_controls(point_viz)
@@ -141,7 +138,7 @@ With ``point_viz: PointViz`` object the ``ScansAccumulator`` can be used as a re
 
 Alternatively with a ``PointViz`` it can be used as a canvas to draw the final state only::
 
-   from ouster.viz import ScansAccumulator, add_default_controls, PointViz
+   from ouster.sdk.viz import ScansAccumulator, add_default_controls, PointViz
 
    point_viz = PointViz("Overall map case")
    add_default_controls(point_viz)
@@ -159,7 +156,7 @@ Alternatively with a ``PointViz`` it can be used as a canvas to draw the final s
        scans_acc.update(scan)
 
    scans_acc.draw(update=True)
-   point_viz.upadte()
+   point_viz.update()
    point_viz.run()
 
 
@@ -167,7 +164,7 @@ Without ``PointViz`` it can be used as in the following snippet to accumulate al
 data later to draw anywhere (here we still use the ``PointViz`` and ``viz.Cloud()`` as a main
 graphing tool, but it can be ``matplotlib`` instead)::
 
-   from ouster.viz import grey_palette, ScansAccumulator, Cloud, add_default_controls, PointViz
+   from ouster.sdk.viz import grey_palette, ScansAccumulator, Cloud, add_default_controls, PointViz
 
    # ... get scans_w_poses Scans source ...
 

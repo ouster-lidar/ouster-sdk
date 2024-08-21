@@ -82,7 +82,7 @@ package manager and run:
 
    PS > vcpkg install --triplet=x64-windows curl eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog libpng flatbuffers
 
-The currently tested vcpkg tag is ``2023.10.19``. After that, using a developer powershell prompt:
+The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer powershell prompt:
 
 .. code:: powershell
 
@@ -167,23 +167,3 @@ To run tests against multiple Python versions simultaneously, use the ``tox`` pa
 This will take longer, since it will build the package from a source distribution for each supported
 Python version available.
 
-
-Using Dockerfile
-----------------
-
-To simplify testing on multiple linux distros, a Dockerfile is included for running ``tox`` on a
-variety of Debian-based distros with all packaged Python versions pre-installed. To build a test
-image, run:
-
-.. code:: console
-
-   $ docker build ${OUSTER_SDK_PATH} -f ${OUSTER_SDK_PATH}/python/Dockerfile \
-       --build-arg BASE=ubuntu:20.04 \
-       -t ouster-sdk-tox
-
-the ``BASE`` argument will default to ``ubuntu:20.04``, but can also be set to other docker tags,
-e.g. ``ubuntu:22.04`` or ``debian:11``. Then, run the container to invoke tox:
-
-.. code:: console
-
-   $ docker run -it --rm ouster-sdk-tox

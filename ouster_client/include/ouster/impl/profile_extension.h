@@ -27,7 +27,7 @@ struct FieldInfo {
 
 OUSTER_CLIENT_EXPORT void add_custom_profile(
     int profile_nr, const std::string& name,
-    const std::vector<std::pair<int, impl::FieldInfo>>& fields,
+    const std::vector<std::pair<std::string, impl::FieldInfo>>& fields,
     size_t chan_data_size);
 
 }  // namespace sensor

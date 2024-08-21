@@ -9,8 +9,9 @@
 #include <cstring>
 #include <sstream>
 
-#include "logging.h"
+#include "ouster/impl/logging.h"
 
+using ouster::sensor::util::UserDataAndPolicy;
 using std::string;
 using namespace ouster::sensor::impl;
 
@@ -20,17 +21,17 @@ SensorTcpImp::SensorTcpImp(const string& hostname)
 
 SensorTcpImp::~SensorTcpImp() { socket_close(socket_handle); }
 
-Json::Value SensorTcpImp::metadata() const {
+Json::Value SensorTcpImp::metadata(int timeout_sec) const {
     Json::Value root;
-    root["sensor_info"] = sensor_info();
-    root["beam_intrinsics"] = beam_intrinsics();
-    root["imu_intrinsics"] = imu_intrinsics();
-    root["lidar_intrinsics"] = lidar_intrinsics();
-    root["lidar_data_format"] = lidar_data_format();
-    root["calibration_status"] = calibration_status();
+    root["sensor_info"] = sensor_info(timeout_sec);
+    root["beam_intrinsics"] = beam_intrinsics(timeout_sec);
+    root["imu_intrinsics"] = imu_intrinsics(timeout_sec);
+    root["lidar_intrinsics"] = lidar_intrinsics(timeout_sec);
+    root["lidar_data_format"] = lidar_data_format(timeout_sec);
+    root["calibration_status"] = calibration_status(timeout_sec);
     Json::CharReaderBuilder builder;
     auto reader = std::unique_ptr<Json::CharReader>{builder.newCharReader()};
-    auto res = get_config_params(true);
+    auto res = get_config_params(true, timeout_sec);
     Json::Value node;
     auto parse_success =
         reader->parse(res.c_str(), res.c_str() + res.size(), &node, nullptr);
@@ -38,11 +39,11 @@ Json::Value SensorTcpImp::metadata() const {
     return root;
 }
 
-Json::Value SensorTcpImp::sensor_info() const {
+Json::Value SensorTcpImp::sensor_info(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_sensor_info"});
 }
 
-string SensorTcpImp::get_config_params(bool active) const {
+string SensorTcpImp::get_config_params(bool active, int /*timeout_sec*/) const {
     auto config_type = active ? "active" : "staged";
     return tcp_cmd({"get_config_param", config_type});
 }
@@ -58,51 +59,70 @@ std::string rtrim(const std::string& s) {
 }
 }  // namespace
 
-void SensorTcpImp::set_config_param(const string& key,
-                                    const string& value) const {
+void SensorTcpImp::set_config_param(const string& key, const string& value,
+                                    int /*timeout_sec*/) const {
     tcp_cmd_with_validation({"set_config_param", key, rtrim(value)},
                             "set_config_param");
 }
 
-Json::Value SensorTcpImp::active_config_params() const {
+Json::Value SensorTcpImp::active_config_params(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_config_param", "active"});
 }
 
-Json::Value SensorTcpImp::staged_config_params() const {
+Json::Value SensorTcpImp::staged_config_params(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_config_param", "staged"});
 }
 
-void SensorTcpImp::set_udp_dest_auto() const {
+void SensorTcpImp::set_udp_dest_auto(int /*timeout_sec*/) const {
     tcp_cmd_with_validation({"set_udp_dest_auto"}, "set_udp_dest_auto");
 }
 
-Json::Value SensorTcpImp::beam_intrinsics() const {
+Json::Value SensorTcpImp::beam_intrinsics(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_beam_intrinsics"});
 }
 
-Json::Value SensorTcpImp::imu_intrinsics() const {
+Json::Value SensorTcpImp::imu_intrinsics(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_imu_intrinsics"});
 }
 
-Json::Value SensorTcpImp::lidar_intrinsics() const {
+Json::Value SensorTcpImp::lidar_intrinsics(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_lidar_intrinsics"});
 }
 
-Json::Value SensorTcpImp::lidar_data_format() const {
+Json::Value SensorTcpImp::lidar_data_format(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_lidar_data_format"}, false);
 }
 
-Json::Value SensorTcpImp::calibration_status() const {
+Json::Value SensorTcpImp::calibration_status(int /*timeout_sec*/) const {
     return tcp_cmd_json({"get_calibration_status"}, false);
 }
 
-void SensorTcpImp::reinitialize() const {
+void SensorTcpImp::reinitialize(int /*timeout_sec*/) const {
     // reinitialize to make all staged parameters effective
     tcp_cmd_with_validation({"reinitialize"}, "reinitialize");
 }
 
-void SensorTcpImp::save_config_params() const {
+void SensorTcpImp::save_config_params(int /*timeout_sec*/) const {
     tcp_cmd_with_validation({"write_config_txt"}, "write_config_txt");
+}
+
+std::string SensorTcpImp::get_user_data(int /*timeout_sec*/) const {
+    throw std::runtime_error("user data API not supported on this FW version");
+}
+
+UserDataAndPolicy SensorTcpImp::get_user_data_and_policy(
+    int /*timeout_sec*/) const {
+    throw std::runtime_error("user data API not supported on this FW version");
+}
+
+void SensorTcpImp::set_user_data(const std::string& /*data*/,
+                                 bool /*keep_on_config_delete*/,
+                                 int /*timeout_sec*/) const {
+    throw std::runtime_error("user data API not supported on this FW version");
+}
+
+void SensorTcpImp::delete_user_data(int /*timeout_sec*/) const {
+    throw std::runtime_error("user data API not supported on this FW version");
 }
 
 SOCKET SensorTcpImp::cfg_socket(const char* addr) {

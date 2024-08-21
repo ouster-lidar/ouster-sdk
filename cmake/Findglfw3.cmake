@@ -5,7 +5,7 @@ include(FindPackageHandleStandardArgs)
 
 find_package(glfw3 CONFIG REQUIRED)
 
-# Package on >=18.04 sets a target
+# Package on >=20.04 sets a target
 if(TARGET glfw)
   get_target_property(GLFW3_LIBRARIES glfw LOCATION)
   get_target_property(GLFW3_INCLUDE_DIRS glfw INTERFACE_INCLUDE_DIRECTORIES)

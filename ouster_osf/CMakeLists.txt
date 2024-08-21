@@ -102,7 +102,6 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/operations.cpp
                               src/json_utils.cpp
                               src/fb_utils.cpp
-                              src/pcap_source.cpp
                               src/writer.cpp
 )
 
@@ -129,7 +128,6 @@ target_link_libraries(ouster_osf
 target_include_directories(ouster_osf PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-    ${EIGEN3_INCLUDE_DIR}
 )
 add_dependencies(ouster_osf cpp_gen)
 add_library(OusterSDK::ouster_osf ALIAS ouster_osf)

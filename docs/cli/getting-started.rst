@@ -82,7 +82,7 @@ auto-configuration, respectively.
       visualized
     
     But ``ouster-cli source <SENSOR HOSTNAME> viz``, or ``ouster-cli source <SENSOR HOSTNAME>
-    record`` still can't receive any packets and get the following error::
+    save`` still can't receive any packets and get the following error::
 
         ouster.client.core.ClientTimeout: No packets received within 1.0s
 
@@ -96,10 +96,39 @@ auto-configuration, respectively.
 
 .. _virtual environment: https://docs.python.org/3/library/venv.html
 
-What next?
-----------
+Full Command List
+=================
+
+By default, ``ouster-cli`` includes the following commands. Some of these
+commands also have subcommands that further extend or specify what
+``ouster-cli`` will do when launched.
+
+    * ``discover`` - uses mDNS to locate Ouster sensors on you local networks.
+    * ``source`` - Read lidar data from a sensor or file and use it as input to one or more commands.
+      Most subcommands can be "chained", meaning the output of a subcommand will become the input of the next subcommand.
+      * Sensors and files:
+        * ``viz`` - visualizes data in a 3D point cloud viewer.
+        * ``slam`` - computes trajectories by determining the change in pose between lidar frames.
+        * ``slice`` - reads a subset of lidar frames from the source using counts or time durations.
+        * ``clip`` - restrict the minimum or maximum range of lidar measurements in the source data.
+        * ``stats`` - calculates statistics from the source data.
+        * ``metadata`` - displays the metadata (e.g. sensor information) associated with the source data.
+        * ``save`` - saves the source data, optionally converting to a new format.
+      * Pcap and OSF files only
+        * ``info`` - prints information about a pcap or OSF file.
+      * Sensors only
+        * ``config`` - configures a sensor.
+        * ``userdata`` - displays the userdata from a sensor.
+      * OSF files only
+        * ``dump`` - prints metadata from an OSF file.
+        * ``parse`` - prints message types from an OSF file.
+    * ``util`` - Miscellaneous utilities.
+      * ``benchmark`` - runs a performance benchmark for ouster-sdk.
+      * ``benchmark-sensor`` - runs a performance benchmark for ouster-sdk using a sensor.
+      * ``system-info`` - generates system diagnostic information as a JSON string, useful to Ouster support staff when providing customer support.
+
 
 You can now to use ``ouster-cli`` as you please, exploring available utilities with the handy
-``---help``. If you'd prefer something more documented, you can check out our :ref:`sample sessions`
+``---help``. If you'd prefer some more detailed examples, you can check out our :ref:`sample sessions`
 to see what an ``ouster-cli`` workflow might look like, or you can read through :ref:`common
 commands`.

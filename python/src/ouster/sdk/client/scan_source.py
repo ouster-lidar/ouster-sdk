@@ -1,7 +1,6 @@
-from typing import Iterator, List, Union, Optional
+from typing import Iterator, Union, Optional, List
 from typing_extensions import Protocol
-from ._client import SensorInfo, LidarScan
-from .data import FieldTypes
+from ._client import SensorInfo, LidarScan, FieldType
 
 
 class ScanSource(Protocol):
@@ -9,7 +8,7 @@ class ScanSource(Protocol):
 
     @property
     def metadata(self) -> SensorInfo:
-        """A list of Metadata objects associated with the scan streams."""
+        """A 'SensorInfo' object associated with the scan streams."""
         ...
 
     @property
@@ -37,14 +36,19 @@ class ScanSource(Protocol):
         ...
 
     @property
-    def fields(self) -> FieldTypes:
+    def field_types(self) -> List[FieldType]:
         """Field types are present in the LidarScan objects on read from iterator"""
         ...
 
     @property
+    def fields(self) -> List[str]:
+        """Fields are present in the LidarScan objects on read from iterator"""
+        ...
+
+    @property
     def scans_num(self) -> Optional[int]:
-        """Number of scans available, in case of a live sensor or non-indexable scan source this method
-         returns None"""
+        """Number of scans available, in case of a live sensor or non-indexable scan source
+         this method returns None"""
         ...
 
     def __len__(self) -> int:
@@ -67,14 +71,21 @@ class ScanSource(Protocol):
     # Optional[LidarScan] since MultiScanSource returns collate scans by default.
     # This can be solved by provide a method that gives access to uncollated scans
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[Optional[LidarScan], List[Optional[LidarScan]]]:
+                    ) -> Union[Optional[LidarScan], 'ScanSource']:
         """Indexed access and slices support"""
         ...
 
     def close(self) -> None:
-        """Release the underlying resource, if any."""
+        """Manually release any underlying resource."""
         ...
 
     def __del__(self) -> None:
         """Automatic release of any underlying resource."""
+        ...
+
+    def _slice_iter(self, key: slice) -> Iterator[Optional[LidarScan]]:
+        ...
+
+    def slice(self, key: slice) -> 'ScanSource':
+        """Constructs a ScanSource matching the specificed slice"""
         ...

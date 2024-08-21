@@ -25,15 +25,15 @@ template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 using namespace ouster::sensor;
 
-static const Table<ChanField, ChanFieldType, 0> empty_field_slots{};
+static const std::vector<ouster::FieldType> empty_field_slots{};
 
-static const Table<ChanField, ChanFieldType, 4> legacy_field_slots{
+static const std::vector<ouster::FieldType> legacy_field_slots{
     {{ChanField::RANGE, ChanFieldType::UINT32},
      {ChanField::SIGNAL, ChanFieldType::UINT32},
      {ChanField::NEAR_IR, ChanFieldType::UINT32},
      {ChanField::REFLECTIVITY, ChanFieldType::UINT32}}};
 
-static const Table<ChanField, ChanFieldType, 7> dual_field_slots{
+static const std::vector<ouster::FieldType> dual_field_slots{
     {{ChanField::RANGE, ChanFieldType::UINT32},
      {ChanField::RANGE2, ChanFieldType::UINT32},
      {ChanField::SIGNAL, ChanFieldType::UINT16},
@@ -42,13 +42,13 @@ static const Table<ChanField, ChanFieldType, 7> dual_field_slots{
      {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
      {ChanField::NEAR_IR, ChanFieldType::UINT16}}};
 
-static const Table<ChanField, ChanFieldType, 4> contrived_slots{
+static const std::vector<ouster::FieldType> contrived_slots{
     {{ChanField::RANGE2, ChanFieldType::UINT32},
      {ChanField::SIGNAL2, ChanFieldType::UINT16},
      {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
      {ChanField::NEAR_IR, ChanFieldType::UINT16}}};
 
-static const Table<ChanField, ChanFieldType, 4> duplicated_slots{
+static const std::vector<ouster::FieldType> duplicated_slots{
     {{ChanField::RANGE2, ChanFieldType::UINT32},
      {ChanField::RANGE2, ChanFieldType::UINT32},
      {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
@@ -73,9 +73,27 @@ struct check_field_data {
 };
 
 void zero_check_fields(ouster::LidarScan& scan) {
-    for (auto it = scan.begin(); it != scan.end(); it++) {
-        ouster::impl::visit_field(scan, it->first, check_field_data(), 0);
+    for (const auto& field : scan.fields()) {
+        ouster::impl::visit_field(scan, field.first, check_field_data(), 0);
     }
+}
+
+TEST(LidarScanSanityTests, get_field_types_test) {
+    ouster::LidarScanFieldTypes ft;
+    ft.emplace_back(ChanField::RANGE, ChanFieldType::UINT32);
+    ft.emplace_back(ChanField::SIGNAL, ChanFieldType::UINT16);
+    ft.emplace_back(ChanField::RANGE2, ChanFieldType::UINT32);
+    ft.emplace_back(ChanField::SIGNAL2, ChanFieldType::UINT16);
+    ft.emplace_back(ChanField::REFLECTIVITY, ChanFieldType::UINT8);
+    ft.emplace_back(ChanField::NEAR_IR, ChanFieldType::UINT16);
+    ft.emplace_back(ChanField::FLAGS, ChanFieldType::UINT8);
+    ft.emplace_back(ChanField::FLAGS2, ChanFieldType::UINT8);
+    ft.emplace_back("CUSTOM0", ChanFieldType::UINT64);
+    ft.emplace_back("CUSTOM7", ChanFieldType::UINT16);
+    std::sort(ft.begin(), ft.end());
+
+    auto ls = ouster::LidarScan(1028, 128, ft.begin(), ft.end());
+    EXPECT_EQ(ft, ls.field_types());
 }
 
 TEST(LidarScan, EmptyConstructorInit) {
@@ -85,7 +103,7 @@ TEST(LidarScan, EmptyConstructorInit) {
 
     EXPECT_EQ(scan.frame_id, -1);
 
-    EXPECT_EQ(scan.end() - scan.begin(), 0);
+    EXPECT_EQ(scan.fields().size(), 0);
 
     zero_check_fields(scan);
 }
@@ -100,13 +118,13 @@ TEST(LidarScan, LegacyConstructorInit) {
 
     size_t count = 0;
     size_t hit_count = 0;
-    std::vector<ChanField> field_copy;
+    std::vector<std::string> field_copy;
     for (auto item : legacy_field_slots) {
-        field_copy.push_back(std::get<0>(item));
+        field_copy.push_back(item.name);
     }
-    for (auto it = scan.begin(); it != scan.end(); it++) {
+    for (const auto& field : scan.fields()) {
         auto result =
-            std::find(field_copy.begin(), field_copy.end(), it->first);
+            std::find(field_copy.begin(), field_copy.end(), field.first);
         if (result != field_copy.end()) {
             hit_count++;
             field_copy.erase(result);
@@ -135,13 +153,13 @@ TEST(LidarScan, DualReturnConstructorInit) {
 
     size_t count = 0;
     size_t hit_count = 0;
-    std::vector<ChanField> field_copy;
+    std::vector<std::string> field_copy;
     for (auto item : dual_field_slots) {
-        field_copy.push_back(std::get<0>(item));
+        field_copy.push_back(item.name);
     }
-    for (auto it = scan.begin(); it != scan.end(); it++) {
+    for (const auto& field : scan.fields()) {
         auto result =
-            std::find(field_copy.begin(), field_copy.end(), it->first);
+            std::find(field_copy.begin(), field_copy.end(), field.first);
         if (result != field_copy.end()) {
             hit_count++;
             field_copy.erase(result);
@@ -170,14 +188,14 @@ TEST(LidarScan, CustomFieldConstructorInit) {
 
     size_t count = 0;
     size_t hit_count = 0;
-    std::vector<ChanField> field_copy;
+    std::vector<std::string> field_copy;
     for (auto item : contrived_slots) {
-        field_copy.push_back(std::get<0>(item));
+        field_copy.push_back(item.name);
     }
 
-    for (auto it = scan.begin(); it != scan.end(); it++) {
+    for (const auto& field : scan.fields()) {
         auto result =
-            std::find(field_copy.begin(), field_copy.end(), it->first);
+            std::find(field_copy.begin(), field_copy.end(), field.first);
         if (result != field_copy.end()) {
             hit_count++;
             field_copy.erase(result);
@@ -200,19 +218,11 @@ TEST(LidarScan, EmptyEquality) {
     auto scan2 = ouster::LidarScan();
     auto scan3 = ouster::LidarScan();
     auto scan4 = ouster::LidarScan(10, 20);
-    auto scan5 = ouster::LidarScan(0, 0);
-    auto scan6 = ouster::LidarScan(0, 0, empty_field_slots.begin(),
-                                   empty_field_slots.end());
-    auto scan7 = ouster::LidarScan(
-        0, 0, UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL);
     scan3.frame_id = 1;
 
     EXPECT_TRUE(scan1 == scan2);
     EXPECT_TRUE(scan1 != scan3);
     EXPECT_TRUE(scan1 != scan4);
-    EXPECT_TRUE(scan1 != scan5);
-    EXPECT_TRUE(scan1 == scan6);
-    EXPECT_TRUE(scan1 != scan7);
 }
 
 TEST(LidarScan, LegacyEquality) {
@@ -264,7 +274,7 @@ TEST(LidarScan, CustomEquality) {
 
         auto test_array1 = dual_field_slots;
         auto test_array2 = dual_field_slots;
-        auto test_array3 = std::vector<std::pair<ChanField, ChanFieldType>>(
+        auto test_array3 = std::vector<ouster::FieldType>(
             dual_field_slots.begin() + 1, dual_field_slots.end());
 
         std::random_shuffle(test_array1.begin(), test_array1.end());
@@ -284,7 +294,7 @@ TEST(LidarScan, CustomEquality) {
         scan4.frame_id = 1;
 
         EXPECT_TRUE(scan1 == scan2);
-        EXPECT_TRUE(scan1 != scan3);
+        EXPECT_TRUE(scan1 == scan3);
         EXPECT_TRUE(scan3 != scan4);
         EXPECT_TRUE(scan1 != scan5);
     }
@@ -301,7 +311,7 @@ TEST(LidarScan, DataCheck) {
         int w = rand() % 1000 + 1;
         int h = rand() % 1000 + 1;
 
-        std::unordered_map<int, uint8_t> expected_data;
+        std::unordered_map<std::string, uint8_t> expected_data;
 
         auto scan1 = ouster::LidarScan(
             w, h, UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL);
@@ -310,14 +320,14 @@ TEST(LidarScan, DataCheck) {
         auto scan3 = ouster::LidarScan(
             w, h, UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL);
 
-        for (auto it = scan1.begin(); it != scan1.end(); it++) {
-            expected_data[it->first] = rand() % 254 + 1;
-            ouster::impl::visit_field(scan1, it->first, set_field_data(),
-                                      expected_data[it->first]);
-            ouster::impl::visit_field(scan2, it->first, set_field_data(),
-                                      expected_data[it->first]);
-            ouster::impl::visit_field(scan1, it->first, check_field_data(),
-                                      expected_data[it->first]);
+        for (const auto& field : scan1.fields()) {
+            expected_data[field.first] = rand() % 254 + 1;
+            ouster::impl::visit_field(scan1, field.first, set_field_data(),
+                                      expected_data[field.first]);
+            ouster::impl::visit_field(scan2, field.first, set_field_data(),
+                                      expected_data[field.first]);
+            ouster::impl::visit_field(scan1, field.first, check_field_data(),
+                                      expected_data[field.first]);
         }
 
         EXPECT_TRUE(scan1 == scan2);
@@ -326,17 +336,15 @@ TEST(LidarScan, DataCheck) {
 }
 
 TEST(LidarScan, CustomUserFields) {
-    using LidarScanFieldTypes = std::vector<
-        std::pair<ouster::sensor::ChanField, ouster::sensor::ChanFieldType>>;
+    using LidarScanFieldTypes = std::vector<ouster::FieldType>;
 
-    LidarScanFieldTypes user_fields{
-        {ChanField::CUSTOM0, ChanFieldType::UINT8},
-        {ChanField::CUSTOM3, ChanFieldType::UINT64},
-        {ChanField::CUSTOM9, ChanFieldType::UINT16}};
+    LidarScanFieldTypes user_fields{{"CUSTOM0", ChanFieldType::UINT8},
+                                    {"CUSTOM3", ChanFieldType::UINT64},
+                                    {"CUSTOM9", ChanFieldType::UINT16}};
 
     ouster::LidarScan user_scan(10, 10, user_fields.begin(), user_fields.end());
 
-    EXPECT_EQ(3, std::distance(user_scan.begin(), user_scan.end()));
+    EXPECT_EQ(3, user_scan.fields().size());
 
     zero_check_fields(user_scan);
 }
@@ -454,7 +462,7 @@ TEST(LidarScan, test_get_first_valid_packet_timestamp) {
 
     auto packet_ts = scan.packet_timestamp();
     // fill in some default values
-    std::iota(packet_ts.begin(), packet_ts.end(), 1);
+    std::iota(packet_ts.data(), packet_ts.data() + packet_ts.size(), 1);
     ASSERT_TRUE((packet_ts == scan.packet_timestamp()).all());
 
     // no packet found
@@ -472,6 +480,16 @@ TEST(LidarScan, test_get_first_valid_packet_timestamp) {
     scan.status()[74] = 0;
     scan.status()[1023] = 1;
     EXPECT_EQ(scan.get_first_valid_packet_timestamp(), 64);
+}
+
+TEST(LidarScan, test_packet_timestamps_length) {
+    auto ls10 = ouster::LidarScan(10, 64, PROFILE_RNG19_RFL8_SIG16_NIR16, 32);
+    auto ls32 = ouster::LidarScan(32, 64, PROFILE_RNG19_RFL8_SIG16_NIR16, 32);
+    auto ls33 = ouster::LidarScan(33, 64, PROFILE_RNG19_RFL8_SIG16_NIR16, 32);
+
+    EXPECT_EQ(ls10.packet_timestamp().size(), 1);
+    EXPECT_EQ(ls32.packet_timestamp().size(), 1);
+    EXPECT_EQ(ls33.packet_timestamp().size(), 2);
 }
 
 TEST(LidarScan, destagger) {
@@ -493,4 +511,14 @@ TEST(LidarScan, destagger) {
             }
         },
         std::invalid_argument);
+}
+
+TEST(LidarScan, lidar_scan_to_string_test) {
+    ouster::LidarScan ls(128, 1024, PROFILE_RNG19_RFL8_SIG16_NIR16);
+    ls.add_field("custom_field", ouster::fd_array<double>(33, 44, 55), {});
+    ls.field<uint32_t>(ChanField::RANGE) = 10;
+
+    std::string s;
+    EXPECT_NO_THROW({ s = to_string(ls); });
+    std::cout << s << std::endl;
 }

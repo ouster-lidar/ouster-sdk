@@ -10,11 +10,10 @@ import numpy
 import pytest
 import inspect
 from pathlib import Path
-from os import path
 
 from ouster.sdk import client
 
-from tests.conftest import METADATA_DATA_DIR, PCAPS_DATA_DIR
+from tests.conftest import METADATA_DATA_DIR
 
 
 @pytest.mark.parametrize("mode, string", [
@@ -39,23 +38,6 @@ def test_timestamp_mode_misc() -> None:
     client.TimestampMode(0) == client.TimestampMode.TIME_FROM_UNSPEC
 
 
-@pytest.mark.parametrize("mode, cols, frequency, string", [
-    (client.LidarMode.MODE_512x10, 512, 10, "512x10"),
-    (client.LidarMode.MODE_512x20, 512, 20, "512x20"),
-    (client.LidarMode.MODE_1024x10, 1024, 10, "1024x10"),
-    (client.LidarMode.MODE_1024x20, 1024, 20, "1024x20"),
-    (client.LidarMode.MODE_2048x10, 2048, 10, "2048x10"),
-    (client.LidarMode.MODE_4096x5, 4096, 5, "4096x5"),
-])
-def test_lidar_mode(mode, cols, frequency, string) -> None:
-    """Check lidar mode (un)parsing and cols/frequency."""
-    int(mode)  # make sure nothing is raised
-    assert str(mode) == string
-    assert client.LidarMode.from_string(string) == mode
-    assert mode.cols == cols
-    assert mode.frequency == frequency
-
-
 def test_lidar_mode_misc() -> None:
     """Check some misc properties of lidar mode."""
     assert len(
@@ -63,23 +45,14 @@ def test_lidar_mode_misc() -> None:
     assert client.LidarMode.from_string('foo') == client.LidarMode.MODE_UNSPEC
     assert client.LidarMode(0) == client.LidarMode.MODE_UNSPEC
     assert str(client.LidarMode.MODE_UNSPEC) == "UNKNOWN"
-    with pytest.raises(ValueError):
-        client.LidarMode.MODE_UNSPEC.cols
-    with pytest.raises(ValueError):
-        client.LidarMode.MODE_UNSPEC.frequency
-    with pytest.raises(AttributeError):
-        client.LidarMode.MODE_1024x10.cols = 1025  # type: ignore
-    with pytest.raises(AttributeError):
-        client.LidarMode.MODE_1024x10.frequency = 0  # type: ignore
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_read_info(meta: client.SensorInfo) -> None:
     """Check the particular values in the test data."""
-    assert meta.hostname == "os-992029000352.local"
     assert meta.sn == "992029000352"
     assert meta.fw_rev == "v2.0.0-rc.2"
-    assert meta.mode == client.LidarMode.MODE_1024x20
+    assert meta.config.lidar_mode == client.LidarMode.MODE_1024x20
     assert meta.prod_line == "OS-2-32-U0"
     assert meta.format.columns_per_frame == 1024
     assert meta.format.columns_per_packet == 16
@@ -101,23 +74,32 @@ def test_read_info(meta: client.SensorInfo) -> None:
 
     assert numpy.array_equal(meta.extrinsic, numpy.identity(4))
     assert meta.init_id == 0
-    assert meta.udp_port_lidar == 0
-    assert meta.udp_port_imu == 0
+    assert meta.config.udp_port_lidar is None
+    assert meta.config.udp_port_imu is None
 
     assert meta.build_date == "2020-10-23T14:05:18Z"
     assert meta.prod_pn == "840-102146-C"
     assert meta.image_rev == "ousteros-image-prod-aries-v2.0.0-rc.2+20201023140416.staging"
     assert meta.status == "RUNNING"
     assert meta.cal == client.SensorCalibration()
-    assert meta.config == client.SensorConfig()
+
+    ref_config = client.SensorConfig()
+    ref_config.lidar_mode = client.LidarMode.MODE_1024x20
+    assert meta.config == ref_config
+    assert meta.get_version().major == 2
+
+    product_info = meta.get_product_info()
+    assert product_info.full_product_info == meta.prod_line
+    assert product_info.form_factor == "OS2"
+    assert product_info.short_range is False
+    assert product_info.beam_config == "U0"
+    assert product_info.beam_count == 32
 
 
 def test_write_info(meta: client.SensorInfo) -> None:
     """Check modifying metadata."""
-    meta.hostname = ""
     meta.sn = ""
     meta.fw_rev = ""
-    meta.mode = client.LidarMode.MODE_UNSPEC
     meta.prod_line = ""
     meta.format.columns_per_frame = 0
     meta.format.columns_per_packet = 0
@@ -135,18 +117,21 @@ def test_write_info(meta: client.SensorInfo) -> None:
     meta.lidar_origin_to_beam_origin_mm = 0.0
     meta.beam_to_lidar_transform = numpy.zeros((4, 4))
     meta.init_id = 0
-    meta.udp_port_lidar = 0
-    meta.udp_port_imu = 0
     meta.build_date = ""
     meta.image_rev = ""
     meta.prod_pn = ""
     meta.status = ""
+    meta.user_data = ""
     meta.cal = client.SensorCalibration()
     meta.config = client.SensorConfig()
+    meta.config.udp_port_lidar = None
+    meta.config.udp_port_imu = None
+    meta.config.lidar_mode = None
 
-    assert meta != client.SensorInfo()
+    assert meta == client.SensorInfo()
     assert meta.has_fields_equal(client.SensorInfo())
-    assert meta.original_string() != client.SensorInfo().original_string()
+    client.SensorInfo().to_json_string()
+    assert meta.to_json_string() == client.SensorInfo().to_json_string()
 
     with pytest.raises(TypeError):
         meta.mode = 1  # type: ignore
@@ -161,6 +146,18 @@ def test_write_info(meta: client.SensorInfo) -> None:
     with pytest.raises(TypeError):
         meta.beam_azimuth_angles = ["foo"]  # type: ignore
 
+    product_info = meta.get_product_info()
+    with pytest.raises(AttributeError):
+        product_info.full_product_info = ""
+    with pytest.raises(AttributeError):
+        product_info.form_factor = ""
+    with pytest.raises(AttributeError):
+        product_info.short_range = True
+    with pytest.raises(AttributeError):
+        product_info.beam_config = ""
+    with pytest.raises(AttributeError):
+        product_info.beam_count = 1
+
 
 def test_copy_info(meta: client.SensorInfo) -> None:
     """Check that copy() works."""
@@ -173,8 +170,16 @@ def test_copy_info(meta: client.SensorInfo) -> None:
     assert meta1 != meta
 
     meta2 = copy(meta)
-    meta2.hostname = "foo"
+    meta2.sn = "foo"
     assert meta2 != meta
+
+
+def test_userdata(meta: client.SensorInfo) -> None:
+    meta.user_data = "test"
+
+    meta2 = client.SensorInfo(meta.to_json_string())
+
+    assert meta2.user_data == meta.user_data
 
 
 def test_parse_info() -> None:
@@ -256,27 +261,21 @@ def test_skip_metadata_beam_validation() -> None:
         client.SensorInfo(f.read(), skip_beam_validation = True)
 
 
-@pytest.mark.parametrize('test_key', ['legacy-2.0', 'single-2.3'])
-def test_original_string(meta: client.SensorInfo, base_name) -> None:
-    meta_path = path.join(PCAPS_DATA_DIR, f"{base_name}.json")
-    with open(meta_path, 'r') as f:
-        assert meta.original_string() == f.read()
-
-
 @pytest.mark.parametrize('metadata_key', ['1_12', '1_12_legacy', '1_13', '1_13_legacy',
     '1_14_128_legacy', '2_0', '2_0_legacy', '2_1', '2_1_legacy', '2_2', '2_2_legacy', '2_3',
     '2_3_legacy', '2_4', '2_4_legacy', '2_5', '2_5_legacy', '3_0'])
 def test_updated_string(metadata_base_name) -> None:
     meta_path = str(Path(METADATA_DATA_DIR) / f"{metadata_base_name}")
-
+    original_string = ""
     with open(meta_path, 'r') as f:
-        meta = client.SensorInfo(f.read())
+        original_string = f.read()
+        meta = client.SensorInfo(original_string)
 
     meta.format.columns_per_packet = 40
     meta.format.fps = 50  # crucial check - fps is a value that is filled in with a default value at parsing time
-    updated_metadata_string = meta.updated_metadata_string()
+    updated_metadata_string = meta.to_json_string()
 
-    assert updated_metadata_string != meta.original_string()
+    assert updated_metadata_string != original_string
 
     meta2 = client.SensorInfo(updated_metadata_string, skip_beam_validation=True)
     assert meta2.format.columns_per_packet == 40

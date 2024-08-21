@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     //! [doc-stag-cpp-make-config]
     sensor::sensor_config config;
     config.azimuth_window = std::make_pair<int>(90000, 270000);
-    config.ld_mode = sensor::lidar_mode::MODE_512x10;
+    config.lidar_mode = sensor::lidar_mode::MODE_512x10;
 
     // If relevant, use config_flag to set udp dest automatically
     uint8_t config_flags = 0;
@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
     // Confirm that only what we wanted to change changed
     assert(original_config != new_config);
     assert(new_config.azimuth_window == config.azimuth_window);
-    assert(new_config.ld_mode == config.ld_mode);
+    assert(new_config.lidar_mode == config.lidar_mode);
 
     std::cerr << "Updated config: \n" << to_string(new_config) << std::endl;
 

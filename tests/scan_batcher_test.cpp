@@ -58,12 +58,10 @@ std::vector<LidarPacket> random_frame(UDPProfileLidar profile,
               ls.timestamp().data() + ls.timestamp().size(), 1000);
     std::fill(ls.status().data(), ls.status().data() + ls.status().size(), 0x1);
 
-    auto randomise = [&](auto ref_field, ChanField i) {
-        if (i >= ChanField::RAW_HEADERS) return;
-
+    auto randomise = [&](auto ref_field, const std::string& i) {
         randomize_field(ref_field, pw.field_value_mask(i));
     };
-    ouster::impl::foreach_field(ls, randomise);
+    ouster::impl::foreach_channel_field(ls, pw, randomise);
 
     auto g = std::mt19937(0xdeadbeef);
     auto dinit_id = std::uniform_int_distribution<uint32_t>(0, 0xFFFFFF);
@@ -172,8 +170,8 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
                         columns_per_packet);
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
-        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
-        ouster::impl::foreach_field(ls, fill);
+        auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
+        ouster::impl::foreach_channel_field(ls, pf, fill);
         ls.packet_timestamp() = 2000;
         ls.timestamp() = 100;
         ls.status() = 0x0f;
@@ -192,10 +190,7 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
 
     EXPECT_EQ(ls.frame_id, frame_id);
 
-    auto test_skipped_fields = [&](auto ref_field, ChanField chan) {
-        // custom fields are never touched
-        if (chan >= ChanField::CUSTOM0 && chan <= ChanField::CUSTOM9) return;
-
+    auto test_skipped_fields = [&](auto ref_field, const std::string& chan) {
         // dropped frames should all be zero, RAW_HEADERS or not
         for (auto& m_id : dropped_m_ids) {
             EXPECT_TRUE((ref_field.col(m_id) == 0).all());
@@ -245,29 +240,23 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
                   dropped_packets.size());
     };
 
-    ouster::impl::foreach_field(ls, test_skipped_fields);
+    ouster::impl::foreach_channel_field(ls, pf, test_skipped_fields);
     test_headers(ls);
 
     // now repeat for RAW_HEADERS and CUSTOM fields
-    LidarScanFieldTypes rh_types(ls.begin(), ls.end());
+    LidarScanFieldTypes rh_types(ls.field_types());
     rh_types.emplace_back(ChanField::RAW_HEADERS, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM0, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM1, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM2, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM3, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM4, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM5, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM6, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM7, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM8, ChanFieldType::UINT32);
-    rh_types.emplace_back(ChanField::CUSTOM9, ChanFieldType::UINT32);
+    rh_types.emplace_back("CUSTOM0", ChanFieldType::UINT32);
+    rh_types.emplace_back("CUSTOM9", ChanFieldType::UINT32);
     auto rh_ls =
         LidarScan(columns_per_frame, pixels_per_column, rh_types.begin(),
                   rh_types.end(), columns_per_packet);
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
-        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
-        ouster::impl::foreach_field(rh_ls, fill);
+        auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
+        ouster::impl::foreach_channel_field(rh_ls, pf, fill);
+        ouster::impl::visit_field(rh_ls, "CUSTOM0", fill, "");
+        ouster::impl::visit_field(rh_ls, "CUSTOM9", fill, "");
         rh_ls.packet_timestamp() = 2000;
         rh_ls.timestamp() = 100;
         rh_ls.status() = 0x0f;
@@ -283,14 +272,16 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
 
     EXPECT_EQ(rh_ls.frame_id, frame_id);
 
-    auto test_custom_fields = [](auto ref_field, ChanField chan) {
-        if (chan >= ChanField::CUSTOM0 && chan <= ChanField::CUSTOM9) {
-            EXPECT_TRUE((ref_field == 1).all());
-        }
+    auto test_custom_fields = [](auto ref_field) {
+        EXPECT_TRUE((ref_field == 1).all());
     };
 
-    ouster::impl::foreach_field(rh_ls, test_custom_fields);
-    ouster::impl::foreach_field(rh_ls, test_skipped_fields);
+    ouster::impl::visit_field(rh_ls, "CUSTOM0", test_custom_fields);
+    ouster::impl::visit_field(rh_ls, "CUSTOM9", test_custom_fields);
+
+    ouster::impl::foreach_channel_field(rh_ls, pf, test_skipped_fields);
+    ouster::impl::visit_field(rh_ls, ChanField::RAW_HEADERS,
+                              test_skipped_fields, ChanField::RAW_HEADERS);
     test_headers(rh_ls);
 }
 
@@ -348,8 +339,8 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
                         columns_per_packet);
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
-        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
-        ouster::impl::foreach_field(ls, fill);
+        auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
+        ouster::impl::foreach_channel_field(ls, pf, fill);
         ls.packet_timestamp() = 2000;
         ls.timestamp() = 100;
         ls.status() = 0x0f;
@@ -362,10 +353,7 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
     }
     EXPECT_TRUE(batcher(*next_frame_packet, ls));
 
-    auto test_skipped_fields = [&](auto ref_field, ChanField chan) {
-        // custom fields are never touched
-        if (chan >= ChanField::CUSTOM0 && chan <= ChanField::CUSTOM9) return;
-
+    auto test_skipped_fields = [&](auto ref_field, const std::string& chan) {
         // dropped frames should all be zero, RAW_HEADERS or not
         for (auto& m_id : dropped_m_ids) {
             EXPECT_TRUE((ref_field.col(m_id) == 0).all());
@@ -397,28 +385,22 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
                   dropped_packets.size());
     };
 
-    ouster::impl::foreach_field(ls, test_skipped_fields);
+    ouster::impl::foreach_channel_field(ls, pf, test_skipped_fields);
     test_headers(ls);
 
-    // now repeat for RAW_HEADERS and CUSTOM fields
-    LidarScanFieldTypes custom_types(ls.begin(), ls.end());
-    custom_types.emplace_back(ChanField::CUSTOM0, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM1, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM2, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM3, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM4, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM5, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM6, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM7, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM8, ChanFieldType::UINT32);
-    custom_types.emplace_back(ChanField::CUSTOM9, ChanFieldType::UINT32);
+    // now repeat for CUSTOM fields
+    LidarScanFieldTypes custom_types(ls.field_types());
+    custom_types.emplace_back("CUSTOM0", ChanFieldType::UINT32);
+    custom_types.emplace_back("CUSTOM9", ChanFieldType::UINT32);
     auto custom_ls =
         LidarScan(columns_per_frame, pixels_per_column, custom_types.begin(),
                   custom_types.end(), columns_per_packet);
 
     {  // pre-fill lidar scan so we know which fields/headers are changed
-        auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
-        ouster::impl::foreach_field(custom_ls, fill);
+        auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
+        ouster::impl::foreach_channel_field(custom_ls, pf, fill);
+        ouster::impl::visit_field(custom_ls, "CUSTOM0", fill, "");
+        ouster::impl::visit_field(custom_ls, "CUSTOM9", fill, "");
         custom_ls.packet_timestamp() = 2000;
         custom_ls.timestamp() = 100;
         custom_ls.status() = 0x0f;
@@ -433,14 +415,14 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
 
     EXPECT_EQ(custom_ls.frame_id, frame_id);
 
-    auto test_custom_fields = [](auto ref_field, ChanField chan) {
-        if (chan >= ChanField::CUSTOM0 && chan <= ChanField::CUSTOM9) {
-            EXPECT_TRUE((ref_field == 1).all());
-        }
+    auto test_custom_fields = [](auto ref_field) {
+        EXPECT_TRUE((ref_field == 1).all());
     };
 
-    ouster::impl::foreach_field(custom_ls, test_custom_fields);
-    ouster::impl::foreach_field(custom_ls, test_skipped_fields);
+    ouster::impl::visit_field(custom_ls, "CUSTOM0", test_custom_fields);
+    ouster::impl::visit_field(custom_ls, "CUSTOM9", test_custom_fields);
+
+    ouster::impl::foreach_channel_field(custom_ls, pf, test_skipped_fields);
     test_headers(custom_ls);
 }
 
@@ -454,17 +436,17 @@ TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
     auto ls = LidarScan(columns_per_frame, pixels_per_column, profile,
                         columns_per_packet);
 
+    packet_format pf(profile, pixels_per_column, columns_per_packet);
+    packet_writer pw(profile, pixels_per_column, columns_per_packet);
+
     // pre-fill lidar scan so we know which fields/headers are changed
-    auto fill = [](auto ref_field, ChanField) { ref_field = 1; };
-    ouster::impl::foreach_field(ls, fill);
+    auto fill = [](auto ref_field, const std::string&) { ref_field = 1; };
+    ouster::impl::foreach_channel_field(ls, pf, fill);
     ls.packet_timestamp() = 2000;
     ls.timestamp() = 100;
     ls.status() = 0x0f;
     ls.measurement_id() = 10000;
     ls.frame_id = 0;
-
-    packet_format pf(profile, pixels_per_column, columns_per_packet);
-    packet_writer pw(profile, pixels_per_column, columns_per_packet);
 
     auto packet = std::make_unique<LidarPacket>();
     std::memset(packet->buf.data(), 0, packet->buf.size());
@@ -487,13 +469,13 @@ TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
     EXPECT_TRUE((ls.timestamp() == 100).all());
     EXPECT_TRUE((ls.status() == 0x0f).all());
     EXPECT_TRUE((ls.measurement_id() == 10000).all());
-    auto test_fields = [](auto ref_field, ChanField) {
+    auto test_fields = [](auto ref_field, const std::string&) {
         EXPECT_TRUE((ref_field == 1).all());
     };
-    ouster::impl::foreach_field(ls, test_fields);
+    ouster::impl::foreach_channel_field(ls, pf, test_fields);
 }
 
-using HashMap = std::map<ChanField, size_t>;
+using HashMap = std::map<std::string, size_t>;
 using snapshot_param = std::tuple<std::string, std::string, HashMap>;
 class ScanBatcherSnapshotTest
     : public ::testing::TestWithParam<snapshot_param> {};
@@ -547,7 +529,7 @@ INSTANTIATE_TEST_CASE_P(
 // https://wjngkoh.wordpress.com/2015/03/04/c-hash-function-for-eigen-matrix-and-vector/
 struct matrix_hash {
     template <typename T>
-    void operator()(Eigen::Ref<ouster::img_t<T>> matrix, ChanField f,
+    void operator()(Eigen::Ref<ouster::img_t<T>> matrix, const std::string& f,
                     HashMap& map) const {
         size_t seed = 0;
         for (int i = 0; i < matrix.size(); ++i) {
@@ -587,13 +569,13 @@ TEST_P(ScanBatcherSnapshotTest, snapshot_test) {
         }
 
     HashMap hashes;
-    ouster::impl::foreach_field(ls, matrix_hash{}, hashes);
+    ouster::impl::foreach_channel_field(ls, pf, matrix_hash{}, hashes);
 
     EXPECT_EQ(hashes, snapshot_hashes);
 }
 
 namespace alternatives {
-using Fields = std::vector<std::pair<int, FieldInfo>>;
+using Fields = std::vector<std::pair<std::string, FieldInfo>>;
 
 static const Fields lb_field_info{
     {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},        // uint16 => uint32
@@ -660,7 +642,7 @@ TEST_P(ScanBatcherSnapshotTest, extended_profile_comp_test) {
                 EXPECT_FALSE(batcher(pcap.current_data(), packet_ts, ls));
             }
         pcap.seek(0);
-        ouster::impl::foreach_field(ls, matrix_hash{}, hashes);
+        ouster::impl::foreach_channel_field(ls, pf, matrix_hash{}, hashes);
         return hashes;
     };
 

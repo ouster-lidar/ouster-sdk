@@ -11,7 +11,10 @@
 #include <sstream>
 
 #include "nonstd/optional.hpp"
+#include "ouster/impl/logging.h"
 #include "ouster/osf/crc32.h"
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
@@ -119,8 +122,9 @@ bool check_prefixed_size_block_crc(const uint8_t* buf,
     uint32_t prefixed_size = get_prefixed_size(buf);
     if (buf_length < prefixed_size + FLATBUFFERS_PREFIX_LENGTH +
                          ouster::osf::CRC_BYTES_SIZE) {
-        std::cerr << "ERROR: CRC32 validation failed!"
-                  << " (out of buffer legth)" << std::endl;
+        logger().error(
+            "ERROR: CRC32 validation failed!"
+            " (out of buffer legth)");
         return false;
     }
 
@@ -132,51 +136,16 @@ bool check_prefixed_size_block_crc(const uint8_t* buf,
     const bool res = (crc_stored == crc_calculated);
 
     if (!res) {
-        std::cerr << "ERROR: CRC32 validation failed!" << std::endl;
-        std::cerr << std::hex << "  CRC -     stored: " << crc_stored
-                  << std::dec << std::endl;
-        std::cerr << std::hex << "  CRC - calculated: " << crc_calculated
-                  << std::dec << std::endl;
+        std::stringstream error_string_stream{};
+        error_string_stream << "ERROR: CRC32 validation failed!" << std::endl;
+        error_string_stream << std::hex << "  CRC -     stored: " << crc_stored
+                            << std::dec << std::endl;
+        error_string_stream
+            << std::hex << "  CRC - calculated: " << crc_calculated << std::dec
+            << std::endl;
+        logger().error(error_string_stream.str());
     }
     return res;
-}
-
-std::function<void(const osf::ts_t, const uint8_t*)> make_build_ls(
-    const ouster::sensor::sensor_info& info,
-    const LidarScanFieldTypes& ls_field_types,
-    std::function<void(const ts_t, const ouster::LidarScan&)> handler) {
-    const auto w = info.format.columns_per_frame;
-    const auto h = info.format.pixels_per_column;
-    auto temp_ls_field_types = ls_field_types;
-    std::shared_ptr<LidarScan> ls(nullptr);
-    if (temp_ls_field_types.empty()) {
-        temp_ls_field_types = get_field_types(info);
-    }
-    ls = std::make_shared<LidarScan>(w, h, temp_ls_field_types.begin(),
-                                     temp_ls_field_types.end());
-
-    auto pf = ouster::sensor::get_format(info);
-    auto build_ls_imp = ScanBatcher(w, pf);
-    osf::ts_t first_msg_ts{-1};
-    return [handler, build_ls_imp, ls, first_msg_ts](
-               const osf::ts_t msg_ts, const uint8_t* buf) mutable {
-        if (first_msg_ts == osf::ts_t{-1}) {
-            first_msg_ts = msg_ts;
-        }
-        if (build_ls_imp(buf, *ls)) {
-            handler(first_msg_ts, *ls);
-            // At this point we've just started accumulating new LidarScan, so
-            // we are saving the msg_ts (i.e. timestamp of a UDP packet)
-            // which contained the first lidar_packet
-            first_msg_ts = msg_ts;
-        }
-    };
-}
-
-std::function<void(const osf::ts_t, const uint8_t*)> make_build_ls(
-    const ouster::sensor::sensor_info& info,
-    std::function<void(const ts_t, const ouster::LidarScan&)> handler) {
-    return make_build_ls(info, {}, handler);
 }
 
 }  // namespace osf

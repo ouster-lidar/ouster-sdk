@@ -1,4 +1,5 @@
 from typing import List, Optional, Union
+import os
 import numpy as np
 from pathlib import Path
 from ouster.sdk.client import ScanSource, MultiScanSource
@@ -16,7 +17,7 @@ io_type_handlers = {
 }
 
 
-def open_source(source_url: str, sensor_idx: int = -1, *args,
+def open_source(source_url: str, sensor_idx: int = 0, *args,
                 extrinsics: Optional[Union[str, np.ndarray, List[np.ndarray]]] = None,
                 **kwargs) -> Union[ScanSource, MultiScanSource]:
     """
@@ -25,10 +26,11 @@ def open_source(source_url: str, sensor_idx: int = -1, *args,
             the url can contain the path to a pcap file or an osf file.
             alternatively, the url could contain a list of comma separated
             sensor hostnames or ips (current multisensor is not supprted)
-        - sensor_idx: If sensor_idx is set to a postive number the function
-            returns a ScanSource instead of MultiScanSource which is simpler
-            but can can handle one source. sensor_idx shouldn't exceed the
-            number of scan sources that the source_url refers to.
+        - sensor_idx: The sensor_idx parameter can be set to any value between
+            0 and the number of addressable sensors within the source_url. This
+            returns the ScanSource interface (default is 0). If you want to work
+            with the more advanced MultiScanSource interface which supports
+            handling multiple sensors at the same time pass -1.
         - extrinsics: could be either a path to an extrinsics file, single 4x4
             numpy array or a list of 4x4 numpy arrays. In case a single 4x4 numpy
             array was given while the scan_source had more than sensor then the
@@ -43,7 +45,7 @@ def open_source(source_url: str, sensor_idx: int = -1, *args,
             of fields of every scan. in case of dual returns profile FLAGS2 will also
             be appended (default is True).
     """
-    source_urls = [url.strip() for url in source_url.split(',') if url.strip()]
+    source_urls = [os.path.expanduser(url.strip()) for url in source_url.split(',') if url.strip()]
 
     if len(source_urls) == 0:
         raise ValueError("No valid source specified")

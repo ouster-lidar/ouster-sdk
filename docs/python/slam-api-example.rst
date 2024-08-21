@@ -11,9 +11,6 @@ SLAM Quickstart
 This guide provides examples of using the SLAM API for development purposes.
 Users can run SLAM with an OS sensor's hostname or IP for real-time processing, or with a recorded PCAP/OSF file for offline processing.
 
-.. warning::
-   Due to missing upstream dependency support on python3.12, slam does not work on python3.12.
-
 
 Obtain Lidar Pose and Calculate Pose Difference
 ===============================================
@@ -24,19 +21,21 @@ between consecutive scans
 .. code:: python
 
    from ouster.sdk import open_source
-   from ouster.mapping.slam import KissBackend
+   from ouster.sdk.mapping.slam import KissBackend
    import numpy as np
-   scans = open_source(pcap_path, sensor_idx=0)
-   slam = KissBackend(scans.metadata, max_range=75, min_range=1, voxel_size=1.0)
+   import ouster.sdk.client as client
+   data_source = open_source(pcap_path)
+   slam = KissBackend(data_source.metadata, max_range=75, min_range=1, voxel_size=1.0)
    last_scan_pose = np.eye(4)
 
-   for idx, scan in enumerate(scans):
+   for idx, scan in enumerate(data_source):
         scan_w_poses = slam.update(scan)
         col = client.first_valid_column(scan_w_poses)
         # scan_w_poses.pose is a list where each pose represents a column points' pose.
         # use the first valid scan's column pose as the scan pose
         scan_pose = scan_w_poses.pose[col]
-        print(f"idx = {idx} and Scan Pose {scan_pose}")
+        scan_ts = scan.timestamp[col]
+        print(f"idx = {idx} at timestamp {scan_ts} has the pose {scan_pose}")
 
         # calculate the inverse transformation of the last scan pose
         inverse_last = np.linalg.inv(last_scan_pose)
@@ -56,20 +55,21 @@ as well as for demonstration and feedback purposes.
 
 .. code:: python
 
+   from ouster.sdk import open_source
    from functools import partial
-   from ouster.viz import SimpleViz, ScansAccumulator
-   from ouster.mapping.slam import KissBackend
-   scans = open_source(pcap_path, sensor_idx=0)
-   slam = KissBackend(scans.metadata, max_range=75, min_range=1, voxel_size=1.0)
+   from ouster.sdk.viz import SimpleViz, ScansAccumulator
+   from ouster.sdk.mapping.slam import KissBackend
+   data_source = open_source(pcap_path)
+   slam = KissBackend(data_source.metadata, max_range=75, min_range=1, voxel_size=1.0)
 
-   scans_w_poses = map(partial(slam.update), scans)
-   scans_acc = ScansAccumulator(info,
+   scans_w_poses = map(partial(slam.update), data_source)
+   scans_acc = ScansAccumulator(data_source.metadata,
                                 accum_max_num=10,
                                 accum_min_dist_num=1,
                                 map_enabled=True,
                                 map_select_ratio=0.01)
 
-   SimpleViz(info, scans_accum=scans_acc, rate=0.0).run(scans_w_poses)
+   SimpleViz(data_source.metadata, scans_accum=scans_acc, rate=1.0).run(scans_w_poses)
 
 More details about the visualizer and accumulated scans can be found at the
 :ref:`Ouster Visualizer <viz-run>` and :ref:`Scans Accumulator <viz-scans-accum>`

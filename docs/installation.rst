@@ -29,9 +29,7 @@ Supported Platforms
 Installation
 --------------
 
-The Ouster Python SDK binary packages require Python >= 3.8 and pip >= 19.0 on most platforms. On
-Ubuntu 18.04, the default Python 3 version is is 3.6, so you'll have to install and use
-``python3.8`` explicitly. On Apple M1, you'll need need Python >= 3.8.
+The Ouster Python SDK binary packages require Python >= 3.8 and pip >= 19.0 on most platforms.
 
 .. note::
 

@@ -1,13 +1,13 @@
 
-===========================
-Module :mod:`ouster.client`
-===========================
+===============================
+Module :mod:`ouster.sdk.client`
+===============================
 
 .. contents::
    :local:
    :depth: 4
 
-.. automodule:: ouster.client
+.. automodule:: ouster.sdk.client
 
 
 ----
@@ -91,9 +91,9 @@ Metadata
 Data
 =====
 
-.. autodata:: ouster.client.data.BufferT
+.. autodata:: ouster.sdk.client.data.BufferT
 
-.. autodata:: ouster.client.data.Packet
+.. autodata:: ouster.sdk.client.data.Packet
 
 .. autoclass:: ImuPacket
    :members:

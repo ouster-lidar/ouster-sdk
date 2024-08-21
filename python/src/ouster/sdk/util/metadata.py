@@ -6,10 +6,37 @@ from typing import Optional, List, Any
 from packaging import version
 import requests
 import re
+from ouster.sdk.client import SensorInfo
 
 
 data_must_be_a_file_err = "The source parameter must be a path to a file."
 meta_must_be_a_file_err = "The metadata parameter must be a path to a file."
+
+
+def _check_sensor_metadata_for_duplicates(data_path, metas):
+    """Check sensor metadata if multiple metadata files are found for the same data path in dir
+
+    Args:
+        data_path: data filepath found in the directory
+        metas: metadata filepaths found in the directory
+
+    Returns:
+        serial number if the metadata files are duplicates else None
+    """
+    metas_set = set()
+    for meta in metas:
+        # Open each file, read its content, and create a SensorInfo object
+        with open(meta) as file:
+            meta_content = file.read()
+            si = SensorInfo(meta_content)
+        if si.sn in metas_set:
+            s = ["The following metadata files identified for "
+                 f"{data_path} contain configuration for the same sensor {si.sn}. Files: "
+                 f"{set(metas)}",
+                 "To resolve this, remove the extra metadata file(s) or specify the metadata "
+                 "files manually using the --meta option."]
+            raise RuntimeError("\n".join(s))
+        metas_set.add(si.sn)
 
 
 def _resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
@@ -49,10 +76,13 @@ def _resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
         # Now it requires at least a single character to be common.
         return []
     else:
-        return [
+        metas = [
             os.path.join(dirname, b_path) for b_path, _ in filter(
                 lambda i: i[1] == best_score, sorted_options)
         ]
+        if len(metas) > 1:
+            _check_sensor_metadata_for_duplicates(data_path, metas)
+        return metas
 
 
 def resolve_metadata(data_path: str,

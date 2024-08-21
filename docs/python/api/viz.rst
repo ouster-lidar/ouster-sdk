@@ -1,12 +1,12 @@
 ============================
-Module :mod:`ouster.viz`
+Module :mod:`ouster.sdk.viz`
 ============================
 
 .. contents::
    :local:
    :depth: 4
 
-.. py:currentmodule:: ouster.viz
+.. py:currentmodule:: ouster.sdk.viz
 
 Ouster sensor data visualization tools. Implemented in C++ OpenGL and wrapped with Python bindings.
 
@@ -31,10 +31,10 @@ Core
 .. autoclass:: ScansAccumulator
    :members:
 
-.. autoattribute:: ouster.viz.spezia_palette
+.. autoattribute:: ouster.sdk.viz.spezia_palette
    :annotation: = spezia colors
 
-.. autoattribute:: ouster.viz.calref_palette
+.. autoattribute:: ouster.sdk.viz.calref_palette
    :annotation: = calref colors
 
 

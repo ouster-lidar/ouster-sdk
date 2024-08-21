@@ -26,17 +26,17 @@ void get_complete_scan(
     ouster::ScanBatcher batch_to_scan(info.format.columns_per_frame, pf);
 
     // Buffer to store raw packet data
-    auto packet_buf = std::make_unique<uint8_t[]>(BUF_SIZE);
+    ouster::sensor::LidarPacket packet(pf.lidar_packet_size);
 
     ouster::sensor_utils::packet_info packet_info;
 
     while (ouster::sensor_utils::next_packet_info(*handle, packet_info)) {
         auto packet_size = ouster::sensor_utils::read_packet(
-            *handle, packet_buf.get(), BUF_SIZE);
+            *handle, packet.buf.data(), packet.buf.size());
 
         if (packet_size == pf.lidar_packet_size &&
-            packet_info.dst_port == info.udp_port_lidar) {
-            if (batch_to_scan(packet_buf.get(), scan)) {
+            packet_info.dst_port == info.config.udp_port_lidar) {
+            if (batch_to_scan(packet, scan)) {
                 if (first_frame_id == 0) {
                     // end of first frame -- assume it is incomplete and skip
                     first_frame_id = scan.frame_id;

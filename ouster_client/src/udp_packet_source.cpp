@@ -11,9 +11,9 @@
 #include <mutex>
 #include <stdexcept>
 
-#include "logging.h"
 #include "ouster/client.h"
 #include "ouster/impl/client_poller.h"
+#include "ouster/impl/logging.h"
 #include "ouster/types.h"
 
 namespace ouster {

@@ -6,8 +6,8 @@ import pytest
 import numpy as np
 
 from ouster.sdk import client
-from ouster.sdk.client import _client
-from ouster.sdk.client._client import (ChanField, FieldInfo)
+from ouster.sdk.client import _client, ChanField
+from ouster.sdk.client._client import FieldInfo
 
 
 def test_create_field_info() -> None:
@@ -23,8 +23,8 @@ def test_add_custom_profile() -> None:
     profile_nr = 1000
     profile_name = "CUSTOM_PROF"
     fields = [
-        (0, FieldInfo(np.uint16, 0, 0xdeadbeef, 0)),
-        (1, FieldInfo(np.uint16, 1, 0xff, 2))
+        (ChanField.RANGE, FieldInfo(np.uint16, 0, 0xdeadbeef, 0)),
+        (ChanField.REFLECTIVITY, FieldInfo(np.uint16, 1, 0xff, 2))
     ]
     chan_data_size = 16
 
@@ -37,13 +37,13 @@ def test_add_custom_profile() -> None:
 def test_custom_copycat_profile_matches_original(packets: client.PacketSource) -> None:
     """Check that custom profile parses the same as original with the same fields"""
     custom_fields = [
-        (ChanField.RANGE.value, FieldInfo(np.uint32, 0, 0x0007ffff, 0)),
-        (ChanField.REFLECTIVITY.value, FieldInfo(np.uint8, 3, 0, 0)),
-        (ChanField.RANGE2.value, FieldInfo(np.uint32, 4, 0x0007ffff, 0)),
-        (ChanField.REFLECTIVITY2.value, FieldInfo(np.uint8, 7, 0, 0)),
-        (ChanField.SIGNAL.value, FieldInfo(np.uint16, 8, 0, 0)),
-        (ChanField.SIGNAL2.value, FieldInfo(np.uint16, 10, 0, 0)),
-        (ChanField.NEAR_IR.value, FieldInfo(np.uint16, 12, 0, 0)),
+        (ChanField.RANGE, FieldInfo(np.uint32, 0, 0x0007ffff, 0)),
+        (ChanField.REFLECTIVITY, FieldInfo(np.uint8, 3, 0, 0)),
+        (ChanField.RANGE2, FieldInfo(np.uint32, 4, 0x0007ffff, 0)),
+        (ChanField.REFLECTIVITY2, FieldInfo(np.uint8, 7, 0, 0)),
+        (ChanField.SIGNAL, FieldInfo(np.uint16, 8, 0, 0)),
+        (ChanField.SIGNAL2, FieldInfo(np.uint16, 10, 0, 0)),
+        (ChanField.NEAR_IR, FieldInfo(np.uint16, 12, 0, 0)),
     ]
 
     _client.add_custom_profile(11, "DUAL_COPYCAT", custom_fields, 16)

@@ -31,7 +31,7 @@ struct FieldInfo {
 };
 
 struct ProfileEntry {
-    const std::pair<ChanField, FieldInfo>* fields;
+    const std::pair<std::string, FieldInfo>* fields;
     size_t n_fields;
     size_t chan_data_size;
 };
@@ -44,7 +44,7 @@ extern Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles;
 uint64_t get_value_mask(const FieldInfo& f);
 int get_bitness(const FieldInfo& f);
 
-std::map<ChanField, FieldInfo> get_fields(UDPProfileLidar profile) {
+std::map<std::string, FieldInfo> get_fields(UDPProfileLidar profile) {
     auto end = profiles.end();
     auto it =
         std::find_if(impl::profiles.begin(), end,
@@ -58,7 +58,7 @@ std::map<ChanField, FieldInfo> get_fields(UDPProfileLidar profile) {
 }  // namespace sensor
 }  // namespace ouster
 
-using bitness_param = std::tuple<UDPProfileLidar, std::map<ChanField, int>>;
+using bitness_param = std::tuple<UDPProfileLidar, std::map<std::string, int>>;
 class FieldInfoSanityTest : public ::testing::TestWithParam<bitness_param> {};
 
 // clang-format off
@@ -169,10 +169,7 @@ struct cmp_field {
     LidarScan& ls;
 
     template <typename T>
-    void operator()(Eigen::Ref<img_t<T>> field, ChanField i) {
-        // FUSA hacks
-        if (i >= ChanField::RAW_HEADERS) return;
-
+    void operator()(Eigen::Ref<img_t<T>> field, const std::string& i) {
         EXPECT_TRUE((ls.field<T>(i) == field).all());
     }
 };
@@ -230,21 +227,15 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     std::fill(ls.status().data(), ls.status().data() + ls.status().size(), 0x1);
     ls.frame_id = 700;
 
-    auto randomise = [&](auto ref_field, ChanField i) {
-        // need this to skip RAW32_WORD*
-        if (i >= ChanField::RAW_HEADERS) return;
-
+    auto randomise = [&](auto ref_field, const std::string& i) {
         // use static seed so that the test does not flake some day and
         // collectively piss off a bunch of angry developers
         randomize_field(ref_field, pw.field_value_mask(i), 0xdeadbeef);
     };
-    ouster::impl::foreach_field(ls, randomise);
+    ouster::impl::foreach_channel_field(ls, pf, randomise);
 
     auto fields = get_fields(profile);
-    auto verify_field = [&](auto ref_field, ChanField i) {
-        // need this to skip RAW32_WORD*
-        if (i >= ChanField::RAW_HEADERS) return;
-
+    auto verify_field = [&](auto ref_field, const std::string& i) {
         // field should not be all zeros
         EXPECT_FALSE((ref_field == 0).all());
 
@@ -257,14 +248,16 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
         uint64_t field_mask = 0;
         for (int i = 0; i < ref_field.size(); ++i) {
             T value = *(data + i);
+            uint64_t value_bits = 0;
+            memcpy(&value_bits, &value, sizeof(T));
             // output must perfectly fit into the value mask
-            EXPECT_EQ(value, value & value_mask);
-            field_mask |= value;
+            EXPECT_EQ(value_bits, value_bits & value_mask);
+            field_mask |= value_bits;
         }
         // verify all possible bits were covered
         EXPECT_EQ(field_mask, value_mask);
     };
-    ouster::impl::foreach_field(ls, verify_field);
+    ouster::impl::foreach_channel_field(ls, pf, verify_field);
 
     auto g = std::mt19937(0xdeadbeef);
     auto dinit_id = std::uniform_int_distribution<uint32_t>(0, 0xFFFFFF);
@@ -299,7 +292,7 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     EXPECT_TRUE((ls.timestamp() == ls2.timestamp()).all());
     EXPECT_TRUE((ls.measurement_id() == ls2.measurement_id()).all());
 
-    ouster::impl::foreach_field(ls2, cmp_field{ls});
+    ouster::impl::foreach_channel_field(ls2, pf, cmp_field{ls});
 }
 
 TEST_P(PacketWriterTest, scans_to_packets_skips_dropped_packets_test) {
@@ -324,15 +317,12 @@ TEST_P(PacketWriterTest, scans_to_packets_skips_dropped_packets_test) {
     std::fill(ls.status().data(), ls.status().data() + ls.status().size(), 0x1);
     ls.frame_id = 700;
 
-    auto randomise = [&](auto ref_field, ChanField i) {
-        // need this to skip RAW32_WORD*
-        if (i >= ChanField::RAW_HEADERS) return;
-
+    auto randomise = [&](auto ref_field, const std::string& i) {
         // use static seed so that the test does not flake some day and
         // collectively piss off a bunch of angry developers
         randomize_field(ref_field, pw.field_value_mask(i), 0xdeadbeef);
     };
-    ouster::impl::foreach_field(ls, randomise);
+    ouster::impl::foreach_channel_field(ls, pf, randomise);
 
     auto packets_orig = std::vector<LidarPacket>{};
     ouster::impl::scan_to_packets(ls, pw, std::back_inserter(packets_orig), 0,
@@ -437,7 +427,7 @@ TEST_P(PacketWriterDataTest, packet_writer_data_repr_test) {
         ASSERT_FALSE(repr_batcher(p, ls_repr));
     }
 
-    ouster::impl::foreach_field(ls_repr, cmp_field{ls_orig});
+    ouster::impl::foreach_channel_field(ls_repr, pw, cmp_field{ls_orig});
 }
 
 TEST_P(PacketWriterDataTest, packet_writer_raw_headers_match_test) {

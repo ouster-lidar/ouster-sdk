@@ -17,18 +17,31 @@ def sensor_group() -> None:
 
 
 @click.command
-@click.option('--legacy/--non-legacy',
-              default=False,
-              help="Use legacy metadata format or not")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
-def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context,
-                legacy: bool) -> None:
+def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
     """Display sensor metadata about the SOURCE."""  # Implements ouster-cli source <hostname> metadata
     try:
-        click.echo(client.Sensor(ctx.source_uri, 7502, 7503,
-                                 _legacy_format=legacy)._fetched_meta)
+        click.echo(client.Sensor(ctx.source_uri, 7502, 7503)._fetched_meta)
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+
+@click.command
+@click.option('-s', default=None, type=str, help='Set userdata to the provided string')
+@click.pass_context
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
+                     retrieve_click_context=True)
+def sensor_userdata(ctx: SourceCommandContext, click_ctx: click.core.Context, s: str) -> None:
+    """Retrieve or set userdata from the current sensor (if supported by the firmware)"""
+    from ouster.sdk.client._client import SensorHttp
+    try:
+        http = SensorHttp.create(ctx.source_uri)
+        if s is None:
+            click.echo(http.get_user_data())
+        else:
+            http.set_user_data(s)
     except RuntimeError as e:
         raise click.ClickException(str(e))
 

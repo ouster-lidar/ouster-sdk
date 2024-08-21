@@ -14,6 +14,8 @@ class OUSTER_CLIENT_EXPORT Logger {
 
     spdlog::logger& get_logger();
 
+    void configure_generic_sink(spdlog::sink_ptr sink,
+                                const std::string& log_level);
     bool configure_stdout_sink(const std::string& log_level);
 
     bool configure_file_sink(const std::string& log_level,
@@ -23,14 +25,9 @@ class OUSTER_CLIENT_EXPORT Logger {
    private:
     Logger();
 
-    void update_sink_and_log_level(spdlog::sink_ptr sink,
-                                   const std::string& log_level);
-
-   private:
     static const std::string logger_name;
     std::unique_ptr<spdlog::logger> logger_;
 };
-
 }  // namespace impl
 
 OUSTER_CLIENT_EXPORT spdlog::logger& logger();

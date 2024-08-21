@@ -9,10 +9,13 @@
 #include <iostream>
 #include <string>
 
+#include "ouster/impl/logging.h"
+
 #ifdef _WIN32
 #include <direct.h>
 #include <fcntl.h>
 #include <io.h>
+#include <share.h>
 #include <shlwapi.h>
 #include <tchar.h>
 #include <windows.h>
@@ -24,6 +27,8 @@
 
 #include <cstring>
 #endif
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
@@ -48,8 +53,7 @@ LPCTSTR ErrorMessage(DWORD error) {
 //  Simple wrapper function for error output.
 void PrintError(LPCTSTR errDesc) {
     LPCTSTR errMsg = ErrorMessage(GetLastError());
-    _ftprintf(stderr, TEXT("\nERROR: %s SYSTEM RETURNED: %s\n"), errDesc,
-              errMsg);
+    logger().error("ERROR: {} SYSTEM RETURNED: {}", errDesc, errMsg);
     LocalFree((LPVOID)errMsg);
 }
 
@@ -89,7 +93,9 @@ bool is_dir(const std::string& path) {
 #else
     struct stat statbuf;
     if (stat(path.c_str(), &statbuf) != 0) {
-        if (errno != ENOENT) printf("ERROR: stat: %s", std::strerror(errno));
+        if (errno != ENOENT) {
+            logger().error("ERROR: stat: {}", std::strerror(errno));
+        }
         return false;
     }
     return S_ISDIR(statbuf.st_mode);
@@ -146,14 +152,14 @@ bool make_tmp_dir(std::string& tmp_path) {
             return true;
         }
     }
-    PrintError(TEXT("Can't create temp dir."));
+    logger().error("ERROR: Can't create temp dir.");
     return false;
 #else
     // TODO[pb]: Check that it works on Mac OS and especially that
     // temp files are cleaned correctly and don't feel up the CI machine ...
     char tmpdir[] = "/tmp/ouster-test.XXXXXX";
     if (::mkdtemp(tmpdir) == nullptr) {
-        std::cerr << "ERROR: Can't create temp dir." << std::endl;
+        logger().error("ERROR: Can't create temp dir.");
         return false;
     };
     tmp_path = tmpdir;
@@ -164,10 +170,11 @@ bool make_tmp_dir(std::string& tmp_path) {
 /// Make directory
 bool make_dir(const std::string& path) {
 #ifdef _WIN32
+    logger().error("ERROR: Can't create dir: {}", path);
     return (CreateDirectoryA(path.c_str(), NULL) != 0);
 #else
     if (mkdir(path.c_str(), 0777) != 0) {
-        printf("ERROR: Can't create dir: %s\n", path.c_str());
+        logger().error("ERROR: Can't create dir: {}", path);
         return false;
     }
     return true;
@@ -317,7 +324,9 @@ int64_t truncate_file(const std::string& path, uint64_t filesize) {
         _close(file_handle);
     }
 #else
-    truncate(path.c_str(), filesize);
+    if (truncate(path.c_str(), filesize) != 0) {
+        return -1;
+    }
 #endif
     return file_size(path);
 }
@@ -340,19 +349,15 @@ int64_t append_binary_file(const std::string& append_to_file_name,
 
     if (append_to_file_stream.is_open()) {
         if (append_from_file_stream.is_open()) {
-            append_from_file_stream.seekg(0, std::ios::end);
-            uint64_t from_file_size = append_from_file_stream.tellg();
-            append_from_file_stream.seekg(0, std::ios::beg);
-
-            append_to_file_stream.seekg(0, std::ios::end);
-
             append_to_file_stream << append_from_file_stream.rdbuf();
             saved_size = append_to_file_stream.tellg();
         } else {
-            std::cerr << "fail to open " << append_to_file_name << std::endl;
+            logger().error("ERROR: Failed to open {} for appending",
+                           append_to_file_name);
         }
     } else {
-        std::cerr << "fail to open " << append_from_file_name << std::endl;
+        logger().error("ERROR: Failed to open {} for appending",
+                       append_to_file_name);
     }
 
     if (append_to_file_stream.is_open()) append_to_file_stream.close();
@@ -389,10 +394,10 @@ int64_t copy_file_trailing_bytes(const std::string& source_file,
             target_file_stream << source_file_stream.rdbuf();
             saved_size = target_file_stream.tellg();
         } else {
-            std::cerr << "fail to open " << source_file << std::endl;
+            logger().error("ERROR: Failed to open {} for copy", target_file);
         }
     } else {
-        std::cerr << "fail to open " << target_file << std::endl;
+        logger().error("ERROR: Failed to open {} for copy", target_file);
     }
 
     if (source_file_stream.is_open()) source_file_stream.close();

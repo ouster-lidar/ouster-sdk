@@ -57,5 +57,6 @@ def test_open_source_meta_pcap():
 
     # the test file is different than what would be resolved ordinarily
     assert json_file_path not in resolve_metadata_multi(pcap_file_path)
-    src = open_source(pcap_file_path, meta=(json_file_path,))
+    src = open_source(pcap_file_path, sensor_idx=-1, meta=(json_file_path,))
+    # TODO: src._metadata_paths is not a standard field
     assert src._metadata_paths == [json_file_path]

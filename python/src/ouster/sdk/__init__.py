@@ -2,7 +2,7 @@
 Copyright (c) 2024, Ouster, Inc.
 All rights reserved.
 
-Ouster-SDL
+Ouster-SDK
 """
 # flake8: noqa (unused imports)
 

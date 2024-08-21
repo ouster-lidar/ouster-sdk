@@ -37,8 +37,7 @@ TEST_F(WriterV2Test, WriterV2AccessorTest) {
         path_concat(test_data_dir(), "pcaps/OS-0-128-U1_v2.3.0_1024x10.json"));
     {
         std::vector<ouster::sensor::sensor_info> info_compare = {info};
-        Writer writer(output_osf_filename, info, LidarScanFieldTypes(),
-                      chunk_size);
+        Writer writer(output_osf_filename, info, {}, chunk_size);
         EXPECT_EQ(writer.chunk_size(), chunk_size);
         EXPECT_EQ(writer.sensor_info_count(), 1);
         EXPECT_EQ(writer.filename(), output_osf_filename);
@@ -47,8 +46,7 @@ TEST_F(WriterV2Test, WriterV2AccessorTest) {
     }
     {
         std::vector<ouster::sensor::sensor_info> info_compare = {info, info2};
-        Writer writer(output_osf_filename, info_compare, LidarScanFieldTypes(),
-                      chunk_size);
+        Writer writer(output_osf_filename, info_compare, {}, chunk_size);
         EXPECT_EQ(writer.sensor_info_count(), 2);
 
         EXPECT_EQ(writer.sensor_info(), info_compare);
@@ -62,11 +60,11 @@ TEST_F(WriterV2Test, WriterV2BoundingTest) {
     std::string output_osf_filename = tmp_file("WriterV2BoundingTest.osf");
     const sensor::sensor_info info = sensor::metadata_from_json(
         path_concat(test_data_dir(), "pcaps/OS-1-128_v2.3.0_1024x10.json"));
-    Writer writer(output_osf_filename, info, LidarScanFieldTypes(), chunk_size);
+    Writer writer(output_osf_filename, info, {}, chunk_size);
 
     bool caught = false;
     try {
-        LidarScan one;
+        LidarScan one = get_random_lidar_scan(info);
         writer.save(1, one);
     } catch (const std::logic_error& e) {
         EXPECT_EQ(std::string(e.what()), "ERROR: Bad Stream ID");
@@ -77,8 +75,8 @@ TEST_F(WriterV2Test, WriterV2BoundingTest) {
     EXPECT_TRUE(caught);
     caught = false;
     try {
-        LidarScan one;
-        LidarScan two;
+        LidarScan one = get_random_lidar_scan(info);
+        LidarScan two = get_random_lidar_scan(info);
         writer.save({one, two});
     } catch (const std::logic_error& e) {
         EXPECT_EQ(std::string(e.what()),

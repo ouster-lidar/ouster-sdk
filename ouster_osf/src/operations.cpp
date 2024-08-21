@@ -13,14 +13,16 @@
 #include "fb_utils.h"
 #include "json/json.h"
 #include "json_utils.h"
+#include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/meta_extrinsics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
-#include "ouster/osf/pcap_source.h"
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_scan.h"
 #include "ouster/osf/writer.h"
+
+using namespace ouster::sensor;
 
 namespace ouster {
 namespace osf {
@@ -198,14 +200,13 @@ flatbuffers::FlatBufferBuilder _generate_modify_metadata_fbb(
     /// @todo on OsfFile refactor, make a copy constructor for MetadataStore
     MetadataStore new_meta_store;
     auto old_meta_store = reader.meta_store();
-    std::cout << "Looking for non sensor info metadata in old metastore"
-              << std::endl;
+    logger().info("Looking for non sensor info metadata in old metastore");
     for (const auto& entry : old_meta_store.entries()) {
         std::cout << "Found: " << entry.second->type() << " ";
         /// @todo figure out why there isnt an easy def for this
         if (entry.second->type() != "ouster/v1/os_sensor/LidarSensor") {
             new_meta_store.add(*entry.second);
-            std::cout << "Is non sensor_info, adding" << std::endl;
+            logger().info("Is non sensor_info, adding");
         } else {
             std::cout << std::endl;
         }

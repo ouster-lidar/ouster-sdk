@@ -72,7 +72,7 @@ class ImageCloudMode(ImageMode, CloudMode, Protocol):
     pass
 
 
-def _second_chan_field(field: client.ChanField) -> Optional[client.ChanField]:
+def _second_chan_field(field: str) -> Optional[str]:
     """Get the second return field name."""
     # yapf: disable
     second_fields = dict({
@@ -93,8 +93,9 @@ class SimpleMode(ImageCloudMode):
     When AutoExposure is enabled its state updates only for return_num=0 but
     applies for both returns.
     """
+
     def __init__(self,
-                 field: client.ChanField,
+                 field: str,
                  *,
                  info: Optional[client.SensorInfo] = None,
                  prefix: Optional[str] = "",
@@ -104,7 +105,7 @@ class SimpleMode(ImageCloudMode):
         """
         Args:
             info: sensor metadata used mainly for destaggering here
-            field: ChanField to process, second return is handled automatically
+            field: name of field to process, second return is handled automatically
             prefix: name prefix
             suffix: name suffix
             use_ae: if True, use AutoExposure for the field
@@ -136,7 +137,9 @@ class SimpleMode(ImageCloudMode):
             return None
 
         f = self._fields[return_num]
-        key_data = ls.field(f).astype(np.float32)
+        field = ls.field(f)
+        key_data = field if field.dtype == np.float32 else field.astype(
+            np.float32)
 
         if self._buc:
             self._buc(key_data)
@@ -172,6 +175,74 @@ class SimpleMode(ImageCloudMode):
     def enabled(self, ls: client.LidarScan, return_num: int = 0):
         return (self._fields[return_num] in ls.fields
                 if return_num < len(self._fields) else False)
+
+
+class RGBMode(ImageCloudMode):
+    """RGB view mode
+    """
+
+    def __init__(self,
+                 field: str,
+                 *,
+                 info: Optional[client.SensorInfo] = None) -> None:
+        """
+        Args:
+            info: sensor metadata used mainly for destaggering here
+            field: channel field to process
+        """
+        self._info = info
+        self._field = field
+
+    @property
+    def name(self) -> str:
+        return self._field
+
+    @property
+    def names(self) -> List[str]:
+        return [self._field]
+
+    def _prepare_data(self,
+                      ls: client.LidarScan,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+
+        field = ls.field(self._field)
+        if np.ndim(field) != 3 and field.shape != 3:
+            raise TypeError(f"Unsupport field shape: {field.shape}")
+        if field.dtype == np.uint8:
+            key_data = (field / (2**8 - 1)).astype(np.float32)
+        elif field.dtype == np.uint16:
+            key_data = (field / (2**16 - 1)).astype(np.float32)
+        elif field.dtype == np.float32:
+            key_data = field
+        elif field.dtype == np.float64:
+            key_data = field.astype(np.float32)
+        else:
+            raise TypeError(f"Unsupport field type {field.dtype}")
+
+        return key_data.clip(0, 1.0)
+
+    def set_image(self,
+                  img: Image,
+                  ls: client.LidarScan,
+                  return_num: int = 0) -> None:
+        if self._info is None:
+            raise ValueError(
+                f"VizMode[{self.name}] requires metadata to make a 2D image")
+        key_data = self._prepare_data(ls)
+        if key_data is not None:
+            img.set_image(client.destagger(self._info, key_data))
+
+    def set_cloud_color(self,
+                        cloud: Cloud,
+                        ls: client.LidarScan,
+                        return_num: int = 0) -> None:
+        key_data = self._prepare_data(ls)
+        if key_data is not None:
+            cloud.set_key(key_data)
+
+    def enabled(self, ls: client.LidarScan, return_num: int = 0):
+        field = ls.field(self._field)
+        return np.ndim(field) == 3
 
 
 class ReflMode(SimpleMode, ImageCloudMode):

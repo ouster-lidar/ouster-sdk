@@ -16,7 +16,7 @@ namespace impl {
  */
 class packet_writer : public packet_format {
     template <typename T, typename SRC>
-    void set_block_impl(Eigen::Ref<const img_t<T>> field, ChanField i,
+    void set_block_impl(Eigen::Ref<const img_t<T>> field, const std::string& i,
                         uint8_t* lidar_buf) const;
 
    public:
@@ -36,10 +36,10 @@ class packet_writer : public packet_format {
     void set_prod_sn(uint8_t* lidar_buf, uint64_t sn) const;
 
     template <typename T>
-    void set_px(uint8_t* px_buf, ChanField i, T value) const;
+    void set_px(uint8_t* px_buf, const std::string& i, T value) const;
 
     template <typename T>
-    void set_block(Eigen::Ref<const img_t<T>> field, ChanField i,
+    void set_block(Eigen::Ref<const img_t<T>> field, const std::string& i,
                    uint8_t* lidar_buf) const;
 
     /**

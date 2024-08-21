@@ -33,7 +33,7 @@ enum client_state {
 };
 
 /** Minimum supported version. */
-const util::version min_version = {1, 12, 0};
+const util::version min_version = {1, 12, 0, "", "", "", ""};
 
 /**
  * Initializes and configures ouster_client logs. This method should be invoked
@@ -231,13 +231,11 @@ OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, ImuPacket& packet);
  *
  * @param[in] cli client returned by init_client associated with the connection.
  * @param[in] timeout_sec how long to wait for the sensor to initialize.
- * @param[in] legacy_format whether to use legacy format of metadata output.
  *
  * @return a text blob of metadata parseable into a sensor_info struct.
  */
-OUSTER_CLIENT_EXPORT std::string get_metadata(client& cli,
-                         int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
-                         bool legacy_format = false);
+OUSTER_CLIENT_EXPORT std::string get_metadata(
+    client& cli, int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /**
  * Get sensor config from the sensor.

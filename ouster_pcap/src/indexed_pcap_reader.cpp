@@ -27,7 +27,7 @@ nonstd::optional<size_t> IndexedPcapReader::sensor_idx_for_current_packet()
     const {
     const auto& pkt_info = current_info();
     for (size_t i = 0; i < sensor_infos_.size(); i++) {
-        if (pkt_info.dst_port == sensor_infos_[i].udp_port_lidar) {
+        if (pkt_info.dst_port == sensor_infos_[i].config.udp_port_lidar) {
             // TODO use the packet format and match serial number if it's
             // available this will allow us to have multiple sensors on the same
             // port

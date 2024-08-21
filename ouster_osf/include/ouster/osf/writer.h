@@ -81,13 +81,14 @@ class Writer {
      * @param[in] info The sensor info to use for a single stream OSF file.
      * @param[in] chunk_size The chunksize to use for the OSF file, this
      *                       parameter is optional.
-     * @param[in] field_types The fields from scans to actually save into the
-     *                        OSF. If not provided uses the fields from the
-     *                        first saved lidar scan for each stream. This
-     *                        parameter is optional.
+     * @param[in] fields_to_write The fields from scans to actually save into
+     *                            the OSF. If not provided uses the fields from
+     *                            the first saved lidar scan for this sensor.
+     *                            This parameter is optional.
      */
     Writer(const std::string& filename, const ouster::sensor::sensor_info& info,
-           const LidarScanFieldTypes& field_types = LidarScanFieldTypes(),
+           const std::vector<std::string>& fields_to_write =
+               std::vector<std::string>(),
            uint32_t chunk_size = 0);
 
     /**
@@ -96,14 +97,15 @@ class Writer {
      *                 file.
      * @param[in] chunk_size The chunksize to use for the OSF file, this
      *                       parameter is optional.
-     * @param[in] field_types The fields from scans to actually save into the
-     *                        OSF. If not provided uses the fields from the
-     *                        first saved lidar scan for each stream. This
-     *                        parameter is optional.
+     * @param[in] fields_to_write The fields from scans to actually save into
+     *                            the OSF. If not provided uses the fields from
+     *                            the first saved lidar scan for this sensor.
+     *                            This parameter is optional.
      */
     Writer(const std::string& filename,
            const std::vector<ouster::sensor::sensor_info>& info,
-           const LidarScanFieldTypes& field_types = LidarScanFieldTypes(),
+           const std::vector<std::string>& fields_to_write =
+               std::vector<std::string>(),
            uint32_t chunk_size = 0);
 
     /**
@@ -191,16 +193,16 @@ class Writer {
      * to write scans to it's stream.
      *
      * @param[in] info The info of the sensor to add to the file.
-     * @param[in] field_types The fields from scans to actually save into the
-     *                        OSF. If not provided uses the fields from the
-     *                        first saved lidar scan for this sensor. This
-     *                        parameter is optional.
+     * @param[in] fields_to_write The fields from scans to actually save into
+     *                            the OSF. If not provided uses the fields from
+     *                            the first saved lidar scan for this sensor.
+     *                            This parameter is optional.
      *
      * @return The stream index for the newly added sensor.
      */
-    uint32_t add_sensor(
-        const ouster::sensor::sensor_info& info,
-        const LidarScanFieldTypes& field_types = LidarScanFieldTypes());
+    uint32_t add_sensor(const ouster::sensor::sensor_info& info,
+                        const std::vector<std::string>& fields_to_write =
+                            std::vector<std::string>());
 
     /**
      * Save a single scan to the specified stream_index in an OSF file.
@@ -529,6 +531,11 @@ class Writer {
      * Internal store of field types to serialize for lidar scans
      */
     std::vector<LidarScanFieldTypes> field_types_;
+
+    /**
+     * Internal store of what fields the user wants to save from each scan.
+     */
+    std::vector<std::vector<std::string>> desired_fields_;
 
     /**
      * Internal stream index to metadata map.

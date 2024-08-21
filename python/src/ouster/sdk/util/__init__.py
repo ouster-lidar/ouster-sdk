@@ -15,9 +15,6 @@ from .metadata import firmware_version      # TODO[UN]: this function should
 from .parsing import default_scan_fields    # type: ignore
 from .parsing import scan_to_packets        # type: ignore
 from .parsing import resolve_field_types    # type: ignore
-from .parsing import PacketFormat           # type: ignore
-from .parsing import ColHeader              # type: ignore
-from .parsing import FusaDualFormat         # type: ignore
 
 from .extrinsics import resolve_extrinsics      # type: ignore
 from .extrinsics import _parse_extrinsics_file  # type: ignore

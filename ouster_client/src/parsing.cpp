@@ -37,12 +37,12 @@ struct FieldInfo {
 };
 
 struct ProfileEntry {
-    const std::pair<ChanField, FieldInfo>* fields;
+    const std::pair<std::string, FieldInfo>* fields;
     size_t n_fields;
     size_t chan_data_size;
 };
 
-static const Table<ChanField, FieldInfo, 8> legacy_field_info{{
+static const Table<std::string, FieldInfo, 8> legacy_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x000fffff, 0}},
     {ChanField::FLAGS, {UINT8, 3, 0, 4}},
     {ChanField::REFLECTIVITY, {UINT16, 4, 0, 0}},
@@ -53,7 +53,7 @@ static const Table<ChanField, FieldInfo, 8> legacy_field_info{{
     {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 5> lb_field_info{{
+static const Table<std::string, FieldInfo, 5> lb_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},
     {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
     {ChanField::REFLECTIVITY, {UINT8, 2, 0, 0}},
@@ -61,7 +61,7 @@ static const Table<ChanField, FieldInfo, 5> lb_field_info{{
     {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 13> dual_field_info{{
+static const Table<std::string, FieldInfo, 13> dual_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
     {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
     {ChanField::REFLECTIVITY, {UINT8, 3, 0, 0}},
@@ -77,7 +77,7 @@ static const Table<ChanField, FieldInfo, 13> dual_field_info{{
     {ChanField::RAW32_WORD4, {UINT32, 12, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 8> single_field_info{{
+static const Table<std::string, FieldInfo, 8> single_field_info{{
     {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
     {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
     {ChanField::REFLECTIVITY, {UINT8, 4, 0, 0}},
@@ -88,7 +88,7 @@ static const Table<ChanField, FieldInfo, 8> single_field_info{{
     {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 14> five_word_pixel_info{{
+static const Table<std::string, FieldInfo, 14> five_word_pixel_info{{
     {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
     {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
     {ChanField::REFLECTIVITY, {UINT8, 3, 0, 0}},
@@ -105,7 +105,7 @@ static const Table<ChanField, FieldInfo, 14> five_word_pixel_info{{
     {ChanField::RAW32_WORD5, {UINT32, 16, 0, 0}},
 }};
 
-static const Table<ChanField, FieldInfo, 9> fusa_two_word_pixel_info{{
+static const Table<std::string, FieldInfo, 9> fusa_two_word_pixel_info{{
     {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},
     {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
     {ChanField::REFLECTIVITY, {UINT8, 2, 0xff, 0}},
@@ -191,7 +191,7 @@ struct packet_format::Impl {
     size_t measurement_id_offset;
     size_t status_offset;
 
-    std::map<ChanField, impl::FieldInfo> fields;
+    std::map<std::string, impl::FieldInfo> fields;
 
     Impl(UDPProfileLidar profile, size_t pixels_per_column,
          size_t columns_per_packet) {
@@ -254,8 +254,27 @@ packet_format::packet_format(const sensor_info& info)
                     info.format.pixels_per_column,
                     info.format.columns_per_packet) {}
 
+template <typename T>
+class SameSizeInt {
+   public:
+    typedef T value;
+};
+
+template <>
+class SameSizeInt<float> {
+   public:
+    typedef uint32_t value;
+};
+
+template <>
+class SameSizeInt<double> {
+   public:
+    typedef uint64_t value;
+};
+
 template <typename T, typename SRC, int N>
-void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field, ChanField chan,
+void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field,
+                                     const std::string& chan,
                                      const uint8_t* packet_buf) const {
     if (sizeof(T) < sizeof(SRC))
         throw std::invalid_argument("Dest type too small for specified field");
@@ -283,7 +302,9 @@ void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field, ChanField chan,
             for (int x = 0; x < N; ++x) {
                 auto px_src =
                     col_buf[x] + col_header_size + (px * channel_data_size);
-                T dst = *reinterpret_cast<const SRC*>(px_src + offset);
+                typename SameSizeInt<T>::value dst =
+                    *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(
+                        px_src + offset);
                 if (mask) dst &= mask;
                 if (shift > 0) dst >>= shift;
                 if (shift < 0) dst <<= std::abs(shift);
@@ -293,9 +314,9 @@ void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field, ChanField chan,
     }
 }
 
-template <typename T, int BlockDim,
-          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
-void packet_format::block_field(Eigen::Ref<img_t<T>> field, ChanField chan,
+template <typename T, int BlockDim>
+void packet_format::block_field(Eigen::Ref<img_t<T>> field,
+                                const std::string& chan,
                                 const uint8_t* packet_buf) const {
     const auto& f = impl_->fields.at(chan);
 
@@ -312,6 +333,24 @@ void packet_format::block_field(Eigen::Ref<img_t<T>> field, ChanField chan,
         case UINT64:
             block_field_impl<T, uint64_t, BlockDim>(field, chan, packet_buf);
             break;
+        case INT8:
+            block_field_impl<T, int8_t, BlockDim>(field, chan, packet_buf);
+            break;
+        case INT16:
+            block_field_impl<T, int16_t, BlockDim>(field, chan, packet_buf);
+            break;
+        case INT32:
+            block_field_impl<T, int32_t, BlockDim>(field, chan, packet_buf);
+            break;
+        case INT64:
+            block_field_impl<T, int64_t, BlockDim>(field, chan, packet_buf);
+            break;
+        case FLOAT32:
+            block_field_impl<T, float, BlockDim>(field, chan, packet_buf);
+            break;
+        case FLOAT64:
+            block_field_impl<T, double, BlockDim>(field, chan, packet_buf);
+            break;
         default:
             throw std::invalid_argument("Invalid field for packet format");
     }
@@ -319,40 +358,94 @@ void packet_format::block_field(Eigen::Ref<img_t<T>> field, ChanField chan,
 
 // explicitly instantiate for each field type / block dim
 template void packet_format::block_field<uint8_t, 4>(
-    Eigen::Ref<img_t<uint8_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint16_t, 4>(
-    Eigen::Ref<img_t<uint16_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint32_t, 4>(
-    Eigen::Ref<img_t<uint32_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint64_t, 4>(
-    Eigen::Ref<img_t<uint64_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int8_t, 4>(
+    Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int16_t, 4>(
+    Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int32_t, 4>(
+    Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int64_t, 4>(
+    Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<float, 4>(
+    Eigen::Ref<img_t<float>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<double, 4>(
+    Eigen::Ref<img_t<double>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint8_t, 8>(
-    Eigen::Ref<img_t<uint8_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint16_t, 8>(
-    Eigen::Ref<img_t<uint16_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint32_t, 8>(
-    Eigen::Ref<img_t<uint32_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint64_t, 8>(
-    Eigen::Ref<img_t<uint64_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int8_t, 8>(
+    Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int16_t, 8>(
+    Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int32_t, 8>(
+    Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int64_t, 8>(
+    Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<float, 8>(
+    Eigen::Ref<img_t<float>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<double, 8>(
+    Eigen::Ref<img_t<double>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint8_t, 16>(
-    Eigen::Ref<img_t<uint8_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint16_t, 16>(
-    Eigen::Ref<img_t<uint16_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint32_t, 16>(
-    Eigen::Ref<img_t<uint32_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 template void packet_format::block_field<uint64_t, 16>(
-    Eigen::Ref<img_t<uint64_t>> field, ChanField chan,
+    Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int8_t, 16>(
+    Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int16_t, 16>(
+    Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int32_t, 16>(
+    Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<int64_t, 16>(
+    Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<float, 16>(
+    Eigen::Ref<img_t<float>> field, const std::string& chan,
+    const uint8_t* packet_buf) const;
+template void packet_format::block_field<double, 16>(
+    Eigen::Ref<img_t<double>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 
 template <typename SRC, typename DST>
@@ -367,18 +460,60 @@ static void col_field_impl(const uint8_t* col_buf, DST* dst, size_t offset,
         auto px_src =
             col_buf + col_header_size + offset + (px * channel_data_size);
         DST* px_dst = dst + px * dst_stride;
-        DST dst = *reinterpret_cast<const SRC*>(px_src);
+        typename SameSizeInt<DST>::value dst =
+            *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(px_src);
         if (mask) dst &= mask;
         if (shift > 0) dst >>= shift;
         if (shift < 0) dst <<= std::abs(shift);
-        *px_dst = dst;
+        *px_dst = *reinterpret_cast<DST*>(&dst);
     }
 }
 
-template <typename T,
-          typename std::enable_if<std::is_unsigned<T>::value, T>::type>
-void packet_format::col_field(const uint8_t* col_buf, ChanField i, T* dst,
-                              int dst_stride) const {
+template <typename SRC, typename DST>
+static void col_field_impl(const uint8_t* col_buf, float* dst, size_t offset,
+                           uint64_t mask, int shift, int pixels_per_column,
+                           int dst_stride, size_t channel_data_size,
+                           size_t col_header_size) {
+    if (sizeof(float) < sizeof(SRC))
+        throw std::invalid_argument("Dest type too small for specified field");
+
+    for (int px = 0; px < pixels_per_column; px++) {
+        auto px_src =
+            col_buf + col_header_size + offset + (px * channel_data_size);
+        float* px_dst = dst + px * dst_stride;
+        typename SameSizeInt<float>::value dst =
+            *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(px_src);
+        if (mask) dst &= mask;
+        if (shift > 0) dst >>= shift;
+        if (shift < 0) dst <<= std::abs(shift);
+        memcpy(px_dst, &dst, sizeof(float));
+    }
+}
+
+template <typename SRC, typename DST>
+static void col_field_impl(const uint8_t* col_buf, double* dst, size_t offset,
+                           uint64_t mask, int shift, int pixels_per_column,
+                           int dst_stride, size_t channel_data_size,
+                           size_t col_header_size) {
+    if (sizeof(float) < sizeof(SRC))
+        throw std::invalid_argument("Dest type too small for specified field");
+
+    for (int px = 0; px < pixels_per_column; px++) {
+        auto px_src =
+            col_buf + col_header_size + offset + (px * channel_data_size);
+        double* px_dst = dst + px * dst_stride;
+        typename SameSizeInt<double>::value dst =
+            *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(px_src);
+        if (mask) dst &= mask;
+        if (shift > 0) dst >>= shift;
+        if (shift < 0) dst <<= std::abs(shift);
+        memcpy(px_dst, &dst, sizeof(double));
+    }
+}
+
+template <typename T>
+void packet_format::col_field(const uint8_t* col_buf, const std::string& i,
+                              T* dst, int dst_stride) const {
     const auto& f = impl_->fields.at(i);
 
     switch (f.ty_tag) {
@@ -402,22 +537,64 @@ void packet_format::col_field(const uint8_t* col_buf, ChanField i, T* dst,
                 col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
                 dst_stride, impl_->channel_data_size, impl_->col_header_size);
             break;
+        case INT8:
+            col_field_impl<int8_t, T>(
+                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
+                dst_stride, impl_->channel_data_size, impl_->col_header_size);
+            break;
+        case INT16:
+            col_field_impl<int16_t, T>(
+                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
+                dst_stride, impl_->channel_data_size, impl_->col_header_size);
+            break;
+        case INT32:
+            col_field_impl<int32_t, T>(
+                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
+                dst_stride, impl_->channel_data_size, impl_->col_header_size);
+            break;
+        case INT64:
+            col_field_impl<int64_t, T>(
+                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
+                dst_stride, impl_->channel_data_size, impl_->col_header_size);
+            break;
+        case FLOAT32:
+            col_field_impl<float, T>(
+                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
+                dst_stride, impl_->channel_data_size, impl_->col_header_size);
+            break;
+        case FLOAT64:
+            col_field_impl<double, T>(
+                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
+                dst_stride, impl_->channel_data_size, impl_->col_header_size);
+            break;
         default:
             throw std::invalid_argument("Invalid field for packet format");
     }
 }
 
 // explicitly instantiate for each field type
-template void packet_format::col_field(const uint8_t*, ChanField, uint8_t*,
-                                       int) const;
-template void packet_format::col_field(const uint8_t*, ChanField, uint16_t*,
-                                       int) const;
-template void packet_format::col_field(const uint8_t*, ChanField, uint32_t*,
-                                       int) const;
-template void packet_format::col_field(const uint8_t*, ChanField, uint64_t*,
-                                       int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       uint8_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       uint16_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       uint32_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       uint64_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       int8_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       int16_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       int32_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       int64_t*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       float*, int) const;
+template void packet_format::col_field(const uint8_t*, const std::string&,
+                                       double*, int) const;
 
-ChanFieldType packet_format::field_type(ChanField f) const {
+ChanFieldType packet_format::field_type(const std::string& f) const {
     return impl_->fields.count(f) ? impl_->fields.at(f).ty_tag
                                   : ChanFieldType::VOID;
 }
@@ -450,7 +627,9 @@ uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
 
 uint32_t packet_format::frame_id(const uint8_t* lidar_buf) const {
     if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        return col_frame_id(nth_col(0, lidar_buf));
+        uint16_t res = 0;
+        std::memcpy(&res, nth_col(0, lidar_buf) + 10, sizeof(uint16_t));
+        return res;
     }
 
     // eUDP frame id is 16 bits, but FUSA frame id is 32 bits
@@ -604,7 +783,7 @@ const uint8_t* packet_format::nth_px(int n, const uint8_t* col_buf) const {
 }
 
 template <typename T>
-T packet_format::px_field(const uint8_t* px_buf, ChanField i) const {
+T packet_format::px_field(const uint8_t* px_buf, const std::string& i) const {
     const auto& f = impl_->fields.at(i);
 
     if (sizeof(T) < field_type_size(f.ty_tag))
@@ -707,12 +886,12 @@ const packet_format& get_format(UDPProfileLidar udp_profile_lidar,
     return *cache.at(k);
 }
 
-uint64_t packet_format::field_value_mask(ChanField i) const {
+uint64_t packet_format::field_value_mask(const std::string& i) const {
     const auto& f = impl_->fields.at(i);
     return get_value_mask(f);
 }
 
-int packet_format::field_bitness(ChanField i) const {
+int packet_format::field_bitness(const std::string& i) const {
     const auto& f = impl_->fields.at(i);
     return get_bitness(f);
 }
@@ -890,25 +1069,43 @@ void packet_writer::set_prod_sn(uint8_t* lidar_buf, uint64_t sn) const {
 }
 
 template <typename T>
-void packet_writer::set_px(uint8_t* px_buf, ChanField i, T value) const {
+void packet_writer::set_px(uint8_t* px_buf, const std::string& i,
+                           T value) const {
     const auto& f = impl_->fields.at(i);
 
-    if (f.shift > 0) value <<= f.shift;
-    if (f.shift < 0) value >>= std::abs(f.shift);
-    if (f.mask) value &= f.mask;
-    T* ptr = reinterpret_cast<T*>(px_buf + f.offset);
+    typename SameSizeInt<T>::value int_value;
+    memcpy(&int_value, &value, sizeof(T));
+    if (f.shift > 0) int_value <<= f.shift;
+    if (f.shift < 0) int_value >>= std::abs(f.shift);
+    if (f.mask) int_value &= f.mask;
+    auto ptr =
+        reinterpret_cast<typename SameSizeInt<T>::value*>(px_buf + f.offset);
     *ptr &= ~f.mask;
-    *ptr |= value;
+    *ptr |= int_value;
 }
 
-template void packet_writer::set_px(uint8_t*, ChanField, uint8_t) const;
-template void packet_writer::set_px(uint8_t*, ChanField, uint16_t) const;
-template void packet_writer::set_px(uint8_t*, ChanField, uint32_t) const;
-template void packet_writer::set_px(uint8_t*, ChanField, uint64_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&,
+                                    uint8_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&,
+                                    uint16_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&,
+                                    uint32_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&,
+                                    uint64_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&, int8_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&,
+                                    int16_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&,
+                                    int32_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&,
+                                    int64_t) const;
+template void packet_writer::set_px(uint8_t*, const std::string&, float) const;
+template void packet_writer::set_px(uint8_t*, const std::string&, double) const;
 
 template <typename T, typename DST>
 void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
-                                   ChanField chan, uint8_t* lidar_buf) const {
+                                   const std::string& chan,
+                                   uint8_t* lidar_buf) const {
     constexpr int N = 32;
     if (columns_per_packet > N)
         throw std::runtime_error("Recompile set_block_impl with larger N");
@@ -942,7 +1139,8 @@ void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
             if (shift > 0) value <<= shift;
             if (shift < 0) value >>= std::abs(shift);
             if (mask) value &= mask;
-            DST* ptr = reinterpret_cast<DST*>(px_dst + offset);
+            DST* ptr = reinterpret_cast<typename SameSizeInt<DST>::value*>(
+                px_dst + offset);
             *ptr &= ~mask;
             *ptr |= value;
         }
@@ -950,8 +1148,8 @@ void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
 }
 
 template <typename T>
-void packet_writer::set_block(Eigen::Ref<const img_t<T>> field, ChanField i,
-                              uint8_t* lidar_buf) const {
+void packet_writer::set_block(Eigen::Ref<const img_t<T>> field,
+                              const std::string& i, uint8_t* lidar_buf) const {
     const auto& f = impl_->fields.at(i);
 
     switch (f.ty_tag) {
@@ -967,19 +1165,59 @@ void packet_writer::set_block(Eigen::Ref<const img_t<T>> field, ChanField i,
         case UINT64:
             set_block_impl<T, uint64_t>(field, i, lidar_buf);
             break;
+        case INT8:
+            set_block_impl<T, int8_t>(field, i, lidar_buf);
+            break;
+        case INT16:
+            set_block_impl<T, int16_t>(field, i, lidar_buf);
+            break;
+        case INT32:
+            set_block_impl<T, int32_t>(field, i, lidar_buf);
+            break;
+        case INT64:
+            set_block_impl<T, int64_t>(field, i, lidar_buf);
+            break;
+        case FLOAT32:
+            set_block_impl<T, uint32_t>(field, i, lidar_buf);
+            break;
+        case FLOAT64:
+            set_block_impl<T, uint64_t>(field, i, lidar_buf);
+            break;
         default:
             throw std::invalid_argument("Invalid field for packet format");
     }
 }
 
 template void packet_writer::set_block(Eigen::Ref<const img_t<uint8_t>> field,
-                                       ChanField i, uint8_t* lidar_buf) const;
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
 template void packet_writer::set_block(Eigen::Ref<const img_t<uint16_t>> field,
-                                       ChanField i, uint8_t* lidar_buf) const;
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
 template void packet_writer::set_block(Eigen::Ref<const img_t<uint32_t>> field,
-                                       ChanField i, uint8_t* lidar_buf) const;
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
 template void packet_writer::set_block(Eigen::Ref<const img_t<uint64_t>> field,
-                                       ChanField i, uint8_t* lidar_buf) const;
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<int8_t>> field,
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<int16_t>> field,
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<int32_t>> field,
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<int64_t>> field,
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<float>> field,
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
+template void packet_writer::set_block(Eigen::Ref<const img_t<double>> field,
+                                       const std::string& i,
+                                       uint8_t* lidar_buf) const;
 
 template <typename T>
 void packet_writer::unpack_raw_headers(Eigen::Ref<const img_t<T>> field,
@@ -1032,6 +1270,18 @@ template void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<uint32_t>> field, uint8_t* lidar_buf) const;
 template void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<uint64_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<int8_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<int16_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<int32_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<int64_t>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<float>> field, uint8_t* lidar_buf) const;
+template void packet_writer::unpack_raw_headers(
+    Eigen::Ref<const img_t<double>> field, uint8_t* lidar_buf) const;
 
 }  // namespace impl
 }  // namespace sensor

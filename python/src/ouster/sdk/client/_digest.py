@@ -14,29 +14,8 @@ from itertools import tee
 
 import numpy as np
 
-from .data import (LidarPacket, LidarScan, ColHeader)
-from .core import (Packets, PacketSource, Scans)
-
-
-# NOTE[pb]: Extracted from LidarPacket for keeping tests based on digests working
-#           this method is deprecated along with ColHeader and should be cleaned
-#           fully eventually.
-def _get_packet_header(packet: LidarPacket, header: ColHeader) -> np.ndarray:
-    """Create a view of the specified column header.
-
-    This method is deprecated. Use the ``timestamp``, ``measurement_id`` or
-    ``status`` properties instead.
-
-    Args:
-        header: The column header to parse
-
-    Returns:
-        A numpy array containing a copy of the specified header values
-    """
-
-    res = packet._pf.packet_header(header, packet._data)
-    res.flags.writeable = False
-    return res
+from .data import (LidarScan, ColHeader)
+from .core import (Packets, LidarPacket, PacketSource, Scans, PacketFormat)
 
 
 def _md5(a: np.ndarray) -> str:
@@ -69,20 +48,20 @@ class FieldDigest:
                 assert other.hashes.get(k) == v, f"Match failure key: {k}"
 
     @classmethod
-    def from_packet(cls, packet: LidarPacket) -> 'FieldDigest':
-        return cls.from_packets([packet])
+    def from_packet(cls, packet: LidarPacket, pf: PacketFormat) -> 'FieldDigest':
+        return cls.from_packets([packet], pf)
 
     @classmethod
-    def from_packets(cls, packets: Iterable[LidarPacket]) -> 'FieldDigest':
+    def from_packets(cls, packets: Iterable[LidarPacket], pf: PacketFormat) -> 'FieldDigest':
         # hashlib._Hash doesn't exist at runtime
         hashes: Dict[str, 'hashlib._Hash'] = defaultdict(hashlib.md5)
 
         for idx, packet in enumerate(packets):
             # TODO: add packet headers
             for h in ColHeader:
-                hashes[h.name].update(_get_packet_header(packet, h).tobytes())
-            for f in packet.fields:
-                hashes[f.name].update(packet.field(f).tobytes())
+                hashes[h.name].update(pf.packet_header(h, packet.buf).tobytes())
+            for field_name in pf.fields:
+                hashes[field_name].update(pf.packet_field(field_name, packet.buf).tobytes())
 
         return cls(**{k: v.hexdigest() for k, v in hashes.items()})
 
@@ -97,7 +76,7 @@ class FieldDigest:
         hashes['STATUS'] = _md5(ls.status.astype(np.uint64))
         hashes['MEASUREMENT_ID'] = _md5(ls.measurement_id.astype(np.uint16))
 
-        hashes.update({c.name: _md5(ls.field(c)) for c in ls.fields})
+        hashes.update({field_name: _md5(ls.field(field_name)) for field_name in ls.fields})
 
         return cls(**hashes)
 
@@ -151,6 +130,7 @@ class StreamDigest:
         plist = [p for p in source1 if isinstance(p, LidarPacket)]
         logging.debug(f"Creating digest with {len(plist)} Lidar packets out of total {len(allpackets)}")
         packets = Packets(plist, source.metadata)
+        pf = PacketFormat(source.metadata)
 
         scans_list1, scans_list2 = tee(Scans(packets))
         for scan in scans_list1:
@@ -158,7 +138,7 @@ class StreamDigest:
 
         # scan_digests = list(map(FieldDigest.from_scan, Scans(packets)))
         scan_digests = list(map(FieldDigest.from_scan, scans_list2))
-        packet_digest = FieldDigest.from_packets(plist)
+        packet_digest = FieldDigest.from_packets(plist, pf)
 
         return cls(packet_hash=packet_digest, scans=scan_digests)
 

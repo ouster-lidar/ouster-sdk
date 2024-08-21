@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     }
 
     auto metadata = sensor::get_metadata(*cli);
-    sensor::sensor_info info = sensor::parse_metadata(metadata);
+    sensor::sensor_info info(metadata);
     sensor::packet_format pf = sensor::get_format(info);
     auto packet_buf = std::make_unique<uint8_t[]>(UDP_BUF_SIZE);
 

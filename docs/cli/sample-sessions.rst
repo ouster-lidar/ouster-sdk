@@ -48,9 +48,13 @@ Let's see what the sensor is seeing in a pretty visualizer:
 
 That looked nice! Let's record some data to a pcap so we can view it on repeat!
 
+Because many of ``ouster-cli`` commands can be chained together, we'll add the ``slice`` command before the ``save`` command to limit the number of frames we save to 100.
+
+If the ``slice`` is not present before ``save``, you can stop recording at anytime with ``CTRL-C``.
+
 .. code:: bash
     
-    $ ouster-cli source <SENSOR HOSTNAME> save .pcap
+    $ ouster-cli source <SENSOR HOSTNAME> slice 0:100 save .pcap
 
 That should produce screen output that looks something like:
 
@@ -60,6 +64,12 @@ That should produce screen output that looks something like:
     Saving PCAP file at ./OS-<SENSOR_DETAILS>-<LIDAR_MODE>_<DATE>.pcap
 
 Go ahead and look in the current directory for the named pcap file and associated metadata file.
+
+The ``slice`` command also allows recording for fixed time durations. For example, the following will record 30 seconds of pcap data.
+
+.. code:: bash
+
+    $ ouster-cli source <SENSOR HOSTNAME> slice 0s:30s save .pcap
 
 Continue to the next section, `Sample pcap session`_ to see what you can do with your new pcap file.
 

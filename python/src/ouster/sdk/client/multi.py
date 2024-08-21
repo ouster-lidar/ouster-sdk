@@ -5,8 +5,8 @@ from typing import Any, Tuple, List, Union, Optional, Iterator, Callable
 import copy
 
 from ._client import (SensorInfo, LidarScan, PacketFormat, ScanBatcher,
-                      get_field_types)
-from .data import Packet, ImuPacket, LidarPacket, packet_ts, FieldTypes
+                      get_field_types, Packet, ImuPacket, LidarPacket, FieldType)
+from .data import packet_ts, FieldTypes
 from .core import PacketSource, first_valid_packet_ts
 from .scan_source import ScanSource
 from .multi_scan_source import MultiScanSource
@@ -174,9 +174,15 @@ class ScansMulti(MultiScanSource):
         if fields:
             if len(fields) != len(file_fields):
                 raise ValueError("Size of Field override doens't match")
-            self._fields = fields
+            self._field_types = fields
         else:
-            self._fields = file_fields
+            self._field_types = file_fields
+        self._fields = []
+        for l in self._field_types:
+            fl = []
+            for f in l:
+                fl.append(f.name)
+            self._fields.append(fl)
 
     @property
     def sensors_count(self) -> int:
@@ -199,8 +205,12 @@ class ScansMulti(MultiScanSource):
         return self._source.is_indexed
 
     @property
-    def fields(self) -> List[FieldTypes]:
+    def fields(self) -> List[str]:
         return self._fields
+
+    @property
+    def field_types(self) -> List[FieldType]:
+        return self._field_types
 
     @property
     def scans_num(self) -> List[Optional[int]]:
@@ -210,7 +220,8 @@ class ScansMulti(MultiScanSource):
 
     def __len__(self) -> int:
         if self.is_live or not self.is_indexed:
-            raise TypeError("len is not supported on unindexed or live sources")
+            raise TypeError(
+                "len is not supported on unindexed or live sources")
         raise NotImplementedError
 
     def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
@@ -233,6 +244,8 @@ class ScansMulti(MultiScanSource):
         pf = [None] * self.sensors_count
         ls_write = [None] * self.sensors_count
         batch = [None] * self.sensors_count
+        ls_write = [None] * self.sensors_count
+        yielded = [None] * self.sensors_count
 
         for i, sinfo in enumerate(self.metadata):
             w[i] = sinfo.format.columns_per_frame
@@ -241,6 +254,8 @@ class ScansMulti(MultiScanSource):
             columns_per_packet[i] = sinfo.format.columns_per_packet
             pf[i] = PacketFormat.from_info(sinfo)
             batch[i] = ScanBatcher(w[i], pf[i])
+            ls_write[i] = LidarScan(
+                h[i], w[i], self._field_types[i], columns_per_packet[i])
 
         # autopep8: off
         scan_shallow_yield = lambda x: x
@@ -254,17 +269,17 @@ class ScansMulti(MultiScanSource):
             had_message = False
             for idx, packet in self._source:
                 if isinstance(packet, LidarPacket):
-                    ls_write[idx] = ls_write[idx] or LidarScan(
-                        h[idx], w[idx], self._fields[idx], columns_per_packet[idx])
-                    if batch[idx](packet._data, packet_ts(packet), ls_write[idx]):
+                    if batch[idx](packet.buf, packet_ts(packet), ls_write[idx]):
                         if not self._complete or ls_write[idx].complete(col_window[idx]):
                             had_message = True
                             yield idx, scan_yield_op(ls_write[idx])
+                            yielded[idx] = ls_write[idx].frame_id
 
             # return the last not fully cut scans in the sensor timestamp order if
             # they satisfy the completeness criteria
+            skip_ls = lambda idx, ls: ls is None or ls.frame_id in [yielded[idx], -1]
             last_scans = sorted(
-                [(idx, ls) for idx, ls in enumerate(ls_write) if ls is not None],
+                [(idx, ls) for idx, ls in enumerate(ls_write) if not skip_ls(idx, ls)],
                 key=lambda si: first_valid_packet_ts(si[1]))
             while last_scans:
                 idx, ls = last_scans.pop(0)
@@ -284,7 +299,7 @@ class ScansMulti(MultiScanSource):
         self._source.seek(offset)
 
     def __getitem__(self, key: Union[int, slice]
-                    ) -> Union[List[Optional[LidarScan]], List[List[Optional[LidarScan]]]]:
+                    ) -> Union[List[Optional[LidarScan]], MultiScanSource]:
 
         if not self.is_indexed:
             raise RuntimeError(

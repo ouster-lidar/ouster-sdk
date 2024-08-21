@@ -67,7 +67,7 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 
     # Save metadata as json
     with open(f"{filename}.json", 'w') as f:
-        f.write(info.updated_metadata_string())
+        f.write(info.to_json_string())
 
     if raw:
         scan_source = None
@@ -89,10 +89,14 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
                        f"{', '.join([c for c in ctx.invoked_command_names if c != 'save'])}.")
 
         # replace ScanSource's packetsource with RecordingPacketSource
+        if info.config.udp_port_imu is None or info.config.udp_port_lidar is None:
+            click.echo("Ports could not be found for the specified source.")
+            exit(1)
+
         scan_source._source = RecordingPacketSource(
             scan_source._source, n_frames=None,
             prefix_path=filename, chunk_size=chunk_size, overwrite=overwrite,
-            lidar_port=info.udp_port_lidar, imu_port=info.udp_port_imu
+            lidar_port=info.config.udp_port_lidar, imu_port=info.config.udp_port_imu
         )
     else:
         click.echo("Warning: Saving pcap without -r/--raw will not save LEGACY IMU packets.")
@@ -110,10 +114,10 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
                     # [kk] TODO: implement chunk-size
                     packets = scan_to_packets(scan, info)
                     for packet in packets:
-                        ts = packet.capture_timestamp or time.time()
+                        ts = packet.host_timestamp / 1e9 if packet.host_timestamp else time.time()
                         _pcap.record_packet(pcap_record_handle, "127.0.0.1",
-                                            "127.0.0.1", info.udp_port_lidar,
-                                            info.udp_port_lidar, packet._data, ts)
+                                            "127.0.0.1", info.config.udp_port_lidar,
+                                            info.config.udp_port_lidar, packet.buf, ts)
                     yield scan
             except (KeyboardInterrupt, StopIteration):
                 pass
@@ -390,7 +394,8 @@ def determine_filename(prefix: str, dir: str, filename: str, extension: str, inf
     if filename != "":
         filename = str(outpath / f"{prefix}{filename}")
     else:
-        filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_{info.mode}_{time_str}{extension}")
+        filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_"
+                                 f"{info.config.lidar_mode}_{time_str}{extension}")
 
     return filename
 
@@ -474,8 +479,8 @@ def source_to_bag_iter(scans: Union[ScanSource, Iterator[LidarScan]], info: Sens
                     for scan in scans:
                         packets = scan_to_packets(scan, info)
                         for packet in packets:
-                            ts = rospy.Time.from_sec(packet.capture_timestamp)
-                            msg = PacketMsg(buf=packet._data.tobytes())
+                            ts = rospy.Time.from_sec(packet.host_timestamp / 1e9)
+                            msg = PacketMsg(buf=packet.buf.tobytes())
                             if isinstance(packet, LidarPacket):
                                 outbag.write(lidar_topic, msg, ts)
                             elif isinstance(packet, ImuPacket):
