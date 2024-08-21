@@ -435,7 +435,7 @@ struct calibration_status {
 };
 
 /** Stores parsed information about the prod line */
-class product_info {
+class OUSTER_CLIENT_EXPORT product_info {
    public:
     /**
      * The original full product line string.
@@ -504,7 +504,8 @@ class product_info {
  *
  * @return lhs == rhs
  */
-bool operator==(const product_info& lhs, const product_info& rhs);
+OUSTER_CLIENT_EXPORT bool operator==(const product_info& lhs,
+                                    const product_info& rhs);
 
 /**
  * In-Equality for product_info.
@@ -514,7 +515,8 @@ bool operator==(const product_info& lhs, const product_info& rhs);
  *
  * @return lhs != rhs
  */
-bool operator!=(const product_info& lhs, const product_info& rhs);
+OUSTER_CLIENT_EXPORT bool operator!=(const product_info& lhs,
+                                     const product_info& rhs);
 
 /**
  * Get string representation of a product info.
@@ -523,7 +525,7 @@ bool operator!=(const product_info& lhs, const product_info& rhs);
  *
  * @return string representation of the product info.
  */
-std::string to_string(const product_info& info);
+OUSTER_CLIENT_EXPORT std::string to_string(const product_info& info);
 
 /** Stores parsed information from metadata and */
 struct OUSTER_CLIENT_EXPORT sensor_info {
