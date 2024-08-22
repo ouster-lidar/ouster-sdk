@@ -50,8 +50,8 @@ set(ouster_client_export_filename
 generate_export_header(ouster_client 
   EXPORT_FILE_NAME ${PROJECT_BINARY_DIR}/${ouster_client_export_filename})
 
-target_include_directories(ouster_client PRIVATE
-  ${PROJECT_BINARY_DIR}/ouster_client)
+target_include_directories(ouster_client PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/ouster_client>)
 
 install(FILES ${PROJECT_BINARY_DIR}/${ouster_client_export_filename} DESTINATION include/ouster)
   
