@@ -155,7 +155,7 @@ OUSTER_CLIENT_EXPORT client_state poll_client(const client& cli, int timeout_sec
  *
  * @return true if a lidar packet was successfully read.
  */
-bool read_lidar_packet(const client& cli, uint8_t* buf,
+OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, uint8_t* buf,
                        const packet_format& pf);
 
 /**
