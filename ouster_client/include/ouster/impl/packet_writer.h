@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "ouster/ouster_client_export.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -14,7 +15,7 @@ namespace impl {
 /**
  * Writing counterpart to packet_format, used for packet generation
  */
-class packet_writer : public packet_format {
+class OUSTER_CLIENT_EXPORT packet_writer : public packet_format {
     template <typename T, typename SRC>
     void set_block_impl(Eigen::Ref<const img_t<T>> field, const std::string& i,
                         uint8_t* lidar_buf) const;

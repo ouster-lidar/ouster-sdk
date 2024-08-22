@@ -4,6 +4,7 @@ find_package(jsoncpp REQUIRED)
 find_package(CURL REQUIRED)
 find_package(spdlog REQUIRED)
 include(Coverage)
+include(GenerateExportHeader)
 
 # ==== Libraries ====
 add_library(ouster_client src/client.cpp src/types.cpp src/sensor_info.cpp src/netcompat.cpp src/lidar_scan.cpp
@@ -41,6 +42,19 @@ target_include_directories(ouster_client SYSTEM PUBLIC
   $<INSTALL_INTERFACE:include/optional-lite>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/optional-lite>)
 
+# ==== Export header ====
+
+set(ouster_client_export_filename
+  ouster_client/ouster/ouster_client_export.h)
+
+generate_export_header(ouster_client 
+  EXPORT_FILE_NAME ${PROJECT_BINARY_DIR}/${ouster_client_export_filename})
+
+target_include_directories(ouster_client PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/ouster_client>)
+
+install(FILES ${PROJECT_BINARY_DIR}/${ouster_client_export_filename} DESTINATION include/ouster)
+  
 # ==== Install ====
 install(TARGETS ouster_client
         EXPORT ouster-sdk-targets

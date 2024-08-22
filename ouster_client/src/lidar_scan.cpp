@@ -375,26 +375,26 @@ Eigen::Ref<const img_t<T>> LidarScan::field(const std::string& name) const {
 // explicitly instantiate for each supported field type
 
 // clang-format off
-template Eigen::Ref<img_t<uint8_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<uint16_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<uint32_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<uint64_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<int8_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<int16_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<int32_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<int64_t>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<float>> LidarScan::field(const std::string& f);
-template Eigen::Ref<img_t<double>> LidarScan::field(const std::string& f);
-template Eigen::Ref<const img_t<uint8_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<uint16_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<uint32_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<uint64_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<int8_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<int16_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<int32_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<int64_t>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<float>> LidarScan::field(const std::string& f) const;
-template Eigen::Ref<const img_t<double>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<uint8_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<uint16_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<uint32_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<uint64_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<int8_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<int16_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<int32_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<int64_t>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<float>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<img_t<double>> LidarScan::field(const std::string& f);
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<uint8_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<uint16_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<uint32_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<uint64_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<int8_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<int16_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<int32_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<int64_t>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<float>> LidarScan::field(const std::string& f) const;
+template OUSTER_CLIENT_EXPORT Eigen::Ref<const img_t<double>> LidarScan::field(const std::string& f) const;
 // clang-format on
 
 static FieldType get_field_type(const std::string& name, const Field& field) {

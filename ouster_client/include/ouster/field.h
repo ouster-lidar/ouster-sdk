@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "ouster/array_view.h"
+#include "ouster/ouster_client_export.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -29,7 +30,8 @@ namespace impl {
  *
  * @return vector of stride offsets
  */
-std::vector<size_t> calculate_strides(const std::vector<size_t>& shape);
+OUSTER_CLIENT_EXPORT std::vector<size_t> calculate_strides(
+    const std::vector<size_t>& shape);
 
 }  // namespace impl
 
@@ -39,24 +41,24 @@ namespace impl {
 // clang-format off
 
 template <typename T> int type_size() { return sizeof(T); }
-template <> int type_size<void>();
+template <> OUSTER_CLIENT_EXPORT int type_size<void>();
 
 template <typename T> size_t type_hash() { return typeid(T).hash_code(); }
-template <> size_t type_hash<void>();
+template <> OUSTER_CLIENT_EXPORT size_t type_hash<void>();
 
 template <typename T>
 ChanFieldType type_cft() { return ChanFieldType::UNREGISTERED; }
-template <> ChanFieldType type_cft<void>();
-template <> ChanFieldType type_cft<uint8_t>();
-template <> ChanFieldType type_cft<uint16_t>();
-template <> ChanFieldType type_cft<uint32_t>();
-template <> ChanFieldType type_cft<uint64_t>();
-template <> ChanFieldType type_cft<int8_t>();
-template <> ChanFieldType type_cft<int16_t>();
-template <> ChanFieldType type_cft<int32_t>();
-template <> ChanFieldType type_cft<int64_t>();
-template <> ChanFieldType type_cft<float>();
-template <> ChanFieldType type_cft<double>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<void>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<uint8_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<uint16_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<uint32_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<uint64_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<int8_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<int16_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<int32_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<int64_t>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<float>();
+template <> OUSTER_CLIENT_EXPORT ChanFieldType type_cft<double>();
 
 // clang-format on
 
@@ -68,7 +70,7 @@ template <> ChanFieldType type_cft<double>();
  * Unlike FieldType this fully describes a Field's dimensions rather than
  * abstract away the lidar width and height or packet count.
  */
-struct FieldDescriptor {
+struct OUSTER_CLIENT_EXPORT FieldDescriptor {
     /**
      * type hash of the described field
      */
@@ -266,7 +268,7 @@ auto fd_array(sensor::ChanFieldType tag, Args&&... args) -> FieldDescriptor {
  * Non-owning wrapper over a memory pointer that allows for type safe
  * conversion to typed pointer, eigen array or ArrayView
  */
-class FieldView {
+class OUSTER_CLIENT_EXPORT FieldView {
    protected:
     void* ptr_;
     FieldDescriptor desc_;
@@ -639,7 +641,7 @@ enum class FieldClass {
  *
  * @return string representation of the FieldClass, or "UNKNOWN".
  */
-std::string to_string(FieldClass f);
+OUSTER_CLIENT_EXPORT std::string to_string(FieldClass f);
 
 /**
  * RAII memory-owning container for arbitrary typed and sized arrays and POD
@@ -647,7 +649,7 @@ std::string to_string(FieldClass f);
  *
  * For usage examples, check unit tests
  */
-class Field : public FieldView {
+class OUSTER_CLIENT_EXPORT Field : public FieldView {
    protected:
     FieldClass class_;
 
@@ -730,7 +732,7 @@ class Field : public FieldView {
  *
  * @return reinterpreted view of uint8_t, uint16_t, uint32_t or uint64_t type
  */
-FieldView uint_view(const FieldView& other);
+OUSTER_CLIENT_EXPORT FieldView uint_view(const FieldView& other);
 
 }  // namespace ouster
 
@@ -742,6 +744,6 @@ namespace std {
  * @param[in] a Field to swap with b
  * @param[in] b Field to swap with a
  */
-void swap(ouster::Field& a, ouster::Field& b);
+OUSTER_CLIENT_EXPORT void swap(ouster::Field& a, ouster::Field& b);
 
 }  // namespace std

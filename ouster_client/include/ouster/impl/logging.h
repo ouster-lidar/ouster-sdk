@@ -2,11 +2,13 @@
 
 #include <spdlog/logger.h>
 
+#include "ouster/ouster_client_export.h"
+
 namespace ouster {
 namespace sensor {
 namespace impl {
 
-class Logger {
+class OUSTER_CLIENT_EXPORT Logger {
    public:
     static Logger& instance();
 
@@ -28,7 +30,7 @@ class Logger {
 };
 }  // namespace impl
 
-spdlog::logger& logger();
+OUSTER_CLIENT_EXPORT spdlog::logger& logger();
 
 }  // namespace sensor
 }  // namespace ouster

@@ -288,7 +288,8 @@ struct zero_field {
  * @param[in] pf packet format
  * @param[in] ls lidar scan to check for RAW_HEADERS field presence.
  */
-bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls);
+OUSTER_CLIENT_EXPORT bool raw_headers_enabled(const sensor::packet_format& pf,
+                                              const LidarScan& ls);
 
 /**
  * OutputItT - STL compatible output iterator over LidarPacket value type

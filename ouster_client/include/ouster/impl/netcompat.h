@@ -44,6 +44,8 @@
 
 #endif  // --------- End Platform Differentiation Block ---------
 
+#include "ouster/ouster_client_export.h"
+
 namespace ouster {
 namespace sensor {
 namespace impl {
@@ -53,40 +55,40 @@ namespace impl {
  * @param[in] sock The socket file descriptor to close
  * @return success
  */
-int socket_close(SOCKET sock);
+OUSTER_CLIENT_EXPORT int socket_close(SOCKET sock);
 
 /**
  * Get the error message for socket errors
  * @return The socket error message
  */
-std::string socket_get_error();
+OUSTER_CLIENT_EXPORT std::string socket_get_error();
 
 /**
  * Check if a socket file descriptor is valid
  * @param[in] value The socket file descriptor to check
  * @return The validity of the socket file descriptor
  */
-bool socket_valid(SOCKET value);
+OUSTER_CLIENT_EXPORT bool socket_valid(SOCKET value);
 
 /**
  * Check if the last error was a socket exit event
  * @return If the socket has exited
  */
-bool socket_exit();
+OUSTER_CLIENT_EXPORT bool socket_exit();
 
 /**
  * Set a specified socket to non-blocking
  * @param[in] value The socket file descriptor to set non-blocking
  * @return success
  */
-int socket_set_non_blocking(SOCKET value);
+OUSTER_CLIENT_EXPORT int socket_set_non_blocking(SOCKET value);
 
 /**
  * Set a specified socket to reuse
  * @param[in] value The socket file descriptor to set reuse
  * @return success
  */
-int socket_set_reuse(SOCKET value);
+OUSTER_CLIENT_EXPORT int socket_set_reuse(SOCKET value);
 
 /**
  * Set SO_RCVTIMEO on the specified socket
@@ -94,7 +96,7 @@ int socket_set_reuse(SOCKET value);
  * @param[in] timeout_sec Timeout esconds
  * @return success
  */
-int socket_set_rcvtimeout(SOCKET sock, int timeout_sec);
+OUSTER_CLIENT_EXPORT int socket_set_rcvtimeout(SOCKET sock, int timeout_sec);
 
 }  // namespace impl
 }  // namespace sensor

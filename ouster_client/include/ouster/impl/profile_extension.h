@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "ouster/ouster_client_export.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -24,7 +25,7 @@ struct FieldInfo {
 
 }  // namespace impl
 
-void add_custom_profile(
+OUSTER_CLIENT_EXPORT void add_custom_profile(
     int profile_nr, const std::string& name,
     const std::vector<std::pair<std::string, impl::FieldInfo>>& fields,
     size_t chan_data_size);

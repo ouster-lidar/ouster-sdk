@@ -10,13 +10,14 @@
 
 #include <Eigen/Core>
 
+#include "ouster/ouster_client_export.h"
 #include "ouster/types.h"
 
 namespace ouster {
 namespace viz {
 
 /** Adjusts brightness to between 0 and 1. */
-class AutoExposure {
+class OUSTER_CLIENT_EXPORT AutoExposure {
     const double lo_percentile, hi_percentile;  // percentiles used for scaling
     const int ae_update_every;
 
@@ -79,7 +80,7 @@ class AutoExposure {
  * thereby correcting subtle horizontal line artifacts in images, especially the
  * ambient image.
  */
-class BeamUniformityCorrector {
+class OUSTER_CLIENT_EXPORT BeamUniformityCorrector {
    private:
     int counter = 0;
     Eigen::ArrayXd dark_count;

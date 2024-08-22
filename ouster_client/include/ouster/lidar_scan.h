@@ -16,6 +16,7 @@
 
 #include "ouster/defaults.h"
 #include "ouster/field.h"
+#include "ouster/ouster_client_export.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -23,7 +24,7 @@ namespace ouster {
 /*
  * Description for a field that we desire in a lidar scan
  */
-struct FieldType {
+struct OUSTER_CLIENT_EXPORT FieldType {
     std::string name;                    ///< Name of the field
     sensor::ChanFieldType element_type;  ///< Type of field elements
     std::vector<size_t> extra_dims;      ///< Additional dimensions of the field
@@ -69,7 +70,7 @@ struct FieldType {
  *
  * @return string representation of the FieldType.
  */
-std::string to_string(const FieldType& field_type);
+OUSTER_CLIENT_EXPORT std::string to_string(const FieldType& field_type);
 
 /**
  * Equality for FieldTypes.
@@ -79,7 +80,7 @@ std::string to_string(const FieldType& field_type);
  *
  * @return if a == b.
  */
-bool operator==(const FieldType& a, const FieldType& b);
+OUSTER_CLIENT_EXPORT bool operator==(const FieldType& a, const FieldType& b);
 
 /**
  * Equality for FieldTypes.
@@ -89,7 +90,7 @@ bool operator==(const FieldType& a, const FieldType& b);
  *
  * @return if a != b.
  */
-bool operator!=(const FieldType& a, const FieldType& b);
+OUSTER_CLIENT_EXPORT bool operator!=(const FieldType& a, const FieldType& b);
 
 /**
  * Alias for the lidar scan field types
@@ -107,7 +108,7 @@ using LidarScanFieldTypes = std::vector<FieldType>;
  * to a single measurement in time. Use the destagger() function to create an
  * image where columns correspond to a single azimuth angle.
  */
-class LidarScan {
+class OUSTER_CLIENT_EXPORT LidarScan {
    public:
     template <typename T>
     using Header = Eigen::Array<T, Eigen::Dynamic, 1>;  ///< Header typedef
@@ -448,7 +449,8 @@ class LidarScan {
      */
     bool complete(sensor::ColumnWindow window) const;
 
-    friend bool operator==(const LidarScan& a, const LidarScan& b);
+    OUSTER_CLIENT_EXPORT friend bool operator==(const LidarScan& a,
+                                                const LidarScan& b);
 };
 
 /**
@@ -458,7 +460,8 @@ class LidarScan {
  *
  * @return string representation of the lidar scan field types.
  */
-std::string to_string(const LidarScanFieldTypes& field_types);
+OUSTER_CLIENT_EXPORT std::string to_string(
+    const LidarScanFieldTypes& field_types);
 
 /**
  * Get the lidar scan field types from lidar profile
@@ -467,7 +470,8 @@ std::string to_string(const LidarScanFieldTypes& field_types);
  *
  * @return The lidar scan field types
  */
-LidarScanFieldTypes get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
+OUSTER_CLIENT_EXPORT LidarScanFieldTypes
+get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
 
 /**
  * Get the lidar scan field types from sensor info
@@ -476,7 +480,8 @@ LidarScanFieldTypes get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
  *
  * @return The lidar scan field types
  */
-LidarScanFieldTypes get_field_types(const sensor::sensor_info& info);
+OUSTER_CLIENT_EXPORT LidarScanFieldTypes
+get_field_types(const sensor::sensor_info& info);
 
 /**
  * Get string representation of a lidar scan.
@@ -485,7 +490,7 @@ LidarScanFieldTypes get_field_types(const sensor::sensor_info& info);
  *
  * @return string representation of the lidar scan.
  */
-std::string to_string(const LidarScan& ls);
+OUSTER_CLIENT_EXPORT std::string to_string(const LidarScan& ls);
 
 /** \defgroup ouster_client_lidar_scan_operators Ouster Client lidar_scan.h
  * Operators
@@ -500,7 +505,7 @@ std::string to_string(const LidarScan& ls);
  *
  * @return if a == b.
  */
-bool operator==(const LidarScan& a, const LidarScan& b);
+OUSTER_CLIENT_EXPORT bool operator==(const LidarScan& a, const LidarScan& b);
 
 /**
  * NOT Equality for scans.
@@ -516,7 +521,7 @@ inline bool operator!=(const LidarScan& a, const LidarScan& b) {
 /** @}*/
 
 /** Lookup table of beam directions and offsets. */
-struct XYZLut {
+struct OUSTER_CLIENT_EXPORT XYZLut {
     LidarScan::Points direction;  ///< Lookup table of beam directions
     LidarScan::Points offset;     ///< Lookup table of beam offsets
 };
@@ -548,11 +553,10 @@ struct XYZLut {
  *
  * @return xyz direction and offset vectors for each point in the lidar scan.
  */
-XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
-                    const mat4d& beam_to_lidar_transform,
-                    const mat4d& transform,
-                    const std::vector<double>& azimuth_angles_deg,
-                    const std::vector<double>& altitude_angles_deg);
+OUSTER_CLIENT_EXPORT XYZLut make_xyz_lut(
+    size_t w, size_t h, double range_unit, const mat4d& beam_to_lidar_transform,
+    const mat4d& transform, const std::vector<double>& azimuth_angles_deg,
+    const std::vector<double>& altitude_angles_deg);
 
 /**
  * Convenient overload that uses parameters from the supplied sensor_info.
@@ -584,7 +588,8 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
  * @return Cartesian points where ith row is a 3D point which corresponds
  *         to ith pixel in LidarScan where i = row * w + col.
  */
-LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
+OUSTER_CLIENT_EXPORT LidarScan::Points cartesian(const LidarScan& scan,
+                                                 const XYZLut& lut);
 
 /**
  * Convert a staggered range image to Cartesian points.
@@ -596,8 +601,8 @@ LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
  * @return Cartesian points where ith row is a 3D point which corresponds
  *         to ith pixel in LidarScan where i = row * w + col.
  */
-LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
-                            const XYZLut& lut);
+OUSTER_CLIENT_EXPORT LidarScan::Points cartesian(
+    const Eigen::Ref<const img_t<uint32_t>>& range, const XYZLut& lut);
 /** @}*/
 
 /** \defgroup ouster_client_destagger Ouster Client lidar_scan.h
@@ -649,7 +654,7 @@ inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
  * Make a function that batches a single scan (revolution) of data to a
  * LidarScan.
  */
-class ScanBatcher {
+class OUSTER_CLIENT_EXPORT ScanBatcher {
     size_t w;
     size_t h;
     uint16_t next_valid_m_id;
