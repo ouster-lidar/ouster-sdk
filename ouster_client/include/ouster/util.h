@@ -4,6 +4,7 @@
  */
 
 #include <json/json.h>
+
 #include "ouster/ouster_client_export.h"
 
 /* Helper function which produces a combination of the two roots, with
@@ -15,7 +16,7 @@
 namespace ouster {
 
 OUSTER_CLIENT_EXPORT Json::Value combined(const Json::Value& root_orig,
-                                         const Json::Value& root_new,
-                     std::vector<std::string>& changed);
+                                          const Json::Value& root_new,
+                                          std::vector<std::string>& changed);
 
 }

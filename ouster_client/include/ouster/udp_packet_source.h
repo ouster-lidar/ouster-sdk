@@ -30,8 +30,8 @@
 
 #include "ouster/client.h"
 #include "ouster/impl/ring_buffer.h"
-#include "ouster/types.h"
 #include "ouster/ouster_client_export.h"
+#include "ouster/types.h"
 
 namespace ouster {
 namespace sensor {

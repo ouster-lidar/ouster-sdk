@@ -14,9 +14,9 @@
 #include <string>
 
 #include "ouster/defaults.h"
+#include "ouster/ouster_client_export.h"
 #include "ouster/types.h"
 #include "ouster/version.h"
-#include "ouster/ouster_client_export.h"
 
 namespace ouster {
 namespace sensor {
@@ -59,8 +59,10 @@ const util::version min_version = {1, 12, 0, "", "", "", ""};
  * @return true on success, otherwise false.
  */
 OUSTER_CLIENT_EXPORT bool init_logger(const std::string& log_level,
-                 const std::string& log_file_path = "", bool rotating = false,
-                 int max_size_in_bytes = 0, int max_files = 0);
+                                      const std::string& log_file_path = "",
+                                      bool rotating = false,
+                                      int max_size_in_bytes = 0,
+                                      int max_files = 0);
 
 /** \defgroup ouster_client_init Ouster Client Client Initialization
  * @{
@@ -76,8 +78,7 @@ OUSTER_CLIENT_EXPORT bool init_logger(const std::string& log_level,
  * @return pointer owning the resources associated with the connection.
  */
 OUSTER_CLIENT_EXPORT std::shared_ptr<client> init_client(
-    const std::string& hostname, int lidar_port,
-                                    int imu_port);
+    const std::string& hostname, int lidar_port, int imu_port);
 
 /**
  * Connect to and configure the sensor and start listening for data.
@@ -143,7 +144,8 @@ OUSTER_CLIENT_EXPORT std::shared_ptr<client> mtp_init_client(
  * LIDAR_DATA) is true if lidar data is ready to read, and (s & IMU_DATA) is
  * true if imu data is ready to read.
  */
-OUSTER_CLIENT_EXPORT client_state poll_client(const client& cli, int timeout_sec = 1);
+OUSTER_CLIENT_EXPORT client_state poll_client(const client& cli,
+                                              int timeout_sec = 1);
 
 /**
  * Read lidar data from the sensor. Will not block.
@@ -156,7 +158,7 @@ OUSTER_CLIENT_EXPORT client_state poll_client(const client& cli, int timeout_sec
  * @return true if a lidar packet was successfully read.
  */
 OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, uint8_t* buf,
-                       const packet_format& pf);
+                                            const packet_format& pf);
 
 /**
  * Read lidar data from the sensor. Will not block.
@@ -168,7 +170,8 @@ OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, uint8_t* buf,
  *
  * @return true if a lidar packet was successfully read.
  */
-OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes);
+OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, uint8_t* buf,
+                                            size_t bytes);
 
 /**
  * Read lidar data from the sensor. Will not block.
@@ -180,7 +183,8 @@ OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, uint8_t* buf, siz
  *
  * @return true if a lidar packet was successfully read.
  */
-OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, LidarPacket& packet);
+OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli,
+                                            LidarPacket& packet);
 
 /**
  * Read imu data from the sensor. Will not block.
@@ -192,7 +196,8 @@ OUSTER_CLIENT_EXPORT bool read_lidar_packet(const client& cli, LidarPacket& pack
  *
  * @return true if a lidar packet was successfully read.
  */
-OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes);
+OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, uint8_t* buf,
+                                          size_t bytes);
 
 /**
  * Read imu data from the sensor. Will not block.
@@ -204,7 +209,8 @@ OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, uint8_t* buf, size_
  *
  * @return true if an imu packet was successfully read.
  */
-OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
+OUSTER_CLIENT_EXPORT bool read_imu_packet(const client& cli, uint8_t* buf,
+                                          const packet_format& pf);
 
 /**
  * Read imu data from the sensor. Will not block.
@@ -250,9 +256,9 @@ OUSTER_CLIENT_EXPORT std::string get_metadata(
  *
  * @return true if sensor config successfully populated.
  */
-OUSTER_CLIENT_EXPORT bool get_config(const std::string& hostname, sensor_config& config,
-                bool active = true,
-                int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
+OUSTER_CLIENT_EXPORT bool get_config(
+    const std::string& hostname, sensor_config& config, bool active = true,
+    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 // clang-format off
 /**
@@ -280,9 +286,10 @@ enum config_flags : uint8_t {
  *
  * @return true if config params successfuly set on sensor.
  */
-OUSTER_CLIENT_EXPORT bool set_config(const std::string& hostname, const sensor_config& config,
-                uint8_t config_flags = 0,
-                int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
+OUSTER_CLIENT_EXPORT bool set_config(
+    const std::string& hostname, const sensor_config& config,
+    uint8_t config_flags = 0,
+    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /**
  * Return the port used to listen for lidar UDP data.

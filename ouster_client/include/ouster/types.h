@@ -20,8 +20,8 @@
 #include <vector>
 
 #include "nonstd/optional.hpp"
-#include "version.h"
 #include "ouster/ouster_client_export.h"
+#include "version.h"
 
 namespace ouster {
 
@@ -505,7 +505,7 @@ class OUSTER_CLIENT_EXPORT product_info {
  * @return lhs == rhs
  */
 OUSTER_CLIENT_EXPORT bool operator==(const product_info& lhs,
-                                    const product_info& rhs);
+                                     const product_info& rhs);
 
 /**
  * In-Equality for product_info.
@@ -600,7 +600,8 @@ struct OUSTER_CLIENT_EXPORT sensor_info {
  *
  * @return lhs == rhs
  */
-OUSTER_CLIENT_EXPORT bool operator==(const data_format& lhs, const data_format& rhs);
+OUSTER_CLIENT_EXPORT bool operator==(const data_format& lhs,
+                                     const data_format& rhs);
 
 /**
  * Not-Equality for data_format.
@@ -610,7 +611,8 @@ OUSTER_CLIENT_EXPORT bool operator==(const data_format& lhs, const data_format& 
  *
  * @return lhs != rhs
  */
-OUSTER_CLIENT_EXPORT bool operator!=(const data_format& lhs, const data_format& rhs);
+OUSTER_CLIENT_EXPORT bool operator!=(const data_format& lhs,
+                                     const data_format& rhs);
 
 /**
  * Equality for sensor_info.
@@ -620,7 +622,8 @@ OUSTER_CLIENT_EXPORT bool operator!=(const data_format& lhs, const data_format& 
  *
  * @return lhs == rhs
  */
-OUSTER_CLIENT_EXPORT bool operator==(const sensor_info& lhs, const sensor_info& rhs);
+OUSTER_CLIENT_EXPORT bool operator==(const sensor_info& lhs,
+                                     const sensor_info& rhs);
 
 /**
  * Not-Equality for sensor_info.
@@ -630,7 +633,8 @@ OUSTER_CLIENT_EXPORT bool operator==(const sensor_info& lhs, const sensor_info& 
  *
  * @return lhs != rhs
  */
-OUSTER_CLIENT_EXPORT bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
+OUSTER_CLIENT_EXPORT bool operator!=(const sensor_info& lhs,
+                                     const sensor_info& rhs);
 
 /**
  * Equality for sensor config.
@@ -640,7 +644,8 @@ OUSTER_CLIENT_EXPORT bool operator!=(const sensor_info& lhs, const sensor_info& 
  *
  * @return lhs == rhs
  */
-OUSTER_CLIENT_EXPORT bool operator==(const sensor_config& lhs, const sensor_config& rhs);
+OUSTER_CLIENT_EXPORT bool operator==(const sensor_config& lhs,
+                                     const sensor_config& rhs);
 
 /**
  * Not-Equality for sensor config.
@@ -650,7 +655,8 @@ OUSTER_CLIENT_EXPORT bool operator==(const sensor_config& lhs, const sensor_conf
  *
  * @return lhs != rhs
  */
-OUSTER_CLIENT_EXPORT bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
+OUSTER_CLIENT_EXPORT bool operator!=(const sensor_config& lhs,
+                                     const sensor_config& rhs);
 
 /**
  * Equality of sensor calibration.
@@ -658,7 +664,8 @@ OUSTER_CLIENT_EXPORT bool operator!=(const sensor_config& lhs, const sensor_conf
  * @param[in] lhs The first object to compare.
  * @param[out] rhs The second object to compare.
  */
-OUSTER_CLIENT_EXPORT bool operator==(const calibration_status& lhs, const calibration_status& rhs);
+OUSTER_CLIENT_EXPORT bool operator==(const calibration_status& lhs,
+                                     const calibration_status& rhs);
 
 /**
  * Not-Equality of sensor calibration.
@@ -666,7 +673,8 @@ OUSTER_CLIENT_EXPORT bool operator==(const calibration_status& lhs, const calibr
  * @param[in] lhs The first object to compare.
  * @param[out] rhs The second object to compare.
  */
-OUSTER_CLIENT_EXPORT bool operator!=(const calibration_status& lhs, const calibration_status& rhs);
+OUSTER_CLIENT_EXPORT bool operator!=(const calibration_status& lhs,
+                                     const calibration_status& rhs);
 
 /**
  * Get a default sensor_info for the given lidar mode.
@@ -729,7 +737,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(timestamp_mode mode);
  *
  * @return timestamp mode corresponding to the string, or 0 on error.
  */
-OUSTER_CLIENT_EXPORT timestamp_mode timestamp_mode_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT timestamp_mode
+timestamp_mode_of_string(const std::string& s);
 
 /**
  * Get string representation of an operating mode.
@@ -747,7 +756,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(OperatingMode mode);
  *
  * @return operating mode corresponding to the string, or 0 on error.
  */
-OUSTER_CLIENT_EXPORT optional<OperatingMode> operating_mode_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT optional<OperatingMode> operating_mode_of_string(
+    const std::string& s);
 
 /**
  * Get string representation of a multipurpose io mode.
@@ -765,8 +775,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(MultipurposeIOMode mode);
  *
  * @return multipurpose io mode corresponding to the string, or 0 on error.
  */
-OUSTER_CLIENT_EXPORT optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
-    const std::string& s);
+OUSTER_CLIENT_EXPORT optional<MultipurposeIOMode>
+multipurpose_io_mode_of_string(const std::string& s);
 
 /**
  * Get string representation of a polarity.
@@ -784,7 +794,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(Polarity polarity);
  *
  * @return polarity corresponding to the string, or 0 on error.
  */
-OUSTER_CLIENT_EXPORT optional<Polarity> polarity_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT optional<Polarity> polarity_of_string(
+    const std::string& s);
 
 /**
  * Get string representation of a NMEA Baud Rate.
@@ -802,7 +813,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(NMEABaudRate rate);
  *
  * @return nmea baud rate corresponding to the string, or 0 on error.
  */
-OUSTER_CLIENT_EXPORT optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT optional<NMEABaudRate> nmea_baud_rate_of_string(
+    const std::string& s);
 
 /**
  * Get string representation of an Azimuth Window.
@@ -830,7 +842,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(UDPProfileLidar profile);
  *
  * @return lidar profile corresponding to the string, or nullopt on error.
  */
-OUSTER_CLIENT_EXPORT optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT optional<UDPProfileLidar> udp_profile_lidar_of_string(
+    const std::string& s);
 
 /**
  * Get string representation of an IMU profile.
@@ -848,7 +861,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(UDPProfileIMU profile);
  *
  * @return imu profile corresponding to the string, or nullopt on error.
  */
-OUSTER_CLIENT_EXPORT optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT optional<UDPProfileIMU> udp_profile_imu_of_string(
+    const std::string& s);
 
 /**
  * Get full scale range setting from string
@@ -857,7 +871,8 @@ OUSTER_CLIENT_EXPORT optional<UDPProfileIMU> udp_profile_imu_of_string(const std
  *
  * @return full scale range corresponding to the string, or nullopt on error.
  */
-OUSTER_CLIENT_EXPORT optional<FullScaleRange> full_scale_range_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT optional<FullScaleRange> full_scale_range_of_string(
+    const std::string& s);
 
 /**
  * Get return order setting from string
@@ -866,7 +881,8 @@ OUSTER_CLIENT_EXPORT optional<FullScaleRange> full_scale_range_of_string(const s
  *
  * @return return order corresponding to the string, or nullopt on error.
  */
-OUSTER_CLIENT_EXPORT optional<ReturnOrder> return_order_of_string(const std::string& s);
+OUSTER_CLIENT_EXPORT optional<ReturnOrder> return_order_of_string(
+    const std::string& s);
 
 /**
  * Get string representation of a Return Order.
@@ -896,7 +912,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(FullScaleRange full_scale_range);
  *
  * @return string representation of the shot limiting status.
  */
-OUSTER_CLIENT_EXPORT std::string to_string(ShotLimitingStatus shot_limiting_status);
+OUSTER_CLIENT_EXPORT std::string to_string(
+    ShotLimitingStatus shot_limiting_status);
 
 /**
  * Get string representation of Thermal Shutdown Status.
@@ -906,14 +923,16 @@ OUSTER_CLIENT_EXPORT std::string to_string(ShotLimitingStatus shot_limiting_stat
  *
  * @return string representation of thermal shutdown status.
  */
-OUSTER_CLIENT_EXPORT std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
+OUSTER_CLIENT_EXPORT std::string to_string(
+    ThermalShutdownStatus thermal_shutdown_status);
 
 /**
  * Determine validity of provided signal multiplier value
  *
  * @param[in] signal_multiplier Signal multiplier value.
  */
-OUSTER_CLIENT_EXPORT void check_signal_multiplier(const double signal_multiplier);
+OUSTER_CLIENT_EXPORT void check_signal_multiplier(
+    const double signal_multiplier);
 
 /**
  * Parse metadata given path to a json file.
@@ -927,8 +946,8 @@ OUSTER_CLIENT_EXPORT void check_signal_multiplier(const double signal_multiplier
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
-OUSTER_CLIENT_EXPORT sensor_info metadata_from_json(const std::string& json_file,
-                               bool skip_beam_validation = false);
+OUSTER_CLIENT_EXPORT sensor_info metadata_from_json(
+    const std::string& json_file, bool skip_beam_validation = false);
 
 /**
  * String representation of the sensor_info. All fields included. NOT equivalent
@@ -992,8 +1011,9 @@ OUSTER_CLIENT_EXPORT std::string client_version();
  *
  * @return version corresponding to the string, or invalid_version on error.
  */
-[[deprecated("Use sensor_info::get_version() instead")]] OUSTER_CLIENT_EXPORT ouster::util::version
-firmware_version_from_metadata(const std::string& metadata);
+[[deprecated("Use sensor_info::get_version() instead")]] OUSTER_CLIENT_EXPORT
+    ouster::util::version
+    firmware_version_from_metadata(const std::string& metadata);
 
 // clang-format off
 typedef const char* cf_type;
@@ -1435,9 +1455,9 @@ OUSTER_CLIENT_EXPORT const packet_format& get_format(const sensor_info& info);
  *
  * @return a packet_format suitable for parsing UDP packets sent by the sensor.
  */
-OUSTER_CLIENT_EXPORT const packet_format& get_format(UDPProfileLidar udp_profile_lidar,
-                                size_t pixels_per_column,
-                                size_t columns_per_packet);
+OUSTER_CLIENT_EXPORT const packet_format& get_format(
+    UDPProfileLidar udp_profile_lidar, size_t pixels_per_column,
+    size_t columns_per_packet);
 
 /**
  * Encapsulate a packet buffer and attributes associated with it.

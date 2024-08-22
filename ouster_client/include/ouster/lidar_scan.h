@@ -16,8 +16,8 @@
 
 #include "ouster/defaults.h"
 #include "ouster/field.h"
-#include "ouster/types.h"
 #include "ouster/ouster_client_export.h"
+#include "ouster/types.h"
 
 namespace ouster {
 
@@ -459,7 +459,8 @@ class OUSTER_CLIENT_EXPORT LidarScan {
  *
  * @return string representation of the lidar scan field types.
  */
-OUSTER_CLIENT_EXPORT std::string to_string(const LidarScanFieldTypes& field_types);
+OUSTER_CLIENT_EXPORT std::string to_string(
+    const LidarScanFieldTypes& field_types);
 
 /**
  * Get the lidar scan field types from lidar profile
@@ -468,7 +469,8 @@ OUSTER_CLIENT_EXPORT std::string to_string(const LidarScanFieldTypes& field_type
  *
  * @return The lidar scan field types
  */
-OUSTER_CLIENT_EXPORT LidarScanFieldTypes get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
+OUSTER_CLIENT_EXPORT LidarScanFieldTypes
+get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
 
 /**
  * Get the lidar scan field types from sensor info
@@ -477,7 +479,8 @@ OUSTER_CLIENT_EXPORT LidarScanFieldTypes get_field_types(sensor::UDPProfileLidar
  *
  * @return The lidar scan field types
  */
-OUSTER_CLIENT_EXPORT LidarScanFieldTypes get_field_types(const sensor::sensor_info& info);
+OUSTER_CLIENT_EXPORT LidarScanFieldTypes
+get_field_types(const sensor::sensor_info& info);
 
 /**
  * Get string representation of a lidar scan.
@@ -549,11 +552,10 @@ struct OUSTER_CLIENT_EXPORT XYZLut {
  *
  * @return xyz direction and offset vectors for each point in the lidar scan.
  */
-OUSTER_CLIENT_EXPORT XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
-                    const mat4d& beam_to_lidar_transform,
-                    const mat4d& transform,
-                    const std::vector<double>& azimuth_angles_deg,
-                    const std::vector<double>& altitude_angles_deg);
+OUSTER_CLIENT_EXPORT XYZLut make_xyz_lut(
+    size_t w, size_t h, double range_unit, const mat4d& beam_to_lidar_transform,
+    const mat4d& transform, const std::vector<double>& azimuth_angles_deg,
+    const std::vector<double>& altitude_angles_deg);
 
 /**
  * Convenient overload that uses parameters from the supplied sensor_info.
@@ -585,7 +587,8 @@ inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
  * @return Cartesian points where ith row is a 3D point which corresponds
  *         to ith pixel in LidarScan where i = row * w + col.
  */
-OUSTER_CLIENT_EXPORT LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
+OUSTER_CLIENT_EXPORT LidarScan::Points cartesian(const LidarScan& scan,
+                                                 const XYZLut& lut);
 
 /**
  * Convert a staggered range image to Cartesian points.
@@ -597,8 +600,8 @@ OUSTER_CLIENT_EXPORT LidarScan::Points cartesian(const LidarScan& scan, const XY
  * @return Cartesian points where ith row is a 3D point which corresponds
  *         to ith pixel in LidarScan where i = row * w + col.
  */
-OUSTER_CLIENT_EXPORT LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
-                            const XYZLut& lut);
+OUSTER_CLIENT_EXPORT LidarScan::Points cartesian(
+    const Eigen::Ref<const img_t<uint32_t>>& range, const XYZLut& lut);
 /** @}*/
 
 /** \defgroup ouster_client_destagger Ouster Client lidar_scan.h
