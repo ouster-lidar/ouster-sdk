@@ -64,6 +64,25 @@ jobs:
       run: cmake --build build -j4
     - name: run tests
       run: cd build/ && ctest -j4 -C Debug --output-on-failure
+  windows-shared-libs-build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: vcpkg build
+      uses: johnwason/vcpkg-action@v6
+      id: vcpkg
+      with:
+        pkgs: jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers gtest
+        triplet: x64-windows
+        revision: 2024.04.26
+        token: ${{ github.token }}
+        github-binarycache: true
+    - name: cmake configure
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake
+    - name: cmake build
+      run: cmake --build build -j4
+    - name: run tests
+      run: cd build/ && ctest -j4 -C Debug --output-on-failure
   windows-python-build:
     runs-on: windows-latest
     steps:

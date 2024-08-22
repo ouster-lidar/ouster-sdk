@@ -449,7 +449,8 @@ class OUSTER_CLIENT_EXPORT LidarScan {
      */
     bool complete(sensor::ColumnWindow window) const;
 
-    friend bool operator==(const LidarScan& a, const LidarScan& b);
+    OUSTER_CLIENT_EXPORT friend bool operator==(const LidarScan& a,
+                                                const LidarScan& b);
 };
 
 /**
@@ -504,7 +505,7 @@ OUSTER_CLIENT_EXPORT std::string to_string(const LidarScan& ls);
  *
  * @return if a == b.
  */
-bool operator==(const LidarScan& a, const LidarScan& b);
+OUSTER_CLIENT_EXPORT bool operator==(const LidarScan& a, const LidarScan& b);
 
 /**
  * NOT Equality for scans.

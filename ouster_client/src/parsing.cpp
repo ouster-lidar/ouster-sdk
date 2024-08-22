@@ -117,7 +117,8 @@ static const Table<std::string, FieldInfo, 9> fusa_two_word_pixel_info{{
     {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
 }};
 
-Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles{{
+OUSTER_CLIENT_EXPORT Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES>
+    profiles{{
     {UDPProfileLidar::PROFILE_LIDAR_LEGACY,
      {legacy_field_info.data(), legacy_field_info.size(), 12}},
     {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
@@ -154,7 +155,7 @@ static int count_set_bits(uint64_t value) {
 };
 
 // TODO: move this out to some generalised FieldInfo utils
-uint64_t get_value_mask(const FieldInfo& f) {
+OUSTER_CLIENT_EXPORT uint64_t get_value_mask(const FieldInfo& f) {
     // first get type mask
     uint64_t type_mask = (uint64_t{1} << (field_type_size(f.ty_tag) * 8)) - 1;
 
@@ -169,7 +170,7 @@ uint64_t get_value_mask(const FieldInfo& f) {
 }
 
 // TODO: move this out to some generalised FieldInfo utils
-int get_bitness(const FieldInfo& f) {
+OUSTER_CLIENT_EXPORT int get_bitness(const FieldInfo& f) {
     return count_set_bits(get_value_mask(f));
 }
 
@@ -357,94 +358,94 @@ void packet_format::block_field(Eigen::Ref<img_t<T>> field,
 }
 
 // explicitly instantiate for each field type / block dim
-template void packet_format::block_field<uint8_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint8_t, 4>(
     Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint16_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint16_t, 4>(
     Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint32_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint32_t, 4>(
     Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint64_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint64_t, 4>(
     Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int8_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int8_t, 4>(
     Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int16_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int16_t, 4>(
     Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int32_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int32_t, 4>(
     Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int64_t, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int64_t, 4>(
     Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<float, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<float, 4>(
     Eigen::Ref<img_t<float>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<double, 4>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<double, 4>(
     Eigen::Ref<img_t<double>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint8_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint8_t, 8>(
     Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint16_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint16_t, 8>(
     Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint32_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint32_t, 8>(
     Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint64_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint64_t, 8>(
     Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int8_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int8_t, 8>(
     Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int16_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int16_t, 8>(
     Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int32_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int32_t, 8>(
     Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int64_t, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int64_t, 8>(
     Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<float, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<float, 8>(
     Eigen::Ref<img_t<float>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<double, 8>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<double, 8>(
     Eigen::Ref<img_t<double>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint8_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint8_t, 16>(
     Eigen::Ref<img_t<uint8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint16_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint16_t, 16>(
     Eigen::Ref<img_t<uint16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint32_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint32_t, 16>(
     Eigen::Ref<img_t<uint32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<uint64_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<uint64_t, 16>(
     Eigen::Ref<img_t<uint64_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int8_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int8_t, 16>(
     Eigen::Ref<img_t<int8_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int16_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int16_t, 16>(
     Eigen::Ref<img_t<int16_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int32_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int32_t, 16>(
     Eigen::Ref<img_t<int32_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<int64_t, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<int64_t, 16>(
     Eigen::Ref<img_t<int64_t>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<float, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<float, 16>(
     Eigen::Ref<img_t<float>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
-template void packet_format::block_field<double, 16>(
+template OUSTER_CLIENT_EXPORT void packet_format::block_field<double, 16>(
     Eigen::Ref<img_t<double>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 
@@ -573,25 +574,35 @@ void packet_format::col_field(const uint8_t* col_buf, const std::string& i,
 }
 
 // explicitly instantiate for each field type
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       uint8_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       uint16_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       uint32_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       uint64_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       int8_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       int16_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       int32_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       int64_t*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
-                                       float*, int) const;
-template void packet_format::col_field(const uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        uint8_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        uint16_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        uint32_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        uint64_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        int8_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        int16_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        int32_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        int64_t*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
+                                        float*, int) const;
+template OUSTER_CLIENT_EXPORT void packet_format::col_field(const uint8_t*,
+                                                            const std::string&,
                                        double*, int) const;
 
 ChanFieldType packet_format::field_type(const std::string& f) const {
@@ -1084,23 +1095,23 @@ void packet_writer::set_px(uint8_t* px_buf, const std::string& i,
     *ptr |= int_value;
 }
 
-template void packet_writer::set_px(uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&,
                                     uint8_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&,
                                     uint16_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&,
                                     uint32_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&,
                                     uint64_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&, int8_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&, int8_t) const;
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&,
                                     int16_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&,
                                     int32_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&,
                                     int64_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&, float) const;
-template void packet_writer::set_px(uint8_t*, const std::string&, double) const;
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&, float) const;
+template OUSTER_CLIENT_EXPORT void packet_writer::set_px(uint8_t*, const std::string&, double) const;
 
 template <typename T, typename DST>
 void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
@@ -1188,34 +1199,34 @@ void packet_writer::set_block(Eigen::Ref<const img_t<T>> field,
     }
 }
 
-template void packet_writer::set_block(Eigen::Ref<const img_t<uint8_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<uint8_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<uint16_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<uint16_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<uint32_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<uint32_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<uint64_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<uint64_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<int8_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<int8_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<int16_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<int16_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<int32_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<int32_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<int64_t>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<int64_t>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<float>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<float>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
-template void packet_writer::set_block(Eigen::Ref<const img_t<double>> field,
+template OUSTER_CLIENT_EXPORT void packet_writer::set_block(Eigen::Ref<const img_t<double>> field,
                                        const std::string& i,
                                        uint8_t* lidar_buf) const;
 
@@ -1262,25 +1273,25 @@ void packet_writer::unpack_raw_headers(Eigen::Ref<const img_t<T>> field,
     }
 }
 
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<uint8_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<uint16_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<uint32_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<uint64_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<int8_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<int16_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<int32_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<int64_t>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<float>> field, uint8_t* lidar_buf) const;
-template void packet_writer::unpack_raw_headers(
+template OUSTER_CLIENT_EXPORT void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<double>> field, uint8_t* lidar_buf) const;
 
 }  // namespace impl

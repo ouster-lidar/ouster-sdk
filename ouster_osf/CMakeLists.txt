@@ -146,6 +146,10 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
+if(WIN32)
+  set_property (TARGET ouster_osf PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 # ==== Install =========================================================
 install(TARGETS ouster_osf
         EXPORT ouster-sdk-targets

@@ -35,6 +35,10 @@ target_include_directories(ouster_viz PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 add_library(OusterSDK::ouster_viz ALIAS ouster_viz)
 
+if(WIN32)
+  set_property (TARGET ouster_viz PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 # ==== Install ====
 install(TARGETS ouster_viz
         EXPORT ouster-sdk-targets

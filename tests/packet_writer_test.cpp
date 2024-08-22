@@ -39,7 +39,9 @@ struct ProfileEntry {
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-extern Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles;
+OUSTER_CLIENT_EXPORT extern
+    Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES>
+        profiles;
 
 uint64_t get_value_mask(const FieldInfo& f);
 int get_bitness(const FieldInfo& f);

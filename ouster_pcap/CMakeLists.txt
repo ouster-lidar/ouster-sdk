@@ -22,6 +22,10 @@ target_link_libraries(ouster_pcap
   PRIVATE libpcap::libpcap libtins::libtins)
 add_library(OusterSDK::ouster_pcap ALIAS ouster_pcap)
 
+if(WIN32)
+  set_property (TARGET ouster_pcap PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 # ==== Install ====
 install(TARGETS ouster_pcap
   EXPORT ouster-sdk-targets
