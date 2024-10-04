@@ -93,11 +93,11 @@ announcements`_
 
 .. _Ouster sensor documentation: https://static.ouster.dev/sensor-docs/index.html
 .. _Ouster support: https://ouster.atlassian.net/servicedesk/customer/portal/8
-.. _Github issue tracker: https://github.com/ouster-lidar/ouster_sdk/issues
-.. _Ouster Github announcements: https://github.com/ouster-lidar/ouster_sdk/discussions/categories/announcements
-.. _Changelog: https://github.com/ouster-lidar/ouster_sdk/blob/master/CHANGELOG.rst
+.. _Github issue tracker: https://github.com/ouster-lidar/ouster-sdk/issues
+.. _Ouster Github announcements: https://github.com/ouster-lidar/ouster-sdk/discussions/categories/announcements
+.. _Changelog: https://github.com/ouster-lidar/ouster-sdk/blob/master/CHANGELOG.rst
 .. _Ouster ROS 1 driver: https://github.com/ouster-lidar/ouster-ros
-.. _Lifecycle Policies: https://github.com/ouster-lidar/ouster_sdk/discussions/532
+.. _Lifecycle Policies: https://github.com/ouster-lidar/ouster-sdk/discussions/532
 .. _OS0: https://ouster.com/products/hardware/os0-lidar-sensor
 .. _OS1: https://ouster.com/products/hardware/os1-lidar-sensor
 .. _OS2: https://ouster.com/products/hardware/os2-lidar-sensor

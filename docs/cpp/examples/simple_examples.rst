@@ -99,7 +99,7 @@ To see this in action, you can run the example executable ``lidar_scan_example``
     
     $ lidar_scan_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
-The source code of ``lidar_scan_example`` is available `here <https://github.com/ouster-lidar/ouster_sdk/blob/master/examples/lidar_scan_example.cpp>`_.
+The source code of ``lidar_scan_example`` is available `here <https://github.com/ouster-lidar/ouster-sdk/blob/master/examples/lidar_scan_example.cpp>`_.
 
 
 2D Representations and 3D representations
@@ -121,7 +121,7 @@ To run this example:
     
     representations_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
-The source code of ``representations_example`` is available `on the github <https://github.com/ouster-lidar/ouster_sdk/blob/master/examples/representations_example.cpp>`_.
+The source code of ``representations_example`` is available `on the github <https://github.com/ouster-lidar/ouster-sdk/blob/master/examples/representations_example.cpp>`_.
 
 
 Reshaping XYZ to 2D

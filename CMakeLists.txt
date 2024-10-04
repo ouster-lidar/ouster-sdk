@@ -13,7 +13,7 @@ include(DefaultBuildType)
 include(VcpkgEnv)
 
 # ==== Project Name ====
-project(ouster_sdk VERSION 0.13.0)
+project(ouster-sdk VERSION 0.13.0)
 
 # generate version header
 set(OusterSDK_VERSION_STRING 0.13.0)

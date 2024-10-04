@@ -77,14 +77,14 @@ Python 3.7 reaches its end of life on June 27th, 2023. We will likely stop produ
 FW versions
 ~~~~~~~~~~~
 FW 2.0 will be 3 years old in November 2023, with numerous upgrades introduces in subsequent FWs
-2.1-2.5, and FW 3.0. New versions of the Python SDK and new commits of ouster_sdk will likely
+2.1-2.5, and FW 3.0. New versions of the Python SDK and new commits of ouster-sdk will likely
 stop supporting direct communication with sensors running FW 2.0 by November 2023, although recorded
 data in the pcap+json format will continue to be read and supported.
 
 Ubuntu 18.04
 ~~~~~~~~~~~~
 Ubuntu 18.04 reaches its end of standard support in May 2023. We will likely stop supporting the C++
-and Python builds of ``ouster_sdk`` on 18.04 by November 2023. You will still be able to run
+and Python builds of ``ouster-sdk`` on 18.04 by November 2023. You will still be able to run
 available Python wheels on your system if you so choose.
 
 
