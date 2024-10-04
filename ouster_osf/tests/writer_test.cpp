@@ -260,7 +260,7 @@ TEST_F(WriterTest, WriteSlicedLegacyLidarScan) {
     field_types.emplace_back(sensor::ChanField::SIGNAL,
                              sensor::ChanFieldType::UINT16);
     field_types.emplace_back(sensor::ChanField::REFLECTIVITY,
-                             sensor::ChanFieldType::UINT16);
+                             sensor::ChanFieldType::UINT8);
 
     std::cout << "LidarScan field_types: " << ouster::to_string(field_types)
               << std::endl;

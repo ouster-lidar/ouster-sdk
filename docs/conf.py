@@ -1,5 +1,4 @@
 import sphinx_rtd_theme  # noqa
-import os
 import json
 
 # Configuration file for the Sphinx documentation builder.
@@ -44,7 +43,6 @@ if not os.path.exists(OUSTER_SDK_PATH):
     OUSTER_SDK_PATH = os.path.dirname(SRC_PATH)
 if not os.path.exists(os.path.join(OUSTER_SDK_PATH, "cmake")):
     raise RuntimeError("Could not guess OUSTER_SDK_PATH")
-print(OUSTER_SDK_PATH)
 
 
 # https://packaging.python.org/en/latest/guides/single-sourcing-package-version/
@@ -120,7 +118,7 @@ html_theme_options = {
 html_context = {
     'display_github': True,
     'github_user': 'ouster-lidar',
-    'github_repo': 'ouster_example',
+    'github_repo': 'ouster_sdk',
     # 'github_version': 'ouster/python-bindings',
     'github_version': 'master',
     'conf_py_path': '/docs/',
@@ -175,6 +173,9 @@ copybutton_exclude = '.linenos, .gp'
 # tabs behavior
 sphinx_tabs_disable_tab_closing = True
 
+enhanced_warnings = (os.getenv("DOXYGEN_ENHANCED_WARNINGS",
+                               default="false").lower() == "true")
+
 # -- Doxygen XML generation handlers -----------------------------------
 def do_doxygen_generate_xml(app):
     # Only runs is breathe projects exists
@@ -195,6 +196,7 @@ def do_doxygen_generate_xml(app):
         'project': app.config.project,
         'version': app.config.release,
         'output_dir': doxygen_output_dir,
+        'enhanced_warnings': "YES" if enhanced_warnings else "NO",
         'warn_log_file': os.path.join(
             doxygen_output_dir, "warning_log.log")
     }

@@ -23,7 +23,7 @@ void get_complete_scan(
     int first_frame_id = 0;
 
     auto pf = get_format(info);
-    ouster::ScanBatcher batch_to_scan(info.format.columns_per_frame, pf);
+    ouster::ScanBatcher batch_to_scan(info);
 
     // Buffer to store raw packet data
     ouster::sensor::LidarPacket packet(pf.lidar_packet_size);

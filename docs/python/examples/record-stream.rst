@@ -12,7 +12,7 @@ Recording, Streaming, and Conversion
 Recording Sensor Data
 ======================
 
-It's easy to record data to a pcap file from a sensor programatically. Let's try it on a
+It's easy to record data to a pcap file from a sensor programmatically. Let's try it on a
 :ref:`configured<ex-configure-sensor>` sensor:
 
 .. tabs::

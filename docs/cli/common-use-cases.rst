@@ -45,7 +45,7 @@ using:
 
 .. code:: bash
 
-    $ ouster-cli source <SENSOR_HOSTNAME> info > <SENSOR_HOSTNAME>.json
+    $ ouster-cli source <SENSOR_HOSTNAME> metadata > <SENSOR_HOSTNAME>.json
 
 This will generate a ``.json`` file named ``<SENSOR_HOSTNAME>.json`` with the metadata inside. To
 output it to a differently named file, simply change ``<SENSOR_HOSNTAME>.json`` to
@@ -101,7 +101,7 @@ the metadata to a json file with the same name, simply use:
 
 .. code:: bash
 
-    $ ouster-cli source <SENSOR_HOSTNAME> record
+    $ ouster-cli source <SENSOR_HOSTNAME> save_raw .pcap
 
 This will record until you keyboard interrupt, i.e., use ``CTRL+C``. You can also set it to record
 a specific length or number of packets, or to use different ports for lidar and IMU data. As always

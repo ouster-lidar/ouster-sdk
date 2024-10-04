@@ -64,14 +64,13 @@ def testing_time(pcap_file: str, json: IO) -> None:
 @click.argument('file', type=click.Path(exists=True))
 @click.option('-m', '--meta', required=False, type=click.Path(exists=True),
         help="Metadata file for PCAP, helpful if automatic metadata resolution fails")
-@click.option('-l', '--lidar-port', default=0, help="Dest. port of lidar data")
-@click.option('-i', '--imu-port', default=0, help="Dest. port of imu data")
+@click.option('-s', '--save', is_flag=True, default=False,
+              help="Save the digest to file.")
 @click.option('-c',
               '--check',
               type=click.Path(exists=True),
               help="Check computed digest")
-def compute_digest(file: str, meta: str, lidar_port: int, imu_port: int,
-                   check: str) -> None:
+def compute_digest(file: str, meta: str, check: str, save: bool) -> None:
     """Write out a digest file for the specified lidar data."""
 
     meta = resolve_metadata(file, meta)
@@ -86,9 +85,7 @@ def compute_digest(file: str, meta: str, lidar_port: int, imu_port: int,
             raise click.ClickException(
                 "Please verify that libpcap is installed")
         packets = pcap.Pcap(file,
-                            info,
-                            lidar_port=lidar_port,
-                            imu_port=imu_port)
+                            info)
     else:
         raise click.ClickException(f"File {file} is not supported")
 
@@ -101,3 +98,9 @@ def compute_digest(file: str, meta: str, lidar_port: int, imu_port: int,
             click.echo("Ok")
     else:
         click.echo(other.to_json())
+
+    if save:
+        filename = file[0:-5] + "_digest.json"
+        print("Saving to: ", filename)
+        with open(filename, "w") as text_file:
+            text_file.write(other.to_json())

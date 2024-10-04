@@ -31,7 +31,12 @@ Config And Metadata
 
 .. doxygenenum:: ouster::sensor::config_flags
 
+.. doxygenfunction:: parse_and_validate_metadata(const std::string &json_data, ValidatorIssues &issues)
 
+.. doxygenfunction:: parse_and_validate_metadata(const std::string &json_data, nonstd::optional<ouster::sensor::sensor_info> &sensor_info, ValidatorIssues &issues)
+
+.. doxygenstruct:: ouster::ValidatorIssues
+    :members:
 
 Network Operations
 ==================

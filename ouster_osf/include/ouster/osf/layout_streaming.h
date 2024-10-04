@@ -53,7 +53,8 @@ class StreamingLayoutCW : public ChunksWriter {
      *
      * @throws std::logic_error Exception on inconsistent timestamps.
      */
-    void save_message(const uint32_t stream_id, const ts_t ts,
+    void save_message(const uint32_t stream_id, const ts_t receive_ts,
+                      const ts_t sensor_ts,
                       const std::vector<uint8_t>& buf) override;
 
     /**
@@ -72,10 +73,12 @@ class StreamingLayoutCW : public ChunksWriter {
      * for a specific set of new messages.
      *
      * @param[in] stream_id The stream id to associate with the message.
-     * @param[in] ts The timestamp for the messages.
+     * @param[in] receive_ts The receive timestamp for the messages.
+     * @param[in] sensor_ts The sensor timestamp for the messages.
      * @param[in] msg_buf A vector of message buffers to gather stats about.
      */
-    void stats_message(const uint32_t stream_id, const ts_t ts,
+    void stats_message(const uint32_t stream_id, const ts_t receive_ts,
+                       const ts_t sensor_ts,
                        const std::vector<uint8_t>& msg_buf);
 
     /**

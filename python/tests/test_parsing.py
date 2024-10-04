@@ -1,8 +1,8 @@
 # type: ignore
 import os
 import numpy as np
-import ouster.sdk.pcap._pcap as _pcap
-from ouster.sdk.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField, PacketFormat
+import ouster.sdk._bindings.pcap as _pcap
+from ouster.sdk.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField, PacketFormat, LidarPacket
 import ouster.sdk.client as client
 import ouster.sdk.pcap as pcap
 from ouster.sdk.util import (default_scan_fields,
@@ -73,6 +73,22 @@ def test_fusa_fields():
     '''
 
 
+def test_packet_crc():
+    """Check that the calculated CRC matches the stored one"""
+    pcap_name = os.path.join(PCAPS_DATA_DIR, 'crc_test.pcap')
+    info_name = os.path.join(PCAPS_DATA_DIR, "crc_test.json")
+    meta = open(info_name).read()
+    si = SensorInfo(meta)
+    pf = PacketFormat(si)
+    source = pcap.Pcap(pcap_name, si)
+    count = 0
+    for p in source:
+        if isinstance(p, LidarPacket):
+            assert hex(pf.crc(p.buf)) == hex(pf.calculate_crc(p.buf))
+            count += 1
+    assert count == 34
+
+
 def test_fusa_reading_pcap():
     """Check that we can read pcap with FLAGS included."""
     dataset_name = 'OS-1-128_767798045_1024x10_20230712_120049'
@@ -80,8 +96,7 @@ def test_fusa_reading_pcap():
     meta = open(resolve_metadata(pcap_name)).read()
     si = SensorInfo(meta)
     source = pcap.Pcap(pcap_name, si)
-    field_types = default_scan_fields(source.metadata.format.udp_profile_lidar,
-                                      flags=True)
+    field_types = default_scan_fields(source.metadata.format.udp_profile_lidar)
     scans = list(client.Scans(source, fields=field_types))
     assert len(scans) == 1
 

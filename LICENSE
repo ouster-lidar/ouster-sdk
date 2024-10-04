@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: OusterSDK
 Upstream-Contact: Ouster Sensor SDK Developers <oss@ouster.io>
-Source: https://github.com/ouster-lidar/ouster_example
+Source: https://github.com/ouster-lidar/ouster_sdk
 
 Files: *
 Copyright: 2018-2022 Ouster, Inc
@@ -9,6 +9,10 @@ License: BSD-3-Clause
 
 Files: include/optional-lite/*
 Copyright: 2014-2021 Martin Moene
+License: BSL-1.0
+
+Files: include/jsoncons*
+Copyright Daniel Parker 2013 - 2020
 License: BSL-1.0
 
 License: BSD-3-Clause

@@ -5,7 +5,7 @@ import numpy as np
 
 import ouster.sdk.util.pose_util as pu
 
-from ._viz import PointViz, Cloud, Label, WindowCtx
+from ouster.sdk._bindings.viz import PointViz, Cloud, Label, WindowCtx
 
 
 T = TypeVar('T')

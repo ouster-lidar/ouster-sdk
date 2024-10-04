@@ -50,11 +50,10 @@ struct GLFWContext {
     WindowCtx window_context;
 
     std::function<void(const WindowCtx&, int, int)> key_handler;
-    std::function<void(const WindowCtx&, int, int)> mouse_button_handler;
+    std::function<void(const WindowCtx&, int, int, int)> mouse_button_handler;
     std::function<void(const WindowCtx&, double, double)> scroll_handler;
     std::function<void(const WindowCtx&, double, double)> mouse_pos_handler;
-
-    std::function<void()> resize_handler;
+    std::function<void(const WindowCtx&)> resize_handler;
 };
 
 }  // namespace viz

@@ -50,6 +50,8 @@ def io_type(source: str) -> OusterIoType:
     """Return a OusterIoType given a source arg str"""
     if os.path.isfile(source):
         return io_type_from_extension(source)
+    if os.path.isdir(source) and io_type_from_extension(source) == OusterIoType.BAG:
+        return OusterIoType.BAG
     try:
         if socket.gethostbyname(source):
             return OusterIoType.SENSOR

@@ -46,7 +46,7 @@ void handle_framebuffer_resize(GLFWwindow* window, int fb_width,
     ctx->window_context.viewport_height = fb_height;
     glViewport(0, 0, fb_width, fb_height);
     gltViewport(fb_width, fb_height);
-    if (ctx->resize_handler) ctx->resize_handler();
+    if (ctx->resize_handler) ctx->resize_handler(ctx->window_context);
 }
 
 /*
@@ -76,15 +76,13 @@ void handle_mouse_button(GLFWwindow* window, int button, int action, int mods) {
         ctx->window_context.mbutton_down =
             (button == GLFW_MOUSE_BUTTON_MIDDLE ||
              (button == GLFW_MOUSE_BUTTON_LEFT && mods == GLFW_MOD_SHIFT));
-
-        // TODO right order wrt updating context?
-        // run custom button handlers from users
-        if (ctx->mouse_button_handler)
-            ctx->mouse_button_handler(ctx->window_context, button, mods);
     } else if (action == GLFW_RELEASE) {
         ctx->window_context.lbutton_down = false;
         ctx->window_context.mbutton_down = false;
     }
+
+    if (ctx->mouse_button_handler)
+        ctx->mouse_button_handler(ctx->window_context, button, action, mods);
 }
 
 /*

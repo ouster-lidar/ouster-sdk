@@ -67,6 +67,11 @@ table LidarScanMsg {
 
     // extra fields support for extensible lidar scan
     custom_fields:[Field];
+
+    frame_status: uint64;
+    shutdown_countdown: uint8;
+    shot_limiting_countdown: uint8;
+    alert_flags:[uint8];
 }
 
 // Scan data from a lidar sensor. One scan is a sweep of a sensor (360 degree).

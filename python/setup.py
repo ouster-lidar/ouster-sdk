@@ -1,7 +1,6 @@
 import os
 import re
 import sys
-import platform
 import shlex
 import shutil
 import subprocess
@@ -62,17 +61,14 @@ class CMakeBuild(build_ext):
 
         # Bug in pybind11 cmake strips symbols with RelWithDebInfo
         # https://github.com/pybind/pybind11/issues/1891
-        cfg = 'Debug' if self.debug else 'Release'
+        # Fixed in https://github.com/pybind/pybind11/issues/1892
+        build_type = os.getenv("BUILD_TYPE", "Release")
+        print(f"build_type: {build_type}")
 
-        cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
-        build_args = ['--config', cfg]
+        cmake_args += ['-DCMAKE_BUILD_TYPE=' + build_type]
 
         env = os.environ.copy()
         jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', os.cpu_count())
-        build_args += ['--', f'-j{jobs}']
-
-        if platform.system() == "Windows":
-            cmake_args += ['-GNinja']
 
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
@@ -104,9 +100,10 @@ class CMakeBuild(build_ext):
         cmake_log("CMAKE CONFIG OUTPUT")
         cmake_log(output1.stdout)
         if output1.returncode != 0:
-            raise "Error running cmake"
+            print("Error running cmake")
+            sys.exit(1)
 
-        output2 = subprocess.run(['cmake', '--build', '.'] + build_args,
+        output2 = subprocess.run(['cmake', '--build', '.', '--parallel', str(jobs), '--config', build_type],
                                  cwd=self.build_temp,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
@@ -114,7 +111,8 @@ class CMakeBuild(build_ext):
         cmake_log("CMAKE BUILD OUTPUT")
         cmake_log(output2.stdout)
         if output2.returncode != 0:
-            raise "Error running cmake --build"
+            print("Error running cmake --build")
+            sys.exit(1)
 
 
 class sdk_sdist(sdist):
@@ -162,6 +160,7 @@ def install_requires():
         'threadpoolctl >=3.5.0',
         'Pillow >=9.2',
         'packaging',
+        'rosbags == 0.9.23',
         'setuptools; python_version >= "3.12"'
     ]
 
@@ -182,7 +181,7 @@ def install_requires():
 if __name__ == "__main__":
     setup(
         name='ouster-sdk',
-        url='https://github.com/ouster-lidar/ouster_example',
+        url='https://github.com/ouster-lidar/ouster_sdk',
         # read from top-level sdk CMakeLists.txt
         version=parse_version(),
         package_dir={'': 'src'},
@@ -214,7 +213,6 @@ if __name__ == "__main__":
             'test': [
                 'pytest >=7.0, <8',
                 'pytest-asyncio',
-                'flask==2.2.5'
             ],
             'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
             'docs': [

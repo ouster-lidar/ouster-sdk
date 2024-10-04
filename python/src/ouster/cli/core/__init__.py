@@ -98,9 +98,8 @@ def cli(ctx, trace: bool, sdk_log_level: Optional[str]) -> None:
     ctx.ensure_object(dict)
     ctx.obj['TRACEBACK'] = TRACEBACK
     if sdk_log_level:
-        if sdk_log_level != "off":
-            ctx.obj['SDK_LOG_LEVEL'] = sdk_log_level.lower()
-            init_logger(ctx.obj['SDK_LOG_LEVEL'])
+        ctx.obj['SDK_LOG_LEVEL'] = sdk_log_level.lower()
+        init_logger(ctx.obj['SDK_LOG_LEVEL'])
 
 
 # util commands

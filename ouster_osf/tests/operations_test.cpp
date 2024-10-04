@@ -46,7 +46,8 @@ class FileSha {
             handleEvpError();
         }
 
-        char buf[BLOCK_SIZE];
+        std::vector<char> buf;
+        buf.resize(BLOCK_SIZE);
         uint64_t i = ouster::osf::file_size(filename);
         bool finished = false;
 
@@ -59,8 +60,8 @@ class FileSha {
                 size = i;
                 finished = true;
             }
-            reader.read(buf, size);
-            if (EVP_DigestUpdate(context, buf, size) != 1) {
+            reader.read(buf.data(), size);
+            if (EVP_DigestUpdate(context, buf.data(), size) != 1) {
                 handleEvpError();
             }
             i -= block_size;
@@ -125,7 +126,7 @@ TEST_F(OperationsTest, GetOsfDumpInfo) {
 
     ASSERT_TRUE(osf_info_obj.isMember("metadata"));
     EXPECT_TRUE(osf_info_obj["metadata"].isMember("id"));
-    EXPECT_EQ("from_pcap pythonic", osf_info_obj["metadata"]["id"].asString());
+    EXPECT_EQ("ouster_sdk", osf_info_obj["metadata"]["id"].asString());
     EXPECT_TRUE(osf_info_obj["metadata"].isMember("start_ts"));
     EXPECT_TRUE(osf_info_obj["metadata"].isMember("end_ts"));
     EXPECT_TRUE(osf_info_obj["metadata"].isMember("entries"));
@@ -142,8 +143,9 @@ TEST_F(OperationsTest, FileShaTest) {
     std::string temp_dir;
     EXPECT_TRUE(make_tmp_dir(temp_dir));
     std::string temp_file = path_concat(temp_dir, "test_file");
-    test_file_out.open(temp_file, std::fstream::out | std::fstream::trunc);
-    test_file_out << "Testing here for hashing" << std::endl;
+    test_file_out.open(temp_file, std::fstream::out | std::fstream::trunc |
+                                      std::fstream::binary);
+    test_file_out << "Testing here for hashing\n";
     test_file_out.close();
     auto sha = FileSha(temp_file);
     EXPECT_EQ(
@@ -208,7 +210,7 @@ ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
     new_metadata.config.lidar_mode = ouster::sensor::MODE_512x10;
     new_metadata.prod_line = "OS-1-128";
 
-    new_metadata.format.pixels_per_column = 5;
+    new_metadata.format.pixels_per_column = 128;
     new_metadata.format.columns_per_packet = 2 + start_number;
     new_metadata.format.columns_per_frame = 3 + start_number;
     new_metadata.format.pixel_shift_by_row = {
@@ -219,14 +221,14 @@ ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
         ouster::sensor::PROFILE_RNG15_RFL8_NIR8;
     new_metadata.format.udp_profile_imu = ouster::sensor::PROFILE_IMU_LEGACY;
     new_metadata.format.fps = 11 + start_number;
-    new_metadata.beam_azimuth_angles = {
-        12. + (double)start_number, 13. + (double)start_number,
-        14. + (double)start_number, 15. + (double)start_number,
-        16. + (double)start_number};
-    new_metadata.beam_altitude_angles = {
-        17. + (double)start_number, 18. + (double)start_number,
-        19. + (double)start_number, 20. + (double)start_number,
-        21. + (double)start_number};
+    new_metadata.beam_azimuth_angles.resize(
+        new_metadata.format.pixels_per_column);
+    new_metadata.beam_altitude_angles.resize(
+        new_metadata.format.pixels_per_column);
+    for (size_t i = 0; i < new_metadata.format.pixels_per_column; i++) {
+        new_metadata.beam_azimuth_angles[i] = (double)i;
+        new_metadata.beam_altitude_angles[i] = (double)i;
+    }
     new_metadata.lidar_origin_to_beam_origin_mm = 22 + start_number;
 
     new_metadata.init_id = 23 + start_number;

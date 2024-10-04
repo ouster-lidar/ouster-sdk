@@ -99,13 +99,22 @@ UDP Profile IMU
 .. doxygenfunction:: ouster::sensor::udp_profile_imu_of_string
 
 Chan Field
----------------
-
+----------
 .. doxygenenum:: ouster::sensor::ChanFieldType
 
-.. doxygenenum:: ouster::sensor::ChanField
+.. doxygennamespace:: ouster::sensor::ChanField
 
-.. doxygenfunction:: ouster::sensor::to_string(ChanField field)
+.. doxygenfunction:: ouster::sensor::to_string(ChanFieldType ft)
+
+Product Info
+------------
+.. doxygenclass:: ouster::sensor::product_info
+
+.. doxygenfunction:: ouster::sensor::operator==(const product_info& lhs, const product_info& rhs)
+
+.. doxygenfunction:: ouster::sensor::operator!=(const product_info& lhs, const product_info& rhs)
+
+.. doxygenfunction:: ouster::sensor::to_string(const sensor_info& info)
 
 Sensor Info
 ===========
@@ -116,8 +125,6 @@ Sensor Info
 .. doxygenfunction:: ouster::sensor::default_sensor_info
 
 .. doxygenfunction:: ouster::sensor::metadata_from_json
-
-.. doxygenfunction:: ouster::sensor::convert_to_legacy
 
 .. doxygenfunction:: ouster::sensor::operator==(const sensor_info& lhs, const sensor_info& rhs)
 

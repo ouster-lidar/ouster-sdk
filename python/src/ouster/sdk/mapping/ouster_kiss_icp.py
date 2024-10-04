@@ -1,4 +1,3 @@
-# type: ignore
 """
 # MIT License
 #
@@ -28,28 +27,19 @@ Module ouster_kiss_icp
 Description:
     This module was a copy from the KissICP repository https://github.com/PRBonn/kiss-icp
     We edit it to fit our use cases better
-
-Author:
-    Hao Yuan
-
-Last modified date: Jan 29th 2024
-
-Modifcation History:
-    1/29/24 Copy KissICP module and handle the frame drop issue
 """
 
 
-from collections import deque
 import numpy as np
 import logging
 
-from kiss_icp.config import KISSConfig
-from kiss_icp.deskew import get_motion_compensator
-from kiss_icp.mapping import get_voxel_hash_map
-from kiss_icp.preprocess import get_preprocessor
-from kiss_icp.registration import register_frame
-from kiss_icp.threshold import get_threshold_estimator
-from kiss_icp.voxelization import voxel_down_sample
+from kiss_icp.config import KISSConfig  # type: ignore[import-untyped]
+from kiss_icp.deskew import get_motion_compensator  # type: ignore[import-untyped]
+from kiss_icp.mapping import get_voxel_hash_map  # type: ignore[import-untyped]
+from kiss_icp.preprocess import get_preprocessor  # type: ignore[import-untyped]
+from kiss_icp.registration import get_registration  # type: ignore[import-untyped]
+from kiss_icp.threshold import get_threshold_estimator  # type: ignore[import-untyped]
+from kiss_icp.voxelization import voxel_down_sample  # type: ignore[import-untyped]
 
 import ouster.sdk.util.pose_util as pu
 
@@ -60,48 +50,19 @@ logger = logging.getLogger()
 class KissICP:
 
     def __init__(self, config: KISSConfig):
-        self.poses = []
+        self.last_pose = np.eye(4)
+        self.last_delta_pose = np.eye(4)
         self.config = config
         self.compensator = get_motion_compensator(config)
         self.adaptive_threshold = get_threshold_estimator(self.config)
         self.local_map = get_voxel_hash_map(self.config)
+        self.registration = get_registration(self.config)
         self.preprocess = get_preprocessor(self.config)
-        self.last_two_ts = deque([], maxlen=2)
-        self.frame_drop_ratio_prev = 1
 
-    def _cal_ts_diff_ratio(self, ts) -> float:
-        if len(self.last_two_ts) < 2:
-            self.last_two_ts.append(ts)
-            return 1.0
-
-        ts_diff_prev = self.last_two_ts[-1] - self.last_two_ts[-2]
-        if ts_diff_prev == 0 or ts < self.last_two_ts[-1]:
-            return 1.0
-
-        ts_diff_cur = ts - self.last_two_ts[-1]
-        # calculate frame drop ratio using real timestamps
-        frame_drop_ratio = ts_diff_cur / ts_diff_prev
-
-        self.last_two_ts.append(ts)
-        return frame_drop_ratio
-
-    def register_frame(self, frame, timestamps, scan_ts):
+    def register_frame(self, frame, timestamps, delta_ratio=1):
         # drop out of ordered frame
-        if len(self.poses) >= 1 and scan_ts <= self.last_two_ts[-1]:
-            logger.info(f"Kiss ICP drops the out of order frame at ts {scan_ts}")
-            return
 
-        frame_drop_ratio_curr = self._cal_ts_diff_ratio(scan_ts)
-
-        if len(self.poses) >= 2:
-            corrected_poses = [pu.pose_interp(self.poses[-2], self.poses[-1],
-                                              t=1 - (1 / self.frame_drop_ratio_prev)), self.poses[-1]]
-        else:
-            corrected_poses = []
-
-        # Apply motion compensation
-        frame = self.compensator.deskew_scan(
-            frame, corrected_poses, timestamps)
+        frame = self.compensator.deskew_scan(frame, timestamps, self.last_delta_pose)
 
         # Preprocess the input cloud
         frame = self.preprocess(frame)
@@ -109,17 +70,17 @@ class KissICP:
         # Voxelize
         source, frame_downsample = self.voxelize(frame)
 
-        # Get motion prediction and adaptive_threshold
-        sigma = self.get_adaptive_threshold()
+        sigma = self.adaptive_threshold.get_threshold()
 
-        # Compute initial_guess for ICP
-        prediction = self.get_prediction_model(frame_drop_ratio_curr)
-        last_pose = self.poses[-1] if self.poses else np.eye(4)
-        initial_guess = last_pose @ prediction
-        self.frame_drop_ratio_prev = frame_drop_ratio_curr
+        if delta_ratio == 1:
+            initial_guess = self.last_pose @ self.last_delta_pose
+        else:
+            delta_pose_log = pu.log_pose(self.last_delta_pose) * delta_ratio
+            delta_pose_exp = pu.exp_pose6(delta_pose_log)
+            initial_guess = self.last_pose @ delta_pose_exp
 
         # Run ICP
-        new_pose = register_frame(
+        new_pose = self.registration.align_points_to_map(
             points=source,
             voxel_map=self.local_map,
             initial_guess=initial_guess,
@@ -127,10 +88,21 @@ class KissICP:
             kernel=sigma / 3,
         )
 
-        self.adaptive_threshold.update_model_deviation(
-            np.linalg.inv(initial_guess) @ new_pose)
+        model_deviation = np.linalg.inv(initial_guess) @ new_pose
+
+        self.adaptive_threshold.update_model_deviation(model_deviation)
+
+        if delta_ratio == 1:
+            self.last_delta_pose = np.linalg.inv(self.last_pose) @ new_pose
+        elif delta_ratio <= 0:
+            raise ValueError("frame delta_ratio must be greater than zero.")
+        else:
+            delta_pose_exp = np.linalg.inv(self.last_pose) @ new_pose
+            delta_pose_log = pu.log_pose(delta_pose_exp) / delta_ratio
+            self.last_delta_pose = pu.exp_pose6(delta_pose_log)
+
+        self.last_pose = new_pose
         self.local_map.update(frame_downsample, new_pose)
-        self.poses.append(new_pose)
 
     def voxelize(self, iframe):
         frame_downsample = voxel_down_sample(
@@ -139,34 +111,3 @@ class KissICP:
             frame_downsample,
             self.config.mapping.voxel_size * 1.5)
         return source, frame_downsample
-
-    def get_adaptive_threshold(self):
-        return (
-            self.config.adaptive_threshold.initial_threshold
-            if not self.has_moved()
-            else self.adaptive_threshold.get_threshold()
-        )
-
-    def get_prediction_model(self, frame_drop_ratio_curr):
-        if len(self.poses) < 2:
-            return np.eye(4)
-        pose_diff_exp = np.linalg.inv(self.poses[-2]) @ self.poses[-1]
-
-        curr_prev_drop_ratio = frame_drop_ratio_curr / self.frame_drop_ratio_prev
-        # Skip matrix manipulation if frames' drop ratio is less than 5%
-        if abs(curr_prev_drop_ratio - 1) < 0.05:
-            return pose_diff_exp
-
-        pose_diff_log = pu.log_pose(pose_diff_exp) * curr_prev_drop_ratio
-
-        return pu.exp_pose6(pose_diff_log)
-
-    def has_moved(self):
-        if len(self.poses) < 1:
-            return False
-
-        def compute_motion(T1, T2):
-            return np.linalg.norm(
-                (np.linalg.inv(T1) @ T2)[:3, -1])
-        motion = compute_motion(self.poses[0], self.poses[-1])
-        return motion > 5 * self.config.adaptive_threshold.min_motion_th

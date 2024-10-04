@@ -41,7 +41,7 @@
 // optional selection and configuration:
 
 #if !defined( optional_CONFIG_SELECT_OPTIONAL )
-# define optional_CONFIG_SELECT_OPTIONAL  ( optional_HAVE_STD_OPTIONAL ? optional_OPTIONAL_STD : optional_OPTIONAL_NONSTD )
+# define optional_CONFIG_SELECT_OPTIONAL  optional_OPTIONAL_NONSTD
 #endif
 
 // Control presence of exception handling (try and auto discover):

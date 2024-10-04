@@ -1,12 +1,14 @@
 from enum import IntEnum
 from functools import wraps
-from ouster.sdk.client import LidarScan, ScanSource
+from ouster.sdk.client import LidarScan, MultiScanSource
 from typing import (Callable, List, Any, Union,
                     Dict, Optional, Iterator)
 from threading import Event
 from dataclasses import dataclass
 import queue
 import click
+
+from datetime import datetime
 
 
 class SourceCommandType(IntEnum):
@@ -18,8 +20,9 @@ class SourceCommandType(IntEnum):
 @dataclass(init=False)
 class SourceCommandContext:
     source_uri: Optional[str]
-    scan_source: Optional[Union[ScanSource, Any]]
-    scan_iter: Optional[Iterator[LidarScan]]
+    source_options: Dict[str, Any]
+    scan_source: Optional[Union[MultiScanSource, Any]]
+    scan_iter: Optional[Iterator[List[Optional[LidarScan]]]]
     terminate_evt: Optional[Event]
     main_thread_fn: Optional[Callable[[None], None]]
     thread_fns: List[Callable[[None], None]]
@@ -37,6 +40,7 @@ class SourceCommandContext:
         self.invoked_command_names = []
         self.misc = {}
         self.terminate_exception = None
+        self.source_options = {}
 
     # [kk] NOTE: get and __getitem__ are defined to support
     # older code that still treats ctx.obj as a dict
@@ -147,44 +151,5 @@ def _join_with_conjunction(things_to_join: List[str], separator: str = ', ', con
     return separator.join(strings)
 
 
-ROS_MODULES_ERROR_MSG = """
-Error: {err_msg}
-
-Please verify that ROS Python modules are available.
-
-The best option is to try to install unofficial rospy packages that work
-with Python 3.8 on Ubuntu 20.04 and Debian 10 without ROS:
-
-    pip install --extra-index-url https://rospypi.github.io/simple/ rospy rosbag tf2_ros
-
-NOTE: If during the attempt to run the above command you get an error:
-
-    EnvironmentError: 404 Client Error: Not Found for url: https://pypi.org/simple/rospy/
-
-Please check installed `pip` version (20.0+ works well with extra indexes), and
-if needed upgrade `pip` with (in a sourced venv):
-
-    pip install pip -U
-
-Alternatively, the bagpy package might work on some systems:
-
-    pip install bagpy
-
-Some users have even more packages missing so they may need to aditionally install:
-
-    pip install PyYAML pycryptodome pycryptodomex
-
-"""
-
-
-def import_rosbag_modules(raise_on_fail: bool = False) -> bool:
-    try:
-        import rosbag  # type: ignore # noqa: F401
-        import rospy  # type: ignore # noqa: F401
-        import genpy  # type: ignore # noqa: F401
-    except ImportError as err:
-        if raise_on_fail:
-            raise ModuleNotFoundError(
-                ROS_MODULES_ERROR_MSG.format(err_msg=str(err)))
-        return False
-    return True
+def _nanos_to_string(nanos):
+    return datetime.utcfromtimestamp(nanos / 1e9).strftime('%Y-%m-%d %H:%M:%S.%f')

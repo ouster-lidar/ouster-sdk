@@ -1,31 +1,49 @@
 from typing import List, Optional, Union
 import os
 import numpy as np
-from pathlib import Path
 from ouster.sdk.client import ScanSource, MultiScanSource
 import ouster.sdk.io_type
 from ouster.sdk.io_type import OusterIoType
 from ouster.sdk.osf import OsfScanSource
 from ouster.sdk.pcap import PcapScanSource
 from ouster.sdk.sensor import SensorScanSource
+from ouster.sdk.bag import BagScanSource
 
 
 io_type_handlers = {
     OusterIoType.SENSOR: SensorScanSource,
     OusterIoType.PCAP: PcapScanSource,
-    OusterIoType.OSF: OsfScanSource
+    OusterIoType.OSF: OsfScanSource,
+    OusterIoType.BAG: BagScanSource,
 }
 
 
-def open_source(source_url: str, sensor_idx: int = 0, *args,
+class SourceURLException(Exception):
+    def __init__(self, sub_exception, url):
+        self._sub_exception = sub_exception
+        self._url = url
+
+    def __str__(self):
+        result = f"Failed to create scan_source for url {self._url}\n"
+        result += f"more details: {self._sub_exception}"
+        return result
+
+    def get_sub_exception(self):
+        return self._sub_exception
+
+    def get_url(self):
+        return self._url
+
+
+def open_source(source_url: Union[str, List[str]], sensor_idx: int = 0, *args,
                 extrinsics: Optional[Union[str, np.ndarray, List[np.ndarray]]] = None,
                 **kwargs) -> Union[ScanSource, MultiScanSource]:
     """
     Parameters:
         - source_url: could be a single url or many for the case of sensors.
             the url can contain the path to a pcap file or an osf file.
-            alternatively, the url could contain a list of comma separated
-            sensor hostnames or ips (current multisensor is not supprted)
+            alternatively, the argument could contain a list of sensor hostnames
+            or ips
         - sensor_idx: The sensor_idx parameter can be set to any value between
             0 and the number of addressable sensors within the source_url. This
             returns the ScanSource interface (default is 0). If you want to work
@@ -45,35 +63,35 @@ def open_source(source_url: str, sensor_idx: int = 0, *args,
             of fields of every scan. in case of dual returns profile FLAGS2 will also
             be appended (default is True).
     """
-    source_urls = [os.path.expanduser(url.strip()) for url in source_url.split(',') if url.strip()]
-
-    if len(source_urls) == 0:
+    if len(source_url) == 0:
         raise ValueError("No valid source specified")
 
-    if len(source_urls) > 1:
-        # This only applies to the live sensors case.
-        # TODO: revise once working on multi sensors
-        raise NotImplementedError(
-            "providing more than a single url is current not supported!")
+    first_url: str
+    first_url = source_url[0] if type(source_url) is list else source_url  # type: ignore
+
+    if type(source_url) is list:
+        source_url = [os.path.expanduser(url) for url in source_url]
+    else:
+        source_url = os.path.expanduser(source_url)  # type: ignore
 
     source_type: OusterIoType
     scan_source: Optional[MultiScanSource] = None
     try:
-        source_type = ouster.sdk.io_type.io_type(source_urls[0])
+        source_type = ouster.sdk.io_type.io_type(first_url)
         handler = io_type_handlers[source_type]
-        scan_source = handler(source_urls[0], *args, **kwargs)
+        sources = source_url if len(source_url) > 1 else source_url[0]
+        scan_source = handler(sources, *args, **kwargs)
     except KeyError:
         raise NotImplementedError(
             f"The io_type:{source_type} is not supported!")
     except Exception as ex:
-        raise RuntimeError(f"Failed to create scan_source for url {source_urls}\n"
-                           f" more details: {ex}")
+        raise SourceURLException(ex, source_url if type(source_url) is list else [source_url])  # type: ignore
 
     if scan_source is None:
         raise RuntimeError(
-            f"Failed to create scan_source for url {source_urls}")
+            f"Failed to create scan_source for url {source_url}")
 
-    _populate_extrinsics(scan_source, source_urls[0], source_type, extrinsics)
+    _populate_extrinsics(scan_source, first_url, source_type, extrinsics)
 
     if sensor_idx < 0:
         return scan_source
@@ -92,14 +110,14 @@ def _populate_extrinsics(scan_source: MultiScanSource,
                          source_type: OusterIoType,
                          _extrinsics: Optional[Union[str, np.ndarray, List[np.ndarray]]] = None) -> None:
 
-    from ouster.sdk.util import resolve_extrinsics, _parse_extrinsics_file
+    from ouster.sdk.util import _parse_extrinsics_file
 
     extrinsics: Optional[List[np.ndarray]] = None
-
+    sensors_count = len(scan_source.metadata)
     if _extrinsics is not None:
         # handle single numpy array case
         if isinstance(_extrinsics, np.ndarray) and _extrinsics.shape == (4, 4):
-            extrinsics = [_extrinsics] * scan_source.sensors_count
+            extrinsics = [_extrinsics] * sensors_count
         # handle list of numpy array case
         elif isinstance(_extrinsics, list) and all(
             [isinstance(ext, np.ndarray) and ext.shape == (4, 4)
@@ -118,22 +136,13 @@ def _populate_extrinsics(scan_source: MultiScanSource,
                       f"{_extrinsics}")
         else:
             raise ValueError(
-                f"Error whiles parsing supplied extrinsics {_extrinsics}")
-    else:
-        if source_type in [OusterIoType.PCAP, OusterIoType.OSF]:
-            source_dir = Path(source_url).absolute().parent
-            # print(f"examining the directory '{source_dir}' for any extrinsics")
-            extrinsics_from_file = resolve_extrinsics(data_path=source_dir,
-                                                      infos=scan_source.metadata)
-            if extrinsics_from_file:
-                extrinsics = [ext_f[0]
-                              for ext_f in extrinsics_from_file if ext_f]
+                f"Error while parsing supplied extrinsics {_extrinsics}")
 
     if extrinsics:
-        if len(extrinsics) < scan_source.sensors_count:
+        if len(extrinsics) < sensors_count:
             # TODO: should we handle the case when sensor_idx >= 0
             print("warning: loaded externsics doesn't match to the count of"
-                  f"sensors. provided {len(extrinsics)}, expected: {scan_source.sensors_count}")
-        for i in range(scan_source.sensors_count):
+                  f"sensors. provided {len(extrinsics)}, expected: {sensors_count}")
+        for i in range(sensors_count):
             if extrinsics[i] is not None:
                 scan_source.metadata[i].extrinsic = extrinsics[i]

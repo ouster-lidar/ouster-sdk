@@ -1,3 +1,8 @@
+option(ENABLE_PERFORMANCE_TESTS "Enable SpeedCheck in cartesian_test and parsing_benchmark_test" OFF)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(ENABLE_PERFORMANCE_TESTS ON)
+endif()
+
 #Several deprecations since gtest 1.8
 if(MSVC)
     add_compile_options(/wd4996 /wd4189)
@@ -55,12 +60,20 @@ set_tests_properties(
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
 )
 
-add_executable(cartesian_test cartesian_test.cpp util.h)
 
+message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
+
+if (ENABLE_PERFORMANCE_TESTS)
+    set(GTEST_FILTER "")
+else ()
+    set(GTEST_FILTER "--gtest_filter=CartesianParametrisedTestFixture.SpeedCheck")
+endif ()
+
+message(STATUS "GTEST_FILTER: ${GTEST_FILTER}")
+add_executable(cartesian_test cartesian_test.cpp util.h)
 target_link_libraries(cartesian_test PRIVATE OusterSDK::ouster_client GTest::gtest GTest::gtest_main)
 CodeCoverageFunctionality(cartesian_test)
-
-add_test(NAME cartesian_test COMMAND cartesian_test --gtest_output=xml:cartesian_test.xml)
+add_test(NAME cartesian_test COMMAND cartesian_test ${GTEST_FILTER} --gtest_output=xml:cartesian_test.xml)
 set_tests_properties(
   cartesian_test
         PROPERTIES
@@ -113,27 +126,27 @@ set_tests_properties(
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
 )
-
 add_executable(parsing_benchmark_test parsing_benchmark_test.cpp util.h)
-
 target_link_libraries(parsing_benchmark_test PRIVATE OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
-CodeCoverageFunctionality(parsing_benchmark_test)
 
-add_test(NAME parsing_benchmark_test COMMAND parsing_benchmark_test --gtest_output=xml:parsing_benchmark_test.xml)
+if(ENABLE_PERFORMANCE_TESTS)
+    CodeCoverageFunctionality(parsing_benchmark_test)
+    add_test(NAME parsing_benchmark_test COMMAND parsing_benchmark_test --gtest_output=xml:parsing_benchmark_test.xml)
 
-set_tests_properties(
-    parsing_benchmark_test
-        PROPERTIES
-        ENVIRONMENT
-        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
-)
+    set_tests_properties(
+        parsing_benchmark_test
+            PROPERTIES
+            ENVIRONMENT
+            DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
+    )
+endif()
 
 add_executable(scan_batcher_test scan_batcher_test.cpp util.h)
 
 target_link_libraries(scan_batcher_test PRIVATE OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
 CodeCoverageFunctionality(scan_batcher_test)
 
-add_test(NAME scan_batcher_test COMMAND scan_batcher_test --gtest_output=xml:parsing_benchmark_test.xml)
+add_test(NAME scan_batcher_test COMMAND scan_batcher_test --gtest_output=xml:scan_batcher_test.xml)
 
 set_tests_properties(
     scan_batcher_test
@@ -147,24 +160,10 @@ add_executable(packet_writer_test packet_writer_test.cpp util.h)
 target_link_libraries(packet_writer_test PRIVATE OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
 CodeCoverageFunctionality(packet_writer_test)
 
-add_test(NAME packet_writer_test COMMAND packet_writer_test --gtest_output=xml:parsing_benchmark_test.xml)
+add_test(NAME packet_writer_test COMMAND packet_writer_test --gtest_output=xml:packet_writer_test.xml)
 
 set_tests_properties(
     packet_writer_test
-        PROPERTIES
-        ENVIRONMENT
-        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
-)
-
-add_executable(udp_queue_test udp_queue_test.cpp)
-
-target_link_libraries(udp_queue_test PRIVATE OusterSDK::ouster_client OusterSDK::ouster_pcap GTest::gtest GTest::gtest_main)
-CodeCoverageFunctionality(udp_queue_test)
-
-add_test(NAME udp_queue_test COMMAND udp_queue_test --gtest_output=xml:udp_queue_test.xml)
-
-set_tests_properties(
-    udp_queue_test
         PROPERTIES
         ENVIRONMENT
         DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/pcaps/
@@ -180,3 +179,9 @@ add_test(NAME field_test COMMAND field_test --gtest_output=xml:field_test.xml)
 if(NOT MSVC)
     target_compile_options(field_test PRIVATE -Wno-unused-variable -Wno-unused-but-set-variable)
 endif()
+
+add_executable(point_viz_test point_viz_test.cpp)
+target_link_libraries(point_viz_test OusterSDK::ouster_client
+    OusterSDK::ouster_viz GTest::gtest GTest::gtest_main
+)
+add_test(NAME point_viz_test COMMAND point_viz_test --gtest_output=xml:point_viz_test.xml)

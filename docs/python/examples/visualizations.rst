@@ -84,13 +84,13 @@ As an example, you can view frame ``84`` from the sample data by running the fol
 
     .. code-tab:: console Linux/macOS
 
-       $ python3 -m ouster.sdk.examples.open3d \
-           --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH --start 84 --pause
+       $ python3 -m ouster.sdk.examples.open3d_example \
+           --pcap $SAMPLE_DATA_PCAP_PATH --start 84 --pause
 
     .. code-tab:: powershell Windows x64
 
-       PS > py -3 -m ouster.sdk.examples.open3d ^
-           --pcap $SAMPLE_DATA_PCAP_PATH --meta $SAMPLE_DATA_JSON_PATH --start 84 --pause
+       PS > py -3 -m ouster.sdk.examples.open3d_example ^
+           --pcap $SAMPLE_DATA_PCAP_PATH --start 84 --pause
 
 You may also want to try the ``--sensor`` option to display the output of a running sensor. Use the
 ``-h`` flag to see a full list of command line options and flags.
@@ -107,7 +107,7 @@ You should be able to click and drag the mouse to look around. You can zoom in a
 mouse wheel, and hold control or shift while dragging to pan and roll, respectively.
 
 Hitting the spacebar will start playing back the rest of the pcap in real time. Note that reasonable
-performance for realtime playback requires relatively fast hardware, since Open3d runs all rendering
+performance for real-time playback requires relatively fast hardware, since Open3d runs all rendering
 and processing in a single thread.
 
 All of the visualizer controls are listed in the table below:
@@ -174,7 +174,7 @@ datatype and plot a range image where each column corresponds to a single azimut
    range_field = scan.field(client.ChanField.RANGE)
    range_img = client.destagger(info, range_field)
 
-We can plot the results using standard Python tools that work with numpy datatypes. Here, we extract
+We can plot the results using standard Python tools that work with numpy data types. Here, we extract
 a column segment of the range data and display the result:
 
 .. code:: python

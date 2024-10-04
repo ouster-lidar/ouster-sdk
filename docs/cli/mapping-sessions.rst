@@ -82,7 +82,7 @@ Then execute the following command:
 Save Command
 ------------
 
-The ``save`` command stores the lidarscan and the lidar movement trajectory into a OSF file by
+The ``save`` command stores the lidar data and the lidar movement trajectory into a OSF file by
 specifying a filename with a .osf extension. This OSF file will be used for accumulated point
 cloud generation and the other post-process tools we offer in the future.
 
@@ -109,7 +109,7 @@ SLAM performance degradation.
 
         ouster-cli source <FILENAME> slam save output.ply
 
-The accumulated point cloud data is automatically split and downsampleed into multiple files to
+The accumulated point cloud data is automatically split and downsampled into multiple files to
 prevent exporting a huge size file. The terminal will display details, and you will see the
 following printout for each output file:
 
@@ -126,8 +126,8 @@ following printout for each output file:
 Use the ``--help`` flag for more information such as selecting different fields as values,
 and changing the point cloud downsampling scale etc.
 
-To filter out the point cloud, you can using the ``clip`` command. Coverting the SLAM output OSF
-file to a PLY file and keep only the point within 20 to 80 meteter range you can run:
+To filter out the point cloud, you can using the ``clip`` command. Converting the SLAM output OSF
+file to a PLY file and keep only the point within 20 to 80 meters range you can run:
 
 .. code:: bash
 
@@ -143,7 +143,7 @@ Viz Command
 -----------
 
 The ``viz`` command enables visualizing the accumulated point cloud generation during the
-SLAM process. By default, the viz operates in looping mode, meaning the visualiation will
+SLAM process. By default, the viz operates in looping mode, meaning the visualization will
 continuously replay the source file.
 
 .. code:: bash
@@ -161,26 +161,27 @@ complete iteration.
         ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz -e exit save sample.osf
 
 
-**Scans Accumulation**: The viz command allows the user to customize ...
+**Accumulation**: The viz command supports several options for creating visually-pleasing maps by accumulating data from
+lidar scans that contain pose information. The following sections describe the options and provide usage examples.
 
 Available view modes
 ~~~~~~~~~~~~~~~~~~~~~
 
-There are three view modes of **ScansAccumulator**, that may be enabled/disabled depending on
-it's params and the data that is passed throught it:
+There are three view modes of accumulation implemented in the default
+visualizer that may be enabled/disabled depending on its parameters and the data
+that is passed through it:
 
-   * **poses** (or **TRACK**), key ``8`` - all scan poses in a trajectory/path view (available only
-     if poses data is present in scans)
-   * **scan map** (or **MAP**), key ``7`` - overall map view with select ratio of random points
-     from every scan (available for scans with/without poses)
-   * **scan accum** (or **ACCUM**), key ``6`` - accumulated *N* scans (key frames) that is picked
-     according to params (available for scans with/without poses)
+   * **poses** mode, key ``8`` - all scan poses in a trajectory/path view (if poses data is present in scans.)
+   * **map accumulation** mode, key ``7`` - overall map view with select ratio of random points
+     from every scan (available for scans with or without poses.)
+   * **scan accumulation** mode, key ``6`` - accumulated *N* scans (key frames) that is picked
+     according to parameters (available for scans with or without poses.)
 
 
 Key bindings
 ~~~~~~~~~~~~~
 
-Keyboard controls available with **ScansAccumulator**:
+The following key shortcuts apply to accumulation options while running Ouster CLI's ``viz`` command.
 
     ==============  =============================================================
         Key         What it does
@@ -193,22 +194,36 @@ Keyboard controls available with **ScansAccumulator**:
     ``j / J``       Increase/decrease point size of accumulated clouds or map
     ==============  =============================================================
 
-Ouster CLI **ScansAccumulator** options:
+Ouster CLI ``viz`` accumulation options:
 
-  * ``--accum-num N`` - accumulate *N* scans (default: ``0``)
-  * ``--accum-every K`` - accumulate every *Kth* scan (default: ``1``)
-  * ``--accum-every-m M`` - accumulate a scan every *Mth* meters traveled (default: ``None``)
-  * ``--accum-map`` - enable the overall map accumulation, select some percentage of points from
-    every scan (default: disabled)
-  * ``--accum-map-ratio R`` - set *R* as a ratio of points to randomly select from every scan
-    (default: ``0.001`` (*0.1%*))
+  * **scan accumulation options**
+     * ``--accum-num INTEGER`` Accumulate up to this number of past scans for
+       visualization. Use <= 0 for unlimited. Defaults to 100 if ``--accum-every`` or
+       ``--accum-every-m`` is set.
+     * ``--accum-every INTEGER`` Add a new scan to the accumulator every this
+    number of scans.
+     * ``--accum-every-m FLOAT`` Add a new scan to the accumulator after this many
+       meters of travel.
+  * **map accumulation options**
+     * ``--map`` If set, add random points from every scan into an overall map for
+       visualization. Enabled if either ``--map-ratio`` or ``--map-size`` are set.
+     * ``--map-ratio FLOAT`` Fraction of random points in every scan to add to
+       overall map (0, 1]. [default: 0.01]
+     * ``--map-size INTEGER`` Maximum number of points in overall map before
+       discarding. [default: 1500000]
+
 
 Dense accumulated clouds view (with every point of a scan)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To obtain the densest view use the ``--accum-num N --accum-every 1`` params where ``N`` is the
+To obtain the densest view use the ``--accum-num N --accum-every 1`` parameters where ``N`` is the
 number of clouds to accumulate (``N`` up to 100 is generally small enough to avoid slowing down
-the viz interface)::
+the viz interface.)
+
+The following example computes poses for each scan using the ``slam`` command and creates a dense
+map using the ``viz --accum-num 20`` to accumulate the points from 20 scans. Finally, the ``save`` command writes the
+scans with their computed trajectories to an OSF file. (Note - accumulation is a visualization feature only. The
+accumulated data is not saved to the file.)::
 
    ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz --accum-num 20 save sample.osf
 
@@ -217,7 +232,6 @@ and the dense accumulated clouds result:
 .. figure:: /images/scans_accum_dense_every.png
 
    Dense view of 20 accumulated scans during the ``slam viz`` run
-
 
 Overall map view (with poses)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -229,7 +243,7 @@ viz with scan accumulator feature without appending the ``slam`` option.
 ::
 
    ouster-cli source sample.osf viz --accum-num 20 \
-   --accum-every 0 --accum-every-m 10.5 --accum-map -r 3 -e stop
+   --accum-every-m 10.5 --map -r 3 -e stop
 
 
 Here is a preview example of the overall map generated from the accumulated scan results.
@@ -238,7 +252,7 @@ displaying the preview of the lidar trajectory:
 
 .. figure:: /images/scans_accum_map_all_scan.png
 
-   Data fully replayed with map and accum enabled (last current scan is displayed here in grey
+   Data fully replayed with map and accum enabled (last current scan is displayed here in gray
    palette)
 
 

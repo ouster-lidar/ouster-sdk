@@ -45,11 +45,6 @@ MessageRef
 .. doxygenclass:: ouster::osf::MessageRef
     :members:
 
-ChunkRef
---------
-.. doxygenclass:: ouster::osf::ChunkRef
-    :members:
-
 MessagesChunkIter
 -----------------
 .. doxygenstruct:: ouster::osf::MessagesChunkIter

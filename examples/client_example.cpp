@@ -12,26 +12,20 @@
 #include "ouster/client.h"
 #include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/sensor_scan_source.h"
 #include "ouster/types.h"
 
 using namespace ouster;
 
 const size_t N_SCANS = 5;
 
-void FATAL(const char* msg) {
-    std::cerr << msg << std::endl;
-    std::exit(EXIT_FAILURE);
-}
-
 int main(int argc, char* argv[]) {
-    if (argc != 2 && argc != 3) {
-        std::cerr
-            << "Version: " << ouster::SDK_VERSION_FULL << " ("
-            << ouster::BUILD_SYSTEM << ")"
-            << "\n\nUsage: client_example <sensor_hostname> [<udp_destination>]"
-               "\n\n<udp_destination> is optional: leave blank for "
-               "automatic destination detection"
-            << std::endl;
+    if (argc < 2) {
+        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
+                  << ouster::BUILD_SYSTEM << ")"
+                  << "\n\nUsage: client_example <sensor_hostname> "
+                     "[<sensor_hostname>]..."
+                  << std::endl;
 
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
@@ -41,98 +35,64 @@ int main(int argc, char* argv[]) {
 
     std::cerr << "Ouster client example " << ouster::SDK_VERSION << std::endl;
     /*
-     * The sensor client consists of the network client and a library for
-     * reading and working with data.
+     * The SensorScanSource is the high level client for working with Ouster
+     * sensors. It is used to connect to sensors, configure them and batch
+     * LidarScans from them.
      *
-     * The network client supports reading and writing a limited number of
-     * configuration parameters and receiving data without working directly with
-     * the socket APIs. See the `client.h` for more details. The minimum
-     * required parameters are the sensor hostname/ip and the data destination
-     * hostname/ip.
+     * It supports unicast, multicast and multiple sensors on the same ports.
      */
-    const std::string sensor_hostname = argv[1];
-    const std::string data_destination = (argc == 3) ? argv[2] : "";
 
-    std::cerr << "Connecting to \"" << sensor_hostname << "\"...\n";
+    // Build list of all sensors to connect to
+    std::vector<ouster::sensor::Sensor> sensors;
 
-    auto handle = sensor::init_client(sensor_hostname, data_destination);
-    if (!handle) FATAL("Failed to connect");
-    std::cerr << "Connection to sensor succeeded" << std::endl;
+    std::vector<int> count;
+    for (int a = 1; a < argc; a++) {
+        const std::string sensor_hostname = argv[a];
 
-    /*
-     * Configuration and calibration parameters can be queried directly from the
-     * sensor. These are required for parsing the packet stream and calculating
-     * accurate point clouds.
-     */
-    std::cerr << "Gathering metadata..." << std::endl;
-    auto metadata = sensor::get_metadata(*handle, 10);
+        std::cerr << "Connecting to \"" << sensor_hostname << "\"...\n";
 
-    // Raw metadata can be parsed into a `sensor_info` struct
-    sensor::sensor_info info(metadata);
-
-    size_t w = info.format.columns_per_frame;
-    size_t h = info.format.pixels_per_column;
-
-    ouster::sensor::ColumnWindow column_window = info.format.column_window;
-
-    auto fw_ver = info.get_version();
-
-    std::cerr << "  Firmware version:  " << fw_ver.major << "." << fw_ver.minor
-              << "." << fw_ver.patch;
-    std::cerr << "\n  Serial number:     " << info.sn
-              << "\n  Product line:      " << info.prod_line
-              << "\n  Scan dimensions:   " << w << " x " << h
-              << "\n  Column window:     [" << column_window.first << ", "
-              << column_window.second << "]" << std::endl;
-
-    // A LidarScan holds lidar data for an entire rotation of the device
-    std::vector<LidarScan> scans{
-        N_SCANS, LidarScan{w, h, info.format.udp_profile_lidar}};
-
-    // A ScanBatcher can be used to batch packets into scans
-    sensor::packet_format pf = sensor::get_format(info);
-    ScanBatcher batch_to_scan(info.format.columns_per_frame, pf);
-
-    /*
-     * The network client provides some convenience wrappers around socket APIs
-     * to facilitate reading lidar and IMU data from the network. It is also
-     * possible to configure the sensor offline and read data directly from a
-     * UDP socket.
-     */
-    std::cerr << "Capturing points... ";
-
-    // buffer to store raw packet data
-    auto lidar_packet = sensor::LidarPacket(pf.lidar_packet_size);
-    auto imu_packet = sensor::ImuPacket(pf.imu_packet_size);
-
-    for (size_t i = 0; i < N_SCANS;) {
-        // wait until sensor data is available
-        sensor::client_state st = sensor::poll_client(*handle);
-
-        // check for error status
-        if (st & sensor::CLIENT_ERROR)
-            FATAL("Sensor client returned error state!");
-
-        // check for lidar data, read a packet and add it to the current batch
-        if (st & sensor::LIDAR_DATA) {
-            if (!sensor::read_lidar_packet(*handle, lidar_packet)) {
-                FATAL("Failed to read a packet of the expected size!");
-            }
-
-            // batcher will return "true" when the current scan is complete
-            if (batch_to_scan(lidar_packet, scans[i])) {
-                // retry until we receive a full set of valid measurements
-                // (accounting for azimuth_window settings if any)
-                if (scans[i].complete(info.format.column_window)) i++;
-            }
-        }
-
-        // check if IMU data is available (but don't do anything with it)
-        if (st & sensor::IMU_DATA) {
-            sensor::read_imu_packet(*handle, imu_packet);
-        }
+        ouster::sensor::sensor_config config;
+        config.udp_dest = "@auto";  // autodetect the UDP destination IP
+        // config.udp_port_lidar = 0; // If you set any of the ports to 0, an
+        // ephemeral port is used
+        ouster::sensor::Sensor s(sensor_hostname, config);
+        sensors.push_back(s);
+        count.push_back(0);
     }
-    std::cerr << "ok" << std::endl;
+
+    // Finally create the client. This will configure all the sensors
+    // and wait for them to initialize.
+    // After this, the source immediately begins collecting data in the
+    // background
+    ouster::sensor::SensorScanSource source(sensors);
+
+    std::cerr << "Connection to sensors succeeded" << std::endl;
+
+    // Now we can print metadata about each sensor since it was collected by the
+    // source already While we are at it build necessary lookup tables
+    std::vector<XYZLut> luts;
+    for (const auto& info : source.get_sensor_info()) {
+        std::cerr << "Sensor " << info.sn << " Information:" << std::endl;
+
+        size_t w = info.format.columns_per_frame;
+        size_t h = info.format.pixels_per_column;
+
+        ouster::sensor::ColumnWindow column_window = info.format.column_window;
+
+        std::cerr << "  Firmware version:  " << info.image_rev
+                  << "\n  Serial number:     " << info.sn
+                  << "\n  Product line:      " << info.prod_line
+                  << "\n  Scan dimensions:   " << w << " x " << h
+                  << "\n  Column window:     [" << column_window.first << ", "
+                  << column_window.second << "]" << std::endl;
+
+        // Pre-compute a table for efficiently calculating point clouds from
+        // range
+        luts.push_back(ouster::make_xyz_lut(
+            info, true /* if extrinsics should be used or not */));
+    }
+
+    std::cerr << "Capturing scans... ";
 
     /*
      * The example code includes functions for efficiently and accurately
@@ -141,16 +101,22 @@ int main(int argc, char* argv[]) {
      *
      * [0] http://eigen.tuxfamily.org
      */
-    std::cerr << "Computing point clouds... " << std::endl;
 
-    // pre-compute a table for efficiently calculating point clouds from
-    // range
-    XYZLut lut = ouster::make_xyz_lut(info);
-    std::vector<LidarScan::Points> clouds;
+    int file_ind = 0;
+    std::string file_base{"cloud_"};
+    // Loop until we get at least the desired number of scans from each sensor
+    while (true) {
+        std::pair<int, std::unique_ptr<LidarScan>> result = source.get_scan();
 
-    for (const LidarScan& scan : scans) {
-        // compute a point cloud using the lookup table
-        clouds.push_back(ouster::cartesian(scan, lut));
+        auto& scan = *result.second;
+        auto index = result.first;
+
+        // grab scans until we get N from each sensor
+        if (!result.second) continue;
+
+        // Now process the cloud and save it
+        // First compute a point cloud using the lookup table
+        auto cloud = ouster::cartesian(scan, luts[index]);
 
         // channel fields can be queried as well
         auto n_valid_first_returns =
@@ -172,19 +138,8 @@ int main(int argc, char* argv[]) {
                       << n_valid_first_returns << " valid first returns at "
                       << ts_ms.count() << " ms" << std::endl;
         }
-    }
 
-    /*
-     * Write output to CSV files. The output can be viewed in a point cloud
-     * viewer like CloudCompare:
-     *
-     * [0] https://github.com/cloudcompare/cloudcompare
-     */
-    std::cerr << "Writing files... " << std::endl;
-
-    int file_ind = 0;
-    std::string file_base{"cloud_"};
-    for (const LidarScan::Points& cloud : clouds) {
+        // Finally save the scan
         std::string filename = file_base + std::to_string(file_ind++) + ".csv";
         std::ofstream out;
         out.open(filename);
@@ -199,7 +154,17 @@ int main(int argc, char* argv[]) {
 
         out.close();
         std::cerr << "  Wrote " << filename << std::endl;
+
+        // Increment our count of that scan and check if we got all 5
+        count[index]++;
+        bool all = true;
+        for (size_t p = 0; p < count.size(); p++) {
+            if (count[p] != N_SCANS) all = false;
+        }
+        if (all) break;
     }
+
+    std::cerr << "Done" << std::endl;
 
     return EXIT_SUCCESS;
 }

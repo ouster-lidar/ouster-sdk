@@ -94,8 +94,13 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
                                columns_per_packet);
     {
         ScanBatcher batcher(columns_per_frame, pf);
-        for (const auto& p : packets) {
-            EXPECT_FALSE(batcher(p, reference));
+        for (size_t i = 0; i < packets.size(); i++) {
+            const auto& p = packets[i];
+            if (i == 63) {
+                EXPECT_TRUE(batcher(p, reference));
+            } else {
+                EXPECT_FALSE(batcher(p, reference));
+            }
         }
     }
 
@@ -305,8 +310,13 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
                                columns_per_packet);
     {
         ScanBatcher batcher(columns_per_frame, pf);
-        for (const auto& p : packets) {
-            EXPECT_FALSE(batcher(p, reference));
+        for (size_t i = 0; i < packets.size(); i++) {
+            const auto& p = packets[i];
+            if (i == 63) {
+                EXPECT_TRUE(batcher(p, reference));
+            } else {
+                EXPECT_FALSE(batcher(p, reference));
+            }
         }
     }
 
@@ -490,7 +500,8 @@ INSTANTIATE_TEST_CASE_P(
                        "OS-0-128-U1_v2.3.0_1024x10.json",
                        {{ChanField::RANGE, 0xf605c68634d4d496},
                         {ChanField::REFLECTIVITY, 0x308446ce12113b5c},
-                        {ChanField::NEAR_IR, 0xacbe4e6963b1d6c7}}},
+                        {ChanField::NEAR_IR, 0xacbe4e6963b1d6c7},
+                        {ChanField::FLAGS, 6373750807750774351}}},
         // dual return
         snapshot_param{"OS-0-32-U1_v2.2.0_1024x10.pcap",
                        "OS-0-32-U1_v2.2.0_1024x10.json",
@@ -500,7 +511,9 @@ INSTANTIATE_TEST_CASE_P(
                         {ChanField::SIGNAL2, 0x4553138a62c59e37},
                         {ChanField::REFLECTIVITY, 0x63d4c6e69ced4423},
                         {ChanField::REFLECTIVITY2, 0x415f5e481688fe5a},
-                        {ChanField::NEAR_IR, 0x2c32a3e5be6b01d5}}},
+                        {ChanField::NEAR_IR, 0x2c32a3e5be6b01d5},
+                        {ChanField::FLAGS, 6902511898004997142},
+                        {ChanField::FLAGS2, 14986456617710294519}}},
         // fusa dual return
         snapshot_param{"OS-1-128_767798045_1024x10_20230712_120049.pcap",
                        "OS-1-128_767798045_1024x10_20230712_120049.json",
@@ -508,21 +521,25 @@ INSTANTIATE_TEST_CASE_P(
                         {ChanField::RANGE2, 0x87288b444ddb9c9e},
                         {ChanField::REFLECTIVITY, 0x6912ca3fa04b0d1f},
                         {ChanField::REFLECTIVITY2, 0xf58aa5594d9749dc},
-                        {ChanField::NEAR_IR, 0xc99384623c5d9feb}}},
+                        {ChanField::NEAR_IR, 0xc99384623c5d9feb},
+                        {ChanField::FLAGS, 15585490641324286966},
+                        {ChanField::FLAGS2, 3655442015794344596}}},
         // single return
         snapshot_param{"OS-2-128-U1_v2.3.0_1024x10.pcap",
                        "OS-2-128-U1_v2.3.0_1024x10.json",
                        {{ChanField::RANGE, 0x5940899c1190d02d},
                         {ChanField::SIGNAL, 0x4446bddd21f14dd4},
                         {ChanField::REFLECTIVITY, 0xea599b8814d2eac1},
-                        {ChanField::NEAR_IR, 0x8a5a3df8896e317a}}},
+                        {ChanField::NEAR_IR, 0x8a5a3df8896e317a},
+                        {ChanField::FLAGS, 3655442015794344596}}},
         // legacy
         snapshot_param{"OS-2-32-U0_v2.0.0_1024x10.pcap",
                        "OS-2-32-U0_v2.0.0_1024x10.json",
                        {{ChanField::RANGE, 0x5937f3d8f3762184},
                         {ChanField::SIGNAL, 0xbb4b7f22d1231e80},
-                        {ChanField::REFLECTIVITY, 0xa7a8e84e48a7eeb1},
-                        {ChanField::NEAR_IR, 0xe972940ca8b204f0}}}));
+                        {ChanField::REFLECTIVITY, 0x3D37AAEB2792F714},
+                        {ChanField::NEAR_IR, 0xe972940ca8b204f0},
+                        {ChanField::FLAGS, 13284364481018348283U}}}));
 // clang-format on
 
 // picked up from
@@ -563,9 +580,14 @@ TEST_P(ScanBatcherSnapshotTest, snapshot_test) {
                         pf.udp_profile_lidar, pf.columns_per_packet);
     uint64_t packet_ts = 1234;  // arbitrary, irrelevant for test
     ScanBatcher batcher(ls.w, pf);
+    int packet_index = 0;
     while (pcap.next_packet())
         if (pcap.current_info().dst_port == 7502) {
-            EXPECT_FALSE(batcher(pcap.current_data(), packet_ts, ls));
+            if (packet_index++ == 63) {
+                EXPECT_TRUE(batcher(pcap.current_data(), packet_ts, ls));
+            } else {
+                EXPECT_FALSE(batcher(pcap.current_data(), packet_ts, ls));
+            }
         }
 
     HashMap hashes;
@@ -578,14 +600,16 @@ namespace alternatives {
 using Fields = std::vector<std::pair<std::string, FieldInfo>>;
 
 static const Fields lb_field_info{
-    {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},        // uint16 => uint32
-    {ChanField::REFLECTIVITY, {UINT16, 1, 0xff00, 8}},  // uint8  => uint16
-    {ChanField::NEAR_IR, {UINT16, 2, 0xff00, 4}}        // uint8  => uint16
+    {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},  // uint16 => uint32
+    {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
+    {ChanField::REFLECTIVITY, {UINT8, 1, 0xff00, 8}},
+    {ChanField::NEAR_IR, {UINT16, 2, 0xff00, 4}}  // uint8  => uint16
 };
 
 static const Fields single_field_info{
     {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
-    {ChanField::REFLECTIVITY, {UINT16, 3, 0xff00, 8}},  // uint8  => uint16
+    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
+    {ChanField::REFLECTIVITY, {UINT8, 3, 0xff00, 8}},
     {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
     {ChanField::NEAR_IR, {UINT16, 8, 0, 0}}};
 
@@ -595,6 +619,8 @@ static const Fields fusa_info{
     {ChanField::NEAR_IR, {UINT16, 3, 0xff, -4}},
     {ChanField::RANGE2, {UINT32, 4, 0x7fff, -3}},  // uint16 => uint32
     {ChanField::REFLECTIVITY2, {UINT8, 6, 0xff, 0}},
+    {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
+    {ChanField::FLAGS2, {UINT8, 5, 0b10000000, 7}},
 };
 
 int add_profiles() {
@@ -637,10 +663,17 @@ TEST_P(ScanBatcherSnapshotTest, extended_profile_comp_test) {
                             pf.udp_profile_lidar, pf.columns_per_packet);
         uint64_t packet_ts = 1234;  // arbitrary, irrelevant for test
         ScanBatcher batcher(ls.w, pf);
-        while (pcap.next_packet())
+
+        int packet_index = 0;
+        while (pcap.next_packet()) {
             if (pcap.current_info().dst_port == 7502) {
-                EXPECT_FALSE(batcher(pcap.current_data(), packet_ts, ls));
+                if (packet_index++ == 63) {
+                    EXPECT_TRUE(batcher(pcap.current_data(), packet_ts, ls));
+                } else {
+                    EXPECT_FALSE(batcher(pcap.current_data(), packet_ts, ls));
+                }
             }
+        }
         pcap.seek(0);
         ouster::impl::foreach_channel_field(ls, pf, matrix_hash{}, hashes);
         return hashes;
@@ -652,4 +685,26 @@ TEST_P(ScanBatcherSnapshotTest, extended_profile_comp_test) {
     HashMap hashes_alt = get_hashes(p_alt);
 
     EXPECT_EQ(hashes_orig, hashes_alt);
+}
+
+TEST(ScanBatcherLegacyTest, legacy_col_status) {
+    std::string pcap_file = "OS-2-32-U0_v2.0.0_1024x10.pcap";
+    std::string meta_file = "OS-2-32-U0_v2.0.0_1024x10.json";
+
+    auto data_dir = getenvs("DATA_DIR");
+
+    auto info = metadata_from_json(data_dir + "/" + meta_file);
+    PcapReader pcap(data_dir + "/" + pcap_file);
+
+    packet_format pf(info);
+
+    while (pcap.next_packet()) {
+        if (pcap.current_info().dst_port == 7502) {
+            for (int icol = 0; icol < pf.columns_per_packet; icol++) {
+                const uint8_t* col_buf = pf.nth_col(icol, pcap.current_data());
+                const uint32_t status = pf.col_status(col_buf);
+                EXPECT_EQ(status, 0xFFFFFFFF);
+            }
+        }
+    }
 }

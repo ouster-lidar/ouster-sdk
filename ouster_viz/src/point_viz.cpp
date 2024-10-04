@@ -90,6 +90,7 @@ class Indexed {
         for (size_t i = 0; i < front.size(); i++) {
             if (back[i] && front[i].state) {
                 *front[i].state = *back[i];
+                back[i]->clear();
             } else if (back[i] && !front[i].state) {
                 front[i].state = std::make_unique<T>(*back[i]);
                 back[i]->clear();
@@ -127,7 +128,10 @@ struct PointViz::Impl {
     using Handlers = std::list<std::function<T>>;
 
     Handlers<bool(const WindowCtx&, int, int)> key_handlers;
-    Handlers<bool(const WindowCtx&, int, int)> mouse_button_handlers;
+    Handlers<bool(const WindowCtx&, ouster::viz::MouseButton,
+                  ouster::viz::MouseButtonEvent,
+                  ouster::viz::EventModifierKeys)>
+        mouse_button_handlers;
     Handlers<bool(const WindowCtx&, double, double)> scroll_handlers;
     Handlers<bool(const WindowCtx&, double, double)> mouse_pos_handlers;
 
@@ -135,13 +139,14 @@ struct PointViz::Impl {
                   int viewport_height)>
         frame_buffer_handlers;
 
+    Handlers<bool(const WindowCtx&)> window_resize_handlers;
+
     // temp storage for frame_buffer_handlers
     std::vector<uint8_t> frame_buffer_data_{};
 
     double fps_last_time_{0};
     uint64_t fps_frame_counter_{0};
     double fps_{0};
-    bool update_on_input_{true};
 
     Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
 };
@@ -183,9 +188,12 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
             if (!f(ctx, key, mods)) break;
     };
     pimpl->glfw->mouse_button_handler = [this](const WindowCtx& ctx, int button,
-                                               int mods) {
+                                               int action, int mods) {
         for (auto& f : pimpl->mouse_button_handlers)
-            if (!f(ctx, button, mods)) break;
+            if (!f(ctx, ouster::viz::MouseButton(button),
+                   ouster::viz::MouseButtonEvent(action),
+                   ouster::viz::EventModifierKeys(mods)))
+                break;
     };
     pimpl->glfw->scroll_handler = [this](const WindowCtx& ctx, double x,
                                          double y) {
@@ -200,8 +208,10 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
 
     // glfwPollEvents blocks during resize on macos. Keep rendering to avoid
     // artifacts during resize
-    pimpl->glfw->resize_handler = [this]() {
-        (void)this;
+    pimpl->glfw->resize_handler = [this](const WindowCtx& ctx) {
+        for (auto& f : pimpl->window_resize_handlers) {
+            if (!f(ctx)) break;
+        }
 #ifdef __APPLE__
         draw();
 #endif
@@ -229,10 +239,6 @@ bool PointViz::running() { return pimpl->glfw->running(); }
 void PointViz::running(bool state) { pimpl->glfw->running(state); }
 
 void PointViz::visible(bool state) { pimpl->glfw->visible(state); }
-
-bool PointViz::update_on_input() { return pimpl->update_on_input_; }
-
-void PointViz::update_on_input(bool state) { pimpl->update_on_input_ = state; }
 
 bool PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl->update_mx};
@@ -353,7 +359,9 @@ void PointViz::push_key_handler(
 }
 
 void PointViz::push_mouse_button_handler(
-    std::function<bool(const WindowCtx&, int, int)>&& f) {
+    std::function<bool(const WindowCtx&, ouster::viz::MouseButton,
+                       ouster::viz::MouseButtonEvent,
+                       ouster::viz::EventModifierKeys)>&& f) {
     pimpl->mouse_button_handlers.push_front(std::move(f));
 }
 
@@ -387,10 +395,21 @@ void PointViz::pop_frame_buffer_handler() {
     pimpl->frame_buffer_handlers.pop_front();
 }
 
+void PointViz::push_frame_buffer_resize_handler(
+    std::function<bool(const WindowCtx&)>&& f) {
+    pimpl->window_resize_handlers.push_front(std::move(f));
+}
+
+void PointViz::pop_frame_buffer_resize_handler() {
+    pimpl->window_resize_handlers.pop_front();
+}
+
 /*
  * Add / remove / access objects in the scene
  */
 Camera& PointViz::camera() { return pimpl->camera_back; }
+
+Camera& PointViz::current_camera() { return pimpl->camera_front; }
 
 TargetDisplay& PointViz::target_display() { return pimpl->target; }
 
@@ -432,14 +451,14 @@ Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
     : n_{w * h},
       w_{w},
       extrinsic_{extrinsic},
-      range_data_(n_, 0),
-      key_data_(4 * n_, 0),
-      mask_data_(4 * n_, 0),
-      xyz_data_(3 * n_, 0),
-      off_data_(3 * n_, 0),
-      transform_data_(12 * w, 0),
-      palette_data_(&spezia_palette[0][0],
-                    &spezia_palette[0][0] + spezia_n * 3) {
+      range_data_{std::make_shared<std::vector<float>>(n_, 0)},
+      key_data_{std::make_shared<std::vector<float>>(4 * n_, 0)},
+      mask_data_{std::make_shared<std::vector<float>>(4 * n_, 0)},
+      xyz_data_{std::make_shared<std::vector<float>>(3 * n_, 0)},
+      off_data_{std::make_shared<std::vector<float>>(3 * n_, 0)},
+      transform_data_{std::make_shared<std::vector<float>>(12 * w, 0)},
+      palette_data_{std::make_shared<std::vector<float>>(
+          &spezia_palette[0][0], &spezia_palette[0][0] + spezia_n * 3)} {
     // set everything to changed so on GLCloud object reuse we properly draw
     // everything first time
     range_changed_ = true;
@@ -452,15 +471,15 @@ Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
 
     // initialize per-column poses to identity
     for (size_t v = 0; v < w; v++) {
-        transform_data_[3 * v] = 1;
-        transform_data_[3 * (v + w) + 1] = 1;
-        transform_data_[3 * (v + 2 * w) + 2] = 1;
+        (*transform_data_)[3 * v] = 1;
+        (*transform_data_)[3 * (v + w) + 1] = 1;
+        (*transform_data_)[3 * (v + 2 * w) + 2] = 1;
     }
     transform_changed_ = true;
 
     // set initial rgba alpha to 1.0
     for (size_t i = 3; i < 4 * n_; i += 4) {
-        key_data_[i] = 1.0;
+        (*key_data_)[i] = 1.0;
     }
 
     Eigen::Map<Eigen::Matrix4d>{pose_.data()}.setIdentity();
@@ -510,14 +529,16 @@ void Cloud::dirty() {
 }
 
 void Cloud::set_range(const uint32_t* x) {
-    std::transform(x, x + n_, std::begin(range_data_),
+    range_data_ = std::make_shared<std::vector<float>>(n_, 0);
+    std::transform(x, x + n_, std::begin(*range_data_),
                    [](uint32_t i) { return static_cast<float>(i); });
     range_changed_ = true;
 }
 
 void Cloud::set_key(const float* key_data) {
+    key_data_ = std::make_shared<std::vector<float>>(4 * n_, 1.0f);
     const float* end = key_data + n_;
-    float* dst = key_data_.data();
+    float* dst = key_data_->data();
     while (key_data != end) {
         *dst = *(key_data++);
         dst += 4;
@@ -526,26 +547,16 @@ void Cloud::set_key(const float* key_data) {
     mono_ = true;
 }
 
-void Cloud::set_key_alpha(const float* key_alpha_data) {
-    const float* end = key_alpha_data + n_;
-    float* dst = key_data_.data();
-    while (key_alpha_data != end) {
-        *(dst + 3) = *(key_alpha_data++);  // 4th component is alpha
-        dst += 4;
-    }
-    key_changed_ = true;
-    mono_ = true;
-}
-
 void Cloud::set_key_rgb(const float* key_rgb_data) {
     // 3 color channels per point (RGB)
+    key_data_ = std::make_shared<std::vector<float>>(4 * n_, 1.0f);
     const float* end = key_rgb_data + 3 * n_;
-    float* dst = key_data_.data();
+    float* dst = key_data_->data();
     while (key_rgb_data != end) {
         *(dst++) = *(key_rgb_data++);
         *(dst++) = *(key_rgb_data++);
         *(dst++) = *(key_rgb_data++);
-        dst++;  // alpha left untouched
+        dst++;
     }
     key_changed_ = true;
     mono_ = false;
@@ -553,8 +564,9 @@ void Cloud::set_key_rgb(const float* key_rgb_data) {
 
 void Cloud::set_key_rgba(const float* key_rgba_data) {
     // 4 color channels per point (RGBA)
+    key_data_ = std::make_shared<std::vector<float>>(4 * n_, 0);
     const float* end = key_rgba_data + 4 * n_;
-    float* dst = key_data_.data();
+    float* dst = key_data_->data();
     while (key_rgba_data != end) {
         *(dst++) = *(key_rgba_data++);
         *(dst++) = *(key_rgba_data++);
@@ -566,23 +578,26 @@ void Cloud::set_key_rgba(const float* key_rgba_data) {
 }
 
 void Cloud::set_mask(const float* mask_data) {
-    std::copy(mask_data, mask_data + 4 * n_, mask_data_.begin());
+    mask_data_ = std::make_shared<std::vector<float>>(4 * n_, 0);
+    std::copy(mask_data, mask_data + 4 * n_, mask_data_->begin());
     mask_changed_ = true;
 }
 
 void Cloud::set_xyz(const float* xyz) {
+    xyz_data_ = std::make_shared<std::vector<float>>(3 * n_, 0);
     for (size_t i = 0; i < n_; i++) {
         for (size_t k = 0; k < 3; k++) {
-            xyz_data_[3 * i + k] = xyz[i + n_ * k];
+            (*xyz_data_)[3 * i + k] = xyz[i + n_ * k];
         }
     }
     xyz_changed_ = true;
 }
 
 void Cloud::set_offset(const float* offset) {
+    off_data_ = std::make_shared<std::vector<float>>(3 * n_, 0);
     for (size_t i = 0; i < n_; i++) {
         for (size_t k = 0; k < 3; k++) {
-            off_data_[3 * i + k] = offset[i + n_ * k];
+            (*off_data_)[3 * i + k] = offset[i + n_ * k];
         }
     }
     offset_changed_ = true;
@@ -599,15 +614,17 @@ void Cloud::set_pose(const mat4d& pose) {
 }
 
 void Cloud::set_column_poses(const float* rotation, const float* translation) {
+    transform_data_ = std::make_shared<std::vector<float>>(12 * w_, 0);
     for (size_t v = 0; v < w_; v++) {
         for (size_t u = 0; u < 3; u++) {
             for (size_t rgb = 0; rgb < 3; rgb++) {
-                transform_data_[(u * w_ + v) * 3 + rgb] =
+                (*transform_data_)[(u * w_ + v) * 3 + rgb] =
                     rotation[v + u * w_ + 3 * rgb * w_];
             }
         }
         for (size_t rgb = 0; rgb < 3; rgb++) {
-            transform_data_[9 * w_ + 3 * v + rgb] = translation[v + rgb * w_];
+            (*transform_data_)[9 * w_ + 3 * v + rgb] =
+                translation[v + rgb * w_];
         }
     }
     transform_changed_ = true;
@@ -615,15 +632,16 @@ void Cloud::set_column_poses(const float* rotation, const float* translation) {
 
 void Cloud::set_column_poses(const float* column_poses) {
     // columns_poses: is [Wx4x4] and column-major storage
+    transform_data_ = std::make_shared<std::vector<float>>(12 * w_, 0);
     for (size_t v = 0; v < w_; v++) {
         for (size_t u = 0; u < 3; u++) {
             for (size_t r = 0; r < 3; r++) {
-                transform_data_[(r * w_ + v) * 3 + u] =
+                (*transform_data_)[(r * w_ + v) * 3 + u] =
                     column_poses[(r * 4 + u) * w_ + v];
             }
         }
         for (size_t u = 0; u < 3; u++) {
-            transform_data_[9 * w_ + 3 * v + u] =
+            (*transform_data_)[9 * w_ + 3 * v + u] =
                 column_poses[(3 * 4 + u) * w_ + v];
         }
     }
@@ -631,8 +649,8 @@ void Cloud::set_column_poses(const float* column_poses) {
 }
 
 void Cloud::set_palette(const float* palette, size_t palette_size) {
-    palette_data_.resize(palette_size * 3);
-    std::copy(palette, palette + (palette_size * 3), palette_data_.begin());
+    palette_data_ = std::make_shared<std::vector<float>>(palette_size * 3);
+    std::copy(palette, palette + (palette_size * 3), palette_data_->begin());
     palette_changed_ = true;
 }
 
@@ -729,6 +747,80 @@ void Image::clear_palette() {
     use_palette_ = false;
 }
 
+double WindowCtx::aspect_ratio() const {
+    // prevent potential for divide-by-zero,
+    // though GLFW prevents sizing the window with zero width or height
+    constexpr int min_height = 1;
+    int height = viewport_height;
+    if (viewport_height < min_height) {
+        height = min_height;
+    }
+
+    return static_cast<double>(viewport_width) / height;
+}
+
+std::pair<double, double> WindowCtx::normalized_coordinates(double x,
+                                                            double y) const {
+    double world_x = 2.0 / viewport_height * x - aspect_ratio();
+    double world_y = 2.0 * (1.0 - (y / viewport_height)) - 1.0;
+    return std::pair<double, double>(world_x, world_y);
+}
+
+std::pair<double, double> WindowCtx::window_coordinates(
+    double normalized_x, double normalized_y) const {
+    double window_x = (normalized_x + aspect_ratio()) * viewport_height / 2.0;
+    double window_y = viewport_height * (1 - normalized_y) / 2.0;
+    return std::pair<double, double>(window_x, window_y);
+}
+
+nonstd::optional<std::pair<int, int>> Image::window_coordinates_to_image_pixel(
+    const WindowCtx& ctx, double x, double y) const {
+    auto world = ctx.normalized_coordinates(x, y);
+
+    // compute image pixel coordinates, accounting for hshift
+    nonstd::optional<std::pair<int, int>> pixel;
+    double mx = world.first - hshift_ * ctx.aspect_ratio();
+    double my = world.second;
+
+    // Important! position_ values are in a different order than the parameters
+    // to set_position. :-/
+    if (mx >= position_[0] && mx <= position_[1] && my >= position_[3] &&
+        my <= position_[2]) {
+        double img_rel_x = (mx - position_[0]) / (position_[1] - position_[0]);
+        double img_rel_y = (position_[2] - my) / (position_[2] - position_[3]);
+        int px = static_cast<int>(img_rel_x * image_width_);
+        int py = static_cast<int>(img_rel_y * image_height_);
+        pixel = std::pair<int, int>(px, py);
+    }
+    return pixel;
+}
+
+std::pair<double, double> Image::image_pixel_to_window_coordinates(
+    const WindowCtx& ctx, int px, int py) const {
+    double img_rel_x = static_cast<double>(px) / image_width_;
+    double img_rel_y = static_cast<double>(py) / image_height_;
+
+    // Important! position_ values are in a different order than the parameters
+    // to set_position. :-/
+    double mx = img_rel_x * (position_[1] - position_[0]) + position_[0];
+    double my = position_[2] - img_rel_y * (position_[2] - position_[3]);
+    double wx = mx + hshift_ * ctx.aspect_ratio();
+    auto psize = pixel_size(ctx);
+    auto wcoords = ctx.window_coordinates(wx, my);
+
+    // return the window pixel in the center of the image pixel
+    return std::pair<double, double>(wcoords.first + psize.first / 2,
+                                     wcoords.second + psize.second / 2);
+}
+
+std::pair<double, double> Image::pixel_size(const WindowCtx& ctx) const {
+    auto lower_left = ctx.window_coordinates(position_[0], position_[3]);
+    auto upper_right = ctx.window_coordinates(position_[1], position_[2]);
+    return std::pair<double, double>(
+        fabs(upper_right.first - lower_left.first) / image_width_,
+        fabs(upper_right.second - lower_left.second) / image_height_);
+}
+
 Cuboid::Cuboid(const mat4d& pose, const std::array<float, 4>& rgba) {
     set_transform(pose);
     set_rgba(rgba);
@@ -821,32 +913,32 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 switch (key) {
                     case GLFW_KEY_W:
                         viz.camera().pitch(5);
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().pitch(5);
                         break;
                     case GLFW_KEY_S:
                         viz.camera().pitch(-5);
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().pitch(-5);
                         break;
                     case GLFW_KEY_A:
                         viz.camera().yaw(5);
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().yaw(5);
                         break;
                     case GLFW_KEY_D:
                         viz.camera().yaw(-5);
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().yaw(-5);
                         break;
                     case GLFW_KEY_EQUAL:
                         viz.camera().dolly(5);
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().dolly(5);
                         break;
                     case GLFW_KEY_MINUS:
                         viz.camera().dolly(-5);
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().dolly(-5);
                         break;
                     case GLFW_KEY_0:
                         orthographic = !orthographic;
                         viz.camera().set_orthographic(orthographic);
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().set_orthographic(orthographic);
                         break;
                     case GLFW_KEY_ESCAPE:
                         viz.running(false);
@@ -858,7 +950,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 switch (key) {
                     case GLFW_KEY_R:
                         viz.camera().reset();
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().reset();
                         break;
                     default:
                         break;
@@ -867,7 +959,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 switch (key) {
                     case GLFW_KEY_R:
                         viz.camera().birds_eye_view();
-                        if (viz.update_on_input()) viz.update();
+                        viz.current_camera().birds_eye_view();
                         break;
                     default:
                         break;
@@ -880,7 +972,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
         auto lock = mx ? std::unique_lock<std::mutex>{*mx}
                        : std::unique_lock<std::mutex>{};
         viz.camera().dolly(static_cast<int>(yoff * 5));
-        if (viz.update_on_input()) viz.update();
+        viz.current_camera().dolly(static_cast<int>(yoff * 5));
         return true;
     });
 
@@ -895,7 +987,8 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 constexpr double sensitivity = 0.3;
                 viz.camera().yaw(sensitivity * dx);
                 viz.camera().pitch(sensitivity * dy);
-                if (viz.update_on_input()) viz.update();
+                viz.current_camera().yaw(sensitivity * dx);
+                viz.current_camera().pitch(sensitivity * dy);
             } else if (wc.mbutton_down) {
                 // convert from screen coordinated to fractions of window size
                 // TODO: factor out conversion?
@@ -905,7 +998,7 @@ void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
                 dx *= 2.0 / window_diagonal;
                 dy *= 2.0 / window_diagonal;
                 viz.camera().dolly_xy(dx, dy);
-                if (viz.update_on_input()) viz.update();
+                viz.current_camera().dolly_xy(dx, dy);
             }
             return true;
         });

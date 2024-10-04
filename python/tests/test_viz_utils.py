@@ -10,14 +10,17 @@ import pytest
 import numpy as np
 
 import math
+import threading
 
 from ouster.sdk import client
 import ouster.sdk.pcap as pcap
 from ouster.sdk.util import resolve_metadata
 import ouster.sdk.util.pose_util as pu
+from ouster.sdk.viz.model import LidarScanVizModel
+from ouster.sdk.client import dewarp
 
-from ouster.sdk.viz import grey_palette
-from ouster.sdk.viz.scans_accum import ScansAccumulator
+from ouster.sdk.viz.accumulators import LidarScanVizAccumulators
+from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
 
 try:
     from scipy.spatial.transform import Rotation as R
@@ -354,7 +357,8 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
         if use_dewarp:
             cloud_scan = viz.Cloud(scan.h * scan.w)
             xyz = xyzlut(scan.field(client.ChanField.RANGE))
-            xyz = pu.dewarp(xyz, column_poses=scan.pose)
+            # TODO hao: remove the input_row_major
+            xyz = dewarp(xyz, scan.pose, input_row_major=False)
             cloud_scan.set_xyz(xyz)
             cloud_scan.set_key(key)
         else:
@@ -411,7 +415,7 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
 
 def test_viz_util_scans_accum_poses(test_data_dir,
                                     point_viz: viz.PointViz) -> None:
-    """Test to draw 3 scans with poses using ScansAccumulator."""
+    """Test to draw 3 scans with poses using LidarScanVizAccumulators."""
     pcap_file = str(test_data_dir / "pcaps" /
                     "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
 
@@ -422,6 +426,7 @@ def test_viz_util_scans_accum_poses(test_data_dir,
     packets = pcap.Pcap(pcap_file, meta)
     scans = client.Scans(packets)
     scans_w_poses = pu.pose_scans_from_kitti(scans, poses_file)
+    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
 
     viz.AxisWithLabel(point_viz,
                       pose=np.eye(4),
@@ -431,15 +436,22 @@ def test_viz_util_scans_accum_poses(test_data_dir,
                       label_scale=1,
                       enabled=True)
 
-    scans_acc = ScansAccumulator(meta,
-                                 point_viz=point_viz,
-                                 accum_max_num=10,
-                                 accum_min_dist_num=1,
-                                 map_enabled=True,
-                                 map_select_ratio=0.5)
+    accumulator_config = LidarScanVizAccumulatorsConfig(
+        accum_max_num=10,
+        accum_min_dist_num=1,
+        map_enabled=True,
+        map_select_ratio=0.5
+    )
+    scans_acc = LidarScanVizAccumulators(
+        model,
+        point_viz,
+        accumulator_config,
+        threading.Lock()
+    )
 
     for scan in scans_w_poses:
-        scans_acc.update(scan)
+        scans_acc.update([scan])
+        model._amend_view_modes_all([scan])
 
     scans_acc.draw(update=True)
 
@@ -465,71 +477,4 @@ def test_viz_util_scans_accum_poses(test_data_dir,
          on_update,
          period=period_t,
          total=total_t,
-         title="ScansAccumulator as scan viz.")
-
-
-def test_viz_util_scans_accum_no_viz(test_data_dir,
-                                     point_viz: viz.PointViz) -> None:
-    """Test to draw 3 scans with poses using ScansAccumulator (without viz)"""
-    pcap_file = str(test_data_dir / "pcaps" /
-                    "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
-
-    poses_file = str(test_data_dir / "pcaps" /
-                     "OS-1-128_v2.3.0_1024x10_lb_n3_poses_kitti.txt")
-
-    meta = client.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
-    packets = pcap.Pcap(pcap_file, meta)
-    scans = client.Scans(packets)
-    scans_w_poses = pu.pose_scans_from_kitti(scans, poses_file)
-
-    viz.AxisWithLabel(point_viz,
-                      pose=np.eye(4),
-                      label="O",
-                      thickness=5,
-                      length=1,
-                      label_scale=1,
-                      enabled=True)
-
-    # create scans accum without PointViz
-    scans_acc = ScansAccumulator(meta,
-                                 map_enabled=True,
-                                 map_select_ratio=0.5)
-
-    # processing doesn't require viz presence in scans accum
-    for scan in scans_w_poses:
-        scans_acc.update(scan)
-
-    # draw the cloud manually to the viz using ScansAccumulator MAP data
-    # TODO[pb]: make the real interfaces to get the data from
-    #           ScansAccumulator back instead of tapping into
-    #           internals.
-    cloud_map = viz.Cloud(scans_acc._map_xyz.shape[0])
-    cloud_map.set_xyz(scans_acc._map_xyz)
-    cloud_map.set_key(scans_acc._map_keys["NEAR_IR"])
-    cloud_map.set_palette(grey_palette)
-    cloud_map.set_point_size(1)
-    point_viz.add(cloud_map)
-
-    total_traj_t = 2
-
-    # some camera movement along 3 scan point cloud
-    cam_traj_eval = pu.TrajectoryEvaluator([
-        (0, np.array([0, 0, 0, -15, 0, 0])),
-        (total_traj_t, np.array([0, 0, - math.pi / 12, 1, 0, 0]))
-    ])
-
-    point_viz.target_display.enable_rings(False)
-
-    period_t = 0.01
-    total_t = 0.95 * total_traj_t  # stop a little bit early
-
-    def on_update(pviz, tick_ts) -> None:
-        t = tick_ts % total_traj_t
-        # add some camera movement
-        pviz.camera.set_target(np.linalg.inv(cam_traj_eval.pose_at(t)))
-
-    spin(point_viz,
-         on_update,
-         period=period_t,
-         total=total_t,
-         title="ScansAccumulator without viz, draw map manually")
+         title="LidarScanVizAccumulators as scan viz.")

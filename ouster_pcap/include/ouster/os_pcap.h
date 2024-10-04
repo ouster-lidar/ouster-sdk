@@ -191,6 +191,7 @@ size_t read_packet(playback_handle& handle, uint8_t* buf, size_t buffer_size);
  * @param[in] file The file path to the target pcap to record to.
  * @param[in] frag_size The size of the fragments for packet fragmentation.
  * @param[in] use_sll_encapsulation Whether to use sll encapsulation.
+ * @return record_handle A handle to the initialized record.
  */
 std::shared_ptr<record_handle> record_initialize(
     const std::string& file, int frag_size, bool use_sll_encapsulation = false);

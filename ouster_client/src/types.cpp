@@ -73,16 +73,16 @@ extern const Table<Polarity, const char*, 2> polarity_strings{
 extern const Table<NMEABaudRate, const char*, 2> nmea_baud_rate_strings{
     {{BAUD_9600, "BAUD_9600"}, {BAUD_115200, "BAUD_115200"}}};
 
-// clang-format off
-Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{{
-    {PROFILE_LIDAR_UNKNOWN, "UNKNOWN"},
-    {PROFILE_LIDAR_LEGACY, "LEGACY"},
-    {PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
-    {PROFILE_RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
-    {PROFILE_RNG15_RFL8_NIR8, "RNG15_RFL8_NIR8"},
-    {PROFILE_FIVE_WORD_PIXEL, "FIVE_WORD_PIXEL"},
-    {PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL, "FUSA_RNG15_RFL8_NIR8_DUAL"},
-}};
+Table<UDPProfileLidar, const char*, MAX_NUM_PROFILES> udp_profile_lidar_strings{
+    {
+        {PROFILE_LIDAR_UNKNOWN, "UNKNOWN"},
+        {PROFILE_LIDAR_LEGACY, "LEGACY"},
+        {PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL, "RNG19_RFL8_SIG16_NIR16_DUAL"},
+        {PROFILE_RNG19_RFL8_SIG16_NIR16, "RNG19_RFL8_SIG16_NIR16"},
+        {PROFILE_RNG15_RFL8_NIR8, "RNG15_RFL8_NIR8"},
+        {PROFILE_FIVE_WORD_PIXEL, "FIVE_WORD_PIXEL"},
+        {PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL, "FUSA_RNG15_RFL8_NIR8_DUAL"},
+    }};
 
 Table<UDPProfileIMU, const char*, 1> udp_profile_imu_strings{{
     {PROFILE_IMU_LEGACY, "LEGACY"},
@@ -140,12 +140,12 @@ bool operator!=(const data_format& lhs, const data_format& rhs) {
     return !(lhs == rhs);
 }
 
-bool operator ==(const calibration_status& lhs, const calibration_status& rhs) {
+bool operator==(const calibration_status& lhs, const calibration_status& rhs) {
     return (lhs.reflectivity_status == rhs.reflectivity_status &&
             lhs.reflectivity_timestamp == rhs.reflectivity_timestamp);
 }
 
-bool operator !=(const calibration_status& lhs, const calibration_status& rhs) {
+bool operator!=(const calibration_status& lhs, const calibration_status& rhs) {
     return !(lhs == rhs);
 }
 
@@ -173,8 +173,7 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
             lhs.columns_per_packet == rhs.columns_per_packet &&
             lhs.udp_profile_lidar == rhs.udp_profile_lidar &&
             lhs.udp_profile_imu == rhs.udp_profile_imu &&
-            lhs.gyro_fsr == rhs.gyro_fsr &&
-            lhs.accel_fsr == rhs.accel_fsr &&
+            lhs.gyro_fsr == rhs.gyro_fsr && lhs.accel_fsr == rhs.accel_fsr &&
             lhs.return_order == rhs.return_order &&
             lhs.min_range_threshold_cm == rhs.min_range_threshold_cm);
 }
@@ -212,8 +211,12 @@ data_format default_data_format(lidar_mode mode) {
         case 2048:
             offset = repeat(16, {36, 24, 12, 0});
             break;
+        case 4096:
+            offset = repeat(16, {72, 48, 24, 0});
+            break;
         default:
             throw std::invalid_argument{"default_data_format"};
+            break;
     }
 
     return {pixels_per_column,
@@ -244,10 +247,7 @@ mat4d default_beam_to_lidar_transform(std::string prod_line) {
     return beam_to_lidar_transform;
 }
 
-calibration_status default_calibration_status() {
-    return calibration_status{};
-}
-
+calibration_status default_calibration_status() { return calibration_status{}; }
 
 /* Misc operations */
 
@@ -304,10 +304,10 @@ template <typename K, size_t N>
 static optional<K> rlookup(const impl::Table<K, const char*, N>& table,
                            const char* v) {
     auto end = table.end();
-    auto res = std::find_if(table.begin(), end,
-                            [&](const std::pair<K, const char*>& p) {
-                                return p.second && std::strcmp(p.second, v) == 0;
-                            });
+    auto res = std::find_if(
+        table.begin(), end, [&](const std::pair<K, const char*>& p) {
+            return p.second && std::strcmp(p.second, v) == 0;
+        });
 
     return res == end ? nullopt : make_optional<K>(res->first);
 }
@@ -433,6 +433,22 @@ size_t field_type_size(ChanFieldType ft) {
     }
 }
 
+uint64_t field_type_mask(ChanFieldType ft) {
+    switch (field_type_size(ft)) {
+        case 1:
+            return 0xff;
+        case 2:
+            return 0xffff;
+        case 4:
+            return 0xffffffff;
+        case 8:
+            return 0xffffffffffffffff;
+        default:
+            throw std::runtime_error(
+                "field_type_mask error: wrong ChanFieldType");
+    }
+}
+
 std::string to_string(UDPProfileLidar profile) {
     auto res = lookup(impl::udp_profile_lidar_strings, profile);
     return res ? res.value() : "UNKNOWN";
@@ -463,14 +479,12 @@ std::string to_string(ThermalShutdownStatus thermal_shutdown_status) {
 }
 
 std::string to_string(ReturnOrder return_order) {
-    auto res =
-        lookup(impl::return_order_strings, return_order);
+    auto res = lookup(impl::return_order_strings, return_order);
     return res ? res.value() : "UNKNOWN";
 }
 
 std::string to_string(FullScaleRange full_scale_range) {
-    auto res =
-        lookup(impl::full_scale_range_strings, full_scale_range);
+    auto res = lookup(impl::full_scale_range_strings, full_scale_range);
     return res ? res.value() : "UNKNOWN";
 }
 
@@ -572,6 +586,8 @@ Json::Value cal_to_json(const calibration_status& cal) {
 
     if (cal.reflectivity_status) {
         root["reflectivity"]["valid"] = cal.reflectivity_status.value();
+    }
+    if (cal.reflectivity_timestamp) {
         root["reflectivity"]["timestamp"] = cal.reflectivity_timestamp.value();
     }
 
@@ -720,8 +736,7 @@ sensor_config parse_config(const Json::Value& root) {
 
     // Firmware 3.1 and higher options
     if (!root["gyro_fsr"].empty()) {
-        auto gyro_fsr =
-            full_scale_range_of_string(root["gyro_fsr"].asString());
+        auto gyro_fsr = full_scale_range_of_string(root["gyro_fsr"].asString());
         if (gyro_fsr) {
             config.gyro_fsr = gyro_fsr;
         } else {
@@ -773,14 +788,12 @@ sensor_config parse_config(const std::string& config) {
 Json::Value config_to_json(const sensor_config& config) {
     Json::Value root{Json::objectValue};
 
-    if (config.udp_dest)
-        root["udp_dest"] = config.udp_dest.value();
+    if (config.udp_dest) root["udp_dest"] = config.udp_dest.value();
 
     if (config.udp_port_lidar)
         root["udp_port_lidar"] = config.udp_port_lidar.value();
 
-    if (config.udp_port_imu)
-        root["udp_port_imu"] = config.udp_port_imu.value();
+    if (config.udp_port_imu) root["udp_port_imu"] = config.udp_port_imu.value();
 
     if (config.timestamp_mode)
         root["timestamp_mode"] = to_string(config.timestamp_mode.value());
@@ -866,17 +879,16 @@ Json::Value config_to_json(const sensor_config& config) {
         root["udp_profile_imu"] = to_string(config.udp_profile_imu.value());
 
     // Firmware 3.1 and higher options
-    if (config.gyro_fsr)
-    	root["gyro_fsr"] = to_string(config.gyro_fsr.value());
+    if (config.gyro_fsr) root["gyro_fsr"] = to_string(config.gyro_fsr.value());
 
     if (config.accel_fsr)
-    	root["accel_fsr"] = to_string(config.accel_fsr.value());
+        root["accel_fsr"] = to_string(config.accel_fsr.value());
 
     if (config.min_range_threshold_cm)
-    	root["min_range_threshold_cm"] = config.min_range_threshold_cm.value();
+        root["min_range_threshold_cm"] = config.min_range_threshold_cm.value();
 
     if (config.return_order)
-    	root["return_order"] = to_string(config.return_order.value());
+        root["return_order"] = to_string(config.return_order.value());
 
     return root;
 }
@@ -891,87 +903,105 @@ std::string to_string(const sensor_config& config) {
     return Json::writeString(builder, root);
 }
 
-PacketValidationFailure LidarPacket::validate(const sensor_info& info,
-                                              const packet_format& format) {
-    if (buf.size() != format.lidar_packet_size) {
-        return PacketValidationFailure::PACKET_SIZE;
-    }
-
-    auto init_id = format.init_id(buf.data());
-    if (info.init_id != 0 && init_id != 0 && init_id != info.init_id) {
-        return PacketValidationFailure::ID;
-    }
-
-    if (info.sn.length() > 0) {
-        auto p_sn = format.prod_sn(buf.data());
-        auto m_sn = std::stoull(info.sn);
-        if (p_sn != 0 && p_sn != m_sn) {
-            return PacketValidationFailure::ID;
+PacketValidationFailure validate_packet(const sensor_info& info,
+                                        const packet_format& format,
+                                        const uint8_t* buf, uint64_t buf_size,
+                                        PacketValidationType type) {
+    // Check if we need to guess the type
+    if (type == PacketValidationType::GUESS_TYPE) {
+        if (buf_size == format.imu_packet_size) {
+            type = PacketValidationType::IMU;
+        } else {
+            type = PacketValidationType::LIDAR;
         }
     }
-    return PacketValidationFailure::NONE;
-}
 
-PacketValidationFailure ImuPacket::validate(const sensor_info& /*info*/,
-                                            const packet_format& format) {
-    if (buf.size() != format.imu_packet_size) {
-        return PacketValidationFailure::PACKET_SIZE;
+    if (type == PacketValidationType::LIDAR) {
+        if (buf_size != format.lidar_packet_size) {
+            return PacketValidationFailure::PACKET_SIZE;
+        }
+
+        auto init_id = format.init_id(buf);
+        if (info.init_id != 0 && init_id != 0 && init_id != info.init_id) {
+            return PacketValidationFailure::ID;
+        }
+
+        if (info.sn.length() > 0) {
+            uint64_t p_sn = format.prod_sn(buf);
+            uint64_t m_sn = std::stoull(info.sn);
+            if ((p_sn != 0) && (p_sn != m_sn)) {
+                return PacketValidationFailure::ID;
+            }
+        }
+        return PacketValidationFailure::NONE;
+    } else if (type == PacketValidationType::IMU) {
+        if (buf_size != format.imu_packet_size) {
+            return PacketValidationFailure::PACKET_SIZE;
+        }
+        return PacketValidationFailure::NONE;
     }
     return PacketValidationFailure::NONE;
+};
+
+PacketValidationFailure LidarPacket::validate(const sensor_info& info,
+                                              const packet_format& format) {
+    return validate_packet(info, format, buf.data(), buf.size(),
+                           PacketValidationType::LIDAR);
+}
+
+PacketValidationFailure ImuPacket::validate(const sensor_info& info,
+                                            const packet_format& format) {
+    return validate_packet(info, format, buf.data(), buf.size(),
+                           PacketValidationType::IMU);
 }
 
 product_info product_info::create_product_info(
     std::string product_info_string) {
-    std::regex product_regex("^(\\w+)-(\\d+|DOME)?(?:-(\\d+))?(?:-((?!SR)\\w+))?-?(SR)?");
+    std::regex product_regex(
+        "^(\\w+)-(\\d+|DOME)?(?:-(\\d+))?(?:-((?!SR)\\w+))?-?(SR)?");
     std::smatch matches;
-    if(product_info_string.length() > 0) {
+    if (product_info_string.length() > 0) {
         if (regex_search(product_info_string, matches, product_regex) == true) {
             std::string form_factor = matches.str(1) + matches.str(2);
             bool short_range = (matches.str(5).length() > 0);
             auto beam_config = matches.str(4);
-            if(beam_config.length() <= 0) {
+            if (beam_config.length() <= 0) {
                 beam_config = "U";
             }
             int beam_count;
             try {
                 beam_count = stoi(matches.str(3));
-            }
-            catch(const std::exception &e) {
+            } catch (const std::exception& e) {
                 beam_count = 0;
             }
 
-            return product_info(product_info_string,
-                                form_factor,
-                                short_range,
-                                beam_config,
-                                beam_count);
+            return product_info(product_info_string, form_factor, short_range,
+                                beam_config, beam_count);
         } else {
-            throw std::runtime_error("Product Info \"" + product_info_string + "\" is not a recognized product info");
+            throw std::runtime_error("Product Info \"" + product_info_string +
+                                     "\" is not a recognized product info");
         }
     }
     return product_info();
 }
 
-product_info::product_info() : product_info("", "", false, "", 0) {};
+product_info::product_info() : product_info("", "", false, "", 0){};
 
 product_info::product_info(std::string product_info_string,
-              std::string form_factor,
-              bool short_range,
-              std::string beam_config,
-              int beam_count) :
-    full_product_info(product_info_string),
-    form_factor(form_factor),
-    short_range(short_range),
-    beam_config(beam_config),
-    beam_count(beam_count) {
-}
+                           std::string form_factor, bool short_range,
+                           std::string beam_config, int beam_count)
+    : full_product_info(product_info_string),
+      form_factor(form_factor),
+      short_range(short_range),
+      beam_config(beam_config),
+      beam_count(beam_count) {}
 
 bool operator==(const product_info& lhs, const product_info& rhs) {
     return lhs.full_product_info == rhs.full_product_info &&
-        lhs.form_factor == rhs.form_factor &&
-        lhs.short_range == rhs.short_range &&
-        lhs.beam_config == rhs.beam_config &&
-        lhs.beam_count == rhs.beam_count;
+           lhs.form_factor == rhs.form_factor &&
+           lhs.short_range == rhs.short_range &&
+           lhs.beam_config == rhs.beam_config &&
+           lhs.beam_count == rhs.beam_count;
 }
 
 bool operator!=(const product_info& lhs, const product_info& rhs) {
@@ -981,7 +1011,8 @@ bool operator!=(const product_info& lhs, const product_info& rhs) {
 std::string to_string(const product_info& info) {
     std::stringstream output;
     output << "Product Info: " << std::endl;
-    output << "\tFull Product Info: \"" << info.full_product_info << "\"" << std::endl;
+    output << "\tFull Product Info: \"" << info.full_product_info << "\""
+           << std::endl;
     output << "\tForm Factor: \"" << info.form_factor << "\"" << std::endl;
     output << "\tShort Range: \"" << info.short_range << "\"" << std::endl;
     output << "\tBeam Config: \"" << info.beam_config << "\"" << std::endl;
@@ -993,7 +1024,8 @@ std::string to_string(const product_info& info) {
 namespace util {
 
 version version_from_string(const std::string& v) {
-    auto rgx = std::regex(R"((([\w\d]*)-([\w\d]*)-)?v?(\d*)\.(\d*)\.(\d*)-?([\d\w.]*)?\+?([\d\w.]*)?)");
+    auto rgx = std::regex(
+        R"((([\w\d]*)-([\w\d]*)-)?v?(\d*)\.(\d*)\.(\d*)-?([\d\w.]*)?\+?([\d\w.]*)?)");
     std::smatch matches;
     std::regex_search(v, matches, rgx);
 

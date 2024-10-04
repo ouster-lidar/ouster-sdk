@@ -8,8 +8,6 @@ import json
 import importlib.resources
 from packaging.markers import Marker
 
-mapping_has_platform_support = True
-
 
 def get_unsupported():
     result = []

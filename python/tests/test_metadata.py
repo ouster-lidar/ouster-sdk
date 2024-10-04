@@ -56,6 +56,8 @@ def test_read_info(meta: client.SensorInfo) -> None:
     assert meta.prod_line == "OS-2-32-U0"
     assert meta.format.columns_per_frame == 1024
     assert meta.format.columns_per_packet == 16
+    assert meta.w == meta.format.columns_per_frame
+    assert meta.h == meta.format.pixels_per_column
     assert meta.format.column_window[0] == 0
     assert meta.format.column_window[1] == meta.format.columns_per_frame - 1
     assert len(meta.format.pixel_shift_by_row) == 32
@@ -177,9 +179,20 @@ def test_copy_info(meta: client.SensorInfo) -> None:
 def test_userdata(meta: client.SensorInfo) -> None:
     meta.user_data = "test"
 
-    meta2 = client.SensorInfo(meta.to_json_string())
+    meta2 = client.SensorInfo(meta.to_json_string(), True)
 
     assert meta2.user_data == meta.user_data
+
+
+def test_extrinsics(meta: client.SensorInfo) -> None:
+    copy = numpy.eye(4)
+    copy[0, 0] = 5
+    copy[1, 0] = 3
+    meta.extrinsic = copy
+
+    meta2 = client.SensorInfo(meta.to_json_string(), True)
+
+    assert (meta2.extrinsic == meta.extrinsic).all()
 
 
 def test_parse_info() -> None:
@@ -217,10 +230,6 @@ def test_parse_info() -> None:
                              numpy.array(range(16)).reshape(4, 4))
     assert numpy.array_equal(info.extrinsic, numpy.identity(4))
 
-    metadata['lidar_origin_to_beam_origin_mm'] = 'foo'
-    with pytest.raises(RuntimeError):
-        client.SensorInfo(json.dumps(metadata))
-
 
 def test_info_length() -> None:
     """Check length of info to ensure we've added appropriately to the == operator"""
@@ -228,7 +237,7 @@ def test_info_length() -> None:
     info_attributes = inspect.getmembers(client.SensorInfo, lambda a: not inspect.isroutine(a))
     info_properties = [a for a in info_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(info_properties) == 22, "Don't forget to update tests and the sensor_info == operator!"
+    assert len(info_properties) == 24, "Don't forget to update tests and the sensor_info == operator!"
 
 
 def test_equality_format() -> None:
@@ -249,20 +258,19 @@ def test_skip_metadata_beam_validation() -> None:
     client.SensorInfo()
 
     with open(all_zeros_metadata, 'r') as f:
-
-        # test that by default it raises an error
-        with pytest.raises(RuntimeError):
-            client.SensorInfo(f.read())
-
-        # reset
-        f.seek(0)
-
         # test that specifying skip doesn't raise error
-        client.SensorInfo(f.read(), skip_beam_validation = True)
+        client.SensorInfo(f.read())
 
 
-@pytest.mark.parametrize('metadata_key', ['1_12', '1_12_legacy', '1_13', '1_13_legacy',
-    '1_14_128_legacy', '2_0', '2_0_legacy', '2_1', '2_1_legacy', '2_2', '2_2_legacy', '2_3',
+@pytest.mark.parametrize('metadata_key', [
+    '1_12',
+    '1_12_legacy',
+    '1_13',
+    '1_14_128_legacy',
+    '2_0',
+    '2_0_legacy',
+    '2_1',
+    '2_1_legacy', '2_2', '2_2_legacy', '2_3',
     '2_3_legacy', '2_4', '2_4_legacy', '2_5', '2_5_legacy', '3_0'])
 def test_updated_string(metadata_base_name) -> None:
     meta_path = str(Path(METADATA_DATA_DIR) / f"{metadata_base_name}")

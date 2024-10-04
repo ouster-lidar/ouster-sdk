@@ -27,10 +27,12 @@ class ChunksWriter {
      * Save a message to a specified stream.
      *
      * @param[in] stream_id The stream id to associate with the message.
-     * @param[in] ts The timestamp for the messages.
+     * @param[in] receive_ts The receive timestamp for the messages.
+     * @param[in] sensor_ts The sensor timestamp for the messages.
      * @param[in] buf A vector of message buffers to record.
      */
-    virtual void save_message(const uint32_t stream_id, const ts_t ts,
+    virtual void save_message(const uint32_t stream_id, const ts_t receive_ts,
+                              const ts_t sensor_ts,
                               const std::vector<uint8_t>& buf) = 0;
 
     /**
@@ -115,6 +117,8 @@ class Writer {
      * @tparam MetaParams The type of meta parameters to add.
      *
      * @param[in] params The parameters to add.
+     *
+     * @return The corresponding lidar id of the metadata entry.
      */
     template <typename MetaType, typename... MetaParams>
     uint32_t add_metadata(MetaParams&&... params) {
@@ -126,6 +130,8 @@ class Writer {
      * Adds a MetadataEntry to the OSF file.
      *
      * @param[in] entry The metadata entry to add to the OSF file.
+     *
+     * @return The corresponding lidar id of the metadata entry
      */
     uint32_t add_metadata(MetadataEntry&& entry);
 
@@ -167,6 +173,8 @@ class Writer {
      * @tparam StreamParams The specified stream parameter types.
      *
      * @param[in] params The parameters to use when creating a stream.
+     *
+     * @return Stream object created.
      */
     template <typename Stream, typename... StreamParams>
     Stream create_stream(StreamParams&&... params) {
@@ -182,11 +190,12 @@ class Writer {
      * @throws std::logic_error Exception on non existent stream id.
      *
      * @param[in] stream_id The stream to save the message to.
-     * @param[in] ts The timestamp to use for the message.
+     * @param[in] receive_ts The receive timestamp to use for the message.
+     * @param[in] sensor_ts The sensor timestamp to use for the message.
      * @param[in] buf The message to save in the form of a byte vector.
      */
-    void save_message(const uint32_t stream_id, const ts_t ts,
-                      const std::vector<uint8_t>& buf);
+    void save_message(const uint32_t stream_id, const ts_t receive_ts,
+                      const ts_t sensor_ts, const std::vector<uint8_t>& buf);
 
     /**
      * Adds info about a sensor to the OSF and returns the stream index to
@@ -251,7 +260,7 @@ class Writer {
      * @param[in] stream_index The index of the corrosponding sensor_info to
      *                         use.
      * @param[in] scan The scan to save.
-     * @param[in] timestamp Timestamp to index this scan with.
+     * @param[in] timestamp Receive timestamp to index this scan with.
      */
     void save(uint32_t stream_index, const LidarScan& scan,
               const ouster::osf::ts_t timestamp);
@@ -567,10 +576,12 @@ class ChunkBuilder {
      * @throws std::logic_error Exception on a size mismatch
      *
      * @param[in] stream_id The stream to save the message to.
-     * @param[in] ts The timestamp to use for the message.
+     * @param[in] receive_ts The receive timestamp to use for the message.
+     * @param[in] sensor_ts The sensor timestamp to use for the message.
      * @param[in] msg_buf The message to save in the form of a byte vector.
      */
-    void save_message(const uint32_t stream_id, const ts_t ts,
+    void save_message(const uint32_t stream_id, const ts_t receive_ts,
+                      const ts_t sensor_ts,
                       const std::vector<uint8_t>& msg_buf);
 
     /**
@@ -602,17 +613,21 @@ class ChunkBuilder {
 
     /**
      * The lowest timestamp in the chunk.
+     *
+     * @return The lowest timestamp in the chunk.
      */
     ts_t start_ts() const;
 
     /**
      * The highest timestamp in the chunk.
+     *
+     * @return The highest timestamp in the chunk.
      */
     ts_t end_ts() const;
 
    private:
     /**
-     * Internal method for updating the corret start and end
+     * Internal method for updating the correct start and end
      * timestamps.
      *
      * @param[in] ts The timestamp to check against for start and end.

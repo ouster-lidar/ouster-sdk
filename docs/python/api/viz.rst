@@ -28,9 +28,6 @@ Core
 .. autoclass:: SimpleViz
    :members:
 
-.. autoclass:: ScansAccumulator
-   :members:
-
 .. autoattribute:: ouster.sdk.viz.spezia_palette
    :annotation: = spezia colors
 

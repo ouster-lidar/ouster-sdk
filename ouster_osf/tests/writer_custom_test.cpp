@@ -80,7 +80,7 @@ class YoStream : public MessageStream<YoStreamMeta, yo> {
     // Boilerplate for writer
     void save(const ouster::osf::ts_t ts, const obj_type& yo_obj) {
         const auto& msg_buf = make_msg(yo_obj);
-        writer_.save_message(meta_.id(), ts, msg_buf);
+        writer_.save_message(meta_.id(), ts, ts, msg_buf);
     }
 
     // Pack yo message into buffer

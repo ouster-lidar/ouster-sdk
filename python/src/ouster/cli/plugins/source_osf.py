@@ -4,7 +4,8 @@ from typing import Any, Iterator, Dict, cast
 
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
-                          source_multicommand)
+                          source_multicommand,
+                          _nanos_to_string)
 
 
 @click.group(name="osf", hidden=True)
@@ -12,7 +13,7 @@ from .source_util import (SourceCommandContext,
 def osf_group(ctx) -> None:
     """Commands for working with OSF files and converting data to OSF."""
     try:
-        from ouster.sdk.osf import _osf
+        import ouster.sdk._bindings.osf as _osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
     ctx.ensure_object(dict)
@@ -33,7 +34,7 @@ def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
     """
     file = ctx.source_uri or ""
     try:
-        from ouster.sdk.osf import _osf
+        import ouster.sdk._bindings.osf as _osf
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
@@ -50,7 +51,8 @@ def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
 @click.option('-n',
               type=int,
               default=0,
-              help="Index of lidar")
+              help="Index of lidar",
+              show_default=True)
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
                      retrieve_click_context=True)
@@ -96,7 +98,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     except ImportError as e:
         raise click.ClickException("Error: " + str(e))
 
-    from ouster.sdk.osf._osf import LidarScanStream
+    from ouster.sdk._bindings.osf import LidarScanStream
     import os
 
     reader = osf.Reader(file)
@@ -122,15 +124,50 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         info = sensor_meta.info
         sensors[sensor_id] = info
 
-    messages = [it for it in reader.messages()]
-    for msg in messages:
+    # if we have StreamingStats we can just use those instead of scanning through the file
+    obj: Dict[str, Any]
+    mstats = reader.meta_store.find(osf.StreamingInfo)
+    for sensor_id, meta in mstats.items():
+        for id, stats in meta.stream_stats:
+            parent = reader.meta_store[id]
+            count += stats.message_count
+            obj = {}
+            obj["count"] = stats.message_count
+            obj["start"] = stats.start_ts
+            obj["end"] = stats.end_ts
+            if not hasattr(parent, "sensor_meta_id"):
+                obj["type"] = reader.meta_store[id].type
+                other_streams[id] = obj
+                continue
+            sensor_id = parent.sensor_meta_id
+            obj["type"] = reader.meta_store[sensor_id].type
+            obj["fields"] = []
+            obj["sensor"] = sensors[sensor_id]
+            lidar_streams[sensor_id] = obj
+
+            if start == 0:
+                start = stats.start_ts
+            else:
+                start = min(stats.start_ts, start)
+            end = max(stats.end_ts, end)
+
+            if obj["type"] == "ouster/v1/os_sensor/LidarSensor":
+                # get fields of the first scan
+                for msg in reader.messages([id], stats.start_ts, stats.start_ts):
+                    if msg.of(LidarScanStream):
+                        ls = msg.decode()
+                        obj["fields"] = ls.field_types
+
+    # fallback for when there's no index
+    for msg in reader.messages():
+        if reader.has_message_idx:
+            break
         count = count + 1
         if start == 0:
             start = msg.ts
         else:
             start = min(msg.ts, start)
         end = max(msg.ts, end)
-        obj: Dict[str, Any]
         if not msg.of(LidarScanStream):
             if msg.id not in other_streams:
                 obj = {}
@@ -166,8 +203,8 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     print(f"Filename: {file}\nLayout: {orig_layout}")
     print(f"Metadata ID: '{reader.metadata_id}'")
     print(f"Size: {size/1000000} MB")
-    print(f"Start: {start/1000000000.0}")
-    print(f"End: {end/1000000000.0}")
+    print(f"Start: {start/1000000000.0} ({_nanos_to_string(start)})")
+    print(f"End: {end/1000000000.0} ({_nanos_to_string(end)})")
     print(f"Duration: {(end-start)/1000000000.0}")
     print(f"Messages: {count}\n")
 
@@ -180,10 +217,13 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         sensor = stream["sensor"]
         print(f"Stream {k} {stream['type']}: ")
         print(f"  Scan Count: {count}")
-        print(f"  Start: {start}")
-        print(f"  End: {end}")
+        print(f"  Start: {start} ({_nanos_to_string(stream['start'])})")
+        print(f"  End: {end} ({_nanos_to_string(stream['end'])})")
         print(f"  Duration: {end-start} seconds")
-        print(f"  Rate: {count/(end-start)} Hz")
+        if end == start:
+            print("  Rate: N/A")
+        else:
+            print(f"  Rate: {count/(end-start)} Hz")
         print(f"  Product Line: {sensor.prod_line}")
         print(f"  Sensor Mode: {sensor.config.lidar_mode}")
         if verbose:
@@ -203,8 +243,8 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
         end = stream['end'] / 1000000000.0
         print(f"Stream {k} {stream['type']}: ")
         print(f"  Message Count: {count}")
-        print(f"  Start: {start}")
-        print(f"  End: {end}")
+        print(f"  Start: {start} ({_nanos_to_string(stream['start'])})")
+        print(f"  End: {end} ({_nanos_to_string(stream['end'])})")
         print(f"  Duration: {end-start} seconds")
         print(f"  Rate: {count/(end-start)} Hz")
 

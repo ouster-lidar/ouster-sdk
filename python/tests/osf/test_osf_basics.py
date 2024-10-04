@@ -3,13 +3,15 @@ import numpy as np
 import hashlib
 import shutil
 import os
+from typing import cast, Iterator
 
 from more_itertools import ilen
 from ouster.sdk import open_source
 
 import ouster.sdk.osf as osf
 import ouster.sdk.client as client
-from ouster.sdk.osf._osf import LidarScanStream
+from ouster.sdk.client import ChanField, FieldType, LidarMode, LidarScan, SensorInfo
+from ouster.sdk._bindings.osf import LidarScanStream
 
 
 @pytest.fixture
@@ -73,6 +75,42 @@ def test_writer_quick(tmp_path, input_info):
                 fields = [field for field in ls.fields]
                 assert client.ChanField.RANGE in fields
                 assert client.ChanField.REFLECTIVITY in fields
+                assert len(fields) == 2
+
+    assert len(messages) == 1
+
+
+# Test that we can load a subset of fields and that it errors if you try and load missing fields
+def test_writer_partial_load(tmp_path, input_info):
+    file_name = tmp_path / "test.osf"
+
+    with osf.Writer(str(file_name), input_info) as writer:
+        scan = client.LidarScan(128, 1024)
+        scan.field(client.ChanField.REFLECTIVITY)[:] = 123
+        scan.field(client.ChanField.RANGE)[:] = 5
+        scan.add_field("test", np.ones((128, 1024, 1)), client.FieldClass.SCAN_FIELD)
+        scan.add_field("test2", np.ones((128, 1024, 1)), client.FieldClass.SCAN_FIELD)
+
+        writer.save(0, scan)
+
+        writer.close()
+
+    # then open it and double check that we only got the fields we needed
+    res_reader = osf.Reader(str(file_name))
+
+    messages = [it for it in res_reader.messages()]
+    for msg in messages:
+        if msg.of(LidarScanStream):
+            with pytest.raises(RuntimeError):
+                msg.decode(["apples"])
+            ls = msg.decode(["RANGE", "test"])
+            if ls:
+                # validate that it only has the channels we added
+                fields = [field for field in ls.fields]
+                assert client.ChanField.RANGE in fields
+                assert client.ChanField.REFLECTIVITY not in fields
+                assert "test" in fields
+                assert "test2" not in fields
                 assert len(fields) == 2
 
     assert len(messages) == 1
@@ -169,10 +207,10 @@ def test_osf_save_message(tmp_path, input_osf_file):
     # This is a test of low-level saveMessage API that directly writes
     # any buffers into the message, users usually really don't want to use it
     # directly. Unless one is creating custom messages.
-    writer.save_message(lidar_id, 1, bytes([0, 1, 2, 3, 4]))
-    writer.save_message(lidar_id, 2, bytearray([0, 1, 2, 3, 4]))
-    writer.save_message(lidar_id, 3, [0, 1, 2, 3, 4])
-    writer.save_message(lidar_id, 4, np.array([0, 1, 2, 3, 4], dtype=np.uint8))
+    writer.save_message(lidar_id, 1, 1, bytes([0, 1, 2, 3, 4]))
+    writer.save_message(lidar_id, 2, 2, bytearray([0, 1, 2, 3, 4]))
+    writer.save_message(lidar_id, 3, 3, [0, 1, 2, 3, 4])
+    writer.save_message(lidar_id, 4, 4, np.array([0, 1, 2, 3, 4], dtype=np.uint8))
 
     # WARNING: It's all not safe to do, but because it's a test we know what
     # we are doing here
@@ -181,7 +219,7 @@ def test_osf_save_message(tmp_path, input_osf_file):
         # pass LidarScan messages as is to a writer
         if msg.id == lidar_stream_meta.id:
             total_ls_cnt += 1
-            writer.save_message(lidar_stream_id, msg.ts, msg.buffer)
+            writer.save_message(lidar_stream_id, msg.ts, msg.ts, msg.buffer)
 
     writer.close()
 
@@ -275,9 +313,98 @@ def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
     assert metadata1 == metadata3
 
 
+def test_full_custom_scan(tmp_path):
+    sensor_info = client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    w, h = sensor_info.format.columns_per_frame, sensor_info.format.pixels_per_column
+    ls = client.LidarScan(h, w, [])
+    ls.add_field("floats", np.ones((h, w), np.float64))
+    ls.add_field("ints", np.ones((h, w), np.uint8))
+
+    test_path = os.path.join(tmp_path, "test.osf")
+
+    writer = osf.Writer(test_path, [sensor_info])
+    writer.save(0, ls)
+    writer.close()
+
+    src = open_source(test_path)
+    assert src._stream_idx == 0
+    assert src.fields == ["floats", "ints"]
+
+
+def test_osf_empty_field(tmp_path):
+    sensor_info = client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    ls = client.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
+    ls.add_field("temperature", np.array([1.2353]), client.FieldClass.SCAN_FIELD)
+    ls.add_field("q", np.ones((128, 1024, 0)), client.FieldClass.SCAN_FIELD)
+
+    ls2 = client.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
+    ls2.add_field("temperature", np.array([], np.float64), client.FieldClass.SCAN_FIELD)
+    ls2.add_field("q", np.ones((128, 1024, 1)), client.FieldClass.SCAN_FIELD)
+
+    test_path = os.path.join(tmp_path, "test.osf")
+    writer = osf.Writer(test_path, [sensor_info])
+    writer.save(0, ls, 0)
+    writer.save(0, ls2, 1)
+    writer.close()
+
+    src = open_source(test_path, index=True)
+
+    assert src[0].field("temperature") == [1.2353]
+    assert len(src[1].field("temperature")) == 0
+
+    assert src[1].field("q").shape == (128, 1024, 1)
+    assert src[0].field("q").shape == (128, 1024, 0)
+
+
 def test_empty_osf_loop(test_data_dir):
     source = open_source(
         str(test_data_dir / "osfs" / "empty_osf.osf"), cycle=True)
 
     with pytest.raises(StopIteration):
         next(iter(source))
+
+
+def test_osf_persists_alerts_thermal_and_shot_limiting_fields(tmp_path) -> None:
+    sensor_info = SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    scan = LidarScan(sensor_info.h, sensor_info.w)
+    scan.alert_flags[:] = range(len(scan.alert_flags))
+    scan.frame_status = 0xabcdef0011223344
+    scan.shutdown_countdown = 0xab
+    scan.shot_limiting_countdown = 0xcd
+    test_path = os.path.join(tmp_path, "test.osf")
+    with osf.Writer(test_path, [sensor_info]) as writer:
+        writer.save(0, scan)
+    src = open_source(test_path)
+    read_scan = next(cast(Iterator[LidarScan], iter(src)))
+    assert np.array_equal(read_scan.alert_flags, scan.alert_flags)
+    assert read_scan.frame_status == scan.frame_status
+    assert read_scan.shutdown_countdown == scan.shutdown_countdown
+    assert read_scan.shot_limiting_countdown == scan.shot_limiting_countdown
+
+
+def test_osf_slice_and_cast() -> None:
+    sensor_info = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    scan = LidarScan(sensor_info.h, sensor_info.w)
+    scan.alert_flags[:] = range(len(scan.alert_flags))
+    scan.frame_status = 0xabcdef0011223344
+    scan.shutdown_countdown = 0xab
+    scan.shot_limiting_countdown = 0xcd
+
+    # an assumption
+    assert scan.field(ChanField.RANGE).dtype == np.uint32
+    scan.field(ChanField.RANGE)[:] = 0xffffff01
+
+    sliced_scan = osf.slice_and_cast(scan, [FieldType(client.ChanField.RANGE, np.uint8)])
+    assert np.array_equal(sliced_scan.alert_flags, scan.alert_flags)
+    assert sliced_scan.shutdown_countdown == scan.shutdown_countdown
+    assert sliced_scan.shot_limiting_countdown == scan.shot_limiting_countdown
+    assert sliced_scan.frame_status == scan.frame_status
+    assert sliced_scan.fields == [ChanField.RANGE]
+
+    casted_range_field = sliced_scan.field(ChanField.RANGE)
+    assert casted_range_field.shape == scan.field(ChanField.RANGE).shape
+    assert casted_range_field.dtype == np.uint8
+
+    # IMPORTANT: casting may be narrowing without warning or error!
+    # Notice that values were truncated to the bottom 8 bits here.
+    assert np.array_equal(casted_range_field, np.ones(casted_range_field.shape))

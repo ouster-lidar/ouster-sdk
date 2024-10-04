@@ -1,6 +1,6 @@
 from typing import Iterator, List, Optional, Union
 from typing_extensions import Protocol
-from ._client import SensorInfo, LidarScan
+from ouster.sdk._bindings.client import SensorInfo, LidarScan
 from .data import FieldTypes
 from .scan_source import ScanSource
 

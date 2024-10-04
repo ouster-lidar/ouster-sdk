@@ -14,7 +14,6 @@
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
 
-/// @todo fix parameter directions in api doc
 namespace ouster {
 namespace osf {
 

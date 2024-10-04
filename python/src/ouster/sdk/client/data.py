@@ -9,14 +9,14 @@ import logging
 
 import numpy as np
 
-from ._client import (LidarScan, SensorInfo, Packet, FieldType)
+from ouster.sdk._bindings.client import (LidarScan, SensorInfo, Packet, FieldType)
 
-from ._client import (destagger_int8, destagger_int16, destagger_int32,
+from ouster.sdk._bindings.client import (destagger_int8, destagger_int16, destagger_int32,
                       destagger_int64, destagger_uint8, destagger_uint16,
                       destagger_uint32, destagger_uint64, destagger_float,
                       destagger_double)
 
-from ._client import XYZLut as client_XYZLut
+from ouster.sdk._bindings.client import XYZLut as client_XYZLut
 
 BufferT = Union[bytes, bytearray, memoryview, np.ndarray]
 """Types that support the buffer protocol."""

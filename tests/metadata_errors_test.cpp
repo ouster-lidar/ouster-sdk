@@ -17,10 +17,6 @@ inline std::string getenvs(const std::string& var) {
 INSTANTIATE_TEST_CASE_P(
     ErrorMetas, MetaErrorsFiles,
     testing::Values(
-        "complete_but_all_zeros_legacy",     // error out instead of passing to
-                                             // xyzlut
-        "incomplete_data_format_legacy",     // missing columns_per_frame
-        "incomplete_data_format_nonlegacy",  // missing pixels per column
         "incomplete_no_sensor_info_nonlegacy",  // nonlegacy can't be missing
                                                 // sensor info unlike legacy
         "incomplete_no_calref_nonlegacy",       // ditto calref

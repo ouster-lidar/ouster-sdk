@@ -1,4 +1,4 @@
-.. figure:: https://github.com/ouster-lidar/ouster_example/raw/master/docs/images/Ouster_Logo_TM_Horiz_Black_RGB_600px.png
+.. figure:: https://github.com/ouster-lidar/ouster_sdk/raw/master/docs/images/Ouster_Logo_TM_Horiz_Black_RGB_600px.png
 
 ------------------------------------------------------
 
@@ -22,6 +22,8 @@ reading and visualizing data.
 * `ouster_osf <ouster_osf/>`_ contains C++ OSF library to store ouster sensors data
 * `ouster_viz <ouster_viz/>`_ contains a customizable point cloud visualizer
 * `python <python/>`_ contains the code for the ouster sensor python SDK (``ouster-sdk`` Python package)
+* `sdk-extenstions` is a submodule of the ouster-sdk repository which is currently for internal use only.
+The submodule cannot be cloned or updated.
 
 .. note::
     Ouster ROS driver code has been moved out to a separate GitHub repository. To get started using the
@@ -31,7 +33,7 @@ reading and visualizing data.
 Contact
 =======
 
-For support of the Ouster SDK, please use `Github Issues <https://github.com/ouster-lidar/ouster_example/issues>`_ in this repo.
+For support of the Ouster SDK, please use `Github Issues <https://github.com/ouster-lidar/ouster_sdk/issues>`_ in this repo.
 
 For support of Ouster products outside of the SDK, please use `Ouster customer support <https://ouster.atlassian.net/servicedesk/customer/portal/8/group/22/create/86>`_.
 

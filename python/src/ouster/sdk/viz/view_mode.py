@@ -1,13 +1,12 @@
-from typing import (List, Optional, Union, cast)
+from typing import (List, Optional, Union)
 from typing_extensions import Protocol, runtime_checkable
 
 from dataclasses import dataclass
 import numpy as np
 from ouster.sdk import client
-from ouster.sdk.client._client import Version
-from ouster.sdk.client import _utils
+from ouster.sdk.client import _utils, Version
 
-from ._viz import Cloud, Image
+from ouster.sdk._bindings.viz import Cloud, Image
 
 
 @runtime_checkable
@@ -253,9 +252,8 @@ class ReflMode(SimpleMode, ImageCloudMode):
         # used only for uncalibrated reflectivity in FW prior v2.1.0
         # TODO: should we check for calibrated reflectivity status from
         # metadata too?
-        if info is not None:
-            self._info = cast(client.SensorInfo, self._info)
-            self._normalized_refl = (Version.from_string(self._info.fw_rev) >=
+        if self._info is not None:
+            self._normalized_refl = (self._info.get_version() >=
                                      Version.from_string("v2.1.0"))
         else:
             # NOTE/TODO[pb]: ReflMode added through viz extra mode mechanism

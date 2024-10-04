@@ -17,8 +17,9 @@ import time
 import numpy as np
 
 from ouster.sdk import client, pcap, open_source
-from ouster.sdk.pcap import _pcap
-from ouster.sdk.client import _client, PacketValidationFailure
+import ouster.sdk._bindings.pcap as _pcap
+from ouster.sdk.client import PacketValidationFailure
+import ouster.sdk._bindings.client as _client
 from tests.conftest import PCAPS_DATA_DIR, TESTS
 from tests.test_batching import _patch_frame_id
 

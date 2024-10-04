@@ -1,5 +1,7 @@
 #include "ouster/sensor_http.h"
 
+#include <sstream>
+
 #include "curl_client.h"
 #include "sensor_http_imp.h"
 #include "sensor_tcp_imp.h"
@@ -14,7 +16,18 @@ using namespace ouster::sensor::impl;
 string SensorHttp::firmware_version_string(const string& hostname,
                                            int timeout_sec) {
     auto http_client = std::make_unique<CurlClient>("http://" + hostname);
-    return http_client->get("api/v1/system/firmware", timeout_sec);
+    auto fwjson = http_client->get("api/v1/system/firmware", timeout_sec);
+
+    Json::Value root{};
+    Json::CharReaderBuilder builder{};
+    std::string errors{};
+    std::stringstream ss{fwjson};
+
+    if (!Json::parseFromStream(builder, ss, &root, &errors))
+        throw std::runtime_error{
+            "Errors parsing firmware for firmware_version_string: " + errors};
+
+    return root["fw"].asString();
 }
 
 version SensorHttp::firmware_version(const string& hostname, int timeout_sec) {
@@ -35,19 +48,37 @@ std::unique_ptr<SensorHttp> SensorHttp::create(const string& hostname,
 
     if (fw.major == 2) {
         switch (fw.minor) {
-            case 0:
+            case 0: {
                 // FW 2.0 doesn't work properly with http
-                return std::make_unique<SensorTcpImp>(hostname);
-            case 1:
-                return std::make_unique<SensorHttpImp_2_1>(hostname);
-            case 2:
-            case 3:
-                return std::make_unique<SensorHttpImp_2_2>(hostname);
+                auto instance = std::make_unique<SensorTcpImp>(hostname);
+                instance->version_ = fw;
+                instance->hostname_ = hostname;
+                return instance;
+            }
+            case 1: {
+                auto instance = std::make_unique<SensorHttpImp_2_1>(hostname);
+                instance->version_ = fw;
+                instance->hostname_ = hostname;
+                return instance;
+            }
+            case 2: {
+                auto instance = std::make_unique<SensorHttpImp_2_2>(hostname);
+                instance->version_ = fw;
+                instance->hostname_ = hostname;
+                return instance;
+            }
         }
     }
-    if ((fw.major == 2 && fw.minor == 4) || (fw.major == 3 && fw.minor == 0)) {
-        return std::make_unique<SensorHttpImp_2_4_or_3>(hostname);
+    if ((fw.major == 2 && (fw.minor == 4 || fw.minor == 3)) ||
+        (fw.major == 3 && fw.minor == 0)) {
+        auto instance = std::make_unique<SensorHttpImp_2_4_or_3>(hostname);
+        instance->version_ = fw;
+        instance->hostname_ = hostname;
+        return instance;
     }
 
-    return std::make_unique<SensorHttpImp>(hostname);
+    auto instance = std::make_unique<SensorHttpImp>(hostname);
+    instance->version_ = fw;
+    instance->hostname_ = hostname;
+    return instance;
 }

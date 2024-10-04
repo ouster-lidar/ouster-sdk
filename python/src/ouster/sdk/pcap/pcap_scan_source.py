@@ -1,11 +1,10 @@
-from typing import Iterator, List, Optional, Tuple, Union
+from typing import Iterator, List, Optional, Union
 
 from ouster.sdk.client import LidarScan, first_valid_packet_ts
 from ouster.sdk.client import ScansMulti     # type: ignore
 from ouster.sdk.client import MultiScanSource
 from ouster.sdk.client.multi import collate_scans   # type: ignore
-from ouster.sdk.util import (resolve_field_types, resolve_metadata_multi,
-                             ForwardSlicer, progressbar)    # type: ignore
+from ouster.sdk.util import (resolve_field_types, ForwardSlicer, progressbar)  # type: ignore
 from .pcap_multi_packet_reader import PcapMultiPacketReader
 
 
@@ -16,63 +15,68 @@ class PcapScanSource(ScansMulti):
         self,
         file_path: str,
         *,
-        dt: int = 10**8,
+        dt: int = 210000000,
         complete: bool = False,
         index: bool = False,
         cycle: bool = False,
-        flags: bool = True,
         raw_headers: bool = False,
         raw_fields: bool = False,
         soft_id_check: bool = False,
-        meta: Tuple[str, ...] = (),
+        meta: Optional[List[str]] = None,
+        field_names: Optional[List[str]] = None,
         **_
     ) -> None:
         """
         Args:
             file_path: OSF filename as scans source
             dt: max time difference between scans in the collated scan (i.e.
-                time period at which every new collated scan is released/cut),
-                default is 0.1s.
+                max time period at which every new collated scan is released/cut),
+                default is 0.21s.
             complete: set to True to only release complete scans
             index: if this flag is set to true an index will be built for the pcap
                 file enabling len, index and slice operations on the scan source, if
                 the flag is set to False indexing is skipped (default is False).
             cycle: repeat infinitely after iteration is finished (default is False)
-            flags: when this option is set, the FLAGS field will be added to the list
-                of fields of every scan, in case of dual returns FLAGS2 will also be
-                appended (default is True).
+            raw_headers: if True, include raw headers in decoded LidarScans
+            raw_fields: if True, include raw fields in decoded LidarScans
+            soft_id_check: if True, don't skip packets on init_id/serial_num mismatch
+            meta: optional list of metadata files to load with the pcap, if not provided
+                files are attempted to be found automatically
+            field_names: list of fields to decode into a LidarScan, if not provided
+                decodes all default fields
         """
 
-        self._source: Optional[PcapMultiPacketReader]
-        self._source = None  # initialize the attribute so close works correctly if we fail out
+        # initialize the attribute so close works correctly if we fail out
+        self._source = None  # type: ignore
 
         try:
-            metadata_paths = list(meta)
-            if not meta:
-                metadata_paths = resolve_metadata_multi(file_path)
-
-            if not metadata_paths:
-                raise RuntimeError(
-                    "Metadata jsons not found. Make sure that metadata json files "
-                    "have common prefix with a PCAP file")
-
-            # TODO: need a better way to save these
-            self._metadata_paths = metadata_paths
-            print(f"loading metadata from {metadata_paths}")
-
             self._source = PcapMultiPacketReader(file_path,
-                                                 metadata_paths=metadata_paths,
+                                                 metadata_paths=meta,
                                                  index=index,
                                                  soft_id_check=soft_id_check)
         except Exception:
-            self._source = None
+            self._source = None  # type: ignore
             raise
 
         # generate the field types per sensor with flags/raw_fields if specified
         field_types = resolve_field_types(self._source.metadata,
-                                          flags=flags,
                                           raw_headers=raw_headers,
                                           raw_fields=raw_fields)
+        # Cut out any undesired fields
+        if field_names is not None:
+            for i in range(0, len(field_types)):
+                new_fts = []
+                for name in field_names:
+                    found = False
+                    for ft in field_types[i]:
+                        if ft.name == name:
+                            new_fts.append(ft)
+                            found = True
+                            break
+                    if not found:
+                        raise RuntimeError(f"Requested field '{name}' does not exist in packet"
+                                           f" format {self._source.metadata[i].config.udp_profile_lidar}")
+                field_types[i] = new_fts
 
         super().__init__(self._source, dt=dt, complete=complete,
                          cycle=cycle, fields=field_types)
@@ -101,6 +105,14 @@ class PcapScanSource(ScansMulti):
             return [None] * self.sensors_count
         pi = self._source._index    # type: ignore
         return [pi.frame_count(i) for i in range(self.sensors_count)]   # type: ignore
+
+    @property
+    def id_error_count(self) -> int:
+        return self._source.id_error_count  # type: ignore
+
+    @property
+    def size_error_count(self) -> int:
+        return self._source.size_error_count  # type: ignore
 
     def __len__(self) -> int:
         if not self.is_indexed:

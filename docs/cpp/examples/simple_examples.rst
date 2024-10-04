@@ -3,7 +3,7 @@ C++ Examples
 ============
 
 To facilitate working with the Ouster C++ SDK, we provide these examples of common operations. The
-examples explained below are compiled into executables which print to screen to demonstratre
+examples explained below are compiled into executables which print to screen to demonstrate
 behavior. Build with ``BUILD_EXAMPLES`` and print to screen to demonstrate behavior.
 
 Sensor Configuration
@@ -31,7 +31,7 @@ Let's look at the first step, where we get the configuration of the sensor as it
 
 
 The function ``get_config`` takes a ``sensor_config`` so we must declare it first. It returns true
-if it succesfully retrieves the config, and false if an error occurs in connecting to the sensor and
+if it successfully retrieves the config, and false if an error occurs in connecting to the sensor and
 setting the config. The function ``set_config`` works similarly, returning true if it successfully
 sets the config, and false otherwise.
 
@@ -99,7 +99,7 @@ To see this in action, you can run the example executable ``lidar_scan_example``
     
     $ lidar_scan_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
-The source code of ``lidar_scan_example`` is available `here <https://github.com/ouster-lidar/ouster_example/blob/master/examples/lidar_scan_example.cpp>`_.
+The source code of ``lidar_scan_example`` is available `here <https://github.com/ouster-lidar/ouster_sdk/blob/master/examples/lidar_scan_example.cpp>`_.
 
 
 2D Representations and 3D representations
@@ -121,17 +121,17 @@ To run this example:
     
     representations_example $SAMPLE_DUAL_RETURNS_PCAP $SAMPLE_DUAL_RETURNS_JSON
 
-The source code of ``representations_example`` is available `on the github <https://github.com/ouster-lidar/ouster_example/blob/master/examples/representations_example.cpp>`_.
+The source code of ``representations_example`` is available `on the github <https://github.com/ouster-lidar/ouster_sdk/blob/master/examples/representations_example.cpp>`_.
 
 
 Reshaping XYZ to 2D
 +++++++++++++++++++
 
 Users may find that they wish to access the ``x``, ``y``, and ``z`` coordinates of a single return
-in a similar way. As the conversiton to cartesian coordinates returns an ``Eigen::Array`` ``n x 3``,
+in a similar way. As the conversion to Cartesian coordinates returns an ``Eigen::Array`` ``n x 3``,
 with ``n = w * h``, reshaping the resulting array is necessary. 
 
-We can combine our knowledge in projecting into cartesian coordinates and destaggering using the
+We can combine our knowledge in projecting into Cartesian coordinates and destaggering using the
 following function:
 
 .. literalinclude:: /../examples/representations_example.cpp
@@ -147,7 +147,7 @@ This demonstrates the functionality with ``x``, but it can be easily expanded to
 Adjusting XYZLut With External Matrix
 +++++++++++++++++++++++++++++++++++++
 
-Users may find that they wish to apply an extra transform while projecting to cartesian coordinates.
+Users may find that they wish to apply an extra transform while projecting to Cartesian coordinates.
 Such a transform, likely an extrinsics matrix of some sort, can be baked into the
 :cpp:struct:`ouster::XYZLut` created with :cpp:func:`ouster::make_xyz_lut`. 
 

@@ -44,3 +44,7 @@ below:
 
    viz-api-tutorial
 
+.. toctree::
+
+   viz-scans-accum
+

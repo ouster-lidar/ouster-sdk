@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.12.0",
+    "tags": {
+      "sdkx": "681b7ffa7ac83a8b361fa68c9ae599cc409c46b6",
+      "sdk": "389f7a8e4f94a5a5956cfa536d68165ebd71b7e9"
+    }
+  },
+  {
     "version": "0.11.1",
     "tags": {
       "sdkx": "2889b1627b0b78b320861049667e801d04023d05",

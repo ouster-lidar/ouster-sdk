@@ -1,4 +1,4 @@
-Clip PointCloud in the Ouster-CLI
+Clip Point clouds in the Ouster-CLI
 =================================
 
 .. _ouster-cli-clip:
@@ -54,7 +54,7 @@ in the slam command. However, you can explicitly pass in the range settings to t
 apply different ranges to the clip operation.
 
 Note that the range settings in the ``slam`` command only affect the point cloud within the SLAM algorithm.
-The slam range settings will not modify the lidarscan and will not affect the other following commands.
+The slam range settings will not modify the lidar scan and will not affect the other following commands.
 
 
 Example Usage

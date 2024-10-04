@@ -14,6 +14,10 @@ table StreamStats {
     // avg size of the messages in bytes for a `stream_id` in the whole
     // OSF file
     message_avg_size:uint32;
+    // Receive timestamps for index, in saved order
+    receive_timestamps:[uint64];
+    // Sensor timestamps for index, in saved order
+    sensor_timestamps:[uint64];
 }
 
 table ChunkInfo {

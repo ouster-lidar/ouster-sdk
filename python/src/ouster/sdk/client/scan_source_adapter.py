@@ -1,6 +1,6 @@
 from typing import Iterator, List, Union, Optional, cast
 
-from ._client import SensorInfo, LidarScan
+from ouster.sdk._bindings.client import SensorInfo, LidarScan
 from ouster.sdk.util.forward_slicer import ForwardSlicer
 from .scan_source import ScanSource
 from .multi_scan_source import MultiScanSource
@@ -71,11 +71,13 @@ class ScanSourceAdapter(ScanSource):
         return self.scans_num
 
     # NOTE: we need to consider a case without collation of scans
-    def __iter__(self) -> Iterator[Optional[LidarScan]]:
+    def __iter__(self) -> Iterator[LidarScan]:
 
-        def _stream_iter(source: MultiScanSource) -> Iterator[Optional[LidarScan]]:
+        def _stream_iter(source: MultiScanSource) -> Iterator[LidarScan]:
             for ls in source:
-                yield ls[self._stream_idx]
+                s = ls[self._stream_idx]
+                if s is not None:
+                    yield s
 
         return _stream_iter(self._scan_source)
 

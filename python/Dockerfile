@@ -47,7 +47,7 @@ RUN set -xe \
 
 USER build:build
 ENV PATH="${PATH}:${BUILD_HOME}/.local/bin" \
-    OUSTER_SDK_PATH="/opt/ouster_example"
+    OUSTER_SDK_PATH="/opt/ouster_sdk"
 WORKDIR ${BUILD_HOME}
 
 # Populate source dir

@@ -33,6 +33,14 @@ def no_scipy() -> bool:
         return False
 
 
+# takes in a pose vector and returns a unit vector pointing in the same direction
+def normalize_vector(v: np.ndarray) -> np.ndarray:
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
+
+
 Numeric = Union[int, float, np.number]
 
 # 3D pose (rotation + translation) represented by 6 elements
@@ -672,6 +680,41 @@ def dewarp(xyz: np.ndarray, *, scan_pose: Optional[PoseH] = None,
 
 ScansIterable = Union[Iterable[client.LidarScan],
                       Iterable[List[Optional[client.LidarScan]]]]
+
+
+def get_rot_matrix_to_align_to_gravity(accel_x: float,
+                                       accel_y: float,
+                                       accel_z: float):
+    """
+    computes the rotation matrix needed to align a given acceleration vector
+    with the direction of gravity.
+
+    Args:
+        accel_x: x-component of the acceleration vector.
+        accel_y: y-component of the acceleration vector.
+        accel_z: z-component of the acceleration vector.
+
+    Returns:
+    A 3x3 rotation matrix that, when applied to the acceleration vector, aligns
+    it with the gravity vector [0,0,1]
+    """
+    gravity_vector = np.array([0, 0, 1])
+    accel_vector = np.array([accel_x, accel_y, accel_z])
+    accel_vector = normalize_vector(accel_vector)
+
+    axis = np.cross(accel_vector, gravity_vector)
+    axis = normalize_vector(axis)
+
+    angle = np.arccos(np.dot(accel_vector, gravity_vector))
+
+    # Rodrigues' rotation formula
+    K = np.array([[0, -axis[2], axis[1]],
+                  [axis[2], 0, -axis[0]],
+                  [-axis[1], axis[0], 0]])
+
+    rotation_matrix = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
+
+    return rotation_matrix
 
 
 def pose_scans(

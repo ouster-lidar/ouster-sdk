@@ -8,111 +8,39 @@ Visualize lidar data using OpenGL.
 """
 
 from collections import deque
-from dataclasses import dataclass
 from functools import partial
 from enum import Enum
 import os
-import platform
 import threading
 import time
-import copy
 from datetime import datetime
-from typing import (Callable, ClassVar, Deque, Dict, Generic, Iterable, List,
-                    Optional, Tuple, TypeVar, Union, Any)
+from typing import (Callable, ClassVar, cast, Deque, Dict, Iterable, Iterator, List,
+                    Optional, Tuple, TypeVar, Union)
 import logging
-import click
 
 import numpy as np
 from PIL import Image as PILImage
 
 from ouster.sdk import client
-from ouster.sdk.client import ChanField, ShotLimitingStatus, ThermalShutdownStatus
-from ._viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
-                   TargetDisplay, add_default_controls, calref_palette,
-                   spezia_palette, spezia_cal_ref_palette, grey_palette,
-                   grey_cal_ref_palette, viridis_palette, viridis_cal_ref_palette,
-                   magma_palette, magma_cal_ref_palette)
+from ouster.sdk.client import (first_valid_packet_ts, LidarScan, ChanField)
+from ouster.sdk._bindings.viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
+                   TargetDisplay, add_default_controls)
 from .util import push_point_viz_handler, push_point_viz_fb_handler
+from .model import VizExtraMode
 from . import util as vizu
-
-from .view_mode import (ImageMode, CloudMode, LidarScanVizMode, ReflMode, RGBMode,
-                        SimpleMode, is_norm_reflectivity_mode, CloudPaletteItem)
-
-from .scans_accum import ScansAccumulator
-
-from ouster.sdk.util import img_aspect_ratio  # type:ignore
+from .view_mode import (ImageMode, CloudMode, LidarScanVizMode, CloudPaletteItem)
+from .accumulators import LidarScanVizAccumulators
+from .accumulators_config import LidarScanVizAccumulatorsConfig, MAP_MAX_POINTS_NUM, MAP_SELECT_RATIO
+from .model import LidarScanVizModel
 
 
 logger = logging.getLogger("viz-logger")
-client_log_location = None
-if platform.system() == "Windows":
-    client_log_dir = os.getenv("LOCALAPPDATA")
-
-    if not client_log_dir:
-        client_log_dir = os.getenv("TMP")
-        if not client_log_dir:
-            client_log_dir = "C:"
-    client_log_dir = os.path.join(client_log_dir, "ouster-cli")
-    client_log_location = os.path.join(client_log_dir, "ouster-sdk.log")
-
-else:
-    client_log_dir = os.path.join(os.path.expanduser("~"), ".ouster-cli")
-    client_log_location = os.path.join(client_log_dir, "ouster-sdk.log")
-
-logging_enabled = True
-# TODO[pb]: Consider the dependency on `click`` here, and why we are using the
-#           click.echo() and not prints for example?
-if not os.path.exists(client_log_dir):
-    try:
-        os.makedirs(client_log_dir)
-    except Exception as e:
-        click.echo(f"Can't enable logging: {e}")
-        logging_enabled = False
-if not os.access(client_log_dir, os.W_OK):
-    click.echo("Can't enable logging")
-    logging_enabled = False
-if logging_enabled:
-    client.init_logger("info", client_log_location)
-
 
 T = TypeVar('T')
 
 
-@dataclass
-class ImgModeItem:
-    """Image mode for specific return with explicit name."""
-    mode: ImageMode
-    name: str
-    return_num: int = 0
-
-
-@dataclass
-class VizExtraMode:
-    """Image/Cloud mode factory func
-
-    Used to embed viz modes from external plugins.
-    """
-    func: Callable[[], LidarScanVizMode]
-
-    def create(self,
-               info: Optional[client.SensorInfo] = None) -> LidarScanVizMode:
-        extra_mode = self.func()
-        if info and hasattr(extra_mode, "_info") and extra_mode._info is None:
-            extra_mode._info = info
-        return extra_mode
-
-
-# Viz modes added externally
-_viz_extra_modes: List[VizExtraMode]
-_viz_extra_modes = []
-
-# Viz palettes added externally
-_viz_extra_palettes: List[CloudPaletteItem]
-_viz_extra_palettes = []
-
-
 class LidarScanViz:
-    """Visualize LidarScan data.
+    """Multi LidarScan clouds visualizer
 
     Uses the supplied PointViz instance to easily display the contents of a
     LidarScan. Sets up key bindings to toggle which channel fields and returns
@@ -121,177 +49,144 @@ class LidarScanViz:
 
     class FlagsMode(Enum):
         NONE = 0
-        HIGHLIGHT_SECOND = 1
+        HIGHLIGHT_SECOND = 1    # TODO[UN]: probably unneccessary
         HIGHLIGHT_BLOOM = 2
         HIDE_BLOOM = 3
 
-    _cloud_palette: Optional[CloudPaletteItem]
+    class ImagesLayout(Enum):
+        HORIZONTAL = 0
+        VERTICAL = 1
 
     def __init__(
             self,
-            meta: client.SensorInfo,
-            viz: Optional[PointViz] = None,
+            metas: List[client.SensorInfo],
+            point_viz: Optional[PointViz] = None,
+            accumulators_config: Optional[LidarScanVizAccumulatorsConfig] = None,
             *,
             _img_aspect_ratio: float = 0,
-            _ext_modes: Optional[List[LidarScanVizMode]] = None,
+            _ext_modes: Optional[List[LidarScanVizMode]] = None,    # TODO[UN]: disabled for now
             _ext_palettes: Optional[List[CloudPaletteItem]] = None) -> None:
         """
         Args:
-            meta: sensor metadata used to interpret scans
+            metas: sensor metadata used to interpret scans
             viz: use an existing PointViz instance instead of creating one
         """
 
         # used to synchronize key handlers and _draw()
         self._lock = threading.Lock()
+        self._model = LidarScanVizModel(metas, _img_aspect_ratio=_img_aspect_ratio)
+        self.update_on_input = True
 
-        # cloud display state
-        self._cloud_mode_ind = 0  # index into _cloud_mode_channels
-        self._cloud_enabled = [True, True]
-        self._cloud_pt_size = 2.0
+        # extension point for the OSD text, inserts before the "axes" line
+        self._osd_text_extra: Callable[[], str] = lambda: ""
 
-        self._cloud_palette_prev: Optional[CloudPaletteItem] = None
-
-        # make a special version of the calref palette for images
-        self._image_calref_palette = copy.deepcopy(calref_palette)
-        self._image_calref_palette[0] = [0.1, 0.1, 0.1]
-
-        # Note these 2 palette arrays must always be the same length
-        self._cloud_palettes: List[CloudPaletteItem]
-        self._cloud_palettes = [
-            CloudPaletteItem("Ouster Colors", spezia_palette),
-            CloudPaletteItem("Greyscale", grey_palette),
-            CloudPaletteItem("Viridis", viridis_palette),
-            CloudPaletteItem("Magma", magma_palette),
-            CloudPaletteItem("Cal. Ref", calref_palette),
-        ]
-
-        self._refl_cloud_palettes: List[CloudPaletteItem]
-        self._refl_cloud_palettes = [
-            CloudPaletteItem("Cal. Ref. Ouster Colors",
-                             spezia_cal_ref_palette),
-            CloudPaletteItem("Cal. Ref. Greyscale", grey_cal_ref_palette),
-            CloudPaletteItem("Cal. Ref. Viridis", viridis_cal_ref_palette),
-            CloudPaletteItem("Cal. Ref. Magma", magma_cal_ref_palette),
-            CloudPaletteItem("Cal. Ref", calref_palette),
-        ]
-
-        # Add extra color palettes, usually inserted through plugins
-        self._cloud_palettes.extend(_viz_extra_palettes)
-        self._refl_cloud_palettes.extend(_viz_extra_palettes)
-
-        self._cloud_palettes.extend(_ext_palettes or [])
-        self._refl_cloud_palettes.extend(_ext_palettes or [])
-
-        self._cloud_palette_ind = 0
-        self._cloud_palette = self._refl_cloud_palettes[self._cloud_palette_ind]
-        self._cloud_palette_name = self._cloud_palette.name
-
-        # image display state
-        self._img_ind = [0, 1]  # index of field to display
-        self._img_refl_mode = [False, False]
+        # set initial image sizes
         self._img_size_fraction = 4
-        self._img_aspect = _img_aspect_ratio or img_aspect_ratio(meta)
+        self._image_size_initialized = False
 
-        # misc display state
-        self._ring_size = 1
-        self._ring_line_width = 2
-        self._osd_enabled = True
-        self._scan_poses_enabled = True
-        self._camera_follow_enabled = True
+        # initial point size in scan clouds
+        self._viz = point_viz or PointViz("Ouster Viz")
 
-        self._modes: List[LidarScanVizMode]
-        self._modes = [
-            ReflMode(info=meta),
-            SimpleMode(ChanField.NEAR_IR, info=meta,
-                       use_ae=True, use_buc=True),
-            SimpleMode(ChanField.SIGNAL, info=meta),
-            SimpleMode(ChanField.RANGE, info=meta),
-        ]
+        self._scans_accum: Optional[LidarScanVizAccumulators] = None
+        if accumulators_config:
+            self._scans_accum = LidarScanVizAccumulators(
+                self._model,
+                self._viz,
+                accumulators_config,
+                self._lock
+            )
 
-        # Add extra viz mode, usually inserted through plugins
-        self._modes.extend([vm.create(meta) for vm in _viz_extra_modes])
+            # TODO[tws]: decide the fate of ScansAccumulator's OSD
+            self._scans_accum.toggle_osd(False)
+            if hasattr(self, "_osd_text_extra"):
+                self._osd_text_extra = self._scans_accum.osd_text
+                # if we add the extra text to the _scan_viz we also want to
+                # draw(w/o update) its state when scans accum keys cause the
+                # re-draw of ScansAccumulator state (osd included)
+                self._scans_accum._key_press_pre_draw = (
+                    lambda: self.draw(update=False))
 
-        self._modes.extend(_ext_modes or [])
+            if hasattr(self, "_key_definitions") and self._scans_accum:
+                self._key_definitions.update(
+                    getattr(self._scans_accum, "_key_definitions", {}))
 
-        self._populate_image_cloud_modes()
+        # add images and clouds to viz
+        for sensor in self._model._sensors:
+            [self._viz.add(image) for image in sensor._images]
+            [self._viz.add(cloud) for cloud in sensor._clouds]
 
-        self._amended_fields: List[str] = [ChanField.RANGE, ChanField.RANGE2,
-                                          ChanField.SIGNAL, ChanField.SIGNAL2,
-                                          ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2,
-                                          ChanField.NEAR_IR,
-                                          ChanField.FLAGS, ChanField.FLAGS2]
+        self._images_layout = LidarScanViz.ImagesLayout.HORIZONTAL
 
         # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
         # initialize masks to just green with zero opacity
-        mask = np.zeros(
-            (meta.format.pixels_per_column, meta.format.columns_per_frame, 4),
-            dtype=np.float32)
-        mask[:, :, 1] = 1.0
-        self._cloud_masks = (mask, mask.copy())
         self._flags_mode = LidarScanViz.FlagsMode.NONE
 
-        self._viz = viz or PointViz("Ouster Viz")
-
-        # initialize scan's first and second return clouds
-        self._metadata = meta
-        self._clouds = (Cloud(meta), Cloud(meta))
-        self._viz.add(self._clouds[0])
-        self._viz.add(self._clouds[1])
-
-        # initialize images
-        self._images = (Image(), Image())
-        self._viz.add(self._images[0])
-        self._viz.add(self._images[1])
-        self.update_image_size(0)
-
         # initialize rings
+        self._ring_size = 1
+        self._ring_line_width = 2
         self._viz.target_display.set_ring_line_width(self._ring_line_width)
         self._viz.target_display.set_ring_size(self._ring_size)
         self._viz.target_display.enable_rings(True)
 
         # initialize osd
+        self._osd_enabled = True
         self._osd = Label("", 0, 1)
         self._viz.add(self._osd)
 
-        # initialize scan axis helper
-        self._scan_axis = vizu.AxisWithLabel(self._viz,
-                                             thickness=3,
-                                             length=1.0,
-                                             enabled=False)
+        # initialize scan axis helpers
+        self._scan_axis_enabled = True
+        self._scan_axis = []
+        # sensors axis
+        for idx, sensor in enumerate(self._model._sensors):
+            self._scan_axis.append(
+                vizu.AxisWithLabel(self._viz,
+                                   pose=sensor._meta.extrinsic,
+                                   label=str(idx + 1),
+                                   thickness=3))
+        # system center axis
+        self._scan_axis_origin = vizu.AxisWithLabel(self._viz,
+                                                    label="O",
+                                                    thickness=5,
+                                                    label_scale=0.4)
+
+        self._camera_follow_enabled = True
+        # TODO[UN]: assign a key to select a sensor to be tracked
+        # also what to do in case tracked sensor is hidden?
+        self._tracked_sensor = 0
+        self._scan_pose = np.eye(4)
 
         self._scan_num = -1
+        self._first_frame_ts = None
 
-        # scan identity poses to re-use
-        self._scan_column_poses_identity = np.array(
-            [np.eye(4)
-             for _ in range(self._metadata.format.columns_per_frame)],
-            dtype=np.float32)
+        self._setup_controls()
 
-        # extension point for the OSD text, inserts before the "axes" line
-        self._osd_text_extra: Callable[[], str] = lambda: ""
+    # TODO[tws] likely remove
+    @property
+    def metadata(self) -> List[client.SensorInfo]:
+        """Metadatas for the displayed sensors."""
+        return self._model._metas
 
+    def _setup_controls(self) -> None:
         # key bindings. will be called from rendering thread, must be synchronized
         key_bindings: Dict[Tuple[int, int], Callable[[LidarScanViz], None]] = {
-            (ord('E'), 0): partial(LidarScanViz.update_image_size, amount=1),
+            (ord('E'), 0): partial(LidarScanViz.update_image_size, amount=+1),
             (ord('E'), 1): partial(LidarScanViz.update_image_size, amount=-1),
-            (ord('P'), 0): partial(LidarScanViz.update_point_size, amount=1),
+            (ord('P'), 0): partial(LidarScanViz.update_point_size, amount=+1),
             (ord('P'), 1): partial(LidarScanViz.update_point_size, amount=-1),
             (ord('1'), 0): partial(LidarScanViz.toggle_cloud, i=0),
             (ord('2'), 0): partial(LidarScanViz.toggle_cloud, i=1),
-            (ord('B'), 0): partial(LidarScanViz.cycle_img_mode, i=0, direction=1),
+            (ord('B'), 0): partial(LidarScanViz.cycle_img_mode, i=0, direction=+1),
             (ord('B'), 1): partial(LidarScanViz.cycle_img_mode, i=0, direction=-1),
-            (ord('N'), 0): partial(LidarScanViz.cycle_img_mode, i=1, direction=1),
+            (ord('N'), 0): partial(LidarScanViz.cycle_img_mode, i=1, direction=+1),
             (ord('N'), 1): partial(LidarScanViz.cycle_img_mode, i=1, direction=-1),
-            (ord('M'), 0): partial(LidarScanViz.cycle_cloud_mode, direction=1),
+            (ord('M'), 0): partial(LidarScanViz.cycle_cloud_mode, direction=+1),
             (ord('M'), 1): partial(LidarScanViz.cycle_cloud_mode, direction=-1),
-            (ord('F'), 0): partial(LidarScanViz.cycle_cloud_palette, direction=1),
+            (ord('F'), 0): partial(LidarScanViz.cycle_cloud_palette, direction=+1),
             (ord('F'), 1): partial(LidarScanViz.cycle_cloud_palette, direction=-1),
-            (ord("'"), 0): partial(LidarScanViz.update_ring_size, amount=1),
+            (ord("'"), 0): partial(LidarScanViz.update_ring_size, amount=+1),
             (ord("'"), 1): partial(LidarScanViz.update_ring_size, amount=-1),
             (ord("'"), 2): LidarScanViz.cicle_ring_line_width,
             (ord("O"), 0): LidarScanViz.toggle_osd,
-            # NOTE[pb]: Left for future consideration whether we want it back or no
-            # (ord('T'), 0): LidarScanViz.toggle_scan_poses,
             (ord('U'), 0): LidarScanViz.toggle_camera_follow,
             # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
             (ord('C'), 0): LidarScanViz.update_flags_mode,
@@ -299,31 +194,23 @@ class LidarScanViz:
             (ord('/'), 1): LidarScanViz.print_keys,
         }
 
-        def handle_keys(self: LidarScanViz, ctx: WindowCtx, key: int,
-                        mods: int) -> bool:
-            if (key, mods) in key_bindings:
-                key_bindings[key, mods](self)
-                self.draw(update=self._viz.update_on_input())
-            return True
-
-        key_definitions: Dict[str, str] = {
-            'w': "Camera pitch up",
-            's': "Camera pitch down",
-            'a': "Camera yaw left",
-            'd': "Camera yaw right",
+        self._key_definitions: Dict[str, str] = {
+            'w': "Camera pitch down",
+            's': "Camera pitch up",
+            'a': "Camera yaw right",
+            'd': "Camera yaw left",
             "e / E": "Increase/decrease size of displayed 2D images",
             "p / P": "Increase/decrease point size",
             "R": "Reset camera orientation",
             "CTRL+r": "Camera bird-eye view",
             "0": "Toggle orthographic camera",
-            "1": "Toggle point cloud 1 visibility",
-            "2": "Toggle point cloud 2 visibility",
+            "1": "Toggle first return point cloud",
+            "2": "Toggle second return point cloud",
             "b": "Cycle top 2D image",
             "n": "Cycle bottom 2D image",
             'm': "Cycle through point cloud coloring mode",
             'f': "Cycle through point cloud color palette",
             'c': "Cycle current highlight mode",
-            # 't': "Toggle scan poses",
             'u': "Toggle camera mode FOLLOW/FIXED",
             "9": "Toggle axis helpers at scan origin",
             '?': "Print keys to standard out",
@@ -333,84 +220,121 @@ class LidarScanViz:
             'SHIFT': "Camera Translation with mouse drag",
             'ESC': "Exit the application",
         }
-        self._key_definitions = key_definitions
 
-        # TODO[pb]: Consider moving the ? handling to the SimpleViz, since
-        #           it's the most common driver of the LidarScanViz. However
-        #           because LidarScanViz can be alone on top of PointViz
-        #           it's good to have the key help there as well .... need to
-        #           think/discuss more SimpleViz/<Others>Viz objects interplay
-        print("Press \'?\' while viz window is focused to print key bindings")
+        # dynamically assign sensor toggle keys
+        # TODO[tws]: there should be a sane limit
+        for sensor_index in range(len(self._model._sensors)):
+            key_bindings[(ord(str(sensor_index + 1)), 2)] = \
+                partial(LidarScanViz.toggle_sensor, sensor_index=sensor_index)
+            self._key_definitions[f"CTRL+{str(sensor_index + 1)}"] = f"Toggle sensor {sensor_index + 1} point cloud(s)"
+
+        def handle_keys(self: LidarScanViz, ctx: WindowCtx, key: int,
+                        mods: int) -> bool:
+            if (key, mods) in key_bindings:
+                key_bindings[key, mods](self)
+                self.draw(update=self.update_on_input)
+            return True
 
         push_point_viz_handler(self._viz, self, handle_keys)
-        add_default_controls(self._viz)
-
-    def _populate_image_cloud_modes(self) -> None:
-
-        self._image_modes: List[ImgModeItem]
-        self._image_modes = [
-            ImgModeItem(mode, name, num) for mode in self._modes
-            if isinstance(mode, ImageMode)
-            for num, name in enumerate(mode.names)
-        ]
-
-        self._cloud_modes: List[CloudMode]
-        self._cloud_modes = [
-            m for m in self._modes if isinstance(m, CloudMode)]
+        if isinstance(self._viz, PointViz):
+            add_default_controls(self._viz)
+        print("Press \'?\' while viz window is focused to print key bindings")
 
     def cycle_img_mode(self, i: int, *, direction: int = 1) -> None:
         """Change the displayed field of the i'th image."""
         with self._lock:
-            self._img_ind[i] += direction
+            self._model.cycle_image_mode(i, direction)
 
-    def cycle_cloud_mode(self, *, direction: int = 1) -> None:
+    def cycle_cloud_mode(self, direction: int = 1) -> None:
         """Change the coloring mode of the 3D point cloud."""
         with self._lock:
-            self._cloud_mode_ind = (self._cloud_mode_ind + direction)
+            self._model.cycle_cloud_mode(direction)
+
+            # Note, updating the cloud mode needs the current scan
+            # because CloudMode.enabled requires it.
+            self._model.update(self._scans)
 
     def cycle_cloud_palette(self, *, direction: int = 1) -> None:
         """Change the color palette of the 3D point cloud."""
         with self._lock:
-            npalettes = len(self._cloud_palettes)
-            self._cloud_palette_ind = (self._cloud_palette_ind + npalettes +
-                                       direction) % npalettes
-            self._cloud_palette = self._cloud_palettes[self._cloud_palette_ind]
+            # move to LidarScanVizModel
+            self._model._palettes.cycle_cloud_palette(direction)
+            self._model.update_cloud_palettes()
 
     def toggle_cloud(self, i: int) -> None:
         """Toggle whether the i'th return is displayed."""
         with self._lock:
-            if self._cloud_enabled[i]:
-                self._cloud_enabled[i] = False
-                self._viz.remove(self._clouds[i])
+            if self._model._cloud_enabled[i]:
+                self._model._cloud_enabled[i] = False
+                for sensor in self._model._sensors:
+                    # TODO[tws] encapsulate
+                    if i < len(sensor._clouds):
+                        self._viz.remove(sensor._clouds[i])
             else:
-                self._cloud_enabled[i] = True
-                self._viz.add(self._clouds[i])
+                self._model._cloud_enabled[i] = True
+                for sensor in self._model._sensors:
+                    # TODO[tws] encapsulate
+                    if i < len(sensor._clouds) and sensor._enabled:
+                        self._viz.add(sensor._clouds[i])
+
+    def toggle_sensor(self, sensor_index: int) -> None:
+        """Toggle whether the i'th sensor data is displayed."""
+        with self._lock:
+            sensor = self._model._sensors[sensor_index]
+            sensor._enabled = not sensor._enabled
+            if sensor._enabled:
+                for i, cld in enumerate(sensor._clouds):
+                    if self._model._cloud_enabled[i]:
+                        self._viz.add(cld)
+                for img in sensor._images:
+                    self._viz.add(img)
+                self._scan_axis[sensor_index].enable()
+            else:
+                for cld in sensor._clouds:
+                    self._viz.remove(cld)
+                for img in sensor._images:
+                    self._viz.remove(img)
+                self._scan_axis[sensor_index].disable()
+            if self._scans_accum:
+                self._scans_accum.toggle_sensor(sensor_index, sensor._enabled)
+        self.update_image_size(0)
 
     def update_point_size(self, amount: int) -> None:
         """Change the point size of the 3D cloud."""
         with self._lock:
-            self._cloud_pt_size = min(10.0,
-                                      max(1.0, self._cloud_pt_size + amount))
-            for cloud in self._clouds:
-                cloud.set_point_size(self._cloud_pt_size)
+            # TODO refactor add to model
+            self._model._cloud_pt_size = min(10.0,
+                                      max(1.0, self._model._cloud_pt_size + amount))
+            self._model._set_cloud_pt_size(self._model._cloud_pt_size)
 
     def update_image_size(self, amount: int) -> None:
-        """Change the size of the 2D image."""
+        """Change the size of the 2D image and position image labels."""
         with self._lock:
             size_fraction_max = 20
             self._img_size_fraction = (self._img_size_fraction + amount +
                                        (size_fraction_max + 1)) % (
                                            size_fraction_max + 1)
+        enabled_sensors = [sensor for sensor in self._model._sensors if sensor._enabled]
+        image_h = self._img_size_fraction / size_fraction_max
 
-            vfrac = self._img_size_fraction / size_fraction_max
-            hfrac = vfrac / 2 / self._img_aspect
+        # compute the total width
+        total_image_w = 0.0
+        for sensor in enabled_sensors:
+            image_w = image_h / sensor._img_aspect_ratio
+            total_image_w += image_w
 
-            self._images[0].set_position(-hfrac, hfrac, 1 - vfrac, 1)
-            self._images[1].set_position(-hfrac, hfrac, 1 - vfrac * 2,
-                                         1 - vfrac)
-
-            # center camera target in area not taken up by image
-            self._viz.camera.set_proj_offset(0, vfrac)
+        # set image positions
+        center_x = -total_image_w / 2
+        last_image_right = 0.0
+        for sensor in enabled_sensors:
+            image_w = image_h / sensor._img_aspect_ratio
+            image_left = last_image_right
+            image_right = last_image_right + image_w
+            last_image_right = image_right
+            for image_idx, image in enumerate(sensor._images):
+                image_top = 1.0 - image_h * image_idx
+                image_bottom = 1.0 - image_h * (image_idx + 1)
+                image.set_position(image_left + center_x, image_right + center_x, image_bottom, image_top)
 
     def update_ring_size(self, amount: int) -> None:
         """Change distance ring size."""
@@ -430,17 +354,6 @@ class LidarScanViz:
         with self._lock:
             self._osd_enabled = not self._osd_enabled if state is None else state
 
-    # NOTE: Left for future consideration
-    # def toggle_scan_poses(self) -> None:
-    #     """Toggle the per column poses use."""
-    #     with self._lock:
-    #         if self._scan_poses_enabled:
-    #             self._scan_poses_enabled = False
-    #             print("LidarScanViz: Key T: Scan Poses: OFF")
-    #         else:
-    #             self._scan_poses_enabled = True
-    #             print("LidarScanViz: Key T: Scan Poses: ON")
-
     def toggle_camera_follow(self) -> None:
         """Toggle the camera follow mode."""
         with self._lock:
@@ -458,93 +371,101 @@ class LidarScanViz:
             else:
                 self._flags_mode = mode
 
-            # set mask on all points in the second cloud, clear other mask
-            if self._flags_mode == LidarScanViz.FlagsMode.HIGHLIGHT_SECOND:
-                self._cloud_masks[0][:, :, 3] = 0.0
-                self._cloud_masks[1][:, :, 3] = 1.0
-                self._clouds[0].set_mask(self._cloud_masks[0])
-                self._clouds[1].set_mask(self._cloud_masks[1])
-            # clear masks on both clouds, expected to be set dynamically in _draw()
-            else:
-                self._cloud_masks[0][:, :, 3] = 0.0
-                self._cloud_masks[1][:, :, 3] = 0.0
-                self._clouds[0].set_mask(self._cloud_masks[0])
-                self._clouds[1].set_mask(self._cloud_masks[1])
+            # reset the cloud range field (since HIDE_BLOOM will modify it)
+            for scan, sensor in zip(self._scans, self._model._sensors):
+                if not scan:
+                    continue
+                for i, range_field in ((0, ChanField.RANGE),
+                                       (1, ChanField.RANGE2)):
+                    sensor._clouds[i].set_range(scan.field(range_field))
 
-            # not bothering with OSD
-            # TODO[pb]: hmm, probably should bother with OSD somehow
-            print("Flags mode:", self._flags_mode.name)
+            # TODO[UN]: need to be done as part of the combined lidar mode
+            # set mask on all points in the second cloud, clear other mask
+            for i, sensor in enumerate(self._model._sensors):
+                if self._flags_mode == LidarScanViz.FlagsMode.HIGHLIGHT_SECOND:
+                    sensor._cloud_masks[0][:, :, 3] = 0.0
+                    sensor._cloud_masks[1][:, :, 3] = 1.0
+                # clear masks on both clouds, expected to be set dynamically in _draw()
+                else:
+                    sensor._cloud_masks[0][:, :, 3] = 0.0
+                    sensor._cloud_masks[1][:, :, 3] = 0.0
+                sensor._clouds[0].set_mask(sensor._cloud_masks[0])
+                sensor._clouds[1].set_mask(sensor._cloud_masks[1])
+
+    def _draw_update_flags_mode(self) -> None:
+        """Apply selected FlagsMode to the cloud"""
+        # set a cloud mask based where first flags bit is set
+        for scan, sensor in zip(self._scans, self._model._sensors):
+            if not scan:
+                continue
+            if self._flags_mode == LidarScanViz.FlagsMode.HIGHLIGHT_BLOOM:
+                for i, flag_field in ((0, ChanField.FLAGS), (1, ChanField.FLAGS2)):
+                    if flag_field in scan.fields:
+                        mask_opacity = (scan.field(flag_field) & 0x1) * 1.0
+                        sensor._cloud_masks[i][:, :, 3] = mask_opacity
+                        sensor._clouds[i].set_mask(sensor._cloud_masks[i])
+            # set range to zero where first flags bit is set
+            elif self._flags_mode == LidarScanViz.FlagsMode.HIDE_BLOOM:
+                for i, flag_field, range_field in ((0, ChanField.FLAGS,
+                                                    ChanField.RANGE),
+                                                   (1, ChanField.FLAGS2,
+                                                    ChanField.RANGE2)):
+                    if flag_field in scan.fields and range_field in scan.fields:
+                        # modifying the scan in-place would break cycling modes while paused
+                        rng = scan.field(range_field).copy()
+                        rng[scan.field(flag_field) & 0x1 == 0x1] = 0
+                        sensor._clouds[i].set_range(rng)
 
     def toggle_scan_axis(self) -> None:
         """Toggle the helper axis of a scan ON/OFF"""
         with self._lock:
-            self._scan_axis.toggle()
-
-    def print_keys(self) -> None:
-        with self._lock:
-            print(">---------------- Key Bindings --------------<")
-            for key_binding in self._key_definitions:
-                print(
-                    f"{key_binding:^7}: {self._key_definitions[key_binding]}")
-            print(">--------------------------------------------<")
-
-    @property
-    def metadata(self) -> client.SensorInfo:
-        """The sensor metadata of the scans."""
-        return self._metadata
+            if self._scan_axis_enabled:
+                self._scan_axis_enabled = False
+                self._scan_axis_origin.disable()
+                for axis in self._scan_axis:
+                    axis.disable()
+            else:
+                self._scan_axis_enabled = True
+                self._scan_axis_origin.enable()
+                for axis, sensor in zip(self._scan_axis, self._model._sensors):
+                    if sensor._enabled:
+                        axis.enable()
 
     @property
-    def scan(self) -> client.LidarScan:
+    # NOTE[BREAKING]
+    def scan(self) -> List[Optional[LidarScan]]:
         """The currently displayed scan."""
-        return self._scan
+        return self._scans
 
     @property
     def scan_num(self) -> int:
         """The currently displayed scan number"""
         return self._scan_num
 
-    def _amend_view_modes(self, scan: client.LidarScan) -> None:
-        # Look for any new field that doesn't have a view mode associated with yet
-        # NOTE: we don't currently handle edge cases like removing a view mode if
-        # the field associated with it was dropped or deleted.
-        # Another situation that is not currently handled if there are more than one
-        # field that share the same name but could have different dimensions. In the
-        # current code the first field to appear will acquire the view mode.
-        # Will handle all these edge cases in "LidarScanViz Reforms" work.
-        amended_fields_length = len(self._amended_fields)   # save the value
-        for field_name in scan.fields:
-            if field_name not in self._amended_fields:
-                # we encountered new field
-                field = scan.field(field_name)
-                # for now only consider 2D + 3D
-                if np.ndim(field) == 2:
-                    self._modes.extend([
-                        SimpleMode(field_name, info=self.metadata)])
-                    self._amended_fields.append(field_name)
-                elif np.ndim(field) == 3 and field.shape[2] == 3:
-                    self._modes.extend([
-                        RGBMode(field_name, info=self.metadata)])
-                    self._amended_fields.append(field_name)
-                # else any other shape we simply skip over
-
-        if amended_fields_length != len(self._amended_fields):
-            self._populate_image_cloud_modes()
-
     def update(self,
-               scan: client.LidarScan,
+               scans: List[Optional[LidarScan]],
                scan_num: Optional[int] = None) -> None:
-        self._scan = scan
+        """Update the LidarScanViz state with the provided scans."""
+        self._scans = scans
         if scan_num is not None:
             self._scan_num = scan_num
         else:
             self._scan_num += 1
 
-        self._amend_view_modes(scan)
+        self._model.update(self._scans)
+        if self._scans_accum:
+            self._scans_accum.update(scans, self._scan_num)
 
     def draw(self, update: bool = True) -> bool:
         """Process and draw the latest state to the screen."""
         with self._lock:
             self._draw()
+            if self._scans_accum:
+                self._scans_accum._draw()
+
+        if not self._image_size_initialized:
+            self.update_image_size(0)
+            self._image_size_initialized = True
 
         if update:
             return self._viz.update()
@@ -561,164 +482,106 @@ class LidarScanViz:
     # i/o and processing, called from client thread
     # usually need to synchronize with key handlers, which run in render thread
     def _draw(self) -> None:
+        self._draw_update_scan_poses()
+        self._draw_update_flags_mode()
+        self._update_multi_viz_osd()
 
-        # figure out what to draw based on current viz state
-        scan = self._scan
+    @staticmethod
+    def _format_version(version: client.Version) -> str:
+        result = f'v{version.major}.{version.minor}.{version.patch}'
+        if version.prerelease:
+            result += f'-{version.prerelease}'
+        return result
 
-        # available display modes
-        img_modes = list(
-            filter(lambda m: m.mode.enabled(scan, m.return_num),
-                   self._image_modes))
-        cloud_modes = list(filter(lambda m: m.enabled(scan),
-                                  self._cloud_modes))
+    def _update_multi_viz_osd(self):
+        if not self._osd_enabled:
+            self._osd.set_text("")
+            return
 
-        # update 3d display
-        self._cloud_mode_ind = (self._cloud_mode_ind +
-                                len(cloud_modes)) % len(cloud_modes)
-        cloud_mode = cloud_modes[self._cloud_mode_ind]
-
-        refl_mode = is_norm_reflectivity_mode(cloud_mode)
-
-        current_palette = None
-        if refl_mode:
-            current_palette = self._refl_cloud_palettes[self._cloud_palette_ind]
-        else:
-            current_palette = self._cloud_palettes[self._cloud_palette_ind]
-
-        if self._cloud_palette_prev is None or self._cloud_palette_prev.name != current_palette.name:  # type: ignore
-            self._cloud_palette = current_palette
-        self._cloud_palette_prev = current_palette
-
-        for i, range_field in ((0, ChanField.RANGE), (1, ChanField.RANGE2)):
-            if range_field in scan.fields:
-                range_data = scan.field(range_field)
+        enabled_clouds_str = ""
+        for idx, sensor in enumerate(self._model._sensors):
+            meta = sensor._meta
+            cloud_state = "ON" if sensor._enabled else "OFF"
+            enabled_clouds_str += f"sensor [CTRL+{idx + 1}]: {cloud_state}"
+            scan = self._scans[idx]
+            if scan:
+                enabled_clouds_str += f" frame id: {scan.frame_id}\n"
             else:
-                range_data = np.zeros((scan.h, scan.w), dtype=np.uint32)
+                enabled_clouds_str += "\n"
+            profile_str = str(meta.format.udp_profile_lidar).replace('_', '..')
+            version_str = LidarScanViz._format_version(meta.get_version())
+            enabled_clouds_str += f"        {profile_str} {meta.prod_line} {version_str} {meta.config.lidar_mode}\n"
 
-            self._clouds[i].set_range(range_data)
+        osd_str = f"{enabled_clouds_str}"
 
-            if self._cloud_palette is not None:
-                self._clouds[i].set_palette(self._cloud_palette.palette)
-
-            if cloud_mode.enabled(scan, i):
-                cloud_modes[self._cloud_mode_ind].set_cloud_color(
-                    self._clouds[i], scan, return_num=i)
-            else:
-                cloud_modes[self._cloud_mode_ind].set_cloud_color(
-                    self._clouds[i], scan, return_num=0)
-
-        if self._cloud_palette is not None:
-            self._cloud_palette_name = self._cloud_palette.name
-
-        # palette is set only on the first _draw when it's changed
-        self._cloud_palette = None
-
-        # update 2d images
-        for i in (0, 1):
-            self._img_ind[i] = (self._img_ind[i] +
-                                len(img_modes)) % len(img_modes)
-            img_mode_item = img_modes[self._img_ind[i]]
-            img_mode = img_mode_item.mode
-
-            refl_mode = is_norm_reflectivity_mode(img_mode)
-            if refl_mode and not self._img_refl_mode[i]:
-                self._images[i].set_palette(self._image_calref_palette)
-            if not refl_mode and self._img_refl_mode[i]:
-                self._images[i].clear_palette()
-            self._img_refl_mode[i] = refl_mode
-
-            img_mode.set_image(self._images[i], scan, img_mode_item.return_num)
-
-        # update osd
-        meta = self._metadata
-        first_ts_s = client.first_valid_column_ts(scan) / 1e9
-
-        cloud_idxs_str = str([i + 1 for i in range(len(self._cloud_enabled))])
+        cloud_idxs_str = str([i + 1 for i in range(len(self._model._cloud_enabled))])
         cloud_states_str = ", ".join(
-            ["ON" if e else "OFF" for e in self._cloud_enabled])
+            ["ON" if e else "OFF" for e in self._model._cloud_enabled])
+
+        img_keys = 'B, N'
+        cld_keys = 'M'
+        img_modes = self._model._image_mode_names[0]
+        img_modes += ", " + self._model._image_mode_names[1]
+        cld_modes = self._model._cloud_mode_name
+        osd_str += f"image [{img_keys}]: {img_modes}\n" \
+            f"cloud {cloud_idxs_str}: {cloud_states_str}\n" \
+            f"        cloud mode [{cld_keys}]: {cld_modes}\n" \
+            f"        palette [F]: {self._model._cloud_palette_name}\n" \
+            f"        flags mode[c]: {self._flags_mode.name}\n" \
+            f"        point size [P]: {int(self._model._cloud_pt_size)}\n"
 
         osd_str_extra = self._osd_text_extra()
         if osd_str_extra:
             osd_str_extra += "\n"
 
-        if self._osd_enabled:
-            osd_str = f"image [B, N]: {img_modes[self._img_ind[0]].name}, {img_modes[self._img_ind[1]].name}\n" \
-                      f"cloud {cloud_idxs_str}: {cloud_states_str}\n"
-            osd_str += f"        mode [M]: {cloud_modes[self._cloud_mode_ind].name}\n" \
-                       f"        flags highlight mode[c]: {self._flags_mode.name}\n" \
-                       f"        palette [F]: {self._cloud_palette_name}\n" \
-                       f"        point size [P]: {int(self._cloud_pt_size)}\n"
-            osd_str += f"{osd_str_extra}" \
-                       f"axes [9]: {'ON' if self._scan_axis.enabled else 'OFF'}\n" \
-                       f"camera mode [U]: {'FOLLOW' if self._camera_follow_enabled else 'FIXED'}\n" \
-                       f"frame: {scan.frame_id}, sensor ts: {first_ts_s:.3f}s\n" \
-                       f"profile: {str(meta.format.udp_profile_lidar).replace('_', '..')}\n" \
-                       f"{meta.prod_line} {meta.fw_rev} {meta.config.lidar_mode}"
-        else:
-            osd_str = ""
-
+        frame_ts = min([first_valid_packet_ts(s) for s in self._scans if s]) * 1e-9
+        if self._first_frame_ts is None:
+            self._first_frame_ts = frame_ts
+        frame_ts -= self._first_frame_ts    # show relative time
+        osd_str += f"{osd_str_extra}" \
+            f"axes [9]: {'ON' if self._scan_axis_enabled else 'OFF'}\n" \
+            f"camera mode [U]: {'FOLLOW' if self._camera_follow_enabled else 'FIXED'}\n" \
+            f"frame # : {self._scan_num}, frame ts: {frame_ts:0.3f} s"
         self._osd.set_text(osd_str)
 
-        if scan.shot_limiting() != ShotLimitingStatus.SHOT_LIMITING_NORMAL:
-            print(f"WARNING: Shot limiting status: {scan.shot_limiting()} "
-                  f"(sensor ts: {first_ts_s:.3f})")
-        if scan.thermal_shutdown() != ThermalShutdownStatus.THERMAL_SHUTDOWN_NORMAL:
-            print(f"WARNING: Thermal shutdown status: {scan.thermal_shutdown()} "
-                  f"(sensor ts: {first_ts_s:.3f})")
-
-        self._draw_update_scan_poses()
-
-        # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
-        self._draw_update_flags_mode()
+    def _get_pose_with_min_ts(self) -> np.ndarray:
+        first_scan = min([s for s in self._scans if s], key=lambda s: first_valid_packet_ts(s))
+        return client.first_valid_column_pose(first_scan)
 
     def _draw_update_scan_poses(self) -> None:
-        """Apply poses from the scan to the cloud"""
+        """Apply poses from the Scans to the scene"""
+        # handle Axis and Camera poses
+        # scan with the minimal timestamp determines the
+        # center of the system (by it's scan pose)
+        pose = self._get_pose_with_min_ts()
+        self._viz.camera.set_target(np.linalg.inv(pose))
+        self._scan_axis_origin.pose = pose
+        # update all sensor axis positions
+        for axis, sensor in zip(self._scan_axis, self._model._sensors):
+            axis.pose = pose @ sensor._meta.extrinsic
 
-        column_poses = (self._scan.pose if self._scan_poses_enabled else
-                        self._scan_column_poses_identity)
-
-        for cloud in self._clouds:
-            cloud.set_column_poses(column_poses)
-
-        scan_pose = column_poses[client.first_valid_column(self._scan)]
-
-        # with poses camera tracks the scan position
-        camera_target = (np.linalg.inv(scan_pose)
-                         if self._scan_poses_enabled else np.eye(4))
-
-        # TODO[pb]: We probably shouldn't have the camera settings to
-        # FOLLOW/FIXED in the LidarScan viz, but move it to the SimpleViz.
-        # Potential complications of such move is the OSD display that happens
-        # in the LidarScanViz and combines already the ScansAccumulator display.
         if self._camera_follow_enabled:
-            self._viz.camera.set_target(camera_target)
+            scan = self._scans[self._tracked_sensor]
+            if scan:    # if picked scan is None don't update camera
+                self._scan_pose = client.first_valid_column_pose(scan)
+        self._viz.camera.set_target(np.linalg.inv(self._scan_pose))
 
-        # update scan axis helper
-        self._scan_axis.pose = scan_pose @ self._metadata.extrinsic
-
-    def _draw_update_flags_mode(self) -> None:
-        """Apply selected FlagsMode to the cloud"""
-        # set a cloud mask based where first flags bit is set
-        if self._flags_mode == LidarScanViz.FlagsMode.HIGHLIGHT_BLOOM:
-            for i, flag_field in ((0, ChanField.FLAGS), (1, ChanField.FLAGS2)):
-                if flag_field in self._scan.fields:
-                    mask_opacity = (self._scan.field(flag_field) & 0x1) * 1.0
-                    self._cloud_masks[i][:, :, 3] = mask_opacity
-                    self._clouds[i].set_mask(self._cloud_masks[i])
-        # set range to zero where first flags bit is set
-        elif self._flags_mode == LidarScanViz.FlagsMode.HIDE_BLOOM:
-            for i, flag_field, range_field in ((0, ChanField.FLAGS,
-                                                ChanField.RANGE),
-                                               (1, ChanField.FLAGS2,
-                                                ChanField.RANGE2)):
-                if flag_field in self._scan.fields and range_field in self._scan.fields:
-                    # modifying the scan in-place would break cycling modes while paused
-                    range = self._scan.field(range_field).copy()
-                    range[self._scan.field(flag_field) & 0x1 == 0x1] = 0
-                    self._clouds[i].set_range(range)
+    def print_keys(self) -> None:
+        with self._lock:
+            print(">---------------- Key Bindings --------------<")
+            for key_binding in self._key_definitions:
+                print(f"{key_binding:^7}: {self._key_definitions[key_binding]}")
+            print(">--------------------------------------------<")
 
 
-class _Seekable(Generic[T]):
+def _first_scan_ts(scans: Union[List[Optional[LidarScan]], LidarScan]):
+    scans = [scans] if isinstance(scans, client.LidarScan) else scans  # TODO[tws] fix these banes of our existence
+    for scan in scans:
+        if scan:
+            return client.first_valid_column_ts(scan)
+
+
+class _Seekable:
     """Wrap an iterable to support seeking by index.
 
     Similar to `more_itertools.seekable` but keeps indexes stable even values
@@ -729,37 +592,54 @@ class _Seekable(Generic[T]):
         (read_ind - len(cache)) < next_ind <= read_ind + 1
     """
 
-    def __init__(self, it: Iterable[T], maxlen=50) -> None:
+    # FIXME[tws] somehow simplify typing
+    def __init__(self, it: Union[Iterable[List[Optional[LidarScan]]], Iterable[LidarScan]], maxlen=50) -> None:
         self._next_ind = 0  # index of next value to be returned
         self._read_ind = -1  # index of most recent (leftmost) value in cache
         self._iterable = it
-        self._it = iter(it)
+        self._it: Union[Iterator[List[Optional[LidarScan]]], Iterator[LidarScan]] = \
+            cast(Union[Iterator[List[Optional[LidarScan]]], Iterator[LidarScan]], iter(it))
         self._maxlen = maxlen
-        self._cache: Deque[T] = deque([], maxlen)
+        self._cache: Deque[Union[List[Optional[LidarScan]], LidarScan]] = deque([], maxlen)
+        self._first_scan_ts = None
 
-    def __iter__(self) -> '_Seekable[T]':
+    def __iter__(self):
         return self
 
-    def __next__(self) -> T:
+    def __next__(self) -> Union[List[Optional[LidarScan]], LidarScan]:
         # next value already read, is in cache
+        t: Union[List[Optional[LidarScan]], LidarScan]
         if self._next_ind <= self._read_ind:
             t = self._cache[self._read_ind - self._next_ind]
             self._next_ind += 1
             return t
         # next value comes from iterator
         elif self._next_ind == self._read_ind + 1:
-            t = next(self._it)
+            t = cast(Union[List[Optional[LidarScan]], LidarScan], next(self._it))
             self._cache.appendleft(t)
             if len(self._cache) > self._maxlen:
                 self._cache.pop()
+
             self._next_ind += 1
             self._read_ind += 1
+
+            # TODO[tws] improve loop handling.
+            # This is a massive kludge to handle looping the source with a _Seekable, which was supposed to be a
+            # generic. A better solution will probably rely on a better conceptulization of ScanSource/MultiScanSource
+            # as Iterables, where the user (SimpleViz, in this case,) waits for StopIteration and resets the source.
+            if self._first_scan_ts:
+                if self._first_scan_ts == _first_scan_ts(t):
+                    self._next_ind = 1
+                    self._read_ind = 0
+            else:
+                self._first_scan_ts = _first_scan_ts(t)
             return t
         else:
             raise AssertionError("Violated: next_ind <= read_ind + 1")
 
     @property
-    def next_ind(self) -> int:
+    def scan_num(self) -> int:
+        """Returns the most-recently read scan number, starting at zero."""
         return self._next_ind
 
     def seek(self, ind: int) -> bool:
@@ -777,6 +657,10 @@ class _Seekable(Generic[T]):
             StopIteration if seeking beyond the end of the iterator
         """
 
+        # Disallow seeking before the first frame
+        if ind < 0:
+            return False
+
         # seek forward until ind is next to be read
         while ind > self._next_ind:
             next(self)
@@ -792,7 +676,7 @@ class _Seekable(Generic[T]):
     def close(self) -> None:
         """Close the underlying iterable, if supported."""
         if hasattr(self._iterable, 'close'):
-            self._iterable.close()  # type: ignore
+            self._iterable.close()
 
 
 def _save_fb_to_png(fb_data: List,
@@ -810,13 +694,6 @@ def _save_fb_to_png(fb_data: List,
     return img_fname
 
 
-# TODO: Make/Define a better ScanViz interface
-# not a best way to describe interface, yeah duck typing danger, etc ...
-# but ScanViz object should have a write property 'scan' and underlying
-# Point viz member at '_viz'
-AnyScanViz = Union[LidarScanViz, Any]
-
-
 class SimpleViz:
     """Visualize a stream of LidarScans.
 
@@ -826,12 +703,19 @@ class SimpleViz:
     _playback_rates = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 0.0)
 
     def __init__(self,
-                 arg: Union[client.SensorInfo, AnyScanViz],
+                 metadata: Union[List[client.SensorInfo], client.SensorInfo],
                  *,
                  rate: Optional[float] = None,
                  pause_at: int = -1,
                  on_eof: str = 'exit',
-                 scans_accum: Optional[Union[bool, ScansAccumulator]] = None,
+                 accum_max_num: int = 0,
+                 accum_min_dist_meters: float = 0,
+                 accum_min_dist_num: int = 1,
+                 map_enabled: bool = False,
+                 map_select_ratio: float = MAP_SELECT_RATIO,
+                 map_max_points: int = MAP_MAX_POINTS_NUM,
+                 _override_pointviz: Optional[PointViz] = None,
+                 _override_lidarscanviz: Optional[LidarScanViz] = None,
                  _buflen: int = 50) -> None:
         """
         Args:
@@ -845,19 +729,18 @@ class SimpleViz:
         Raises:
             ValueError: if the specified rate isn't one of the options
         """
-        if isinstance(arg, client.SensorInfo):
-            self._metadata = arg
-            self._viz = PointViz("Ouster Viz")
-            self._scan_viz = LidarScanViz(arg, self._viz)
-        elif isinstance(arg, LidarScanViz):
-            self._metadata = arg._metadata
-            self._viz = arg._viz
-            self._scan_viz = arg
-        else:
-            # we continue, so custom ScanVizs can be used with the same
-            # SimpleViz class and basic controls
-            self._viz = arg._viz
-            self._scan_viz = arg
+        self._metadata = [metadata] if isinstance(metadata, client.SensorInfo) else metadata
+        self._viz = _override_pointviz if _override_pointviz else PointViz("Ouster Viz")
+        accum_config = LidarScanVizAccumulatorsConfig(
+            accum_max_num=accum_max_num,
+            accum_min_dist_meters=accum_min_dist_meters,
+            accum_min_dist_num=accum_min_dist_num,
+            map_enabled=map_enabled,
+            map_select_ratio=map_select_ratio,
+            map_max_points=map_max_points
+        )
+        self._scan_viz = _override_lidarscanviz if _override_lidarscanviz \
+            else LidarScanViz(self._metadata, self._viz, accum_config)
 
         self._lock = threading.Lock()
         self._live = (rate is None)
@@ -870,7 +753,6 @@ class SimpleViz:
         # pausing and stepping
         self._cv = threading.Condition()
         self._paused = False
-        self._viz.update_on_input(self._paused)
         self._step = 0
         self._proc_exit = False
 
@@ -882,39 +764,6 @@ class SimpleViz:
 
         # continuous screenshots recording
         self._viz_img_recording = False
-
-        metas = ([self._scan_viz.metadata] if isinstance(
-            self._scan_viz.metadata, client.SensorInfo) else
-            self._scan_viz.metadata)
-
-        self._scans_accum = None
-        # TODO[pb]: Here we consider ScansAccumulator separately for
-        # first tests and ease of use, however its behaviour is very close
-        # (fully aligned?) with the `arg: AnyScanViz` option. Which means that
-        # we might consider a refactor when SimpleViz accepts not a single
-        # `arg: AnyScanViz` but a list `List[AnyScanViz]` type.
-        # to be discussed and refactored later ....
-        if scans_accum:
-            if isinstance(scans_accum, ScansAccumulator):
-                self._scans_accum = scans_accum
-                if self._scans_accum.viz is None:
-                    self._scans_accum.set_point_viz(self._viz)
-            else:
-                self._scans_accum = ScansAccumulator(
-                    metas, point_viz=self._viz)
-            self._scans_accum.toggle_osd(False)
-
-            if hasattr(self._scan_viz, "_osd_text_extra"):
-                self._scan_viz._osd_text_extra = self._scans_accum.osd_text
-                # if we add the extra text to the _scan_viz we also want to
-                # draw(w/o update) its state when scans accum keys cause the
-                # re-draw of ScansAccumulator state (osd included)
-                self._scans_accum._key_press_pre_draw = (
-                    lambda: self._scan_viz.draw(update=False))
-
-        if hasattr(self._scan_viz, "_key_definitions") and self._scans_accum:
-            self._scan_viz._key_definitions.update(
-                getattr(self._scans_accum, "_key_definitions", {}))
 
         key_bindings: Dict[Tuple[int, int], Callable[[SimpleViz], None]] = {
             (ord(','), 0): partial(SimpleViz.seek_relative, n_frames=-1),
@@ -979,7 +828,6 @@ class SimpleViz:
         """Pause or unpause the visualization."""
         with self._cv:
             self._paused = not self._paused
-            self._viz.update_on_input(self._paused)
             self._update_playback_osd()
             if not self._paused:
                 self._cv.notify()
@@ -988,7 +836,6 @@ class SimpleViz:
         """Seek forward of backwards in the stream."""
         with self._cv:
             self._paused = True
-            self._viz.update_on_input(self._paused)
             self._step = n_frames
             self._update_playback_osd()
             self._cv.notify()
@@ -1038,72 +885,111 @@ class SimpleViz:
             print(f"Saved screenshot to: {saved_img_path}")
         push_point_viz_fb_handler(self._viz, self._viz, handle_fb_once)
 
-    def _frame_period(self) -> float:
-        rate = SimpleViz._playback_rates[self._rate_ind]
-        if rate and not self._paused:
-            if isinstance(self._scan_viz, LidarScanViz):
-                return 1.0 / (self._metadata.format.fps * rate)
-            else:
-                # if some other scan viz that is not derived from LidarScanViz
-                # we default to 10 Hz
-                return 1.0 / (10 * rate)
+    def _lidar_frame_period(self) -> float:
+        if isinstance(self._scan_viz, LidarScanViz):
+            # TODO[UN]: per sensor frame period
+            return 1.0 / (self._metadata[0].format.fps)
         else:
-            return 0.0
+            # if some other scan viz that is not derived from LidarScanViz
+            # we default to 10 Hz
+            return 1.0 / 10.0
 
-    def _process(self, seekable: _Seekable[client.LidarScan]) -> None:
+    def _get_timestamp(self, scan: List[Optional[LidarScan]]):
+        return min([first_valid_packet_ts(s) for s in scan if s])
 
-        last_ts = time.monotonic()
+    def _process(self, seekable: _Seekable) -> None:
         scan_idx = -1
+
+        # times for the last sim time since pause or skip
+        # when we playback:
+        # sim_time = (time.now() - last_time_update)*rate + last_sim_time
+        last_sim_time = None
+        last_time_update = None
+
+        # packet time (or fake time) of last scan we received
+        last_scan_time = None
+        # used to detect changes in rate to reset the sim time origin to avoid glitches
+        last_rate = None
+
+        # monotonic time of last scan display, used to show scan display rate
+        last_play_time = None
+
         try:
             while True:
                 # wait until unpaused, step, or quit
                 try:
                     with self._cv:
-                        self._cv.wait_for(lambda: not self._paused or self._step or
-                                          self._proc_exit)
+                        if self._paused:
+                            self._cv.wait_for(lambda: not self._paused or self._step or
+                                              self._proc_exit)
+                            last_time_update = time.monotonic()
+                            last_sim_time = last_scan_time
                         if self._proc_exit:
                             break
                         if self._step:
-                            seek_ind = seekable.next_ind + self._step - 1
+                            seek_ind = seekable.scan_num + self._step - 1
                             self._step = 0
                             if not seekable.seek(seek_ind):
                                 continue
-                        period = self._frame_period()
 
-                    # process new data
-                    scan_idx = seekable.next_ind
+                    rate = SimpleViz._playback_rates[self._rate_ind]
+                    if rate != last_rate:
+                        last_rate = rate
+                        last_time_update = time.monotonic()
+                        last_sim_time = last_scan_time
+
                     scan = next(seekable)
+                    scan_idx = seekable.scan_num
+                    scan = [scan] if isinstance(scan, client.LidarScan) else scan
+                    scan_ts = self._get_timestamp(scan) / 1e9
 
-                    # TODO[pb]: Now scan_idx keeps increasing if looped source
-                    # is presented, thus there is a need to keep track the lapsed
-                    # scan_idx and pass it always as a valid scan number starting
-                    # from 0 of the scans source.
+                    # fallback if we have no valid ts in the scan
+                    if scan_ts == 0:
+                        if last_scan_time is None:
+                            scan_ts = 0
+                        else:
+                            scan_ts = last_scan_time + self._lidar_frame_period()
+
+                    # detect loops
+                    if last_scan_time is not None and last_scan_time > scan_ts:
+                        last_time_update = time.monotonic()
+                        last_sim_time = scan_ts - self._lidar_frame_period()
+                    last_scan_time = scan_ts
+
+                    if last_sim_time is None:
+                        last_sim_time = scan_ts
+                        last_time_update = time.monotonic()
+
+                    # Queue up the scans to be viewed
                     self._scan_viz.update(scan, scan_idx)
-                    if self._scans_accum:
-                        self._scans_accum.update(scan, scan_idx)
-
                     self._scan_viz.draw(update=False)
-                    if self._scans_accum:
-                        self._scans_accum.draw(update=False)
 
                     if self._pause_at == scan_idx:
                         self._paused = True
-                        self._viz.update_on_input(self._paused)
 
                     self._update_playback_osd()
 
-                    # sleep for remainder of scan period if not live
-                    to_sleep = max(0.0, period - (time.monotonic() - last_ts))
-                    if scan_idx > 0 and not self._live:
-                        time.sleep(to_sleep)
+                    # Sleep until time to "play" this scan if necessary
+                    sim_time = (time.monotonic() - last_time_update) * rate + last_sim_time
+                    if rate != 0 and not self._paused and not self._live:
+                        time_remaining = (scan_ts - sim_time) / rate
+                        if time_remaining > 0:
+                            # Dont update based on input while we are sleeping or we skip ahead
+                            has_update_on_input = hasattr(self._scan_viz, "update_on_input")
+                            if has_update_on_input:
+                                self._scan_viz.update_on_input = False
+                            time.sleep(time_remaining)
+                            if has_update_on_input:
+                                self._scan_viz.update_on_input = True
 
-                    now_t = time.monotonic()
-                    # track process/draw period
-                    self._last_draw_period = now_t - last_ts
-                    last_ts = now_t
-
-                    # show new data
+                    # Update scan rate display calculation
+                    now_ts = time.monotonic()
+                    last = last_play_time or now_ts
+                    dt = now_ts - last
+                    last_play_time = now_ts
+                    self._last_draw_period = dt
                     self._viz.update()
+
                 except StopIteration:
                     if not self._paused and not self._on_eof == "stop":
                         break
@@ -1111,7 +997,6 @@ class SimpleViz:
                     # Pause after we get a StopIteration in eof "stop"
                     if self._on_eof == "stop":
                         self._paused = True
-                        self._viz.update_on_input(self._paused)
                         self._update_playback_osd()
                         self._viz.update()
 
@@ -1157,15 +1042,8 @@ class SimpleViz:
             self._viz.run()
             logger.info("Done rendering loop")
         except KeyboardInterrupt:
-            pass
+            print("Termination requested, shutting down...")
         finally:
-            try:
-                # some scan sources may be waiting on IO, blocking the
-                # processing thread
-                seekable.close()
-            except Exception as e:
-                logger.warn(f"Data source closed with error: '{e}'")
-
             # processing thread will still be running if e.g. viz window was closed
             with self._cv:
                 self._proc_exit = True
@@ -1177,7 +1055,7 @@ class SimpleViz:
 
 __all__ = [
     'PointViz', 'Cloud', 'Image', 'Cuboid', 'Label', 'WindowCtx', 'Camera',
-    'TargetDisplay', 'add_default_controls', 'calref_palette', 'spezia_palette',
-    'grey_palette', 'viridis_palette', 'magma_palette', 'ImageMode',
-    'CloudMode', 'CloudPaletteItem', 'VizExtraMode'
+    'TargetDisplay', 'add_default_controls', 'ImageMode',
+    'CloudMode', 'CloudPaletteItem', 'VizExtraMode', 'LidarScanViz',
+    'push_point_viz_handler',
 ]

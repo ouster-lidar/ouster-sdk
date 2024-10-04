@@ -4,7 +4,6 @@ import click
 import logging
 import laspy
 import numpy as np
-import ouster.sdk.util.pose_util as pu
 from ouster.sdk.io_type import OusterIoType
 from ouster.cli.plugins.source import source  # type: ignore
 from ouster.sdk.util import default_scan_fields
@@ -14,10 +13,10 @@ from ouster.cli.plugins.source_save import (SourceSaveCommand,
                                             _file_exists_error)
 from ouster.sdk.client import (LidarScan,
                                ChanField,
-                               UDPProfileLidar,
                                XYZLut,
                                first_valid_column_ts,
-                               first_valid_column_pose)
+                               first_valid_column_pose,
+                               dewarp)
 from ouster.cli.plugins.source_util import (source_multicommand,
                                             SourceCommandType,
                                             SourceCommandContext)
@@ -60,31 +59,32 @@ def source_clip(ctx: SourceCommandContext, max_range: float,
     low_range = min_range * 1000 if min_range else 0
     high_range = max_range * 1000 if max_range else float('inf')
 
-    dual = ctx.scan_source.metadata.format.udp_profile_lidar in [  # type: ignore
-            UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL,  # type: ignore
-            UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL]  # type: ignore
-
     scans = ctx.scan_iter
 
     def clip_iter():
-        for scan in scans:
-            copy = LidarScan(scan)
+        for scanl in scans:
+            out = []
+            for scan in scanl:
+                if scan is None:
+                    out.append(None)
+                    continue
+                copy = LidarScan(scan)
 
-            range1 = copy.field(ChanField.RANGE)
+                range1 = copy.field(ChanField.RANGE)
 
-            if percent_range and percent_range != 100:
-                nonlocal high_range
-                non_zero_range1 = range1[range1 != 0]  # Filter out zeros
-                percentile_range = np.percentile(non_zero_range1, percent_range)
-                high_range = min(high_range, percentile_range)
+                if percent_range and percent_range != 100:
+                    nonlocal high_range
+                    non_zero_range1 = range1[range1 != 0]  # Filter out zeros
+                    percentile_range = np.percentile(non_zero_range1, percent_range)
+                    high_range = min(high_range, percentile_range)
 
-            range1[(range1 < low_range) | (range1 > high_range)] = 0
+                range1[(range1 < low_range) | (range1 > high_range)] = 0
 
-            if dual:
-                range2 = copy.field(ChanField.RANGE2)
-                range2[(range2 < low_range) | (range2 > high_range)] = 0
-
-            yield copy
+                if copy.has_field(ChanField.RANGE2):
+                    range2 = copy.field(ChanField.RANGE2)
+                    range2[(range2 < low_range) | (range2 > high_range)] = 0
+                out.append(copy)
+            yield out
 
     ctx.scan_iter = clip_iter()
 
@@ -121,10 +121,10 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
         try:
             from ouster.sdk.mapping.slam import KissBackend
         except ImportError as e:
-            raise click.ClickException("kiss-icp, a package required for slam, is "
-                                       "unsupported on this platform. Error: " + str(e))
+            raise click.ClickException(click.style("kiss-icp, a package required for slam, is "
+                                       f"unsupported on this platform. Error: {str(e)}", fg='red'))
 
-        return KissBackend(info=ctx.scan_source.metadata,
+        return KissBackend(infos=ctx.scan_source.metadata,
                            max_range=max_range,
                            min_range=min_range,
                            voxel_size=voxel_size,
@@ -138,15 +138,20 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
 
     def slam_iter(scan_source, slam_engine):
         scan_start_ts = None
-        for scan in scan_source:
+        for scans in scan_source:
+            # Use the first valid scan to check if the iteration restarts
+            scan = scans[0]
+            if scan is None:
+                continue
+
             scan_ts = first_valid_column_ts(scan)
             if scan_ts == scan_start_ts:
                 logger.info("SLAM restarts as scan iteration restarts")
                 slam_engine = make_kiss_slam()
             if not scan_start_ts:
                 scan_start_ts = scan_ts
-            scan_slam = slam_engine.update(scan)
-            yield scan_slam
+            slam_scans = slam_engine.update(scans)
+            yield slam_scans
 
     ctx.scan_iter = slam_iter(ctx.scan_iter, slam_engine)
 
@@ -158,7 +163,7 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
 @click.argument("filename", required=True)
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
-@click.option('-s', '--voxel-size', default=0.1, help="Voxel map size for downsampling"
+@click.option('-v', '--voxel-size', default=0.1, help="Voxel map size for downsampling"
               "This parameter is the same as the open3D voxel size. Default value is 0.1. "
               "The bigger the value, the fewer points it outputs")
 @click.option('--field',
@@ -176,11 +181,16 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
               help="Print point cloud status much frequently. Default is Off")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite "
               "existing files with the same name")
+@click.option('--max-z', default=None, type=float, help="max z threshold for point cloud saving")
+@click.option('--min-z', default=None, type=float, help="min z threshold for point cloud saving")
+@click.option('-f', '--pts-per-file', default=15000000, type=int,
+              help="the number of points per output file. Default is 15000000")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                         dir: str, voxel_size: float, field: str, decimate: bool,
-                        overwrite: bool, verbose: bool, **kwargs) -> None:
+                        overwrite: bool, verbose: bool, max_z: float,
+                        min_z: float, pts_per_file: int, **kwargs) -> None:
 
     pcu_installed = False
     if decimate:
@@ -191,12 +201,12 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
             logger.warning("The point_cloud_utils library is not supported or installed,"
                            "so the process will generate larger, non-downsampled files")
 
-    scans = ctx.scan_iter
-    info = ctx.scan_source.metadata  # type: ignore
+    scans_iter = ctx.scan_iter
+    infos = ctx.scan_source.metadata  # type: ignore
 
     outfile_ext = "." + kwargs["format"]
     output_file_path = determine_filename(prefix, dir, filename,
-                                          outfile_ext, info)
+                                          outfile_ext, infos[0])
     create_directories_if_missing(output_file_path)
 
     # files pre exist check step
@@ -217,7 +227,6 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
         # may lead to crash
         down_sample_steps = 100
         # affect per output file size. makes output file size ~1G
-        max_pnt_per_file = 10000000
         file_numb = 0
 
         # variables for point cloud status printout
@@ -227,7 +236,7 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
         points_down_removed = 0
 
         valid_fields = default_scan_fields(
-            info.format.udp_profile_lidar, flags=False)
+            infos[0].format.udp_profile_lidar)
 
         found = False
         field_names = []
@@ -242,12 +251,26 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
             sys.exit(f"Exit! field {field} is not available in the low bandwidth mode\n"
                      f"use -f and choose a valid field from {valid_fields_str}")
 
-        xyzlut = XYZLut(info, use_extrinsics=True)
+        xyzlut_list = []
+        for info in infos:
+            xyzlut_list.append(XYZLut(info, use_extrinsics=True))
 
         def process_points(points, keys):
             nonlocal points_keys_total, points_down_removed, points_saved
-
             pts_size_before = points.shape[0]
+            z_min_filter = np.ones(points.shape[0], dtype=bool)  # Initialize to all True
+            z_max_filter = np.ones(points.shape[0], dtype=bool)
+            if min_z is not None:
+                z_min_filter = points[:, 2] >= min_z
+
+            if max_z is not None:
+                z_max_filter = points[:, 2] <= max_z
+
+            # Apply range filter if any of min_z or max_z is specified
+            if min_z is not None or max_z is not None:
+                z_range_filter = z_min_filter & z_max_filter
+                points = points[z_range_filter]
+                keys = keys[z_range_filter]
 
             if pcu_installed and decimate:
                 # can be extended for RGBA values later
@@ -337,69 +360,72 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
         finish_saving_action = True
         logger.info("Start processing...")
         try:
-            for scan_idx, scan in enumerate(scans):
-                scan_ts = first_valid_column_ts(scan)
-                if scan_ts == scan_start_ts:
-                    finish_saving = True
-                    logger.info("Scan iteration restarts")
-                if finish_saving:
-                    # Save point cloud and printout when scan iteration restarts
-                    # This action only do once
-                    if finish_saving_action:
+            for scan_idx, scans in enumerate(scans_iter):
+                for idx, scan in enumerate(scans):
+                    if scan is None:
+                        continue
+                    scan_ts = first_valid_column_ts(scan)
+                    if scan_ts == scan_start_ts:
+                        finish_saving = True
+                        logger.info("Scan iteration restarts")
+                    if finish_saving:
+                        # Save point cloud and printout when scan iteration restarts
+                        # This action only do once
+                        if finish_saving_action:
+                            process_points(points_to_process, keys_to_process)
+                            save_file(f"{file_wo_ext}-{file_numb:03}", outfile_ext)
+                            logger.info("Finished point cloud saving.")
+                            finish_saving_action = False
+                        yield scan
+                        continue
+                    if not scan_start_ts:
+                        scan_start_ts = scan_ts
+
+                    # Pose attribute is per col global pose so we use identity for scan
+                    # pose
+                    column_poses = scan.pose
+
+                    if (empty_pose and column_poses.size > 0
+                            and not np.array_equal(first_valid_column_pose(scan), np.eye(4))):
+                        empty_pose = False
+
+                    points = xyzlut_list[idx](scan)
+                    keys = scan.field(field)
+
+                    if scan_idx and scan_idx % 100 == 0:
+                        logger.info(f"Processed {scan_idx} lidar scan")
+
+                    # to remove out range points
+                    valid_row_index = scan.field(ChanField.RANGE) > 0
+                    out_range_row_index = scan.field(ChanField.RANGE) == 0
+                    dewarped_points = dewarp(points, column_poses, input_row_major=False)
+                    filtered_points = dewarped_points[valid_row_index]
+                    filtered_keys = keys[valid_row_index]
+
+                    curr_scan_points = dewarped_points.shape[0] * dewarped_points.shape[1]
+                    points_sum += curr_scan_points
+                    points_out_range += np.count_nonzero(out_range_row_index)
+
+                    # may not need below line
+                    shaped_keys = filtered_keys.reshape(filtered_keys.shape[0], 1)
+                    points_to_process = np.append(points_to_process, filtered_points,
+                                                  axis=0)
+                    keys_to_process = np.append(keys_to_process, shaped_keys, axis=0)
+
+                    # downsample the accumulated point clouds #
+                    if scan_idx % down_sample_steps == 0:
                         process_points(points_to_process, keys_to_process)
-                        save_file(f"{file_wo_ext}-{file_numb:03}", outfile_ext)
-                        logger.info("Finished point cloud saving.")
-                        finish_saving_action = False
-                    yield scan
-                    continue
-                if not scan_start_ts:
-                    scan_start_ts = scan_ts
-
-                # Pose attribute is per col global pose so we use identity for scan
-                # pose
-                column_poses = scan.pose
-
-                if (empty_pose and column_poses.size > 0
-                        and not np.array_equal(first_valid_column_pose(scan), np.eye(4))):
-                    empty_pose = False
-
-                points = xyzlut(scan)
-                keys = scan.field(field)
-
-                if scan_idx and scan_idx % 100 == 0:
-                    logger.info(f"Processed {scan_idx} lidar scan")
-
-                # to remove out range points
-                valid_row_index = scan.field(ChanField.RANGE) > 0
-                out_range_row_index = scan.field(ChanField.RANGE) == 0
-                dewarped_points = pu.dewarp(points, column_poses=column_poses)
-                filtered_points = dewarped_points[valid_row_index]
-                filtered_keys = keys[valid_row_index]
-
-                curr_scan_points = dewarped_points.shape[0] * dewarped_points.shape[1]
-                points_sum += curr_scan_points
-                points_out_range += np.count_nonzero(out_range_row_index)
-
-                # may not need below line
-                shaped_keys = filtered_keys.reshape(filtered_keys.shape[0], 1)
-                points_to_process = np.append(points_to_process, filtered_points,
-                                              axis=0)
-                keys_to_process = np.append(keys_to_process, shaped_keys, axis=0)
-
-                # downsample the accumulated point clouds #
-                if scan_idx % down_sample_steps == 0:
-                    process_points(points_to_process, keys_to_process)
-                    points_to_process = np.empty(shape=[0, 3])
-                    keys_to_process = np.empty(shape=[0, 1])
-                    if verbose:
-                        pc_status_print()
+                        points_to_process = np.empty(shape=[0, 3])
+                        keys_to_process = np.empty(shape=[0, 1])
+                        if verbose:
+                            pc_status_print()
 
                 # output a file to prevent crash due to oversize #
-                if points_keys_total.shape[0] >= max_pnt_per_file:
+                if points_keys_total.shape[0] >= pts_per_file:
                     save_file(f"{file_wo_ext}-{file_numb:03}", outfile_ext)
                     file_numb += 1
 
-                yield scan
+                yield scans
 
         except KeyboardInterrupt:
             pass

@@ -65,8 +65,8 @@
    :hidden:
    :caption: External Links
 
-   Source Code <https://github.com/ouster-lidar/ouster_example>
-   Issue Tracker <https://github.com/ouster-lidar/ouster_example/issues>
+   Source Code <https://github.com/ouster-lidar/ouster-sdk>
+   Issue Tracker <https://github.com/ouster-lidar/ouster-sdk/issues>
    Sensor Documentation <https://static.ouster.dev/sensor-docs/>
    More Sample Data <https://ouster.com/resources/lidar-sample-data/>
 

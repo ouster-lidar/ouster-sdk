@@ -24,7 +24,7 @@ Quick links
 Supported Devices
 -----------------
 
-The sdk supports the following Ouster sensors:
+The SDK supports the following Ouster sensors:
 
 * OS0_
 * OS1_
@@ -51,6 +51,9 @@ The following table indicates the compatibility of each released SDK version and
 ===================================== ======= ======= ======= ======= ======= ======= ======= =======
 SDK Tag (Release) / Python SDK        FW 2.0  FW 2.1  FW 2.2  FW 2.3  FW 2.4  FW 2.5  FW 3.0  FW 3.1
 ===================================== ======= ======= ======= ======= ======= ======= ======= =======
+C++ SDK 20240703 /  Python SDK 0.13.0 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
+C++ SDK 20240703 /  Python SDK 0.12.0 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
+C++ SDK 20240423 /  Python SDK 0.11.1 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20240423 /  Python SDK 0.11.0 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20231031 /  Python SDK 0.10.0 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20230710 /  Python SDK 0.9.0  **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
@@ -90,11 +93,11 @@ announcements`_
 
 .. _Ouster sensor documentation: https://static.ouster.dev/sensor-docs/index.html
 .. _Ouster support: https://ouster.atlassian.net/servicedesk/customer/portal/8
-.. _Github issue tracker: https://github.com/ouster-lidar/ouster_example/issues
-.. _Ouster Github announcements: https://github.com/ouster-lidar/ouster_example/discussions/categories/announcements
-.. _Changelog: https://github.com/ouster-lidar/ouster_example/blob/master/CHANGELOG.rst
+.. _Github issue tracker: https://github.com/ouster-lidar/ouster_sdk/issues
+.. _Ouster Github announcements: https://github.com/ouster-lidar/ouster_sdk/discussions/categories/announcements
+.. _Changelog: https://github.com/ouster-lidar/ouster_sdk/blob/master/CHANGELOG.rst
 .. _Ouster ROS 1 driver: https://github.com/ouster-lidar/ouster-ros
-.. _Lifecycle Policies: https://github.com/ouster-lidar/ouster_example/discussions/532
+.. _Lifecycle Policies: https://github.com/ouster-lidar/ouster_sdk/discussions/532
 .. _OS0: https://ouster.com/products/hardware/os0-lidar-sensor
 .. _OS1: https://ouster.com/products/hardware/os1-lidar-sensor
 .. _OS2: https://ouster.com/products/hardware/os2-lidar-sensor

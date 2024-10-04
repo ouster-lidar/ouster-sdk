@@ -149,7 +149,8 @@ void Writer::_save(uint32_t stream_index, const LidarScan& scan,
             }
         }
 
-        lidar_streams_[stream_index]->save(time, scan);
+        lidar_streams_[stream_index]->save(
+            time, ts_t(scan.get_first_valid_column_timestamp()), scan);
     } else {
         throw std::logic_error("ERROR: Bad Stream ID");
     }
@@ -217,7 +218,8 @@ uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
 
 // > > > ===================== Chunk Emiter operations ======================
 
-void Writer::save_message(const uint32_t stream_id, const ts_t ts,
+void Writer::save_message(const uint32_t stream_id, const ts_t receive_ts,
+                          const ts_t sensor_ts,
                           const std::vector<uint8_t>& msg_buf) {
     if (!meta_store_.get(stream_id)) {
         std::stringstream ss;
@@ -229,7 +231,7 @@ void Writer::save_message(const uint32_t stream_id, const ts_t ts,
         return;
     }
 
-    chunks_writer_->save_message(stream_id, ts, msg_buf);
+    chunks_writer_->save_message(stream_id, receive_ts, sensor_ts, msg_buf);
 }
 
 const MetadataStore& Writer::meta_store() const { return meta_store_; }
@@ -325,7 +327,8 @@ Writer::~Writer() { close(); }
 
 // ================================================================
 
-void ChunkBuilder::save_message(const uint32_t stream_id, const ts_t ts,
+void ChunkBuilder::save_message(const uint32_t stream_id, const ts_t receive_ts,
+                                const ts_t /*sensor_ts*/,
                                 const std::vector<uint8_t>& msg_buf) {
     if (finished_) {
         logger().error(
@@ -340,11 +343,11 @@ void ChunkBuilder::save_message(const uint32_t stream_id, const ts_t ts,
             " chunk size MAX_SIZE");
     }
 
-    update_start_end(ts);
+    update_start_end(receive_ts);
 
     // wrap the buffer into StampedMessage
-    auto stamped_msg =
-        gen::CreateStampedMessageDirect(fbb_, ts.count(), stream_id, &msg_buf);
+    auto stamped_msg = gen::CreateStampedMessageDirect(fbb_, receive_ts.count(),
+                                                       stream_id, &msg_buf);
     messages_.push_back(stamped_msg);
 }
 

@@ -24,31 +24,37 @@ between consecutive scans
    from ouster.sdk.mapping.slam import KissBackend
    import numpy as np
    import ouster.sdk.client as client
-   data_source = open_source(pcap_path)
+   source_file_path = "/PATH_TO_THE_FILE"
+   data_source = open_source(source_file_path, sensor_idx=-1)
    slam = KissBackend(data_source.metadata, max_range=75, min_range=1, voxel_size=1.0)
    last_scan_pose = np.eye(4)
 
-   for idx, scan in enumerate(data_source):
-        scan_w_poses = slam.update(scan)
-        col = client.first_valid_column(scan_w_poses)
-        # scan_w_poses.pose is a list where each pose represents a column points' pose.
-        # use the first valid scan's column pose as the scan pose
-        scan_pose = scan_w_poses.pose[col]
-        scan_ts = scan.timestamp[col]
-        print(f"idx = {idx} at timestamp {scan_ts} has the pose {scan_pose}")
+   for idx, scans in enumerate(data_source):
+       # slam.update takes a list of scans as input and returns a list of scans,
+       # supporting potential multi-sensor configurations
+       scans_w_poses = slam.update(scans)
+       if not scans_w_poses:
+           continue
+       # use the first scan for calculation
+       col = client.first_valid_column(scans_w_poses[0])
+       # scans_w_poses[0].pose is a list of poses where each pose represents a column
+       # points' pose. Use the first valid scan's column pose as the scan pose
+       scan_pose = scans_w_poses[0].pose[col]
+       scan_ts = scans[0].timestamp[col]
+       print(f"idx = {idx} at timestamp {scan_ts} has the pose {scan_pose}")
 
-        # calculate the inverse transformation of the last scan pose
-        inverse_last = np.linalg.inv(last_scan_pose)
-        # calculate the pose difference by matrix multiplication
-        pose_diff = np.dot(inverse_last, scan_pose)
-        # extract rotation and translation
-        rotation_diff = pose_diff[:3, :3]
-        translation_diff = pose_diff[:3, 3]
-        print(f"idx = {idx} and Rotation Difference: {rotation_diff}, "
-              f"Translation Difference: {translation_diff}")
+       # calculate the inverse transformation of the last scan pose
+       inverse_last = np.linalg.inv(last_scan_pose)
+       # calculate the pose difference by matrix multiplication
+       pose_diff = np.dot(inverse_last, scan_pose)
+       # extract rotation and translation
+       rotation_diff = pose_diff[:3, :3]
+       translation_diff = pose_diff[:3, 3]
+       print(f"idx = {idx} and Rotation Difference: {rotation_diff}, "
+             f"Translation Difference: {translation_diff}")
 
 
-SLAM with Visulizer and Accumulated Scans
+SLAM with Visualizer and Accumulated Scans
 =========================================
 Visualizers and Accumulated Scans are also available for monitoring the performance of the algorithm,
 as well as for demonstration and feedback purposes.
@@ -56,20 +62,17 @@ as well as for demonstration and feedback purposes.
 .. code:: python
 
    from ouster.sdk import open_source
-   from functools import partial
-   from ouster.sdk.viz import SimpleViz, ScansAccumulator
+   from ouster.sdk.viz import SimpleViz
    from ouster.sdk.mapping.slam import KissBackend
-   data_source = open_source(pcap_path)
+
+   source_file_path = "/PATH_TO_THE_FILE"
+   data_source = open_source(source_file_path, sensor_idx=-1)
    slam = KissBackend(data_source.metadata, max_range=75, min_range=1, voxel_size=1.0)
 
-   scans_w_poses = map(partial(slam.update), data_source)
-   scans_acc = ScansAccumulator(data_source.metadata,
-                                accum_max_num=10,
-                                accum_min_dist_num=1,
-                                map_enabled=True,
-                                map_select_ratio=0.01)
+   scans_w_poses = map(lambda x: slam.update(x)[0], data_source)
 
-   SimpleViz(data_source.metadata, scans_accum=scans_acc, rate=1.0).run(scans_w_poses)
+   SimpleViz(data_source.metadata, accum_max_num=10).run(scans_w_poses)
+
 
 More details about the visualizer and accumulated scans can be found at the
 :ref:`Ouster Visualizer <viz-run>` and :ref:`Scans Accumulator <viz-scans-accum>`

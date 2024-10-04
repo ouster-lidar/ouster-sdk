@@ -75,9 +75,11 @@ struct FieldDescriptor {
     size_t type;
 
     /**
-     * size in bytes of the described field
+     * Calculates the size in bytes of the described field
+     *
+     * @return type size in bytes
      */
-    size_t bytes;
+    size_t bytes() const;
 
     // TODO: ideally we need something like llvm::SmallVector here -- Tim T.
 
@@ -90,6 +92,12 @@ struct FieldDescriptor {
      * vector of stride offsets of the described field, if present
      */
     std::vector<size_t> strides;
+
+    /**
+     * size of the underlying type, in bytes
+     *
+     */
+    size_t element_size;
 
     /**
      * Get type hash
@@ -112,13 +120,6 @@ struct FieldDescriptor {
     size_t size() const;
 
     /**
-     * Get size of the underlying type, in bytes
-     *
-     * @return type size in bytes
-     */
-    int element_size() const;
-
-    /**
      * Get type tag, if can be translated to ChanFieldType, otherwise
      * returns ChanFieldType::UNREGISTERED
      *
@@ -127,19 +128,21 @@ struct FieldDescriptor {
     sensor::ChanFieldType tag() const;
 
     bool operator==(const FieldDescriptor& other) const noexcept {
-        return type == other.type && bytes == other.bytes &&
-               shape == other.shape && strides == other.strides;
+        return type == other.type && shape == other.shape &&
+               strides == other.strides && element_size == other.element_size;
     }
 
     /**
      * Swaps descriptors
+     *
+     * @param[in,out] other Handle to swapped FieldDescriptor.
      */
     void swap(FieldDescriptor& other);
 
     /**
      * Check if the type is eligible for conversion
      *
-     * @return true if eligible, otherwise false
+     * @return true if eligible, otherwise false.
      */
     template <typename T>
     bool eligible_type() const {
@@ -154,14 +157,15 @@ struct FieldDescriptor {
     /**
      * Check if descriptor types are compatible
      *
-     * @return true if compatible, otherwise false
+     * @param[in] other A constant of type FieldDescriptor.
+     * @return true if compatible, otherwise false.
      */
     bool is_type_compatible(const FieldDescriptor& other) const noexcept;
 
     /**
      * Return number of dimensions of the described field
      *
-     * @return number of dimensions
+     * @return number of dimensions.
      */
     size_t ndim() const noexcept;
 
@@ -170,23 +174,23 @@ struct FieldDescriptor {
     /**
      * Get a field descriptor for a chunk of typed memory
      *
-     * useful when storing arbitrary sized structs
+     * useful when storing arbitrary sized structs.
      *
-     * @tparam T type of memory to be stored; this gets used by safety checks
-     * @param[in] bytes number of bytes in memory
+     * @tparam T Type of memory to be stored; this gets used by safety checks.
+     * @param[in] bytes Number of bytes in memory.
      *
      * @return FieldDescriptor
      */
     template <typename T = void>
     static FieldDescriptor memory(size_t bytes) {
-        return {type_hash<T>(), bytes, {}, {}};
+        return {type_hash<T>(), {}, {}, bytes};
     }
 
     /**
      * Get a field descriptor for an array
      *
-     * @tparam T array type
-     * @param[in] shape vector of array dimensions
+     * @tparam T Array type
+     * @param[in] shape Shape vector of array dimensions.
      *
      * @return FieldDescriptor
      */
@@ -195,23 +199,15 @@ struct FieldDescriptor {
         static_assert(!std::is_same<T, void>::value,
                       "FieldDescriptor::array<void> is disallowed, use "
                       "FieldDescriptor::memory() instead");
-        size_t total = std::accumulate(shape.begin(), shape.end(), size_t{1},
-                                       std::multiplies<size_t>{});
-        size_t bytes = sizeof(T) * total;
-
-        if (!bytes)
-            throw std::invalid_argument(
-                "failed creating array descriptor, one "
-                "of dimensions is zero");
-
-        return {type_hash<T>(), bytes, shape, impl::calculate_strides(shape)};
+        return {type_hash<T>(), shape, impl::calculate_strides(shape),
+                sizeof(T)};
     }
 
     /**
      * Get a field descriptor for an array
      *
-     * @param[in] tag tag of array type
-     * @param[in] shape vector of array dimensions
+     * @param[in] tag Tag of array type.
+     * @param[in] shape Vector of array dimensions.
      *
      * @return FieldDescriptor
      */
@@ -248,8 +244,8 @@ struct FieldDescriptor {
 
 /**
  * Parameter pack shorthand for FieldDescriptor::array
- *
- * @return FieldDescriptor
+ * @param[in] args Variadic arguments that are forwarded to the function.
+ * @return FieldDescriptor array
  */
 template <typename T, typename... Args>
 auto fd_array(Args&&... args) -> FieldDescriptor {
@@ -278,8 +274,8 @@ class FieldView {
     /**
      * Initialize FieldView with a pointer and a descriptor
      *
-     * @param[in] ptr memory pointer
-     * @param[in] desc field descriptor
+     * @param[in] ptr Memory pointer.
+     * @param[in] desc Field descriptor.
      */
     FieldView(void* ptr, const FieldDescriptor& desc);
 
@@ -484,6 +480,8 @@ class FieldView {
      * subview = arr[:,10,20]
      * \endcode
      *
+     * @throws std::invalid_argument If FieldView ran out of dimensions to
+     *         subview or if FieldView cannot subview over the shape limits
      * @param[in] idx parameter pack of int indices or idx_range (keep())
      *
      * @return FieldView subview
@@ -506,16 +504,13 @@ class FieldView {
         char* ptr =
             reinterpret_cast<char*>(ptr_) +
             impl::strided_index(desc().strides, impl::range_or_idx(idx)...) *
-                desc().element_size();
+                desc().element_size;
 
         auto new_desc = FieldDescriptor{};
         new_desc.type = desc().type;
         new_desc.shape = impl::range_args_reshape(desc().shape, idx...);
         new_desc.strides = impl::range_args_restride(desc().strides, idx...);
-        new_desc.bytes =
-            std::accumulate(new_desc.shape.begin(), new_desc.shape.end(), 1,
-                            std::multiplies<size_t>{}) *
-            desc().element_size();
+        new_desc.element_size = desc().element_size;
 
         return {reinterpret_cast<void*>(ptr), new_desc};
     }
@@ -545,7 +540,7 @@ class FieldView {
 
         auto new_desc = FieldDescriptor{};
         new_desc.type = desc().type;
-        new_desc.bytes = desc().bytes;
+        new_desc.element_size = desc().element_size;
         new_desc.shape = std::vector<size_t>{static_cast<size_t>(dims)...};
         new_desc.strides = impl::calculate_strides(new_desc.shape);
         return {const_cast<void*>(ptr_), new_desc};

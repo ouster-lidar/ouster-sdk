@@ -1,13 +1,13 @@
 import os
 import time
 from typing import (Callable, Iterable, Iterator, TypeVar,
-                    Optional, Any)
+                    Optional)
 
 from more_itertools import consume
 
-from ouster.sdk.client import (PacketMultiSource, LidarPacket, ImuPacket, FrameBorder, PacketFormat)
+from ouster.sdk.client import (PacketMultiSource, LidarPacket, ImuPacket, FrameBorder)
 from ouster.sdk.pcap.pcap import MTU_SIZE
-import ouster.sdk.pcap._pcap as _pcap
+import ouster.sdk._bindings.pcap as _pcap
 
 
 T = TypeVar('T')
@@ -55,22 +55,20 @@ def ichunked_before(it: Iterable[T],
         consume(c)
 
 
-# TODO: these currently account for SensorScanSource being based on Scans internally and will
-#       require rework once that has a proper ScansMulti implementation -- Tim T.
 class RecordingPacketSource:
     # TODO: deduplicate this & pcap.record
     def __init__(self,
                 source: PacketMultiSource,
                 prefix_path: str,
                 *,
-                sensor_idx: int = 0,
+                sensor_idx: int = -1,
                 n_seconds: float = 0.0,
                 n_frames: Optional[int],
                 chunk_size: int = 0,
                 src_ip: str = "127.0.0.1",
                 dst_ip: str = "127.0.0.1",
-                lidar_port: int = 7502,
-                imu_port: int = 7503,
+                lidar_port: int = -1,
+                imu_port: int = -1,
                 use_sll_encapsulation: bool = False,
                 overwrite: bool = True):
         self.source = source
@@ -85,11 +83,7 @@ class RecordingPacketSource:
         self.imu_port = imu_port
         self.use_sll_encapsulation = use_sll_encapsulation
         self.overwrite = overwrite
-        metadata = self.source.metadata
-        if type(metadata) is list:
-            metadata = metadata[self.sensor_idx]
-        self._metadata = metadata
-        self.pf = PacketFormat(metadata)
+        self._metadata = self.source.metadata
 
     @property  # type: ignore
     def __class__(self):
@@ -101,7 +95,15 @@ class RecordingPacketSource:
         error = False
         n = 0
 
-        frame_bound = FrameBorder(self._metadata)
+        frame_bound = []
+        for m in self._metadata:
+            frame_bound.append(FrameBorder(m))
+
+        ports = []
+        for m in self._metadata:
+            lidar = m.config.udp_port_lidar if self.lidar_port < 0 else self.lidar_port
+            imu = m.config.udp_port_imu if self.imu_port < 0 else self.imu_port
+            ports.append((lidar, imu))
 
         chunk = 0
         pcap_path = self.prefix_path + f"-{chunk:03}.pcap"
@@ -115,14 +117,12 @@ class RecordingPacketSource:
             handle = _pcap.record_initialize(pcap_path, MTU_SIZE,
                                              self.use_sll_encapsulation)
             for next_packet in self.source:
-                idx, packet = next_packet if (type(next_packet) is tuple) else (None, next_packet)
-                if (idx is None) or (idx == self.sensor_idx):
+                idx, packet = next_packet if (type(next_packet) is tuple) else (0, next_packet)
+                if (self.sensor_idx < 0) or (idx == self.sensor_idx):
                     if isinstance(packet, LidarPacket):
-                        src_port = self.lidar_port
-                        dst_port = self.lidar_port
+                        src_port = dst_port = ports[idx][0]
                     elif isinstance(packet, ImuPacket):
-                        src_port = self.imu_port
-                        dst_port = self.imu_port
+                        src_port = dst_port = ports[idx][1]
                     else:
                         raise ValueError("Unexpected packet type")
 
@@ -134,7 +134,7 @@ class RecordingPacketSource:
                     ts = (packet.host_timestamp / 1e9) or time.time()
                     _pcap.record_packet(handle, self.src_ip, self.dst_ip, src_port, dst_port, packet.buf, ts)
 
-                    if frame_bound(packet):
+                    if frame_bound[idx](packet):
                         num_frames += 1
                         if self.chunk_size and os.path.getsize(pcap_path) > self.chunk_size * 2**20:
                             # file size exceeds chunk size; create a new chunk
@@ -162,48 +162,3 @@ class RecordingPacketSource:
     def __getattr__(self, attr):
         # forward all other calls to self.source
         return self.source.__getattribute__(attr)
-
-
-# TODO: these currently account for SensorScanSource being based on Scans internally and will
-#       require rework once that has a proper ScansMulti implementation -- Tim T.
-class BagRecordingPacketSource:
-    def __init__(self, packet_source: PacketMultiSource,
-                 filename: str, sensor_idx: int = 0,
-                 lidar_topic: str = "/os_node/lidar_packets",
-                 imu_topic: str = "/os_node/imu_packets"):
-        self.packet_source = packet_source
-        self.filename = filename
-        self.sensor_idx = sensor_idx
-        self.lidar_topic = lidar_topic
-        self.imu_topic = imu_topic
-
-    @property  # type: ignore
-    def __class__(self):
-        # report the class of the wrapped packet source
-        return self.packet_source.__class__
-
-    def __iter__(self):
-        from ouster.cli.core.util import import_rosbag_modules
-        import_rosbag_modules(raise_on_fail=True)
-
-        from ouster.sdk.bag import PacketMsg  # type: ignore
-        import rosbag  # type: ignore
-        import rospy  # type: ignore
-        try:
-            with rosbag.Bag(self.filename, 'w') as outbag:
-                for next_packet in self.packet_source:
-                    idx, packet = next_packet if (type(next_packet) is tuple) else (None, next_packet)
-                    if (idx is None) or (idx == self.sensor_idx):
-                        ts = rospy.Time.from_sec(packet.host_timestamp / 1e9)
-                        msg = PacketMsg(buf=packet.buf.tobytes())
-                        if isinstance(packet, LidarPacket):
-                            outbag.write(self.lidar_topic, msg, ts)
-                        elif isinstance(packet, ImuPacket):
-                            outbag.write(self.imu_topic, msg, ts)
-                    yield next_packet
-        except (KeyboardInterrupt, StopIteration):
-            pass
-
-    def __getattr__(self, attr: str) -> Any:
-        # forward all other calls to self.source
-        return self.packet_source.__getattribute__(attr)

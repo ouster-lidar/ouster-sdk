@@ -48,37 +48,18 @@ set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/sdk)
 # appends build-configuration suffix to *_OUTPUT_DIRECTORY properties *unless*
 # they contain a generator expression, so we use a noop: $<0:>
 # https://cmake.org/cmake/help/latest/prop_tgt/LIBRARY_OUTPUT_DIRECTORY.html
-pybind11_add_module(_client src/cpp/_client.cpp)
-target_link_libraries(_client
+pybind11_add_module(_bindings src/cpp/main.cpp src/cpp/_client.cpp src/cpp/_viz.cpp src/cpp/_pcap.cpp src/cpp/_osf.cpp)
+target_link_libraries(_bindings
   PRIVATE
     ouster_client
     ouster_build
+    ouster_pcap
+    ouster_osf
+    ouster_viz
     spdlog::spdlog)
-CodeCoverageFunctionality(_client)
+CodeCoverageFunctionality(_bindings)
   
-target_include_directories(_client SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
-set_target_properties(_client PROPERTIES
+target_include_directories(_bindings SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
+set_target_properties(_bindings PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
-  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/client/$<0:>)
-
-pybind11_add_module(_pcap src/cpp/_pcap.cpp)
-target_link_libraries(_pcap PRIVATE ouster_pcap ouster_build)
-set_target_properties(_pcap PROPERTIES
-  POSITION_INDEPENDENT_CODE TRUE
-  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/pcap/$<0:>)
-CodeCoverageFunctionality(_pcap)
-
-pybind11_add_module(_viz src/cpp/_viz.cpp)
-target_link_libraries(_viz PRIVATE ouster_client ouster_viz ouster_build)
-target_include_directories(_viz SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
-set_target_properties(_viz PROPERTIES
-  POSITION_INDEPENDENT_CODE TRUE
-  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/viz/$<0:>)
-CodeCoverageFunctionality(_viz)
-
-pybind11_add_module(_osf src/cpp/_osf.cpp)
-target_link_libraries(_osf PRIVATE ouster_osf ouster_build)
-set_target_properties(_osf PROPERTIES
-  POSITION_INDEPENDENT_CODE TRUE
-  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/osf/$<0:>)
-CodeCoverageFunctionality(_osf)
+  LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/$<0:>)

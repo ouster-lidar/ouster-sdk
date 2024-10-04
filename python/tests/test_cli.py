@@ -145,7 +145,7 @@ def test_source_help(runner) -> None:
     result = runner.invoke(core.cli, CliArgs(['source', '--help']).args)
 
     # check that a variety of SOURCE commands are in the output
-    assert "PCAP|OSF info" in result.output
+    assert "PCAP|OSF|BAG info" in result.output
     assert "SENSOR config" in result.output
 
     # check that general message is there
@@ -234,8 +234,7 @@ def test_source_could_not_resolve(runner):
     # TODO: uncomment when bag is possible source
     # assert ("Error: Source type expected to be a sensor hostname, ip address, "
     # "or a .bag, .osf, or .pcap file.") in result.output
-    assert ("Error: Source type expected to be a sensor hostname, ip address, "
-    "or a(n) .osf or .pcap file.") in result.output
+    assert ("Error: Source type expected to be") in result.output
     assert result.exit_code == 2
 
 
@@ -324,7 +323,7 @@ def source_pcap_slice_impl(test_pcap_file, runner, command, packets, should_fail
     finally:
         os.unlink(f'{f.name}')
         if pcap_filename is not None:
-            json_filename = pcap_filename[:-4] + 'json'
+            json_filename = pcap_filename[:-5] + '_0.json'
             os.unlink(pcap_filename)
             os.unlink(json_filename)
 
@@ -397,6 +396,19 @@ def test_source_pcap_save_no_extension(test_pcap_file, runner, tmp_path):
         # there's no OSF file in output dir
         files = os.listdir(tmp_path)
         assert "Must provide a " in result.output
+        assert len(files) == 0
+
+
+def test_source_pcap_legacy_soft_id_failure(runner, tmp_path):
+    test_pcap = str(Path(PCAPS_DATA_DIR) / 'same_ports_legacy.pcap')
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', '-s', test_pcap, 'save', 'osf.osf']).args)
+
+        assert "--soft-id-check is not supported for multi-sensor datasets." in result.output
+
+        # there are no files in the output dir
+        files = os.listdir(tmp_path)
         assert len(files) == 0
 
 

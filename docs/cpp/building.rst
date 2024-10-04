@@ -9,7 +9,7 @@ jsoncpp, Eigen3, and tins libraries with headers installed on the system. The sa
 requires the GLFW3 and GLEW libraries.
 
 The C++ example code is available `on the Ouster Github
-<https://github.com/ouster-lidar/ouster_example>`_. Follow the instructions for cloning the project.
+<https://github.com/ouster-lidar/ouster_sdk>`_. Follow the instructions for cloning the project.
 
 Building on Linux / macOS
 =========================
@@ -19,7 +19,8 @@ To install build dependencies on Ubuntu:20.04+, run:
 .. code:: console
 
    $ sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev \
-                      libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev
+                      libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev \
+                      libpng-dev libflatbuffers-dev
 
 You may also install curl with a different ssl backend, for example libcurl4-gnutls-dev or
 libcurl4-nss-dev.
@@ -28,7 +29,7 @@ On macOS, install XCode and `homebrew <https://brew.sh>`_ and run:
 
 .. code:: console
 
-   $ brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog
+   $ brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog libpng flatbuffers
 
 To build run the following commands:
 
@@ -36,10 +37,10 @@ To build run the following commands:
 
    $ mkdir build
    $ cd build
-   $ cmake  <path to ouster_example> -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=ON
-   $ cmake --build .
+   $ cmake  <path to ouster_sdk/CMakeLists.txt> -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=ON
+   $ cmake --build . -- -j$(nproc)
 
-where ``<path to ouster_example>`` is the location of the ``ouster_example`` source directory. The
+where ``<path to ouster_sdk>`` is the location of the ``ouster_sdk`` source directory. The
 CMake build script supports several optional flags. Add any of the following to override the
 defaults:
 
@@ -51,19 +52,6 @@ defaults:
    -DBUILD_EXAMPLES=ON                # Build C++ examples
    -DBUILD_TESTING=ON                 # Build tests
    -DBUILD_SHARED_LIBS=ON             # Build shared instead of static libraries
-
-.. admonition:: Additional dependencies required to build Ouster OSF lib
-
-   To build Ouster OSF library as part of the SDK you need to pass ``BUILD_OSF=ON`` and ensure that
-   ``libpng`` and ``flatbuffers`` packages are available on the system.
-
-   On Ubuntu:20.04+ systems::
-
-      $ sudo apt install libpng-dev libflatbuffers-dev
-
-   On macOS::
-
-      $ brew install libpng flatbuffers
 
 
 Building on Windows
@@ -96,17 +84,19 @@ You should be able to install dependencies with
 
    PS > .\vcpkg.exe install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
 
-After these steps are complete, you should be able to open, build and run the ``ouster_example``
+After these steps are complete, you should be able to open, build and run the ``ouster_sdk``
 project using Visual Studio:
 
 1. Start Visual Studio.
 2. When the prompt opens asking you what type of project to open click **Open a local folder** and
-   navigate to the ``ouster_example`` source directory.
+   navigate to the ``ouster_sdk`` source directory.
 3. After opening the project for the first time, wait for CMake configuration to complete.
-4. Make sure Visual Studio is `building in release mode`_. You may experience performance issues and
+4. Make sure the ``Desktop development with C++`` is installed. If not, install it using the Search bar
+   on the top of the screen.
+5. Make sure Visual Studio is `building in release mode`_. You may experience performance issues and
    missing data in the visualizer otherwise.
-5. In the menu bar at the top of the screen, select **Build > Build All**.
-6. To use the resulting binaries, go to **View > Terminal** and run, for example:
+6. In the menu bar at the top of the screen, select **Build > Build All**.
+7. To use the resulting binaries, go to **View > Terminal** and run, for example:
 
 .. code:: powershell
 
@@ -130,7 +120,7 @@ write point clouds out to CSV files:
    $ ./client_example <sensor hostname> <udp data destination>
 
 where ``<sensor hostname>`` can be the hostname (os-99xxxxxxxxxx) or IP of the sensor and ``<udp
-data destingation>`` is the hostname or IP to which the sensor should send lidar data. You can also
+data destination>`` is the hostname or IP to which the sensor should send lidar data. You can also
 supply ``""``, an empty string, to utilize automatic detection.
 
 On Windows, you may need to allow the client/visualizer through the Windows firewall to receive

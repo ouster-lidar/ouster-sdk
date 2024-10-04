@@ -77,7 +77,7 @@ auto-configuration, respectively.
     - sensor is in ``RUNNING`` state
     - sensor lidar packets traffic is seen on the expected machine and can be recorded with
       ``tcpdump -w`` command to a pcap file (or ``Wireshark`` tools)
-    - CLI comamnd ``ouster-cli source <SENSOR HOSTNAME> {info,config}`` are working properly
+    - CLI command ``ouster-cli source <SENSOR HOSTNAME> {info,config}`` are working properly
     - Viz ``ouster-cli source <PCAP FILE> viz`` from the ``tcpdump`` recorded pcap can be played and
       visualized
     
@@ -106,23 +106,31 @@ commands also have subcommands that further extend or specify what
     * ``discover`` - uses mDNS to locate Ouster sensors on you local networks.
     * ``source`` - Read lidar data from a sensor or file and use it as input to one or more commands.
       Most subcommands can be "chained", meaning the output of a subcommand will become the input of the next subcommand.
-      * Sensors and files:
+
+      * Sensors and files
+
         * ``viz`` - visualizes data in a 3D point cloud viewer.
         * ``slam`` - computes trajectories by determining the change in pose between lidar frames.
-        * ``slice`` - reads a subset of lidar frames from the source using counts or time durations.
+        * ``slice`` - reads a subset of lidar frames from the source using counts or time duration.
         * ``clip`` - restrict the minimum or maximum range of lidar measurements in the source data.
         * ``stats`` - calculates statistics from the source data.
         * ``metadata`` - displays the metadata (e.g. sensor information) associated with the source data.
         * ``save`` - saves the source data, optionally converting to a new format.
+
       * Pcap and OSF files only
+
         * ``info`` - prints information about a pcap or OSF file.
       * Sensors only
+
         * ``config`` - configures a sensor.
         * ``userdata`` - displays the userdata from a sensor.
       * OSF files only
+
         * ``dump`` - prints metadata from an OSF file.
         * ``parse`` - prints message types from an OSF file.
+
     * ``util`` - Miscellaneous utilities.
+
       * ``benchmark`` - runs a performance benchmark for ouster-sdk.
       * ``benchmark-sensor`` - runs a performance benchmark for ouster-sdk using a sensor.
       * ``system-info`` - generates system diagnostic information as a JSON string, useful to Ouster support staff when providing customer support.

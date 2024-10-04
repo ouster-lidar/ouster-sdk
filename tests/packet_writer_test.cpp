@@ -69,7 +69,7 @@ INSTANTIATE_TEST_CASE_P(
         bitness_param{UDPProfileLidar::PROFILE_LIDAR_LEGACY,
                       {{ChanField::RANGE, 20},
                        {ChanField::FLAGS, 4},
-                       {ChanField::REFLECTIVITY, 16},
+                       {ChanField::REFLECTIVITY, 8},
                        {ChanField::SIGNAL, 16},
                        {ChanField::NEAR_IR, 16},
                        {ChanField::RAW32_WORD1, 32},
@@ -284,7 +284,14 @@ TEST_P(PacketWriterTest, packet_writer_randomize_test) {
     auto ls2 = LidarScan(columns_per_frame, pixels_per_column, profile,
                          columns_per_packet);
     ScanBatcher batcher(columns_per_frame, pf);
-    for (const auto& p : packets) EXPECT_FALSE(batcher(p, ls2));
+    for (size_t i = 0; i < packets.size(); i++) {
+        const auto& p = packets[i];
+        if (i == 63) {
+            EXPECT_TRUE(batcher(p, ls2));
+        } else {
+            EXPECT_FALSE(batcher(p, ls2));
+        }
+    }
 
     EXPECT_EQ(ls.frame_id, ls2.frame_id);
     EXPECT_TRUE((ls.packet_timestamp() == ls2.packet_timestamp()).all());

@@ -1,14 +1,14 @@
-from typing import List, Optional
+from typing import Optional
 from copy import copy
 import requests
 import ouster.sdk.client as client
-from packaging import version
-from ouster.sdk.util import firmware_version
+from ouster.sdk.client import (SensorHttp, Version)
 
-MIN_AUTO_DEST_FW = version.Version("2.3.1")
+MIN_AUTO_DEST_FW = Version.from_string("2.3.1")
 
 
-def _auto_detected_udp_dest(hostname: str) -> Optional[str]:
+def _auto_detected_udp_dest(http_client: SensorHttp,
+                            current_config: Optional[client.SensorConfig] = None) -> Optional[str]:
     """
     Function which obtains the udp_dest the sensor would choose when automatically detecting
     without changing anything else about sensor state
@@ -18,7 +18,8 @@ def _auto_detected_udp_dest(hostname: str) -> Optional[str]:
     Returns:
         udp_dest: the udp_dest the sensor detects automatically
     """
-    orig_config = client.get_config(hostname, active=True)
+    hostname = http_client.hostname()
+    orig_config = current_config or client.SensorConfig(http_client.get_config_params(True))
 
     # get what the possible auto udp_dest is
     config_endpoint = f"http://{hostname}/api/v1/sensor/config"
@@ -27,7 +28,7 @@ def _auto_detected_udp_dest(hostname: str) -> Optional[str]:
     response.raise_for_status()
 
     # get staged config
-    udp_auto_config = client.get_config(hostname, active=False)
+    udp_auto_config = client.SensorConfig(http_client.get_config_params(False))
 
     # set staged config back to original
     response = requests.post(config_endpoint, params={'reinit': False, 'persist': False},
@@ -37,26 +38,25 @@ def _auto_detected_udp_dest(hostname: str) -> Optional[str]:
     return udp_auto_config.udp_dest
 
 
-def configure_sensor(hostname: str,
-                     lidar_port: Optional[int] = None,
-                     imu_port: Optional[int] = None,
-                     do_not_reinitialize: bool = False,
-                     no_auto_udp_dest: bool = False) -> client.SensorConfig:
-    """Depending on the args do_not_reinitialize, no_auto_udp_dest,
-    possibly reconfigure the sensor. Then, return the configuration that is used."""
+def build_sensor_config(http_client: SensorHttp,
+                        lidar_port: Optional[int] = None,
+                        imu_port: Optional[int] = None,
+                        do_not_reinitialize: bool = False,
+                        no_auto_udp_dest: bool = False) -> client.SensorConfig:
+    """
+    Depending on the args do_not_reinitialize, and no_auto_udp_dest
+    determine a configuration for the sensor
+    """
 
-    print(f"Contacting sensor {hostname}...")
-
-    fw_version = firmware_version(hostname)
+    fw_version = http_client.firmware_version()
 
     auto_config_udp_dest = None
     use_set_config_auto = False
 
-    # original config
-    orig_config = client.get_config(hostname, active=True)
+    orig_config = client.SensorConfig(http_client.get_config_params(True))
 
     if fw_version >= MIN_AUTO_DEST_FW:
-        auto_config_udp_dest = _auto_detected_udp_dest(hostname)
+        auto_config_udp_dest = _auto_detected_udp_dest(http_client, orig_config)
         if orig_config.udp_dest != auto_config_udp_dest:
             if no_auto_udp_dest or do_not_reinitialize:
                 print(f"WARNING: Your sensor's udp destination {orig_config.udp_dest} does "
@@ -72,13 +72,12 @@ def configure_sensor(hostname: str,
             use_set_config_auto = True
 
     if do_not_reinitialize:
-
         if orig_config.operating_mode == client.OperatingMode.OPERATING_STANDBY:
             raise RuntimeError("Your sensor is in STANDBY mode but you have disallowed "
                                "reinitialization. Drop -x to allow reinitialization or "
                                "change your sensor's operating mode.")
 
-        if lidar_port and orig_config.udp_port_lidar != lidar_port:
+        if lidar_port is not None and orig_config.udp_port_lidar != lidar_port:
             raise RuntimeError(
                 f"Sensor's lidar port {orig_config.udp_port_lidar} does "
                 f"not match provided lidar port but you have disallowed "
@@ -87,22 +86,23 @@ def configure_sensor(hostname: str,
         return orig_config
 
     new_config = copy(orig_config)
-
-    lidar_port_change = (lidar_port and
+    lidar_port_change = ((lidar_port is not None) and
                          orig_config.udp_port_lidar != lidar_port)
-    imu_port_change = (imu_port and orig_config.udp_port_imu != imu_port)
+    imu_port_change = ((imu_port is not None) and orig_config.udp_port_imu != imu_port)
     port_changes = []
     if (lidar_port_change or imu_port_change):
-        new_config.udp_port_lidar = lidar_port or orig_config.udp_port_lidar
-        new_config.udp_port_imu = imu_port or orig_config.udp_port_imu
+        new_config.udp_port_lidar = lidar_port if lidar_port is not None else orig_config.udp_port_lidar
+        new_config.udp_port_imu = imu_port if imu_port is not None else orig_config.udp_port_imu
 
         if lidar_port_change:
+            new_port_name = "ephemeral" if new_config.udp_port_lidar == 0 else new_config.udp_port_lidar
             port_changes.append(f"lidar port from {orig_config.udp_port_lidar} "
-                                f"to {new_config.udp_port_lidar}")
+                                f"to {new_port_name}")
 
         if imu_port_change:
+            new_port_name = "ephemeral" if new_config.udp_port_imu == 0 else new_config.udp_port_imu
             port_changes.append(f"imu port from {orig_config.udp_port_imu} "
-                                f"to {new_config.udp_port_imu}")
+                                f"to {new_port_name}")
 
         port_changes_str = " and ".join(port_changes)
         print(f"Will change {port_changes_str} ...")
@@ -115,43 +115,11 @@ def configure_sensor(hostname: str,
     if use_set_config_auto:
         print(f"Will change udp_dest from '{orig_config.udp_dest}' to automatically "
               "detected UDP DEST")
-        new_config.udp_dest = None
+        new_config.udp_dest = "@auto"
 
     new_config.operating_mode = client.OperatingMode.OPERATING_NORMAL
     if new_config.operating_mode != orig_config.operating_mode:
         print((f"Will change sensor's operating mode from {orig_config.operating_mode}"
                f" to {new_config.operating_mode}"))
 
-    if orig_config != new_config or use_set_config_auto:
-        print("Setting sensor config...")
-        client.set_config(hostname, new_config, persist=False,
-                          udp_dest_auto=use_set_config_auto)
-
-        new_config = client.get_config(hostname)
-
     return new_config
-
-
-def configure_sensor_multi(
-        hostnames: List[str],
-        first_lidar_port: Optional[int] = None,
-        do_not_reinitialize: bool = False,
-        no_auto_udp_dest: bool = False) -> List[client.SensorConfig]:
-    """Configure multiple sensors by hostnames/ips"""
-
-    first_lidar_port = first_lidar_port or 17502
-    configs: List[client.SensorConfig] = []
-
-    for idx, hn in enumerate(hostnames):
-        lidar_port = first_lidar_port + idx * 2
-        imu_port = lidar_port + 1
-        configs.append(
-            configure_sensor(hn,
-                             lidar_port=lidar_port,
-                             imu_port=imu_port,
-                             do_not_reinitialize=do_not_reinitialize,
-                             no_auto_udp_dest=no_auto_udp_dest))
-        print(f"Initializing connection to sensor {hn} on "
-              f"lidar port {configs[-1].udp_port_lidar} with udp dest "
-              f"'{configs[-1].udp_dest}'...")
-    return configs

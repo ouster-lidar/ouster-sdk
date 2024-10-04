@@ -15,12 +15,12 @@
 #include "ouster/client.h"
 #include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/sensor_client.h"
 #include "ouster/types.h"
 
 using namespace ouster;
 
 const size_t N_SCANS = 5;
-const size_t UDP_BUF_SIZE = 65536;
 
 void FATAL(const char* msg) {
     std::cerr << msg << std::endl;
@@ -69,12 +69,14 @@ int main(int argc, char* argv[]) {
      * hostname/ip.
      */
     const std::string sensor_hostname = argv[1];
-    const std::string data_destination = (argc == 3) ? argv[2] : "";
+    const std::string data_destination = (argc == 3) ? argv[2] : "@auto";
 
     std::cerr << "Connecting to \"" << sensor_hostname << "\"...\n";
 
-    auto handle = sensor::init_client(sensor_hostname, data_destination);
-    if (!handle) FATAL("Failed to connect");
+    ouster::sensor::sensor_config config;
+    config.udp_dest = data_destination;
+    sensor::SensorClient client(
+        {ouster::sensor::Sensor(sensor_hostname, config)});
     std::cerr << "Connection to sensor succeeded" << std::endl;
 
     /*
@@ -83,10 +85,9 @@ int main(int argc, char* argv[]) {
      * accurate point clouds.
      */
     std::cerr << "Gathering metadata..." << std::endl;
-    auto metadata = sensor::get_metadata(*handle);
 
-    // Raw metadata can be parsed into a `sensor_info` struct
-    sensor::sensor_info info(metadata);
+    // You can access the retrieved metadata from the SensorClient class
+    sensor::sensor_info info = client.get_sensor_info()[0];
 
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
@@ -101,17 +102,18 @@ int main(int argc, char* argv[]) {
               << column_window.second << "]" << std::endl;
 
     // A LidarScan holds lidar data for an entire rotation of the device
-    LidarScan scan{w, h, info.format.udp_profile_lidar};
+    LidarScan scan{info};
 
     // pre-compute a table for efficiently calculating point clouds from
     // range
-    XYZLut lut = ouster::make_xyz_lut(info);
+    // the second argument specifies if sensor extrinsics should be applied to
+    // the output point cloud
+    XYZLut lut = ouster::make_xyz_lut(info, true);
     // A an array of points to hold the projected representation of the scan
     LidarScan::Points cloud;
 
     // A ScanBatcher can be used to batch packets into scans
-    sensor::packet_format pf = sensor::get_format(info);
-    ScanBatcher batch_to_scan(info.format.columns_per_frame, pf);
+    ScanBatcher batch_to_scan(info);
 
     /*
      * The network client provides some convenience wrappers around socket APIs
@@ -121,8 +123,8 @@ int main(int argc, char* argv[]) {
      */
 
     // Place to store raw packets as they pass between threads
-    ouster::sensor::LidarPacket lidar_packet(pf.lidar_packet_size);
-    ouster::sensor::ImuPacket imu_packet(pf.imu_packet_size);
+    ouster::sensor::LidarPacket lidar_packet;
+    ouster::sensor::ImuPacket imu_packet;
 
     /*
     In this example we spin two threads one to receive lidar packets while the
@@ -143,36 +145,31 @@ int main(int argc, char* argv[]) {
     std::thread packet_receiving_thread([&]() {
         while (n_scans < N_SCANS) {
             // wait until sensor data is available
-            sensor::client_state st = sensor::poll_client(*handle);
+            auto ev = client.get_packet(lidar_packet, imu_packet, 1.0);
 
             // check for timeout
-            if (st == sensor::TIMEOUT) FATAL("Client has timed out");
+            if (ev.type == ouster::sensor::ClientEvent::PollTimeout)
+                FATAL("Client has timed out");
 
-            if (st & sensor::EXIT) FATAL("Exit was requested");
-
-            // check for error status
-            if (st & sensor::CLIENT_ERROR)
-                FATAL("Sensor client returned error state!");
+            // check for error state
+            if (ev.type == ouster::sensor::ClientEvent::Error)
+                FATAL("Exit was requested");
 
             // check for lidar data, read a packet and add it to the current
             // batch
-            if (st & sensor::LIDAR_DATA) {
+            if (ev.type == ouster::sensor::ClientEvent::LidarPacket) {
                 std::unique_lock<std::mutex> lock(mtx);
                 receiving_cv.wait(
                     lock, [&packet_processed] { return packet_processed; });
-                if (!sensor::read_lidar_packet(*handle, lidar_packet)) {
-                    FATAL("Failed to read a packet of the expected size!");
-                }
                 packet_processed = false;
                 processing_cv.notify_one();
             }
 
             // check if IMU data is available (but don't do anything with it)
-            if (st & sensor::IMU_DATA) {
+            if (ev.type == ouster::sensor::ClientEvent::ImuPacket) {
                 std::unique_lock<std::mutex> lock(mtx);
                 receiving_cv.wait(
                     lock, [&packet_processed] { return packet_processed; });
-                sensor::read_imu_packet(*handle, imu_packet);
                 // we are not going to processor imu data
                 // so we will keep packet_processed set to true
             }

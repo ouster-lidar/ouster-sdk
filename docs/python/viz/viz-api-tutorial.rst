@@ -72,8 +72,8 @@ grayscale images are supported, though you can use :meth:`.viz.Image.set_mask`, 
 masks, to get color.
 
 The :class:`.viz.Image` screen coordinate system is *height-normalized* and goes from bottom to top
-(``[-1, +1]``) for the ``y`` cordinate, and from left to right (``[-aspect, +aspect]``) for the
-``x`` coordidate, where::
+(``[-1, +1]``) for the ``y`` coordinate, and from left to right (``[-aspect, +aspect]``) for the
+``x`` coordinate, where::
     
     aspect = viewport width in Pixels / viewport height in Pixels
 
@@ -233,7 +233,7 @@ from :class:`.client.SensorInfo` (metadata object) and 2D ``RANGE`` image as an 
 
 .. note::
 
-   Please refer to :doc:`/reference/lidar-scan` for details about interal ``LidarScan``
+   Please refer to :doc:`/reference/lidar-scan` for details about internal ``LidarScan``
    representations and its basic operations.
 
 
@@ -304,7 +304,7 @@ higher-order visual component :class:`.viz.LidarScanViz` that enables:
 - 3D point cloud and two 2D fields images in one view
 - color palettes for 3D point cloud coloration
 - point cloud point size increase/decrease
-- toggles for view of different fields images and increasing/decreaseing their size
+- toggles for view of different fields images and increasing/decreasing their size
 - dual return point clouds and fields images support
 - key handlers for all of the above
 
@@ -382,7 +382,7 @@ Keyboard handlers
 We haven't yet covered the :class:`.viz.Camera` object and ways to control it. So here's a quick
 example of how we can map ``R`` key to move the camera closer or farther from the target.
 
-Random :meth:`.viz.Camera.dolly` change on keypress:
+Random :meth:`.viz.Camera.dolly` change on key press:
 
 .. literalinclude:: /../python/src/ouster/sdk/examples/viz.py
     :start-after: [doc-stag-key-handlers]

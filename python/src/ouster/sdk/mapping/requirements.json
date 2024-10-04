@@ -11,7 +11,7 @@
     },
     "kiss-icp":
     {
-        "version": "==0.4.0",
-        "marker": "platform_machine != \"aarch64\""
+        "version": "==1.0.0",
+	"marker": "(platform_machine != \"x86_64\" or platform_system != \"Darwin\") and (platform_machine != \"aarch64\" or platform_system != \"Linux\")"
     }
 }

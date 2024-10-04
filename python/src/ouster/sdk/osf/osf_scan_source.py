@@ -5,7 +5,7 @@ from ouster.sdk import client
 from ouster.sdk.client import LidarScan, SensorInfo, first_valid_packet_ts
 from ouster.sdk.client import ScanSource, MultiScanSource
 
-from ouster.sdk.osf._osf import (Reader, Writer, MessageRef, LidarSensor,
+from ouster.sdk._bindings.osf import (Reader, Writer, MessageRef, LidarSensor,
                                  Extrinsics, LidarScanStream, StreamingInfo)
 
 from ouster.sdk.client.multi import collate_scans       # type: ignore
@@ -19,24 +19,26 @@ class OsfScanSource(MultiScanSource):
         self,
         file_path: str,
         *,
-        dt: int = 10**8,
+        dt: int = 210000000,
         complete: bool = False,
         index: bool = False,
         cycle: bool = False,
+        field_names: Optional[List[str]] = None,
         **kwargs
     ) -> None:
         """
         Args:
             file_path: OSF file path to open as a scan source
             dt: max time difference between scans in the collated scan (i.e.
-                time period at which every new collated scan is released/cut),
-                default is 0.1s
+                max time period at which every new collated scan is released/cut),
+                default is 0.21s
             complete: set to True to only release complete scans (not implemnted)
             index: if this flag is set to true an index will be built for the osf
                 file enabling len, index and slice operations on the scan source, if
                 the flag is set to False indexing is skipped (default is False).
             cycle: repeat infinitely after iteration is finished (default is False)
-
+            field_names: list of fields to decode into a LidarScan, if not provided
+                decodes all fields
         Remarks:
             In case the OSF file didn't have builtin-index and the index flag was
             was set to True the object will attempt to index the file in place.
@@ -50,8 +52,8 @@ class OsfScanSource(MultiScanSource):
                 f"{OsfScanSource.__name__} does not support user-supplied metadata.")
 
         self._reader = Reader(file_path)
-
-        if not self._reader.has_message_idx:
+        has_index = self._reader.has_message_idx and self._reader.has_timestamp_idx
+        if not has_index:
             if index:
                 print("OSF file not indexed! re-indexing file inplace...")
                 try:
@@ -60,11 +62,12 @@ class OsfScanSource(MultiScanSource):
                     print(f"Failed re-indexing OSF file!\n more details: {e}")
                     self._indexed = False
                 self._reader = Reader(file_path)
-            else:
-                print("OSF file not indexed, indexing not requested!")
+                has_index = True
 
         self._cycle = cycle
         self._dt = dt
+
+        self._desired_fields = field_names or []
 
         self._sensors = [(sid, sm) for sid, sm in self._reader.meta_store.find(
             LidarSensor).items()]
@@ -77,29 +80,40 @@ class OsfScanSource(MultiScanSource):
         }
 
         # load stored extrinsics (if any)
+        self._metadatas = [sm.info for _, sm in self._sensors]
         extrinsics = self._reader.meta_store.find(Extrinsics)
         for _, v in extrinsics.items():
             if v.ref_meta_id in self._sensor_idx:
                 sidx = self._sensor_idx[v.ref_meta_id]
                 print(f"OSF: stored extrinsics for sensor[{sidx}]:\n",
                       v.extrinsics)
-                self._sensors[sidx][1].info.extrinsic = v.extrinsics
-
-        self._metadatas = [sm.info for _, sm in self._sensors]
+                self._metadatas[sidx].extrinsic = v.extrinsics
 
         # map stream_id to metadata entry
         self._stream_sensor_idx: Dict[int, int]
         self._stream_sensor_idx = {}
-        for stream_type in [LidarScanStream]:
-            for stream_id, stream_meta in self._reader.meta_store.find(
-                    stream_type).items():
-                self._stream_sensor_idx[stream_id] = self._sensor_idx[
-                    stream_meta.sensor_meta_id]
+        self._stream_ids = []
+        for stream_id, stream_meta in self._reader.meta_store.find(LidarScanStream).items():
+            self._stream_sensor_idx[stream_id] = self._sensor_idx[
+                stream_meta.sensor_meta_id]
+            self._stream_ids.append(stream_id)
 
-        # get the first scan
-        scan_streams = self._reader.meta_store.find(LidarScanStream)
-        self._stream_ids = [mid for mid, _ in scan_streams.items()]
+        # extract necessary values from the index/stats to calculate lengths
+        self._scans_num: List[Optional[int]] = [None] * len(self._stream_ids)
+        self._times = []  # a list of all scans and their times/indexes
+        for stream_id, stream_meta in self._reader.meta_store.find(StreamingInfo).items():
+            for id, stats in stream_meta.stream_stats:
+                if id in self._stream_ids:
+                    sensor_index = self._stream_ids.index(id)
+                    self._scans_num[sensor_index] = stats.message_count
+                    rts = stats.receive_timestamps
+                    for t in rts:
+                        self._times.append((sensor_index, t))
 
+        # sort the list of scan times so that we can collate them below
+        self._times.sort(key=lambda x: x[1])
+
+        # get the first scan of each to get field types
         self._field_types = []
         self._fields = []
         for sid, mid in enumerate(self._stream_ids):
@@ -120,17 +134,9 @@ class OsfScanSource(MultiScanSource):
                     self._fields.append(l)
                     break
 
-        # TODO: the following two properties (_scans_num, _len) are computed on
-        # load but should rather be provided directly through OSF API. Obtain
-        # these values directly from OSF API once implemented.
-        if self._indexed:
-            start_ts = self._reader.start_ts
-            end_ts = self._reader.end_ts
-            self._scans_num = [ilen(self._msgs_iter_stream(
-                mid, start_ts, end_ts)) for mid in self._stream_ids]
-            self._len = ilen(collate_scans(self._msgs_iter(
-                self._stream_ids, start_ts, end_ts, False),
-                self.sensors_count, lambda msg: cast(MessageRef, msg).ts, dt=self._dt))
+        if has_index:
+            self._len = ilen(collate_scans(self._times, self.sensors_count, lambda msg: msg, dt=self._dt))
+            self._indexed = True
 
     def _osf_convert(self, reader: Reader, output: str) -> None:
         # TODO: figure out how to get the current chunk_size
@@ -151,7 +157,11 @@ class OsfScanSource(MultiScanSource):
         msgs_count = ilen(msgs)
         msgs = reader.messages()
         for idx, msg in enumerate(msgs):
-            writer.save_message(msg.id, msg.ts, msg.buffer)
+            # retrieve sensor_ts where possible (for lidar data)
+            sensor_ts = 0
+            if msg.of(LidarScanStream):
+                sensor_ts = msg.decode().get_first_valid_column_timestamp()
+            writer.save_message(msg.id, msg.ts, sensor_ts, msg.buffer)
             progressbar(idx, msgs_count, "", "indexed")
         print("\nfinished building index")
         writer.close()
@@ -164,7 +174,7 @@ class OsfScanSource(MultiScanSource):
                 import shutil
                 shutil.copy2(f.name, osf_file)
             except OSError as e:
-                raise RuntimeError(f"Error overwriteing osf file: {osf_file}"
+                raise RuntimeError(f"Error overwriting osf file: {osf_file}"
                                    f"\nmore details: {e}")
 
     def _msgs_iter_stream(self, stream_id: int, start_ts: int, stop_ts: int
@@ -188,7 +198,7 @@ class OsfScanSource(MultiScanSource):
     def _scans_iter(self, start_ts: int, stop_ts: int, cycle: bool
                     ) -> Iterator[Tuple[int, LidarScan]]:
         for idx, msg in self._msgs_iter(self._stream_ids, start_ts, stop_ts, cycle):
-            ls = msg.decode()
+            ls = msg.decode(self._desired_fields)
             if ls:
                 window = self.metadata[idx].format.column_window
                 scan = cast(LidarScan, ls)
@@ -291,7 +301,7 @@ class OsfScanSource(MultiScanSource):
     def _slice_iter(self, key: slice) -> Iterator[List[Optional[LidarScan]]]:
         # NOTE: In this method if key.step was negative, this won't be
         # result in the output being reversed, it is the responisbility of
-        # the caller to accumelate the results into a vector then return them.
+        # the caller to accumulate the results into a vector then return them.
         L = len(self)
         k = ForwardSlicer.normalize(key, L)
         count = k.stop - k.start

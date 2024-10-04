@@ -17,6 +17,10 @@ std::vector<size_t> calculate_strides(const std::vector<size_t>& shape) {
     auto strides = std::vector<size_t>{};
     strides.reserve(shape.size());
     for (auto dim : shape) {
+        if (dim == 0) {
+            strides.push_back(1);
+            continue;
+        }
         total /= dim;
         strides.push_back(total);
     }
@@ -73,7 +77,7 @@ size_t FieldDescriptor::size() const {
                            std::multiplies<size_t>{});
 }
 
-int FieldDescriptor::element_size() const { return bytes / size(); }
+size_t FieldDescriptor::bytes() const { return size() * element_size; }
 
 sensor::ChanFieldType FieldDescriptor::tag() const {
     using sensor::impl::type_cft;
@@ -107,9 +111,9 @@ sensor::ChanFieldType FieldDescriptor::tag() const {
 
 void FieldDescriptor::swap(FieldDescriptor& other) {
     std::swap(type, other.type);
-    std::swap(bytes, other.bytes);
     std::swap(shape, other.shape);
     std::swap(strides, other.strides);
+    std::swap(element_size, other.element_size);
 }
 
 bool FieldDescriptor::is_type_compatible(
@@ -126,7 +130,7 @@ FieldView::FieldView(void* ptr, const FieldDescriptor& desc)
 
 FieldView::operator bool() const noexcept { return !!get(); }
 
-size_t FieldView::bytes() const noexcept { return desc_.bytes; }
+size_t FieldView::bytes() const noexcept { return desc_.bytes(); }
 
 size_t FieldView::size() const { return desc_.size(); }
 
@@ -158,7 +162,7 @@ Field::~Field() { free(ptr_); }
 
 Field::Field(const FieldDescriptor& desc, FieldClass field_class)
     : FieldView(nullptr, desc), class_{field_class} {
-    ptr_ = calloc(desc.bytes, sizeof(uint8_t));
+    ptr_ = calloc(desc.bytes(), sizeof(uint8_t));
     if (!ptr_) {
         throw std::runtime_error("Field: host allocation failed");
     }
@@ -173,7 +177,7 @@ Field& Field::operator=(Field&& other) noexcept {
 
 Field::Field(const Field& other)
     : FieldView(nullptr, other.desc()), class_{other.class_} {
-    ptr_ = malloc(desc().bytes);
+    ptr_ = malloc(desc().bytes());
     if (!ptr_) {
         throw std::runtime_error("Field: host allocation failed");
     }
@@ -207,7 +211,7 @@ FieldView uint_view(const FieldView& other) {
     }
 
     FieldDescriptor desc;
-    switch (other.desc().element_size()) {
+    switch (other.desc().element_size) {
         case 1:
             desc = FieldDescriptor::array<uint8_t>(other.shape());
             break;
@@ -224,7 +228,9 @@ FieldView uint_view(const FieldView& other) {
             // shape size check should usually suffice, but this may trigger
             // on strange cases like views bound to arrays of custom structs
             throw std::invalid_argument(
-                "uint_view: got wrong element size, are you using an array "
+                "uint_view: got wrong element size " +
+                std::to_string(other.desc().element_size) +
+                ", are you using an array "
                 "of primitives?");
     }
 

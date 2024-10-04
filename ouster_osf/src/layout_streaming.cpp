@@ -17,7 +17,9 @@ StreamingLayoutCW::StreamingLayoutCW(Writer& writer, uint32_t chunk_size)
     : chunk_size_{chunk_size ? chunk_size : STREAMING_DEFAULT_CHUNK_SIZE},
       writer_{writer} {}
 
-void StreamingLayoutCW::save_message(const uint32_t stream_id, const ts_t ts,
+void StreamingLayoutCW::save_message(const uint32_t stream_id,
+                                     const ts_t receive_ts,
+                                     const ts_t sensor_ts,
                                      const std::vector<uint8_t>& msg_buf) {
     if (!chunk_builders_.count(stream_id)) {
         chunk_builders_.insert({stream_id, std::make_shared<ChunkBuilder>()});
@@ -26,10 +28,10 @@ void StreamingLayoutCW::save_message(const uint32_t stream_id, const ts_t ts,
     auto chunk_builder = chunk_builders_[stream_id];
 
     // checking non-decreasing invariant of chunks and messages
-    if (chunk_builder->end_ts() > ts) {
+    if (chunk_builder->end_ts() > receive_ts) {
         std::stringstream err;
-        err << "ERROR: Can't write with a decreasing timestamp: " << ts.count()
-            << " for stream_id: " << stream_id
+        err << "ERROR: Can't write with a decreasing timestamp: "
+            << receive_ts.count() << " for stream_id: " << stream_id
             << " ( previous recorded timestamp: "
             << chunk_builder->end_ts().count() << ")";
         throw std::logic_error(err.str());
@@ -39,10 +41,10 @@ void StreamingLayoutCW::save_message(const uint32_t stream_id, const ts_t ts,
         finish_chunk(stream_id, chunk_builder);
     }
 
-    chunk_builder->save_message(stream_id, ts, msg_buf);
+    chunk_builder->save_message(stream_id, receive_ts, sensor_ts, msg_buf);
 
     // update running statistics per stream
-    stats_message(stream_id, ts, msg_buf);
+    stats_message(stream_id, receive_ts, sensor_ts, msg_buf);
 }
 
 void StreamingLayoutCW::finish() {
@@ -56,14 +58,17 @@ void StreamingLayoutCW::finish() {
 
 uint32_t StreamingLayoutCW::chunk_size() const { return chunk_size_; }
 
-void StreamingLayoutCW::stats_message(const uint32_t stream_id, const ts_t ts,
+void StreamingLayoutCW::stats_message(const uint32_t stream_id,
+                                      const ts_t receive_ts,
+                                      const ts_t sensor_ts,
                                       const std::vector<uint8_t>& msg_buf) {
     auto msg_size = static_cast<uint32_t>(msg_buf.size());
     auto stats_it = stream_stats_.find(stream_id);
     if (stats_it == stream_stats_.end()) {
-        stream_stats_.insert({stream_id, StreamStats(stream_id, ts, msg_size)});
+        stream_stats_.insert({stream_id, StreamStats(stream_id, receive_ts,
+                                                     sensor_ts, msg_size)});
     } else {
-        stats_it->second.update(ts, msg_size);
+        stats_it->second.update(receive_ts, sensor_ts, msg_size);
     }
 }
 

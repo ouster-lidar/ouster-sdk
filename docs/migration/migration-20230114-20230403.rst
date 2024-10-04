@@ -54,7 +54,7 @@ A number of long-deprecated members of the LidarScan interface have been removed
  - ``encoder``: Encoder counts were part of the LEGACY UDP profile, representing the azimuth angle
    as a raw encoder count starting from 0 to a max value of 90111. It thus incremented 44 ticks per
    azimuth angle in 2048 mode, 88 ticks in 1024 mode and 176 in 512 mode. To recover encoder
-   infcount, you can multiply the ``measurement_id`` by the number dictated by your lidar mode. We
+   count, you can multiply the ``measurement_id`` by the number dictated by your lidar mode. We
    suggest, however, migrating to use simply ``measurement_id`` and multiplying by ``360 degrees/
    N`` where ``N`` is the number of columns in your mode (512, 1024, 2048) when you need the
    azimuth, thus untying any sense of azimuth from the internal mechanicals of the Ouster sensor.
@@ -77,14 +77,14 @@ Python 3.7 reaches its end of life on June 27th, 2023. We will likely stop produ
 FW versions
 ~~~~~~~~~~~
 FW 2.0 will be 3 years old in November 2023, with numerous upgrades introduces in subsequent FWs
-2.1-2.5, and FW 3.0. New versions of the Python SDK and new commits of ouster_example will likely
+2.1-2.5, and FW 3.0. New versions of the Python SDK and new commits of ouster_sdk will likely
 stop supporting direct communication with sensors running FW 2.0 by November 2023, although recorded
 data in the pcap+json format will continue to be read and supported.
 
 Ubuntu 18.04
 ~~~~~~~~~~~~
 Ubuntu 18.04 reaches its end of standard support in May 2023. We will likely stop supporting the C++
-and Python builds of ``ouster_example`` on 18.04 by November 2023. You will still be able to run
+and Python builds of ``ouster_sdk`` on 18.04 by November 2023. You will still be able to run
 available Python wheels on your system if you so choose.
 
 
@@ -120,7 +120,7 @@ We will discuss future FW removals and deprecations and their impact if you are 
 
 TCP API
 ~~~~~~~
-The planned removal of the TCP API in future firmwares should not affect SDK users who communciate
+The planned removal of the TCP API in future firmwares should not affect SDK users who communicate
 with the sensor only through SDK APIs, as we have already updated our code to use the HTTP API where
 it is available.
 

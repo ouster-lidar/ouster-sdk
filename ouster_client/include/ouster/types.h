@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "json/json.h"
 #include "nonstd/optional.hpp"
 #include "version.h"
 
@@ -267,8 +268,7 @@ struct sensor_config {
     optional<uint16_t> udp_port_imu;    ///< The destination port for the imu
                                         ///< data to be sent to
 
-    // TODO: replace ts_mode and ld_mode when timestamp_mode and
-    // lidar_mode get changed to CapsCase
+    // TODO: change timestamp_mode and lidar_mode to UpperCamel
     /**
      * The timestamp mode for the sensor to use.
      * Refer to timestamp_mode for more details.
@@ -482,14 +482,15 @@ class product_info {
    protected:
     /**
      * Constructor to initialize each of the members off of.
-     *
-     * @internal
+     * @brief Constructor for product_info that takes params (internal only)
      *
      * @param[in] product_info_string The full product line string.
      * @param[in] form_factor The sensor form factor.
      * @param[in] short_range If the sensor is short range or not.
      * @param[in] beam_config The beam configuration for the sensor.
      * @param[in] beam_count The number of beams for a sensor.
+     *
+     * @internal
      */
     product_info(std::string product_info_string, std::string form_factor,
                  bool short_range, std::string beam_config, int beam_count);
@@ -563,7 +564,9 @@ struct sensor_info {
     std::string user_data{};    ///< userdata from sensor if available
 
     /* Constructor from metadata */
-    explicit sensor_info(const std::string& metadata, bool skip_beam_validation = false);
+    [[deprecated("skip_beam_validation does not do anything anymore")]] 
+        explicit sensor_info(const std::string& metadata, bool skip_beam_validation);
+    explicit sensor_info(const std::string& metadata);
 
     /* Empty constructor -- keep for  */
     sensor_info();
@@ -583,6 +586,20 @@ struct sensor_info {
     product_info get_product_info() const;
 
     bool has_fields_equal(const sensor_info& other) const;
+
+    /**
+     * Retrieves the width of a frame
+     *
+     * @return width of a frame.
+     */
+    auto w() const -> decltype(format.columns_per_frame);  ///< returns the width of a frame (equivalent to format.columns_per_frame)
+
+    /**
+     * Retrieves the height of a frame
+     *
+     * @return height of a frame.
+     */
+    auto h() const -> decltype(format.pixels_per_column);  ///< returns the height of a frame (equivalent to format.pixels_per_column)
 
    private:
     bool was_legacy_ = false;
@@ -995,7 +1012,9 @@ firmware_version_from_metadata(const std::string& metadata);
 
 // clang-format off
 typedef const char* cf_type;
-/** Tag to identitify a paricular value reported in the sensor channel data
+/**
+ * @namespace ChanField
+ * Tag to identitify a paricular value reported in the sensor channel data
  * block. */
 namespace ChanField {
     static constexpr cf_type RANGE = "RANGE";            ///< 1st return range in mm
@@ -1051,6 +1070,15 @@ enum ChanFieldType {
 size_t field_type_size(ChanFieldType ft);
 
 /**
+ * Get the bit mask of the ChanFieldType.
+ *
+ * @param[in] ft the field type
+ *
+ * @return 64 bit mask
+ */
+uint64_t field_type_mask(ChanFieldType ft);
+
+/**
  * Get string representation of a channel field.
  *
  * @param[in] ft The field type to get the string representation of.
@@ -1074,13 +1102,6 @@ std::string to_string(ChanFieldType ft);
  */
 class packet_format {
    protected:
-    template <typename T>
-    T px_field(const uint8_t* px_buf, const std::string& i) const;
-
-    template <typename T, typename SRC, int N>
-    void block_field_impl(Eigen::Ref<img_t<T>> field, const std::string& i,
-                          const uint8_t* packet_buf) const;
-
     struct Impl;
     std::shared_ptr<const Impl> impl_;
 
@@ -1149,6 +1170,15 @@ class packet_format {
     uint64_t prod_sn(const uint8_t* lidar_buf) const;
 
     /**
+     * Read the alert flags.
+     *
+     * @param[in] lidar_buf the lidar buf.
+     *
+     * @return the alert flags byte.
+     */
+    uint8_t alert_flags(const uint8_t* lidar_buf) const;
+
+    /**
      * Read the packet thermal shutdown countdown
      *
      * @param[in] lidar_buf the lidar buf.
@@ -1196,11 +1226,18 @@ class packet_format {
 
     /**
      * A const forward iterator over field / type pairs.
+     *
+     * @return Iterator pointing to the first element in the field type of
+     * packets.
+     *
      */
     FieldIter begin() const;
 
     /**
      * A const forward iterator over field / type pairs.
+     *
+     * @return Iterator pointing to the last element in the field type of
+     * packets.
      */
     FieldIter end() const;
 
@@ -1251,12 +1288,35 @@ class packet_format {
      * @return column status.
      */
     uint32_t col_status(const uint8_t* col_buf) const;
-
+    /**
+     * @brief Encodes the column value.
+     *
+     * This function encodes the column value.
+     *
+     * @deprecated Use col_measurement_id instead. This function will be removed
+     * in future versions.
+     *
+     * @param[in] col_buf A measurement block pointer returned by `nth_col()`.
+     *
+     * @return Encoded column value.
+     */
     [[deprecated("Use col_measurement_id instead")]] uint32_t col_encoder(
         const uint8_t* col_buf)
         const;  ///< @deprecated Encoder count is deprecated as it is redundant
                 ///< with measurement id, barring a multiplication factor which
                 ///< varies by lidar mode. Use col_measurement_id instead
+    /**
+     * @brief Retrieves the current frame id
+     *
+     * This function returns the frame id of a column
+     *
+     * @deprecated Use frame_id instead. This function will be removed
+     * in future versions.
+     *
+     * @param[in] col_buf A measurement block pointer returned by `nth_col()`.
+     *
+     * @return The current frame id.
+     */
     [[deprecated("Use frame_id instead")]] uint16_t col_frame_id(
         const uint8_t* col_buf) const;  ///< @deprecated Use frame_id instead
 
@@ -1278,7 +1338,7 @@ class packet_format {
     /**
      * Returns maximum available size of parsing block usable with block_field
      *
-     * if packet format does not allow for block parsing, returns 0
+     * @return if packet format does not allow for block parsing, returns 0
      */
     int block_parsable() const;
 
@@ -1407,6 +1467,24 @@ class packet_format {
      * @return number of bits
      */
     int field_bitness(const std::string& f) const;
+
+    /**
+     * Return the CRC contained in the packet if present
+     *
+     * @param[in] lidar_buf the lidar buffer.
+     *
+     * @return crc contained in the packet if present
+     */
+    optional<uint64_t> crc(const uint8_t* lidar_buf) const;
+
+    /**
+     * Calculate the CRC for the given packet.
+     *
+     * @param[in] lidar_buf the lidar buffer.
+     *
+     * @return calculated crc of the packet
+     */
+    uint64_t calculate_crc(const uint8_t* lidar_buf) const;
 };
 
 /** @defgroup OusterClientTypeGetFormat Get Packet Format functions */
@@ -1457,7 +1535,7 @@ struct Packet {
     }
 };
 
-/*
+/**
  * Reasons for failure of packet validation.
  */
 enum class PacketValidationFailure {
@@ -1465,6 +1543,30 @@ enum class PacketValidationFailure {
     PACKET_SIZE = 1,  ///< The packet size does not match the expected size
     ID = 2            ///< The prod_sn or init_id does not match the metadata
 };
+
+/**
+ * Enum for packet validation types.
+ */
+enum class PacketValidationType {
+    LIDAR,      ///< Validate as if the buffer was a lidar buffer
+    IMU,        ///< Validate as if the buffer was an imu buffer
+    GUESS_TYPE  ///< Try to guess the type and validate as that
+};
+
+/**
+ * Validate a packet buffer against a given type.
+ *
+ * @param[in] info The sensor info to try to check the buffer against.
+ * @param[in] format The packet format to try to check the buffer against.
+ * @param[in] buf The packet buffer to validate.
+ * @param[in] buf_size The size of the packet buffer.
+ * @param[in] type Optional type of packet to try and validate as.
+ * @return Result of the validation
+ */
+PacketValidationFailure validate_packet(
+    const sensor_info& info, const packet_format& format, const uint8_t* buf,
+    uint64_t buf_size,
+    PacketValidationType type = PacketValidationType::GUESS_TYPE);
 
 /**
  * Encapsulate a lidar packet buffer and attributes associated with it.

@@ -138,8 +138,8 @@ fields, we can keep only ``3`` and save the disk space and bandwidth during repl
 A general scheme of writing scans to the OSF with Writer:
 
 0. Create ``osf.Writer`` with the output file name, lidar metadata(s) (``ouster.sdk.client.SensorInfo``) and optionally the desired output scan fields.
-1. Use the writers's ``save`` function ``writer.save(index, scan)`` to encode the LidarScan ``scan`` into the
-   underlying message buffer for lidar ``index`` and finally push it to disk. If you have multiple lidars you can
+1. Use the writer's ``save`` function ``writer.save(index, scan)`` to encode the LidarScan ``scan`` into the
+   underlying message buffer for lidar ``index`` and finally push it to disk. If you have multiple lidar sensors you can
    save the scans simultaneously by providing them in an array to ``writer.save``.
 
 .. literalinclude:: /../python/src/ouster/sdk/examples/osf.py

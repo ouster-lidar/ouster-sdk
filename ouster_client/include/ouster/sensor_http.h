@@ -31,6 +31,9 @@ struct UserDataAndPolicy {
  * An interface to communicate with Ouster sensors via http requests
  */
 class SensorHttp {
+    ouster::util::version version_;
+    std::string hostname_;
+
    protected:
     /**
      * Constructs an http interface to communicate with the sensor.
@@ -42,6 +45,22 @@ class SensorHttp {
      * Deconstruct the sensor http interface.
      */
     virtual ~SensorHttp() = default;
+
+    /**
+     * Returns the cached sensor FW version retrieved on construction.
+     *
+     * @return returns the sensor FW version
+     */
+    inline const ouster::util::version& firmware_version() const {
+        return version_;
+    }
+
+    /**
+     * Returns the hostname for the associated sensor.
+     *
+     * @return returns the sensor FW version
+     */
+    inline const std::string& hostname() const { return hostname_; }
 
     /**
      * Queries the sensor metadata.
@@ -88,6 +107,8 @@ class SensorHttp {
      * Retrieves the active configuration on the sensor
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return active configuration parameters set on the sensor
      */
     virtual Json::Value active_config_params(int timeout_sec = 1) const = 0;
 
@@ -95,6 +116,8 @@ class SensorHttp {
      * Retrieves the staged configuration on the sensor
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return staged configuration parameters set on the sensor
      */
     virtual Json::Value staged_config_params(int timeout_sec = 1) const = 0;
 
@@ -109,6 +132,8 @@ class SensorHttp {
      * Retrieves beam intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return beam_intrinsics retrieved from sensor
      */
     virtual Json::Value beam_intrinsics(int timeout_sec = 1) const = 0;
 
@@ -116,6 +141,8 @@ class SensorHttp {
      * Retrieves imu intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return imu_intrinsics received from sensor
      */
     virtual Json::Value imu_intrinsics(int timeout_sec = 1) const = 0;
 
@@ -123,6 +150,8 @@ class SensorHttp {
      * Retrieves lidar intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return lidar_intrinsics retrieved from sensor
      */
     virtual Json::Value lidar_intrinsics(int timeout_sec = 1) const = 0;
 
@@ -130,6 +159,8 @@ class SensorHttp {
      * Retrieves lidar data format.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return lidar_data_format received from sensor
      */
     virtual Json::Value lidar_data_format(int timeout_sec = 1) const = 0;
 
@@ -137,6 +168,8 @@ class SensorHttp {
      * Gets the calibaration status of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return calibration status received from sensor
      */
     virtual Json::Value calibration_status(int timeout_sec = 1) const = 0;
 
@@ -158,6 +191,8 @@ class SensorHttp {
      * Gets the user data stored on the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return user data retrieved from sensor
      */
     virtual std::string get_user_data(int timeout_sec = 1) const = 0;
 
@@ -165,6 +200,8 @@ class SensorHttp {
      * Gets the user data stored on the sensor and the retention policy.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return user data and policy setting retrieved from the sensor
      */
     virtual UserDataAndPolicy get_user_data_and_policy(
         int timeout_sec = 1) const = 0;
@@ -194,6 +231,8 @@ class SensorHttp {
      * @param[in] hostname hostname of the sensor to communicate with.
      * @param[in] timeout_sec The timeout to use in seconds for the version
      *                        request, this argument is optional.
+     *
+     * @return firmware version string from sensor
      */
     static std::string firmware_version_string(
         const std::string& hostname,
@@ -205,6 +244,8 @@ class SensorHttp {
      * @param[in] hostname hostname of the sensor to communicate with.
      * @param[in] timeout_sec The timeout to use in seconds for the version
      *                        request, this argument is optional.
+     *
+     * @return parsed firmware version from sensor
      */
     static ouster::util::version firmware_version(
         const std::string& hostname,
@@ -216,6 +257,8 @@ class SensorHttp {
      * @param[in] hostname hostname of the sensor to communicate with.
      * @param[in] timeout_sec The timeout to use in seconds for the version
      *                        request, this argument is optional.
+     *
+     * @return a version specific implementation of the SensorHTTP instance
      */
     static std::unique_ptr<SensorHttp> create(
         const std::string& hostname,

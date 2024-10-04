@@ -74,7 +74,7 @@ To generate staggered and destaggered images yourself, you can try the following
     plt.imshow(ranges_destaggered, cmap='gray', resample=False)
 
 .. todo:: 
-    (Kai) Might be nice to cover either here or in the reference how to
+    Might be nice to cover either here or in the reference how to
     duplicate timestamps into an 'img', "destagger" it, and then use for for
     association of XYZ points with their timestamps 
 

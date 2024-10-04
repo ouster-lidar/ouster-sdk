@@ -45,7 +45,8 @@ enum OSF_VERSION {
                     ///< and for Session in osfSession (2020/03/18)
     V_1_4,          ///< Gen2/128 support (2020/08/11)
 
-    V_2_0 = 20  ///< Second Generation OSF v2
+    V_2_0 = 20,  ///< Second Generation OSF v2
+    V_2_1 = 21   ///< Add full index and addtional info to LidarScans
 };
 
 /**
