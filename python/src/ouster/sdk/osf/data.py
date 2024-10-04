@@ -1,14 +1,15 @@
 from typing import Optional, Union, cast, Iterator, Tuple, List
+import warnings
 
 from ouster.sdk import client
 from ouster.sdk.client.data import FieldTypes
 from ouster.sdk.client import ScanSource
-from ouster.sdk.client._client import LidarScan
+from ouster.sdk._bindings.client import LidarScan
 import ouster.sdk.osf as osf
 
 
 class Scans(ScanSource):
-    """An iterable stream of ``LidarScan`` read from OSF file (for the first available sensor)."""
+    """Deprecated: An iterable stream of ``LidarScan`` read from OSF file (for a single sensor)."""
 
     def __init__(self,
                  osf_file: str,
@@ -23,6 +24,10 @@ class Scans(ScanSource):
             (i.e. id of the metadata entry with ``osf.LidarSensor`` type).
             0 (default) means that first LidarSensor from the OSF is used.
         """
+        warnings.warn("osf.Scans(...) is deprecated: "
+                  "Use osf.OsfScanSource(...).single_source(sensor_id or 0) instead. "
+                  "This API is planned to be removed in Q4 2024.",
+                  DeprecationWarning, stacklevel=2)
         self._reader = osf.Reader(osf_file)
         self._cycle = cycle
         self._sensor_id = sensor_id

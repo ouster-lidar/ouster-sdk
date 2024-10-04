@@ -14,7 +14,7 @@ from contextlib import closing
 
 import numpy as np
 
-from ouster.sdk import client
+from ouster.sdk import client, sensor
 from ouster.sdk.client import LidarMode
 
 
@@ -44,10 +44,10 @@ def configure_dual_returns(hostname: str) -> None:
         return
 
     print("Retrieving sensor metadata..")
-    with closing(client.Sensor(hostname, 7502, 7503)) as source:
+    with closing(sensor.SensorScanSource(hostname)) as source:
         # print some useful info from
         print(
-            f"udp profile lidar: {str(source.metadata.format.udp_profile_lidar)}"
+            f"udp profile lidar: {str(source.metadata[0].format.udp_profile_lidar)}"
         )
 
 
@@ -91,17 +91,19 @@ def fetch_metadata(hostname: str) -> None:
         hostname: hostname of the sensor
     """
     # [doc-stag-fetch-metadata]
-    with closing(client.Sensor(hostname, 7502, 7503)) as source:
-        # print some useful info from
+    with closing(sensor.SensorScanSource(hostname)) as source:
+        metadata = source.metadata[0]
+        # print some useful info from metadata
         print("Retrieved metadata:")
-        print(f"  serial no:        {source.metadata.sn}")
-        print(f"  firmware version: {source.metadata.fw_rev}")
-        print(f"  product line:     {source.metadata.prod_line}")
-        print(f"  lidar mode:       {source.metadata.config.lidar_mode}")
+        print(f"  serial no:        {metadata.sn}")
+        print(f"  firmware version: {metadata.fw_rev}")
+        print(f"  product line:     {metadata.prod_line}")
+        print(f"  lidar mode:       {metadata.config.lidar_mode}")
         print(f"Writing to: {hostname}.json")
 
         # write metadata to disk
-        source.write_metadata(f"{hostname}.json")
+        with open(f"{hostname}.json", "w") as f:
+            f.write(metadata.to_json_string())
     # [doc-etag-fetch-metadata]
 
 
@@ -133,8 +135,10 @@ def filter_3d_by_range_and_azimuth(hostname: str,
 
     plt.title("Filtered 3D Points from {}".format(hostname))
 
-    metadata, sample = client.Scans.sample(hostname, 2, lidar_port)
-    scan = next(sample)[1]
+    source = sensor.SensorScanSource(hostname, lidar_port=lidar_port, complete=True)
+    metadata = source.metadata[0]
+    scan = next(iter(source))[0]
+    source.close()
 
     # [doc-stag-filter-3d]
     # obtain destaggered range
@@ -173,14 +177,14 @@ def live_plot_reflectivity(hostname: str, lidar_port: int = 7502) -> None:
 
     # [doc-stag-live-plot-reflectivity]
     # establish sensor connection
-    with closing(client.Scans.stream(hostname, lidar_port,
-                                     complete=False)) as stream:
+    with closing(sensor.SensorScanSource(hostname, lidar_port=lidar_port,
+                                         complete=False)) as stream:
         show = True
         while show:
-            for scan in stream:
+            for scan, *_ in stream:
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(scan.frame_id))
-                reflectivity = client.destagger(stream.metadata,
+                reflectivity = client.destagger(stream.metadata[0],
                                           scan.field(client.ChanField.REFLECTIVITY))
                 reflectivity = (reflectivity / np.max(reflectivity) * 255).astype(np.uint8)
                 cv2.imshow("scaled reflectivity", reflectivity)
@@ -203,8 +207,10 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     import matplotlib.pyplot as plt  # type: ignore
 
     # get single scan
-    metadata, sample = client.Scans.sample(hostname, 1, lidar_port)
-    scan = next(sample)[0]
+    source = sensor.SensorScanSource(hostname, lidar_port=lidar_port)
+    scan = next(iter(source))[0]
+    metadata = source.metadata[0]
+    source.close()
 
     # set up figure
     plt.figure()
@@ -254,8 +260,11 @@ def record_pcap(hostname: str,
     # [doc-stag-pcap-record]
     from more_itertools import time_limited
     # connect to sensor and record lidar/imu packets
-    with closing(client.Sensor(hostname, lidar_port, imu_port,
-                               buf_size=640)) as source:
+    config = client.SensorConfig()
+    config.udp_port_lidar = lidar_port
+    config.udp_port_imu = imu_port
+    with closing(client.SensorPacketSource([(hostname, config)],
+                               buf_size=640).single_source(0)) as source:
 
         # make a descriptive filename for metadata/pcap files
         time_part = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -263,7 +272,8 @@ def record_pcap(hostname: str,
         fname_base = f"{meta.prod_line}_{meta.sn}_{meta.config.lidar_mode}_{time_part}"
 
         print(f"Saving sensor metadata to: {fname_base}.json")
-        source.write_metadata(f"{fname_base}.json")
+        with open(f"{fname_base}.json", "w") as f:
+            f.write(source.metadata.to_json_string())
 
         print(f"Writing to: {fname_base}.pcap (Ctrl-C to stop early)")
         source_it = time_limited(n_seconds, source)

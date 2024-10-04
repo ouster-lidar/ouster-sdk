@@ -21,6 +21,9 @@ inline float** genPalette(const int n, const float from[3], const float to[3]) {
     return palette;
 }
 
+#pragma warning(push)
+#pragma warning(disable : 4305)
+
 // clang-format off
 // generated from:
 // https://daniel.lawrence.lu/public/colortransform/#0_2423_964_352_6_2624_1000_513_11_3248_1000_617_15_415_1000_774
@@ -2367,7 +2370,7 @@ const float magma_cal_ref_palette[magma_cal_ref_n][3] = {
     {0.987053, 0.991438, 0.749504},
     {0.987053, 0.991438, 0.749504},
 };
-
+#pragma warning(pop)
 // clang-format on
 }  // namespace viz
 }  // namespace ouster

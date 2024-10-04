@@ -8,7 +8,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -29,12 +28,147 @@ constexpr int imu_packet_size = 48;
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
+/**
+ * Helper struct to load/store bit sequences from packets
+ *
+ * NOTE: getters and setters require up to 64 bits of valid memory past the bit
+ *       we are attempting to set/retrieve, so caution is advised.
+ */
 struct FieldInfo {
     ChanFieldType ty_tag;
     size_t offset;
     uint64_t mask;
     int shift;
+
+    /**
+     * Retrieves the value from the buffer.
+     * NOTE: the check that T is of at least the size of ChanFieldType used
+     *       is deferred because this function is used in the hot loop
+     *
+     * @param[in] buffer buffer to retrieve the value from.
+     *
+     * @return value
+     */
+    template <typename T>
+    T get(const uint8_t* buffer) const {
+        uint64_t word = *reinterpret_cast<const uint64_t*>(buffer + offset);
+        word &= mask;
+        if (shift > 0) {
+            word >>= shift;
+        } else if (shift < 0) {
+            word <<= std::abs(shift);
+        }
+
+        T out{};
+        std::memcpy(&out, &word, sizeof(out));
+        return out;
+    }
+
+    /**
+     * Stores the value into the buffer.
+     * NOTE: the check that T is of at least the size of ChanFieldType used
+     *       is deferred because this function is used in the hot loop
+     *
+     * @param[in] buffer buffer to retrieve the value from.
+     * @param[in] value value to store
+     */
+    template <typename T>
+    void set(uint8_t* buffer, T value) const {
+        uint64_t word = 0;
+        std::memcpy(&word, &value, sizeof(value));
+        if (shift > 0) word <<= shift;
+        if (shift < 0) word >>= std::abs(shift);
+        word &= mask;
+        uint64_t* ptr = reinterpret_cast<uint64_t*>(buffer + offset);
+        *ptr &= ~mask;
+        *ptr |= word;
+    }
 };
+
+/**
+ * FieldInfo factory function
+ *
+ * NOTE: FieldInfo getters and setters require up to 64 bits of valid memory
+ *       past the bit_start, caution is advised.
+ *
+ * @param[in] bit_start starting bit of the value in the buffer
+ * @param[in] bit_size size, in bits, of the value in the buffer
+ * @param[in] upshift amount of bits to shift the value up, if any; this is
+ *            used in packet values that are truncating lower significance bits,
+ *            e.g. in low bandwidth profiles
+ *
+ * @return FieldInfo
+ */
+FieldInfo field_info(size_t bit_start, size_t bit_size, size_t upshift = 0) {
+    FieldInfo info{};
+
+    size_t needs_bits = bit_size + upshift;
+    if (needs_bits > 64) {
+        throw std::invalid_argument(
+            "failed creating FieldInfo: value cannot store more than 64 bits");
+    }
+
+    info.offset = bit_start / 8;
+    bit_start = bit_start % 8;
+
+    for (size_t i = bit_start; i < bit_start + bit_size; ++i) {
+        info.mask |= uint64_t{1} << i;
+    }
+
+    info.shift = bit_start;
+    info.shift -= upshift;
+
+    size_t size_bytes = needs_bits / 8 + ((needs_bits % 8) ? 1 : 0);
+
+    switch (size_bytes) {
+        case 1:
+            info.ty_tag = ChanFieldType::UINT8;
+            break;
+        case 2:
+            info.ty_tag = ChanFieldType::UINT16;
+            break;
+        case 3:
+        case 4:
+            info.ty_tag = ChanFieldType::UINT32;
+            break;
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+            info.ty_tag = ChanFieldType::UINT64;
+            break;
+        default:
+            info.ty_tag = ChanFieldType::VOID;
+    }
+
+    return info;
+}
+
+static int count_set_bits(uint64_t value) {
+    int count = 0;
+    while (value) {
+        count += value & 1;
+        value >>= 1;
+    }
+    return count;
+};
+
+uint64_t get_value_mask(const FieldInfo& f) {
+    uint64_t type_mask = sensor::field_type_mask(f.ty_tag);
+
+    uint64_t mask = f.mask;
+    if (mask == 0) mask = type_mask;
+    if (f.shift > 0) mask >>= f.shift;
+    if (f.shift < 0) mask <<= std::abs(f.shift);
+    // final type *may* cut the resultant mask still
+    mask &= type_mask;
+
+    return mask;
+}
+
+int get_bitness(const FieldInfo& f) {
+    return count_set_bits(get_value_mask(f));
+}
 
 struct ProfileEntry {
     const std::pair<std::string, FieldInfo>* fields;
@@ -43,78 +177,78 @@ struct ProfileEntry {
 };
 
 static const Table<std::string, FieldInfo, 8> legacy_field_info{{
-    {ChanField::RANGE, {UINT32, 0, 0x000fffff, 0}},
-    {ChanField::FLAGS, {UINT8, 3, 0, 4}},
-    {ChanField::REFLECTIVITY, {UINT16, 4, 0, 0}},
-    {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
-    {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
-    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
-    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
-    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
+    {ChanField::RANGE, field_info(0, 20)},
+    {ChanField::FLAGS, field_info(28, 4)},
+    {ChanField::REFLECTIVITY, field_info(32, 8)},
+    {ChanField::SIGNAL, field_info(48, 16)},
+    {ChanField::NEAR_IR, field_info(64, 16)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+    {ChanField::RAW32_WORD2, field_info(32, 32)},
+    {ChanField::RAW32_WORD3, field_info(64, 32)},
 }};
 
 static const Table<std::string, FieldInfo, 5> lb_field_info{{
-    {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},
-    {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
-    {ChanField::REFLECTIVITY, {UINT8, 2, 0, 0}},
-    {ChanField::NEAR_IR, {UINT16, 2, 0xff00, 4}},
-    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
+    {ChanField::RANGE, field_info(0, 15, 3)},
+    {ChanField::FLAGS, field_info(15, 1)},
+    {ChanField::REFLECTIVITY, field_info(16, 8)},
+    {ChanField::NEAR_IR, field_info(24, 8, 4)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
 }};
 
 static const Table<std::string, FieldInfo, 13> dual_field_info{{
-    {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
-    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
-    {ChanField::REFLECTIVITY, {UINT8, 3, 0, 0}},
-    {ChanField::RANGE2, {UINT32, 4, 0x0007ffff, 0}},
-    {ChanField::FLAGS2, {UINT8, 6, 0b11111000, 3}},
-    {ChanField::REFLECTIVITY2, {UINT8, 7, 0, 0}},
-    {ChanField::SIGNAL, {UINT16, 8, 0, 0}},
-    {ChanField::SIGNAL2, {UINT16, 10, 0, 0}},
-    {ChanField::NEAR_IR, {UINT16, 12, 0, 0}},
-    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
-    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
-    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
-    {ChanField::RAW32_WORD4, {UINT32, 12, 0, 0}},
+    {ChanField::RANGE, field_info(0, 19)},
+    {ChanField::FLAGS, field_info(19, 5)},
+    {ChanField::REFLECTIVITY, field_info(24, 8)},
+    {ChanField::RANGE2, field_info(32, 19)},
+    {ChanField::FLAGS2, field_info(51, 5)},
+    {ChanField::REFLECTIVITY2, field_info(56, 8)},
+    {ChanField::SIGNAL, field_info(64, 16)},
+    {ChanField::SIGNAL2, field_info(80, 16)},
+    {ChanField::NEAR_IR, field_info(96, 16)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+    {ChanField::RAW32_WORD2, field_info(32, 32)},
+    {ChanField::RAW32_WORD3, field_info(64, 32)},
+    {ChanField::RAW32_WORD4, field_info(96, 32)},
 }};
 
 static const Table<std::string, FieldInfo, 8> single_field_info{{
-    {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
-    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
-    {ChanField::REFLECTIVITY, {UINT8, 4, 0, 0}},
-    {ChanField::SIGNAL, {UINT16, 6, 0, 0}},
-    {ChanField::NEAR_IR, {UINT16, 8, 0, 0}},
-    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
-    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
-    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
+    {ChanField::RANGE, field_info(0, 19)},
+    {ChanField::FLAGS, field_info(19, 5)},
+    {ChanField::REFLECTIVITY, field_info(32, 8)},
+    {ChanField::SIGNAL, field_info(48, 16)},
+    {ChanField::NEAR_IR, field_info(64, 16)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+    {ChanField::RAW32_WORD2, field_info(32, 32)},
+    {ChanField::RAW32_WORD3, field_info(64, 32)},
 }};
 
 static const Table<std::string, FieldInfo, 14> five_word_pixel_info{{
-    {ChanField::RANGE, {UINT32, 0, 0x0007ffff, 0}},
-    {ChanField::FLAGS, {UINT8, 2, 0b11111000, 3}},
-    {ChanField::REFLECTIVITY, {UINT8, 3, 0, 0}},
-    {ChanField::RANGE2, {UINT32, 4, 0x0007ffff, 0}},
-    {ChanField::FLAGS2, {UINT8, 6, 0b11111000, 3}},
-    {ChanField::REFLECTIVITY2, {UINT8, 7, 0, 0}},
-    {ChanField::SIGNAL, {UINT16, 8, 0, 0}},
-    {ChanField::SIGNAL2, {UINT16, 10, 0, 0}},
-    {ChanField::NEAR_IR, {UINT16, 12, 0, 0}},
-    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
-    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
-    {ChanField::RAW32_WORD3, {UINT32, 8, 0, 0}},
-    {ChanField::RAW32_WORD4, {UINT32, 12, 0, 0}},
-    {ChanField::RAW32_WORD5, {UINT32, 16, 0, 0}},
+    {ChanField::RANGE, field_info(0, 19)},
+    {ChanField::FLAGS, field_info(19, 5)},
+    {ChanField::REFLECTIVITY, field_info(24, 8)},
+    {ChanField::RANGE2, field_info(32, 19)},
+    {ChanField::FLAGS2, field_info(51, 5)},
+    {ChanField::REFLECTIVITY2, field_info(56, 8)},
+    {ChanField::SIGNAL, field_info(64, 16)},
+    {ChanField::SIGNAL2, field_info(80, 16)},
+    {ChanField::NEAR_IR, field_info(96, 16)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+    {ChanField::RAW32_WORD2, field_info(32, 32)},
+    {ChanField::RAW32_WORD3, field_info(64, 32)},
+    {ChanField::RAW32_WORD4, field_info(96, 32)},
+    {ChanField::RAW32_WORD5, field_info(128, 32)},
 }};
 
 static const Table<std::string, FieldInfo, 9> fusa_two_word_pixel_info{{
-    {ChanField::RANGE, {UINT32, 0, 0x7fff, -3}},
-    {ChanField::FLAGS, {UINT8, 1, 0b10000000, 7}},
-    {ChanField::REFLECTIVITY, {UINT8, 2, 0xff, 0}},
-    {ChanField::NEAR_IR, {UINT16, 3, 0xff, -4}},
-    {ChanField::RANGE2, {UINT32, 4, 0x7fff, -3}},
-    {ChanField::FLAGS2, {UINT8, 5, 0b10000000, 7}},
-    {ChanField::REFLECTIVITY2, {UINT8, 6, 0xff, 0}},
-    {ChanField::RAW32_WORD1, {UINT32, 0, 0, 0}},
-    {ChanField::RAW32_WORD2, {UINT32, 4, 0, 0}},
+    {ChanField::RANGE, field_info(0, 15, 3)},
+    {ChanField::FLAGS, field_info(15, 1)},
+    {ChanField::REFLECTIVITY, field_info(16, 8)},
+    {ChanField::NEAR_IR, field_info(24, 8, 4)},
+    {ChanField::RANGE2, field_info(32, 15, 3)},
+    {ChanField::FLAGS2, field_info(47, 1)},
+    {ChanField::REFLECTIVITY2, field_info(48, 8)},
+    {ChanField::RAW32_WORD1, field_info(0, 32)},
+    {ChanField::RAW32_WORD2, field_info(32, 32)},
 }};
 
 Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles{{
@@ -144,35 +278,6 @@ static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
     return it->second;
 }
 
-static int count_set_bits(uint64_t value) {
-    int count = 0;
-    while (value) {
-        count += value & 1;
-        value >>= 1;
-    }
-    return count;
-};
-
-// TODO: move this out to some generalised FieldInfo utils
-uint64_t get_value_mask(const FieldInfo& f) {
-    // first get type mask
-    uint64_t type_mask = (uint64_t{1} << (field_type_size(f.ty_tag) * 8)) - 1;
-
-    uint64_t mask = f.mask;
-    if (mask == 0) mask = type_mask;
-    if (f.shift > 0) mask >>= f.shift;
-    if (f.shift < 0) mask <<= std::abs(f.shift);
-    // final type *may* cut the resultant mask still
-    mask &= type_mask;
-
-    return mask;
-}
-
-// TODO: move this out to some generalised FieldInfo utils
-int get_bitness(const FieldInfo& f) {
-    return count_set_bits(get_value_mask(f));
-}
-
 }  // namespace impl
 
 struct packet_format::Impl {
@@ -187,11 +292,23 @@ struct packet_format::Impl {
     size_t col_size;
     size_t lidar_packet_size;
 
-    size_t timestamp_offset;
-    size_t measurement_id_offset;
-    size_t status_offset;
-
     std::map<std::string, impl::FieldInfo> fields;
+
+    // header infos
+    impl::FieldInfo packet_type_info;
+    impl::FieldInfo frame_id_info;
+    impl::FieldInfo init_id_info;
+    impl::FieldInfo prod_sn_info;
+    impl::FieldInfo alert_flags_info;
+    impl::FieldInfo countdown_thermal_shutdown_info;
+    impl::FieldInfo countdown_shot_limiting_info;
+    impl::FieldInfo thermal_shutdown_info;
+    impl::FieldInfo shot_limiting_info;
+
+    // column infos
+    impl::FieldInfo col_status_info;
+    impl::FieldInfo col_timestamp_info;
+    impl::FieldInfo col_measurement_id_info;
 
     Impl(UDPProfileLidar profile, size_t pixels_per_column,
          size_t columns_per_packet) {
@@ -205,12 +322,6 @@ struct packet_format::Impl {
         col_footer_size = legacy ? 4 : 0;
         packet_footer_size = legacy ? 0 : 32;
 
-        if (profile == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-            max_frame_id = std::numeric_limits<uint32_t>::max();
-        } else {
-            max_frame_id = std::numeric_limits<uint16_t>::max();
-        }
-
         col_size = col_header_size + pixels_per_column * channel_data_size +
                    col_footer_size;
         lidar_packet_size = packet_header_size + columns_per_packet * col_size +
@@ -222,9 +333,76 @@ struct packet_format::Impl {
 
         fields = {entry.fields, entry.fields + entry.n_fields};
 
-        timestamp_offset = 0;
-        measurement_id_offset = 8;
-        status_offset = legacy ? col_size - col_footer_size : 10;
+        // TODO: amend how we detect FUSA once we have a different mechanism
+        bool fusa = false;
+        if (profile == UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+            max_frame_id = std::numeric_limits<uint32_t>::max();
+            fusa = true;
+        } else {
+            max_frame_id = std::numeric_limits<uint16_t>::max();
+        }
+
+        using impl::field_info;
+
+        if (legacy) {
+            // below are absent on legacy, results in mask==0
+            packet_type_info = field_info(0, 0);
+            init_id_info = field_info(0, 0);
+            prod_sn_info = field_info(0, 0);
+            alert_flags_info = field_info(0, 0);
+            countdown_thermal_shutdown_info = field_info(0, 0);
+            countdown_shot_limiting_info = field_info(0, 0);
+            thermal_shutdown_info = field_info(0, 0);
+            shot_limiting_info = field_info(0, 0);
+
+            // frame_id is baked into the first column header
+            frame_id_info = field_info(80, 16);
+
+            col_status_info = field_info(8 * (col_size - col_footer_size), 32);
+            /**
+             * LEGACY col_status sits at the end of the column as opposed to
+             * being in column header, and FieldInfo::get takes 8-byte word,
+             * which would read memory values past the end of the packet.
+             *
+             * This is a crude way of making it read 8-byte word from the left
+             * instead.
+             * TODO: if we run into this issue again, add "pad_left" parameter
+             *       to field_info(), otherwise leaving it here
+             * -- Tim T.
+             */
+            col_status_info.offset -= 4;
+            col_status_info.mask <<= 32;
+            col_status_info.shift += 32;
+        } else if (fusa) {
+            packet_type_info = field_info(0, 8);
+            frame_id_info = field_info(32, 32);
+            init_id_info = field_info(8, 24);
+            alert_flags_info = field_info(
+                64, 8);  // Supposedly supported in both 2.5.X and 3.1.X
+            prod_sn_info = field_info(88, 40);
+            countdown_thermal_shutdown_info = field_info(128, 8);
+            countdown_shot_limiting_info = field_info(136, 8);
+            thermal_shutdown_info = field_info(144, 4);
+            shot_limiting_info = field_info(156, 4);
+
+            col_status_info = field_info(80, 16);
+        } else {
+            packet_type_info = field_info(0, 16);
+            frame_id_info = field_info(16, 16);
+            init_id_info = field_info(32, 24);
+            prod_sn_info = field_info(56, 40);
+            alert_flags_info = field_info(
+                96, 8);  // Supposedly supported in both 2.5.X and 3.1.X
+            countdown_thermal_shutdown_info = field_info(128, 8);
+            countdown_shot_limiting_info = field_info(136, 8);
+            thermal_shutdown_info = field_info(144, 4);
+            shot_limiting_info = field_info(156, 4);
+
+            col_status_info = field_info(80, 16);
+        }
+
+        col_timestamp_info = field_info(0, 64);
+        col_measurement_id_info = field_info(64, 16);
     }
 };
 
@@ -272,26 +450,24 @@ class SameSizeInt<double> {
     typedef uint64_t value;
 };
 
-template <typename T, typename SRC, int N>
-void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field,
-                                     const std::string& chan,
-                                     const uint8_t* packet_buf) const {
-    if (sizeof(T) < sizeof(SRC))
+template <typename T, int BlockDim>
+void packet_format::block_field(Eigen::Ref<img_t<T>> field,
+                                const std::string& chan,
+                                const uint8_t* packet_buf) const {
+    impl::FieldInfo f = impl_->fields.at(chan);
+
+    if (sizeof(T) < field_type_size(f.ty_tag))
         throw std::invalid_argument("Dest type too small for specified field");
 
-    const auto& f = impl_->fields.at(chan);
-
-    size_t offset = f.offset;
-    uint64_t mask = f.mask;
-    int shift = f.shift;
     size_t channel_data_size = impl_->channel_data_size;
 
     int cols = field.cols();
-    T* data = field.data();
-    std::array<const uint8_t*, N> col_buf;
 
-    for (int icol = 0; icol < columns_per_packet; icol += N) {
-        for (int i = 0; i < N; ++i) {
+    T* data = field.data();
+    std::array<const uint8_t*, BlockDim> col_buf;
+
+    for (int icol = 0; icol < columns_per_packet; icol += BlockDim) {
+        for (int i = 0; i < BlockDim; ++i) {
             col_buf[i] = nth_col(icol + i, packet_buf);
         }
 
@@ -299,60 +475,29 @@ void packet_format::block_field_impl(Eigen::Ref<img_t<T>> field,
 
         for (int px = 0; px < pixels_per_column; ++px) {
             std::ptrdiff_t f_offset = cols * px + m_id;
-            for (int x = 0; x < N; ++x) {
+            for (int x = 0; x < BlockDim; ++x) {
                 auto px_src =
                     col_buf[x] + col_header_size + (px * channel_data_size);
-                typename SameSizeInt<T>::value dst =
-                    *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(
-                        px_src + offset);
-                if (mask) dst &= mask;
-                if (shift > 0) dst >>= shift;
-                if (shift < 0) dst <<= std::abs(shift);
-                *(data + f_offset + x) = dst;
+                *(data + f_offset + x) = f.get<T>(px_src);
             }
         }
     }
 }
 
-template <typename T, int BlockDim>
-void packet_format::block_field(Eigen::Ref<img_t<T>> field,
-                                const std::string& chan,
-                                const uint8_t* packet_buf) const {
-    const auto& f = impl_->fields.at(chan);
+template <typename T>
+void packet_format::col_field(const uint8_t* col_buf, const std::string& i,
+                              T* dst, int dst_stride) const {
+    impl::FieldInfo f = impl_->fields.at(i);
 
-    switch (f.ty_tag) {
-        case UINT8:
-            block_field_impl<T, uint8_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case UINT16:
-            block_field_impl<T, uint16_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case UINT32:
-            block_field_impl<T, uint32_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case UINT64:
-            block_field_impl<T, uint64_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case INT8:
-            block_field_impl<T, int8_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case INT16:
-            block_field_impl<T, int16_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case INT32:
-            block_field_impl<T, int32_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case INT64:
-            block_field_impl<T, int64_t, BlockDim>(field, chan, packet_buf);
-            break;
-        case FLOAT32:
-            block_field_impl<T, float, BlockDim>(field, chan, packet_buf);
-            break;
-        case FLOAT64:
-            block_field_impl<T, double, BlockDim>(field, chan, packet_buf);
-            break;
-        default:
-            throw std::invalid_argument("Invalid field for packet format");
+    if (sizeof(T) < field_type_size(f.ty_tag))
+        throw std::invalid_argument("Dest type too small for specified field");
+
+    size_t channel_data_size = impl_->channel_data_size;
+
+    for (int px = 0; px < pixels_per_column; px++) {
+        auto px_src = col_buf + col_header_size + (px * channel_data_size);
+        T* px_dst = dst + px * dst_stride;
+        *px_dst = f.get<T>(px_src);
     }
 }
 
@@ -448,130 +593,6 @@ template void packet_format::block_field<double, 16>(
     Eigen::Ref<img_t<double>> field, const std::string& chan,
     const uint8_t* packet_buf) const;
 
-template <typename SRC, typename DST>
-static void col_field_impl(const uint8_t* col_buf, DST* dst, size_t offset,
-                           uint64_t mask, int shift, int pixels_per_column,
-                           int dst_stride, size_t channel_data_size,
-                           size_t col_header_size) {
-    if (sizeof(DST) < sizeof(SRC))
-        throw std::invalid_argument("Dest type too small for specified field");
-
-    for (int px = 0; px < pixels_per_column; px++) {
-        auto px_src =
-            col_buf + col_header_size + offset + (px * channel_data_size);
-        DST* px_dst = dst + px * dst_stride;
-        typename SameSizeInt<DST>::value dst =
-            *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(px_src);
-        if (mask) dst &= mask;
-        if (shift > 0) dst >>= shift;
-        if (shift < 0) dst <<= std::abs(shift);
-        *px_dst = *reinterpret_cast<DST*>(&dst);
-    }
-}
-
-template <typename SRC, typename DST>
-static void col_field_impl(const uint8_t* col_buf, float* dst, size_t offset,
-                           uint64_t mask, int shift, int pixels_per_column,
-                           int dst_stride, size_t channel_data_size,
-                           size_t col_header_size) {
-    if (sizeof(float) < sizeof(SRC))
-        throw std::invalid_argument("Dest type too small for specified field");
-
-    for (int px = 0; px < pixels_per_column; px++) {
-        auto px_src =
-            col_buf + col_header_size + offset + (px * channel_data_size);
-        float* px_dst = dst + px * dst_stride;
-        typename SameSizeInt<float>::value dst =
-            *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(px_src);
-        if (mask) dst &= mask;
-        if (shift > 0) dst >>= shift;
-        if (shift < 0) dst <<= std::abs(shift);
-        memcpy(px_dst, &dst, sizeof(float));
-    }
-}
-
-template <typename SRC, typename DST>
-static void col_field_impl(const uint8_t* col_buf, double* dst, size_t offset,
-                           uint64_t mask, int shift, int pixels_per_column,
-                           int dst_stride, size_t channel_data_size,
-                           size_t col_header_size) {
-    if (sizeof(float) < sizeof(SRC))
-        throw std::invalid_argument("Dest type too small for specified field");
-
-    for (int px = 0; px < pixels_per_column; px++) {
-        auto px_src =
-            col_buf + col_header_size + offset + (px * channel_data_size);
-        double* px_dst = dst + px * dst_stride;
-        typename SameSizeInt<double>::value dst =
-            *reinterpret_cast<const typename SameSizeInt<SRC>::value*>(px_src);
-        if (mask) dst &= mask;
-        if (shift > 0) dst >>= shift;
-        if (shift < 0) dst <<= std::abs(shift);
-        memcpy(px_dst, &dst, sizeof(double));
-    }
-}
-
-template <typename T>
-void packet_format::col_field(const uint8_t* col_buf, const std::string& i,
-                              T* dst, int dst_stride) const {
-    const auto& f = impl_->fields.at(i);
-
-    switch (f.ty_tag) {
-        case UINT8:
-            col_field_impl<uint8_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case UINT16:
-            col_field_impl<uint16_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case UINT32:
-            col_field_impl<uint32_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case UINT64:
-            col_field_impl<uint64_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case INT8:
-            col_field_impl<int8_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case INT16:
-            col_field_impl<int16_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case INT32:
-            col_field_impl<int32_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case INT64:
-            col_field_impl<int64_t, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case FLOAT32:
-            col_field_impl<float, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        case FLOAT64:
-            col_field_impl<double, T>(
-                col_buf, dst, f.offset, f.mask, f.shift, pixels_per_column,
-                dst_stride, impl_->channel_data_size, impl_->col_header_size);
-            break;
-        default:
-            throw std::invalid_argument("Invalid field for packet format");
-    }
-}
-
 // explicitly instantiate for each field type
 template void packet_format::col_field(const uint8_t*, const std::string&,
                                        uint8_t*, int) const;
@@ -610,116 +631,41 @@ packet_format::FieldIter packet_format::end() const {
 /* Packet headers */
 
 uint16_t packet_format::packet_type(const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no packet_type - use 0 to code as 'legacy'
-        return 0;
-    }
-    uint16_t res = 0;
-    if (udp_profile_lidar ==
-        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        // FuSa profile has 8-bit packet_type
-        std::memcpy(&res, lidar_buf + 0, sizeof(uint8_t));
-    } else {
-        std::memcpy(&res, lidar_buf + 0, sizeof(uint16_t));
-    }
-    return res;
+    return impl_->packet_type_info.get<uint16_t>(lidar_buf);
 }
 
 uint32_t packet_format::frame_id(const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        uint16_t res = 0;
-        std::memcpy(&res, nth_col(0, lidar_buf) + 10, sizeof(uint16_t));
-        return res;
-    }
-
-    // eUDP frame id is 16 bits, but FUSA frame id is 32 bits
-    if (udp_profile_lidar ==
-        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        uint32_t res = 0;
-        std::memcpy(&res, lidar_buf + 4, sizeof(res));
-        return res;
-    } else {
-        uint16_t res = 0;
-        std::memcpy(&res, lidar_buf + 2, sizeof(res));
-        return res;
-    }
+    return impl_->frame_id_info.get<uint32_t>(lidar_buf);
 }
 
 uint32_t packet_format::init_id(const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no init_id - use 0 to code as 'legacy'
-        return 0;
-    }
-    uint32_t res = 0;
-    if (udp_profile_lidar ==
-        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        std::memcpy(&res, lidar_buf + 1, sizeof(uint32_t));
-    } else {
-        std::memcpy(&res, lidar_buf + 4, sizeof(uint32_t));
-    }
-    return res & 0x00ffffff;
+    return impl_->init_id_info.get<uint32_t>(lidar_buf);
 }
 
 uint64_t packet_format::prod_sn(const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no prod_sn (serial number) - use 0 to code as
-        // 'legacy'
-        return 0;
-    }
-    uint64_t res = 0;
-    if (udp_profile_lidar ==
-        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        std::memcpy(&res, lidar_buf + 11, sizeof(uint64_t));
-    } else {
-        std::memcpy(&res, lidar_buf + 7, sizeof(uint64_t));
-    }
-    return res & 0x000000ffffffffff;
+    return impl_->prod_sn_info.get<uint64_t>(lidar_buf);
+}
+
+uint8_t packet_format::alert_flags(const uint8_t* lidar_buf) const {
+    return impl_->alert_flags_info.get<uint8_t>(lidar_buf);
 }
 
 uint16_t packet_format::countdown_thermal_shutdown(
     const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no shutdown counter in packet header - use 0 for
-        // 'normal operation'
-        return 0;
-    }
-    uint16_t res = 0;
-    std::memcpy(&res, lidar_buf + 16, sizeof(uint8_t));
-    return res;
+    return impl_->countdown_thermal_shutdown_info.get<uint16_t>(lidar_buf);
 }
 
 uint16_t packet_format::countdown_shot_limiting(
     const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no shot limiting countdown in packet header - use
-        // 0 for 'normal operation'
-        return 0;
-    }
-    uint16_t res = 0;
-    std::memcpy(&res, lidar_buf + 17, sizeof(uint8_t));
-    return res;
+    return impl_->countdown_shot_limiting_info.get<uint16_t>(lidar_buf);
 }
 
 uint8_t packet_format::thermal_shutdown(const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no shutdown status in packet header - use 0 for
-        // 'normal operation'
-        return 0;
-    }
-    uint8_t res = 0;
-    std::memcpy(&res, lidar_buf + 18, sizeof(uint8_t));
-    return res & 0x0f;
+    return impl_->thermal_shutdown_info.get<uint8_t>(lidar_buf);
 }
 
 uint8_t packet_format::shot_limiting(const uint8_t* lidar_buf) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no shot limiting in packet header - use 0 for
-        // 'normal operation'
-        return 0;
-    }
-    uint8_t res = 0;
-    std::memcpy(&res, lidar_buf + 19, sizeof(uint8_t));
-    return res & 0x0f;
+    return impl_->shot_limiting_info.get<uint8_t>(lidar_buf);
 }
 
 const uint8_t* packet_format::footer(const uint8_t* lidar_buf) const {
@@ -735,25 +681,15 @@ const uint8_t* packet_format::nth_col(int n, const uint8_t* lidar_buf) const {
 }
 
 uint32_t packet_format::col_status(const uint8_t* col_buf) const {
-    uint32_t res = 0;
-    std::memcpy(&res, col_buf + impl_->status_offset, sizeof(uint32_t));
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        return res;  // LEGACY was 32 bits of all 1s
-    } else {
-        return res & 0xffff;  // For eUDP packets, we want the last 16 bits
-    }
+    return impl_->col_status_info.get<uint32_t>(col_buf);
 }
 
 uint64_t packet_format::col_timestamp(const uint8_t* col_buf) const {
-    uint64_t res = 0;
-    std::memcpy(&res, col_buf + impl_->timestamp_offset, sizeof(uint64_t));
-    return res;
+    return impl_->col_timestamp_info.get<uint64_t>(col_buf);
 }
 
 uint16_t packet_format::col_measurement_id(const uint8_t* col_buf) const {
-    uint16_t res = 0;
-    std::memcpy(&res, col_buf + impl_->measurement_id_offset, sizeof(uint16_t));
-    return res;
+    return impl_->col_measurement_id_info.get<uint16_t>(col_buf);
 }
 
 uint32_t packet_format::col_encoder(const uint8_t* col_buf) const {
@@ -780,21 +716,6 @@ uint16_t packet_format::col_frame_id(const uint8_t* col_buf) const {
 
 const uint8_t* packet_format::nth_px(int n, const uint8_t* col_buf) const {
     return col_buf + impl_->col_header_size + (n * impl_->channel_data_size);
-}
-
-template <typename T>
-T packet_format::px_field(const uint8_t* px_buf, const std::string& i) const {
-    const auto& f = impl_->fields.at(i);
-
-    if (sizeof(T) < field_type_size(f.ty_tag))
-        throw std::invalid_argument("Dest type too small for specified field");
-
-    T res = 0;
-    std::memcpy(&res, px_buf + f.offset, field_type_size(f.ty_tag));
-    if (f.mask) res &= f.mask;
-    if (f.shift > 0) res >>= f.shift;
-    if (f.shift < 0) res <<= std::abs(f.shift);
-    return res;
 }
 
 /* IMU packet parsing */
@@ -912,209 +833,69 @@ uint8_t* packet_writer::footer(uint8_t* lidar_buf) const {
 }
 
 void packet_writer::set_col_status(uint8_t* col_buf, uint32_t status) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        std::memcpy(col_buf + impl_->status_offset, &status, sizeof(uint32_t));
-    } else {
-        uint16_t s = status & 0xffff;
-        std::memcpy(col_buf + impl_->status_offset, &s, sizeof(uint16_t));
-    }
+    impl_->col_status_info.set(col_buf, status);
 }
 
 void packet_writer::set_col_timestamp(uint8_t* col_buf, uint64_t ts) const {
-    std::memcpy(col_buf + impl_->timestamp_offset, &ts, sizeof(ts));
+    impl_->col_timestamp_info.set(col_buf, ts);
 }
 
 void packet_writer::set_col_measurement_id(uint8_t* col_buf,
                                            uint16_t m_id) const {
-    std::memcpy(col_buf + impl_->measurement_id_offset, &m_id, sizeof(m_id));
+    impl_->col_measurement_id_info.set(col_buf, m_id);
 }
 
 void packet_writer::set_frame_id(uint8_t* lidar_buf, uint32_t frame_id) const {
-    // eUDP frame id is 16 bits, but FUSA frame id is 32 bits
-    if (udp_profile_lidar ==
-        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        std::memcpy(lidar_buf + 4, &frame_id, sizeof(frame_id));
-        return;
-    }
-
-    uint16_t f_id = static_cast<uint16_t>(frame_id);
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        std::memcpy(nth_col(0, lidar_buf) + 10, &f_id, sizeof(f_id));
-        return;
-    }
-
-    std::memcpy(lidar_buf + 2, &f_id, sizeof(f_id));
+    impl_->frame_id_info.set(lidar_buf, frame_id);
 }
 
-// Helpers for weird sized ints
-// TODO: generalise when/if we need other uintXX_t fractionals
-class uint24_t {
-   protected:
-    uint8_t _internal[3];
-
-   public:
-    uint24_t() {}
-
-    uint24_t(const uint32_t val) { *this = val; }
-
-    uint24_t(const uint24_t& val) { *this = val; }
-
-    operator uint32_t() const {
-        return (_internal[2] << 16) | (_internal[1] << 8) | (_internal[0] << 0);
-    }
-
-    uint24_t& operator=(const uint24_t& input) {
-        _internal[0] = input._internal[0];
-        _internal[1] = input._internal[1];
-        _internal[2] = input._internal[2];
-
-        return *this;
-    }
-
-    uint24_t& operator=(const uint32_t input) {
-        _internal[0] = ((unsigned char*)&input)[0];
-        _internal[1] = ((unsigned char*)&input)[1];
-        _internal[2] = ((unsigned char*)&input)[2];
-
-        return *this;
-    }
-};
-
-class uint40_t {
-   protected:
-    uint8_t _internal[5];
-
-   public:
-    uint40_t() {}
-
-    uint40_t(const uint64_t val) { *this = val; }
-
-    uint40_t(const uint40_t& val) { *this = val; }
-
-    operator uint64_t() const {
-        return (((uint64_t)_internal[4]) << 32) |
-               (((uint64_t)_internal[3]) << 24) |
-               (((uint64_t)_internal[2]) << 16) |
-               (((uint64_t)_internal[1]) << 8) |
-               (((uint64_t)_internal[0]) << 0);
-    }
-
-    uint40_t& operator=(const uint40_t& input) {
-        _internal[0] = input._internal[0];
-        _internal[1] = input._internal[1];
-        _internal[2] = input._internal[2];
-        _internal[3] = input._internal[3];
-        _internal[4] = input._internal[4];
-
-        return *this;
-    }
-
-    uint40_t& operator=(const uint64_t input) {
-        _internal[0] = ((unsigned char*)&input)[0];
-        _internal[1] = ((unsigned char*)&input)[1];
-        _internal[2] = ((unsigned char*)&input)[2];
-        _internal[3] = ((unsigned char*)&input)[3];
-        _internal[4] = ((unsigned char*)&input)[4];
-
-        return *this;
-    }
-};
-
-#pragma pack(push, 1)
-// Relevant parts of packet headers as described/named in sensor documentation
-struct FUSAHeader {
-    uint8_t packet_type;
-    uint24_t init_id;
-    uint32_t frame_id;
-    uint24_t padding;
-    uint40_t serial_no;
-};
-
-struct ConfigurableHeader {
-    uint16_t packet_type;
-    uint16_t frame_id;
-    uint24_t init_id;
-    uint40_t serial_no;
-};
-#pragma pack(pop)
-
 void packet_writer::set_init_id(uint8_t* lidar_buf, uint32_t init_id) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no init_id
-        return;
-    }
-    if (udp_profile_lidar ==
-        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        auto hdr = (FUSAHeader*)lidar_buf;
-        hdr->init_id = init_id;
-    } else {
-        auto hdr = (ConfigurableHeader*)lidar_buf;
-        hdr->init_id = init_id;
-    }
+    impl_->init_id_info.set(lidar_buf, init_id);
+}
+
+void packet_writer::set_packet_type(uint8_t* lidar_buf,
+                                    uint16_t packet_type) const {
+    impl_->packet_type_info.set(lidar_buf, packet_type);
 }
 
 void packet_writer::set_prod_sn(uint8_t* lidar_buf, uint64_t sn) const {
-    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        // LEGACY profile has no prod_sn
-        return;
-    }
-    if (udp_profile_lidar ==
-        UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
-        auto hdr = (FUSAHeader*)lidar_buf;
-        hdr->serial_no = sn;
-    } else {
-        auto hdr = (ConfigurableHeader*)lidar_buf;
-        hdr->serial_no = sn;
-    }
+    impl_->prod_sn_info.set(lidar_buf, sn);
+}
+
+void packet_writer::set_alert_flags(uint8_t* lidar_buf,
+                                    uint8_t alert_flags) const {
+    impl_->alert_flags_info.set(lidar_buf, alert_flags);
+}
+
+void packet_writer::set_shutdown(uint8_t* lidar_buf, uint8_t status) const {
+    impl_->thermal_shutdown_info.set(lidar_buf, status);
+}
+
+void packet_writer::set_shot_limiting(uint8_t* lidar_buf,
+                                      uint8_t status) const {
+    impl_->shot_limiting_info.set(lidar_buf, status);
+}
+
+void packet_writer::set_shutdown_countdown(uint8_t* lidar_buf,
+                                           uint8_t shutdown_countdown) const {
+    impl_->countdown_thermal_shutdown_info.set(lidar_buf, shutdown_countdown);
+}
+
+void packet_writer::set_shot_limiting_countdown(
+    uint8_t* lidar_buf, uint8_t shot_limiting_countdown) const {
+    impl_->countdown_shot_limiting_info.set(lidar_buf, shot_limiting_countdown);
 }
 
 template <typename T>
-void packet_writer::set_px(uint8_t* px_buf, const std::string& i,
-                           T value) const {
-    const auto& f = impl_->fields.at(i);
-
-    typename SameSizeInt<T>::value int_value;
-    memcpy(&int_value, &value, sizeof(T));
-    if (f.shift > 0) int_value <<= f.shift;
-    if (f.shift < 0) int_value >>= std::abs(f.shift);
-    if (f.mask) int_value &= f.mask;
-    auto ptr =
-        reinterpret_cast<typename SameSizeInt<T>::value*>(px_buf + f.offset);
-    *ptr &= ~f.mask;
-    *ptr |= int_value;
-}
-
-template void packet_writer::set_px(uint8_t*, const std::string&,
-                                    uint8_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
-                                    uint16_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
-                                    uint32_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
-                                    uint64_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&, int8_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
-                                    int16_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
-                                    int32_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&,
-                                    int64_t) const;
-template void packet_writer::set_px(uint8_t*, const std::string&, float) const;
-template void packet_writer::set_px(uint8_t*, const std::string&, double) const;
-
-template <typename T, typename DST>
-void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
-                                   const std::string& chan,
-                                   uint8_t* lidar_buf) const {
+void packet_writer::set_block(Eigen::Ref<const img_t<T>> field,
+                              const std::string& chan,
+                              uint8_t* lidar_buf) const {
     constexpr int N = 32;
     if (columns_per_packet > N)
         throw std::runtime_error("Recompile set_block_impl with larger N");
 
-    const auto& f = impl_->fields.at(chan);
+    impl::FieldInfo f = impl_->fields.at(chan);
 
-    size_t offset = f.offset;
-    uint64_t mask = f.mask;
-    int shift = f.shift;
     size_t channel_data_size = impl_->channel_data_size;
 
     int cols = field.cols();
@@ -1135,56 +916,8 @@ void packet_writer::set_block_impl(Eigen::Ref<const img_t<T>> field,
             auto px_dst =
                 col_buf[x] + col_header_size + (px * channel_data_size);
 
-            uint64_t value = *(data + f_offset + x);
-            if (shift > 0) value <<= shift;
-            if (shift < 0) value >>= std::abs(shift);
-            if (mask) value &= mask;
-            DST* ptr = reinterpret_cast<typename SameSizeInt<DST>::value*>(
-                px_dst + offset);
-            *ptr &= ~mask;
-            *ptr |= value;
+            f.set(px_dst, *(data + f_offset + x));
         }
-    }
-}
-
-template <typename T>
-void packet_writer::set_block(Eigen::Ref<const img_t<T>> field,
-                              const std::string& i, uint8_t* lidar_buf) const {
-    const auto& f = impl_->fields.at(i);
-
-    switch (f.ty_tag) {
-        case UINT8:
-            set_block_impl<T, uint8_t>(field, i, lidar_buf);
-            break;
-        case UINT16:
-            set_block_impl<T, uint16_t>(field, i, lidar_buf);
-            break;
-        case UINT32:
-            set_block_impl<T, uint32_t>(field, i, lidar_buf);
-            break;
-        case UINT64:
-            set_block_impl<T, uint64_t>(field, i, lidar_buf);
-            break;
-        case INT8:
-            set_block_impl<T, int8_t>(field, i, lidar_buf);
-            break;
-        case INT16:
-            set_block_impl<T, int16_t>(field, i, lidar_buf);
-            break;
-        case INT32:
-            set_block_impl<T, int32_t>(field, i, lidar_buf);
-            break;
-        case INT64:
-            set_block_impl<T, int64_t>(field, i, lidar_buf);
-            break;
-        case FLOAT32:
-            set_block_impl<T, uint32_t>(field, i, lidar_buf);
-            break;
-        case FLOAT64:
-            set_block_impl<T, uint64_t>(field, i, lidar_buf);
-            break;
-        default:
-            throw std::invalid_argument("Invalid field for packet format");
     }
 }
 
@@ -1283,6 +1016,49 @@ template void packet_writer::unpack_raw_headers(
 template void packet_writer::unpack_raw_headers(
     Eigen::Ref<const img_t<double>> field, uint8_t* lidar_buf) const;
 
+static std::array<uint64_t, 256> crc64_init(void) {
+    // Generate LUT of all possible 8-bit CRCs to speed up CRC calculation
+    // This is for the ECMA-182 CRC64 implementation used on the sensor.
+    constexpr uint64_t poly = 0xC96C5795D7870F42;
+    std::array<uint64_t, 256> arr = {0};
+    for (uint32_t i = 0; i < 256; ++i) {
+        uint64_t r = i;
+        for (uint32_t j = 0; j < 8; ++j) {
+            r = (r >> 1) ^ (poly & ~((r & 1) - 1));
+        }
+        arr[i] = r;
+    }
+
+    return arr;
+}
+
+static std::array<uint64_t, 256> crc64_table = crc64_init();
+
+uint64_t crc64_compute(const uint8_t* buf, size_t len) {
+    uint64_t crc = ~0;
+    // Use Sarwate algorithm LSB-first to calculate the CRC using the LUT.
+    while (len != 0) {
+        crc = crc64_table[*buf++ ^ (crc & 0xFF)] ^ (crc >> 8);
+        --len;
+    }
+
+    return ~crc;
+}
 }  // namespace impl
+
+optional<uint64_t> packet_format::crc(const uint8_t* lidar_buf) const {
+    if (udp_profile_lidar == UDPProfileLidar::PROFILE_LIDAR_LEGACY ||
+        udp_profile_lidar ==
+            UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        return optional<uint64_t>();
+    }
+
+    return *(uint64_t*)&lidar_buf[lidar_packet_size - 8];
+}
+
+uint64_t packet_format::calculate_crc(const uint8_t* lidar_buf) const {
+    return impl::crc64_compute(lidar_buf, lidar_packet_size - 8);
+}
+
 }  // namespace sensor
 }  // namespace ouster

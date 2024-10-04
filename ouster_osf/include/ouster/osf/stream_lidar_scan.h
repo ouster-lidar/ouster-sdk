@@ -146,10 +146,12 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
      * we also might want to have the corresponding function to read back
      * sequentially from Stream that doesn't seem like fit into this model...
      *
-     * @param[in] ts The timestamp to use for the lidar scan.
+     * @param[in] receive_ts The receive timestamp to use for the lidar scan.
+     * @param[in] sensor_ts The sensor timestamp to use for the lidar scan.
      * @param[in] lidar_scan The lidar scan to write.
      */
-    void save(const ouster::osf::ts_t ts, const obj_type& lidar_scan);
+    void save(const ouster::osf::ts_t receive_ts,
+              const ouster::osf::ts_t sensor_ts, const obj_type& lidar_scan);
 
     /**
      * Encode/serialize the object to the buffer of bytes.
@@ -168,11 +170,14 @@ class LidarScanStream : public MessageStream<LidarScanStreamMeta, LidarScan> {
      * @param[in] meta_provider Used to reconstruct any references to other
      *                          metadata entries dependencies
      *                          (like sensor_meta_id)
+     * @param[in] fields List of fields to decode. All are decoded if none
+     *                   provided.
      * @return Pointer to the decoded object.
      */
     static std::unique_ptr<obj_type> decode_msg(
         const std::vector<uint8_t>& buf, const meta_type& meta,
-        const MetadataStore& meta_provider);
+        const MetadataStore& meta_provider,
+        const std::vector<std::string>& fields = {});
 
    public:
     /**

@@ -144,8 +144,21 @@ int main(int argc, char* argv[]) {
         std::cerr << std::endl;
     };
 
+    std::cerr << "\nLet's create a scan with a custom field." << std::endl;
+    //![doc-stag-cpp-scan-add-field]
+    auto custom_scan = ouster::LidarScan(info);
+    custom_scan.add_field("my-custom-field",
+                          ouster::fd_array<uint8_t>(info.h(), info.w()));
+
+    // Custom fields
+    custom_scan.field<uint8_t>("my-custom-field") = 1;  // set all pixels
+    custom_scan.field<uint8_t>("my-custom-field").block(10, 10, 20, 20) =
+        255;  // set a block of pixels
+    //![doc-etag-cpp-scan-add-field]
+
     print_el(legacy_scan, std::string("Legacy Scan"));
     print_el(profile_scan, std::string("Profile Scan"));
     print_el(dual_returns_scan, std::string("Dual Returns Scan"));
     print_el(reduced_fields_scan, std::string("Reduced fields Scan"));
+    print_el(custom_scan, std::string("Custom fields Scan"));
 }

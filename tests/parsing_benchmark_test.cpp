@@ -16,28 +16,6 @@
 
 using namespace ouster::sensor;
 
-using str_pair = std::pair<std::string, std::string>;
-class ParsingBenchmarkTestFixture : public ::testing::TestWithParam<str_pair> {
-};
-
-// clang-format off
-INSTANTIATE_TEST_CASE_P(
-    ParsingBenchmarkTests,
-    ParsingBenchmarkTestFixture,
-    ::testing::Values(
-        str_pair{"OS-0-128-U1_v2.3.0_1024x10.pcap",
-                 "OS-0-128-U1_v2.3.0_1024x10.json"},
-        str_pair{"OS-0-32-U1_v2.2.0_1024x10.pcap",
-                 "OS-0-32-U1_v2.2.0_1024x10.json"},
-        str_pair{"OS-1-128_767798045_1024x10_20230712_120049.pcap",
-                 "OS-1-128_767798045_1024x10_20230712_120049.json"},
-        str_pair{"OS-1-128_v2.3.0_1024x10_lb_n3.pcap",
-                 "OS-1-128_v2.3.0_1024x10.json"},
-        str_pair{"OS-2-128-U1_v2.3.0_1024x10.pcap",
-                 "OS-2-128-U1_v2.3.0_1024x10.json"})
-);
-// clang-format on
-
 namespace ouster {
 namespace sensor_utils {
 
@@ -89,14 +67,81 @@ struct set_zero {
     }
 };
 
-TEST_P(ParsingBenchmarkTestFixture, ParseBlockCorrectnessTest) {
+struct test_fixture {
+    std::string pcap_filename;
+    std::string info_filename;
+    // first packet only
+    uint32_t frame_id;
+    uint32_t init_id;
+    uint64_t prod_sn;
+    // 7th col of first packet only
+    uint64_t col_timestamp;
+};
+
+class ParsingBenchmarkTestFixture
+    : public ::testing::TestWithParam<test_fixture> {};
+
+// clang-format off
+INSTANTIATE_TEST_CASE_P(
+    ParsingBenchmarkTests,
+    ParsingBenchmarkTestFixture,
+    ::testing::Values(
+        test_fixture{"OS-0-128-U1_v2.3.0_1024x10.pcap",
+                     "OS-0-128-U1_v2.3.0_1024x10.json",
+                     1491,
+                     5431292,
+                     122150000150,
+                     1462560143810},
+        test_fixture{"OS-0-32-U1_v2.2.0_1024x10.pcap",
+                     "OS-0-32-U1_v2.2.0_1024x10.json",
+                     1453,
+                     9599938,
+                     992137000142,
+                     515817575400},
+        test_fixture{"OS-1-128_767798045_1024x10_20230712_120049.pcap",
+                     "OS-1-128_767798045_1024x10_20230712_120049.json",
+                     229,
+                     390076,
+                     122246000293,
+                     647840675576},
+        test_fixture{"OS-1-128_v2.3.0_1024x10_lb_n3.pcap",
+                     "OS-1-128_v2.3.0_1024x10.json",
+                     1795,
+                     7109750,
+                     122201000998,
+                     991588047790},
+        test_fixture{"OS-2-128-U1_v2.3.0_1024x10.pcap",
+                     "OS-2-128-U1_v2.3.0_1024x10.json",
+                     1259,
+                     5431293,
+                     992210000957,
+                     765697732720})
+);
+// clang-format on
+
+TEST_P(ParsingBenchmarkTestFixture, ParseCorrectnessTest) {
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
 
-    auto info =
-        ouster::sensor::metadata_from_json(data_dir + "/" + test_params.second);
+    auto info = ouster::sensor::metadata_from_json(data_dir + "/" +
+                                                   test_params.info_filename);
     auto pf = ouster::sensor::packet_format(info);
-    PcapReader pcap(data_dir + "/" + test_params.first);
+    PcapReader pcap(data_dir + "/" + test_params.pcap_filename);
+
+    // test headers parsing
+    pcap.seek(0);
+    pcap.next_packet();
+    EXPECT_EQ(pf.packet_type(pcap.current_data()), 1u);
+    EXPECT_EQ(pf.frame_id(pcap.current_data()), test_params.frame_id);
+    EXPECT_EQ(pf.init_id(pcap.current_data()), test_params.init_id);
+    EXPECT_EQ(pf.prod_sn(pcap.current_data()), test_params.prod_sn);
+    EXPECT_EQ(pf.countdown_thermal_shutdown(pcap.current_data()), 0);
+    EXPECT_EQ(pf.countdown_shot_limiting(pcap.current_data()), 0);
+    EXPECT_EQ(pf.thermal_shutdown(pcap.current_data()), 0);
+    const uint8_t* col = pf.nth_col(7, pcap.current_data());
+    EXPECT_EQ(pf.col_status(col), 1u);
+    EXPECT_EQ(pf.col_timestamp(col), test_params.col_timestamp);
+    EXPECT_EQ(pf.col_measurement_id(col), 7);
 
     auto ls =
         LidarScan(info.format.columns_per_frame, info.format.pixels_per_column,
@@ -135,18 +180,18 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
 
-    auto info =
-        ouster::sensor::metadata_from_json(data_dir + "/" + test_params.second);
+    auto info = ouster::sensor::metadata_from_json(data_dir + "/" +
+                                                   test_params.info_filename);
     auto pf = ouster::sensor::packet_format(info);
 
     std::cout << styles["yellow"] << styles["bold"]
-              << "CHECKING PARSING PERFORMANCE WITH: " << test_params.first
-              << styles["reset"] << std::endl;
+              << "CHECKING PARSING PERFORMANCE WITH: "
+              << test_params.pcap_filename << styles["reset"] << std::endl;
 
     // load up packets into memory to avoid I/O latency messing with benchmarks
     std::vector<std::vector<uint8_t>> packets;
     {
-        PcapReader pcap(data_dir + "/" + test_params.first);
+        PcapReader pcap(data_dir + "/" + test_params.pcap_filename);
         while (pcap.next_packet()) {
             if (pcap.current_info().dst_port == 7502) {
                 std::vector<uint8_t> packet(pcap.current_length());

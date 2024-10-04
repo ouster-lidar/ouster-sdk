@@ -5,18 +5,19 @@ Lidar and IMU Packets
 =====================
 
 
-The :py:class:`.PacketSource` is the basic interface for sensor packets. It can be advantageous to
+The :py:class:`.PacketMultiSource` is the basic interface for sensor packets. It can be advantageous to
 work with packets directly when latency is a concern, or when you wish to examine the data packet by
 packet, e.g., if you wish to examine timestamps of packets.
 
-Let's make a :py:class:`.PacketSource` from our sample data using :py:class:`.pcap.Pcap`:
+Let's make a :py:class:`.PacketMultiSource` from our sample data using :py:class:`.pcap.PcapMultiPacketReader`:
 
 .. code:: python
 
+    from ouster.sdk import pcap
     with open(metadata_path, 'r') as f:
         metadata = client.SensorInfo(f.read())
 
-    source = pcap.Pcap(pcap_path, metadata)
+    source = pcap.PcapMultiPacketReader(pcap_path, metadatas=[metadata])
 
 Now we can read packets from ``source`` with the following code:
 

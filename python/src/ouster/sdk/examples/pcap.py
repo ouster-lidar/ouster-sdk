@@ -10,21 +10,18 @@ This module has a rudimentary command line interface. For usage, run::
 """
 import os
 import argparse
-from contextlib import closing
 import numpy as np
 
 from ouster.sdk import client, pcap
-from .colormaps import normalize
+from ouster.sdk.examples.colormaps import normalize
 
 
-def pcap_3d_one_scan(source: client.PacketSource,
-                     metadata: client.SensorInfo,
+def pcap_3d_one_scan(source_file: str,
                      num: int = 0) -> None:
     """Render one scan from a pcap file in the Open3D viewer.
 
     Args:
-        source: PacketSource from pcap
-        metadata: associated SensorInfo for PacketSource
+        source: path to pcap
         num: scan number in a given pcap file (satrs from *0*)
     """
     try:
@@ -35,9 +32,13 @@ def pcap_3d_one_scan(source: client.PacketSource,
             "platforms. Try running `pip3 install open3d` first.")
         exit(1)
 
+    # open source
+    source = pcap.PcapScanSource(source_file).single_source(0)
+    metadata = source.metadata
+
     from more_itertools import nth
     # get single scan by index
-    scan = nth(client.Scans(source), num)
+    scan = nth(source, num)
 
     if not scan:
         print(f"ERROR: Scan # {num} in not present in pcap file")
@@ -77,15 +78,18 @@ def pcap_3d_one_scan(source: client.PacketSource,
     vis.destroy_window()
 
 
-def pcap_display_xyz_points(source: client.PacketSource,
-                            metadata: client.SensorInfo,
+def pcap_display_xyz_points(source_file: str,
                             num: int = 0) -> None:
     """Plot point cloud using matplotlib."""
     import matplotlib.pyplot as plt  # type: ignore
 
+    # open the source
+    source = pcap.PcapScanSource(source_file).single_source(0)
+    metadata = source.metadata
+
     # [doc-stag-pcap-plot-xyz-points]
     from more_itertools import nth
-    scan = nth(client.Scans(source), num)
+    scan = nth(source, num)
     if not scan:
         print(f"ERROR: Scan # {num} in not present in pcap file")
         exit(1)
@@ -112,13 +116,19 @@ def pcap_display_xyz_points(source: client.PacketSource,
     # [doc-etag-pcap-plot-xyz-points]
 
 
-def pcap_to_las(source: client.PacketSource,
-                metadata: client.SensorInfo,
+def pcap_to_las(source_file: str,
                 num: int = 0,
                 las_dir: str = ".",
                 las_base: str = "las_out",
                 las_ext: str = "las") -> None:
     "Write scans from a pcap to las files (one per lidar scan)."
+
+    from itertools import islice
+    import laspy  # type: ignore
+
+    # open source
+    source = pcap.PcapScanSource(source_file).single_source(0)
+    metadata = source.metadata
 
     if (metadata.format.udp_profile_lidar ==
             client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
@@ -127,14 +137,11 @@ def pcap_to_las(source: client.PacketSource,
               "for clarity reasons.  You can modify the code as needed by "
               "accessing it through Github or the SDK documentation.")
 
-    from itertools import islice
-    import laspy  # type: ignore
-
     # precompute xyzlut to save computation in a loop
     xyzlut = client.XYZLut(metadata)
 
     # create an iterator of LidarScans from pcap and bound it if num is specified
-    scans = iter(client.Scans(source))
+    scans = iter(source)
     if num:
         scans = islice(scans, num)
 
@@ -153,13 +160,15 @@ def pcap_to_las(source: client.PacketSource,
         las.write(las_path)
 
 
-def pcap_to_pcd(source: client.PacketSource,
-                metadata: client.SensorInfo,
+def pcap_to_pcd(source_file: str,
                 num: int = 0,
                 pcd_dir: str = ".",
                 pcd_base: str = "pcd_out",
                 pcd_ext: str = "pcd") -> None:
     "Write scans from a pcap to pcd files (one per lidar scan)."
+    # open source
+    source = pcap.PcapScanSource(source_file).single_source(0)
+    metadata = source.metadata
 
     if (metadata.format.udp_profile_lidar ==
             client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
@@ -184,7 +193,7 @@ def pcap_to_pcd(source: client.PacketSource,
     xyzlut = client.XYZLut(metadata)
 
     # create an iterator of LidarScans from pcap and bound it if num is specified
-    scans = iter(client.Scans(source))
+    scans = iter(source)
     if num:
         scans = islice(scans, num)
 
@@ -203,8 +212,7 @@ def pcap_to_pcd(source: client.PacketSource,
         o3d.io.write_point_cloud(pcd_path, pcd)  # type: ignore
 
 
-def pcap_to_ply(source: client.PacketSource,
-                metadata: client.SensorInfo,
+def pcap_to_ply(source_file: str,
                 num: int = 0,
                 ply_dir: str = ".",
                 ply_base: str = "ply_out",
@@ -214,26 +222,25 @@ def pcap_to_ply(source: client.PacketSource,
     # Don't need to print warning about dual returns since this leverages pcap_to_pcd
 
     # We are reusing the same Open3d File IO function to write the PLY file out
-    pcap_to_pcd(source,
-                metadata,
+    pcap_to_pcd(source_file,
                 num=num,
                 pcd_dir=ply_dir,
                 pcd_base=ply_base,
                 pcd_ext=ply_ext)
 
 
-def pcap_query_scan(source: client.PacketSource,
-                    metadata: client.SensorInfo,
+def pcap_query_scan(source_file: str,
                     num: int = 0) -> None:
     """
     Example: Query available fields in LidarScan
 
     Args:
-        source: PacketSource from pcap
-        metadata: associated SensorInfo for PacketSource
+        source_file: Path to pcap file
         num: scan number in a given pcap file (satrs from *0*)
     """
-    scans = iter(client.Scans(source))
+    # open source
+    source = pcap.PcapScanSource(source_file).single_source(0)
+    scans = iter(source)
 
     # [doc-stag-pcap-query-scan]
     scan = next(scans)
@@ -244,11 +251,14 @@ def pcap_query_scan(source: client.PacketSource,
 
 
 def pcap_read_packets(
-        source: client.PacketSource,
-        metadata: client.SensorInfo,
+        source_file: str,
         num: int = 0  # not used in this example
 ) -> None:
     """Basic read packets example from pcap file. """
+    # open source
+    source = pcap.PcapMultiPacketReader(source_file).single_source(0)
+    metadata = source.metadata
+
     # [doc-stag-pcap-read-packets]
     packet_format = client.PacketFormat(metadata)
     for packet in source:
@@ -278,8 +288,7 @@ def pcap_read_packets(
 
 
 def pcap_to_csv(
-        source: client.PacketSource,
-        metadata: client.SensorInfo,
+        source: str,
         num: int = 0) -> None:
     # leave comment directing users to ouster-cli
     print("NOTICE: The pcap-to-csv example has been retired in favor of "
@@ -307,9 +316,6 @@ def main():
         description=description, formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument('pcap_path', metavar='PCAP', help='path to pcap file')
-    parser.add_argument('metadata_path',
-                        metavar='METADATA',
-                        help='path to metadata json')
     parser.add_argument('example',
                         metavar='EXAMPLE',
                         choices=examples.keys(),
@@ -327,19 +333,9 @@ def main():
         print(description)
         exit(1)
 
-    if not args.metadata_path or not os.path.exists(args.metadata_path):
-        print(f"Metadata file does not exist: {args.metadata_path}")
-        exit(1)
-
-    with open(args.metadata_path, 'r') as f:
-        metadata = client.SensorInfo(f.read())
-
     print(f'example: {args.example}')
 
-    source = pcap.Pcap(args.pcap_path, metadata)
-
-    with closing(source):
-        example(source, metadata, args.scan_num)  # type: ignore
+    example(args.pcap_path, args.scan_num)
 
 
 if __name__ == "__main__":

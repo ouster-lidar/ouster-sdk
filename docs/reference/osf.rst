@@ -33,7 +33,7 @@ Getting example OSF files
 -------------------------
 
 The :doc:`sample data page <../sample-data>` has instructions for obtaining sample datasets. Sample
-datasets are availble in OSF format in addition to pcap.
+datasets are available in OSF format in addition to pcap.
 
 OSF format details
 ------------------

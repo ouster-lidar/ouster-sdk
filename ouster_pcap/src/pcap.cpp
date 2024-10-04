@@ -17,8 +17,8 @@
 #define FTELL _ftelli64
 #define FSEEK _fseeki64
 #elif defined __EMSCRIPTEN__
-#define FTELL ftell
-#define FSEEK fseek
+#define FTELL ftello
+#define FSEEK fseeko
 #else
 #include <arpa/inet.h>  // inet_ntop
 #include <sys/time.h>   // timeval

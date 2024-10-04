@@ -2,10 +2,7 @@
 
 import os.path
 from pathlib import Path
-from typing import Optional, List, Any
-from packaging import version
-import requests
-import re
+from typing import Optional, List
 from ouster.sdk.client import SensorInfo
 
 
@@ -23,20 +20,20 @@ def _check_sensor_metadata_for_duplicates(data_path, metas):
     Returns:
         serial number if the metadata files are duplicates else None
     """
-    metas_set = set()
+    serial_numbers = set()
     for meta in metas:
         # Open each file, read its content, and create a SensorInfo object
         with open(meta) as file:
             meta_content = file.read()
             si = SensorInfo(meta_content)
-        if si.sn in metas_set:
+        if si.sn in serial_numbers:
             s = ["The following metadata files identified for "
                  f"{data_path} contain configuration for the same sensor {si.sn}. Files: "
-                 f"{set(metas)}",
+                 f"{', '.join(sorted((set(metas))))} ",
                  "To resolve this, remove the extra metadata file(s) or specify the metadata "
                  "files manually using the --meta option."]
             raise RuntimeError("\n".join(s))
-        metas_set.add(si.sn)
+        serial_numbers.add(si.sn)
 
 
 def _resolve_metadata_multi_with_prefix_guess(data_path: str) -> List[str]:
@@ -123,19 +120,3 @@ def resolve_metadata_multi(data_path: str) -> List[str]:
         list of metadata json paths guessed with the most common prefix match
     """
     return _resolve_metadata_multi_with_prefix_guess(data_path)
-
-
-def firmware_version(hostname: str) -> Any:
-    firmware_version_endpoint = f"http://{hostname}/api/v1/system/firmware"
-    response = requests.get(firmware_version_endpoint)
-    if response.status_code != requests.codes.ok:
-        raise RuntimeError("Could not get sensor firmware version")
-
-    match = re.search("v(\\d+).(\\d+)\\.(\\d+)", response.text)
-    if match:
-        return version.Version(".".join(
-            [match.group(1), match.group(2),
-             match.group(3)]))
-
-    raise RuntimeError(
-        f"Could not get sensor firmware version from {response.text}")

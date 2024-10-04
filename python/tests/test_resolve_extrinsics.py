@@ -105,7 +105,7 @@ def test_open_source_with_file_that_has_no_valid_extrinscs_but_supply_extrinscs_
     assert array_cmp.any()
 
 
-def test_open_source_with_file_that_has_valid_extrinscs():
+def test_open_source_with_file_that_has_valid_extrinscs_no_automatic():
     ss = open_source(source_url=PCAP_PATH_WITH_EXT)
-    array_cmp = ss.metadata.extrinsic != np.eye(4)
+    array_cmp = ss.metadata.extrinsic == np.eye(4)
     assert array_cmp.any()

@@ -227,6 +227,8 @@ class OsfFile {
      * Move policy:
      * Allow transferring ownership of the underlying file
      * handler (mmap).
+     *
+     * @param[in] other The OSF file to move
      */
     OsfFile(OsfFile&& other);
 

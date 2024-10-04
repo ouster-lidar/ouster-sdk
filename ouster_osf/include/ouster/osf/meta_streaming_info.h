@@ -98,6 +98,22 @@ struct StreamStats {
     uint32_t message_avg_size;
 
     /**
+     * The receive timestamps of each message in the stream.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs :: StreamStats :: receive_timestamps
+     */
+    std::vector<uint64_t> receive_timestamps;
+
+    /**
+     * The sensor timestamps of each message in the stream.
+     *
+     * Flat Buffer Reference:
+     *   fb/streaming/streaming_info.fbs :: StreamStats :: sensor_timestamps
+     */
+    std::vector<uint64_t> sensor_timestamps;
+
+    /**
      * Default constructor, sets everthing to 0.
      */
     StreamStats() = default;
@@ -106,23 +122,29 @@ struct StreamStats {
      * Construct a StreamStats with the specified values
      *
      * @param[in] s_id Specify the stream_id to use.
-     * @param[in] t Set the start and end timestamps to the specified value.
+     * @param[in] receive_ts Set the start and end timestamps to the specified
+     * value and add it to the receive timestamps.
+     * @param[in] sensor_ts Add to the sensor timestamps.
      * @param[in] msg_size Set the average message size to the specified value.
      */
-    StreamStats(uint32_t s_id, ts_t t, uint32_t msg_size);
+    StreamStats(uint32_t s_id, ts_t receive_ts, ts_t sensor_ts,
+                uint32_t msg_size);
 
     /**
      * Update values within the StreamStats
      *
-     * @param[in] t Add another timestamp and calculate the start and end
-     *              values.
+     * @param[in] receive_ts Add another receive timestamp and calculate the
+     * start and end values.
+     * @param[in] sensor_ts Add another sensor timestamp
      * @param[in] msg_size Add another message size and calculate the average.
      */
-    void update(ts_t t, uint32_t msg_size);
+    void update(ts_t receive_ts, ts_t sensor_ts, uint32_t msg_size);
 };
 
 /**
  * Get the string representation for a ChunkInfo object.
+ *
+ * @param[in] chunk_info ChunkInfo object to be converted to string
  *
  * @return The string representation for a ChunkInfo object.
  */
@@ -130,6 +152,8 @@ std::string to_string(const ChunkInfo& chunk_info);
 
 /**
  * Get the string representation for a StreamStats object.
+ *
+ * @param[in] stream_stats StreamStats object to be converted to string.
  *
  * @return The string representation for a StreamStats object.
  */

@@ -21,10 +21,11 @@ TEST_F(MetaStreamingInfoTests, StreamingPrintTests) {
               "{offset = 1, stream_id = 2, message_count = 3}");
 
     ts_t t(5678L);
-    StreamStats data2(4, t, 6);
+    StreamStats data2(4, t, t, 6);
     EXPECT_EQ(to_string(data2),
               "{stream_id = 4, start_ts = 5678, end_ts = 5678,"
-              " message_count = 1, message_avg_size = 6}");
+              " message_count = 1, message_avg_size = 6, host_timestamps = "
+              "[5678, ], sensor_timestamps = [5678, ]}");
 }
 
 }  // namespace

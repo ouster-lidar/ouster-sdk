@@ -2,7 +2,7 @@ from typing import Optional, Iterator, Union, List
 from itertools import islice
 from ouster.sdk.client.scan_source import ScanSource
 from ouster.sdk.client.multi_scan_source import MultiScanSource
-from ouster.sdk.client._client import SensorInfo, LidarScan
+from ouster.sdk._bindings.client import SensorInfo, LidarScan
 from ouster.sdk.client.data import FieldTypes
 from ouster.sdk.util.forward_slicer import ForwardSlicer
 

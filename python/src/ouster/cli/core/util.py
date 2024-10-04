@@ -31,10 +31,9 @@ from copy import deepcopy
 from ouster.sdk import client
 from ouster.sdk.util import resolve_metadata
 
-from ouster.sdk.sensor import SensorMultiPacketReader
-from ouster.sdk.client import ScansMulti, PacketMultiSource, PacketMultiWrapper
-
-from ouster.sdk.sensor.util import configure_sensor_multi
+from ouster.sdk.sensor.util import build_sensor_config
+from ouster.sdk.client import ScansMulti, PacketMultiSource, SensorHttp, PacketFormat, parse_and_validate_metadata
+from ouster.sdk.client.data import ColHeader
 
 DEFAULT_SAMPLE_URL = 'https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip'
 
@@ -194,6 +193,33 @@ def system_info() -> None:
 
 
 @util_group.command()
+@click.argument('file', required=True, type=click.Path(exists=True))
+def validate_metadata(file: str) -> None:
+    """Validate a metadata json file."""
+    with open(file, 'r') as f:
+        _, issues = parse_and_validate_metadata(f.read())
+        have_issues = False
+        if len(issues.critical) > 0:
+            have_issues = True
+            click.echo("CRITICAL ISSUES:")
+            for item in issues.critical:
+                click.echo(item)
+        if len(issues.warning) > 0:
+            have_issues = True
+            click.echo("WARNING ISSUES:")
+            for item in issues.warning:
+                click.echo(item)
+        if len(issues.information) > 0:
+            have_issues = True
+            click.echo("INFORMATION ISSUES:")
+            for item in issues.information:
+                click.echo(item)
+
+        if not have_issues:
+            click.echo("No issues found")
+
+
+@util_group.command()
 @click.argument('file', required=False, type=click.Path(exists=True))
 @click.option('-m',
               '--meta',
@@ -251,7 +277,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     click.echo(f"  filename: {os.path.basename(file)}")
     click.echo(f"  md5: {hash}")
     click.echo(f"  size: {os.path.getsize(file) / 2**30:.3f} GB")
-    click.echo(f"  mode: {info.mode}")
+    click.echo(f"  mode: {info.config.lidar_mode}")
     click.echo(f"  prod line: {info.prod_line}")
     click.echo(f"  col window: {info.format.column_window}")
 
@@ -339,7 +365,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
               '--n-seconds',
               default=20.0,
               help="Max time process, default 20.s")
-@click.option('-b', '--buf-size', default=1280, help="Max packets to buffer")
+@click.option('-b', '--buf-size', default=20.0, help="Max time to buffer packets")
 @click.option('-t', '--timeout', default=2.0, help="Seconds to wait for data")
 @click.option('-x',
               '--do-not-reinitialize',
@@ -353,10 +379,6 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
               default=False,
               help="Do not automatically set udp_dest (by default it will auto "
               "set udp_dest")
-@click.option('--multi',
-              is_flag=True,
-              hidden=False,
-              help='Turn on multi sensor handling')
 @click.option('--short',
               required=False,
               is_flag=True,
@@ -390,7 +412,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
 def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                      n_frames: Optional[int], n_seconds: float, buf_size: int,
                      do_not_reinitialize: bool, no_auto_udp_dest: bool,
-                     multi: bool, timeout: float, short: bool,
+                     timeout: float, short: bool,
                      only_range_refl: bool, copy_data: bool, scan_batch: bool,
                      xyz: bool, xyz_mean: bool, no_viz: bool) -> None:
     """Reads from the sensor and measure packet drops, cpu load etc."""
@@ -399,61 +421,32 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     hostnames: List[str] = [x.strip() for x in hostname.split(",") if x.strip()]
 
-    if not multi and len(hostnames) > 1:
-        click.echo(
-            f"ERROR: Got {len(hostnames)} sensors but NOT --multi param is "
-            "specified. Use --multi or a single sensor source.")
-        return
-
     click.echo(f"Checking sensor configurations for: {hostnames} ...")
-
-    configs = configure_sensor_multi(hostnames,
-                                     first_lidar_port=lidar_port,
-                                     do_not_reinitialize=do_not_reinitialize,
-                                     no_auto_udp_dest=no_auto_udp_dest)
-
-    ports = [(c.udp_port_lidar, c.udp_port_imu) for c in configs]
 
     click.echo(f"Starting sensor source for: {hostnames} ...")
 
     packet_source: PacketMultiSource
 
-    if not multi:
-        source = client.Sensor(hostnames[0],
-                               configs[0].udp_port_lidar,
-                               configs[0].udp_port_imu,
-                               buf_size=buf_size,
-                               timeout=timeout if timeout > 0 else None)
-    else:
-        source = SensorMultiPacketReader(hostnames,
-                                         ports=ports,
-                                         buf_size_secs=3.0,
-                                         timeout=timeout if timeout > 0 else None,
-                                         extrinsics_path=os.getcwd())
+    slist = []
+    for hostname in hostnames:
+        sensor_http = SensorHttp.create(hostname, 10)
+        config = build_sensor_config(sensor_http,
+                                     lidar_port,
+                                     None,
+                                     do_not_reinitialize=do_not_reinitialize,
+                                     no_auto_udp_dest=no_auto_udp_dest)
+        slist.append((hostname, config))
+    packet_source = client.SensorPacketSource(slist, buf_size=buf_size, timeout=timeout if timeout > 0 else None)
 
-    packet_source = PacketMultiWrapper(source)
-
-    for idx, (conf, meta) in enumerate(zip(configs, packet_source.metadata)):
+    for idx, meta in enumerate(packet_source.metadata):
         click.echo(f"sensor [{idx}] = ")
-        click.echo(f"  {'Model':<20}: {meta.prod_line} {meta.fw_rev} {meta.mode}")
+        click.echo(f"  {'Model':<20}: {meta.prod_line} {meta.fw_rev} {meta.config.lidar_mode}")
         click.echo(f"  {'SN':<20}: {meta.sn}")
-        click.echo(f"  {'hostname':<20}: {meta.hostname}")
         for prop in [
                 "udp_dest", "udp_port_lidar", "udp_port_imu", "lidar_mode",
                 "azimuth_window", "udp_profile_lidar"
         ]:
-            click.echo(f"  {prop:<20}: {getattr(conf, prop)}")
-
-    # TODO[pb]: Left here commented for quick test of MultiViz while we don't have
-    #           `ouster-cli sensor viz --multi` implemented
-    # from ouster.sdk.viz import SimpleViz
-    # from ouster.sdk.viz.multi_viz import MultiLidarScanViz
-    # scan_source = ScansMulti(packet_source)
-    # ls_viz = MultiLidarScanViz(scan_source.metadata, source_name=str(hostnames))
-    # scans = iter(scan_source)
-    # SimpleViz(ls_viz, _buflen=100).run(scans)
-    # scan_source.close()
-    # return
+            click.echo(f"  {prop:<20}: {getattr(meta.config, prop)}")
 
     packets_per_frame = [
         (m.format.columns_per_frame / m.format.columns_per_packet)
@@ -462,6 +455,9 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     max_packets_per_frame = max(packets_per_frame)
     columns_per_packet = [
         m.format.columns_per_packet for m in packet_source.metadata
+    ]
+    pf = [
+        PacketFormat(m) for m in packet_source.metadata
     ]
 
     xyzlut = [client.XYZLut(info) for info in packet_source.metadata]
@@ -530,7 +526,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     for idx, info in enumerate(data_source.metadata):
         click.echo(
-            f"Receiving data [{idx}]: {info.prod_line}, {info.mode}, "
+            f"Receiving data [{idx}]: {info.prod_line}, {info.config.lidar_mode}, "
             f"{info.format.udp_profile_lidar}, {info.format.column_window}, "
             f"[{flags}] ...")
 
@@ -553,7 +549,8 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
             if isinstance(obj, client.LidarPacket):
                 # no scan batching branch
                 packet = obj if not copy_data else deepcopy(obj)
-                packet_num = int(packet.measurement_id[0] / columns_per_packet[idx])
+                packet_num = int(pf[idx].packet_header(ColHeader.MEASUREMENT_ID, packet.buf)[0]
+                    / columns_per_packet[idx])
 
                 total_packets[idx] += 1
 
@@ -697,7 +694,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
             click.echo("  sensors:")
             for idx, info in enumerate(data_source.metadata):
                 click.echo(
-                    f"      {idx:<5}: {info.prod_line}, {info.mode}, "
+                    f"      {idx:<5}: {info.prod_line}, {info.config.lidar_mode}, "
                     f"{info.format.udp_profile_lidar}, {info.format.column_window}"
                 )
 
@@ -714,25 +711,24 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                 f"      missed            : {sum(missed_packets)} "
                 f"({all_missed_packets_percent:.02f}%){missed_packets_str}")
 
-            if hasattr(source, "id_error_count"):
-                if isinstance(source.id_error_count, list):
-                    error_cnt_str = f"{sum(source.id_error_count)}"
-                    if sum(source.id_error_count) and len(source.metadata) > 1:
-                        error_cnt_str += f", {source.id_error_count}"
+            if hasattr(packet_source, "id_error_count"):
+                if isinstance(packet_source.id_error_count, list):
+                    error_cnt_str = f"{sum(packet_source.id_error_count)}"
+                    if sum(packet_source.id_error_count) and len(packet_source.metadata) > 1:
+                        error_cnt_str += f", {packet_source.id_error_count}"
                 else:
-                    error_cnt_str = f"{source.id_error_count}"
+                    error_cnt_str = f"{packet_source.id_error_count}"
                 click.echo(f"      id errors         : {error_cnt_str}")
 
             click.echo(f"  total frames          : {total_frames_cnt}{frames_cnt_str}")
-            click.echo(f"  avg packets in buf    : {avg_packets_in_buf:.02f} "
-                       f"/ {source._cli.capacity}")
+            click.echo(f"  avg packets in buf    : {avg_packets_in_buf:.02f}")
             click.echo(f"  avg CPU loads         : {avg_cpu_load:.02f}% "
                        f"({avg_max_cpu_load:.02f}%)")
 
         # one line summary for spreadsheets use (only for single sensor)
         if len(data_source.metadata) == 1:
             info = data_source.metadata[0]
-            click.echo(f"-,{info.prod_line},{info.mode},"
+            click.echo(f"-,{info.prod_line},{info.config.lidar_mode},"
                        f"{info.format.udp_profile_lidar},"
                        f"{flags},"
                        f"{sum(total_packets)},"
@@ -740,7 +736,6 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                        f"{all_missed_packets_percent:.02f},"
                        f"{sum(frames_cnt)},"
                        f"{avg_packets_in_buf:.02f},"
-                       f"{source._cli.capacity},"
                        f"{avg_cpu_load:.02f},"
                        f"{avg_max_cpu_load:.02f}")
 

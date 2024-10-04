@@ -6,30 +6,32 @@ Ouster Visualizer (aka PointViz and tools)
 """
 # flake8: noqa (unused imports)
 
-from ._viz import PointViz
-from ._viz import Cloud
-from ._viz import Image
-from ._viz import Cuboid
-from ._viz import Label
-from ._viz import WindowCtx
-from ._viz import Camera
-from ._viz import TargetDisplay
-from ._viz import add_default_controls
-from ._viz import calref_palette
-from ._viz import spezia_palette
-from ._viz import grey_palette
-from ._viz import viridis_palette
-from ._viz import magma_palette
+from ouster.sdk._bindings.viz import MouseButton
+from ouster.sdk._bindings.viz import MouseButtonEvent
+from ouster.sdk._bindings.viz import EventModifierKeys
+from ouster.sdk._bindings.viz import PointViz
+from ouster.sdk._bindings.viz import Cloud
+from ouster.sdk._bindings.viz import Image
+from ouster.sdk._bindings.viz import Cuboid
+from ouster.sdk._bindings.viz import Label
+from ouster.sdk._bindings.viz import WindowCtx
+from ouster.sdk._bindings.viz import Camera
+from ouster.sdk._bindings.viz import TargetDisplay
+from ouster.sdk._bindings.viz import add_default_controls
+from ouster.sdk._bindings.viz import calref_palette
+from ouster.sdk._bindings.viz import spezia_palette
+from ouster.sdk._bindings.viz import grey_palette
+from ouster.sdk._bindings.viz import viridis_palette
+from ouster.sdk._bindings.viz import magma_palette
+
+from .view_mode import ImageMode
+from .view_mode import CloudMode
+from .view_mode import ImageCloudMode
 
 from .core import push_point_viz_handler
 from .core import LidarScanViz
 from .core import SimpleViz
-from .view_mode import ImageMode
-from .view_mode import CloudMode
-from .view_mode import ImageCloudMode
 from .core import CloudPaletteItem
 from .core import VizExtraMode
 
 from .util import AxisWithLabel
-
-from .scans_accum import ScansAccumulator

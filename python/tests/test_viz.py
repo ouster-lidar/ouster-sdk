@@ -4,14 +4,14 @@ All rights reserved.
 """
 
 import weakref
-from typing import TYPE_CHECKING, Tuple, Optional, Callable
+from typing import TYPE_CHECKING, List, Tuple, Optional, Callable
 
 import pytest
 import numpy as np
 
 import random
 
-from ouster.sdk import client
+from ouster.sdk.client import ChanField, LidarScan, SensorInfo
 
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck
@@ -405,13 +405,6 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     cloud.set_key(key)
     show_viz()
 
-    # + set_key_alpha() ====================================
-    label.set_text("Cloud RGB: add set..key..alpha() to parts")
-    key_alpha = np.full(1024, 1.0, dtype=float)
-    key_alpha[points[1, :] > 0] = 0.3
-    cloud.set_key_alpha(key_alpha)
-    show_viz()
-
     # + set_mask(rgba) =====================================
     label.set_text("Cloud RGB: add set..mask() 1/3 of cloud "
                    "in RED with transparency")
@@ -480,20 +473,11 @@ def test_point_viz_destruction() -> None:
     assert ref() is None
 
 
-def test_palette_lengths(meta: client.SensorInfo,
-                        scan: client.LidarScan) -> None:
-    """Check that LidarScanViz has matching palette lengths."""
-    point_viz = viz.PointViz("Test Viz")
-    scan_viz = viz.LidarScanViz(meta, point_viz)
-
-    assert len(scan_viz._refl_cloud_palettes) == len(scan_viz._cloud_palettes)
-
-
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_scan_viz_destruction(meta: client.SensorInfo,
+def test_scan_viz_destruction(meta: SensorInfo,
                               point_viz: viz.PointViz) -> None:
     """Check that LidarScan is destroyed deterministically."""
-    ls_viz = viz.LidarScanViz(meta, point_viz)
+    ls_viz = viz.LidarScanViz([meta], point_viz)
     ref = weakref.ref(ls_viz)
 
     del ls_viz
@@ -501,8 +485,8 @@ def test_scan_viz_destruction(meta: client.SensorInfo,
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_viz_multiple_instances(meta: client.SensorInfo,
-                                scan: client.LidarScan) -> None:
+def test_viz_multiple_instances(meta: SensorInfo,
+                                scan: LidarScan) -> None:
     """Check that destructing a visualizer doesn't break other instances."""
     point_viz = viz.PointViz("Test Viz")
 
@@ -510,29 +494,29 @@ def test_viz_multiple_instances(meta: client.SensorInfo,
     point_viz2 = viz.PointViz("Test Viz2")
     del point_viz2
 
-    ls_viz = viz.LidarScanViz(meta, point_viz)
+    ls_viz = viz.LidarScanViz([meta], point_viz)
 
-    ls_viz.update(scan)
+    ls_viz.update([scan])
     ls_viz.draw()
     point_viz.run()
 
 
-def test_scan_viz_smoke(meta: client.SensorInfo,
-                        scan: client.LidarScan) -> None:
+def test_scan_viz_smoke(meta: SensorInfo,
+                        scan: LidarScan) -> None:
     """Smoke test LidarScan visualization."""
-    ls_viz = viz.LidarScanViz(meta)
+    ls_viz = viz.LidarScanViz([meta])
 
-    ls_viz.update(scan)
+    ls_viz.update([scan])
     ls_viz.draw()
     ls_viz.run()
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_scan_viz_extras(meta: client.SensorInfo,
-                         scan: client.LidarScan) -> None:
+def test_scan_viz_extras(meta: SensorInfo,
+                         scan: LidarScan) -> None:
     """Check rendering of labels, cuboids, clouds and images together."""
     point_viz = viz.PointViz("Test Viz")
-    ls_viz = viz.LidarScanViz(meta, point_viz)
+    ls_viz = viz.LidarScanViz([meta], point_viz)
 
     cube1 = viz.Cuboid(np.identity(4), (1.0, 0, 0))
 
@@ -550,7 +534,7 @@ def test_scan_viz_extras(meta: client.SensorInfo,
     point_viz.add(cube1)
     point_viz.add(cube2)
 
-    ls_viz.update(scan)
+    ls_viz.update([scan])
 
     point_viz.camera.dolly(150)
     ls_viz.draw()
@@ -562,14 +546,18 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
 
     def __init__(
         self,
-        meta: client.SensorInfo,
+        meta: SensorInfo,
         viz: Optional[viz.PointViz] = None,
-        pre_draw_callback: Optional[Callable[[client.LidarScan],
-                                             client.LidarScan]] = None,
+        pre_draw_callback: Optional[
+            Callable[
+                [List[Optional[LidarScan]]],
+                List[Optional[LidarScan]]
+            ]
+        ] = None,
         post_draw_callback: Optional[Callable[['LidarScanVizWithCallbacks'],
                                               None]] = None
     ) -> None:
-        super().__init__(meta, viz)
+        super().__init__([meta], viz)
 
         self._pre_draw_callback = pre_draw_callback
         self._post_draw_callback = post_draw_callback
@@ -579,7 +567,7 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
 
         # pre draw callbacl takes LidarScan and returns LidarScan
         if self._pre_draw_callback:
-            self._scan = self._pre_draw_callback(self._scan)
+            self._scan = self._pre_draw_callback(self._scans)
 
         # call original draw
         super()._draw()
@@ -591,8 +579,8 @@ class LidarScanVizWithCallbacks(viz.LidarScanViz):
 
 
 @pytest.mark.parametrize('test_key', ['single-2.3'])
-def test_simple_viz_with_callbacks(meta: client.SensorInfo,
-                                   scan: client.LidarScan) -> None:
+def test_simple_viz_with_callbacks(meta: SensorInfo,
+                                   scan: LidarScan) -> None:
     """Call the callback on pre/post draw example."""
 
     from itertools import repeat
@@ -608,26 +596,30 @@ def test_simple_viz_with_callbacks(meta: client.SensorInfo,
 
     scan_cnt = 0
 
-    def pre_draw(ls: client.LidarScan) -> client.LidarScan:
+    def modify_scan(ls: Optional[LidarScan]) -> Optional[LidarScan]:
+        """Modify the range channel of a lidarscan if it exists, otherwise return None."""
+        if ls:
+            nls = deepcopy(ls)
+            ratio = scan_cnt / num_steps
+
+            # modifying range in some way
+            range = nls.field(ChanField.RANGE)
+            range = start_range * 1000 + (range - start_range * 1000) * ratio
+            nls.field(ChanField.RANGE)[:] = range
+            return nls
+        return None
+
+    def pre_draw(scans: List[Optional[LidarScan]]) -> List[Optional[LidarScan]]:
         nonlocal scan_cnt
-
-        nls = deepcopy(ls)
-        ratio = scan_cnt / num_steps
-
-        # modifying range in some way
-        range = nls.field(client.ChanField.RANGE)
-        range = start_range * 1000 + (range - start_range * 1000) * ratio
-        nls.field(client.ChanField.RANGE)[:] = range
-
         scan_cnt += 1
         # don't forget to return it back
-        return nls
+        return [modify_scan(ls) for ls in scans]
 
     def post_draw(scan_viz: LidarScanVizWithCallbacks) -> None:
-
-        # currently discplayed LidarScan
-        ls = scan_viz._scan
-
+        # TWS: the original test only handled one scan but the new LidarScanViz is always multi.
+        # currently displayed LidarScan
+        ls = scan_viz._scans[0]
+        assert ls is not None
         ratio = scan_cnt / num_steps
         img_mask = np.zeros((ls.h, ls.w, 4))
         col_idx = int(ls.w * ratio)
@@ -635,12 +627,12 @@ def test_simple_viz_with_callbacks(meta: client.SensorInfo,
 
         # there are 2 images - single return and second
         # can safely skip the second, but here we draw on both smth
-        for img in scan_viz._images:
+        for img in scan_viz._model._sensors[0]._images:
             # set some mask
             img.set_mask(img_mask)
 
         # same for clouds, first and second return
-        for cloud in scan_viz._clouds:
+        for cloud in scan_viz._model._sensors[0]._clouds:
             # set some mask
             cloud.set_mask(img_mask)
 
@@ -652,6 +644,6 @@ def test_simple_viz_with_callbacks(meta: client.SensorInfo,
                                        pre_draw_callback=pre_draw,
                                        post_draw_callback=post_draw)
 
-    viz.SimpleViz(ls_viz, rate=1.0).run(scans)
+    viz.SimpleViz([meta], _override_lidarscanviz=ls_viz, rate=1.0).run(scans)
 
     print("Done")

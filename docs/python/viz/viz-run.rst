@@ -13,7 +13,7 @@ where ``<sensor hostname>`` is the hostname (os-99xxxxxxxxxx) or IP of the senso
 
 Alternately, to replay the existing data from ``pcap`` and ``json`` files call the visualizer as::
 
-   $ ouster-cli source <pcap_path> [--meta <meta_path>] viz
+   $ ouster-cli source [--meta <meta_path>] <pcap_path> viz
 
 .. figure:: /images/ouster-viz.png
     :align: center
@@ -41,10 +41,10 @@ Keyboard Controls
         Key          What it does
     ================ ===============================================
     ``shift``        Camera Translation with mouse drag
-    ``w``            Camera pitch up
-    ``s``            Camera pitch down
-    ``a``            Camera yaw left
-    ``d``            Camera yaw right
+    ``w``            Camera pitch down
+    ``s``            Camera pitch up
+    ``a``            Camera yaw right
+    ``d``            Camera yaw left
     ``R``            Reset camera
     ``ctr-r``        Set camera to the birds-eye view
     ``u``            Toggle camera mode FOLLOW/FIXED
@@ -78,7 +78,9 @@ Keyboard Controls
     ``p / P``        Increase/decrease point size
     ``m / M``        Cycle point cloud coloring mode
     ``f / F``        Cycle point cloud color palette
+    ``ctrl + [N]``   Enable/disable the Nth sensor cloud where N is `1` to `9`
     ``1``            Toggle first return point cloud visibility
+    ``2``            Toggle second return point cloud visibility
     ``6``            Toggle scans accumulation view mode (ACCUM)
     ``7``            Toggle overall map view mode (MAP)
     ``8``            Toggle poses/trajectory view mode (TRACK)
@@ -110,9 +112,9 @@ The visualizer also includes an option to control the orientation of the point c
 loaded. If you possess, say, an OS-DOME mounted an upside down, you can start the visualizer with
 the option ``--extrinsics``::
 
-    $ ouster-cli source 10.0.0.13 viz --extrinsics -1 0 0 0 0 1 0 0 0 0 -1 0 0 0 0 1
+    $ ouster-cli source --extrinsics -1 0 0 0 0 1 0 0 0 0 -1 0 0 0 0 1 10.0.0.13 viz
 
-The input is a row-major homogenous matrix.
+The input is a row-major homogeneous matrix.
 
 For other options, run ``ouster-cli source <sensor | pcap | osf> viz -h``
 
@@ -126,9 +128,9 @@ For other options, run ``ouster-cli source <sensor | pcap | osf> viz -h``
 Advanced usage with sensor
 --------------------------
 
-The Ouster visualizer automatically configures connected sensors to send data to the appropriate udp
+The Ouster visualizer automatically configures connected sensors to send data to the appropriate UDP
 destination address. If your sensor is already configured appropriately, you may find it useful to
-use the argument ``--no-auto-dest`` to save time by skipping the roundtrip to reconfigure the
+use the argument ``--no-auto-udp-dest`` to save time by skipping the round trip to reconfigure the
 sensor.
 
 

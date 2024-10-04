@@ -6,7 +6,7 @@ Lidar Scan API
 
 In this reference document, we explain a core concept in both C++ and Python, and will often link
 function names in the order (``C++ class/function``, ``Python class/function``). For
-langauge-specific usage and running example code, please see the :ref:`Python LidarScan examples<ex-python-lidarscan>`
+language-specific usage and running example code, please see the :ref:`Python LidarScan examples<ex-python-lidarscan>`
 or the :ref:`C++ LidarScan examples<ex-cpp-lidarscan>`.
 
 The ``LidarScan`` class (:cpp:class:`ouster::LidarScan`, :py:class:`.LidarScan`) batches lidar
@@ -134,6 +134,33 @@ Running the above code on a sample ``LidarScan`` will give you output that looks
 Now that we know how to create the ``LidarScan`` and access its contents, let's see what
 we can do with it!
 
+Adding custom fields to a LidarScan
+===================================
+
+Beginning in Ouster SDK 0.12.0, it's possible to add custom fields to a ``LidarScan``. This is especially useful if you
+want to add custom data to an OSF file for visualization purposes. Like the standard fields normally found in a
+``LidarScan``, custom fields also make use of ``Eigen::Array`` and ``numpy.ndarray`` in C++ and Python, respectively.
+
+.. tabs::
+
+    .. tab:: python
+
+        .. literalinclude:: /../python/src/ouster/sdk/examples/lidar_scan.py
+            :language: python
+            :start-after: [doc-stag-python-scan-add-field]
+            :end-before: [doc-etag-python-scan-add-field]
+            :dedent:
+
+    .. tab:: C++
+
+        .. literalinclude:: /../examples/lidar_scan_example.cpp
+            :language: cpp
+            :start-after: [doc-stag-cpp-scan-add-field]
+            :end-before: [doc-etag-cpp-scan-add-field]
+            :dedent:
+
+Note - fields can also be removed using the ``del_field`` method. This can be useful for removing unneeded data, thereby
+saving space when saving scans to an OSF file.
 
 Projecting into Cartesian Coordinates
 =====================================
@@ -210,7 +237,7 @@ of timestamp. For this natural 2D image, we *destagger* the relevant field of th
             :dedent:
 
 The above code gives the scene below (see the long strip at the bottom). We've magnified two patches
-for better visiblity atop.
+for better visibility atop.
 
 .. figure:: /images/lidar_scan_destaggered.png
     :align: center
@@ -232,5 +259,5 @@ both sampling, used in :ref:`ex-visualization-with-matplotlib`, and streaming, u
 
 Under the hood, this class batches packets into ``LidarScans``. C++ users must batch packets
 themselves using the :cpp:class:`ouster::ScanBatcher` class. To get a feel for how to use it, we recommend
-reading `this example on Github
-<https://github.com/ouster-lidar/ouster_example/blob/master/examples/client_example.cpp#L93>`_.
+reading `this example on GitHub
+<https://github.com/ouster-lidar/ouster_sdk/blob/master/examples/client_example.cpp#L93>`_.

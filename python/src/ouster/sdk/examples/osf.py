@@ -9,13 +9,9 @@ def osf_read_scans(osf_file: str) -> None:
     """
     import ouster.sdk.osf as osf
     # [doc-stag-osf-read-scans]
-    scans = osf.Scans(osf_file)
+    scans = osf.OsfScanSource(osf_file).single_source(0)
     for scan in scans:
         print(f'scan = {scan}, WxH={scan.w}x{scan.h}')
-
-    # or with timestamps
-    for ts, scan in scans.withTs():
-        print(f'ts = {ts}, scan = {scan}, WxH={scan.w}x{scan.h}')
     # [doc-etag-osf-read-scans]
 
 
@@ -26,11 +22,8 @@ def osf_get_sensors_info(osf_file: str) -> None:
     """
     import ouster.sdk.osf as osf
     # [doc-stag-osf-get-sensors-info]
-    reader = osf.Reader(osf_file)
-    # Get all stored sensors information
-    sensors = reader.meta_store.find(osf.LidarSensor)
-    for sensor_id, sensor_meta in sensors.items():
-        info = sensor_meta.info
+    scans = osf.OsfScanSource(osf_file)
+    for sensor_id, info in enumerate(scans.metadata):
         print(f"sensor[{sensor_id}] = ", info)
     # [doc-etag-osf-get-sensors-info]
 
@@ -79,8 +72,7 @@ def osf_check_layout(osf_file: str) -> None:
 def osf_get_lidar_streams(osf_file: str) -> None:
     """Reads info about available Lidar Scan streams in an OSF file.
 
-    Find all LidarScanStream metadata entries and prints sensor_meta_id with encoded field types of
-    a LidarScan in a messages.
+    Find all LidarScanStream metadata entries and prints sensor_meta_id.
     """
     import ouster.sdk.osf as osf
     # [doc-stag-osf-get-lidar-streams]
@@ -88,10 +80,8 @@ def osf_get_lidar_streams(osf_file: str) -> None:
     lidar_streams = reader.meta_store.find(osf.LidarScanStream)
     for stream_id, stream_meta in lidar_streams.items():
         sensor_id = stream_meta.sensor_meta_id
-        field_types = stream_meta.field_types
         print(f"LidarScanStream[{stream_id}]:")
         print(f"  sensor_id = {sensor_id}")
-        print(f"  field_types = {field_types}")
     # [doc-etag-osf-get-lidar-streams]
 
 
@@ -104,7 +94,7 @@ def osf_slice_scans(osf_file: str) -> None:
     import ouster.sdk.osf as osf
     # [doc-stag-osf-slice-scans]
     # Scans reader from input OSF
-    scans = osf.Scans(osf_file)
+    scans = osf.OsfScanSource(osf_file).single_source(0)
 
     # New field types should be a subset of fields in encoded LidarScan so we just assume that
     # RANGE, SIGNAL and REFLECTIVITY fields will be present in the input OSF file.
@@ -118,9 +108,9 @@ def osf_slice_scans(osf_file: str) -> None:
     writer = osf.Writer(output_file, scans.metadata, fields_to_write)
 
     # Read scans and write back
-    for ts, scan in scans.withTs():
-        print(f"writing sliced scan with ts = {ts}")
-        writer.save(0, scan, ts)
+    for scan in scans:
+        print(f"writing sliced scan with ts = {scan.get_first_valid_packet_timestamp()}")
+        writer.save(0, scan)
 
     writer.close()
     # [doc-etag-osf-slice-scans]
@@ -140,7 +130,7 @@ def osf_split_scans(osf_file: str) -> None:
     split_dur = int((end_ts - start_ts) / n_splits)
 
     # Scans reader from input OSF
-    scans = osf.Scans(osf_file)
+    scans = osf.OsfScanSource(osf_file).single_source(0)
 
     output_file_base = os.path.splitext(os.path.basename(osf_file))[0]
 
@@ -150,8 +140,9 @@ def osf_split_scans(osf_file: str) -> None:
         writers.append(osf.Writer(f"{output_file_base}_s{i:02d}.osf", scans.metadata))
 
     # Read scans and write to a corresponding output stream
-    for ts, scan in scans.withTs():
-        split_idx = int((ts - start_ts) / split_dur)
+    for scan in scans:
+        ts = scan.get_first_valid_packet_timestamp()
+        split_idx = min(int((ts - start_ts) / split_dur), n_splits - 1)
         print(f"writing scan to split {split_idx:02d} file")
         writers[split_idx].save(0, scan)
 

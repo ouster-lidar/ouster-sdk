@@ -81,11 +81,8 @@ INSTANTIATE_TEST_CASE_P(
     TestMetas, MetaFiles,
     testing::Values(
         "1_12_os1-991913000010-64",
-        "1_12_os1-991937000062-16A0_legacy",
         "1_12_os1-991937000062-64_legacy",
         "1_13_os1-991913000010-64",
-        "1_13_os1-991937000062-16A0_legacy",
-        "1_13_os1-991937000062-32A02_legacy",
         "1_14_6cccd_os-882002000138-128_legacy",
         "1_14_beta_os1-991937000062-16A0_legacy",
         "1_14_6cccd_os-882002000138-32U0_legacy",
@@ -105,7 +102,8 @@ INSTANTIATE_TEST_CASE_P(
         "2_5_0_os-992146000760-128_legacy",
         "3_0_1_os-122246000293-128",
         "3_0_1_os-122246000293-128_legacy",
-        "ouster-studio-reduced-config-v1"));
+        "ouster-studio-reduced-config-v1"
+));
 // clang-format on
 
 TEST_P(MetaFiles, combinedTestMetadata) {

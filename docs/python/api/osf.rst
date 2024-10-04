@@ -31,14 +31,6 @@ Reading
    :members:
    :undoc-members:
 
-``ChunkRef`` wrapper for a `chunk`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: ChunkRef
-   :members:
-   :undoc-members:
-   :special-members: __len__
-
 ``MetadataStore`` for `metadata entries`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -46,7 +38,7 @@ Reading
    :members:
    :undoc-members:
 
-``MetadataEntry`` base class for all metadatas
+``MetadataEntry`` base class for all metadata
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: MetadataEntry
@@ -61,10 +53,6 @@ Writing OSF files
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: Writer
-   :members:
-   :undoc-members:
-
-.. autoclass:: ChunksLayout
    :members:
    :undoc-members:
 
@@ -86,7 +74,7 @@ Common `metadata entries`
    :members:
    :undoc-members:
 
-``StreamingInfo`` stream statisitcs
+``StreamingInfo`` stream statistics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autoclass:: StreamingInfo

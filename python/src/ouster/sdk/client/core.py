@@ -9,17 +9,15 @@ generated using pybind11.
 from contextlib import closing
 from typing import (cast, Iterable, Iterator, List, Optional, Tuple,
                     Union, Callable)
-from threading import Thread
 import time
 import logging
-from math import ceil
 import numpy as np
+import warnings
 from more_itertools import take
 from typing_extensions import Protocol
 
-from ._client import (SensorInfo, SensorConnection, Client, ClientState, PacketValidationFailure,
-                      PacketFormat, LidarScan, ScanBatcher, get_field_types, LidarPacket, ImuPacket,
-                      Packet, FieldType)
+from ouster.sdk._bindings.client import (SensorInfo, PacketFormat, LidarScan, ScanBatcher, get_field_types,
+                      LidarPacket, Packet, FieldType)
 
 from .data import (FieldTypes)
 
@@ -99,304 +97,8 @@ class Packets(PacketSource):
         return False
 
 
-class Sensor(PacketSource):
-    """A packet source listening on local UDP ports.
-
-    Uses a separate thread that fills internal buffers without holding the GIL.
-
-    Note:
-        Make sure ``close()`` will be called on all instances before Python
-        attempts to exit, or the interpreter will hang waiting to join the
-        thread (like any other non-daemonized Python thread).
-    """
-
-    _connection: SensorConnection
-    _cli: Client
-    _timeout: Optional[float]
-    _metadata: SensorInfo
-    _pf: PacketFormat
-    _producer: Thread
-    _cache: Optional[ClientState]
-    _lidarbuf: LidarPacket
-    _imubuf: ImuPacket
-    _lidar_port: int
-    _hostname: str
-
-    def __init__(self,
-                 hostname: str,
-                 lidar_port: int,
-                 imu_port: int,
-                 *,
-                 metadata: Optional[SensorInfo] = None,
-                 buf_size: int = 128,
-                 timeout: Optional[float] = 2.0,
-                 _overflow_err: bool = False,
-                 _flush_before_read: bool = True,
-                 _flush_frames: int = 5,
-                 soft_id_check: bool = False,
-                 _skip_metadata_beam_validation: bool = False) -> None:
-        """
-        Neither the ports nor udp destination configuration on the sensor will
-        be updated. The metadata will be fetched over the network from the
-        sensor unless explicitly provided using the ``metadata`` parameter.
-
-        Args:
-            hostname: hostname or IP address of the sensor
-            lidar_port: UDP port to listen on for lidar data
-            imu_port: UDP port to listen on for imu data
-            metadata: explicitly provide metadata for the stream
-            buf_size: number of packets to buffer before dropping data
-            timeout: seconds to wait for packets before signaling error or None
-            _overflow_err: if True, raise ClientOverflow
-            _flush_before_read: if True, try to clear buffers before reading
-            _flush_frames: the number of frames to skip/flush on start of a new iter
-            soft_id_check: if True, don't skip lidar packets buffers on,
-            id mismatch (init_id/sn pair),
-            _skip_metadata_beam_validation: if True, skip metadata beam angle check
-
-        Raises:
-            ClientError: If initializing the client fails.
-        """
-        self._connection = SensorConnection(
-            hostname, lidar_port, imu_port)
-        self._timeout = timeout
-        self._overflow_err = _overflow_err
-        self._flush_before_read = _flush_before_read
-        self._cache = None
-        self._fetched_meta = ""
-        self._flush_frames = _flush_frames
-
-        self._soft_id_check = soft_id_check
-        self._id_error_count = 0
-        self._skip_metadata_beam_validation = _skip_metadata_beam_validation
-
-        self._hostname = hostname
-        self._lidar_port = lidar_port
-
-        # Fetch from sensor if not explicitly provided
-        if metadata:
-            self._metadata = metadata
-        else:
-            self._fetch_metadata()
-            self._metadata = SensorInfo(
-                self._fetched_meta, self._skip_metadata_beam_validation)
-        self._pf = PacketFormat.from_info(self._metadata)
-        self._cli = Client(self._connection, buf_size,
-                           self._pf.lidar_packet_size, buf_size,
-                           self._pf.imu_packet_size)
-        self._lidarbuf = LidarPacket(self._pf.lidar_packet_size)
-        self._imubuf = ImuPacket(self._pf.imu_packet_size)
-
-        # Use args to avoid capturing self causing circular reference
-        self._producer = Thread(target=self._cli.produce)
-        self._producer.start()
-
-    @property
-    def is_live(self) -> bool:
-        return True
-
-    @property
-    def lidar_port(self) -> int:
-        return self._connection.lidar_port
-
-    @property
-    def imu_port(self) -> int:
-        return self._connection.imu_port
-
-    def _fetch_metadata(self, timeout: Optional[float] = None) -> None:
-        timeout_sec = 45
-        if timeout:
-            timeout_sec = ceil(timeout)
-        if not self._fetched_meta:
-            self._fetched_meta = self._connection.get_metadata(
-                timeout_sec=timeout_sec)
-            if not self._fetched_meta:
-                raise ClientError("Failed to collect metadata")
-
-    def write_metadata(self, path: str) -> None:
-        """Save metadata to disk.
-
-        Args:
-            path: path to write
-        """
-        self._fetch_metadata()
-        with open(path, 'w') as f:
-            f.write(self._fetched_meta)
-
-    @property
-    def metadata(self) -> SensorInfo:
-        return self._metadata
-
-    def _next_packet(self) -> Optional[Packet]:
-        st = self._peek()
-        self._cache = None
-
-        # TODO: revise this part and upper loop to eliminate ValueError
-        if st & ClientState.OVERFLOW:
-            if self._overflow_err:
-                raise ClientOverflow("client packets overflow")
-            else:
-                raise ValueError()
-        if st & ClientState.LIDAR_DATA:
-            msg = self._lidarbuf
-            self._lidarbuf = LidarPacket(self._pf.lidar_packet_size)
-            res = msg.validate(self._metadata, self._pf)
-            if res == PacketValidationFailure.PACKET_SIZE:
-                raise ValueError(f"Packet was unexpected size {len(msg.buf)}")
-            if res == PacketValidationFailure.ID:
-                self._id_error_count += 1
-                init_id = self._pf.init_id(msg.buf)
-                prod_sn = self._pf.prod_sn(msg.buf)
-                error_msg = f"Metadata init_id/sn does not match: " \
-                    f"expected by metadata - {self._metadata.init_id}/{self._metadata.sn}, " \
-                    f"but got from packet buffer - {init_id}/{prod_sn}"
-                if not self._soft_id_check:
-                    raise ValueError(error_msg)
-                else:
-                    # Continue with warning. When init_ids/sn doesn't match
-                    # the resulting LidarPacket has high chances to be
-                    # incompatible with data format set in metadata json file
-                    logger.warn(f"LidarPacket validation: {error_msg}")
-            return msg
-        elif st & ClientState.IMU_DATA:
-            msg2 = self._imubuf
-            self._imubuf = ImuPacket(self._pf.imu_packet_size)
-            return msg2
-        elif st == ClientState.TIMEOUT:
-            raise ClientTimeout(f"No packets received within {self._timeout}s from sensor "
-                                f"{self._hostname} using udp destination {self._metadata.config.udp_dest} "
-                                f"on port {self._lidar_port}. Check your firewall settings and/or ensure "
-                                f"that the lidar port {self._lidar_port} is not being held open.")
-        elif st & ClientState.ERROR:
-            raise ClientError("Client returned ERROR state")
-        elif st & ClientState.EXIT:
-            return None
-
-        raise AssertionError("Should be unreachable")
-
-    def _peek(self) -> ClientState:
-        if self._cache is None:
-            st = self._cli.consume(self._lidarbuf,
-                                   self._imubuf,
-                                   -1 if self._timeout is None else self._timeout)
-            self._cache = st
-        return self._cache
-
-    def __iter__(self) -> Iterator[Packet]:
-        """Access the UDP data stream as an iterator.
-
-        Reading may block waiting for network data for up to the specified
-        timeout. Failing to consume this iterator faster than the data rate of
-        the sensor may cause packets to be dropped. Returned packet is meant to
-        be consumed prior to incrementing the iterator, and storing the returned
-        packet in a container may result in the contents being invalidated. If
-        such behaviour is necessary, deepcopy the packets upon retrieval.
-
-        Raises:
-            ClientTimeout: if no packets are received within the configured
-                timeout
-            ClientError: if the client enters an unspecified error state
-            ValueError: if the packet source has already been closed
-        """
-
-        if not self._producer.is_alive():
-            raise ValueError("I/O operation on closed packet source")
-
-        # Attempt to flush any old data before producing packets
-        if self._flush_before_read:
-            self.flush(n_frames=self._flush_frames, full=True)
-
-        while True:
-            try:
-                p = self._next_packet()
-                if p is not None:
-                    yield p
-                else:
-                    break
-            except ValueError:
-                # bad packet size here: this can happen when
-                # packets are buffered by the OS, not necessarily an error
-                # same pass as in data.py
-                # TODO: introduce status for PacketSource to indicate frequency
-                # of bad packet size or init_id errors
-                pass
-
-    def flush(self, n_frames: int = 3, *, full=False) -> int:
-        """Drop some data to clear internal buffers.
-
-        Args:
-            n_frames: number of frames to drop
-            full: clear internal buffers first, so data is read from the OS
-                  receive buffers (or the network) directly
-
-        Returns:
-            The number of packets dropped
-
-        Raises:
-            ClientTimeout: if a lidar packet is not received within the
-                configured timeout
-            ClientError: if the client enters an unspecified error state
-        """
-        if full:
-            self._cli.flush()
-
-        last_frame = -1
-        n_dropped = 0
-        last_ts = time.monotonic()
-        while True:
-            # check next packet to see if it's the start of a new frame
-            st = self._peek()
-            if st & ClientState.LIDAR_DATA:
-                frame = self._pf.frame_id(self._lidarbuf.buf)
-                if frame != last_frame:
-                    last_frame = frame
-                    n_frames -= 1
-                    if n_frames < 0:
-                        break
-                last_ts = time.monotonic()
-            elif st & ClientState.ERROR:
-                raise ClientError("Client returned ERROR state")
-            elif st & ClientState.EXIT:
-                break
-
-            # check for timeout
-            if self._timeout is not None and (time.monotonic() >=
-                                              last_ts + self._timeout):
-                raise ClientTimeout(
-                    f"No packets received within {self._timeout}s")
-
-            # drop cached packet
-            self._cache = None
-            n_dropped += 1
-
-        return n_dropped
-
-    @property
-    def buf_use(self) -> int:
-        return self._cli.size
-
-    @property
-    def id_error_count(self) -> int:
-        return self._id_error_count
-
-    def close(self) -> None:
-        """Shut down producer thread and close network connection.
-
-        Attributes may be unset if constructor throws an exception.
-        """
-        if hasattr(self, '_cli'):
-            self._cli.shutdown()
-        if hasattr(self, '_producer'):
-            self._producer.join()
-        if hasattr(self, '_connection'):
-            self._connection.shutdown()
-
-    def __del__(self) -> None:
-        self.close()
-
-
 class Scans(ScanSource):
-    """An iterable stream of scans batched from a PacketSource.
+    """Deprecated: An iterable stream of scans batched from a PacketSource.
 
     Batching will emit a scan every time the frame_id increments (i.e. on
     receiving first packet in the next scan). Reordered packets will be handled,
@@ -424,6 +126,10 @@ class Scans(ScanSource):
             fields: specify which channel fields to populate on LidarScans
             _max_latency: (experimental) approximate max number of frames to buffer
         """
+        warnings.warn("client.Scans(...) is deprecated: "
+                  "Use client.ScansMulti(...).single_source(0) or the appropriate scan source directly instead. "
+                  "This API is planned to be removed in Q4 2024.",
+                  DeprecationWarning, stacklevel=2)
         self._source = source
         self._complete = complete
         self._timeout = timeout
@@ -447,6 +153,7 @@ class Scans(ScanSource):
         column_window = self._source.metadata.format.column_window
 
         # If source is a sensor, make a type-specialized reference available
+        from ouster.sdk.client import Sensor
         sensor = cast(Sensor, self._source) if isinstance(
             self._source, Sensor) else None
 
@@ -574,6 +281,7 @@ class Scans(ScanSource):
             A tuple of metadata queried from the sensor and an iterator that
             samples n consecutive scans
         """
+        from .sensor import Sensor
         with closing(Sensor(hostname, lidar_port, 7503,
                             metadata=metadata)) as sensor:
             metadata = sensor.metadata
@@ -584,7 +292,7 @@ class Scans(ScanSource):
                            lidar_port,
                            7503,
                            metadata=metadata,
-                           buf_size=n * 128,
+                           buf_size=n * 0.2,
                            _flush_before_read=False)) as source:
                 source.flush(full=True)
                 scans = cls(source, timeout=2.0, complete=True, _max_latency=0)
@@ -598,7 +306,7 @@ class Scans(ScanSource):
             hostname: str = "localhost",
             lidar_port: int = 7502,
             *,
-            buf_size: int = 640,
+            buf_size: float = 1.0,
             timeout: Optional[float] = 2.0,
             complete: bool = True,
             metadata: Optional[SensorInfo] = None,
@@ -616,6 +324,7 @@ class Scans(ScanSource):
             metadata: explicitly provide metadata for the stream
             fields: specify which channel fields to populate on LidarScans
         """
+        from .sensor import Sensor
         source = Sensor(hostname,
                         lidar_port,
                         7503,
@@ -674,6 +383,12 @@ def first_valid_packet_ts(scan: LidarScan) -> int:
     """Return first valid packet timestamp of a LidarScan"""
     columns_per_packet = scan.w // scan.packet_timestamp.shape[0]
     return scan.packet_timestamp[first_valid_column(scan) // columns_per_packet]
+
+
+def last_valid_packet_ts(scan: LidarScan) -> int:
+    """Return first valid packet timestamp of a LidarScan"""
+    columns_per_packet = scan.w // scan.packet_timestamp.shape[0]
+    return scan.packet_timestamp[last_valid_column(scan) // columns_per_packet]
 
 
 def last_valid_column_ts(scan: LidarScan) -> int:

@@ -103,7 +103,7 @@ TEST_F(FileOpsTest, TestFileSize) {
     const std::string test_file_name =
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
     int64_t fsize = file_size(test_file_name);
-    EXPECT_EQ(1021684, fsize);
+    EXPECT_EQ(1025780, fsize);
     std::string not_a_file = path_concat(test_data_dir(), "not_a_file");
     EXPECT_TRUE(file_size(not_a_file) < 0);
     EXPECT_TRUE(file_size(test_data_dir()) < 0);
@@ -118,7 +118,7 @@ TEST_F(FileOpsTest, TestFileMapping) {
     EXPECT_TRUE(file_buf != nullptr);
 
     int64_t fsize = file_size(test_file_name);
-    EXPECT_EQ(1021684, fsize);
+    EXPECT_EQ(1025780, fsize);
 
     if (file_buf != nullptr) {
         std::cout << "bytes = " << to_string(file_buf, 64) << std::endl;

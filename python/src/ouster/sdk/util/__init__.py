@@ -8,9 +8,6 @@ Generic util module
 
 from .metadata import resolve_metadata
 from .metadata import resolve_metadata_multi
-from .metadata import firmware_version      # TODO[UN]: this function should
-                                            # probably should be moved to
-                                            # its own file.
 
 from .parsing import default_scan_fields    # type: ignore
 from .parsing import scan_to_packets        # type: ignore

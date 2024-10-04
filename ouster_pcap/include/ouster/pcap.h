@@ -43,6 +43,7 @@ struct packet_info {
  * Class for dealing with reading pcap files
  */
 class PcapReader {
+   protected:
     std::unique_ptr<pcap_impl> impl;    ///< Private implementation pointer
     packet_info info;                   ///< Cached packet info
     std::map<int, int> fragment_count;  ///< Map to count fragments per packet

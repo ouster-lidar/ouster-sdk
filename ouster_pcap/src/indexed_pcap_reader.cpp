@@ -1,5 +1,10 @@
 #include "ouster/indexed_pcap_reader.h"
 
+#include <iostream>
+#include <stdexcept>
+
+#include "ouster/types.h"
+
 namespace ouster {
 namespace sensor_utils {
 
@@ -10,9 +15,10 @@ IndexedPcapReader::IndexedPcapReader(
       index_(metadata_filenames.size()),
       previous_frame_ids_(metadata_filenames.size()) {
     for (const std::string& metadata_filename : metadata_filenames) {
-        sensor_infos_.push_back(
-            ouster::sensor::metadata_from_json(metadata_filename));
+        auto temp_info = ouster::sensor::metadata_from_json(metadata_filename);
+        sensor_infos_.push_back(temp_info);
     }
+    init_();
 }
 
 IndexedPcapReader::IndexedPcapReader(
@@ -21,19 +27,64 @@ IndexedPcapReader::IndexedPcapReader(
     : PcapReader(pcap_filename),
       sensor_infos_(sensor_infos),
       index_(sensor_infos.size()),
-      previous_frame_ids_(sensor_infos.size()) {}
+      previous_frame_ids_(sensor_infos.size()) {
+    init_();
+}
+
+void IndexedPcapReader::init_() {
+    uint64_t index = 0;
+    for (auto it : sensor_infos_) {
+        std::string sn_lidar = it.sn;
+        std::string sn_imu = "LEGACY_IMU";
+        if (it.config.udp_profile_lidar ==
+            ouster::sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
+            sn_lidar = "LEGACY_LIDAR";
+        }
+        packet_formats_.push_back(ouster::sensor::packet_format(it));
+
+        if (port_map_[*it.config.udp_port_lidar].find(sn_lidar) !=
+            port_map_[*it.config.udp_port_lidar].end()) {
+            std::cout << "Duplicate lidar port/sn found for indexing pcap: " +
+                             sn_lidar + ":" +
+                             std::to_string(*it.config.udp_port_lidar)
+                      << std::endl;
+            throw std::runtime_error(
+                "Duplicate lidar port/sn found for indexing pcap: " + sn_lidar +
+                ":" + std::to_string(*it.config.udp_port_lidar));
+        }
+        port_map_[*it.config.udp_port_lidar][sn_lidar] = index;
+        if (port_map_[*it.config.udp_port_imu].find(sn_imu) !=
+            port_map_[*it.config.udp_port_imu].end()) {
+            std::cout << "Duplicate imu port/sn found for indexing pcap: " +
+                             sn_imu + ":" +
+                             std::to_string(*it.config.udp_port_imu)
+                      << std::endl;
+            throw std::runtime_error(
+                "Duplicate imu port/sn found for indexing pcap: " + sn_imu +
+                ":" + std::to_string(*it.config.udp_port_imu));
+        }
+        port_map_[*it.config.udp_port_imu][sn_imu] = index;
+
+        index++;
+    }
+}
 
 nonstd::optional<size_t> IndexedPcapReader::sensor_idx_for_current_packet()
     const {
     const auto& pkt_info = current_info();
-    for (size_t i = 0; i < sensor_infos_.size(); i++) {
-        if (pkt_info.dst_port == sensor_infos_[i].config.udp_port_lidar) {
-            // TODO use the packet format and match serial number if it's
-            // available this will allow us to have multiple sensors on the same
-            // port
-            return i;
+    auto temp_match = port_map_.find(pkt_info.dst_port);
+    if (temp_match != port_map_.end()) {
+        for (auto it : temp_match->second) {
+            auto res = validate_packet(
+                sensor_infos_[it.second], packet_formats_[it.second], data,
+                pkt_info.payload_size,
+                ouster::sensor::PacketValidationType::LIDAR);
+            if (res == ouster::sensor::PacketValidationFailure::NONE) {
+                return it.second;
+            }
         }
     }
+
     return nonstd::nullopt;
 }
 

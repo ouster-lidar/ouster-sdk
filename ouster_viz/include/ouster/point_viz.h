@@ -13,18 +13,21 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include "nonstd/optional.hpp"
 
 namespace ouster {
 namespace viz {
 
 /**
- * @todo document me
+ * 4x4 matrix of doubles to represent transformations
  */
 using mat4d = std::array<double, 16>;
 
 /**
- * @todo document me
+ * 4x4 identity matrix
  */
 constexpr mat4d identity4d = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 
@@ -42,6 +45,49 @@ class GLRings;
 struct CameraData;
 }  // namespace impl
 
+/**
+ * @brief A mouse button enum, for use in mouse button event handlers
+ */
+enum class MouseButton : int {
+    // Note, this purposefully duplicates GLFW's enum
+    // so that we can provide our own symbols without
+    // having to include glfw.h here.
+    // https://www.glfw.org/docs/latest/group__buttons.html
+    MOUSE_BUTTON_1 = 0,
+    MOUSE_BUTTON_2 = 1,
+    MOUSE_BUTTON_3 = 2,
+    MOUSE_BUTTON_4 = 3,
+    MOUSE_BUTTON_5 = 4,
+    MOUSE_BUTTON_6 = 5,
+    MOUSE_BUTTON_7 = 6,
+    MOUSE_BUTTON_8 = 7,
+    MOUSE_BUTTON_LAST = MOUSE_BUTTON_8,
+    MOUSE_BUTTON_LEFT = MOUSE_BUTTON_1,
+    MOUSE_BUTTON_RIGHT = MOUSE_BUTTON_2,
+    MOUSE_BUTTON_MIDDLE = MOUSE_BUTTON_3,
+};
+
+/**
+ * @brief A mouse button event enum, for use in mouse button event handlers
+ */
+enum class MouseButtonEvent : int {
+    MOUSE_BUTTON_RELEASED = 0,
+    MOUSE_BUTTON_PRESSED = 1,
+};
+
+/**
+ * @brief An enum for modifier keys, for use in mouse button event handlers
+ */
+enum class EventModifierKeys : int {
+    MOD_NONE = 0,
+    MOD_SHIFT = 0x0001,
+    MOD_CONTROL = 0x0002,
+    MOD_ALT = 0x0004,
+    MOD_SUPER = 0x0008,
+    MOD_CAPS_LOCK = 0x0010,
+    MOD_NUM_LOCK = 0x0020,
+};
+
 struct WindowCtx;
 class Camera;
 class Cloud;
@@ -51,12 +97,12 @@ class Label;
 class TargetDisplay;
 
 /**
- * @todo document me
+ * Sets the default_window_width to 800
  */
 constexpr int default_window_width = 800;
 
 /**
- * @todo document me
+ * Sets the default_window_height to 600
  */
 constexpr int default_window_height = 600;
 
@@ -72,6 +118,15 @@ constexpr int default_window_height = 600;
  * rendering (e.g. when streaming data from a running sensor).
  */
 class PointViz {
+    friend void add_default_controls(viz::PointViz& viz, std::mutex* mx);
+
+    /**
+     * Get a reference to the current camera controls
+     *
+     * @return Handle to the current camera
+     */
+    Camera& current_camera();
+
    public:
     struct Impl;
 
@@ -79,9 +134,11 @@ class PointViz {
      * Creates a window and initializes the rendering context
      *
      * @param[in] name name of the visualizer, shown in the title bar
-     * @param[in] fix_aspect @todo document me
-     * @param[in] window_width @todo document me
-     * @param[in] window_height @todo document me
+     * @param[in] fix_aspect Window aspect to set
+     * @param[in] window_width Window width to set,
+     *            else uses the default_window_width
+     * @param[in] window_height Window height to set,
+     *            else uses the default_window_height
      */
     PointViz(const std::string& name, bool fix_aspect = false,
              int window_width = default_window_width,
@@ -128,20 +185,6 @@ class PointViz {
     void visible(bool state);
 
     /**
-     * Check if viz update_on_input state
-     *
-     * @return true if the viz will update on input
-     */
-    bool update_on_input();
-
-    /**
-     * Set viz update_on_input flag.
-     *
-     * @param[in] state new value of the flag
-     */
-    void update_on_input(bool state);
-
-    /**
      * Update visualization state
      *
      * Send state updates to be rendered on the next frame
@@ -157,32 +200,56 @@ class PointViz {
      *
      * @param[in] f the callback. The second argument is the ascii value of the
      * key pressed. Third argument is a bitmask of the modifier keys
+     * The callback's return value determines whether
+     * the remaining key callbacks should be called.
      */
     void push_key_handler(std::function<bool(const WindowCtx&, int, int)>&& f);
 
     /**
      * Add a callback for handling mouse button input
      *
-     * @param[in] f @todo document me
+     * @param[in] f the callback. The callback's arguments are
+     *   ctx: the context containing information about the buttons
+     *   pressed, the mouse position, and the viewport;
+     *   button: the mouse button pressed;
+     *   mods: representing which modifier keys are pressed
+     *   during the mouse click.
+     *   The callback's return value determines whether
+     *   the remaining mouse button callbacks should be called.
      */
     void push_mouse_button_handler(
-        std::function<bool(const WindowCtx&, int, int)>&& f);
+        std::function<bool(const WindowCtx& ctx,
+                           ouster::viz::MouseButton button,
+                           ouster::viz::MouseButtonEvent event,
+                           ouster::viz::EventModifierKeys mods)>&& f);
 
     /**
      * Add a callback for handling mouse scrolling input
      *
-     * @param[in] f @todo document me
+     * @param[in] f the callback. The callback's arguments are
+     *   ctx: the context containing information about the buttons
+     *   pressed, the mouse position, and the viewport;
+     *   x: the amount of scrolling in the x direction;
+     *   y: the amount of scrolling in the y direction.
+     *   The callback's return value determines whether
+     *   the remaining mouse scroll callbacks should be called.
      */
     void push_scroll_handler(
-        std::function<bool(const WindowCtx&, double, double)>&& f);
+        std::function<bool(const WindowCtx&, double x, double y)>&& f);
 
     /**
      * Add a callback for handling mouse movement
      *
-     * @param[in] f @todo document me
+     * @param[in] f the callback. The callback's arguments are
+     *   ctx: the context containing information about the buttons
+     *   pressed, the mouse position, and the viewport;
+     *   x: the mouse position in the x direction;
+     *   y: the mouse position in the y direction.
+     *   The callback's return value determines whether
+     *   the remaining mouse position callbacks should be called.
      */
     void push_mouse_pos_handler(
-        std::function<bool(const WindowCtx&, double, double)>&& f);
+        std::function<bool(const WindowCtx&, double x, double y)>&& f);
 
     /**
      * Add a callback for processing every new draw frame buffer.
@@ -192,102 +259,126 @@ class PointViz {
      *       for further processing.
      *
      * @param[in] f function callback of a form f(fb_data, fb_width, fb_height)
+     *   The callback's return value determines whether
+     *   the remaining frame buffer callbacks should be called.
      */
     void push_frame_buffer_handler(
         std::function<bool(const std::vector<uint8_t>&, int, int)>&& f);
 
     /**
-     * Remove the last added callback for handling keyboard input
+     * Remove the last added callback for handling keyboard events
      */
     void pop_key_handler();
 
     /**
-     * @copydoc pop_key_handler()
+     * Remove the last added callback for handling mouse button events
      */
     void pop_mouse_button_handler();
 
     /**
-     * @copydoc pop_key_handler()
+     * Remove the last added callback for handling mouse scroll events
      */
     void pop_scroll_handler();
 
     /**
-     * @copydoc pop_key_handler()
+     * Remove the last added callback for handling mouse position events
      */
     void pop_mouse_pos_handler();
 
     /**
-     * @copydoc pop_key_handler()
+     * Remove the last added callback for handling frame buffer events
      */
     void pop_frame_buffer_handler();
 
     /**
+     * Add a callback for handling frame buffer resize events.
+     * @param[in] f function callback of the form f(const WindowCtx&). The
+     * callback's return value determines whether the remaining frame buffer
+     * resize callbacks should be called.
+     */
+    void push_frame_buffer_resize_handler(
+        std::function<bool(const WindowCtx&)>&& f);
+
+    /**
+     * Remove the last added callback for handling frame buffer resize events.
+     */
+    void pop_frame_buffer_resize_handler();
+
+    /**
      * Get a reference to the camera controls
      *
-     * @return @todo document me
+     * @return Handler to the camera object
      */
     Camera& camera();
 
     /**
      * Get a reference to the target display controls
      *
-     * @return @todo document me
+     * @return Handler to the target display controls
      */
     TargetDisplay& target_display();
 
     /**
      * Add an object to the scene
      *
-     * @param[in] cloud @todo document me
+     * @param[in] cloud Adds a point cloud to the scene
      */
     void add(const std::shared_ptr<Cloud>& cloud);
 
     /**
      * Add an object to the scene
      *
-     * @param[in] image @todo document me
+     * @param[in] image Adds an image to the scene
      */
     void add(const std::shared_ptr<Image>& image);
 
     /**
      * Add an object to the scene
      *
-     * @param[in] cuboid @todo document me
+     * @param[in] cuboid Adds a cuboid to the scene
      */
     void add(const std::shared_ptr<Cuboid>& cuboid);
 
     /**
      * Add an object to the scene
      *
-     * @param[in] label @todo document me
+     * @param[in] label Adds a label to the scene
      */
     void add(const std::shared_ptr<Label>& label);
 
     /**
      * Remove an object from the scene
      *
-     * @param[in] cloud @todo document me
+     * @param[in] cloud Remove a point cloud from the scene
+     *
+     * @return true if successfully removed else false
      */
     bool remove(const std::shared_ptr<Cloud>& cloud);
 
     /**
      * Remove an object from the scene
      *
-     * @param[in] image @todo document me
+     * @param[in] image Remove an image from the scene
+     *
+     * @return true if successfully removed else false
      */
     bool remove(const std::shared_ptr<Image>& image);
 
     /**
      * Remove an object from the scene
      *
-     * @param[in] cuboid @todo document me
+     * @param[in] cuboid Remove a cuboid from the scene
+     *
+     * @return true if successfully removed else false
      */
     bool remove(const std::shared_ptr<Cuboid>& cuboid);
 
     /**
      * Remove an object from the scene
      *
-     * @param[in] label @todo document me
+     * @param[in] label Remove a label from the scene
+     *
+     * @return true if successfully removed else false
      */
     bool remove(const std::shared_ptr<Label>& label);
 
@@ -362,6 +453,41 @@ struct WindowCtx {
     int viewport_height{0};    ///< Current viewport height in pixels
     int window_width{0};       ///< Current window width in screen coordinates
     int window_height{0};      ///< Current window height in screen coordinates
+
+    /**
+     * @brief return the aspect ratio of the viewport.
+     *
+     * @return The aspect ratio of the viewport.
+     */
+    double aspect_ratio() const;
+
+    /**
+     * @brief return 2d coordinates normalized to (-1, 1) in the y-axis, given
+     * window coordinates.
+     *
+     * PointViz renders 2d images and labels in this coordinate system, and as
+     * such this method can be used to determine if a pixel in window
+     * coordinates falls within a 2d image.
+     *
+     * @param[in] x X axis value of 2D window coordinate
+     * @param[in] y Y axis value of 2D window coordinate
+     *
+     * @return 2d coordinates normalized to (-1, 1) in the y-axis
+     */
+    std::pair<double, double> normalized_coordinates(double x, double y) const;
+
+    /**
+     * @brief the inverse of "normalized_coordinates".
+     *
+     * Given 2d coordinates normalized to (-1, 1) in the y-axis, return window
+     * coordinates.
+     * @param[in] normalized_x X axis value of 2D normalized coordinate
+     * @param[in] normalized_y Y axis value of 2D normalized coordinate
+     *
+     * @return 2d coordinates in window pixel space.
+     */
+    std::pair<double, double> window_coordinates(double normalized_x,
+                                                 double normalized_y) const;
 };
 
 /**
@@ -612,13 +738,13 @@ class Cloud {
     bool pose_changed_{false};
     bool point_size_changed_{false};
 
-    std::vector<float> range_data_{};
-    std::vector<float> key_data_{};
-    std::vector<float> mask_data_{};
-    std::vector<float> xyz_data_{};
-    std::vector<float> off_data_{};
-    std::vector<float> transform_data_{};
-    std::vector<float> palette_data_{};
+    std::shared_ptr<std::vector<float>> range_data_{};
+    std::shared_ptr<std::vector<float>> key_data_{};
+    std::shared_ptr<std::vector<float>> mask_data_{};
+    std::shared_ptr<std::vector<float>> xyz_data_{};
+    std::shared_ptr<std::vector<float>> off_data_{};
+    std::shared_ptr<std::vector<float>> transform_data_{};
+    std::shared_ptr<std::vector<float>> palette_data_{};
     mat4d pose_{};
     float point_size_{2};
     bool mono_{true};
@@ -695,14 +821,6 @@ class Cloud {
      *        points, preferably normalized between 0 and 1
      */
     void set_key(const float* key);
-
-    /**
-     * Set the key alpha values, leaving the color the same.
-     *
-     * @param[in] key_alpha pointer to array of at least as many elements as
-     *                      there are points, normalized between 0 and 1
-     */
-    void set_key_alpha(const float* key_alpha);
 
     /**
      * Set the key values in RGB format, used for coloring.
@@ -876,17 +994,20 @@ class Image {
     /**
      * Set the display position of the image.
      *
-     * TODO: this is super weird. Coordinates are {x_min, x_max, y_max, y_min}
-     * in sort-of normalized screen coordinates: y is in [-1, 1], and x uses the
-     * same scale (i.e. window width is ignored). This is currently just the
-     * same method the previous hard-coded 'image_frac' logic was using; I
-     * believe it was done this way to allow scaling with the window while
-     * maintaining the aspect ratio.
-     *
      * @param[in] x_min
      * @param[in] x_max
      * @param[in] y_min
      * @param[in] y_max
+     *
+     * @todo:  this is super weird.
+     * Coordinates are {x_min, x_max, y_max, y_min}
+     * in sort-of normalized screen coordinates:
+     * y is in [-1, 1], and x uses the same scale
+     * (i.e. window width is ignored).
+     * This is currently just the same method the previous
+     * hard-coded 'image_frac' logic was using;
+     * I believe it was done this way to allow scaling
+     * with the window while maintaining the aspect ratio.
      */
     void set_position(float x_min, float x_max, float y_min, float y_max);
 
@@ -922,6 +1043,37 @@ class Image {
      */
     void clear_palette();
 
+    /**
+     * Returns the image pixel corresponding to the provided window coordinates.
+     *
+     * @param[in] ctx the WindowCtx.
+     * @param[in] x X coordinate for the window
+     * @param[in] y Y coordinate for the window
+     *
+     * @return Image pixel corresponding to the provided window coordinates.
+     */
+    nonstd::optional<std::pair<int, int>> window_coordinates_to_image_pixel(
+        const WindowCtx& ctx, double x, double y) const;
+
+    /**
+     * @brief Returns the inverse of "window_coordinates_to_image_pixel"
+     * This is useful for computing positions relative to an image pixel.
+     * @param[in] ctx the WindowCtx.
+     * @param[in] px X pixel coordinate
+     * @param[in] py Y pixel coordinate
+     * @return a coordinate normalized to -1, 1 in the window's Y axis
+     */
+    std::pair<double, double> image_pixel_to_window_coordinates(
+        const WindowCtx& ctx, int px, int py) const;
+
+    /**
+     * @brief Returns the pixel size as a pair representing width and height in
+     * window pixels.
+     * @param[in] ctx the WindowCtx.
+     * @return a pair representing the image pixel size in window pixels.
+     */
+    std::pair<double, double> pixel_size(const WindowCtx& ctx) const;
+
     friend class impl::GLImage;
 };
 
@@ -937,7 +1089,12 @@ class Cuboid {
 
    public:
     /**
-     * @todo document me
+     * Constructor to initialize a cuboid
+     *
+     * @param[in] transform 4x4 matrix representing a transform
+     *            defining the cuboid
+     * @param[in] rgba 4x4 float matrix representing cuboid color in RGBA format
+     *
      */
     Cuboid(const mat4d& transform, const vec4f& rgba);
 
@@ -987,11 +1144,21 @@ class Label {
 
    public:
     /**
-     * @todo document me
+     * Constructs a Label object
+     *
+     * @param[in] text Text to display
+     * @param[in] position Set 3D position of label as x,y,z coordinates
+     *            of type double
      */
     Label(const std::string& text, const vec3d& position);
     /**
-     * @todo document me
+     * Sets the 2D position of the lavel
+     *
+     * @param[in] text Label text to display
+     * @param[in] x horizontal position [0, 1]
+     * @param[in] y vertical position [0, 1]
+     * @param[in] align_right interpret position as right of the label
+     * @param[in] align_top interpret position as top of the label
      */
     Label(const std::string& text, float x, float y, bool align_right = false,
           bool align_top = false);

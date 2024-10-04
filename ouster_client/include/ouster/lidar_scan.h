@@ -125,8 +125,19 @@ class LidarScan {
     Field packet_timestamp_;
     Field pose_;
 
+    /**
+     * The alert flags field, from eUDP packet headers.
+     */
+    Field alert_flags_;
+
     LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
               size_t columns_per_packet);
+
+    /**
+     * The number of packets used to produce a full scan given the width in
+     * pixels and the number of columns per packet.
+     */
+    size_t packet_count_{0};
 
    public:
     /**
@@ -160,6 +171,18 @@ class LidarScan {
     uint64_t frame_status{0};
 
     /**
+     * Thermal shutdown counter. Please refer to the firmware documentation for
+     * more information.
+     */
+    uint8_t shutdown_countdown{0};
+
+    /**
+     * Shot limiting counter. Please refer to the firmware documentation for
+     * more information.
+     */
+    uint8_t shot_limiting_countdown{0};
+
+    /**
      * The current frame ID.
      *
      * @warning Members variables: use with caution, some of these will become
@@ -181,6 +204,14 @@ class LidarScan {
      * (DEFAULT_COLUMNS_PER_PACKET).
      */
     LidarScan(size_t w, size_t h);
+
+    /**
+     * Initialize a scan with fields configured as default for the provided
+     * SensorInfo's configuration
+     *
+     * @param[in] sensor_info description of sensor to create scan for
+     */
+    LidarScan(const sensor::sensor_info& sensor_info);
 
     /**
      * Initialize a scan with the default fields for a particular udp profile.
@@ -255,11 +286,15 @@ class LidarScan {
 
     /**
      * Get frame shot limiting status
+     *
+     * @return true if sensor is shot limiting
      */
     sensor::ShotLimitingStatus shot_limiting() const;
 
     /**
      * Get frame thermal shutdown status
+     *
+     * @return true if sensor is in thermal shutdown state.
      */
     sensor::ThermalShutdownStatus thermal_shutdown() const;
 
@@ -339,9 +374,9 @@ class LidarScan {
      *
      * @throw std::invalid_argument if key duplicates a preexisting field
      *
-     * @param[in] type descriptor of the field to add
+     * @param[in] type Descriptor of the field to add.
      *
-     * @return field
+     * @return field The value of the field added.
      */
     Field& add_field(const FieldType& type);
 
@@ -351,6 +386,8 @@ class LidarScan {
      * @throw std::invalid_argument if field under key does not exist
      *
      * @param[in] name string key of the field to remove
+     *
+     * @return field The deleted field.
      */
     Field del_field(const std::string& name);
 
@@ -366,12 +403,14 @@ class LidarScan {
     /**
      * Get the FieldType of all fields in the scan
      *
-     * @return the type associated with every field in the scan
+     * @return The type associated with every field in the scan.
      */
     LidarScanFieldTypes field_types() const;
 
     /**
      * Reference to the internal fields map
+     *
+     * @return The unordered map of field type and field.
      */
     std::unordered_map<std::string, Field>& fields();
 
@@ -393,16 +432,34 @@ class LidarScan {
     /**
      * Access the packet timestamp headers (usually host time).
      *
-     * @return a view of timestamp as a w-element vector.
+     * @return a view of timestamp as a vector with w / columns-per-packet
+     * elements.
      */
     Eigen::Ref<Header<uint64_t>> packet_timestamp();
 
     /**
      * Access the host timestamp headers (usually host time).
      *
-     * @return a view of timestamp as a w-element vector.
+     * @return a view of timestamp as a vector with w / columns-per-packet
+     * elements.
      */
     Eigen::Ref<const Header<uint64_t>> packet_timestamp() const;
+
+    /**
+     * Access the packet alert flags headers.
+     *
+     * @return a view of timestamp as a vector with w / columns-per-packet
+     * elements.
+     */
+    Eigen::Ref<Header<uint8_t>> alert_flags();
+
+    /**
+     * Access the packet alert flags headers.
+     *
+     * @return a view of timestamp as a vector with w / columns-per-packet
+     * elements.
+     */
+    Eigen::Ref<const Header<uint8_t>> alert_flags() const;
 
     /**
      * Return the first valid packet timestamp
@@ -410,6 +467,13 @@ class LidarScan {
      * @return the first valid packet timestamp, 0 if none available
      */
     uint64_t get_first_valid_packet_timestamp() const;
+
+    /**
+     * Return the first valid column timestamp
+     *
+     * @return the first valid column timestamp, 0 if none available
+     */
+    uint64_t get_first_valid_column_timestamp() const;
 
     /**
      * Access the measurement id headers.
@@ -447,6 +511,13 @@ class LidarScan {
      * @return whether all columns within given column window were valid
      */
     bool complete(sensor::ColumnWindow window) const;
+
+    /**
+     * Returns the number of lidar packets used to produce this scan.
+     *
+     * @return the number of packets
+     */
+    size_t packet_count() const;
 
     friend bool operator==(const LidarScan& a, const LidarScan& b);
 };
@@ -557,19 +628,17 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
 /**
  * Convenient overload that uses parameters from the supplied sensor_info.
  * Projections to XYZ made with this XYZLut will be in the sensor coordinate
- * frame defined in the sensor documentation.
+ * frame defined in the sensor documentation unless use_extrinics is true.
+ * Then the projections will be in the coordinate frame defined by the provided
+ * extrinsics in the metadata.
  *
  * @param[in] sensor metadata returned from the client.
+ * @param[in] use_extrinsics if true, applies the ``sensor.extrinsic`` transform
+ *                           to the resulting "sensor frame" coordinates
  *
  * @return xyz direction and offset vectors for each point in the lidar scan.
  */
-inline XYZLut make_xyz_lut(const sensor::sensor_info& sensor) {
-    return make_xyz_lut(
-        sensor.format.columns_per_frame, sensor.format.pixels_per_column,
-        sensor::range_unit, sensor.beam_to_lidar_transform,
-        sensor.lidar_to_sensor_transform, sensor.beam_azimuth_angles,
-        sensor.beam_altitude_angles);
-}
+XYZLut make_xyz_lut(const sensor::sensor_info& sensor, bool use_extrinsics);
 
 /** \defgroup ouster_client_lidar_scan_cartesian Ouster Client lidar_scan.h
  * XYZLut related items.
@@ -658,21 +727,30 @@ class ScanBatcher {
     std::vector<uint8_t> cache;
     uint64_t cache_packet_ts;
     bool cached_packet = false;
+    int64_t finished_scan_id = -1;
+    size_t expected_packets;
+    size_t batched_packets = 0;
 
     void _parse_by_col(const uint8_t* packet_buf, LidarScan& ls);
     void _parse_by_block(const uint8_t* packet_buf, LidarScan& ls);
+    void finalize_scan(LidarScan& ls, bool raw_headers);
 
    public:
     sensor::packet_format pf;  ///< The packet format object used for decoding
 
+    // clang-format off
     /**
      * Create a batcher given information about the scan and packet format.
+     * @deprecated Use ScanBatcher::ScanBatcher(const sensor_info&) instead.
      *
      * @param[in] w number of columns in the lidar scan. One of 512, 1024, or
      * 2048.
      * @param[in] pf expected format of the incoming packets used for parsing.
      */
+    [[deprecated("Use ScanBatcher::ScanBatcher(const sensor_info&) instead. "
+                 "This is planned to be removed in Q4 2024.")]]
     ScanBatcher(size_t w, const sensor::packet_format& pf);
+    // clang-format on
 
     /**
      * Create a batcher given information about the scan and packet format.
@@ -719,6 +797,78 @@ class ScanBatcher {
                     LidarScan& ls);
 };
 
+namespace pose_util {
+typedef Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> Points;
+typedef Eigen::Matrix<double, Eigen::Dynamic, 16, Eigen::RowMajor> Poses;
+typedef Eigen::Matrix<double, 1, 16, Eigen::RowMajor> Pose;
+
+/**
+ * This function takes in a set of 3D points and a set of 4x4 pose matrices
+ *
+ * @param[out] dewarped An eigen matrix of shape (N, 3) to hold the dewarped
+ * 3D points, where the same number of points are transformed by each
+ * corresponding pose matrix.
+ * @param[in] points A Eigen matrix of shape (N, 3) representing the 3D points.
+ * Each row corresponds to a point in 3D space.
+ * @param[in] poses A Eigen matrix of shape (W, 16) representing W 4x4
+ * transformation matrices. Each row is a flattened 4x4 pose matrix
+ */
+
+void dewarp(Eigen::Ref<Points> dewarped, const Eigen::Ref<const Points> points,
+            const Eigen::Ref<const Poses> poses);
+
+/**
+ * This function takes in a set of 3D points and a set of 4x4 pose matrices
+ *
+ * @param[in] points A Eigen matrix of shape (N, 3) representing the 3D points.
+ * Each row corresponds to a point in 3D space.
+ * @param[in] poses A Eigen matrix of shape (W, 16) representing W 4x4
+ * transformation matrices. Each row is a flattened 4x4 pose matrix
+ *
+ * @return A matrix of shape (N, 3) containing the dewarped 3D points,
+ * where the same number of points are transformed by each corresponding pose
+ * matrix.
+ */
+
+Points dewarp(const Eigen::Ref<const Points> points,
+              const Eigen::Ref<const Poses> poses);
+
+/**
+ *  Applies a single 4x4 pose transformation to a set of 3D points.
+ *
+ * This function takes in a set of 3D points and applies a single 4x4
+ * transformation matrix (Pose) to all points.
+ *
+ * @param[out] transformed A matrix of shape (N, 3) containing the transformed
+ * 3D points, where each point is rotated and translated by the given pose.
+ * @param[in] points A matrix of shape (N, 3) representing the 3D points.
+ *               Each row corresponds to a point in 3D space.
+ * @param[in] pose A vector of 16 elements representing a flattened 4x4
+ * transformation matrix.
+ */
+
+void transform(Eigen::Ref<Points> transformed,
+               const Eigen::Ref<const Points> points,
+               const Eigen::Ref<const Pose> pose);
+/**
+ *  Applies a single 4x4 pose transformation to a set of 3D points.
+ *
+ * This function takes in a set of 3D points and applies a single 4x4
+ * transformation matrix (Pose) to all points.
+ *
+ * @param[in] points A matrix of shape (N, 3) representing the 3D points.
+ *               Each row corresponds to a point in 3D space.
+ * @param[in] pose A vector of 16 elements representing a flattened 4x4
+ * transformation matrix.
+ *
+ * @return A matrix of shape (N, 3) containing the transformed 3D points,
+ *         where each point is rotated and translated by the given pose.
+ */
+
+Points transform(const Eigen::Ref<const Points> points,
+                 const Eigen::Ref<const Pose> pose);
+
+}  // namespace pose_util
 }  // namespace ouster
 
 #include "ouster/impl/cartesian.h"

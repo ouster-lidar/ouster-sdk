@@ -384,6 +384,23 @@ nonstd::optional<ts_t> Reader::ts_by_message_idx(uint32_t stream_id,
 
 bool Reader::has_message_idx() const { return chunks_.has_message_idx(); };
 
+bool Reader::has_timestamp_idx() const {
+    // just check metadata for any elements in the stats timestamp array
+    for (auto& item : meta_store().find<StreamingInfo>()) {
+        // return false if anything has the wrong number of timestamps for
+        // number of messages
+        for (auto& stats : item.second->stream_stats()) {
+            if (stats.second.message_count > 0 &&
+                stats.second.receive_timestamps.size() !=
+                    stats.second.message_count) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 ChunksRange Reader::chunks() {
     return ChunksRange(0, file_.metadata_offset(), this);
 }

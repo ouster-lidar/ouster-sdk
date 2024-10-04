@@ -106,6 +106,6 @@ def test_destagger_correct_multi(meta, scan) -> None:
 
     destaggered_stacked = client.destagger(meta, near_ir_stacked)
 
-    assert near_ir_stacked.dtype == np.uint32
-    assert destaggered_stacked.dtype == np.uint32
+    assert near_ir_stacked.dtype == np.uint16
+    assert destaggered_stacked.dtype == np.uint16
     assert np.array_equal(ref_stacked, destaggered_stacked)

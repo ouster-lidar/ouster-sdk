@@ -138,7 +138,11 @@ void add_custom_profile(
             udp_profile, name, {}, {}, chan_data_size};
         for (auto&& pair : fields) {
             profile.slots.emplace_back(pair.first, pair.second.ty_tag);
-            profile.fields.emplace_back(pair.first, pair.second);
+            ouster::sensor::impl::FieldInfo field = pair.second;
+            if (field.mask == 0) {
+                field.mask = sensor::field_type_mask(field.ty_tag);
+            }
+            profile.fields.emplace_back(pair.first, field);
         }
 
         impl::extended_profiles_data.push_back(std::move(profile));

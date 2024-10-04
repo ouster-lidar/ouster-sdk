@@ -85,6 +85,20 @@ Metadata
    :members:
    :undoc-members:
 
+.. autofunction:: parse_and_validate_metadata
+
+.. autoclass:: ValidatorIssues
+   :members:
+   :undoc-members:
+
+.. autoclass:: ValidatorEntry
+   :members:
+   :undoc-members:
+
+.. autoclass:: ProductInfo
+   :members:
+   :undoc-members:
+
 ----
 
 

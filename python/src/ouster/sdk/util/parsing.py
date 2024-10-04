@@ -10,12 +10,12 @@ import numpy as np
 
 import ouster.sdk.client as client
 from ouster.sdk.client import (ChanField, FieldDType, UDPProfileLidar, LidarPacket)
-from ouster.sdk.client._client import PacketWriter, get_field_types, FieldType
+from ouster.sdk._bindings.client import PacketWriter, get_field_types, FieldType
+from ouster.sdk._bindings.client import scan_to_packets as _scan_to_packets
 
 
 def default_scan_fields(
         profile: UDPProfileLidar,
-        flags: bool = False,
         raw_headers: bool = False) -> Optional[client.FieldTypes]:
     """Get the default fields populated on scans for a profile.
 
@@ -24,7 +24,6 @@ def default_scan_fields(
 
     Args:
         profile: The lidar profile
-        flags: Include the FLAGS fields
         raw_headers: Include RAW_HEADERS field
 
     Returns:
@@ -33,15 +32,6 @@ def default_scan_fields(
     """
 
     fields = get_field_types(profile)
-
-    # todo remove me when we default fields on in C++
-    if flags:
-        fields.append(FieldType(client.ChanField.FLAGS, np.uint8))
-        if profile in [
-                UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL,
-                UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL
-        ]:
-            fields.append(FieldType(client.ChanField.FLAGS2, np.uint8))
 
     if raw_headers:
         # Getting the optimal field type for RAW_HEADERS is not possible with
@@ -56,7 +46,6 @@ def default_scan_fields(
 
 def resolve_field_types(
     metadata: Union[client.SensorInfo, List[client.SensorInfo]],
-    flags: bool = False,
     raw_headers: bool = False,
     raw_fields: bool = False
 ) -> Union[client.FieldTypes, List[client.FieldTypes]]:
@@ -68,7 +57,6 @@ def resolve_field_types(
     Args:
         metadata: single SensorInfo or a list of SensorInfo used resolve
                   UDPLidarProfile
-        flags: True if augment the resulting fields with FLAGS/FLAGS2
         raw_headers: True if RAW_HEADERS field should be included (i.e. all
                      lidar packet headers and footers will be added during
                      batching)
@@ -96,12 +84,6 @@ def resolve_field_types(
         ]:
             dual = True
 
-        # todo remove me when we default fields on in C++
-        if flags:
-            ftypes.append(FieldType(client.ChanField.FLAGS, np.uint8))
-            if dual:
-                ftypes.append(FieldType(client.ChanField.FLAGS2, np.uint8))
-
         if raw_fields:
             ftypes.append(FieldType(client.ChanField.RAW32_WORD1, np.uint32))
             if profile != client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8:
@@ -116,7 +98,7 @@ def resolve_field_types(
 
         if raw_headers:
             # getting the optimal field type for RAW_HEADERS
-            pf = client._client.PacketFormat.from_info(m)
+            pf = client.PacketFormat.from_info(m)
             h = pf.pixels_per_column
             raw_headers_space = (pf.packet_header_size +
                                  pf.packet_footer_size + pf.col_header_size +
@@ -162,7 +144,7 @@ def tohex(data: client.BufferT) -> str:
 
 def scan_to_packets(ls: client.LidarScan,
                     info: client.SensorInfo) -> List[LidarPacket]:
-    """Converts LidarScar to a lidar_packet buffers
+    """Converts LidarScan to a lidar_packet buffers
 
     Args:
         ls: LidarScan; if LidarScan has RAW_HEADERS field, packet headers
@@ -173,7 +155,7 @@ def scan_to_packets(ls: client.LidarScan,
         A set of lidar packets that will produce the same LidarScan if passed
         through the ScanBatcher again (less fields data)
     """
-    return client._client.scan_to_packets(ls, PacketWriter.from_info(info), info.init_id, int(info.sn))
+    return _scan_to_packets(ls, PacketWriter.from_info(info), info.init_id, int(info.sn))
 
 
 def terminator_packet(info: client.SensorInfo,
@@ -201,7 +183,7 @@ def terminator_packet(info: client.SensorInfo,
     """
 
     # get frame_id using client.PacketFormat
-    pf = client._client.PacketFormat.from_info(info)
+    pf = client.PacketFormat.from_info(info)
     curr_fid = pf.frame_id(last_packet.buf)
 
     pw = PacketWriter.from_info(info)
@@ -210,11 +192,11 @@ def terminator_packet(info: client.SensorInfo,
                                   count=pf.lidar_packet_size)
 
     # get frame_id using parsing.py PacketFormat and compare with client result
-    assert pw.frame_id(last_buf_view) == curr_fid, "_client.PacketFormat " \
+    assert pw.frame_id(last_buf_view) == curr_fid, "client.PacketFormat " \
         "and parsing.py PacketFormat should get the same frame_id value from buffer"
 
     # making a dummy data for the terminal lidar_packet
-    tpacket = LidarPacket(packet_format=pw)
+    tpacket = LidarPacket(pw.lidar_packet_size)
 
     # update the frame_id so it causes the LidarScan finishing routine
     # NOTE: frame_id is uint16 datatype so we need to properly wrap it on +1
@@ -238,9 +220,9 @@ def packets_to_scan(
     h = info.format.pixels_per_column
     _fields = fields if fields is not None else default_scan_fields(
         info.format.udp_profile_lidar)
-    ls = client._client.LidarScan(h, w, _fields)
-    pf = client._client.PacketFormat.from_info(info)
-    batch = client._client.ScanBatcher(w, pf)
+    ls = client.LidarScan(h, w, _fields)
+    pf = client.PacketFormat.from_info(info)
+    batch = client.ScanBatcher(w, pf)
     for idx, packet in enumerate(lidar_packets):
         assert not batch(packet, ls), "lidar_packets buffers should belong to a " \
             f"single LidarScan, but {idx} of {len(lidar_packets)} buffers already " \

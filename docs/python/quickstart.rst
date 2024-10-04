@@ -92,10 +92,11 @@ regardless of whether the source data comes from a sensor, pcap, or osf file.
 Notice here that rather than we try to load and parse the metadata ourselves we only need to pass to metadata
 to the method through ``meta`` parameter and the method will take care of loading it and associating it with the
 source object. The ``meta`` parameter however is optional and can be omitted. When the ``meta`` parameter is not
-set explicity the ``open_source`` method will attempt to locate the metadata automatically for us and we can reduce
+set explicitly the ``open_source`` method will attempt to locate the metadata automatically for us and we can reduce
 the call to:
 
 .. code:: python
+
    >>> source = open_source(pcap_path)
 
 However if metadata file is not in the same folder as the pcap and don't have a shared name prefix the method will
@@ -108,7 +109,7 @@ fail.
    storage) contains scans from more than one sensor, in this case, users can set the ``sensor_idx`` to a any value
    between zero and ``sensors_count -1`` to access and manipulate scans from a specific sensor by the order they appear
    in the file. Alternatively, if users set the value of ``sensor_idx`` to ``-1`` then ``open_source`` will return a
-   slightly differnt interface from ``ScanSource`` which is the ``MultiScanSource`` this interface and as the name
+   slightly different interface from ``ScanSource`` which is the ``MultiScanSource`` this interface and as the name
    suggests allows users to work with sensor data collected from multiple sensors at the same time.
 
    The main different between the ``MultiScanSource`` and the ``ScanSource`` is the expected return of some of the object
@@ -118,7 +119,7 @@ fail.
    is being used. This is true even when the pcap file contains data for a single sensor.
 
 
-On the other hand, if the user wants to open an osf file or access the a live sensor, all that changes is url
+On the other hand, if the user wants to open an OSF file or access a live sensor, all that changes is URL
 of the source. For example, to interact with a live sensor the user can execute the following snippet:
 
 .. code:: python
@@ -132,7 +133,7 @@ Obtaining sensor metadata
 -------------------------
 
 Every ScanSource holds a reference to the sensor metadata, which has crucial information that is important when
-when processing the invidivual scans. Continuing the example, a user this can access the metadata through the
+when processing the individual scans. Continuing the example, a user this can access the metadata through the
 ``metadata`` property of a ``ScanSource`` object:
 
 .. code:: python
@@ -161,9 +162,9 @@ As we noted earlier, if we set ``sensor_idx=-1`` when invoking ``open_source`` m
 ``MultiScanSource``, which always addresses a group of sensors. Thus, when iterating over the ``source`` the user
 receives a collated set of scans from the addressed sensors per iteration. The ``MultiScanSource`` examines the
 timestamp of every scan from every sensor and returns a list of scans that fit within the same time window as single
-batch. The size of the batch is fixed corresponding to how many sensors contained in the pcap or osf file. However,
+batch. The size of the batch is fixed corresponding to how many sensors contained in the pcap or OSF file. However,
 the collation could yield a null value if one or more of the sensors didn't produce a ``LidarScan`` object that fits
-within the time frame of current batch or iteration. Thus, depending on the operation at hand it is crticial to check
+within the time frame of current batch or iteration. Thus, depending on the operation at hand it is critical to check
 if we got a valid ``LidarScan`` object when examining the iteration output of a ``MultiScanSource``.  If we are to
 perform the same example as above when ``source`` is a handle to ``MultiScanSource`` and display the frame_id of
 ``LidarScan`` objects the belongs to the same batch on the same line the code needs to updated to the following:
@@ -174,7 +175,7 @@ perform the same example as above when ``source`` is a handle to ``MultiScanSour
    >>> source_iter = iter(source)
    >>> for scans in source_iter:
    ...     for scan in scans:    # source_iter here returns a list of scans
-   ...         if scan:          # check if invidiual scan object is valid
+   ...         if scan:          # check if individual scan object is valid
    ...             print(scan.frame_id, end=', ')
    ...     print()   # new line for next batch
    ...     ctr += 1
@@ -192,8 +193,8 @@ Using indexing and slicing capabilities of a ScanSource
 One of the most prominent new features of the ScanSource API, (besides being able to address multi sensors), is the
 ability to use indexing and slicing when accessing the stored scans within the ``LidarScan`` source. Currently, this
 capability is only supported for indexable sources. That is to say, the functionality we are discussing can only be used
-when accessing a pcap or an osf file with indexing turned on. To turn on indexing simply add the ``index`` flag and set
-it ``True`` when opening a pcap or osf file:
+when accessing a pcap or an OSF file with indexing turned on. To turn on indexing simply add the ``index`` flag and set
+it ``True`` when opening a pcap or OSF file:
 
 
 .. code:: python
@@ -243,15 +244,15 @@ To print frame_id of the last 10 LidarScans we do:
    ...     print(scan.frame_id)
 
 
-Finally, as you would expect from a typical slice operation, you can also using negative step and also use a reversed
-iteration as shown in the following example:
+Finally, as you would expect from a typical slice operation you can also use a step value, though reversed
+iteration is not supported.
 
 .. code:: python
 
    >>> for scan in source[0:10:2]:     # prints the frame_id of every second scan of the first 10 scans
    ...     print(scan.frame_id)
 
-   >>> for scan in source[10:0:-1]:     # prints the frame_id of every scan of the first 10 scans in reverse
+   >>> for scan in source[10:0:-1]:    # unsupported
    ...     print(scan.frame_id)
 
 
@@ -284,7 +285,7 @@ following snippet shows few examples to demonstrate this capability:
 Using the client API
 ====================
 
-The client API provides :py:class:`.PacketSource` implementations, as well as access to methods for configuring a sensor or reading metadata.
+The client API provides :py:class:`.PacketMultiSource` implementations, as well as access to methods for configuring a sensor or reading metadata.
 
 As such, you can use it instead of the ``ScanSource`` API if you prefer to work with individual packets rather than lidar scans.
 
@@ -301,13 +302,28 @@ information from ``metadata_path`` first, using the client module:
    ...     info = client.SensorInfo(f.read())
 
 Now that we've parsed the metadata file into a :py:class:`.SensorInfo`, we can use it to read our
-captured UDP data by instantiating :py:class:`.pcap.Pcap`. This class acts as a
-:py:class:`.PacketSource` and can be used in many of the same contexts as a real sensor.
+captured UDP data by instantiating :py:class:`.pcap.PcapMultiPacketReader`. This class acts as a
+:py:class:`.PacketMultiSource` and can be used in many of the same contexts as a real sensor.
 
 .. code:: python
 
     >>> from ouster.sdk import pcap
-    >>> source = pcap.Pcap(pcap_path, info)
+    >>> source = pcap.PcapMultiPacketReader(pcap_path, metadatas=[info])
+    >>> for sensor_idx, packet in source:
+    >>>    ...
+
+The ``source`` object returned is an ``Iterable`` of tuples each containing the sensor index and a packet that
+originates from that sensor. (The index corresponds to the positions of the ``SensorInfo`` instances provided to the
+``metadatas`` keyword argument.)
+
+To limit the output to an ``Iterable`` of packets (without the sensor index) use the ``single_source`` method, providing
+the index of the sensor you want to read from (which will be ``0`` if you've only provided a single ``SensorInfo``
+instance.)
+
+.. code:: python
+
+    >>> for packet in source.single_source(0):
+    >>>    ...
 
 To visualize data from this pcap file, proceed to :doc:`/python/examples/visualizations` examples.
 
@@ -363,20 +379,37 @@ Now configure the client:
 
    >>> from ouster.sdk import client
    >>> config = client.SensorConfig()
+   >>> config.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
    >>> config.udp_port_lidar = 7502
    >>> config.udp_port_imu = 7503
    >>> config.operating_mode = client.OperatingMode.OPERATING_NORMAL
    >>> client.set_config(hostname, config, persist=True, udp_dest_auto = True)
 
-Just like with the sample data, you can create a :py:class:`.PacketSource` from the sensor:
+When using a :py:class:`.SensorPacketSource`, provide a list of hostname/``SensorConfig`` pairs:
 
 .. code:: python
 
-   >>> source = client.Sensor(hostname, 7502, 7503)
+   >>> source = client.SensorPacketSource([(hostname, config)])
    >>> info = source.metadata
 
-Now we have a ``source`` from our sensor! You're ready to record, visualize to visualize data from your sensor, proceed to
-:doc:`/python/examples/visualizations` examples. Or you can check out other things you can do with a
+Now we have a ``source`` from our sensor! As before, since ``SensorPacketSource`` supports multiple sensors, you have
+the option to read it as an ``Iterable[List[Optional[LidarScan]]]`` of each containing the sensor index and a scan, or to limit the output
+to a single sensor (an ``Iterable[LidarScan]``.)
+
+.. code:: python
+
+   >>> for scans in source:
+   >>>    ...  # a list of scans, one per sensor
+
+Or,
+
+.. code:: python
+
+   >>> for scan in source.single_source(0):
+   >>>    ...  # a single scan for sensor index 0
+
+At this point, you're ready visualize to visualize data from your sensor. Proceed to
+:doc:`/python/examples/visualizations` for examples. Or you can check out other things you can do with a
 ``source`` in the Python :doc:`/python/examples/index`.
 
 

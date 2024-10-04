@@ -5,14 +5,14 @@ All rights reserved.
 
 from contextlib import closing
 import socket
+import random
 
 import numpy as np
 import pytest
 
 from ouster.sdk import client
-from ouster.sdk.client import ChanField, LidarPacket, ImuPacket, PacketFormat, ColHeader, FieldType
+from ouster.sdk.client import ChanField, LidarPacket, ImuPacket, PacketFormat, ColHeader, Version, FieldType
 from ouster.sdk.client.core import ClientTimeout
-from ouster.sdk.client._client import Version
 
 pytest.register_assert_rewrite('ouster.sdk.client._digest')
 import ouster.sdk.client._digest as digest  # noqa
@@ -20,27 +20,30 @@ import ouster.sdk.client._digest as digest  # noqa
 
 @pytest.fixture
 def default_meta():
-    return client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    meta = client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    meta.config.udp_port_imu = random.randint(10000, 65000)
+    meta.config.udp_port_lidar = random.randint(10000, 65000)
+    return meta
 
 
 def test_sensor_init(default_meta: client.SensorInfo) -> None:
     """Initializing a data stream with metadata makes no network calls."""
-    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as source:
+    with closing(client.Sensor("localhost", None, None, metadata=default_meta)) as source:
         assert source.lidar_port != 0
         assert source.imu_port != 0
 
 
 def test_sensor_timeout(default_meta: client.SensorInfo) -> None:
     """Setting a zero timeout reliably raises an exception."""
-    with closing(client.Sensor("", 0, 0, metadata=default_meta,
-                               timeout=0.0)) as source:
+    with closing(client.Sensor("localhost", None, None, metadata=default_meta,
+                               timeout=0.1)) as source:
         with pytest.raises(client.ClientTimeout):
             next(iter(source))
 
 
 def test_sensor_closed(default_meta: client.SensorInfo) -> None:
     """Check reading from a closed source raises an exception."""
-    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as source:
+    with closing(client.Sensor("localhost", None, None, metadata=default_meta)) as source:
         source.close()
         with pytest.raises(ValueError):
             next(iter(source))
@@ -48,9 +51,9 @@ def test_sensor_closed(default_meta: client.SensorInfo) -> None:
 
 def test_sensor_port_in_use(default_meta: client.SensorInfo) -> None:
     """Instantiating clients listening to the same port does not fail."""
-    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as s1:
+    with closing(client.Sensor("localhost", None, None, metadata=default_meta)) as s1:
         with closing(
-                client.Sensor("",
+                client.Sensor("localhost",
                               s1.lidar_port,
                               s1.imu_port,
                               metadata=default_meta)) as s2:
@@ -60,22 +63,21 @@ def test_sensor_port_in_use(default_meta: client.SensorInfo) -> None:
             assert s2.imu_port == s1.imu_port
 
 
-def test_sensor_packet(default_meta: client.SensorInfo) -> None:
+def test_sensor_packet2(default_meta: client.SensorInfo) -> None:
     """Check that the client will read single properly-sized IMU/LIDAR packet."""
     with closing(
-            client.Sensor("",
-                          0,
-                          0,
+            client.Sensor("127.0.0.1",
+                          None,
+                          None,
                           metadata=default_meta,
                           timeout=5.0,
                           _flush_before_read=False)) as source:
         pf = PacketFormat(source.metadata)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
         data = np.random.randint(255,
                                  size=pf.lidar_packet_size,
                                  dtype=np.uint8)
-        sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
+        sock.sendto(data.tobytes(), ("127.0.0.1", source.lidar_port))
         packet = next(iter(source))
         assert (packet.buf == data).all()
         assert isinstance(packet, LidarPacket)
@@ -83,7 +85,7 @@ def test_sensor_packet(default_meta: client.SensorInfo) -> None:
         data = np.random.randint(255,
                                  size=pf.imu_packet_size,
                                  dtype=np.uint8)
-        sock.sendto(data.tobytes(), ("localhost", source.imu_port))
+        sock.sendto(data.tobytes(), ("127.0.0.1", source.imu_port))
         packet = next(iter(source))
         assert (packet.buf == data).all()
         assert isinstance(packet, ImuPacket)
@@ -91,9 +93,9 @@ def test_sensor_packet(default_meta: client.SensorInfo) -> None:
 
 def test_sensor_flush(default_meta: client.SensorInfo) -> None:
     with closing(
-            client.Sensor("",
-                          0,
-                          0,
+            client.Sensor("127.0.0.1",
+                          None,
+                          None,
                           metadata=default_meta,
                           timeout=1.0,
                           _flush_before_read=False)) as source:
@@ -103,7 +105,7 @@ def test_sensor_flush(default_meta: client.SensorInfo) -> None:
             data = np.zeros((pf.lidar_packet_size), dtype=np.uint8)
             data[:] = i
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
+            sock.sendto(data.tobytes(), ("127.0.0.1", source.lidar_port))
         flushed_packets = 2
         source.flush(flushed_packets)
         for i in range(flushed_packets, total_packets_sent):
@@ -114,16 +116,16 @@ def test_sensor_flush(default_meta: client.SensorInfo) -> None:
 def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
     """Check that the client will ignore improperly-sized packets."""
     with closing(
-            client.Sensor("",
-                          0,
-                          0,
+            client.Sensor("127.0.0.1",
+                          None,
+                          None,
                           metadata=default_meta,
                           timeout=1.0,
                           _flush_before_read=False)) as source:
+        pf = PacketFormat.from_info(source.metadata)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        pf = client.PacketFormat(source.metadata)
         # send packet too small
-        sock.sendto(b"hello", ("localhost", source.lidar_port))
+        sock.sendto(b"hello", ("127.0.0.1", source.lidar_port))
         with pytest.raises(client.ClientTimeout):
             next(iter(source))
 
@@ -131,7 +133,7 @@ def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
         data = np.random.randint(255,
                                  size=pf.lidar_packet_size + 10,
                                  dtype=np.uint8)
-        sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
+        sock.sendto(data.tobytes(), ("127.0.0.1", source.lidar_port))
         with pytest.raises(client.ClientTimeout):
             next(iter(source))
 
@@ -141,8 +143,8 @@ def test_sensor_packet_bad_size(default_meta: client.SensorInfo) -> None:
 def test_sensor_overflow(default_meta: client.SensorInfo) -> None:
     with closing(
             client.Sensor("",
-                          0,
-                          0,
+                          None,
+                          None,
                           buf_size=10,
                           metadata=default_meta,
                           timeout=1.0,
@@ -155,7 +157,7 @@ def test_sensor_overflow(default_meta: client.SensorInfo) -> None:
                                      size=pf.lidar_packet_size,
                                      dtype=np.uint8)
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.sendto(data.tobytes(), ("localhost", source.lidar_port))
+            sock.sendto(data.tobytes(), ("127.0.0.1", source.lidar_port))
         with pytest.raises(client.ClientOverflow):
             for i in range(total_packets_sent):
                 next(iter(source))
@@ -172,7 +174,7 @@ def test_scans_simple(packets: client.PacketSource) -> None:
 
 def test_scans_closed(default_meta: client.SensorInfo) -> None:
     """Check reading from closed scans raises an exception."""
-    with closing(client.Sensor("", 0, 0, metadata=default_meta)) as source:
+    with closing(client.Sensor("localhost", None, None, metadata=default_meta)) as source:
         scans = client.Scans(source)
         scans.close()
         with pytest.raises(ValueError):
@@ -296,6 +298,8 @@ def test_scans_dual(packets: client.PacketSource) -> None:
         ChanField.REFLECTIVITY2,
         ChanField.SIGNAL,
         ChanField.SIGNAL2,
+        ChanField.FLAGS,
+        ChanField.FLAGS2,
         ChanField.NEAR_IR,
     }
 
@@ -368,10 +372,10 @@ def test_version_parse() -> None:
     assert v.minor == 2
     assert v.patch == 3
 
-    v2 = Version.from_string("1.2.3")
-    assert v2.major == 1
-    assert v2.minor == 2
-    assert v2.patch == 3
+    v = Version.from_string("1.2.3")
+    assert v.major == 1
+    assert v.minor == 2
+    assert v.patch == 3
 
     v = Version.from_string("ousteros-prod-bootes-v1.2.3-rc1+123456")
     assert v.major == 1

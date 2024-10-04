@@ -37,11 +37,11 @@ TEST_F(OsfFileTest, OpenOsfFileNominally) {
     OsfFile osf_file(
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
     EXPECT_TRUE(osf_file);
-    EXPECT_EQ(osf_file.version(), OSF_VERSION::V_2_0);
-    EXPECT_EQ(osf_file.size(), 1021684);
+    EXPECT_EQ(osf_file.version(), OSF_VERSION::V_2_1);
+    EXPECT_EQ(osf_file.size(), 1025780);
     EXPECT_EQ(osf_file.offset(), 0);
 
-    EXPECT_EQ(osf_file.metadata_offset(), 1013976);
+    EXPECT_EQ(osf_file.metadata_offset(), 1015824);
     std::cout << "file = " << osf_file.to_string() << std::endl;
 
     EXPECT_EQ(osf_file.seek(100).offset(), 100);
@@ -99,11 +99,11 @@ TEST_F(OsfFileTest, OpenOsfFileWithStandardRead) {
     OsfFile osf_file(
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
     EXPECT_TRUE(osf_file);
-    EXPECT_EQ(osf_file.version(), OSF_VERSION::V_2_0);
-    EXPECT_EQ(osf_file.size(), 1021684);
+    EXPECT_EQ(osf_file.version(), OSF_VERSION::V_2_1);
+    EXPECT_EQ(osf_file.size(), 1025780);
     EXPECT_EQ(osf_file.offset(), 0);
 
-    EXPECT_EQ(osf_file.metadata_offset(), 1013976);
+    EXPECT_EQ(osf_file.metadata_offset(), 1015824);
     std::cout << "file = " << osf_file.to_string() << std::endl;
 
     EXPECT_TRUE(osf_file.valid());

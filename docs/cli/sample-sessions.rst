@@ -65,7 +65,7 @@ That should produce screen output that looks something like:
 
 Go ahead and look in the current directory for the named pcap file and associated metadata file.
 
-The ``slice`` command also allows recording for fixed time durations. For example, the following will record 30 seconds of pcap data.
+The ``slice`` command also allows recording for fixed time duration. For example, the following will record 30 seconds of pcap data.
 
 .. code:: bash
 
@@ -114,3 +114,21 @@ To visualize the pcap at 2x speed while looping back:
 You can check check out all the available options by typing ``--help`` after ``ouster-cli source <PCAP_FILE.pcap> viz``.
 
  .. _OS2 bridge sample data: https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip
+
+
+Working with OSF files
+----------------------
+
+Most of the Ouster CLI commands mentioned above also apply to OSF files. Here are a few examples.
+
+To save 100 frames of lidar data from a sensor to an OSF file, run
+
+.. code:: bash
+
+    $ ouster-cli source <SENSOR HOSTNAME> slice 0:100 save .osf
+
+To visualize the OSF at 2x speed while looping back:
+
+.. code:: bash
+
+    $ ouster-cli source <OSF FILE.osf> viz -r 2.0 -e loop

@@ -9,6 +9,7 @@ import pytest
 
 
 import ouster.sdk.util.pose_util as pu
+from ouster.sdk.client import dewarp, transform
 
 
 def gt_pose6toHomMatrix(vec: np.ndarray) -> np.ndarray:
@@ -219,3 +220,107 @@ def test_no_scipy_exp_log_ops(poses6: List[pu.Pose6]):
         assert np.allclose(pu._no_scipy_log_rot_mat(rot_mats[i]), rot_vecs[i])
 
     assert np.allclose(pu._no_scipy_log_rot_mat(rot_mats), pu.log_rot_mat(rot_mats))
+
+
+def test_rotation_alignment_vector1():
+    accel_x, accel_y, accel_z = 1, 0, 1
+    rotation_matrix = pu.get_rot_matrix_to_align_to_gravity(accel_x, accel_y, accel_z)
+    aligned_vector = rotation_matrix @ pu.normalize_vector(np.array([accel_x, accel_y, accel_z]))
+    # align with gravity
+    expected_vector = np.array([0, 0, 1])
+    np.testing.assert_almost_equal(aligned_vector, expected_vector, decimal=6)
+
+
+def test_rotation_alignment_vector2():
+    accel_x, accel_y, accel_z = 0, 1, 1
+    rotation_matrix = pu.get_rot_matrix_to_align_to_gravity(accel_x, accel_y, accel_z)
+    aligned_vector = rotation_matrix @ pu.normalize_vector(np.array([accel_x, accel_y, accel_z]))
+    # align with gravity
+    expected_vector = np.array([0, 0, 1])
+    np.testing.assert_almost_equal(aligned_vector, expected_vector, decimal=6)
+
+
+def test_transform_N_3():
+    # Define known input points of shape (10, 3)
+    points = np.array([[1.0, 2.0, 3.0],
+                       [4.0, 5.0, 6.0],
+                       [7.0, 8.0, 9.0],
+                       [10.0, 11.0, 12.0],
+                       [13.0, 14.0, 15.0],
+                       [16.0, 17.0, 18.0],
+                       [19.0, 20.0, 21.0],
+                       [22.0, 23.0, 24.0],
+                       [25.0, 26.0, 27.0],
+                       [28.0, 29.0, 30.0]])
+
+    # Define a non-identity transformation matrix (4x4)
+    # yawl 30 degree with (1, 2 ,-3) translation
+    transformation_matrix = np.array([[0.866, -0.5, 0.0, 1.0],
+                                      [0.5, 0.866, 0.0, 2.0],
+                                      [0.0, 0.0, 1.0, -1.0],
+                                      [0.0, 0.0, 0.0, 1.0]])
+
+    # Expected transformed points (manually calculated)
+    expected_points = np.array([[0.866, 4.232, 2],
+                                [1.964, 8.33, 5],
+                                [3.062, 12.428, 8],
+                                [4.16, 16.526, 11],
+                                [5.258, 20.624, 14],
+                                [6.356, 24.722, 17],
+                                [7.454, 28.82, 20],
+                                [8.552, 32.918, 23],
+                                [9.65, 37.016, 26],
+                                [10.748, 41.114, 29]])
+
+    transformed_points = transform(points, transformation_matrix)
+    np.testing.assert_almost_equal(transformed_points, expected_points, decimal=5)
+
+
+def test_transform_N_M_3():
+    # Define known input points of shape (2, 4, 3)
+    points = np.array([[[1.0, 2.0, 3.0],
+                        [4.0, 5.0, 6.0],
+                        [7.0, 8.0, 9.0],
+                        [10.0, 11.0, 12.0]],
+
+                       [[13.0, 14.0, 15.0],
+                        [16.0, 17.0, 18.0],
+                        [19.0, 20.0, 21.0],
+                        [22.0, 23.0, 24.0]]])
+
+    # Define a non-identity transformation matrix (4x4)
+    # yawl 30 degree with (1, 2 ,-3) translation
+    transformation_matrix = np.array([[0.866, -0.5, 0.0, 1.0],
+                                      [0.5, 0.866, 0.0, 2.0],
+                                      [0.0, 0.0, 1.0, -1.0],
+                                      [0.0, 0.0, 0.0, 1.0]])
+
+    # Expected transformed points (manually calculated)
+
+    expected_points = np.array([[[0.866, 4.232, 2],
+                                 [1.964, 8.33, 5],
+                                 [3.062, 12.428, 8],
+                                 [4.16, 16.526, 11]],
+
+                                [[5.258, 20.624, 14],
+                                 [6.356, 24.722, 17],
+                                 [7.454, 28.82, 20],
+                                 [8.552, 32.918, 23]]])
+
+    transformed_points = transform(points, transformation_matrix)
+    np.testing.assert_almost_equal(transformed_points, expected_points, decimal=5)
+
+
+def test_dewarp():
+    poses = np.array([[1, 0, 0, 1, 0, 1, 0, -2, 0, 0, 1, 3, 0, 0, 0, 1] for _ in range(1024)])
+    points = np.array([[i - 3, i + 1, i + 2] for i in range(128 * 1024)])
+    num_poses = poses.shape[0]
+    pts_per_pose = int(points.shape[0] / poses.shape[0])
+
+    # c++ py-binding dewarp
+    poses_reshaped = poses.reshape(num_poses, 4, 4)
+    points_reshaped = points.reshape(pts_per_pose, num_poses, 3)
+
+    dewarped_points_c_plus = dewarp(points_reshaped, poses_reshaped)
+    dewarped_point_py = pu.dewarp(points_reshaped, column_poses=poses_reshaped)
+    np.testing.assert_allclose(dewarped_points_c_plus, dewarped_point_py, rtol=1e-5, atol=1e-8)

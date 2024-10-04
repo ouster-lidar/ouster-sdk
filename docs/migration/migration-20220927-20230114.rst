@@ -95,7 +95,7 @@ migration guide (whichever is relevant).
 - ``encoder``: Encoder counts were part of the LEGACY UDP profile, representing the azimuth angle as
   a raw encoder count starting from 0 to a max value of 90111. It thus incremented 44 ticks per
   azimuth angle in 2048 mode, 88 ticks in 1024 mode and 176 in 512 mode. To recover encoder
-  infcount, you can multiply the ``measurement_id`` by the number dictated by your lidar mode. We
+  count, you can multiply the ``measurement_id`` by the number dictated by your lidar mode. We
   would suggest, however, migrating to use simply ``measurement_id`` and multiplying by ``360
   degrees/ N`` where ``N`` is the number of columns in your mode (512, 1024, 2048) when you need the
   azimuth, thus untying any sense of azimuth from the internal mechanicals of the Ouster sensor.

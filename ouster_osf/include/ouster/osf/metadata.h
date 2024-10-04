@@ -49,6 +49,8 @@ struct MetadataTraits {
  * Helper function that returns the MetadataEntry type of concrete metadata.
  *
  * @tparam MetadataDerived The derived subclass cpp type.
+ *
+ * @return metadata type
  */
 template <typename MetadataDerived>
 inline const std::string metadata_type() {
@@ -537,6 +539,8 @@ class MetadataStore {
      * Add a specified MetadataEntry to the store
      *
      * @param[in] entry The entry to add to the store.
+     *
+     * @return The metadata id of the entry added.
      */
     uint32_t add(MetadataEntry&& entry);
 

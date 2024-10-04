@@ -2,6 +2,100 @@
 Changelog
 =========
 
+**Important: as of 0.13.0, the SDK is no longer compatible with firmware versions older than 2.1.0.**
+
+[20240702] [0.13.0]
+======================
+
+ouster_osf
+------------------------
+* Add full index of both receive and sensor timestamps to metadata
+* Speed up opening of OSF files with index
+
+* OSF now saves alert flags, thermal countdown and status, shot limiting countdown and status from ``LidarScan``.
+* [BUGFIX] Fix OSF being unable to load LidarScans containing only custom fields
+* [BUGFIX] Fix OSF not flushed when the user pressed CTRL-C more than once
+* [BUGFIX] Fix improper timestamps when saving OSF on MacOS(m-series) and Windows
+* [BUGFIX] Fix an issue with destaggering images after modifying ``SensorInfo`` in an ``OsfScanSource``.
+* [BUGFIX] Fix an issue loading extrinsics from OSF metadata into a ``SensorInfo`` in ``OsfScanSource``.
+* [BREAKING] Remove ``ChunksLayout`` and ``ChunkRef`` from Python API.
+
+ouster_client/Python SDK
+------------------------
+
+* Add support for reading and writing ROS1 and ROS2 bag files.
+* Add new sensor client interface ``ouster::sensor::SensorClient`` which supports multiple sensors as well as multiple sensors and IMU data on the same port
+* Add higher level sensor client interface ```ouster::sensor::SensorScanSource`` which produces ``LidarScan`` s from multiple sensors
+* Add ``ouster.sdk.client.SensorPacketSource`` which receives packets from multiple sensors
+* Add support for multiple sensors to ``ouster.sdk.sensor.SensorScanSource``
+* Greatly reduced redundant HTTP API calls to the sensor during initialization
+* Deserialize FLAGS fields in each profile by default
+* Add support for IPv6 multicast
+* Add ``field_names`` argument to each scan source and to ``open_source`` to specify which fields to decode
+* Add metadata validation functionality
+* Add vendored json library
+* Improved multi sensor pcap reading
+* Improve ``ScanBatcher`` to release ``LidarScan`` as soon as they are completed
+* ``ScanBatcher`` now adds alert flags, thermal countdown, and shot limiting countdown to ``LidarScan``.
+* Use index to speed up ``ouster-cli source .osf info``
+* Use index to speed up slicing of indexed OSF sources when sliced immediately after the ``source`` command
+* Add ``LidarScan.get_first_valid_column_timestamp()``
+* Add ``crc`` and ``calculate_crc`` methods to ``ouster::sensor::packet_format`` for obtaining or calculating (respectively) the CRC64 of a packet.
+* ``scan_to_packets`` now creates packets with alert flags, thermal countdown and status, shot limiting countdown and status, and CRC64.
+* Add ``ouster::pose_util::dewarp`` C++ function to de-warp a ``LidarScan`` (similar to ``ouster.sdk.pose_util`` in the Python API.)
+* Add a constructor ``LidarScan(const ouster::sensor::sensor_info&)``.
+* Always use ``nonstd::optional`` instead of drop-in ``std::optional`` from https://github.com/martinmoene/optional-lite.git to reduce issues associated with mixing C++14 and C++17.
+* Add ``w()`` and ``h()`` methods to ``sensor_info`` in C++ and ``w`` and ``h`` properties to ``SensorInfo`` in Python.
+* [BUGFIX] fix automatic UDP dest for FW 2.3 sensors.
+
+
+* [BREAKING] Remove ``ouster::make_xyz_lut(const ouster::sensor::sensor_info&)``. (Use ``make_xyz_lut(const sensor::sensor_info& sensor, bool use_extrinsics)`` instead.)
+* [BREAKING] changed REFLECTIVITY channel field size to 8 bits. (Important - this makes the SDK incompatible with FW 2.0 and 2.1.)
+* [BREAKING] Removed ``UDPPacketSource`` and ``BufferedUDPSource``.
+* [BREAKING] Removed ``ouster.sdk.util.firmware_version(hostname)`` please use ``ouster.sdk.client.SensorHttp.create(hostname).firmware_version()`` instead
+* [BREAKING] ``open_source`` no longer automatically finds and applies extrinsics from ``sensor_extrinsics.json`` files. Use the ``extrinsics`` argument instead to specify the path to the relevant extrinsics file instead.
+* [BREAKING] Deprecated ``osf.Scans(...)`` for ``osf.OsfScanSource(...).single_source(0)```.
+* [BREAKING] Deprecated ``client.Sensor(...)`` for ``client.SensorPacketSource(...).single_source(0)```.
+* [BREAKING] Deprecated ``pcap.Pcap(...)`` for ``pcap.PcapMultiPacketReader(...).single_source(0)```.
+* [BREAKING] Deprecated ``ScanBatcher::ScanBatcher(size_t, const packet_format&)`` for ``ScanBatcher::ScanBatcher(const sensor_info&)``.
+* [FUTURE BREAKING] Removing all instances of jsoncpp's ``Json::Value`` from the public C++ API methods in favor of ``std::string``.
+
+ouster_viz
+----------
+
+* ``LidarScanViz`` now supports multi-sensor datasets.
+* Add Python callback registration methods for mouse button and scroll events from ``PointViz``.
+* Add Python and C++ callback registration methods for frame buffer resize events.
+* Add ``MouseButton``, ``MouseButtonEvent``, and ``EventModifierKeys`` enums.
+* Add methods ``aspect_ratio``, ``normalized_coordinates``, and ``window_coordinates`` to ``viz::WindowCtx``.
+* Add method ``window_coordinates_to_image_pixel`` to ``viz::Image``. (See ``viz_events_example.cpp`` for an example.)
+* Add ``current_camera()`` method to ``PointViz``.
+* [BREAKING] ``SimpleViz`` no longer accepts a ``ScansAccumulator`` instance and now accepts scan/map accumulation parameters as keyword args in its constructor.
+* [BREAKING] ``ScansAccumulator`` is split into several different classes: ``ScansAccumulator``, ``MapAccumulator``, ``TracksAccumulator``, and ``LidarScanVizAccumulators``.
+* [BREAKING] changed ``PointViz`` mouse button callback to fire for both mouse button press and release events.
+* [BREAKING] changed ``PointViz`` mouse button callback signature to use the new enums.
+* [BREAKING] removed ``bool update_on_input()`` and ``update_on_input(bool)`` methods from ``PointViz``.
+* [BUGFIX] SimpleViz throws a 'generator already executing' exception.
+
+ouster_cli
+----------
+
+* Add support for reading and writing ROS1 and ROS2 bag files.
+* Add support for working with multi scan sources.
+* Add ``--fields`` argument to ``ouster-cli source`` to specify which fields to decode.
+* Add metadata validation utility.
+* [BUGFIX] Program doesn't terminate immediately when pressing CTRL-C the first time when streaming from a live sensor.
+* [BUGFIX] Fix some errors that appeared when running ``ouster-cli util benchmark``
+* [BREAKING] ``source`` no longer automatically finds and applies extrinsics from ``sensor_extrinsics.json`` files. Use the ``-E`` argument instead to specify the path to the relevant extrinsics file instead.
+* [BREAKING] Moved raw recording functionality for BAG and PCAP to ``ouster-cli source ... record_raw`` command.
+* [BREAKING] CLI plugins now need to handle a list of Optional[LidarScan] instead of a single LidarScan to support multi sources.
+
+mapping
+-------
+
+* Update KissICP version from 0.4.0 to 1.0.0.
+* Add multi-sensor support.
+
 [20240702] [0.12.0]
 ===================
 
@@ -64,7 +158,9 @@ ouster-cli
 * Add chainable ``ouster-cli source ... stats`` command
 * Add chainable ``ouster-cli source ... clip`` command to discard points outside a provided range
 * Add ``--rate max`` option to ``ouster-cli source ... viz```
-* Improve argument naming and descriptions for ``ouster-cli source ... viz`` map and accum options
+* Improve argument naming and descriptions for ``ouster-cli source ... viz`` map and accum options:
+  ``--accum-map`` is now called ``--map`` and ``--accum-map-ratio`` is now called ``--map-ratio``.
+* New ``--map-size`` argument to set the maximum number of points used when ``--map`` is specified.
 
 * [BUGFIX] Prevent dropped frames from live sensors by consuming scans as fast as they come in rather than sleeping
 
@@ -137,20 +233,18 @@ Python SDK
 * Add support for python 3.12, including wheels on pypi
 * Updated VCPKG libraries to 2023.10.19
 * New ``ScanSource`` API:
-  * Added new ``MultiScanSource`` that supports streaming and manipulating LidarScan frames
-    from multiple concurrent LidarScan sources
-    * For non-live sources the ``MultiScanSource`` have the option to choose LidarScan(s) by index
-    or choose a subset of scans using slicing operation
-    * The ``MultiScanSource`` interface has the ability to fallback to ``ScanSource`` using the 
-      ``single_source(sensor_idx)``, ``ScanSource`` interface yield a single LidarScan on iteration
-      rather than a List
-    * The ``ScanSource`` interface obtained via ``single_source`` method supports same indexing and
-      and slicing operations as the ``MultiScanSource``
-  * Added a generic ``open_source`` that accepts sensor urls, or a path to a pcap recording
-    or an osf file
+
+   * Added new ``MultiScanSource`` that supports streaming and manipulating LidarScan frames from multiple concurrent LidarScan sources
+
+     * For non-live sources the ``MultiScanSource`` has the option to choose LidarScan(s) by index or choose a subset of scans using slicing operation
+     * The ``MultiScanSource`` interface has the ability to fallback to ``ScanSource`` using the ``single_source(sensor_idx)``, ``ScanSource`` interface yield a single LidarScan on iteration rather than a List
+     * The ``ScanSource`` interface obtained via ``single_source`` method supports same indexing and and slicing operations as the ``MultiScanSource``
+
+  * Added a generic ``open_source`` that accepts sensor urls, or a path to a pcap recording or an osf file
   * Add explicit flag ``index`` to index unindexed osf files, if flag is set to ``True`` the osf file
     will be indexed and the index will be saved to the file on first attempt
   * Display a progress bar during index of pcap file or osf (if unindexed)
+
 * Improved the robustness of the ``resolve_metadata`` method used to
   automatically identify the sensor metadata associated with a PCAP source.
 * [bugfix] SimpleViz complains about missing fields
@@ -240,6 +334,7 @@ Known issues
 * ouster-cli when combining ``slice`` command with ``viz`` the program will
   exit once iterate over the selected range of scans even when
   the ``--on-eof`` option is set to ``loop``.
+
   - workaround: to have ``viz`` loop over the selected range, first perform a
     ``slice`` with ``save``, then playback the generated file.
 

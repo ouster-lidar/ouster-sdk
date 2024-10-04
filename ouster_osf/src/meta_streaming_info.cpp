@@ -24,21 +24,27 @@ std::string to_string(const ChunkInfo& chunk_info) {
     return ss.str();
 }
 
-StreamStats::StreamStats(uint32_t s_id, ts_t t, uint32_t msg_size)
+StreamStats::StreamStats(uint32_t s_id, ts_t receive_ts, ts_t sensor_ts,
+                         uint32_t msg_size)
     : stream_id{s_id},
-      start_ts{t},
-      end_ts{t},
+      start_ts{receive_ts},
+      end_ts{receive_ts},
       message_count{1},
-      message_avg_size{msg_size} {};
+      message_avg_size{msg_size} {
+    receive_timestamps.push_back(receive_ts.count());
+    sensor_timestamps.push_back(sensor_ts.count());
+}
 
-void StreamStats::update(ts_t t, uint32_t msg_size) {
-    if (start_ts > t) start_ts = t;
-    if (end_ts < t) end_ts = t;
+void StreamStats::update(ts_t receive_ts, ts_t sensor_ts, uint32_t msg_size) {
+    if (start_ts > receive_ts) start_ts = receive_ts;
+    if (end_ts < receive_ts) end_ts = receive_ts;
     ++message_count;
     int avg_size = static_cast<int>(message_avg_size);
     avg_size = avg_size + (static_cast<int>(msg_size) - avg_size) /
                               static_cast<int>(message_count);
     message_avg_size = static_cast<uint32_t>(avg_size);
+    receive_timestamps.push_back(receive_ts.count());
+    sensor_timestamps.push_back(sensor_ts.count());
 }
 
 std::string to_string(const StreamStats& stream_stats) {
@@ -47,7 +53,16 @@ std::string to_string(const StreamStats& stream_stats) {
        << ", start_ts = " << stream_stats.start_ts.count()
        << ", end_ts = " << stream_stats.end_ts.count()
        << ", message_count = " << stream_stats.message_count
-       << ", message_avg_size = " << stream_stats.message_avg_size << "}";
+       << ", message_avg_size = " << stream_stats.message_avg_size
+       << ", host_timestamps = [";
+    for (const auto& ts : stream_stats.receive_timestamps) {
+        ss << ts << ", ";
+    }
+    ss << "], sensor_timestamps = [";
+    for (const auto& ts : stream_stats.sensor_timestamps) {
+        ss << ts << ", ";
+    }
+    ss << "]}";
     return ss.str();
 }
 
@@ -70,7 +85,9 @@ flatbuffers::Offset<ouster::osf::gen::StreamingInfo> create_streaming_info(
         auto stat = stream_stat.second;
         auto ss_offset = gen::CreateStreamStats(
             fbb, stat.stream_id, stat.start_ts.count(), stat.end_ts.count(),
-            stat.message_count, stat.message_avg_size);
+            stat.message_count, stat.message_avg_size,
+            fbb.CreateVector<uint64_t>(stat.receive_timestamps),
+            fbb.CreateVector<uint64_t>(stat.sensor_timestamps));
         stream_stats_vec.push_back(ss_offset);
     }
 
@@ -138,6 +155,16 @@ std::unique_ptr<MetadataEntry> StreamingInfo::from_buffer(
                            ss.end_ts = ts_t{stat->end_ts()};
                            ss.message_count = stat->message_count();
                            ss.message_avg_size = stat->message_avg_size();
+                           if (stat->receive_timestamps()) {
+                               for (auto v : *stat->receive_timestamps()) {
+                                   ss.receive_timestamps.push_back(v);
+                               }
+                           }
+                           if (stat->sensor_timestamps()) {
+                               for (auto v : *stat->sensor_timestamps()) {
+                                   ss.sensor_timestamps.push_back(v);
+                               }
+                           }
                            return std::make_pair(stat->stream_id(), ss);
                        });
     }
@@ -167,6 +194,16 @@ std::string StreamingInfo::repr() const {
         ss["message_count"] =
             static_cast<Json::UInt64>(stat.second.message_count);
         ss["message_avg_size"] = stat.second.message_avg_size;
+        Json::Value st = Json::arrayValue;
+        Json::Value rt = Json::arrayValue;
+        for (const auto& t : stat.second.sensor_timestamps) {
+            st.append(static_cast<Json::UInt64>(t));
+        }
+        for (const auto& t : stat.second.receive_timestamps) {
+            rt.append(static_cast<Json::UInt64>(t));
+        }
+        ss["sensor_timestamps"] = st;
+        ss["receive_timestamps"] = rt;
         si_obj["stream_stats"].append(ss);
     }
 

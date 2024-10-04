@@ -12,8 +12,9 @@ import numpy as np
 import pytest
 
 from ouster.sdk import client
-from ouster.sdk.client import PacketFormat, PacketWriter, FieldType
-from ouster.sdk.client._client import ScanBatcher
+from ouster.sdk.client import PacketFormat, PacketWriter, \
+    FieldType, ScanBatcher, LidarScan, LidarPacket, SensorInfo
+from ouster.sdk.pcap import PcapMultiPacketReader
 
 
 client.ChanField.CUSTOM0 = 'custom0'
@@ -260,8 +261,8 @@ def lidar_stream_with_lagging_frame_ids(packets: client.PacketSource) -> client.
                 if isinstance(p, client.LidarPacket):
                     _patch_frame_id(p, frame_id)
                     yield p
-            frame_id = ids[idx % len(ids)]
             idx += 1
+            frame_id = ids[idx % len(ids)]
 
     return client.Packets(gen_packets(), packets.metadata)
 
@@ -272,3 +273,80 @@ def test_scans_multi_wraparound(lidar_stream_with_lagging_frame_ids: client.Pack
     by no more than a single id."""
     scans = take(3, client.Scans(lidar_stream_with_lagging_frame_ids))
     assert list(map(lambda s: s.frame_id, scans)) == [65535, 0, 1]
+
+
+@pytest.mark.parametrize('file', ['OS-0-32-U1_v2.2.0_1024x10.pcap', 'windowed_frame1.pcap', 'windowed_frame2.pcap'])
+def test_early_release(file: str, test_data_dir):
+    """ Verify that scan batcher releases a complete scan without waiting for a packet
+    from the next one"""
+    path = test_data_dir / "pcaps" / file
+    source = PcapMultiPacketReader(str(path))
+
+    metadata = source.metadata[0]
+    ls = LidarScan(metadata)
+    b = ScanBatcher(metadata)
+    pf = PacketFormat(metadata)
+    completed = False
+    for i, s in source:
+        if isinstance(s, LidarPacket):
+            frame_id = pf.frame_id(s.buf)
+            if b(s, ls):
+                completed = True
+                assert ls.frame_id == frame_id
+                assert ls.complete(metadata.format.column_window)
+    assert completed
+
+
+def test_batching_alerts():
+    """It should include alert_flags from the packet in the LidarScan."""
+    profile = client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    info = SensorInfo()
+    info.format.columns_per_frame = 1024
+    info.format.columns_per_packet = 16
+    info.format.pixels_per_column = 128
+    info.format.udp_profile_lidar = profile
+    writer = PacketWriter.from_profile(profile, info.format.pixels_per_column, info.format.columns_per_packet)
+    batcher = ScanBatcher(info)
+    scan = LidarScan(info)
+    scan.frame_id = 0
+
+    num_packets = info.format.columns_per_frame // info.format.columns_per_packet
+    for packet_id in range(num_packets):
+
+        # create a packet and set the measurement id of the first column, which
+        # ScanBatcher uses to determine which packet in the scan it is
+        packet = LidarPacket()
+        writer.set_col_measurement_id(packet, 0, packet_id * info.format.columns_per_packet)
+
+        # set the alert flag value to the packet id (just so we have something to test.)
+        writer.set_alert_flags(packet, packet_id)
+        assert writer.alert_flags(packet.buf) == packet_id
+        batcher(packet, scan)
+
+    # confirm that the alert flag values are increasing from 0..63 (the same as the packet ids)
+    assert np.array_equal(scan.alert_flags, np.array(range(num_packets)))
+
+
+def test_batching_countdowns():
+    """It should include shutdown_countdown and shot_limiting_countdown in the LidarScan."""
+    profile = client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    info = SensorInfo()
+    info.format.columns_per_frame = 1024
+    info.format.columns_per_packet = 16
+    info.format.pixels_per_column = 128
+    info.format.udp_profile_lidar = profile
+    writer = PacketWriter.from_profile(profile, info.format.pixels_per_column, info.format.columns_per_packet)
+    batcher = ScanBatcher(info)
+    scan = LidarScan(info)
+    scan.frame_id = -1
+
+    num_packets = info.format.columns_per_frame // info.format.columns_per_packet
+    for packet_id in range(num_packets):
+        packet = LidarPacket()
+        # According to FW, the values from each packet will be the same within a given frame
+        writer.set_shutdown_countdown(packet, 30)
+        writer.set_shot_limiting_countdown(packet, 29)
+        batcher(packet, scan)
+
+    assert scan.shutdown_countdown == writer.countdown_thermal_shutdown(packet.buf)
+    assert scan.shot_limiting_countdown == writer.countdown_shot_limiting(packet.buf)

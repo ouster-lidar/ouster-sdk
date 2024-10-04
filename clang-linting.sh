@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 help='false'
 apply='false'
 check='true'
@@ -28,15 +30,23 @@ if [[ $apply == 'true' ]]; then
   SUBCOMMAND=''
 fi
 
-
 # Ignore the ./ouster_client/include/optional-lite/nonstd/optional.hpp file while formatting files
-CMD="find . -regex '.*\.\(cpp\|hpp\|cu\|c\|h\)' -not -path ./ouster_client/include/optional-lite/nonstd/optional.hpp \
--exec clang-format ${SUBCOMMAND} -style=file -i {} \;"
-OUTPUT=$(eval "$CMD" 2>&1 | grep error)
+run_command() {
+  find . -regex '.*\.\(cpp\|hpp\|cu\|c\|h\)' -not -path './ouster_client/include/optional-lite/nonstd/optional.hpp' \
+  -and -not -path './thirdparty/*' \
+  -exec clang-format ${SUBCOMMAND} -style=file -i {} \;
+   echo "Exit code: $?"
+}
+# grep returns an exit code of 1 if it finds no matches.
+set +e
+OUTPUT=$(run_command 2>&1 | grep error)
+set -e
+echo "OUTPUT $OUTPUT"
+
 if [ -z "$OUTPUT" ]; then
   echo "clang-format check passed! No errors"
   exit 0;
 else
-  eval "$CMD"
+  run_command
   exit 1;
 fi

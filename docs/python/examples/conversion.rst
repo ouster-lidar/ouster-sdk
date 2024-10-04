@@ -22,16 +22,16 @@ To convert the first ``5`` scans of our sample data from a pcap file, you can tr
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-csv --scan-num 5
+        $ ouster-cli source --meta $SAMPLE_DATA_JSON_PATH $SAMPLE_DATA_PCAP_PATH slice 0:5 save output.csv
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-csv --scan-num 5
+        PS > ouster-cli.exe source --meta $SAMPLE_DATA_JSON_PATH $SAMPLE_DATA_PCAP_PATH slice 0:5 save output.csv
 
 
-The source code of an example below:
+The following function implements the pcap to csv conversion above.
 
-.. literalinclude:: /../python/src/ouster/cli/core/pcap.py
+.. literalinclude:: /../python/src/ouster/cli/plugins/source_save.py
     :start-after: [doc-stag-pcap-to-csv]
     :end-before: [doc-etag-pcap-to-csv]
     :linenos:

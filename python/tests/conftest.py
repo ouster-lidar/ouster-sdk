@@ -11,6 +11,7 @@ from pathlib import Path
 from more_itertools import partition
 import pytest
 from ouster.sdk import client, pcap
+from ouster.sdk.viz import Cloud
 
 pytest.register_assert_rewrite('ouster.sdk.client._digest')
 import ouster.sdk.client._digest as digest  # noqa
@@ -56,6 +57,7 @@ def pytest_collection_modifyitems(items, config) -> None:
 # TODO: add OS-DOME-32/64 in 1024x10 mode pcap with digest
 CURRENT_DIR = path.dirname(path.abspath(__file__))
 PCAPS_DATA_DIR = path.join(CURRENT_DIR, "..", "..", "tests", "pcaps")
+BAGS_DATA_DIR = path.join(CURRENT_DIR, "..", "..", "tests", "bags")
 METADATA_DATA_DIR = path.join(CURRENT_DIR, "..", "..", "tests", "metadata")
 OSFS_DATA_DIR = path.join(CURRENT_DIR, "..", "..", "tests", "osfs")
 
@@ -179,3 +181,39 @@ def metadata_base_name(metadata_key: str) -> str:
 @pytest.fixture
 def has_mapping() -> bool:
     return _has_mapping
+
+
+class MockPointViz():
+
+    class MockTargetDisplay:
+        def enable_rings(*args, **kwargs):
+            pass
+
+        def set_ring_size(*args, **kwargs):
+            pass
+
+        def set_ring_line_width(*args, **kwargs):
+            pass
+
+    def __init__(self):
+        self.items = set()
+
+    def add(self, cloud: Cloud):
+        assert cloud not in self.items
+        self.items.add(cloud)
+
+    def remove(self, cloud: Cloud) -> bool:
+        if cloud not in self.items:
+            return False
+        self.items.remove(cloud)
+        return True
+
+    def push_key_handler(*args, **kwargs):
+        pass
+
+    def add_default_controls(*args, **kwargs):
+        pass
+
+    @property
+    def target_display(*args, **kwargs):
+        return MockPointViz.MockTargetDisplay()

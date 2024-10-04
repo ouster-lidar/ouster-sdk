@@ -57,33 +57,38 @@ namespace impl {
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-static const Table<std::string, ChanFieldType, 4> legacy_field_slots{
+static const Table<std::string, ChanFieldType, 5> legacy_field_slots{
     {{sensor::ChanField::RANGE, ChanFieldType::UINT32},
-     {sensor::ChanField::SIGNAL, ChanFieldType::UINT32},
-     {sensor::ChanField::NEAR_IR, ChanFieldType::UINT32},
-     {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT32}}};
+     {sensor::ChanField::SIGNAL, ChanFieldType::UINT16},
+     {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
+     {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+     {sensor::ChanField::FLAGS, ChanFieldType::UINT8}}};
 
-static const Table<std::string, ChanFieldType, 7> dual_field_slots{{
+static const Table<std::string, ChanFieldType, 9> dual_field_slots{{
     {sensor::ChanField::RANGE, ChanFieldType::UINT32},
     {sensor::ChanField::RANGE2, ChanFieldType::UINT32},
     {sensor::ChanField::SIGNAL, ChanFieldType::UINT16},
     {sensor::ChanField::SIGNAL2, ChanFieldType::UINT16},
     {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT8},
     {sensor::ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
+    {sensor::ChanField::FLAGS, ChanFieldType::UINT8},
+    {sensor::ChanField::FLAGS2, ChanFieldType::UINT8},
     {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
-static const Table<std::string, ChanFieldType, 4> single_field_slots{{
+static const Table<std::string, ChanFieldType, 5> single_field_slots{{
     {sensor::ChanField::RANGE, ChanFieldType::UINT32},
     {sensor::ChanField::SIGNAL, ChanFieldType::UINT16},
-    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+    {sensor::ChanField::FLAGS, ChanFieldType::UINT8},
     {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
 }};
 
-static const Table<std::string, ChanFieldType, 3> lb_field_slots{{
+static const Table<std::string, ChanFieldType, 4> lb_field_slots{{
     {sensor::ChanField::RANGE, ChanFieldType::UINT32},
-    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT16},
+    {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT8},
     {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
+    {sensor::ChanField::FLAGS, ChanFieldType::UINT8},
 }};
 
 static const Table<std::string, ChanFieldType, 5> five_word_slots{{
@@ -94,12 +99,14 @@ static const Table<std::string, ChanFieldType, 5> five_word_slots{{
     {sensor::ChanField::RAW32_WORD5, ChanFieldType::UINT32},
 }};
 
-static const Table<std::string, ChanFieldType, 5> fusa_two_word_slots{{
+static const Table<std::string, ChanFieldType, 7> fusa_two_word_slots{{
     {sensor::ChanField::RANGE, ChanFieldType::UINT32},
     {sensor::ChanField::REFLECTIVITY, ChanFieldType::UINT8},
     {sensor::ChanField::NEAR_IR, ChanFieldType::UINT16},
     {sensor::ChanField::RANGE2, ChanFieldType::UINT32},
     {sensor::ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
+    {sensor::ChanField::FLAGS, ChanFieldType::UINT8},
+    {sensor::ChanField::FLAGS2, ChanFieldType::UINT8},
 }};
 
 struct DefaultFieldsEntry {
@@ -183,8 +190,7 @@ static FieldDescriptor get_field_type_descriptor(const LidarScan& scan,
         return FieldDescriptor::array(ft.element_type, dims);
     } else if (ft.field_class == FieldClass::PACKET_FIELD) {
         std::vector<size_t> dims;
-        dims.push_back(scan.w / scan.columns_per_packet_ +
-                       (scan.w % scan.columns_per_packet_ ? 1 : 0));
+        dims.push_back(scan.packet_count());
         dims.insert(dims.end(), ft.extra_dims.begin(), ft.extra_dims.end());
         return FieldDescriptor::array(ft.element_type, dims);
     } else {  // FieldClass::SCAN_FIELD
@@ -192,10 +198,20 @@ static FieldDescriptor get_field_type_descriptor(const LidarScan& scan,
     }
 }
 
+LidarScan::LidarScan(const sensor::sensor_info& info)
+    : LidarScan{info.format.columns_per_frame, info.format.pixels_per_column,
+                info.format.udp_profile_lidar, info.format.columns_per_packet} {
+}
+
 // specify sensor:: namespace for doxygen matching
 LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
                      size_t columns_per_packet)
-    : w{w}, h{h}, columns_per_packet_(columns_per_packet) {
+    : packet_count_{(w + columns_per_packet - 1) /
+                    columns_per_packet},  // equivalent to
+                                          // int(ceil(w/columns_per_packet))
+      w{w},
+      h{h},
+      columns_per_packet_(columns_per_packet) {
     if (w * h == 0) {
         throw std::invalid_argument(
             "Cannot construct non-empty LidarScan with "
@@ -210,10 +226,11 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
     measurement_id_ = Field{fd_array<uint16_t>(w), FieldClass::COLUMN_FIELD};
     status_ = Field{fd_array<uint32_t>(w), FieldClass::COLUMN_FIELD};
     packet_timestamp_ =
-        Field{fd_array<uint64_t>(w / columns_per_packet +
-                                 (w % columns_per_packet ? 1 : 0)),
-              FieldClass::PACKET_FIELD};
+        Field{fd_array<uint64_t>(packet_count_), FieldClass::PACKET_FIELD};
     pose_ = Field{fd_array<double>(w, 4, 4), {}};
+    alert_flags_ =
+        Field{fd_array<uint8_t>(packet_count_), FieldClass::PACKET_FIELD};
+
     /**
      * These may be unnecessary to set to identity
      */
@@ -225,7 +242,8 @@ LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
 
 LidarScan::LidarScan(const LidarScan& ls_src,
                      const LidarScanFieldTypes& field_types)
-    : w(ls_src.w),
+    : packet_count_(ls_src.packet_count_),
+      w(ls_src.w),
       h(ls_src.h),
       columns_per_packet_(ls_src.columns_per_packet_),
       frame_status(ls_src.frame_status),
@@ -295,12 +313,22 @@ bool LidarScan::has_field(const std::string& name) const {
 }
 
 Field& LidarScan::add_field(const FieldType& type) {
-    if (has_field(type.name) > 0) {
+    if (has_field(type.name)) {
         throw std::invalid_argument("Duplicated field '" + type.name + "'");
     }
 
-    // no other checking is necessary since the user isnt providing dimensions
-    // that need validation
+    // just validate that we didnt add a 0 size pixel field
+    if (type.field_class == FieldClass::PIXEL_FIELD) {
+        // none of the dimensions should be zero
+        for (const auto& dim : type.extra_dims) {
+            if (dim == 0) {
+                throw std::invalid_argument(
+                    "Cannot add pixel field with 0 elements.");
+            }
+        }
+    }
+
+    // no other checking is necessary
     fields()[type.name] =
         Field(get_field_type_descriptor(*this, type), type.field_class);
 
@@ -309,7 +337,7 @@ Field& LidarScan::add_field(const FieldType& type) {
 
 Field& LidarScan::add_field(const std::string& name, FieldDescriptor desc,
                             FieldClass field_class) {
-    if (has_field(name) > 0)
+    if (has_field(name))
         throw std::invalid_argument("Duplicated field '" + name + "'");
 
     if (field_class == FieldClass::PIXEL_FIELD) {
@@ -323,6 +351,13 @@ Field& LidarScan::add_field(const std::string& name, FieldDescriptor desc,
                 std::to_string(desc.shape[0]) + "x" +
                 std::to_string(desc.shape[1]) + " vs " + std::to_string(h) +
                 "x" + std::to_string(w));
+        // none of the dimensions should be zero
+        for (const auto& dim : desc.shape) {
+            if (dim == 0) {
+                throw std::invalid_argument(
+                    "Cannot add pixel field with 0 elements.");
+            }
+        }
     }
 
     if (field_class == FieldClass::COLUMN_FIELD) {
@@ -335,14 +370,12 @@ Field& LidarScan::add_field(const std::string& name, FieldDescriptor desc,
     }
 
     if (field_class == FieldClass::PACKET_FIELD) {
-        const size_t desired_w =
-            w / columns_per_packet_ + (w % columns_per_packet_ ? 1 : 0);
-        if (desc.shape[0] != desired_w)
+        if (desc.shape[0] != packet_count_)
             throw std::invalid_argument(
                 "Packet field shape must match "
                 "number of packets. Width was " +
                 std::to_string(desc.shape[0]) + " vs required width of " +
-                std::to_string(desired_w));
+                std::to_string(packet_count_));
     }
 
     fields()[name] = Field{desc, field_class};
@@ -438,6 +471,14 @@ Eigen::Ref<const LidarScan::Header<uint64_t>> LidarScan::packet_timestamp()
     return packet_timestamp_;
 }
 
+Eigen::Ref<LidarScan::Header<uint8_t>> LidarScan::alert_flags() {
+    return alert_flags_;
+}
+
+Eigen::Ref<const LidarScan::Header<uint8_t>> LidarScan::alert_flags() const {
+    return alert_flags_;
+}
+
 uint64_t LidarScan::get_first_valid_packet_timestamp() const {
     int total_packets = packet_timestamp().size();
     int columns_per_packet = w / total_packets;
@@ -450,6 +491,16 @@ uint64_t LidarScan::get_first_valid_packet_timestamp() const {
             return packet_timestamp()[i];
     }
 
+    return 0;
+}
+
+uint64_t LidarScan::get_first_valid_column_timestamp() const {
+    auto stat = status();
+    for (int i = 0; i < timestamp().size(); i++) {
+        if ((stat[i] & 1) > 0) {
+            return timestamp()[i];
+        }
+    }
     return 0;
 }
 
@@ -490,6 +541,8 @@ bool LidarScan::complete(sensor::ColumnWindow window) const {
                    .isConstant(0x01);
     }
 }
+
+size_t LidarScan::packet_count() const { return packet_count_; }
 
 bool operator==(const LidarScan& a, const LidarScan& b) {
     return a.frame_id == b.frame_id && a.w == b.w && a.h == b.h &&
@@ -577,8 +630,10 @@ std::string to_string(const LidarScan& ls) {
         }
         ss << ") ";
 
-        FieldView flat_view = f.reshape(1, f.size());
-        impl::visit_field_2d(flat_view, read_eigen, ss);
+        if (f.bytes() > 0) {
+            FieldView flat_view = f.reshape(1, f.size());
+            impl::visit_field_2d(flat_view, read_eigen, ss);
+        }
         ss << std::endl;
     };
 
@@ -677,6 +732,24 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
     return lut;
 }
 
+XYZLut make_xyz_lut(const sensor::sensor_info& sensor, bool use_extrinsics) {
+    mat4d transform = sensor.lidar_to_sensor_transform;
+    if (use_extrinsics) {
+        // apply extrinsics after lidar_to_sensor_transform so the
+        // resulting LUT will produce the coordinates in
+        // "extrinsics frame" instead of "sensor frame"
+        mat4d ext_transform = sensor.extrinsic;
+        ext_transform(0, 3) /= sensor::range_unit;
+        ext_transform(1, 3) /= sensor::range_unit;
+        ext_transform(2, 3) /= sensor::range_unit;
+        transform = ext_transform * sensor.lidar_to_sensor_transform;
+    }
+    return make_xyz_lut(
+        sensor.format.columns_per_frame, sensor.format.pixels_per_column,
+        sensor::range_unit, sensor.beam_to_lidar_transform, transform,
+        sensor.beam_azimuth_angles, sensor.beam_altitude_angles);
+}
+
 LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut) {
     return cartesian(scan.field(sensor::ChanField::RANGE), lut);
 }
@@ -703,10 +776,37 @@ ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
       pf(pf) {
     if (pf.columns_per_packet == 0)
         throw std::invalid_argument("unexpected columns_per_packet: 0");
+    // Since we don't know the azimuth window, assume it is full.
+    const size_t desired_w =
+        w / pf.columns_per_packet + (w % pf.columns_per_packet ? 1 : 0);
+    expected_packets = desired_w;
 }
 
 ScanBatcher::ScanBatcher(const sensor::sensor_info& info)
-    : ScanBatcher(info.format.columns_per_frame, sensor::get_format(info)) {}
+    : ScanBatcher(info.format.columns_per_frame, sensor::get_format(info)) {
+    // Calculate the number of packets required to have a complete scan
+    int max_packets = expected_packets;
+    if (info.format.column_window.second < info.format.column_window.first) {
+        // the valid azimuth window wraps through 0
+        int start_packet =
+            info.format.column_window.second / pf.columns_per_packet;
+        int end_packet =
+            info.format.column_window.first / pf.columns_per_packet;
+        expected_packets = start_packet + 1 + (max_packets - end_packet);
+        // subtract one if start and end are in the same block
+        if (start_packet == end_packet) {
+            expected_packets -= 1;
+        }
+    } else {
+        // no wrapping of azimuth the window through 0
+        int start_packet =
+            info.format.column_window.first / pf.columns_per_packet;
+        int end_packet =
+            info.format.column_window.second / pf.columns_per_packet;
+
+        expected_packets = end_packet - start_packet + 1;
+    }
+}
 
 namespace {
 
@@ -922,6 +1022,15 @@ bool ScanBatcher::operator()(const ouster::sensor::LidarPacket& packet,
     return (*this)(packet.buf.data(), packet.host_timestamp, ls);
 }
 
+void ScanBatcher::finalize_scan(LidarScan& ls, bool raw_headers) {
+    impl::foreach_channel_field(ls, pf, zero_field_cols{}, next_valid_m_id, w);
+
+    if (raw_headers) {
+        impl::visit_field(ls, sensor::ChanField::RAW_HEADERS, zero_field_cols{},
+                          "", next_headers_m_id, w);
+    }
+}
+
 bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
                              LidarScan& ls) {
     if (ls.w != w || ls.h != h)
@@ -934,7 +1043,6 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
     // process cached packet and packet ts
     if (cached_packet) {
         cached_packet = false;
-        ls.frame_id = -1;
         this->operator()(cache.data(), cache_packet_ts, ls);
     }
 
@@ -942,37 +1050,52 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
 
     const bool raw_headers = impl::raw_headers_enabled(pf, ls);
 
-    if (ls.frame_id == -1) {
+    if (ls.frame_id == -1 || finished_scan_id >= 0) {
         // expecting to start batching a new scan
+        if (finished_scan_id >= 0) {
+            // drop duplicate or packets from previous frame
+            if (finished_scan_id == f_id) {
+                // drop old duplicate packets
+                return false;
+            } else if (finished_scan_id ==
+                       ((f_id + 1) %
+                        (static_cast<int64_t>(pf.max_frame_id) + 1))) {
+                // drop reordered packets from the previous frame
+                return false;
+            }
+        }
+        finished_scan_id = -1;
         next_valid_m_id = 0;
         next_headers_m_id = 0;
+        batched_packets = 0;
         ls.frame_id = f_id;
         zero_header_cols(ls, 0, w);
         ls.packet_timestamp().setZero();
         const uint8_t f_thermal_shutdown = pf.thermal_shutdown(packet_buf);
         const uint8_t f_shot_limiting = pf.shot_limiting(packet_buf);
         ls.frame_status = frame_status(f_thermal_shutdown, f_shot_limiting);
+
+        // The countdown values are supposed to be the same for all packets in a
+        // given scan.
+        ls.shutdown_countdown = pf.countdown_thermal_shutdown(packet_buf);
+        ls.shot_limiting_countdown = pf.countdown_shot_limiting(packet_buf);
     } else if (ls.frame_id ==
                ((f_id + 1) % (static_cast<int64_t>(pf.max_frame_id) + 1))) {
         // drop reordered packets from the previous frame
         return false;
     } else if (ls.frame_id != f_id) {
-        // got a packet from a new frame
-        impl::foreach_channel_field(ls, pf, zero_field_cols{}, next_valid_m_id,
-                                    w);
-
-        if (raw_headers) {
-            impl::visit_field(ls, sensor::ChanField::RAW_HEADERS,
-                              zero_field_cols{}, "", next_headers_m_id, w);
-        }
+        // got a packet from a new frame, release the old one
+        finished_scan_id = ls.frame_id;
+        finalize_scan(ls, raw_headers);
 
         // store packet buf and ts data to the cache for later processing
         std::memcpy(cache.data(), packet_buf, cache.size());
         cache_packet_ts = packet_ts;
         cached_packet = true;
-
         return true;
     }
+
+    batched_packets++;
 
     // handling packet level data: packet_timestamp
     const uint8_t* col0_buf = pf.nth_col(0, packet_buf);
@@ -980,6 +1103,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         pf.col_measurement_id(col0_buf) / pf.columns_per_packet;
     if (packet_id < ls.packet_timestamp().rows()) {
         ls.packet_timestamp()[packet_id] = packet_ts;
+        ls.alert_flags()[packet_id] = pf.alert_flags(packet_buf);
     }
 
     // handling column and pixel level data
@@ -1000,6 +1124,14 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         _parse_by_block(packet_buf, ls);
     } else {
         _parse_by_col(packet_buf, ls);
+    }
+
+    // if we have enough packets and are packet-complete release the scan
+    if (batched_packets >= expected_packets &&
+        (size_t)ls.packet_timestamp().count() == expected_packets) {
+        finished_scan_id = f_id;
+        finalize_scan(ls, raw_headers);
+        return true;
     }
 
     return false;
@@ -1025,4 +1157,56 @@ bool operator!=(const FieldType& a, const FieldType& b) {
            a.field_class != b.field_class || a.extra_dims != b.extra_dims;
 }
 
+namespace pose_util {
+void dewarp(Eigen::Ref<Points> dewarped, const Eigen::Ref<const Points> points,
+            const Eigen::Ref<const Poses> poses) {
+    const size_t W = poses.rows();                  // Number of pose matrices
+    const size_t H = points.rows() / poses.rows();  // Points per pose matrix
+
+#ifdef __OUSTER_UTILIZE_OPENMP__
+#pragma omp parallel for schedule(static)
+#endif
+    for (size_t w = 0; w < W; ++w) {
+        Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>
+            pose_matrix(poses.row(w).data());
+        const Eigen::Matrix3d rotation = pose_matrix.topLeftCorner<3, 3>();
+        const Eigen::Vector3d translation = pose_matrix.topRightCorner<3, 1>();
+
+        for (size_t i = 0; i < H; ++i) {
+            const Eigen::Index ix = i * W + w;
+            Eigen::Map<const Eigen::Vector3d> s(points.row(ix).data());
+            Eigen::Map<Eigen::Vector3d> p(dewarped.row(ix).data());
+            p = rotation * s + translation;
+        }
+    }
+}
+
+Points dewarp(const Eigen::Ref<const Points> points,
+              const Eigen::Ref<const Poses> poses) {
+    Points dewarped(points.rows(), points.cols());
+    dewarp(dewarped, points, poses);
+    return dewarped;
+}
+
+void transform(Eigen::Ref<pose_util::Points> transformed,
+               const Eigen::Ref<const pose_util::Points> points,
+               const Eigen::Ref<const pose_util::Pose> pose) {
+    Eigen::Matrix<double, 4, 4, Eigen::RowMajor> pose_matrix =
+        Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>(
+            pose.data());
+
+    Eigen::Matrix3d rotation = pose_matrix.topLeftCorner<3, 3>();
+    Eigen::Vector3d translation = pose_matrix.topRightCorner<3, 1>();
+
+    transformed =
+        (points * rotation.transpose()).rowwise() + translation.transpose();
+}
+
+Points transform(const Eigen::Ref<const Points> points,
+                 const Eigen::Ref<const Pose> pose) {
+    Points transformed(points.rows(), points.cols());
+    transform(transformed, points, pose);
+    return transformed;
+}
+}  // namespace pose_util
 }  // namespace ouster

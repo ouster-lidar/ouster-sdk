@@ -37,4 +37,4 @@ int main(int argc, char* argv[]) {
     // Write it to file on stream 0
     writer.save(0, scan);
 }
-//! [doc-2tag-osf-write-cpp]
+//! [doc-etag-osf-write-cpp]

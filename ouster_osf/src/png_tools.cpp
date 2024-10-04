@@ -784,6 +784,9 @@ bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
     }
     auto res_err = false;
     for (size_t i = 0; i < field_types.size(); ++i) {
+        if (!lidar_scan.has_field(field_types[i].first)) {
+            continue;
+        }
         auto err = fieldDecode(lidar_scan, scan_data, scan_idxs[i],
                                field_types[i], px_offset);
         if (err) {
@@ -802,16 +805,12 @@ bool scanDecodeFieldsSingleThread(
     const std::vector<int>& px_offset,
     const ouster::LidarScanFieldTypes& field_types) {
     size_t fields_cnt = lidar_scan.fields().size();
-    if (scan_data.size() != fields_cnt) {
-        logger().error(
-            "ERROR: lidar_scan data contains # of channels: {}"
-            ", expected: {} for OSF_EUDP",
-            scan_data.size(), fields_cnt);
-        return true;
-    }
     size_t next_idx = 0;
     for (auto ft : field_types) {
-        auto& f = lidar_scan.field(ft.name);
+        if (!lidar_scan.has_field(ft.name)) {
+            ++next_idx;
+            continue;
+        }
         if (fieldDecode(lidar_scan, scan_data, next_idx,
                         {ft.name, ft.element_type}, px_offset)) {
             logger().error(
@@ -830,13 +829,6 @@ bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
                       const std::vector<int>& px_offset,
                       const ouster::LidarScanFieldTypes& field_types) {
     size_t fields_num = field_types.size();
-    if (scan_data.size() != fields_num) {
-        logger().error(
-            "ERROR: lidar_scan data contains # of channels: "
-            "{}, expected: {} for OSF EUDP",
-            scan_data.size(), fields_num);
-        return true;
-    }
 
     unsigned int con_num = std::thread::hardware_concurrency();
     // looking for at least 4 cores if can't determine
@@ -1409,6 +1401,11 @@ ScanChannelData encodeField(const ouster::Field& field) {
         return buffer;
     }
 
+    // empty case
+    if (field.bytes() == 0) {
+        return buffer;
+    }
+
     FieldView view = uint_view(field);
     // collapse shape
     if (view.shape().size() > 2) {
@@ -1446,6 +1443,11 @@ void decodeField(ouster::Field& field, const ScanChannelData& buffer) {
     // 1d case, uncompressed
     if (field.shape().size() == 1) {
         std::memcpy(field, buffer.data(), buffer.size());
+        return;
+    }
+
+    // empty case
+    if (field.bytes() == 0) {
         return;
     }
 

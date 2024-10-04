@@ -140,8 +140,8 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
     glUniform1i(GLCloud::cloud_ids.palette_id, 0);
     glActiveTexture(GL_TEXTURE0);
     if (cloud.palette_changed_) {
-        load_texture(cloud.palette_data_.data(), cloud.palette_data_.size() / 3,
-                     1, palette_texture);
+        load_texture(cloud.palette_data_->data(),
+                     cloud.palette_data_->size() / 3, 1, palette_texture);
         cloud.palette_changed_ = false;
     }
     glBindTexture(GL_TEXTURE_2D, palette_texture);
@@ -149,7 +149,7 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
     glUniform1i(GLCloud::cloud_ids.transformation_id, 1);
     glActiveTexture(GL_TEXTURE1);
     if (cloud.transform_changed_) {
-        load_texture(cloud.transform_data_.data(), cloud.w_, 4,
+        load_texture(cloud.transform_data_->data(), cloud.w_, 4,
                      transform_texture, GL_RGB32F);
         cloud.transform_changed_ = false;
     }
@@ -157,38 +157,39 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
 
     if (cloud.mask_changed_) {
         glBindBuffer(GL_ARRAY_BUFFER, mask_buffer);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.mask_data_.size(),
-                     cloud.mask_data_.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER,
+                     sizeof(GLfloat) * cloud.mask_data_->size(),
+                     cloud.mask_data_->data(), GL_STATIC_DRAW);
         cloud.mask_changed_ = false;
     }
 
     if (cloud.xyz_changed_) {
         glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.xyz_data_.size(),
-                     cloud.xyz_data_.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.xyz_data_->size(),
+                     cloud.xyz_data_->data(), GL_STATIC_DRAW);
         cloud.xyz_changed_ = false;
     }
 
     if (cloud.offset_changed_) {
         glBindBuffer(GL_ARRAY_BUFFER, off_buffer);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.off_data_.size(),
-                     cloud.off_data_.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.off_data_->size(),
+                     cloud.off_data_->data(), GL_STATIC_DRAW);
         cloud.offset_changed_ = false;
     }
 
     if (cloud.range_changed_) {
         glBindBuffer(GL_ARRAY_BUFFER, range_buffer);
         glBufferData(GL_ARRAY_BUFFER,
-                     sizeof(GLfloat) * cloud.range_data_.size(),
-                     cloud.range_data_.data(), GL_DYNAMIC_DRAW);
+                     sizeof(GLfloat) * cloud.range_data_->size(),
+                     cloud.range_data_->data(), GL_DYNAMIC_DRAW);
         cloud.range_changed_ = false;
     }
 
     if (cloud.key_changed_) {
         mono = cloud.mono_;
         glBindBuffer(GL_ARRAY_BUFFER, key_buffer);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.key_data_.size(),
-                     cloud.key_data_.data(), GL_DYNAMIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * cloud.key_data_->size(),
+                     cloud.key_data_->data(), GL_DYNAMIC_DRAW);
         cloud.key_changed_ = false;
     }
 

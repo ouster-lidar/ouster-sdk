@@ -24,12 +24,12 @@ Building the Python SDK from source requires several dependencies:
 - `python <https://www.python.org/>`_ >= 3.8 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
-The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster_example>`_. You should clone the whole project.
+The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster_sdk>`_. You should clone the whole project.
 
-Linux and macos
+Linux and macOS
 ---------------
 
-On supported Debian-based linux systems, you can install all build dependencies by running:
+On supported Debian-based Linux systems, you can install all build dependencies by running:
 
 .. code:: console
 
@@ -39,7 +39,7 @@ On supported Debian-based linux systems, you can install all build dependencies 
                       libglfw3-dev libglew-dev libspdlog-dev \
                       libpng-dev libflatbuffers-dev
 
-On macos >= 11, using homebrew, you should be able to run:
+On macOS >= 11, using Homebrew, you should be able to run:
 
 .. code:: console
 
@@ -49,8 +49,8 @@ After you have the system dependencies, you can build the SDK with:
 
 .. code:: console
 
-   # first, specify the path to the ouster_example repository
-   $ export OUSTER_SDK_PATH=<PATH TO OUSTER_EXAMPLE REPO>
+   # first, specify the path to the ouster_sdk repository
+   $ export OUSTER_SDK_PATH=<PATH TO OUSTER_SDK REPO>
 
    # make sure you have an up-to-date version of pip and setuptools installed
    $ python3 -m pip install --user --upgrade pip setuptools
@@ -86,8 +86,8 @@ The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer 
 
 .. code:: powershell
 
-   # first, specify the path to the ouster_example repository
-   PS > $env:OUSTER_SDK_PATH="<PATH TO OUSTER_EXAMPLE>"
+   # first, specify the path to the ouster_sdk repository
+   PS > $env:OUSTER_SDK_PATH="<PATH TO OUSTER_SDK>"
 
    # point cmake to the location of vcpkg (make sure to use an absolute path)
    PS > $env:CMAKE_TOOLCHAIN_FILE="<PATH TO VCPKG REPO>\scripts\buildsystems\vcpkg.cmake"
@@ -112,7 +112,7 @@ See the top-level README in the `Ouster Example repository`_ for more details on
 development environment on Windows.
 
 .. _vcpkg: https://github.com/microsoft/vcpkg/blob/master/README.md
-.. _Ouster Example repository: https://github.com/ouster-lidar/ouster_example
+.. _Ouster Example repository: https://github.com/ouster-lidar/ouster_sdk
 
 
 Developing

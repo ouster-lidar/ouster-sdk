@@ -34,15 +34,18 @@
 #include <string>
 #include <utility>
 
+#include "common.h"
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
 #include "ouster/impl/build.h"
 #include "ouster/impl/packet_writer.h"
 #include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/metadata.h"
+#include "ouster/sensor_client.h"
 #include "ouster/sensor_http.h"
+#include "ouster/sensor_scan_source.h"
 #include "ouster/types.h"
-#include "ouster/udp_packet_source.h"
 
 namespace py = pybind11;
 namespace chrono = std::chrono;
@@ -57,11 +60,7 @@ using ouster::sensor::packet_format;
 using ouster::sensor::product_info;
 using ouster::sensor::sensor_config;
 using ouster::sensor::sensor_info;
-using ouster::sensor::impl::BufferedUDPSource;
-using ouster::sensor::impl::Event;
 using ouster::sensor::impl::packet_writer;
-using ouster::sensor::impl::Producer;
-using ouster::sensor::impl::UDPPacketSource;
 using ouster::sensor::util::SensorHttp;
 using namespace ouster;
 
@@ -389,7 +388,163 @@ struct set_field {
     }
 };
 
-PYBIND11_MODULE(_client, m) {
+/**
+ * Applies a set of 4x4 pose transformations to a collection of 3D points,
+ * reshapes the input into appropriate Eigen matrices, and invokes the C++
+ * version of the `dewarp` function for performing the transformations.
+ *
+ * This function is designed to convert NumPy input arrays from Python into
+ * Eigen matrices, which are suitable for efficient matrix operations in C++.
+ * The 3D points are passed in the shape of (H, W, 3), and the 4x4 pose matrices
+ * are passed in the shape of (W, 4, 4).
+ *
+ * @param[in] points A NumPy array of shape (H, W, 3) representing the 3D
+ * points.
+ *               - H: Number of columns (groups of points)
+ *               - W: Number of points per column
+ *               - 3: 3D coordinates (x, y, z)
+ *
+ * @param[in] poses A NumPy array of shape (W, 4, 4) representing the 4x4 pose
+ * matrices.
+ *              - W: Number of pose matrices
+ *              - 4x4: The transformation matrices
+ *
+ * @param[in] input_row_major If the param points is stored in row major, then
+ * it's true. Otherwise it's false.
+ *
+ * @return A NumPy array of shape (H, W, 3) containing the dewarped 3D points
+ * after applying the corresponding 4x4 transformation matrices to the points.
+ *
+ */
+
+// TODO Hao remove the input_row_major parameter
+py::array_t<double> dewarp(const py::array_t<double>& points,
+                           const py::array_t<double>& poses,
+                           bool input_row_major = true) {
+    auto poses_buf = poses.request();
+    auto points_buf = points.request();
+
+    // Validate input dimensions for poses
+    if (poses_buf.ndim != 3 || poses_buf.shape[1] != 4 ||
+        poses_buf.shape[2] != 4) {
+        throw std::runtime_error("Invalid shape for poses, expected (W, 4, 4)");
+    }
+
+    // Validate input dimensions for points
+    if (points_buf.ndim != 3 || points_buf.shape[2] != 3) {
+        throw std::runtime_error(
+            "Invalid shape for points, expected (H, W, 3)");
+    }
+
+    const int num_poses = poses_buf.shape[0];            // W: 1024, 2048 etc
+    const int num_rows = points_buf.shape[0];            // H: 64, 128 etc
+    const int num_points_per_col = points_buf.shape[1];  // W
+    const int point_dim = 3;
+
+    if (num_points_per_col != num_poses) {
+        throw std::runtime_error(
+            "Number of points per set must match the number of poses");
+    }
+
+    // poses reshape into (W, 16)
+    Eigen::Map<pose_util::Poses> poses_mat(static_cast<double*>(poses_buf.ptr),
+                                           num_poses, 16);
+
+    auto result = py::array_t<double>({num_rows, num_poses, point_dim});
+    auto result_buf = result.request();
+    Eigen::Map<pose_util::Points> dewarped_points(
+        static_cast<double*>(result_buf.ptr), num_rows * num_poses, point_dim);
+
+    if (input_row_major) {
+        Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>>
+            points_mat(static_cast<double*>(points_buf.ptr),
+                       num_rows * num_poses, point_dim);
+        pose_util::dewarp(dewarped_points, points_mat, poses_mat);
+    } else {
+        // TODO[UN]: Optimize for the ColMajor case
+        // needs tests in place
+        Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::ColMajor>>
+            points_mat_col_major(static_cast<double*>(points_buf.ptr),
+                                 num_rows * num_poses, point_dim);
+        Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> points_mat =
+            points_mat_col_major;
+        pose_util::dewarp(dewarped_points, points_mat, poses_mat);
+    }
+
+    return result;
+}
+
+/**
+ * Applies a single of 4x4 pose transformations to a collection of 3D points,
+ * reshapes the input into appropriate Eigen matrices, and invokes the C++
+ * version of the `transfrom` function for performing the transformations.
+ *
+ * This function is designed to convert NumPy input arrays from Python into
+ * Eigen matrices, which are suitable for efficient matrix operations in C++.
+ * The 3D points are passed in the shape of (H, W, 3), and the single 4x4 pose
+ * matrics in the shape of (4, 4).
+ *
+ * @param[in] points A NumPy array of shape (H, W, 3), or (N, 3)
+ * representing the 3D points.
+ *               - H: Number of columns (groups of points)
+ *               - W: Number of points per column
+ *               - 3: 3D coordinates (x, y, z)
+ *
+ * @param[in] poses A NumPy array of shape (4, 4) representing the 4x4 pose
+ * matrices.
+ *              - 4x4: The transformation matrices
+ *
+ * @return A NumPy array of shape (H, W, 3) or (N, 3) containing the transformed
+ * 3D points after applying the corresponding 4x4 transformation matrices to the
+ * points.
+ *
+ */
+py::array_t<double> transform(const py::array_t<double>& points,
+                              const py::array_t<double>& pose) {
+    // Ensure the pose is a 4x4 matrix
+    if (pose.ndim() != 2 || pose.shape(0) != 4 || pose.shape(1) != 4) {
+        throw std::runtime_error("pose array must have shape (4, 4)");
+    }
+
+    Eigen::Map<const pose_util::Pose> pose_eigen(pose.data());
+
+    // Handle case where points is a 2D array: (N, 3)
+    if (points.ndim() == 2 && points.shape(1) == 3) {
+        const int n = points.shape(0);
+
+        Eigen::Map<const pose_util::Points> points_eigen(points.data(), n, 3);
+
+        auto result = py::array_t<double>({n, 3});
+        auto result_buf = result.request();
+        Eigen::Map<pose_util::Points> transformed(
+            static_cast<double*>(result_buf.ptr), n, 3);
+
+        pose_util::transform(transformed, points_eigen, pose_eigen);
+        return result;
+    }
+
+    // Handle case where points is a 3D array: (H, W, 3)
+    else if (points.ndim() == 3 && points.shape(2) == 3) {
+        const int h = points.shape(0);
+        const int w = points.shape(1);
+
+        Eigen::Map<const pose_util::Points> points_eigen(points.data(), h * w,
+                                                         3);
+
+        auto result = py::array_t<double>({h, w, 3});
+        auto result_buf = result.request();
+        Eigen::Map<pose_util::Points> transformed(
+            static_cast<double*>(result_buf.ptr), h * w, 3);
+
+        pose_util::transform(transformed, points_eigen, pose_eigen);
+        return result;
+    } else {
+        throw std::invalid_argument(
+            "points array must have shape (n, 3) or (h, w, 3)");
+    }
+}
+
+void init_client(py::module& m, py::module&) {
     m.doc() = R"(
     Sensor client bindings generated by pybind11.
 
@@ -470,6 +625,14 @@ PYBIND11_MODULE(_client, m) {
         .def("field_value_mask", &packet_format::field_value_mask)
         .def("field_bitness", &packet_format::field_bitness)
 
+        .def("crc", [](packet_format& pf, py::buffer buf) {
+            return pf.crc(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("calculate_crc", [](packet_format& pf, py::buffer buf) {
+            return pf.calculate_crc(getptr(pf.lidar_packet_size, buf));
+        })
+
         .def("packet_type", [](packet_format& pf, py::buffer buf) {
             return pf.packet_type(getptr(pf.lidar_packet_size, buf));
         })
@@ -484,6 +647,10 @@ PYBIND11_MODULE(_client, m) {
 
         .def("init_id", [](packet_format& pf, py::buffer buf) {
             return pf.init_id(getptr(pf.lidar_packet_size, buf));
+        })
+
+        .def("alert_flags", [](packet_format& pf, py::buffer buf) {
+            return pf.alert_flags(getptr(pf.lidar_packet_size, buf));
         })
 
         .def("countdown_thermal_shutdown", [](packet_format& pf, py::buffer buf) {
@@ -629,6 +796,15 @@ PYBIND11_MODULE(_client, m) {
               [](const packet_writer& self, LidarPacket& p, uint32_t frame_id) {
                   self.set_frame_id(p.buf.data(), frame_id);
               })
+        .def("set_alert_flags", [](const packet_writer& self, LidarPacket& p, uint8_t alert_flags) {
+            self.set_alert_flags(p.buf.data(), alert_flags);
+        })
+        .def("set_shutdown_countdown", [](const packet_writer& self, LidarPacket& p, uint8_t shutdown_countdown) {
+            self.set_shutdown_countdown(p.buf.data(), shutdown_countdown);
+        })
+        .def("set_shot_limiting_countdown", [](const packet_writer& self, LidarPacket& p, uint8_t shot_limiting_countdown) {
+            self.set_shot_limiting_countdown(p.buf.data(), shot_limiting_countdown);
+        })
         .def("set_field", set_field<uint8_t>{})
         .def("set_field", set_field<uint16_t>{})
         .def("set_field", set_field<uint32_t>{})
@@ -806,6 +982,8 @@ PYBIND11_MODULE(_client, m) {
         .def("has_fields_equal", &sensor_info::has_fields_equal, R"(Compare public fields")")
         // only uncomment for debugging purposes!! story for general use and output is not filled
         //.def("__str__", [](const sensor_info& i) { return to_string(i); })
+        .def_property_readonly("w", [](const sensor_info& self) { return self.w(); }, R"(returns the width of a frame (equivalent to format.columns_per_frame))")
+        .def_property_readonly("h", [](const sensor_info& self) { return self.h(); }, R"(returns the height of a frame (equivalent to format.pixels_per_column))")
         .def("__eq__", [](const sensor_info& i, const sensor_info& j) { return i == j; })
         .def("__repr__", [](const sensor_info& self) {
             const auto mode = self.config.lidar_mode ? to_string(self.config.lidar_mode.value()) : std::to_string(self.format.fps) + "fps";
@@ -1103,134 +1281,122 @@ PYBIND11_MODULE(_client, m) {
             py::arg("timeout_sec") = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("shutdown", [](client_shared_ptr& self) { self.reset(); });
 
+    // New Client
+    py::enum_<sensor::ClientEvent::EventType>(m, "ClientEventType",
+                                              py::arithmetic())
+        .value("Error", sensor::ClientEvent::Error)
+        .value("Exit", sensor::ClientEvent::Exit)
+        .value("PollTimeout", sensor::ClientEvent::PollTimeout)
+        .value("ImuPacket", sensor::ClientEvent::ImuPacket)
+        .value("LidarPacket", sensor::ClientEvent::LidarPacket);
+
+    py::class_<sensor::ClientEvent>(m, "ClientEvent")
+        .def(py::init())
+        .def_readwrite("source", &sensor::ClientEvent::source)
+        .def_readwrite("type", &sensor::ClientEvent::type);
+
+    py::class_<sensor::Sensor>(m, "Sensor")
+        .def(py::init<const std::string&, const sensor_config&>(),
+             py::arg("hostname"), py::arg("desired_config") = sensor_config())
+        .def(
+            "fetch_metadata",
+            [](sensor::Sensor& self, int timeout) {
+                return self.fetch_metadata(timeout);
+            },
+            py::arg("timeout") = 40)
+        .def("http_client", &sensor::Sensor::http_client)
+        .def("desired_config", &sensor::Sensor::desired_config)
+        .def("hostname", &sensor::Sensor::hostname);
+
+    py::class_<sensor::SensorClient>(m, "SensorClient")
+        .def(py::init([](std::vector<sensor::Sensor> sensors,
+                         double config_timeout,
+                         double buffer_time) -> sensor::SensorClient* {
+                 return new sensor::SensorClient(sensors, config_timeout,
+                                                 buffer_time);
+             }),
+             py::arg("sensors"), py::arg("config_timeout") = 45,
+             py::arg("buffer_time") = 0)
+        .def(py::init([](std::vector<sensor::Sensor> sensors,
+                         std::vector<sensor::sensor_info> metadata,
+                         double config_timeout,
+                         double buffer_size) -> sensor::SensorClient* {
+                 return new sensor::SensorClient(sensors, metadata,
+                                                 config_timeout, buffer_size);
+             }),
+             py::arg("sensors"), py::arg("metadata"),
+             py::arg("config_timeout") = 1, py::arg("buffer_time") = 0)
+        .def("get_sensor_info",
+             [](sensor::SensorClient& self) { return self.get_sensor_info(); })
+        .def("flush", &sensor::SensorClient::flush)
+        .def("close", &sensor::SensorClient::close)
+        .def("buffer_size", &sensor::SensorClient::buffer_size)
+        .def(
+            "get_packet",
+            [](sensor::SensorClient& self, LidarPacket& lp, ImuPacket& ip,
+               double timeout) {
+                py::gil_scoped_release release;
+                auto packet = self.get_packet(lp, ip, timeout);
+                return packet;
+            },
+            py::arg("lidar_packet"), py::arg("imu_packet"),
+            py::arg("timeout") = 0.1);
+
+    py::class_<sensor::SensorScanSource>(m, "SensorScanSource")
+        .def(py::init([](std::vector<sensor::Sensor> sensors, double timeout,
+                         unsigned int queue_size,
+                         bool soft_id_check) -> sensor::SensorScanSource* {
+                 return new sensor::SensorScanSource(sensors, timeout,
+                                                     queue_size, soft_id_check);
+             }),
+             py::arg("sensors"), py::arg("config_timeout") = 45,
+             py::arg("queue_size") = 2, py::arg("soft_id_check") = false)
+        .def(py::init([](std::vector<sensor::Sensor> sensors,
+                         std::vector<sensor::sensor_info> metadata,
+                         double timeout, unsigned int queue_size,
+                         bool soft_id_check) -> sensor::SensorScanSource* {
+                 return new sensor::SensorScanSource(sensors, metadata, timeout,
+                                                     queue_size, soft_id_check);
+             }),
+             py::arg("sensors"), py::arg("metadata"),
+             py::arg("config_timeout") = 45, py::arg("queue_size") = 2,
+             py::arg("soft_id_check") = false)
+        .def(py::init([](std::vector<sensor::Sensor> sensors,
+                         std::vector<sensor::sensor_info> metadata,
+                         const std::vector<std::vector<FieldType>>& field_types,
+                         double timeout, unsigned int queue_size,
+                         bool soft_id_check) -> sensor::SensorScanSource* {
+                 return new sensor::SensorScanSource(sensors, metadata,
+                                                     field_types, timeout,
+                                                     queue_size, soft_id_check);
+             }),
+             py::arg("sensors"), py::arg("metadata"), py::arg("fields"),
+             py::arg("config_timeout") = 45, py::arg("queue_size") = 2,
+             py::arg("soft_id_check") = false)
+        .def("get_sensor_info",
+             [](sensor::SensorScanSource& self) {
+                 return self.get_sensor_info();
+             })
+        .def("flush", &sensor::SensorScanSource::flush)
+        .def("close", &sensor::SensorScanSource::close)
+        .def("dropped_scans", &sensor::SensorScanSource::dropped_scans)
+        .def("id_error_count", &sensor::SensorScanSource::id_error_count)
+        .def(
+            "get_scan",
+            [](sensor::SensorScanSource& self, double timeout) {
+                py::gil_scoped_release release;
+                auto packet = self.get_scan(timeout);
+                return packet;
+            },
+            py::arg("timeout") = 0.1);
+
     // Client Handle
     py::enum_<sensor::client_state>(m, "ClientState", py::arithmetic())
         .value("TIMEOUT", sensor::client_state::TIMEOUT)
         .value("ERROR", sensor::client_state::CLIENT_ERROR)
         .value("LIDAR_DATA", sensor::client_state::LIDAR_DATA)
         .value("IMU_DATA", sensor::client_state::IMU_DATA)
-        .value("EXIT", sensor::client_state::EXIT)
-        // TODO: revisit including in C++ API
-        .value("OVERFLOW", sensor::client_state(Producer::CLIENT_OVERFLOW));
-
-    py::class_<Event>(m, "Event")
-        .def(py::init())
-        .def_readwrite("source", &Event::source)
-        .def_readwrite("state", &Event::state);
-
-    py::class_<UDPPacketSource>(m, "UDPPacketSource")
-        .def(py::init())
-        .def(
-            "add_client",
-            [](UDPPacketSource& self, client_shared_ptr cli,
-               size_t lidar_buf_size, size_t lidar_packet_size,
-               size_t imu_buf_size, size_t imu_packet_size) {
-                self.add_client(cli, lidar_buf_size, lidar_packet_size,
-                                imu_buf_size, imu_packet_size);
-            },
-            py::arg("connection"), py::arg("lidar_buf_size"),
-            py::arg("lidar_packet_size"), py::arg("imu_buf_size"),
-            py::arg("imu_buf_size"))
-        .def(
-            "add_client",
-            [](UDPPacketSource& self, client_shared_ptr cli,
-               const sensor_info& info, float seconds_to_buffer) {
-                self.add_client(cli, info, seconds_to_buffer);
-            },
-            py::arg("connection"), py::arg("metadata"),
-            py::arg("seconds_to_buffer"))
-        .def("shutdown", [](UDPPacketSource& self) { self.shutdown(); })
-        // clang-format off
-        .def_property_readonly("size", [](const UDPPacketSource& self) {
-            return self.size();
-        })
-        // clang-format on
-        .def_property_readonly(
-            "capacity",
-            [](const UDPPacketSource& self) { return self.capacity(); })
-        .def("produce",
-             [](UDPPacketSource& self) {
-                 py::gil_scoped_release release;
-                 self.produce();
-             })
-        .def("pop",
-             [](UDPPacketSource& self, float timeout_sec) -> Event {
-                 py::gil_scoped_release release;
-                 return self.pop(timeout_sec);
-             })
-        .def(
-            "packet",
-            [](UDPPacketSource& self, Event e) -> Packet& {
-                return self.packet(e);
-            },
-            py::return_value_policy::reference)
-        .def("advance", [](UDPPacketSource& self, Event e) { self.advance(e); })
-        .def("flush", [](UDPPacketSource& self) { self.flush(); });
-
-    py::class_<BufferedUDPSource>(m, "Client")
-        .def(py::init<client_shared_ptr, size_t, size_t, size_t, size_t>(),
-             py::arg("connection"), py::arg("lidar_buf_size"),
-             py::arg("lidar_packet_size"), py::arg("imu_buf_size"),
-             py::arg("imu_buf_size"))
-        .def(py::init<client_shared_ptr, const sensor_info&, float>(),
-             py::arg("connection"), py::arg("metadata"),
-             py::arg("seconds_to_buffer"))
-        .def("shutdown", [](BufferedUDPSource& self) { self.shutdown(); })
-        .def("pop",
-             [](BufferedUDPSource& self,
-                float timeout_sec) -> sensor::client_state {
-                 py::gil_scoped_release release;
-                 return self.pop(timeout_sec);
-             })
-        .def(
-            "packet",
-            [](BufferedUDPSource& self, sensor::client_state st) -> Packet& {
-                return self.packet(st);
-            },
-            py::return_value_policy::reference)
-        .def("advance", &BufferedUDPSource::advance)
-        .def("consume",
-             [](BufferedUDPSource& self, LidarPacket& lp, ImuPacket& ip,
-                float timeout_sec) {
-                 using fsec = chrono::duration<float>;
-
-                 // timeout_sec == 0 means nonblocking, < 0 means forever
-                 auto timeout_time =
-                     timeout_sec >= 0
-                         ? chrono::steady_clock::now() + fsec{timeout_sec}
-                         : chrono::steady_clock::time_point::max();
-
-                 // consume() with 0 timeout means return if no queued
-                 // packets
-                 float poll_interval = timeout_sec ? 0.1 : 0.0;
-
-                 // allow interrupting timeout from Python by polling
-                 sensor::client_state res = sensor::client_state::TIMEOUT;
-                 do {
-                     res = self.consume(lp, ip, poll_interval);
-                     if (res != sensor::client_state::TIMEOUT) break;
-
-                     if (PyErr_CheckSignals() != 0)
-                         throw py::error_already_set();
-                     // allow other python threads to run
-                     py::gil_scoped_release release;
-                 } while (chrono::steady_clock::now() < timeout_time);
-                 return res;
-             })
-        .def("produce",
-             [](BufferedUDPSource& self) {
-                 py::gil_scoped_release release;
-                 self.produce();
-             })
-        .def("flush", [](BufferedUDPSource& self) { self.flush(); })
-        // clang-format off
-        .def_property_readonly("size", [](const BufferedUDPSource& self) {
-            return self.size();
-        })
-        // clang-format on
-        .def_property_readonly("capacity", [](const BufferedUDPSource& self) {
-            return self.capacity();
-        });
+        .value("EXIT", sensor::client_state::EXIT);
 
     py::class_<FieldType>(m, "FieldType", R"(
         Describes a field.
@@ -1363,6 +1529,20 @@ PYBIND11_MODULE(_client, m) {
          )",
              py::arg("w"), py::arg("h"), py::arg("field_types"),
              py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
+        .def(py::init([](const sensor_info& sensor_info) {
+                 return new LidarScan(sensor_info);
+             }),
+             R"(
+        Initialize a scan with defaults fields and size for a given sensor_info
+
+        Args:
+            sensor_info: SensorInfo to construct a scan for
+
+        Returns:
+            New LidarScan approprate for the sensor_info
+
+         )",
+             py::arg("sensor_info"))
         .def(py::init([](const LidarScan& source,
                          const std::vector<FieldType>& field_types) {
                  return new LidarScan(source, field_types);
@@ -1404,6 +1584,13 @@ PYBIND11_MODULE(_client, m) {
         .def_readwrite(
             "frame_status", &LidarScan::frame_status,
             "Information from the packet header which corresponds to a frame.")
+        .def_readwrite("shutdown_countdown", &LidarScan::shutdown_countdown,
+                       "Thermal shutdown countdown. Please refer to the "
+                       "firmware documentation for more information.")
+        .def_readwrite("shot_limiting_countdown",
+                       &LidarScan::shot_limiting_countdown,
+                       "Shot-limiting countdown. Please refer to the firmware "
+                       "documentation for more information.")
         .def(
             "complete",
             [](const LidarScan& self,
@@ -1416,6 +1603,11 @@ PYBIND11_MODULE(_client, m) {
             py::arg("window") =
                 static_cast<nonstd::optional<sensor::ColumnWindow>>(
                     nonstd::nullopt))
+        .def_property_readonly(
+            "packet_count", &LidarScan::packet_count,
+            "The number of packets used to produce a full scan given the width "
+            "in pixels and the number of columns per "
+            "packet.")
         .def(
             "field",
             [](LidarScan& self, const std::string& name) {
@@ -1540,6 +1732,17 @@ PYBIND11_MODULE(_client, m) {
         Returns:
             The specified field as a numpy array
         )")
+        .def("has_field", &LidarScan::has_field,
+             R"(
+        Returns true if the LidarScan has a field with the given name
+
+        Args:
+            name: name of the field to check for
+
+        Returns:
+            True if the field exists in the scan, false otherwise
+        )",
+             py::arg("name"))
         .def(
             "field_class",
             [](LidarScan& self, const std::string& name) -> ouster::FieldClass {
@@ -1553,6 +1756,20 @@ PYBIND11_MODULE(_client, m) {
 
         Returns:
             FieldClass of the field
+        )")
+        .def(
+            "has_field",
+            [](LidarScan& self, const std::string& name) -> bool {
+                return self.has_field(name);
+            },
+            R"(
+        Check if a field with a given name exists in the LidarScan.
+
+        Args:
+            name: name of the field
+
+        Returns:
+            True if the field is present in the LidarScan.
         )")
         .def("shot_limiting", &LidarScan::shot_limiting,
              "The frame shot limiting status.")
@@ -1575,6 +1792,16 @@ PYBIND11_MODULE(_client, m) {
                     self.packet_timestamp().data(), py::cast(self));
             },
             "The host timestamp header as a numpy array with "
+            "W/columns-per-packet entries.")
+        // NOTE: returned array is writeable, but not reassignable
+        .def_property_readonly(
+            "alert_flags",
+            [](LidarScan& self) {
+                return py::array(py::dtype::of<uint8_t>(),
+                                 self.alert_flags().rows(),
+                                 self.alert_flags().data(), py::cast(self));
+            },
+            "The alert flags header as a numpy array with "
             "W/columns-per-packet entries.")
         // NOTE: returned array is writeable, but not reassignable
         .def_property_readonly(
@@ -1617,6 +1844,18 @@ PYBIND11_MODULE(_client, m) {
             "field_types",
             [](const LidarScan& self) { return self.field_types(); },
             "Return an list of available fields.")
+        .def(
+            "get_first_valid_packet_timestamp",
+            [](const LidarScan& self) {
+                return self.get_first_valid_packet_timestamp();
+            },
+            "Return first valid packet timestamp in the scan.")
+        .def(
+            "get_first_valid_column_timestamp",
+            [](const LidarScan& self) {
+                return self.get_first_valid_column_timestamp();
+            },
+            "Return first valid column timestamp in the scan.")
         .def("__eq__",
              [](const LidarScan& l, const LidarScan& r) { return l == r; })
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
@@ -1677,6 +1916,9 @@ PYBIND11_MODULE(_client, m) {
              py::arg("timeout_sec") = 1)
         .def("delete_user_data", &SensorHttp::delete_user_data,
              py::arg("timeout_sec") = 1)
+        .def("firmware_version",
+             [](SensorHttp& self) { return self.firmware_version(); })
+        .def("hostname", &SensorHttp::hostname)
         .def_static(
             "create",
             [](const std::string& hostname, int timeout_sec) {
@@ -1705,28 +1947,10 @@ PYBIND11_MODULE(_client, m) {
     py::class_<XYZLut>(m, "XYZLut")
         .def(py::init([](const sensor_info& sensor, bool use_extrinsics) {
                  auto self = new XYZLut{};
-                 if (use_extrinsics) {
-                     // apply extrinsics after lidar_to_sensor_transform so the
-                     // resulting LUT will produce the coordinates in
-                     // "extrinsics frame" instead of "sensor frame"
-                     mat4d ext_transform = sensor.extrinsic;
-                     ext_transform(0, 3) /= sensor::range_unit;
-                     ext_transform(1, 3) /= sensor::range_unit;
-                     ext_transform(2, 3) /= sensor::range_unit;
-                     ext_transform =
-                         ext_transform * sensor.lidar_to_sensor_transform;
-                     *self = make_xyz_lut(
-                         sensor.format.columns_per_frame,
-                         sensor.format.pixels_per_column, sensor::range_unit,
-                         sensor.beam_to_lidar_transform, ext_transform,
-                         sensor.beam_azimuth_angles,
-                         sensor.beam_altitude_angles);
-                 } else {
-                     *self = make_xyz_lut(sensor);
-                 }
+                 *self = make_xyz_lut(sensor, use_extrinsics);
                  return self;
              }),
-             py::arg("info"), py::arg("use_extrinsics") = false)
+             py::arg("info"), py::arg("use_extrinsics"))
         .def("__call__",
              [](const XYZLut& self, Eigen::Ref<img_t<uint32_t>>& range) {
                  return cartesian(range, self);
@@ -1784,6 +2008,73 @@ PYBIND11_MODULE(_client, m) {
             returns field types
             )",
         py::arg("udp_profile_lidar"));
+
+    py::class_<ouster::ValidatorIssues>(m, "ValidatorIssues")
+        .def_property_readonly(
+            "critical",
+            [](ouster::ValidatorIssues& self) { return self.critical; },
+            "Critical validator issues.")
+        .def_property_readonly(
+            "warning",
+            [](ouster::ValidatorIssues& self) { return self.warning; },
+            "Warning validator issues.")
+        .def_property_readonly(
+            "information",
+            [](ouster::ValidatorIssues& self) { return self.information; },
+            "Information validator issues");
+
+    py::class_<ouster::ValidatorIssues::ValidatorEntry>(m, "ValidatorEntry")
+        .def("__str__", &ouster::ValidatorIssues::ValidatorEntry::to_string,
+             R"(
+        Get the string representation of a ValidatorEntry
+
+        Returns:
+            returns the string representation of a ValidatorEntry
+        )")
+        .def("__repr__", &ouster::ValidatorIssues::ValidatorEntry::to_string,
+             R"(
+        Get the string representation of a ValidatorEntry
+
+        Returns:
+            returns the string representation of a ValidatorEntry
+        )")
+        .def("get_path", &ouster::ValidatorIssues::ValidatorEntry::get_path,
+             R"(
+        Get the entry path to the issue.
+
+        Returns:
+            returns the entry path to the issue.
+        )")
+        .def("get_msg", &ouster::ValidatorIssues::ValidatorEntry::get_msg,
+             R"(
+        Get the message of the ValidatorEntry
+
+        Returns:
+            returns the message of the ValidatorEntry
+        )");
+
+    m.def(
+        "parse_and_validate_metadata",
+        [](const std::string& metadata)
+            -> std::tuple<nonstd::optional<ouster::sensor::sensor_info>,
+                          ouster::ValidatorIssues> {
+            nonstd::optional<ouster::sensor::sensor_info> sensor_info;
+            ouster::ValidatorIssues issues;
+
+            ouster::parse_and_validate_metadata(metadata, sensor_info, issues);
+
+            return std::make_pair(sensor_info, issues);
+        },
+        R"(
+        Parse and validate sensor metadata
+
+        Args:
+            metadata (str): The metadata json to parse and validate.
+
+        Returns:
+            returns (ValidatorIssues, SensorInfo): The list of issues that were encountered 
+                                                  and the parsed SensorInfo
+        )");
 
     py::class_<Packet>(m, "Packet")
         .def(py::init<int>(), py::arg("size") = 65536)
@@ -1862,6 +2153,20 @@ PYBIND11_MODULE(_client, m) {
         .def_readwrite("shift", &FieldInfo::shift);
 
     m.def("add_custom_profile", &ouster::sensor::add_custom_profile);
+
+    m.def("in_multicast", &ouster::sensor::in_multicast);
+
+    m.def("dewarp",
+          py::overload_cast<const py::array_t<double>&,
+                            const py::array_t<double>&, bool>(&dewarp),
+          "Dewarp points with given poses", py::arg("points"), py::arg("poses"),
+          py::arg("input_row_major") = true);
+
+    m.def("transform",
+          py::overload_cast<const py::array_t<double>&,
+                            const py::array_t<double>&>(&transform),
+          "Transform points with given a pose matrix", py::arg("points"),
+          py::arg("pose"));
 
     m.attr("__version__") = ouster::SDK_VERSION;
 }

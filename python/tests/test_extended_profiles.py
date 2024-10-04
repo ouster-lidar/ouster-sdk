@@ -6,8 +6,9 @@ import pytest
 import numpy as np
 
 from ouster.sdk import client
-from ouster.sdk.client import _client, ChanField
-from ouster.sdk.client._client import FieldInfo
+from ouster.sdk.client import ChanField
+from ouster.sdk._bindings.client import FieldInfo
+import ouster.sdk._bindings.client as _client
 
 
 def test_create_field_info() -> None:
@@ -44,6 +45,8 @@ def test_custom_copycat_profile_matches_original(packets: client.PacketSource) -
         (ChanField.SIGNAL, FieldInfo(np.uint16, 8, 0, 0)),
         (ChanField.SIGNAL2, FieldInfo(np.uint16, 10, 0, 0)),
         (ChanField.NEAR_IR, FieldInfo(np.uint16, 12, 0, 0)),
+        (ChanField.FLAGS2, FieldInfo(np.uint8, 6, 0b11111000, 3)),
+        (ChanField.FLAGS, FieldInfo(np.uint8, 2, 0b11111000, 3)),
     ]
 
     _client.add_custom_profile(11, "DUAL_COPYCAT", custom_fields, 16)

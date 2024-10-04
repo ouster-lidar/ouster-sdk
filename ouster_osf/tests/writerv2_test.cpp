@@ -151,17 +151,34 @@ TEST_F(WriterV2Test, WriterV2SingleVectorTest) {
 
 void test_multi_file(std::string& output_osf_filename, LidarScan& ls,
                      LidarScan& ls2) {
+    bool got_1 = false;
+    bool got_2 = false;
     Reader reader(output_osf_filename);
     auto msg_it = reader.messages().begin();
     EXPECT_NE(msg_it, reader.messages().end());
+    msg_it->id();
     auto ls_recovered = msg_it->decode_msg<LidarScanStream>();
     EXPECT_TRUE(ls_recovered);
-    EXPECT_EQ(*ls_recovered, ls);
+    if (msg_it->id() == 3) {
+        got_1 = true;
+        EXPECT_EQ(*ls_recovered, ls);
+    } else {
+        got_2 = true;
+        EXPECT_EQ(*ls_recovered, ls2);
+    }
     EXPECT_NE(++msg_it, reader.messages().end());
     auto ls_recovered2 = msg_it->decode_msg<LidarScanStream>();
     EXPECT_TRUE(ls_recovered2);
-    EXPECT_EQ(*ls_recovered2, ls2);
+    if (msg_it->id() == 3) {
+        got_1 = true;
+        EXPECT_EQ(*ls_recovered2, ls);
+    } else {
+        got_2 = true;
+        EXPECT_EQ(*ls_recovered2, ls2);
+    }
     EXPECT_EQ(++msg_it, reader.messages().end());
+    EXPECT_TRUE(got_1);
+    EXPECT_TRUE(got_2);
 }
 
 TEST_F(WriterV2Test, WriterV2MultiIndexedTest) {
@@ -178,7 +195,7 @@ TEST_F(WriterV2Test, WriterV2MultiIndexedTest) {
         writer.save(0, ls);
         writer.save(1, ls2);
     }
-    test_multi_file(output_osf_filename, ls2, ls);
+    test_multi_file(output_osf_filename, ls, ls2);
 }
 
 TEST_F(WriterV2Test, WriterV2MultiVectorTest) {
@@ -194,7 +211,7 @@ TEST_F(WriterV2Test, WriterV2MultiVectorTest) {
         Writer writer(output_osf_filename, {info, info2});
         writer.save({ls, ls2});
     }
-    test_multi_file(output_osf_filename, ls2, ls);
+    test_multi_file(output_osf_filename, ls, ls2);
 }
 }  // namespace
 }  // namespace osf

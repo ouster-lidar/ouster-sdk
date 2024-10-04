@@ -1,6 +1,6 @@
 .. _viz-scans-accum:
 
-Visualize SLAM Poses using ``ScansAccumulator`` - accumulates track, point clouds and map views
+Visualize SLAM Poses using ``SimpleViz`` - accumulates track, point clouds and map views
 -----------------------------------------------------------------------------------------------
 
 .. contents::
@@ -11,30 +11,34 @@ Visualize SLAM Poses using ``ScansAccumulator`` - accumulates track, point cloud
 Overview
 ^^^^^^^^^
 
-**ScansAccumulator** is the continuation of the efforts to view the lidar data with poses that may
-come within the ``LidarScan.pose`` property. When poses are not present in the ``LidarScan``
-**ScansAccumulator** may still be useful to view the accumulated *N* scans from the live
+Beginning in ouster-sdk 0.13.0, it's easier than ever to use "map" or "scan"
+accumulation to visualize lidar scans that contain pose information. The
+default visualizer, ``SimpleViz``, present in both ``ouster-cli`` and Ouster
+SDK's Python API support these accumulation modes out of the box.
+
+Furthermore, when poses are not present in the ``LidarScan`` accumulation may
+still be useful to view the accumulated *N* scans from the live
 sensor/recording and reveal the accuracy/repeatability of the data.
 
 
 Available view modes
 ~~~~~~~~~~~~~~~~~~~~~
 
-There are three view modes of **ScansAccumulator**, that may be enabled/disabled depending on
-it's params and the data that is passed throught it:
+There are three view modes of accumulation implemented in the default
+visualizer that may be enabled/disabled depending on its parameters and the data
+that is passed through it:
 
-   * **poses** (or **TRACK**), key ``8`` - all scan poses in a trajectory/path view (available only
-     if poses data is present in scans)
-   * **scan map** (or **MAP**), key ``7`` - overall map view with select ratio of random points
-     from every scan (available for scans with/without poses)
-   * **scan accum** (or **ACCUM**), key ``6`` - accumulated *N* scans (key frames) that is picked
-     according to params (available for scans with/without poses)
+   * **poses** mode, key ``8`` - all scan poses in a trajectory/path view (if poses data is present in scans.)
+   * **map accumulation** mode, key ``7`` - overall map view with select ratio of random points
+     from every scan (available for scans with or without poses.)
+   * **scan accumulation** mode, key ``6`` - accumulated *N* scans (key frames) that is picked
+     according to parameters (available for scans with or without poses.)
 
 
 Key bindings
 ~~~~~~~~~~~~~
 
-Keyboard controls available with **ScansAccumulator**:
+Keyboard controls available with **SimpleViz**:
 
     ==============  =============================================================
         Key         What it does
@@ -52,7 +56,7 @@ Keyboard controls available with **ScansAccumulator**:
 Use in Ouster SDK CLI
 ^^^^^^^^^^^^^^^^^^^^^^
 
-**ScansAccumulator** is accessible when visualizing data with ``ouster-cli`` using the ``viz`` command.
+**SimpleViz** is accessible when visualizing data with ``ouster-cli`` using the ``viz`` command.
 
 Here are the ``viz`` command options that affect it:
 
@@ -71,7 +75,7 @@ Examples of the CLI commands:
 Dense accumulated clouds view (with every point of a scan)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To obtain the densest view use the ``--accum-num N --accum-every 1`` params where ``N`` is the
+To obtain the densest view use the ``--accum-num N --accum-every 1`` parameters where ``N`` is the
 number of clouds to accumulate (``N`` up to 100 is generally small enough to avoid slowing down the
 viz interface)::
 
@@ -98,7 +102,7 @@ And here is the final result when viz is done and stopped (``-e stop``) after pl
 
 .. figure:: /images/scans_accum_map_all_scan.png
 
-   Data fully replayed with map and accum enabled (last current scan is displayed here in grey
+   Data fully replayed with map and accum enabled (last current scan is displayed here in gray
    palette)
 
 
@@ -113,81 +117,70 @@ And here is the final result when viz is done and stopped (``-e stop``) after pl
    positions)
 
 
-Programmatic use with (and without) PointViz
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Programmatic use
+^^^^^^^^^^^^^^^^
 
-With ``point_viz: PointViz`` object the ``ScansAccumulator`` can be used as a regular
-``LidarScanViz`` and passed directly to ``SimpleViz``::
+To use any of these accumulation modes, provide their configuration directly to ``SimpleViz`` via keyword arguments. The following snippet will play back scans from the source ``scans_w_poses`` and the sensor configuration provided by ``meta``::
 
-   from ouster.sdk.viz import PointViz, add_default_controls, ScansAccumulator, SimpleViz
+    import sys
+    from ouster.sdk import open_source
+    from ouster.sdk.viz import SimpleViz
+    from ouster.sdk.mapping import KissBackend
 
-   point_viz = PointViz("SimpleViz usecase")
-   add_default_controls(point_viz)
+    source_uri = sys.argv[1]
+    source = open_source(source_uri)
 
-   # ... get scans_w_poses Scans source ...
-
-   scans_acc = ScansAccumulator(meta,
-                                point_viz=point_viz,
-                                accum_max_num=10,
-                                accum_min_dist_num=1,
-                                map_enabled=True,
-                                map_select_ratio=0.5)
-
-   SimpleViz(scans_acc, rate=1.0).run(scans_w_poses)
+    kiss_icp = KissBackend([source.metadata])
 
 
-Alternatively with a ``PointViz`` it can be used as a canvas to draw the final state only::
-
-   from ouster.sdk.viz import ScansAccumulator, add_default_controls, PointViz
-
-   point_viz = PointViz("Overall map case")
-   add_default_controls(point_viz)
-
-   # ... get scans_w_poses Scans source ...
-
-   scans_acc = ScansAccumulator(meta,
-                                point_viz=point_viz,
-                                accum_max_num=10,
-                                accum_min_dist_num=1,
-                                map_enabled=True,
-                                map_select_ratio=0.5)
-
-   for scan in scans_w_poses:
-       scans_acc.update(scan)
-
-   scans_acc.draw(update=True)
-   point_viz.update()
-   point_viz.run()
+    def scans_w_poses():
+        for scan in source:
+            yield kiss_icp.update([scan])
 
 
-Without ``PointViz`` it can be used as in the following snippet to accumulate all data and use the
-data later to draw anywhere (here we still use the ``PointViz`` and ``viz.Cloud()`` as a main
-graphing tool, but it can be ``matplotlib`` instead)::
+    viz = SimpleViz(
+        source.metadata,
+        accum_max_num=100,
+        accum_min_dist_num=0,
+        accum_min_dist_meters=4,
+        rate=1,
+        on_eof='stop'
+    )
 
-   from ouster.sdk.viz import grey_palette, ScansAccumulator, Cloud, add_default_controls, PointViz
+    viz.run(scans_w_poses())
 
-   # ... get scans_w_poses Scans source ...
+Alternatively, ``LidarScanViz`` (which is a lower-level visualizer that implements ``SimpleViz``) can display a static map
+from scans that have poses computed in a preprocessing step::
 
-   # create scans accum without PointViz
-   scans_acc = ScansAccumulator(meta,
-                                map_enabled=True,
-                                map_select_ratio=0.5)
+    import sys
+    from tqdm import tqdm  # for progress bar
+    from ouster.sdk import open_source
+    from ouster.sdk.viz import LidarScanViz
+    from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
+    from ouster.sdk.mapping import KissBackend
 
-   # processing doesn't require viz presence in scans accum
-   for scan in scans_w_poses:
-       scans_acc.update(scan)
+    source_uri = sys.argv[1]
+    source = open_source(source_uri)
 
-   point_viz = PointViz("Standalone case")
-   add_default_controls(point_viz)
+    kiss_icp = KissBackend([source.metadata])
 
-   # draw the cloud manually to the viz using ScansAccumulator MAP data
-   cloud_map = Cloud(scans_acc._map_xyz.shape[0])
-   cloud_map.set_xyz(scans_acc._map_xyz)
-   cloud_map.set_key(scans_acc._map_keys["NEAR_IR"])
-   cloud_map.set_palette(grey_palette)
-   cloud_map.set_point_size(1)
-   point_viz.add(cloud_map)
+    num_scans_to_map = 200
+    scans_w_poses = [
+        kiss_icp.update([scan]) for _, scan in
+        zip(tqdm(range(num_scans_to_map), desc="Computing map"), source)
+    ]
 
-In the example above one might use ``matplotlib`` with some modifications to use palette for picking
-the key color.
+    viz = LidarScanViz(
+        [source.metadata],
+        accumulators_config = LidarScanVizAccumulatorsConfig(
+            accum_max_num=100,
+            accum_min_dist_num=0,
+            accum_min_dist_meters=4
+        )
+    )
 
+    for scan in scans_w_poses:
+        viz.update(scan)
+
+    viz.draw(update=True)
+    viz.run()

@@ -556,6 +556,14 @@ class Reader {
     bool has_message_idx() const;
 
     /**
+     * Whether OSF contains the message timestamp index in the metadata
+     * necessary to quickly collate and jump to a specific message time."
+     *
+     * @return Whether OSF contains the message timestamp index
+     */
+    bool has_timestamp_idx() const;
+
+    /**
      * Reads chunks and returns the iterator to valid chunks only.
      * NOTE: Every chunk is read in full and validated. (i.e. it's not just
      * iterator over chunks index)
@@ -763,6 +771,18 @@ class MessageRef {
         return Stream::decode_msg(buffer(), *meta, meta_provider_);
     }
 
+    template <typename Stream, typename T>
+    std::unique_ptr<typename Stream::obj_type> decode_msg(T& t) const {
+        auto meta = meta_provider_.get<typename Stream::meta_type>(id());
+
+        if (meta == nullptr) {
+            // Stream and metadata entry id is inconsistent
+            return nullptr;
+        }
+
+        return Stream::decode_msg(buffer(), *meta, meta_provider_, t);
+    }
+
     /**
      * Get the underlying raw message byte vector.
      *
@@ -921,6 +941,7 @@ class ChunkRef {
      * A shortcut for state()->start_ts
      *
      * @relates state
+     * @return starting timestamp in the received chunk
      */
     ts_t start_ts() const;
 
@@ -929,6 +950,7 @@ class ChunkRef {
      * A shortcut for state()->end_ts
      *
      * @relates state
+     * @return last timestamp in the received chunk
      */
     ts_t end_ts() const;
 

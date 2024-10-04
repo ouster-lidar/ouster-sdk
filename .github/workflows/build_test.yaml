@@ -18,7 +18,7 @@ jobs:
     - name: install python-deps
       run: pip3 install mypy flake8
     - name: python-lint
-      run: cd python && mypy ./src ./tests && flake8
+      run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
   linux-build:
     runs-on: ubuntu-latest
     steps:

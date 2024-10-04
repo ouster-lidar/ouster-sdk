@@ -5,6 +5,8 @@ import click
 
 import ouster.sdk.client as client
 
+from ouster.sdk._bindings.client import Sensor as _Sensor
+
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
                           source_multicommand)
@@ -23,7 +25,7 @@ def sensor_group() -> None:
 def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
     """Display sensor metadata about the SOURCE."""  # Implements ouster-cli source <hostname> metadata
     try:
-        click.echo(client.Sensor(ctx.source_uri, 7502, 7503)._fetched_meta)
+        click.echo(_Sensor(ctx.source_uri).fetch_metadata().to_json_string())
     except RuntimeError as e:
         raise click.ClickException(str(e))
 

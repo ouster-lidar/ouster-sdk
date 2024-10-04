@@ -9,8 +9,8 @@ Intended to run with `python -m ouster.sdk.examples.viz`
 """
 
 import argparse
-from ouster.sdk import client, pcap, viz
-from ouster.sdk.util import resolve_metadata
+from ouster.sdk import client, viz
+from ouster.sdk import open_source
 import os
 import sys
 import numpy as np
@@ -46,31 +46,21 @@ def main():
                         nargs='?',
                         metavar='PCAP',
                         help='path to pcap file')
-    parser.add_argument('meta_path',
-                        nargs='?',
-                        metavar='METADATA',
-                        help='path to metadata json')
 
     args = parser.parse_args()
 
     pcap_path = os.getenv("SAMPLE_DATA_PCAP_PATH", args.pcap_path)
-    meta_path = os.getenv("SAMPLE_DATA_JSON_PATH", args.meta_path)
 
-    # try to find the metadata json file near the pcap file by common prefix
-    meta_path = resolve_metadata(pcap_path, meta_path)
-
-    if not pcap_path or not meta_path:
+    if not pcap_path:
         print(
             "ERROR: Please add SAMPLE_DATA_PCAP_PATH and SAMPLE_DATA_JSON_PATH to"
             + " environment variables or pass <pcap_path> and <meta_path>")
         sys.exit()
 
-    print(f"Using:\n\tjson: {meta_path}\n\tpcap: {pcap_path}")
-
     # Getting data sources
-    meta = client.SensorInfo(open(meta_path).read())
-    packets = pcap.Pcap(pcap_path, meta)
-    scans = iter(client.Scans(packets))
+    source = open_source(pcap_path)
+    meta = source.metadata
+    scans = iter(source)
 
     # ==============================
     print("Ex 0: Empty Point Viz")
@@ -292,10 +282,10 @@ def main():
 
     # [doc-stag-lidar-scan-viz]
     # Creating LidarScan visualizer (3D point cloud + field images on top)
-    ls_viz = viz.LidarScanViz(meta, point_viz)
+    ls_viz = viz.LidarScanViz([meta], point_viz)
 
     # adding scan to the lidar scan viz
-    ls_viz.update(scan)
+    ls_viz.update([scan])
 
     # refresh viz data
     ls_viz.draw()

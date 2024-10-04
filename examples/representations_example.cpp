@@ -28,7 +28,8 @@ img_t<double> get_x_in_image_form(const LidarScan& scan, bool destaggered,
     const size_t h = info.format.pixels_per_column;
 
     // Get the XYZ in ouster::Points (n x 3 Eigen array) form
-    XYZLut lut = make_xyz_lut(info);
+    // Do not apply extrinsics in this case (the false)
+    XYZLut lut = make_xyz_lut(info, false);
     auto cloud = cartesian(scan.field(sensor::ChanField::RANGE), lut);
 
     // Access x and reshape as needed
@@ -61,7 +62,7 @@ int main(int argc, char* argv[]) {
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
 
-    auto scan = LidarScan(w, h, info.format.udp_profile_lidar);
+    auto scan = LidarScan(info);
 
     std::cerr << "Reading in scan from pcap..." << std::endl;
     get_complete_scan(handle, scan, info);
@@ -69,7 +70,7 @@ int main(int argc, char* argv[]) {
     // 1. Getting XYZ
     std::cerr << "1. Calculating 3d Points... " << std::endl;
     //! [doc-stag-cpp-xyz]
-    XYZLut lut = make_xyz_lut(info);
+    XYZLut lut = make_xyz_lut(info, true);
     auto range = scan.field(sensor::ChanField::RANGE);
     auto cloud = cartesian(range, lut);
     //! [doc-etag-cpp-xyz]

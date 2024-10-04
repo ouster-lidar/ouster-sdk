@@ -5,11 +5,13 @@ All rights reserved.
 import os
 import socket
 import time
+import warnings
 from typing import (Iterable, Iterator, Optional, Tuple, Dict)  # noqa: F401
 
 from ouster.sdk.client import (LidarPacket, ImuPacket, Packet, PacketSource,  # noqa: F401
-                           SensorInfo, _client, PacketValidationFailure)      # noqa: F401
-from . import _pcap
+                           SensorInfo, PacketValidationFailure)      # noqa: F401
+import ouster.sdk._bindings.pcap as _pcap
+import ouster.sdk._bindings.client as _client
 
 MTU_SIZE = 1500
 
@@ -33,7 +35,7 @@ def _packet_info_stream(path: str, n_packets, progress_callback=None, callback_f
 
 
 class Pcap(PacketSource):
-    """Read a sensor packet stream out of a pcap file as an iterator."""
+    """Deprecated: Read a sensor packet stream out of a pcap file as an iterator."""
 
     def __init__(self,
                  pcap_path: str,
@@ -70,6 +72,10 @@ class Pcap(PacketSource):
             loop: Specify whether to reload the PCAP file when the end is reached
             soft_id_check: if True, don't skip lidar packets buffers on init_id/sn mismatch
         """
+        warnings.warn("pcap.Pcap(...) is deprecated: "
+                  "Use pcap.PcapMultiPacketReader(...).single_source(0) instead. "
+                  "This API is planned to be removed in Q4 2024.",
+                  DeprecationWarning, stacklevel=2)
         from ouster.sdk.pcap import PcapMultiPacketReader
         self._source = PcapMultiPacketReader(pcap_path, [], rate=rate, metadatas=[info],
                                              soft_id_check=soft_id_check)
@@ -119,7 +125,7 @@ class Pcap(PacketSource):
 
 
 def _replay(pcap_path: str, info: SensorInfo, dst_ip: str, dst_lidar_port: int,
-            dst_imu_port: int) -> Iterator[bool]:
+            dst_imu_port: int, address: Optional[Tuple[str, int]] = None) -> Iterator[bool]:
     """Replay UDP packets out over the network.
 
     Todo:
@@ -131,6 +137,7 @@ def _replay(pcap_path: str, info: SensorInfo, dst_ip: str, dst_lidar_port: int,
         dst_ip: IP to send packets to
         dst_lidar_port: Destination port for lidar packets
         dst_imu_port: Destination port for imu packets
+        address: Address and port to bind to send packets from. Optional.
 
     Returns:
         An iterator that reports whether packets were sent successfully as it's
@@ -139,8 +146,9 @@ def _replay(pcap_path: str, info: SensorInfo, dst_ip: str, dst_lidar_port: int,
     try:
         socket_out = socket.socket(family=socket.AF_INET,
                                    type=socket.SOCK_DGRAM)
-
         pcap_handle = Pcap(pcap_path, info)
+        if address is not None:
+            socket_out.bind(address)
         for item in pcap_handle:
             port = 0
             if isinstance(item, LidarPacket):
@@ -154,6 +162,8 @@ def _replay(pcap_path: str, info: SensorInfo, dst_ip: str, dst_lidar_port: int,
     finally:
         if pcap_handle is not None:
             pcap_handle.close()
+        if socket_out:
+            socket_out.close()
 
 
 def record(packets: Iterable[Packet],

@@ -87,7 +87,7 @@ uint64_t builder_to_file(flatbuffers::FlatBufferBuilder& builder,
 uint64_t start_osf_file(const std::string& filename) {
     auto header_fbb = flatbuffers::FlatBufferBuilder(1024);
     auto header = ouster::osf::gen::CreateHeader(
-        header_fbb, ouster::osf::OSF_VERSION::V_2_0,
+        header_fbb, ouster::osf::OSF_VERSION::V_2_1,
         ouster::osf::HEADER_STATUS::INVALID, 0, 0);
     header_fbb.FinishSizePrefixed(header, ouster::osf::gen::HeaderIdentifier());
     return builder_to_file(header_fbb, filename, false);
@@ -98,7 +98,7 @@ uint64_t finish_osf_file(const std::string& filename,
                          const uint32_t metadata_size) {
     auto header_fbb = flatbuffers::FlatBufferBuilder(1024);
     auto header = ouster::osf::gen::CreateHeader(
-        header_fbb, ouster::osf::OSF_VERSION::V_2_0,
+        header_fbb, ouster::osf::OSF_VERSION::V_2_1,
         ouster::osf::HEADER_STATUS::VALID, metadata_offset,
         metadata_offset + metadata_size);
     header_fbb.FinishSizePrefixed(header, ouster::osf::gen::HeaderIdentifier());

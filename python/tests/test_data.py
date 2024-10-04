@@ -12,8 +12,8 @@ import numpy as np
 import pytest
 
 from ouster.sdk import client
-from ouster.sdk.client._client import scan_to_packets
-from ouster.sdk.client import PacketValidationFailure, PacketFormat, PacketWriter, FieldType
+from ouster.sdk._bindings.client import scan_to_packets
+from ouster.sdk.client import PacketValidationFailure, PacketFormat, PacketWriter, FieldType, LidarScan
 
 
 def test_make_packets(meta: client.SensorInfo) -> None:
@@ -81,7 +81,7 @@ def test_read_legacy_packet(packet: client.LidarPacket, packets: client.PacketSo
     """Read some arbitrary values from a packet and check header invariants."""
     pf = client.PacketFormat(packets.metadata)
     assert pf.packet_field(client.ChanField.RANGE, packet.buf)[-1, 0] == 12099
-    assert pf.packet_field(client.ChanField.REFLECTIVITY, packet.buf)[-1, 0] == 1017
+    assert pf.packet_field(client.ChanField.REFLECTIVITY, packet.buf)[-1, 0] == 249
     assert pf.packet_field(client.ChanField.SIGNAL, packet.buf)[-1, 0] == 6
     assert pf.packet_field(client.ChanField.NEAR_IR, packet.buf)[-1, 0] == 13
 
@@ -274,6 +274,7 @@ def test_scan_fields_ref() -> None:
         client.ChanField.REFLECTIVITY,
         client.ChanField.SIGNAL,
         client.ChanField.NEAR_IR,
+        client.ChanField.FLAGS,
     }
 
 
@@ -286,10 +287,16 @@ def test_scan_default_fields() -> None:
         client.ChanField.REFLECTIVITY,
         client.ChanField.SIGNAL,
         client.ChanField.NEAR_IR,
+        client.ChanField.FLAGS,
     }
 
     for f in ls.fields:
-        assert ls.field(f).dtype == np.uint32
+        if f == client.ChanField.FLAGS or f == client.ChanField.REFLECTIVITY:
+            assert ls.field(f).dtype == np.uint8
+        elif f == client.ChanField.RANGE:
+            assert ls.field(f).dtype == np.uint32
+        else:
+            assert ls.field(f).dtype == np.uint16
 
 
 def test_scan_dual_profile() -> None:
@@ -305,6 +312,8 @@ def test_scan_dual_profile() -> None:
         client.ChanField.REFLECTIVITY2,
         client.ChanField.SIGNAL,
         client.ChanField.SIGNAL2,
+        client.ChanField.FLAGS,
+        client.ChanField.FLAGS2,
         client.ChanField.NEAR_IR,
     }
 
@@ -318,6 +327,7 @@ def test_scan_low_data_rate() -> None:
         client.ChanField.RANGE,
         client.ChanField.REFLECTIVITY,
         client.ChanField.NEAR_IR,
+        client.ChanField.FLAGS,
     }
 
 
@@ -331,6 +341,7 @@ def test_scan_single_return() -> None:
         client.ChanField.REFLECTIVITY,
         client.ChanField.SIGNAL,
         client.ChanField.NEAR_IR,
+        client.ChanField.FLAGS,
     }
 
 
@@ -663,6 +674,23 @@ def test_scan_int() -> None:
     assert ls.field("i64")[1, 2] == -2
 
 
+def test_scan_empty_field() -> None:
+    """Test that we can add zero size fields through different means and that zero size PFs are disallowed."""
+    ls = client.LidarScan(
+        64, 1024,
+        client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
+
+    ls.add_field("floats", np.ones((64, 1024, 0), np.float64), client.FieldClass.SCAN_FIELD)
+    ls.add_field("float", np.array([], np.float64), client.FieldClass.SCAN_FIELD)
+    ls.add_field("i8", np.int8, (0,), client.FieldClass.SCAN_FIELD)
+
+    with pytest.raises(ValueError):
+        ls.add_field("error", np.ones((64, 1024, 0), np.float64))
+
+    with pytest.raises(ValueError):
+        ls.add_field("i82", np.int8, (0,))
+
+
 def test_lidarscan_3d_field() -> None:
     """It should allow adding a 3d field."""
     h, w, d = 64, 1024, 3
@@ -744,3 +772,13 @@ def test_lidarscan_add_field_with_value() -> None:
         ls.field(client.ChanField.RANGE)
     ls.add_field(client.ChanField.RANGE, np.ones((h, w), np.int16))
     assert ls.field(client.ChanField.RANGE).all()
+
+
+def test_lidar_scan_packet_header_width():
+    """The packet headers should be wide enough to fit values from the expected number of packets."""
+    scan = LidarScan(1, 1)
+    assert scan.packet_count == 1
+    scan = LidarScan(1, 1024)
+    assert scan.packet_count == 64
+    scan = LidarScan(1, 1023)
+    assert scan.packet_count == 64

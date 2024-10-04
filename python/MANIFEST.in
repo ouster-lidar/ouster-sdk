@@ -5,3 +5,9 @@ graft tests
 # add the C++ source via the symlink created by setup.py; prune to avoid a cycle
 graft sdk
 prune sdk/python
+prune sdk/.git
+prune sdk/artifacts
+prune sdk/sdk-extensions
+prune sdk/Jenkinsfile
+prune sdk/clang-linting.sh
+prune sdk/build

@@ -12,6 +12,28 @@ import os
 from tests.conftest import PCAPS_DATA_DIR, OSFS_DATA_DIR
 
 
+def test_single_scan_source_pcap_packets() -> None:
+    file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
+
+    # old interface
+    from ouster.sdk import client, pcap
+    from ouster.sdk.util import resolve_metadata
+
+    meta_path = resolve_metadata(file_path)
+    assert meta_path
+    meta = client.SensorInfo(open(meta_path).read())
+    pcap_source = pcap.Pcap(file_path, meta)
+    p1 = next(iter(pcap_source))
+    from ouster.sdk.pcap import PcapMultiPacketReader
+
+    # new interface
+    packet_source = PcapMultiPacketReader(file_path)
+    ss = packet_source.single_source(0)
+    p2 = next(iter(ss))
+
+    assert (p1.buf == p2.buf).all()
+
+
 def test_single_scan_source_pcap() -> None:
     file_path = os.path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
 

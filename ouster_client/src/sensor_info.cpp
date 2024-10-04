@@ -9,7 +9,6 @@
 #include <array>
 #include <cmath>
 #include <fstream>
-#include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -18,11 +17,24 @@
 
 #include "ouster/impl/build.h"
 #include "ouster/impl/logging.h"
+#include "ouster/metadata.h"
 #include "ouster/types.h"
 #include "ouster/util.h"
 #include "ouster/version.h"
 
 namespace ouster {
+
+/**
+ * Parse and validate a metadata stream.
+ *
+ * @param[in] json_data The metadata data.
+ * @param[out] sensor_info The sensor_info to populate.
+ * @param[out] issues The issues that occured during parsing.
+ * @return if there are any critical issues or not.
+ */
+extern bool parse_and_validate_metadata(
+    const std::string& json_data, ouster::sensor::sensor_info& sensor_info,
+    ValidatorIssues& issues);
 
 using nonstd::make_optional;
 using nonstd::nullopt;
@@ -69,6 +81,14 @@ bool sensor_info::has_fields_equal(const sensor_info& other) const {
         this->image_rev == other.image_rev && this->prod_pn == other.prod_pn &&
         this->status == other.status && this->cal == other.cal &&
         this->config == other.config && this->user_data == other.user_data);
+}
+
+auto sensor_info::w() const -> decltype(format.columns_per_frame) {
+    return format.columns_per_frame;
+}
+
+auto sensor_info::h() const -> decltype(format.pixels_per_column) {
+    return format.pixels_per_column;
 }
 
 /* Default values */
@@ -155,363 +175,35 @@ const std::map<std::string, bool> nonlegacy_metadata_fields = {
 
 // clang-format on
 
-static bool is_new_format(const Json::Value& root) {
-    size_t nonlegacy_fields_present = 0;
-    std::string missing_fields = "";
-    for (const auto& field_pair : nonlegacy_metadata_fields) {
-        auto field = field_pair.first;
-        auto is_obj = field_pair.second;
-        if (root.isMember(field)) {
-            nonlegacy_fields_present++;
-            if (is_obj && !root[field].isObject()) {
-                throw std::runtime_error{"Non-legacy metadata field " + field +
-                                         " must have child fields"};
-            }
-        } else {
-            missing_fields += field + " ";
-        }
-    }
-
-    if (nonlegacy_fields_present > 0 &&
-        nonlegacy_fields_present < nonlegacy_metadata_fields.size()) {
-        throw std::runtime_error{"Non-legacy metadata must include fields: " +
-                                 missing_fields};
-    }
-
-    return nonlegacy_fields_present == nonlegacy_metadata_fields.size();
-}
-
-static void parse_metadata(sensor_info& info, const Json::Value& root,
-                           bool skip_beam_validation) {
-    const std::vector<std::string> minimum_metadata_fields{"config_params",
-                                                           "beam_intrinsics"};
-    for (auto field : minimum_metadata_fields) {
-        if (!root.isMember(field)) {
-            throw std::runtime_error{"Metadata must contain: " + field};
-        }
-    }
-
-    // nice to have fields which we will use defaults for if they don't exist
-    const std::vector<std::string> desired_metadata_fields{"imu_intrinsics",
-                                                           "lidar_intrinsics"};
-    for (auto field : desired_metadata_fields) {
-        if (!root.isMember(field)) {
-            logger().warn("No " + field +
-                          " found in metadata. Will be left blank or filled in "
-                          "with default legacy values");
-        }
-    }
-
-    // if these are not present they are also empty strings
-    auto sensor_info = root["sensor_info"];
-    info.build_date = sensor_info["build_date"].asString();
-    info.fw_rev = sensor_info["build_rev"].asString();
-    info.image_rev = sensor_info["image_rev"].asString();
-    info.prod_line = sensor_info["prod_line"].asString();
-    info.prod_pn = sensor_info["prod_pn"].asString();
-    info.sn = sensor_info["prod_sn"].asString();
-    info.status = sensor_info["status"].asString();
-
-    // default to 0 if init_id key not present
-    info.init_id = sensor_info["initialization_id"].asInt();
-
-    // checked that lidar_mode is present already - never empty string
-    auto mode =
-        lidar_mode_of_string(root["config_params"]["lidar_mode"].asString());
-
-    // "data_format" introduced in fw 2.0. Fall back to 1.13
-    if (root.isMember("lidar_data_format") &&
-        root["lidar_data_format"].isObject()) {
-        info.format = parse_data_format(root["lidar_data_format"]);
-        // data_format.fps was added for DF sensors, so we are backfilling
-        // fps value for OS sensors here if it's not present in metadata
-        if (info.format.fps == 0) {
-            info.format.fps = frequency_of_lidar_mode(mode);
-        }
-    } else {
-        logger().warn(
-            "No lidar_data_format found. Using default legacy data format");
-        info.format = default_data_format(mode);
-    }
-
-    // "lidar_origin_to_beam_origin_mm" introduced in fw 2.0 BUT missing
-    // on OS-DOME. Handle falling back to FW 1.13 or setting to 0
-    // according to prod-line
-    auto beam_intrinsics = root["beam_intrinsics"];
-    if (beam_intrinsics.isMember("lidar_origin_to_beam_origin_mm")) {
-        info.lidar_origin_to_beam_origin_mm =
-            beam_intrinsics["lidar_origin_to_beam_origin_mm"].asDouble();
-    } else {
-        if (info.prod_line.find("OS-DOME-") ==
-            0) {  // is an OS-DOME - fill with 0
-            info.lidar_origin_to_beam_origin_mm = 0;
-        } else {  // not an OS-DOME
-            logger().warn(
-                "No lidar_origin_to_beam_origin_mm found. Using default "
-                "value for the specified prod_line or default gen 1 values "
-                "if prod_line is missing");
-            info.lidar_origin_to_beam_origin_mm =
-                default_lidar_origin_to_beam_origin(
-                    info.prod_line);  // note it is possible that
-                                      // info.prod_line is ""
-        }
-    }
-
-    // beam_to_lidar_transform" introduced in fw 2.5/fw 3.0
-    if (beam_intrinsics.isMember("beam_to_lidar_transform")) {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                const Json::Value::ArrayIndex ind = i * 4 + j;
-                info.beam_to_lidar_transform(i, j) =
-                    beam_intrinsics["beam_to_lidar_transform"][ind].asDouble();
-            }
-        }
-    } else {
-        // fw is < 2.5/3.0 and we need to manually fill it in
-        info.beam_to_lidar_transform = mat4d::Identity();
-        info.beam_to_lidar_transform(0, 3) =
-            info.lidar_origin_to_beam_origin_mm;
-    }
-
-    if (beam_intrinsics["beam_altitude_angles"].size() != 0 &&
-        beam_intrinsics["beam_altitude_angles"].size() !=
-            info.format.pixels_per_column)
-        throw std::runtime_error{"Unexpected number of beam_altitude_angles"};
-
-    if (beam_intrinsics["beam_azimuth_angles"].size() != 0 &&
-        beam_intrinsics["beam_azimuth_angles"].size() !=
-            info.format.pixels_per_column)
-        throw std::runtime_error{"Unexpected number of beam_azimuth_angles"};
-
-    if (beam_intrinsics["beam_altitude_angles"].size() ==
-        info.format.pixels_per_column) {
-        if (beam_intrinsics["beam_altitude_angles"][0].isArray()) {
-            // DF sensor path
-            for (const auto& row : beam_intrinsics["beam_altitude_angles"])
-                for (const auto& v : row)
-                    info.beam_altitude_angles.push_back(v.asDouble());
-
-            if (info.beam_altitude_angles.size() !=
-                info.format.pixels_per_column * info.format.columns_per_frame) {
-                throw std::runtime_error{
-                    "Unexpected number of total beam_altitude_angles"};
-            }
-        } else {
-            // OS sensor path
-            for (const auto& v : beam_intrinsics["beam_altitude_angles"])
-                info.beam_altitude_angles.push_back(v.asDouble());
-        }
-    }
-
-    if (beam_intrinsics["beam_azimuth_angles"].size() ==
-        info.format.pixels_per_column) {
-        if (beam_intrinsics["beam_azimuth_angles"][0].isArray()) {
-            // DF sensor path
-            for (const auto& row : beam_intrinsics["beam_azimuth_angles"]) {
-                for (const auto& v : row)
-                    info.beam_azimuth_angles.push_back(v.asDouble());
-            }
-
-            if (info.beam_azimuth_angles.size() !=
-                info.format.pixels_per_column * info.format.columns_per_frame) {
-                throw std::runtime_error{
-                    "Unexpected number of total beam_azimuth_angles"};
-            }
-        } else {
-            // OS sensor path
-            for (const auto& v : beam_intrinsics["beam_azimuth_angles"])
-                info.beam_azimuth_angles.push_back(v.asDouble());
-        }
-    }
-
-    // "imu_to_sensor_transform" may be absent in sensor config
-    // produced by Ouster Studio, so we backfill it with default value
-    auto imu_intrinsics = root["imu_intrinsics"];
-    if (imu_intrinsics["imu_to_sensor_transform"].size() == 16) {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                const Json::Value::ArrayIndex ind = i * 4 + j;
-                info.imu_to_sensor_transform(i, j) =
-                    imu_intrinsics["imu_to_sensor_transform"][ind].asDouble();
-            }
-        }
-    } else {
-        logger().warn(
-            "No valid imu_to_sensor_transform found. Using default for gen "
-            "1");
-        info.imu_to_sensor_transform = default_imu_to_sensor_transform;
-    }
-
-    // "lidar_to_sensor_transform" may be absent in sensor config
-    // produced by Ouster Studio, so we backfill it with default value
-    auto lidar_intrinsics = root["lidar_intrinsics"];
-    if (lidar_intrinsics["lidar_to_sensor_transform"].size() == 16) {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                const Json::Value::ArrayIndex ind = i * 4 + j;
-                info.lidar_to_sensor_transform(i, j) =
-                    lidar_intrinsics["lidar_to_sensor_transform"][ind]
-                        .asDouble();
-            }
-        }
-    } else {
-        logger().warn(
-            "No valid lidar_to_sensor_transform found. Using default for "
-            "gen "
-            "1");
-        info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
-    }
-
-    auto zero_check = [](auto el, std::string name) {
-        if (el.size() == 0) return;
-        bool all_zeros = std::all_of(el.cbegin(), el.cend(),
-                                     [](double k) { return k == 0.0; });
-        if (all_zeros) {
-            throw std::runtime_error{"Field " + name +
-                                     " in the metadata cannot all be zeros."};
-        }
-    };
-
-    if (!skip_beam_validation) {
-        zero_check(info.beam_altitude_angles, "beam_altitude_angles");
-        zero_check(info.beam_azimuth_angles, "beam_azimuth_angles");
-    } else {
-        logger().warn("Skipping all 0 beam angle check");
-    }
-
-    info.extrinsic = mat4d::Identity();
-
-    if (root.isMember("ouster-sdk")) {
-        auto sdk_group = root["ouster-sdk"];
-        if (sdk_group["extrinsic"].size() == 16) {
-            for (int i = 0; i < 4; i++) {
-                for (int j = 0; j < 4; j++) {
-                    const Json::Value::ArrayIndex ind = i * 4 + j;
-                    info.extrinsic(i, j) =
-                        sdk_group["extrinsic"][ind].asDouble();
-                }
-            }
-        } else {
-            logger().info("No valid extrinsics found. Using identity.");
-        }
-    }
-
-    // we are guaranteed calibration_status as a key exists so don't need to
-    // check again
-    if (root["calibration_status"].isObject()) {
-        if (root["calibration_status"]["reflectivity"]["valid"].isBool()) {
-            info.cal.reflectivity_status =
-                root["calibration_status"]["reflectivity"]["valid"].asBool();
-        } else {
-            logger().warn(
-                "metadata field calibration_status.reflectivity.valid is "
-                "not Bool value, but: {}. Using False instead.",
-                root["calibration_status"]["reflectivity"]["valid"].asString());
-        }
-
-        if (info.cal.reflectivity_status) {
-            info.cal.reflectivity_timestamp =
-                root["calibration_status"]["reflectivity"]["timestamp"]
-                    .asString();
-        }
-    }
-
-    info.config = parse_config(root["config_params"]);
-    info.user_data = root["user_data"].asString();
-}
-
-static void parse_legacy(sensor_info& info, const Json::Value& root,
-                         bool skip_beam_validation) {
-    // just convert to non-legacy and run the non-legacy parse
-    const std::vector<std::string> config_fields{
-        "udp_port_imu",
-        "udp_port_lidar",
-        "lidar_mode",
-    };
-
-    const std::vector<std::string> beam_intrinsics_fields{
-        "lidar_origin_to_beam_origin_mm", "beam_altitude_angles",
-        "beam_azimuth_angles", "beam_to_lidar_transform"};
-
-    const std::vector<std::string> sensor_info_fields{
-        "prod_line",         "status",    "prod_pn",    "prod_sn",
-        "initialization_id", "build_rev", "build_date", "image_rev",
-    };
-
-    // Error if we dont have required fields
-    const std::vector<std::string> minimum_metadata_fields{"lidar_mode"};
-
-    for (auto field : minimum_metadata_fields) {
-        if (!root.isMember(field)) {
-            throw std::runtime_error{"Metadata must contain: " + field};
-        }
-    }
-
-    Json::Value result;
-    if (root.isMember("lidar_to_sensor_transform")) {
-        result["lidar_intrinsics"]["lidar_to_sensor_transform"] =
-            root["lidar_to_sensor_transform"];
-    }
-    if (root.isMember("imu_to_sensor_transform")) {
-        result["imu_intrinsics"]["imu_to_sensor_transform"] =
-            root["imu_to_sensor_transform"];
-    }
-    if (root.isMember("data_format")) {
-        result["lidar_data_format"] = root["data_format"];
-    }
-    if (root.isMember("client_version")) {
-        result["ouster-sdk"]["client_version"] = root["client_version"];
-    }
-    for (const auto& field : config_fields) {
-        if (root.isMember(field)) {
-            result["config_params"][field] = root[field];
-        }
-    }
-
-    for (const auto& field : beam_intrinsics_fields) {
-        if (root.isMember(field)) {
-            result["beam_intrinsics"][field] = root[field];
-        }
-    }
-
-    for (const auto& field : sensor_info_fields) {
-        if (root.isMember(field)) {
-            result["sensor_info"][field] = root[field];
-        }
-    }
-
-    parse_metadata(info, result, skip_beam_validation);
-}
-
 sensor_info::sensor_info() {
     // TODO - understand why this seg faults in CI when uncommented
     // logger().warn("Initializing sensor_info without original metadata
     // string");
 }
 
-sensor_info::sensor_info(const std::string& metadata,
-                         bool skip_beam_validation) {
+sensor_info::sensor_info(const std::string& metadata) {
     Json::Value root{};
     Json::CharReaderBuilder builder{};
-    std::string errors{};
-    std::stringstream ss{metadata};
+    ValidatorIssues issues;
 
-    if (metadata.size()) {
-        if (!Json::parseFromStream(builder, ss, &root, &errors))
-            throw std::runtime_error{"Errors parsing metadata string: " +
-                                     errors};
-    }
-
-    if (is_new_format(root)) {
-        was_legacy_ = false;
-        logger().info("parsing non-legacy metadata format");
-        parse_metadata(*this, root, skip_beam_validation);
+    if (metadata.size() > 0) {
+        parse_and_validate_metadata(metadata, *this, issues);
+        if (issues.critical.size() > 0) {
+            std::stringstream error_string;
+            error_string << "ERROR: Critical Metadata Issues Exist: "
+                         << std::endl;
+            for (auto it : issues.critical) {
+                error_string << it.to_string() << std::endl;
+            }
+            throw std::runtime_error(error_string.str());
+        }
     } else {
-        was_legacy_ = true;
-        logger().info("parsing legacy metadata format");
-        parse_legacy(*this, root, skip_beam_validation);
+        throw std::runtime_error("ERROR: empty metadata passed in");
     }
 }
+sensor_info::sensor_info(const std::string& metadata,
+                         bool /*skip_beam_validation*/)
+    : sensor_info(metadata) {}
 
 void mat4d_to_json(Json::Value& val, mat4d mat) {
     for (size_t i = 0; i < 4; i++) {
@@ -636,7 +328,7 @@ product_info sensor_info::get_product_info() const {
 }
 
 sensor_info metadata_from_json(const std::string& json_file,
-                               bool skip_beam_validation) {
+                               bool /*skip_beam_validation*/) {
     std::stringstream buf{};
     std::ifstream ifs{};
     ifs.open(json_file);
@@ -649,7 +341,7 @@ sensor_info metadata_from_json(const std::string& json_file,
         throw std::runtime_error{ss.str()};
     }
 
-    return sensor_info(buf.str(), skip_beam_validation);
+    return sensor_info(buf.str());
 }
 
 std::string to_string(const sensor_info& info) { return info.to_json_string(); }

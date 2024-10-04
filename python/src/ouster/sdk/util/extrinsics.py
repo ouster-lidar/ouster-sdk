@@ -11,13 +11,7 @@ import tarfile
 import re
 
 
-def img_aspect_ratio(info: client.SensorInfo) -> float:
-    """Returns 2D image aspect ratio based on sensor FOV angles.
-
-    Uses the order:
-        img_aspect_ratio = FOV_vertical / FOV_horizontal
-    """
-
+def fov_vertical(info: client.SensorInfo) -> float:
     altitude_zeros = np.count_nonzero(info.beam_altitude_angles == 0.0)
     if altitude_zeros > 1:
         altitudes = info.beam_altitude_angles[np.nonzero(
@@ -26,7 +20,14 @@ def img_aspect_ratio(info: client.SensorInfo) -> float:
         altitudes = info.beam_altitude_angles
 
     fov_vertical = np.max(altitudes) - np.min(altitudes)
+    if fov_vertical < 1e-9:
+        print("WARNING: beam_altitudes_angles shouldn't be all zeros")
+        fov_vertical = 1.0
 
+    return fov_vertical
+
+
+def fov_horizontal(info: client.SensorInfo) -> float:
     if len(info.beam_azimuth_angles) == info.format.pixels_per_column:
         fov_horizontal = 360.0
     else:
@@ -39,14 +40,19 @@ def img_aspect_ratio(info: client.SensorInfo) -> float:
         fov_horizontal = np.max(azimuths) - np.min(azimuths)
 
     if fov_horizontal < 1e-9:
-        print("WARNNING: beam_azimuth_angles shouldn't be all zeros")
+        print("WARNING: beam_azimuth_angles shouldn't be all zeros")
         fov_horizontal = 1.0
 
-    if fov_vertical < 1e-9:
-        print("WARNNING: beam_altitudes_angles shouldn't be all zeros")
-        fov_vertical = 1.0
+    return fov_horizontal
 
-    return fov_vertical / fov_horizontal
+
+def img_aspect_ratio(info: client.SensorInfo) -> float:
+    """Returns 2D image aspect ratio based on sensor FOV angles.
+
+    Uses the order:
+        img_aspect_ratio = FOV_vertical / FOV_horizontal
+    """
+    return fov_vertical(info) / fov_horizontal(info)
 
 
 def quatToRotMat(q: np.ndarray) -> np.ndarray:

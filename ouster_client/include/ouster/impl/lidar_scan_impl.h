@@ -327,6 +327,20 @@ void scan_to_packets(const LidarScan& ls,
         std::memset(packet.buf.data(), 0, packet.buf.size());
         packet.host_timestamp = ls.packet_timestamp()[p_id];
 
+        // Set alert flags, which may vary from packet to packet
+        pw.set_alert_flags(lidar_buf, ls.alert_flags()[p_id]);
+
+        // Set shot-limiting and shutdown fields, which should be the same for
+        // all packets in the scan
+        pw.set_shutdown(lidar_buf, ls.thermal_shutdown());
+        pw.set_shot_limiting(lidar_buf, ls.shot_limiting());
+        pw.set_shutdown_countdown(lidar_buf, ls.shutdown_countdown);
+        pw.set_shot_limiting_countdown(lidar_buf, ls.shot_limiting_countdown);
+
+        // Set other scan-level attributes
+
+        // TODO(dguridi): add an official PacketType enum in types.h
+        pw.set_packet_type(lidar_buf, 0x1);
         pw.set_frame_id(lidar_buf, frame_id);
         pw.set_init_id(lidar_buf, init_id);
         pw.set_prod_sn(lidar_buf, prod_sn);
@@ -354,9 +368,10 @@ void scan_to_packets(const LidarScan& ls,
                         packet);
         } else if (pw.udp_profile_lidar !=
                    ouster::sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-            uint32_t* ptr = reinterpret_cast<uint32_t*>(packet.buf.data() +
-                                                        packet.buf.size() - 4);
-            *ptr = 0xdeadbeef;  // eUDP packets end in 0xdeadbeef
+            assert(packet.buf.size() > sizeof(uint64_t));
+            uint64_t crc = pw.calculate_crc(packet.buf.data());
+            memcpy(packet.buf.data() + packet.buf.size() - sizeof(crc), &crc,
+                   sizeof(crc));
         }
 
         *iter++ = packet;

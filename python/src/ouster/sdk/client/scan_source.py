@@ -1,6 +1,6 @@
 from typing import Iterator, Union, Optional, List
 from typing_extensions import Protocol
-from ._client import SensorInfo, LidarScan, FieldType
+from ouster.sdk._bindings.client import SensorInfo, LidarScan, FieldType
 
 
 class ScanSource(Protocol):
@@ -56,10 +56,7 @@ class ScanSource(Protocol):
          throws a TypeError"""
         ...
 
-    # NOTE: based on the underlying implemention the return type is
-    # Optional[LidarScan] since MultiScanSource returns collate scans by default.
-    # This can be solved by  provide a method that gives access to uncollated scans
-    def __iter__(self) -> Iterator[Optional[LidarScan]]:
+    def __iter__(self) -> Iterator[LidarScan]:
         ...
 
     def _seek(self, key: int) -> None:

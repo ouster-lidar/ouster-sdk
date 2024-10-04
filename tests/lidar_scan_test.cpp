@@ -29,9 +29,10 @@ static const std::vector<ouster::FieldType> empty_field_slots{};
 
 static const std::vector<ouster::FieldType> legacy_field_slots{
     {{ChanField::RANGE, ChanFieldType::UINT32},
-     {ChanField::SIGNAL, ChanFieldType::UINT32},
-     {ChanField::NEAR_IR, ChanFieldType::UINT32},
-     {ChanField::REFLECTIVITY, ChanFieldType::UINT32}}};
+     {ChanField::SIGNAL, ChanFieldType::UINT16},
+     {ChanField::NEAR_IR, ChanFieldType::UINT16},
+     {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
+     {ChanField::FLAGS, ChanFieldType::UINT8}}};
 
 static const std::vector<ouster::FieldType> dual_field_slots{
     {{ChanField::RANGE, ChanFieldType::UINT32},
@@ -40,6 +41,8 @@ static const std::vector<ouster::FieldType> dual_field_slots{
      {ChanField::SIGNAL2, ChanFieldType::UINT16},
      {ChanField::REFLECTIVITY, ChanFieldType::UINT8},
      {ChanField::REFLECTIVITY2, ChanFieldType::UINT8},
+     {ChanField::FLAGS, ChanFieldType::UINT8},
+     {ChanField::FLAGS2, ChanFieldType::UINT8},
      {ChanField::NEAR_IR, ChanFieldType::UINT16}}};
 
 static const std::vector<ouster::FieldType> contrived_slots{
@@ -521,4 +524,35 @@ TEST(LidarScan, lidar_scan_to_string_test) {
     std::string s;
     EXPECT_NO_THROW({ s = to_string(ls); });
     std::cout << s << std::endl;
+}
+
+TEST(TransformTest, TransformN3) {
+    // Define known input points of shape (10, 3)
+    ouster::pose_util::Points points(10, 3);
+    points << 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0,
+        25.0, 26.0, 27.0, 28.0, 29.0, 30.0;
+
+    // Define a non-identity transformation matrix (4x4)
+    ouster::pose_util::Pose transformation_matrix;
+    transformation_matrix << 0.866, -0.5, 0.0, 1.0, 0.5, 0.866, 0.0, 2.0, 0.0,
+        0.0, 1.0, -1.0, 0.0, 0.0, 0.0, 1.0;
+
+    // Expected transformed points (manually calculated)
+    ouster::pose_util::Points expected_points(10, 3);
+    expected_points << 0.866, 4.232, 2, 1.964, 8.33, 5, 3.062, 12.428, 8, 4.16,
+        16.526, 11, 5.258, 20.624, 14, 6.356, 24.722, 17, 7.454, 28.82, 20,
+        8.552, 32.918, 23, 9.65, 37.016, 26, 10.748, 41.114, 29;
+
+    // Call the transform function
+    ouster::pose_util::Points result =
+        ouster::pose_util::transform(points, transformation_matrix);
+
+    // Compare the results
+    for (int i = 0; i < result.rows(); ++i) {
+        for (int j = 0; j < result.cols(); ++j) {
+            EXPECT_NEAR(result(i, j), expected_points(i, j),
+                        1e-3);  // Small tolerance for floating-point comparison
+        }
+    }
 }

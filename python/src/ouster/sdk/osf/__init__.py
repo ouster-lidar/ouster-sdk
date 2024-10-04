@@ -6,25 +6,23 @@ API to work with OSF files
 """
 # flake8: noqa (unused imports)
 
-from ._osf import Reader
-from ._osf import MessageRef
-from ._osf import ChunkRef
-from ._osf import MetadataStore
-from ._osf import MetadataEntry
-from ._osf import LidarSensor
-from ._osf import Extrinsics    # TODO: extrinsics should be factored out of osf
-from ._osf import LidarScanStreamMeta
-from ._osf import LidarScanStream
-from ._osf import StreamStats
-from ._osf import StreamingInfo
-from ._osf import ChunksLayout
-from ._osf import Writer
+from ouster.sdk._bindings.osf import Reader
+from ouster.sdk._bindings.osf import MessageRef
+from ouster.sdk._bindings.osf import MetadataStore
+from ouster.sdk._bindings.osf import MetadataEntry
+from ouster.sdk._bindings.osf import LidarSensor
+from ouster.sdk._bindings.osf import Extrinsics    # TODO: extrinsics should be factored out of osf
+from ouster.sdk._bindings.osf import LidarScanStreamMeta
+from ouster.sdk._bindings.osf import LidarScanStream
+from ouster.sdk._bindings.osf import StreamStats
+from ouster.sdk._bindings.osf import StreamingInfo
+from ouster.sdk._bindings.osf import Writer
 
-from ._osf import slice_and_cast
-from ._osf import dump_metadata
-from ._osf import backup_osf_file_metablob
-from ._osf import restore_osf_file_metablob
-from ._osf import osf_file_modify_metadata
+from ouster.sdk._bindings.osf import slice_and_cast
+from ouster.sdk._bindings.osf import dump_metadata
+from ouster.sdk._bindings.osf import backup_osf_file_metablob
+from ouster.sdk._bindings.osf import restore_osf_file_metablob
+from ouster.sdk._bindings.osf import osf_file_modify_metadata
 
 from .data import Scans
 from .osf_scan_source import OsfScanSource

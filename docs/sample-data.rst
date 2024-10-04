@@ -39,7 +39,7 @@ Visualize It!
 If you've installed the ``ouster-sdk`` (see :ref:`Python Installation <installation-python>`) then
 you're all set to visualize with::
         
-   $ ouster-cli source $SAMPLE_DATA_PCAP_PATH [--meta $SAMPLE_DATA_JSON_PATH] viz
+   $ ouster-cli source [--meta $SAMPLE_DATA_JSON_PATH] $SAMPLE_DATA_PCAP_PATH viz
        
 You should get a view similar to:
 
