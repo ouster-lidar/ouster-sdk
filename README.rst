@@ -1,4 +1,4 @@
-.. figure:: https://github.com/ouster-lidar/ouster_sdk/raw/master/docs/images/Ouster_Logo_TM_Horiz_Black_RGB_600px.png
+.. figure:: docs/images/Ouster_Logo_TM_Horiz_Black_RGB_600px.png
 
 ------------------------------------------------------
 
@@ -33,7 +33,7 @@ The submodule cannot be cloned or updated.
 Contact
 =======
 
-For support of the Ouster SDK, please use `Github Issues <https://github.com/ouster-lidar/ouster_sdk/issues>`_ in this repo.
+For support of the Ouster SDK, please use `Github Issues <https://github.com/ouster-lidar/ouster-sdk/issues>`_ in this repo.
 
 For support of Ouster products outside of the SDK, please use `Ouster customer support <https://ouster.atlassian.net/servicedesk/customer/portal/8/group/22/create/86>`_.
 

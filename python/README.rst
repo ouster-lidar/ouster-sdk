@@ -51,7 +51,7 @@ follow our `Lifecycle Policy`_ page to understand when support for a Python vers
 Operating System, or Sensor FW may dropped from support.
 
 .. _PyPI: https://pypi.org/project/ouster-sdk/
-.. _Lifecycle Policy: https://github.com/ouster-lidar/ouster_sdk/discussions/532
+.. _Lifecycle Policy: https://github.com/ouster-lidar/ouster-sdk/discussions/532
 
 ..
     [python-supported-platforms-end]

@@ -118,7 +118,7 @@ html_theme_options = {
 html_context = {
     'display_github': True,
     'github_user': 'ouster-lidar',
-    'github_repo': 'ouster_sdk',
+    'github_repo': 'ouster-sdk',
     # 'github_version': 'ouster/python-bindings',
     'github_version': 'master',
     'conf_py_path': '/docs/',

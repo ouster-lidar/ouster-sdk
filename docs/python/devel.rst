@@ -24,7 +24,7 @@ Building the Python SDK from source requires several dependencies:
 - `python <https://www.python.org/>`_ >= 3.8 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
-The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster_sdk>`_. You should clone the whole project.
+The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster-sdk>`_. You should clone the whole project.
 
 Linux and macOS
 ---------------
@@ -49,7 +49,7 @@ After you have the system dependencies, you can build the SDK with:
 
 .. code:: console
 
-   # first, specify the path to the ouster_sdk repository
+   # first, specify the path to the ouster-sdk repository
    $ export OUSTER_SDK_PATH=<PATH TO OUSTER_SDK REPO>
 
    # make sure you have an up-to-date version of pip and setuptools installed
@@ -86,7 +86,7 @@ The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer 
 
 .. code:: powershell
 
-   # first, specify the path to the ouster_sdk repository
+   # first, specify the path to the ouster-sdk repository
    PS > $env:OUSTER_SDK_PATH="<PATH TO OUSTER_SDK>"
 
    # point cmake to the location of vcpkg (make sure to use an absolute path)
@@ -112,7 +112,7 @@ See the top-level README in the `Ouster Example repository`_ for more details on
 development environment on Windows.
 
 .. _vcpkg: https://github.com/microsoft/vcpkg/blob/master/README.md
-.. _Ouster Example repository: https://github.com/ouster-lidar/ouster_sdk
+.. _Ouster SDK repository: https://github.com/ouster-lidar/ouster-sdk
 
 
 Developing

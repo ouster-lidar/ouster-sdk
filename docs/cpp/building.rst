@@ -9,7 +9,7 @@ jsoncpp, Eigen3, and tins libraries with headers installed on the system. The sa
 requires the GLFW3 and GLEW libraries.
 
 The C++ example code is available `on the Ouster Github
-<https://github.com/ouster-lidar/ouster_sdk>`_. Follow the instructions for cloning the project.
+<https://github.com/ouster-lidar/ouster-sdk>`_. Follow the instructions for cloning the project.
 
 Building on Linux / macOS
 =========================
@@ -37,10 +37,10 @@ To build run the following commands:
 
    $ mkdir build
    $ cd build
-   $ cmake  <path to ouster_sdk/CMakeLists.txt> -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=ON
+   $ cmake  <path to ouster-sdk/CMakeLists.txt> -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=ON
    $ cmake --build . -- -j$(nproc)
 
-where ``<path to ouster_sdk>`` is the location of the ``ouster_sdk`` source directory. The
+where ``<path to ouster-sdk>`` is the location of the ``ouster-sdk`` source directory. The
 CMake build script supports several optional flags. Add any of the following to override the
 defaults:
 
@@ -84,12 +84,12 @@ You should be able to install dependencies with
 
    PS > .\vcpkg.exe install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
 
-After these steps are complete, you should be able to open, build and run the ``ouster_sdk``
+After these steps are complete, you should be able to open, build and run the ``ouster-sdk``
 project using Visual Studio:
 
 1. Start Visual Studio.
 2. When the prompt opens asking you what type of project to open click **Open a local folder** and
-   navigate to the ``ouster_sdk`` source directory.
+   navigate to the ``ouster-sdk`` source directory.
 3. After opening the project for the first time, wait for CMake configuration to complete.
 4. Make sure the ``Desktop development with C++`` is installed. If not, install it using the Search bar
    on the top of the screen.

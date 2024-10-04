@@ -181,7 +181,7 @@ def install_requires():
 if __name__ == "__main__":
     setup(
         name='ouster-sdk',
-        url='https://github.com/ouster-lidar/ouster_sdk',
+        url='https://github.com/ouster-lidar/ouster-sdk',
         # read from top-level sdk CMakeLists.txt
         version=parse_version(),
         package_dir={'': 'src'},

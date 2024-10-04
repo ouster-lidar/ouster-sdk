@@ -11,7 +11,7 @@ class ousterSdkRecipe(ConanFile):
     package_type = "library"
     license = "BSD 3-Clause License"
     author = "Ouster, Inc."
-    url = "https://github.com/ouster-lidar/ouster_sdk"
+    url = "https://github.com/ouster-lidar/ouster-sdk"
     description = "Ouster SDK - tools for working with Ouster Lidars"
     topics = ("lidar", "driver", "hardware", "point cloud", "3d", "robotics", "automotive")
     settings = "os", "compiler", "build_type", "arch"

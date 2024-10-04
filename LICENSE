@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: OusterSDK
 Upstream-Contact: Ouster Sensor SDK Developers <oss@ouster.io>
-Source: https://github.com/ouster-lidar/ouster_sdk
+Source: https://github.com/ouster-lidar/ouster-sdk
 
 Files: *
 Copyright: 2018-2022 Ouster, Inc
