@@ -117,6 +117,7 @@ install(EXPORT ouster-sdk-targets
 configure_file(cmake/OusterSDKConfig.cmake.in OusterSDKConfig.cmake @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/OusterSDKConfigVersion.cmake"
+  "${CMAKE_CURRENT_LIST_DIR}/cmake/Findjsoncpp.cmake"
   DESTINATION lib/cmake/OusterSDK)
 if(BUILD_PCAP)
   # Install the findpcap cmake file for install targets.
