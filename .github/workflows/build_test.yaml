@@ -106,7 +106,7 @@ jobs:
     - name: install deps
       run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers
     - name: install python-deps
-      run: python3.12 -m pip3 install pytest pytest-xdist --break-system-packages
+      run: python3.12 -m pip install pytest pytest-xdist --break-system-packages
     - name: build python
       run: cd python && python3.12 -m pip install -e .[test] --break-system-packages
     - name: set netparams
