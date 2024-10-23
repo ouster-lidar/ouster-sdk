@@ -15,7 +15,7 @@ using namespace ouster::sensor::impl;
 
 string SensorHttp::firmware_version_string(const string& hostname,
                                            int timeout_sec) {
-    auto http_client = std::make_unique<CurlClient>("http://" + hostname);
+    auto http_client = std::make_unique<CurlClient>(hostname);
     auto fwjson = http_client->get("api/v1/system/firmware", timeout_sec);
 
     Json::Value root{};

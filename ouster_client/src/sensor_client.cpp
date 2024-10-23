@@ -5,6 +5,7 @@
 
 #include "ouster/sensor_client.h"
 
+#include "ouster/defaults.h"
 #include "ouster/impl/logging.h"
 
 using ouster::sensor::impl::Logger;
@@ -54,7 +55,7 @@ std::shared_ptr<ouster::sensor::util::SensorHttp> Sensor::http_client() const {
     // construct the client if we haven't already
     if (!http_client_) {
         http_client_ = ouster::sensor::util::SensorHttp::create(
-            hostname_, 1);  // todo figure out timeout
+            hostname_, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
     }
     return http_client_;
 }

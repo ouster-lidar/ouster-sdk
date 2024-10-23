@@ -63,9 +63,9 @@ class Indexed {
 
     bool remove(const std::shared_ptr<T>& t) {
         auto res = std::find(back.begin(), back.end(), t);
-        if (res == back.end())
+        if (res == back.end()) {
             return false;
-        else {
+        } else {
             res->reset();
             return true;
         }
@@ -73,9 +73,12 @@ class Indexed {
 
     void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
         for (auto& f : front) {
-            if (!f.state) continue;  // skip deleted
-            if (!f.gl)
+            if (!f.state) {
+                continue;  // skip deleted
+            }
+            if (!f.gl) {
                 f.gl = std::make_unique<GL>(*f.state);  // init GL for added
+            }
             f.gl->draw(ctx, camera, *f.state);
         }
     }
@@ -89,7 +92,7 @@ class Indexed {
         // send updated, added or deleted state to the front
         for (size_t i = 0; i < front.size(); i++) {
             if (back[i] && front[i].state) {
-                *front[i].state = *back[i];
+                front[i].state->update_from(*back[i]);
                 back[i]->clear();
             } else if (back[i] && !front[i].state) {
                 front[i].state = std::make_unique<T>(*back[i]);
@@ -185,32 +188,41 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
     // add user-setable input handlers
     pimpl->glfw->key_handler = [this](const WindowCtx& ctx, int key, int mods) {
         for (auto& f : pimpl->key_handlers)
-            if (!f(ctx, key, mods)) break;
+            if (!f(ctx, key, mods)) {
+                break;
+            }
     };
     pimpl->glfw->mouse_button_handler = [this](const WindowCtx& ctx, int button,
                                                int action, int mods) {
         for (auto& f : pimpl->mouse_button_handlers)
             if (!f(ctx, ouster::viz::MouseButton(button),
                    ouster::viz::MouseButtonEvent(action),
-                   ouster::viz::EventModifierKeys(mods)))
+                   ouster::viz::EventModifierKeys(mods))) {
                 break;
+            }
     };
     pimpl->glfw->scroll_handler = [this](const WindowCtx& ctx, double x,
                                          double y) {
         for (auto& f : pimpl->scroll_handlers)
-            if (!f(ctx, x, y)) break;
+            if (!f(ctx, x, y)) {
+                break;
+            }
     };
     pimpl->glfw->mouse_pos_handler = [this](const WindowCtx& ctx, double x,
                                             double y) {
         for (auto& f : pimpl->mouse_pos_handlers)
-            if (!f(ctx, x, y)) break;
+            if (!f(ctx, x, y)) {
+                break;
+            }
     };
 
     // glfwPollEvents blocks during resize on macos. Keep rendering to avoid
     // artifacts during resize
     pimpl->glfw->resize_handler = [this](const WindowCtx& ctx) {
         for (auto& f : pimpl->window_resize_handlers) {
-            if (!f(ctx)) break;
+            if (!f(ctx)) {
+                break;
+            }
         }
 #ifdef __APPLE__
         draw();
@@ -240,11 +252,17 @@ void PointViz::running(bool state) { pimpl->glfw->running(state); }
 
 void PointViz::visible(bool state) { pimpl->glfw->visible(state); }
 
-bool PointViz::update() {
+void PointViz::update() {
     std::lock_guard<std::mutex> guard{pimpl->update_mx};
 
-    // last frame hasn't been drawn yet
-    if (pimpl->front_changed) return false;
+    // TWS 20241014: note we used to return here if
+    // the last frame hasn't been drawn yet.
+    // However, this can cause problem if the API user calls
+    // update(), especially if more than once, before
+    // calling run().
+    // We're preserving front_changed in case we want
+    // to expose this value via the API later on.
+    // if (pimpl->front_changed) return false;
 
     // propagate camera changes
     pimpl->camera_front = pimpl->camera_back;
@@ -256,8 +274,6 @@ bool PointViz::update() {
     pimpl->rings.update(pimpl->target);
 
     pimpl->front_changed = true;
-
-    return true;
 }
 
 int PointViz::viewport_width() const {
@@ -353,31 +369,31 @@ double PointViz::fps() const { return pimpl->fps_; }
  * Input handling
  */
 void PointViz::push_key_handler(
-    std::function<bool(const WindowCtx&, int, int)>&& f) {
+    std::function<bool(const WindowCtx&, int, int)>&& callback) {
     // TODO: not thread safe: called in glfwPollEvents()
-    pimpl->key_handlers.push_front(std::move(f));
+    pimpl->key_handlers.push_front(std::move(callback));
 }
 
 void PointViz::push_mouse_button_handler(
     std::function<bool(const WindowCtx&, ouster::viz::MouseButton,
                        ouster::viz::MouseButtonEvent,
-                       ouster::viz::EventModifierKeys)>&& f) {
-    pimpl->mouse_button_handlers.push_front(std::move(f));
+                       ouster::viz::EventModifierKeys)>&& callback) {
+    pimpl->mouse_button_handlers.push_front(std::move(callback));
 }
 
 void PointViz::push_scroll_handler(
-    std::function<bool(const WindowCtx&, double, double)>&& f) {
-    pimpl->scroll_handlers.push_front(std::move(f));
+    std::function<bool(const WindowCtx&, double, double)>&& callback) {
+    pimpl->scroll_handlers.push_front(std::move(callback));
 }
 
 void PointViz::push_mouse_pos_handler(
-    std::function<bool(const WindowCtx&, double, double)>&& f) {
-    pimpl->mouse_pos_handlers.push_front(std::move(f));
+    std::function<bool(const WindowCtx&, double, double)>&& callback) {
+    pimpl->mouse_pos_handlers.push_front(std::move(callback));
 }
 
 void PointViz::push_frame_buffer_handler(
-    std::function<bool(const std::vector<uint8_t>&, int, int)>&& f) {
-    pimpl->frame_buffer_handlers.push_front(std::move(f));
+    std::function<bool(const std::vector<uint8_t>&, int, int)>&& callback) {
+    pimpl->frame_buffer_handlers.push_front(std::move(callback));
 }
 
 void PointViz::pop_key_handler() { pimpl->key_handlers.pop_front(); }
@@ -396,8 +412,8 @@ void PointViz::pop_frame_buffer_handler() {
 }
 
 void PointViz::push_frame_buffer_resize_handler(
-    std::function<bool(const WindowCtx&)>&& f) {
-    pimpl->window_resize_handlers.push_front(std::move(f));
+    std::function<bool(const WindowCtx&)>&& callback) {
+    pimpl->window_resize_handlers.push_front(std::move(callback));
 }
 
 void PointViz::pop_frame_buffer_resize_handler() {
@@ -459,16 +475,6 @@ Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
       transform_data_{std::make_shared<std::vector<float>>(12 * w, 0)},
       palette_data_{std::make_shared<std::vector<float>>(
           &spezia_palette[0][0], &spezia_palette[0][0] + spezia_n * 3)} {
-    // set everything to changed so on GLCloud object reuse we properly draw
-    // everything first time
-    range_changed_ = true;
-    key_changed_ = true;
-    mask_changed_ = true;
-    xyz_changed_ = true;
-    offset_changed_ = true;
-    point_size_changed_ = true;
-    palette_changed_ = true;
-
     // initialize per-column poses to identity
     for (size_t v = 0; v < w; v++) {
         (*transform_data_)[3 * v] = 1;
@@ -502,6 +508,30 @@ Cloud::Cloud(size_t w, size_t h, const float* dir, const float* off,
     // initialize unit vectors and offsets, set_range() used for data
     set_xyz(dir);
     set_offset(off);
+}
+
+void Cloud::update_from(const Cloud& other) {
+    // TODO[tws] This is ugly.
+    // VAOs should have some encapsulation that allows better management.
+    bool range_changed = other.range_changed_ || range_changed_;
+    bool key_changed = other.key_changed_ || key_changed_;
+    bool mask_changed = other.mask_changed_ || mask_changed_;
+    bool pose_changed = other.pose_changed_ || pose_changed_;
+    bool xyz_changed = other.xyz_changed_ || xyz_changed_;
+    bool offset_changed = other.offset_changed_ || offset_changed_;
+    bool transform_changed = other.transform_changed_ || transform_changed_;
+    bool palette_changed = other.palette_changed_ || palette_changed_;
+    bool point_size_changed = other.point_size_changed_ || point_size_changed_;
+    *this = other;
+    this->range_changed_ = range_changed;
+    this->key_changed_ = key_changed;
+    this->mask_changed_ = mask_changed;
+    this->pose_changed_ = pose_changed;
+    this->xyz_changed_ = xyz_changed;
+    this->offset_changed_ = offset_changed;
+    this->transform_changed_ = transform_changed;
+    this->palette_changed_ = palette_changed;
+    this->point_size_changed_ = point_size_changed;
 }
 
 void Cloud::clear() {
@@ -656,6 +686,18 @@ void Cloud::set_palette(const float* palette, size_t palette_size) {
 
 Image::Image() = default;
 
+void Image::update_from(const Image& other) {
+    bool position_changed = other.position_changed_ || position_changed_;
+    bool image_changed = other.image_changed_ || image_changed_;
+    bool mask_changed = other.mask_changed_ || mask_changed_;
+    bool palette_changed = other.palette_changed_ || palette_changed_;
+    *this = other;
+    this->position_changed_ = position_changed;
+    this->image_changed_ = image_changed;
+    this->mask_changed_ = mask_changed;
+    this->palette_changed_ = palette_changed;
+}
+
 void Image::clear() {
     position_changed_ = false;
     image_changed_ = false;
@@ -664,6 +706,12 @@ void Image::clear() {
 }
 
 void Image::set_image(size_t width, size_t height, const float* image_data) {
+    if (width < 1 || height < 1) {
+        throw std::invalid_argument("invalid image size");
+    }
+    if (!image_data) {
+        throw std::invalid_argument("null image data");
+    }
     const size_t n = width * height;
     image_data_.resize(4 * n);
     image_width_ = width;
@@ -681,6 +729,12 @@ void Image::set_image(size_t width, size_t height, const float* image_data) {
 
 void Image::set_image_rgb(size_t width, size_t height,
                           const float* image_data_rgb) {
+    if (width < 1 || height < 1) {
+        throw std::invalid_argument("invalid image size");
+    }
+    if (!image_data_rgb) {
+        throw std::invalid_argument("null image data");
+    }
     const size_t n = width * height;
     image_data_.resize(4 * n);
     image_width_ = width;
@@ -699,6 +753,12 @@ void Image::set_image_rgb(size_t width, size_t height,
 
 void Image::set_image_rgba(size_t width, size_t height,
                            const float* image_data_rgba) {
+    if (width < 1 || height < 1) {
+        throw std::invalid_argument("invalid image size");
+    }
+    if (!image_data_rgba) {
+        throw std::invalid_argument("null image data");
+    }
     const size_t n = width * height;
     image_data_.resize(4 * n);
     image_width_ = width;
@@ -716,6 +776,12 @@ void Image::set_image_rgba(size_t width, size_t height,
 }
 
 void Image::set_mask(size_t width, size_t height, const float* mask_data) {
+    if (width < 1 || height < 1) {
+        throw std::invalid_argument("invalid mask size");
+    }
+    if (!mask_data) {
+        throw std::invalid_argument("null mask data");
+    }
     size_t n = width * height * 4;
     mask_data_.resize(n);
     mask_width_ = width;
@@ -735,6 +801,9 @@ void Image::set_hshift(float hshift) {
 }
 
 void Image::set_palette(const float* palette, size_t palette_size) {
+    if (!palette) {
+        throw std::invalid_argument("null palette");
+    }
     palette_data_.resize(palette_size * 3);
     std::copy(palette, palette + (palette_size * 3), palette_data_.begin());
     palette_changed_ = true;
@@ -747,34 +816,39 @@ void Image::clear_palette() {
     use_palette_ = false;
 }
 
-double WindowCtx::aspect_ratio() const {
-    // prevent potential for divide-by-zero,
-    // though GLFW prevents sizing the window with zero width or height
-    constexpr int min_height = 1;
-    int height = viewport_height;
-    if (viewport_height < min_height) {
-        height = min_height;
+void WindowCtx::check_invariants() const {
+    if (window_width < 1 || window_height < 1) {
+        throw std::logic_error("invalid window size");
     }
+    if (viewport_width < 1 || viewport_height < 1) {
+        throw std::logic_error("invalid viewport size");
+    }
+}
 
-    return static_cast<double>(viewport_width) / height;
+double WindowCtx::aspect_ratio() const {
+    check_invariants();
+    return static_cast<double>(window_width) / window_height;
 }
 
 std::pair<double, double> WindowCtx::normalized_coordinates(double x,
                                                             double y) const {
-    double world_x = 2.0 / viewport_height * x - aspect_ratio();
-    double world_y = 2.0 * (1.0 - (y / viewport_height)) - 1.0;
+    check_invariants();
+    double world_x = (2.0 / window_width * x - 1.0) * aspect_ratio();
+    double world_y = 2.0 * (1.0 - (y / window_height)) - 1.0;
     return std::pair<double, double>(world_x, world_y);
 }
 
 std::pair<double, double> WindowCtx::window_coordinates(
     double normalized_x, double normalized_y) const {
-    double window_x = (normalized_x + aspect_ratio()) * viewport_height / 2.0;
-    double window_y = viewport_height * (1 - normalized_y) / 2.0;
+    check_invariants();
+    double window_x = (normalized_x + aspect_ratio()) * window_height / 2.0;
+    double window_y = window_height * (1 - normalized_y) / 2.0;
     return std::pair<double, double>(window_x, window_y);
 }
 
 nonstd::optional<std::pair<int, int>> Image::window_coordinates_to_image_pixel(
     const WindowCtx& ctx, double x, double y) const {
+    ctx.check_invariants();
     auto world = ctx.normalized_coordinates(x, y);
 
     // compute image pixel coordinates, accounting for hshift
@@ -797,6 +871,7 @@ nonstd::optional<std::pair<int, int>> Image::window_coordinates_to_image_pixel(
 
 std::pair<double, double> Image::image_pixel_to_window_coordinates(
     const WindowCtx& ctx, int px, int py) const {
+    ctx.check_invariants();
     double img_rel_x = static_cast<double>(px) / image_width_;
     double img_rel_y = static_cast<double>(py) / image_height_;
 
@@ -814,6 +889,7 @@ std::pair<double, double> Image::image_pixel_to_window_coordinates(
 }
 
 std::pair<double, double> Image::pixel_size(const WindowCtx& ctx) const {
+    ctx.check_invariants();
     auto lower_left = ctx.window_coordinates(position_[0], position_[3]);
     auto upper_right = ctx.window_coordinates(position_[1], position_[2]);
     return std::pair<double, double>(
@@ -824,6 +900,14 @@ std::pair<double, double> Image::pixel_size(const WindowCtx& ctx) const {
 Cuboid::Cuboid(const mat4d& pose, const std::array<float, 4>& rgba) {
     set_transform(pose);
     set_rgba(rgba);
+}
+
+void Cuboid::update_from(const Cuboid& other) {
+    bool transform_changed = other.transform_changed_ || transform_changed_;
+    bool rgba_changed = other.rgba_changed_ || rgba_changed_;
+    *this = other;
+    this->transform_changed_ = transform_changed;
+    this->rgba_changed_ = rgba_changed;
 }
 
 void Cuboid::clear() {
@@ -850,6 +934,18 @@ Label::Label(const std::string& text, float x, float y, bool align_right,
              bool align_top) {
     set_text(text);
     set_position(x, y, align_right, align_top);
+}
+
+void Label::update_from(const Label& other) {
+    bool pos_changed = other.pos_changed_ || pos_changed_;
+    bool scale_changed = other.scale_changed_ || scale_changed_;
+    bool text_changed = other.text_changed_ || text_changed_;
+    bool rgba_changed = other.rgba_changed_ || rgba_changed_;
+    *this = other;
+    this->pos_changed_ = pos_changed;
+    this->scale_changed_ = scale_changed;
+    this->text_changed_ = text_changed;
+    this->rgba_changed_ = rgba_changed;
 }
 
 void Label::clear() {

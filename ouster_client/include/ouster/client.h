@@ -98,7 +98,7 @@ std::shared_ptr<client> init_client(
     const std::string& hostname, const std::string& udp_dest_host,
     lidar_mode ld_mode = MODE_UNSPEC, timestamp_mode ts_mode = TIME_FROM_UNSPEC,
     int lidar_port = 0, int imu_port = 0,
-    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
+    int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
     bool persist_config = false);
 
 /**
@@ -123,7 +123,7 @@ std::shared_ptr<client> init_client(
 std::shared_ptr<client> mtp_init_client(
     const std::string& hostname, const sensor_config& config,
     const std::string& mtp_dest_host, bool main,
-    int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS,
+    int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
     bool persist_config = false);
 
 /** @}*/
@@ -232,8 +232,8 @@ bool read_imu_packet(const client& cli, ImuPacket& packet);
  *
  * @return a text blob of metadata parseable into a sensor_info struct.
  */
-std::string get_metadata(
-    client& cli, int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
+std::string get_metadata(client& cli,
+                         int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /**
  * Get sensor config from the sensor.
@@ -250,7 +250,7 @@ std::string get_metadata(
  */
 bool get_config(const std::string& hostname, sensor_config& config,
                 bool active = true,
-                int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
+                int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 // clang-format off
 /**
@@ -280,7 +280,7 @@ enum config_flags : uint8_t {
  */
 bool set_config(const std::string& hostname, const sensor_config& config,
                 uint8_t config_flags = 0,
-                int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS);
+                int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 
 /**
  * Return the port used to listen for lidar UDP data.

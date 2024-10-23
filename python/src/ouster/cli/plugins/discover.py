@@ -9,12 +9,12 @@ This is adapted from zeroconf's async_browser.py example.
 import json
 import logging
 from typing import Optional, Tuple
-import requests
 import time
 from socket import AddressFamily
 import asyncio
 import click
 from ouster.cli.core import cli
+from ouster.sdk.client import SensorHttp
 from zeroconf import IPVersion, ServiceStateChange, Zeroconf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import zeroconf
@@ -173,34 +173,6 @@ def format_hostname_for_url(hostname_str: str) -> str:
         return hostname_str
 
 
-def get_sensor_info(hostname_or_address, socket_timeout):
-    url = f"http://{format_hostname_for_url(hostname_or_address)}/api/v1/sensor/metadata/sensor_info"
-    response = requests.get(url, timeout=socket_timeout)
-    return response.json()
-
-
-def get_sensor_config(hostname_or_address, socket_timeout):
-    url = f"http://{format_hostname_for_url(hostname_or_address)}/api/v1/sensor/cmd/get_config_param?args=active"
-    response = requests.get(url, timeout=socket_timeout)
-    if response.status_code != 200:
-        return None
-    return response.json()
-
-
-def get_sensor_network(hostname_or_address, socket_timeout):
-    url = f"http://{format_hostname_for_url(hostname_or_address)}/api/v1/system/network"
-    response = requests.get(url, timeout=socket_timeout)
-    return response.json()
-
-
-def get_sensor_user_data(hostname_or_address, socket_timeout):
-    url = f"http://{format_hostname_for_url(hostname_or_address)}/api/v1/user/data"
-    response = requests.get(url, timeout=socket_timeout)
-    if response.status_code != 200:
-        return None
-    return response.json()
-
-
 def get_output_for_sensor(sensor):
     undefined_value = '-'
     unknown = 'UNKNOWN'
@@ -274,15 +246,16 @@ def get_all_sensor_info(info, socket_timeout, show_user_data) -> str:
     warnings = []
     for address in addresses:
         try:
+            sensor_http = SensorHttp.create(address, socket_timeout)
             if not sensor_info:
-                sensor_info = get_sensor_info(address, socket_timeout)
+                sensor_info = sensor_http.sensor_info()
             if not config:
-                config = get_sensor_config(address, socket_timeout)
+                config = sensor_http.active_config_params()
             if not network:
-                network = get_sensor_network(address, socket_timeout)
+                network = json.loads(sensor_http.network(socket_timeout))
             if show_user_data and not user_data:
-                user_data = get_sensor_user_data(address, socket_timeout)
-        except OSError as e:
+                user_data = sensor_http.user_data(socket_timeout)
+        except (RuntimeError, OSError) as e:
             warning_prefix = f"Could not connect to {info.server} via {address}"
             warnings.append(
                 get_text_for_oserror(

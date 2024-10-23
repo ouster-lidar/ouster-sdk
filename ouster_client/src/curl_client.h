@@ -100,6 +100,7 @@ class CurlClient : public ouster::util::HttpClient {
         }
         std::lock_guard<std::mutex> guard(mutex_);
         curl_easy_setopt(curl_handle, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl_handle, CURLOPT_DEFAULT_PROTOCOL, "http");
         curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, timeout_seconds);
         if (type == RequestType::TYPE_GET) {
             curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, 0);

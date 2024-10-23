@@ -1,5 +1,12 @@
 [
   {
+    "version": "0.13.0",
+    "tags": {
+      "sdkx": "release-0.13.0",
+      "sdk": "release-0.13.0"
+    }
+  },
+  {
     "version": "0.12.0",
     "tags": {
       "sdkx": "681b7ffa7ac83a8b361fa68c9ae599cc409c46b6",

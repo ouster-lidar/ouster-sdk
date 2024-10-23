@@ -233,7 +233,7 @@ Json::Value collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
 
 bool get_config(SensorHttp& sensor_http, sensor_config& config,
                 bool active = true,
-                int timeout_sec = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS) {
+                int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) {
     auto res = sensor_http.get_config_params(active, timeout_sec);
     config = parse_config(res);
     return true;

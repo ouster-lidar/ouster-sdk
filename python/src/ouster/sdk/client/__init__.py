@@ -48,6 +48,7 @@ from ouster.sdk._bindings.client import ValidatorEntry
 from ouster.sdk._bindings.client import ScanBatcher
 from ouster.sdk._bindings.client import dewarp
 from ouster.sdk._bindings.client import transform
+from ouster.sdk._bindings.client import LONG_HTTP_REQUEST_TIMEOUT_SECONDS, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS
 
 from .data import BufferT
 from .data import FieldDType

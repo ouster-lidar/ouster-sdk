@@ -15,7 +15,7 @@ class LidarScanVizAccumulatorsConfig:
     def __init__(self,
         accum_max_num: int = 0,
         accum_min_dist_meters: float = 0,
-        accum_min_dist_num: int = 1,         # TODO[tws]: this is a *weird* default - change it? Remove it?
+        accum_min_dist_num: int = 0,
         map_enabled: bool = False,
         map_select_ratio: float = MAP_SELECT_RATIO,
         map_max_points: int = MAP_MAX_POINTS_NUM,

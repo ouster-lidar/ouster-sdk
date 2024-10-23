@@ -8,6 +8,6 @@ prune sdk/python
 prune sdk/.git
 prune sdk/artifacts
 prune sdk/sdk-extensions
-prune sdk/Jenkinsfile
-prune sdk/clang-linting.sh
 prune sdk/build
+recursive-exclude sdk Jenkinsfile
+recursive-exclude sdk clang-linting.sh

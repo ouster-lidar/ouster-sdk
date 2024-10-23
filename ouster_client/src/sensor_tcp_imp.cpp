@@ -125,6 +125,11 @@ void SensorTcpImp::delete_user_data(int /*timeout_sec*/) const {
     throw std::runtime_error("user data API not supported on this FW version");
 }
 
+std::string SensorTcpImp::network(int /*timeout_sec*/) const {
+    throw std::runtime_error(
+        "This endpoint is not supported on this FW version");
+}
+
 SOCKET SensorTcpImp::cfg_socket(const char* addr) {
     struct addrinfo hints, *info_start, *ai;
 

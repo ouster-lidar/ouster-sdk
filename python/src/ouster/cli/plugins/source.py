@@ -721,16 +721,16 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
         ctx.scan_iter = catch_iter()
 
         # speed up slicing on indexed OSF if slicing comes first
-        if command_names[0] == "slice":
+        global _last_slice
+        if command_names[0] == "slice" and _last_slice:
             # we can only speed it up if its indexed and OSF at the moment
             if isinstance(ctx.scan_source, OsfScanSource) and ctx.scan_source.is_indexed:
-                global _last_slice
                 # at the moment we can only handle index based slices (where the start is not a float)
                 # TODO: support time based slices
                 if not _last_slice[0] is float:
                     # finally calculate wrap-around start and end indexes assuming cycle is set
                     # TODO: revist when we revist cycle/loop
-                    start_index = _last_slice[0] % len(ctx.scan_source)
+                    start_index = _last_slice[0]
                     end_index = None
                     if _last_slice[1] is not None:
                         end_index = _last_slice[1] - start_index
@@ -739,6 +739,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
                     callbacks = callbacks[1:]  # remove the callback since we dont need it now
                     # finally apply the rest of the slice (end and interval)
                     ctx.scan_iter = islice(ctx.scan_iter, 0, end_index, _last_slice[2])
+            _last_slice = None  # globals are the root of all evil
 
         try:
             # Execute multicommand callbacks

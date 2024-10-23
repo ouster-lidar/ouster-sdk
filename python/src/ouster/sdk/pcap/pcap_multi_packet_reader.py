@@ -7,6 +7,7 @@ from ouster.sdk.util import (resolve_metadata_multi)    # type: ignore
 
 import time
 import numpy as np
+import os
 
 from threading import Lock
 import logging
@@ -86,7 +87,8 @@ class PcapMultiPacketReader(PacketMultiSource):
         if metadatas is None and metadata_paths:
             metadatas = []
             for idx, meta_path in enumerate(metadata_paths):
-                with open(meta_path) as meta_file:
+                meta_path_full = os.path.expanduser(meta_path)
+                with open(meta_path_full) as meta_file:
                     meta_json = meta_file.read()
                     meta_info = SensorInfo(meta_json)
                     self._metadata_json.append(meta_json)

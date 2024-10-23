@@ -30,8 +30,6 @@ int main(int argc, char* argv[]) {
                   << ouster::BUILD_SYSTEM << ")"
                   << "\n\nUsage: client_example <sensor_hostname> "
                      "[<sensor_hostname>]..."
-                     "\n\n<udp_destination> is optional: leave blank for "
-                     "automatic destination detection"
                   << std::endl;
 
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;

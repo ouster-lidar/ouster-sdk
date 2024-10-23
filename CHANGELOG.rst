@@ -4,6 +4,30 @@ Changelog
 
 **Important: as of 0.13.0, the SDK is no longer compatible with firmware versions older than 2.1.0.**
 
+[20241017] [0.13.1]
+======================
+
+* Add support for directly using IPv6 addresses for sensors in the CLI and in sensor clients.
+* Typing '?' now displays the visualizer keyboard shortcuts in the visualizer window.
+* Removed the ``async_client_example.cpp`` example.
+* Un-deprecated ``ScanBatcher::ScanBatcher(size_t, const packet_format&)`` to remove a warning. (But please use ``ScanBatcher::ScanBatcher(const sensor_info&)`` instead.)
+
+* [BREAKING] Removed the ``input_row_major`` parameter from the ``dewarp`` function. (``dewarp`` now infers the array type.)
+* [BREAKING] Renamed ``DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS`` to ``LONG_HTTP_REQUEST_TIMEOUT_SECONDS``.
+* [BREAKING] Changed the default value of ``LidarScanVizAccumulatorsConfig.accum_min_dist_num`` from ``1`` to ``0``.
+* [BUGFIX] Fixed a visualizer glitch causing drawables not to render if added after a call to ``PointViz::update()`` but before ``PointViz::run()`` or ``PointViz::run_once()``.
+* [BUGFIX] Fixed a visualizer crash when using ``HIGHLIGHT_SECOND`` mode with single-return datasets.
+* [BUGFIX] Fixed an issue with the 2d images not updating when cycled during pause.
+* [BUGFIX] Fixed a bug that the first scan pose it not identity when using slice slam command on a slam output osf file
+* [BUGFIX] Re-introduce the RAW field option
+
+Known Issues
+------------
+
+* Using an unbounded slice (e.g. with ``slice 100:`` during visualization can cause the source to loop back to the beginning (outside of the slice) when the source is a pcap file or an OSF saved with an earlier version of the SDK.
+* A race condition in ``PointViz`` event handers occasionally causes a crash or unexpected results.
+
+
 [20240702] [0.13.0]
 ======================
 
@@ -50,7 +74,7 @@ ouster_client/Python SDK
 
 
 * [BREAKING] Remove ``ouster::make_xyz_lut(const ouster::sensor::sensor_info&)``. (Use ``make_xyz_lut(const sensor::sensor_info& sensor, bool use_extrinsics)`` instead.)
-* [BREAKING] changed REFLECTIVITY channel field size to 8 bits. (Important - this makes the SDK incompatible with FW 2.0 and 2.1.)
+* [BREAKING] changed REFLECTIVITY channel field size to 8 bits. (Important - this makes the SDK incompatible with FW 2.0.)
 * [BREAKING] Removed ``UDPPacketSource`` and ``BufferedUDPSource``.
 * [BREAKING] Removed ``ouster.sdk.util.firmware_version(hostname)`` please use ``ouster.sdk.client.SensorHttp.create(hostname).firmware_version()`` instead
 * [BREAKING] ``open_source`` no longer automatically finds and applies extrinsics from ``sensor_extrinsics.json`` files. Use the ``extrinsics`` argument instead to specify the path to the relevant extrinsics file instead.

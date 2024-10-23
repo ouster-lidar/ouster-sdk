@@ -66,13 +66,13 @@ def open_source(source_url: Union[str, List[str]], sensor_idx: int = 0, *args,
     if len(source_url) == 0:
         raise ValueError("No valid source specified")
 
-    first_url: str
-    first_url = source_url[0] if type(source_url) is list else source_url  # type: ignore
-
     if type(source_url) is list:
         source_url = [os.path.expanduser(url) for url in source_url]
     else:
         source_url = os.path.expanduser(source_url)  # type: ignore
+
+    first_url: str
+    first_url = source_url[0] if type(source_url) is list else source_url  # type: ignore
 
     source_type: OusterIoType
     scan_source: Optional[MultiScanSource] = None

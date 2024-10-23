@@ -67,10 +67,16 @@ def writeScanColPose(slam_prev_pose, slam_curr_pose, scans: List[Optional[client
     if slam_frame_diff <= 0:
         raise ValueError("frame_diff must greater than zero.")
 
-    if slam_prev_pose is None or not scans:
+    if not scans:
+        # Handle empty scans
+        return
+
+    if slam_prev_pose is None:
         # First scan pose in KISS in identity matrix. not enough poses to do
         # perturbation in every column. Scan col poses will be identity matrix
         # by default
+        for scan in scans:
+            scan.pose[:] = np.eye(4)  # type: ignore
         return
 
     diff_log = pu.log_pose(np.dot(slam_curr_pose,

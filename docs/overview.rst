@@ -51,6 +51,7 @@ The following table indicates the compatibility of each released SDK version and
 ===================================== ======= ======= ======= ======= ======= ======= ======= =======
 SDK Tag (Release) / Python SDK        FW 2.0  FW 2.1  FW 2.2  FW 2.3  FW 2.4  FW 2.5  FW 3.0  FW 3.1
 ===================================== ======= ======= ======= ======= ======= ======= ======= =======
+C++ SDK 20240703 /  Python SDK 0.13.1 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20240703 /  Python SDK 0.13.0 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20240703 /  Python SDK 0.12.0 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20240423 /  Python SDK 0.11.1 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**

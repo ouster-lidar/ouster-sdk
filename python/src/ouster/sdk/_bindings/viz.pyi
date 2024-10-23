@@ -313,7 +313,7 @@ class PointViz:
     def running(self, state: bool) -> None:
         ...
 
-    def update(self) -> bool:
+    def update(self) -> None:
         ...
 
     def visible(self, state: bool) -> bool:

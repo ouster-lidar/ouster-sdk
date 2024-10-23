@@ -9,7 +9,7 @@ Visualize lidar data using OpenGL.
 
 from collections import deque
 from functools import partial
-from enum import Enum
+from enum import Enum, auto
 import os
 import threading
 import time
@@ -46,6 +46,10 @@ class LidarScanViz:
     LidarScan. Sets up key bindings to toggle which channel fields and returns
     are displayed, and change 2D image and point size.
     """
+    class OsdState(Enum):
+        NONE = auto(),
+        DEFAULT = auto(),
+        HELP = auto()
 
     class FlagsMode(Enum):
         NONE = 0
@@ -129,7 +133,8 @@ class LidarScanViz:
         self._viz.target_display.enable_rings(True)
 
         # initialize osd
-        self._osd_enabled = True
+        self._osd_state = LidarScanViz.OsdState.DEFAULT
+        self._previous_osd_state = LidarScanViz.OsdState.NONE
         self._osd = Label("", 0, 1)
         self._viz.add(self._osd)
 
@@ -155,6 +160,7 @@ class LidarScanViz:
         self._tracked_sensor = 0
         self._scan_pose = np.eye(4)
 
+        self._scans: List[Optional[LidarScan]] = []
         self._scan_num = -1
         self._first_frame_ts = None
 
@@ -165,6 +171,11 @@ class LidarScanViz:
     def metadata(self) -> List[client.SensorInfo]:
         """Metadatas for the displayed sensors."""
         return self._model._metas
+
+    @property
+    def osd_state(self) -> "LidarScanViz.OsdState":
+        """Returns the state of the on screen display."""
+        return self._osd_state
 
     def _setup_controls(self) -> None:
         # key bindings. will be called from rendering thread, must be synchronized
@@ -191,7 +202,7 @@ class LidarScanViz:
             # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
             (ord('C'), 0): LidarScanViz.update_flags_mode,
             (ord('9'), 0): LidarScanViz.toggle_scan_axis,
-            (ord('/'), 1): LidarScanViz.print_keys,
+            (ord('/'), 1): LidarScanViz.toggle_help,
         }
 
         self._key_definitions: Dict[str, str] = {
@@ -244,6 +255,10 @@ class LidarScanViz:
         """Change the displayed field of the i'th image."""
         with self._lock:
             self._model.cycle_image_mode(i, direction)
+
+            # Note, updating the image mode needs the current scan
+            # because ImageMode.enabled requires it.
+            self._model.update(self._scans)
 
     def cycle_cloud_mode(self, direction: int = 1) -> None:
         """Change the coloring mode of the 3D point cloud."""
@@ -352,7 +367,10 @@ class LidarScanViz:
     def toggle_osd(self, state: Optional[bool] = None) -> None:
         """Show or hide the on-screen display."""
         with self._lock:
-            self._osd_enabled = not self._osd_enabled if state is None else state
+            if self._osd_state != LidarScanViz.OsdState.DEFAULT:
+                self._osd_state = LidarScanViz.OsdState.DEFAULT
+            else:
+                self._osd_state = LidarScanViz.OsdState.NONE
 
     def toggle_camera_follow(self) -> None:
         """Toggle the camera follow mode."""
@@ -371,13 +389,18 @@ class LidarScanViz:
             else:
                 self._flags_mode = mode
 
+            # if no scan is set yet, skip updating the cloud masks
+            if not self._scans:
+                return
+
             # reset the cloud range field (since HIDE_BLOOM will modify it)
             for scan, sensor in zip(self._scans, self._model._sensors):
                 if not scan:
                     continue
                 for i, range_field in ((0, ChanField.RANGE),
                                        (1, ChanField.RANGE2)):
-                    sensor._clouds[i].set_range(scan.field(range_field))
+                    if range_field in scan.fields:
+                        sensor._clouds[i].set_range(scan.field(range_field))
 
             # TODO[UN]: need to be done as part of the combined lidar mode
             # set mask on all points in the second cloud, clear other mask
@@ -456,7 +479,7 @@ class LidarScanViz:
         if self._scans_accum:
             self._scans_accum.update(scans, self._scan_num)
 
-    def draw(self, update: bool = True) -> bool:
+    def draw(self, update: bool = True) -> None:
         """Process and draw the latest state to the screen."""
         with self._lock:
             self._draw()
@@ -468,9 +491,7 @@ class LidarScanViz:
             self._image_size_initialized = True
 
         if update:
-            return self._viz.update()
-        else:
-            return False
+            self._viz.update()
 
     def run(self) -> None:
         """Run the rendering loop of the visualizer.
@@ -494,8 +515,14 @@ class LidarScanViz:
         return result
 
     def _update_multi_viz_osd(self):
-        if not self._osd_enabled:
+        if self._osd_state == LidarScanViz.OsdState.NONE:
             self._osd.set_text("")
+            return
+        elif self._osd_state == LidarScanViz.OsdState.HELP:
+            on_screen_help_text = []
+            for key_binding in self._key_definitions:
+                on_screen_help_text.append(f"{key_binding:^7}: {self._key_definitions[key_binding]}")
+            self._osd.set_text('\n'.join(on_screen_help_text))
             return
 
         enabled_clouds_str = ""
@@ -566,12 +593,20 @@ class LidarScanViz:
                 self._scan_pose = client.first_valid_column_pose(scan)
         self._viz.camera.set_target(np.linalg.inv(self._scan_pose))
 
-    def print_keys(self) -> None:
+    def print_key_bindings(self) -> None:
+        print(">---------------- Key Bindings --------------<")
+        for key_binding in self._key_definitions:
+            print(f"{key_binding:^7}: {self._key_definitions[key_binding]}")
+        print(">--------------------------------------------<")
+
+    def toggle_help(self) -> None:
         with self._lock:
-            print(">---------------- Key Bindings --------------<")
-            for key_binding in self._key_definitions:
-                print(f"{key_binding:^7}: {self._key_definitions[key_binding]}")
-            print(">--------------------------------------------<")
+            if self._osd_state != LidarScanViz.OsdState.HELP:
+                self._previous_osd_state = self._osd_state
+                self._osd_state = LidarScanViz.OsdState.HELP
+                self.print_key_bindings()
+            else:
+                self._osd_state = self._previous_osd_state
 
 
 def _first_scan_ts(scans: Union[List[Optional[LidarScan]], LidarScan]):
@@ -757,9 +792,10 @@ class SimpleViz:
         self._proc_exit = False
 
         # playback status display
+        # TODO[tws] probably move playback osd to LidarScanViz...
+        # We've had to define extra key handlers here to support it for no good reason.
         self._playback_osd = Label("", 1, 1, align_right=True)
         self._viz.add(self._playback_osd)
-        self._osd_enabled = True
         self._update_playback_osd()
 
         # continuous screenshots recording
@@ -772,14 +808,15 @@ class SimpleViz:
             (ord('.'), 2): partial(SimpleViz.seek_relative, n_frames=10),
             (ord(' '), 0): SimpleViz.toggle_pause,
             (ord('O'), 0): SimpleViz.toggle_osd,
+            (ord('/'), 1): SimpleViz.toggle_help,
             (ord('X'), 1): SimpleViz.toggle_img_recording,
             (ord('Z'), 1): SimpleViz.screenshot,
         }
 
         key_definitions: Dict[str, str] = {
             'o': "Toggle information overlay",
-            'shift+x': "Toggle a continuous saving of screenshots",
-            'shift+z': "Take a screenshot!",
+            'SHIFT+x': "Toggle a continuous saving of screenshots",
+            'SHIFT+z': "Take a screenshot!",
             ". / ,": "Step forward one frame",
             "> / <": "Increase/decrease playback rate (during replay)",
             'SPACE': "Pause and unpause",
@@ -806,8 +843,13 @@ class SimpleViz:
 
         push_point_viz_handler(self._viz, self, handle_keys)
 
+    def toggle_help(self) -> None:
+        self._scan_viz.toggle_help()
+        self._update_playback_osd()
+        self._scan_viz.draw()
+
     def _update_playback_osd(self) -> None:
-        if not self._osd_enabled:
+        if self._scan_viz.osd_state != LidarScanViz.OsdState.DEFAULT:
             self._playback_osd.set_text("")
             return
 
@@ -850,8 +892,7 @@ class SimpleViz:
     def toggle_osd(self, state: Optional[bool] = None) -> None:
         """Show or hide the on-screen display."""
         with self._cv:
-            self._osd_enabled = not self._osd_enabled if state is None else state
-            self._scan_viz.toggle_osd(self._osd_enabled)
+            self._scan_viz.toggle_osd()
             self._update_playback_osd()
             self._scan_viz.draw()
 

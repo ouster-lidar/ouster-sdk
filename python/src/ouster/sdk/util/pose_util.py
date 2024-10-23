@@ -1,5 +1,5 @@
 from typing_extensions import Protocol
-from typing import (Union, Tuple, List, Optional, Iterable, Sequence)
+from typing import (Union, Tuple, List, Optional, Sequence)
 
 import numpy as np
 
@@ -632,54 +632,6 @@ class TrajectoryEvaluator(Poser):
 
     def __getitem__(self, idx):
         return self._poses[idx]
-
-
-def dewarp(xyz: np.ndarray, *, scan_pose: Optional[PoseH] = None,
-           column_poses: Optional[np.ndarray] = None) -> np.ndarray:
-    """Returns transformed: xyz_return = scan_pose @ column_poses @ xyz
-
-    Args:
-        xyz: is the return of `client.XYZLut` call, which has (H, W, 3) dimensions
-             and column major contiguous storage
-        scan_pose: optional. (4, 4) homogeneous pose of the scan
-        column_poses: optional. (W, 4, 4) homogeneous poses of the scans column
-
-    Returns:
-        xyz with applied scan_pose and/or column_poses:
-          xyz_return = scan_pose @ column_poses @ xyz
-        binary layout of the returned `xyz` is ensure to match the one that is
-        returned by call `client.XYZLut` so it can further used with PointViz
-        and other functions that expect this specific layout.
-    """
-    if xyz.ndim != 3 or xyz.shape[2] != 3:
-        raise ValueError("Expect xyz to be (H, W, 3) shape")
-
-    if scan_pose is not None and scan_pose.shape != (4, 4):
-        raise ValueError("Expect scan_pose to be (4, 4) shape")
-
-    if column_poses is not None:
-        if not (column_poses.shape[0] == xyz.shape[1]
-                and column_poses.shape[1] == 4 and column_poses.shape[2] == 4):
-            raise ValueError("Expect column_poses to be (W, 4, 4) shape")
-
-    # Apply transformations
-    if column_poses is not None:
-        xyz_poses = np.matmul(scan_pose, column_poses) if scan_pose is not None else column_poses
-
-        xyz_transformed = np.transpose(np.matmul(xyz_poses[:, :3, :3], np.transpose(xyz, axes=(1, 2, 0))),
-                                       axes=(2, 0, 1)) + xyz_poses[np.newaxis, :, :3, -1]
-    elif scan_pose is not None:
-        xyz_transformed = np.transpose(np.matmul(scan_pose[np.newaxis, :3, :3],
-                                                 np.transpose(xyz, axes=(1, 2, 0))),
-                                       axes=(2, 0, 1)) + scan_pose[np.newaxis, :3, -1]
-    else:
-        xyz_transformed = xyz
-
-    return xyz_transformed
-
-
-ScansIterable = Union[Iterable[client.LidarScan],
-                      Iterable[List[Optional[client.LidarScan]]]]
 
 
 def get_rot_matrix_to_align_to_gravity(accel_x: float,

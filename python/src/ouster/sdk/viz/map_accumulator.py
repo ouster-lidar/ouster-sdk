@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict, Optional, List, Union
 from ouster.sdk.client import LidarScan, ChanField
-import ouster.sdk.util.pose_util as pu
+from ouster.sdk.client import dewarp
 from ouster.sdk._bindings.viz import Cloud, PointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
 from ouster.sdk.viz.model import LidarScanVizModel
@@ -126,7 +126,7 @@ class MapAccumulator(AccumulatorBase):
                                    replace=False)
             row_sel, col_sel = nzi[nzc], nzj[nzc]
             xyz = sensor._xyzlut(range_field)
-            xyz = pu.dewarp(xyz, column_poses=scan.pose)[row_sel, col_sel]
+            xyz = dewarp(xyz, scan.pose)[row_sel, col_sel]
             xyz_num = xyz.shape[0]
 
             # TODO[tws] previously protected by "with self._lock" - do we still need this?
