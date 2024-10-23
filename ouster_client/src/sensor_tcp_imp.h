@@ -181,6 +181,17 @@ class SensorTcpImp : public util::SensorHttp {
      */
     void delete_user_data(int timeout_sec = 1) const override;
 
+    /**
+     * Gets sensor IP address information.
+     *
+     * @param[in] timeout_sec The timeout to use in seconds for the version
+     *                        request, this argument is optional.
+     *
+     * @return a JSON string containing sensor IP address information.
+     */
+    std::string network(
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
    private:
     SOCKET cfg_socket(const char* addr);
 

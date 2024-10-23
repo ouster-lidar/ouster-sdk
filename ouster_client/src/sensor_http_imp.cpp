@@ -7,7 +7,7 @@ using std::string;
 using namespace ouster::sensor::impl;
 
 SensorHttpImp::SensorHttpImp(const string& hostname)
-    : http_client(std::make_unique<CurlClient>("http://" + hostname)) {}
+    : http_client(std::make_unique<CurlClient>(hostname)) {}
 
 SensorHttpImp::~SensorHttpImp() = default;
 
@@ -65,6 +65,10 @@ Json::Value SensorHttpImp::lidar_data_format(int timeout_sec) const {
 
 Json::Value SensorHttpImp::calibration_status(int timeout_sec) const {
     return get_json("api/v1/sensor/metadata/calibration_status", timeout_sec);
+}
+
+std::string SensorHttpImp::network(int timeout_sec) const {
+    return get("api/v1/system/network", timeout_sec);
 }
 
 // reinitialize to activate new settings

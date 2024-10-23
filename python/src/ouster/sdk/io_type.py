@@ -53,10 +53,9 @@ def io_type(source: str) -> OusterIoType:
     if os.path.isdir(source) and io_type_from_extension(source) == OusterIoType.BAG:
         return OusterIoType.BAG
     try:
-        if socket.gethostbyname(source):
+        if socket.getaddrinfo(source, 0):
             return OusterIoType.SENSOR
     except Exception:
         pass
-
     raise ValueError("Source type expected to be a sensor hostname, ip address,"
                      " or a .pcap, .osf, or .bag file.")

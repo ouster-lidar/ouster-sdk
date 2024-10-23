@@ -1,13 +1,8 @@
 from typing import List
-
-import math
-
 import numpy as np
-
+import math
 import time
 import pytest
-
-
 import ouster.sdk.util.pose_util as pu
 from ouster.sdk.client import dewarp, transform
 
@@ -312,15 +307,25 @@ def test_transform_N_M_3():
 
 
 def test_dewarp():
-    poses = np.array([[1, 0, 0, 1, 0, 1, 0, -2, 0, 0, 1, 3, 0, 0, 0, 1] for _ in range(1024)])
-    points = np.array([[i - 3, i + 1, i + 2] for i in range(128 * 1024)])
+    poses = np.array([[1, 0, 0, 1, 0, 1, 0, -2, 0, 0, 1, 3, 0, 0, 0, 1] for _ in range(4)])
+    points = np.array([[i - 3, i + 1, i + 2] for i in range(2 * 4)])
     num_poses = poses.shape[0]
     pts_per_pose = int(points.shape[0] / poses.shape[0])
 
-    # c++ py-binding dewarp
     poses_reshaped = poses.reshape(num_poses, 4, 4)
     points_reshaped = points.reshape(pts_per_pose, num_poses, 3)
 
-    dewarped_points_c_plus = dewarp(points_reshaped, poses_reshaped)
-    dewarped_point_py = pu.dewarp(points_reshaped, column_poses=poses_reshaped)
-    np.testing.assert_allclose(dewarped_points_c_plus, dewarped_point_py, rtol=1e-5, atol=1e-8)
+    expected_points = np.array([[[-2, -1, 5],
+                                 [-1, 0, 6],
+                                 [0, 1, 7],
+                                 [1, 2, 8]],
+
+                                [[2, 3, 9],
+                                 [3, 4, 10],
+                                 [4, 5, 11],
+                                 [5, 6, 12]]])
+
+    dewarped_points = dewarp(points_reshaped, poses_reshaped)
+
+    np.testing.assert_allclose(dewarped_points.shape, (2, 4, 3))
+    np.testing.assert_allclose(dewarped_points, expected_points, rtol=1e-5, atol=1e-8)

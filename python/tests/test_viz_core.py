@@ -313,3 +313,91 @@ def test_lidarscanviz_update_sets_default_view_mode():
     viz = LidarScanViz([meta], MockPointViz())
     viz.update([scan])
     assert viz._model._cloud_mode_name == ChanField.REFLECTIVITY
+
+
+def test_lidarscanviz_cycle_img_mode_updates_images():
+    """
+    When paused, cycling the img mode should update the images.
+    """
+    class MockImage:
+        """
+        TWS 20241007: this kind of mock would be unnecessary
+        if we bind the various properties of the viz::Image class.
+        """
+        def __init__(self):
+            self.set_image_called = False
+
+        def clear_palette(self, *args, **kwargs):
+            pass
+
+        def set_image(self, *args, **kwargs):
+            self.set_image_called = True
+
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    scan = LidarScan(meta)
+    assert ChanField.REFLECTIVITY in scan.fields  # a precondition
+    viz = LidarScanViz([meta], MockPointViz())
+    viz.update([scan])
+
+    # precondition: the default image modes
+    assert viz._model._image_mode_names == [ChanField.REFLECTIVITY, ChanField.NEAR_IR]
+
+    viz._model._sensors[0]._images = [MockImage(), MockImage()]
+    assert not viz._model._sensors[0]._images[0].set_image_called
+    assert not viz._model._sensors[0]._images[1].set_image_called
+
+    viz.cycle_img_mode(0)
+
+    assert viz._model._image_mode_names == [ChanField.SIGNAL, ChanField.NEAR_IR]
+    assert viz._model._sensors[0]._images[0].set_image_called
+    assert viz._model._sensors[0]._images[1].set_image_called
+
+
+def test_lidarscanviz_highlight_second_doesnt_crash_with_no_scan():
+    """
+    Highlighting the second return should not cause a crash if there is no scan yet.
+    """
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    viz = LidarScanViz([meta], MockPointViz())
+    # check preconditions
+    assert not viz._scans
+    viz.update_flags_mode(LidarScanViz.FlagsMode.HIGHLIGHT_SECOND)
+
+
+def test_lidarscanviz_highlight_second_doesnt_crash_with_no_second_return():
+    """
+    Highlighting the second return should not cause a crash if there is no second return.
+    """
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    scan = LidarScan(meta)
+    # check preconditions
+    assert ChanField.REFLECTIVITY in scan.fields
+    assert ChanField.REFLECTIVITY2 not in scan.fields
+    viz = LidarScanViz([meta], MockPointViz())
+    viz.update([scan])
+    viz.update_flags_mode(LidarScanViz.FlagsMode.HIGHLIGHT_SECOND)
+
+
+def test_osd_state():
+    """Hiding the help should reset the OSD to its previous state."""
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    viz = LidarScanViz([meta], MockPointViz())
+    assert viz.osd_state == LidarScanViz.OsdState.DEFAULT
+    viz.toggle_osd()
+    assert viz.osd_state == LidarScanViz.OsdState.NONE
+
+    # if state is DEFAULT, toggling help twice resets to DEFAULT
+    viz.toggle_osd()
+    assert viz.osd_state == LidarScanViz.OsdState.DEFAULT
+    viz.toggle_help()
+    assert viz.osd_state == LidarScanViz.OsdState.HELP
+    viz.toggle_help()
+    assert viz.osd_state == LidarScanViz.OsdState.DEFAULT
+
+    # if state is NONE, toggling help twice resets to NONE
+    viz.toggle_osd()
+    assert viz.osd_state == LidarScanViz.OsdState.NONE
+    viz.toggle_help()
+    assert viz.osd_state == LidarScanViz.OsdState.HELP
+    viz.toggle_help()
+    assert viz.osd_state == LidarScanViz.OsdState.NONE

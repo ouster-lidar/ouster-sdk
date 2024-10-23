@@ -13,6 +13,7 @@ class CliArgs(Borg):
     def __init__(self, args=None):
         super().__init__()
         if args is not None:
+            # globals are the root of all evil
             self.args = args
         else:
             if not hasattr(self, 'args'):

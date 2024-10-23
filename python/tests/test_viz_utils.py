@@ -358,7 +358,7 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
             cloud_scan = viz.Cloud(scan.h * scan.w)
             xyz = xyzlut(scan.field(client.ChanField.RANGE))
             # TODO hao: remove the input_row_major
-            xyz = dewarp(xyz, scan.pose, input_row_major=False)
+            xyz = dewarp(xyz, scan.pose)
             cloud_scan.set_xyz(xyz)
             cloud_scan.set_key(key)
         else:

@@ -251,12 +251,10 @@ class LidarScanVizAccumulators:
         self._draw_osd()
 
     # TODO[tws] likely remove; realistically we only need one lock and LidarScanViz should manage it
-    def draw(self, update: bool = True) -> bool:
+    def draw(self, update: bool = True) -> None:
         """Process and draw the latest state to the screen."""
         with self._lock:
             self._draw()
 
         if update:
-            return self._viz.update()
-        else:
-            return False
+            self._viz.update()

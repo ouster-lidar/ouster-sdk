@@ -21,6 +21,10 @@ from typing import (Any, ClassVar, Dict, Iterator, List, Optional, overload, Tup
 from ouster.sdk.client.data import (BufferT, ColHeader, FieldDType, FieldTypes)
 
 
+SHORT_HTTP_REQUEST_TIMEOUT_SECONDS: int
+LONG_HTTP_REQUEST_TIMEOUT_SECONDS: int
+
+
 class PacketValidationFailure:
     NONE: ClassVar[PacketValidationFailure]
     ID: ClassVar[PacketValidationFailure]
@@ -114,52 +118,56 @@ class SensorConnection:
 
 
 class SensorHttp:
-    def metadata(self, timeout_sec: int = 1) -> dict:
+    def metadata(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def sensor_info(self, timeout_sec: int = 1) -> dict:
+    def sensor_info(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def get_config_params(self, active: bool, timeout_sec: int = 1) -> str:
+    def get_config_params(self, active: bool, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
         ...
 
-    def set_config_params(self, key: str, value: str, timeout_sec: int = 1) -> None:
+    def set_config_params(self, key: str, value: str, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
-    def active_config_params(self, timeout_sec: int = 1) -> dict:
+    def active_config_params(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def staged_config_params(self, timeout_sec: int = 1) -> dict:
+    def staged_config_params(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def set_udp_dest_auto(self, timeout_sec: int = 1) -> None:
+    def set_udp_dest_auto(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
-    def beam_intrinsics(self, timeout_sec: int = 1) -> dict:
+    def beam_intrinsics(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def imu_intrinsics(self, timeout_sec: int = 1) -> dict:
+    def imu_intrinsics(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def lidar_intrinsics(self, timeout_sec: int = 1) -> dict:
+    def lidar_intrinsics(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def lidar_data_format(self, timeout_sec: int = 1) -> dict:
+    def lidar_data_format(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
         ...
 
-    def reinitialize(self, timeout_sec: int = 1) -> None:
+    def reinitialize(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
-    def save_config_params(self, timeout_sec: int = 1) -> None:
+    def save_config_params(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
-    def get_user_data(self, timeout_sec: int = 1) -> str:
+    def get_user_data(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
         ...
 
-    def set_user_data(self, user_data: str, keep_on_config_delete: bool, timeout_sec: int = 1) -> None:
+    def set_user_data(self, user_data: str, keep_on_config_delete: bool, timeout_sec: int =
+    SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
-    def delete_user_data(self, timeout_sec: int = 1) -> None:
+    def delete_user_data(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        ...
+
+    def network(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
     def hostname(self) -> str:
@@ -169,7 +177,7 @@ class SensorHttp:
         ...
 
     @staticmethod
-    def create(hostname: str, timeout_sec: int = 40) -> SensorHttp:
+    def create(hostname: str, timeout_sec: int = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> SensorHttp:
         ...
  
 
@@ -1293,7 +1301,7 @@ def parse_and_validate_metadata(metadata: str) -> Tuple[SensorInfo, ValidatorIss
     ...                         
 
 
-def dewarp(points: ndarray, poses: ndarray, input_row_major: bool = True) -> ndarray:
+def dewarp(points: ndarray, poses: ndarray) -> ndarray:
     ...
 
 def transform(points: ndarray, pose: ndarray) -> ndarray:

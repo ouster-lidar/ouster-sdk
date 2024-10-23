@@ -141,6 +141,7 @@ class OsfScanSource(MultiScanSource):
     def _osf_convert(self, reader: Reader, output: str) -> None:
         # TODO: figure out how to get the current chunk_size
         chunk_size = 0
+        progressbar(0, 1, "", "indexed")
         writer = Writer(output, chunk_size)
         writer.set_metadata_id(reader.metadata_id)
         for _, m in reader.meta_store.items():

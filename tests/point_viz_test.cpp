@@ -6,8 +6,8 @@ using namespace ouster::viz;
 
 TEST(PointViz, window_coordinates_to_world_coordinates) {
     WindowCtx ctx;
-    ctx.viewport_width = 600;
-    ctx.viewport_height = 400;
+    ctx.window_width = ctx.viewport_width = 600;
+    ctx.window_height = ctx.viewport_height = 400;
     auto world = ctx.normalized_coordinates(0, 0);
     EXPECT_DOUBLE_EQ(world.first, -1.5);
     EXPECT_DOUBLE_EQ(world.second, 1);
@@ -20,8 +20,8 @@ TEST(PointViz, window_coordinates_to_world_coordinates) {
 
 TEST(PointViz, window_coordinates_to_image_pixel) {
     WindowCtx ctx;
-    ctx.viewport_width = 400;
-    ctx.viewport_height = 300;
+    ctx.window_width = ctx.viewport_width = 400;
+    ctx.window_height = ctx.viewport_height = 300;
     Image img;
     auto pixel = img.window_coordinates_to_image_pixel(ctx, 0, 0);
     EXPECT_FALSE(pixel.has_value());  // by default, images have no width/height
@@ -32,7 +32,7 @@ TEST(PointViz, window_coordinates_to_image_pixel) {
     img.set_image(w, h, img_data);
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
     pixel =
-        img.window_coordinates_to_image_pixel(ctx, 0, ctx.viewport_height - 1);
+        img.window_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
     EXPECT_EQ(pixel->first, 0);
     EXPECT_EQ(pixel->second, 2);
 
@@ -40,21 +40,20 @@ TEST(PointViz, window_coordinates_to_image_pixel) {
     EXPECT_EQ(pixel->first, 0);
     EXPECT_EQ(pixel->second, 0);
 
-    pixel =
-        img.window_coordinates_to_image_pixel(ctx, ctx.viewport_width - 1, 0);
+    pixel = img.window_coordinates_to_image_pixel(ctx, ctx.window_width - 1, 0);
     EXPECT_EQ(pixel->first, 3);
     EXPECT_EQ(pixel->second, 0);
 
-    pixel = img.window_coordinates_to_image_pixel(ctx, ctx.viewport_width - 1,
-                                                  ctx.viewport_height - 1);
+    pixel = img.window_coordinates_to_image_pixel(ctx, ctx.window_width - 1,
+                                                  ctx.window_height - 1);
     EXPECT_EQ(pixel->first, 3);
     EXPECT_EQ(pixel->second, 2);
 }
 
 TEST(PointViz, image_pixel_to_window_coordinates) {
     WindowCtx ctx;
-    ctx.viewport_width = 400;
-    ctx.viewport_height = 300;
+    ctx.window_width = ctx.viewport_width = 400;
+    ctx.window_height = ctx.viewport_height = 300;
     Image img;
 
     constexpr int w = 4;
@@ -63,7 +62,7 @@ TEST(PointViz, image_pixel_to_window_coordinates) {
     img.set_image(w, h, img_data);
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
     auto pixel =
-        img.window_coordinates_to_image_pixel(ctx, 0, ctx.viewport_height - 1);
+        img.window_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
     EXPECT_EQ(pixel->first, 0);
     EXPECT_EQ(pixel->second, 2);
 

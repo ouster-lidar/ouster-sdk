@@ -409,18 +409,13 @@ struct set_field {
  *              - W: Number of pose matrices
  *              - 4x4: The transformation matrices
  *
- * @param[in] input_row_major If the param points is stored in row major, then
- * it's true. Otherwise it's false.
- *
  * @return A NumPy array of shape (H, W, 3) containing the dewarped 3D points
  * after applying the corresponding 4x4 transformation matrices to the points.
  *
  */
 
-// TODO Hao remove the input_row_major parameter
 py::array_t<double> dewarp(const py::array_t<double>& points,
-                           const py::array_t<double>& poses,
-                           bool input_row_major = true) {
+                           const py::array_t<double>& poses) {
     auto poses_buf = poses.request();
     auto points_buf = points.request();
 
@@ -455,7 +450,7 @@ py::array_t<double> dewarp(const py::array_t<double>& points,
     Eigen::Map<pose_util::Points> dewarped_points(
         static_cast<double*>(result_buf.ptr), num_rows * num_poses, point_dim);
 
-    if (input_row_major) {
+    if (points.flags() & py::array_t<double>::c_style) {
         Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>>
             points_mat(static_cast<double*>(points_buf.ptr),
                        num_rows * num_poses, point_dim);
@@ -1249,7 +1244,8 @@ void init_client(py::module& m, py::module&) {
              py::arg("timestamp_mode") =
                  sensor::timestamp_mode::TIME_FROM_INTERNAL_OSC,
              py::arg("lidar_port") = 0, py::arg("imu_port") = 0,
-             py::arg("timeout_sec") = 10, py::arg("persist_config") = false)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS,
+             py::arg("persist_config") = false)
         .def(
             "poll",
             [](const client_shared_ptr& self,
@@ -1278,7 +1274,7 @@ void init_client(py::module& m, py::module&) {
             [](client_shared_ptr& self, int timeout_sec) -> std::string {
                 return sensor::get_metadata(*self, timeout_sec);
             },
-            py::arg("timeout_sec") = DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS)
+            py::arg("timeout_sec") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("shutdown", [](client_shared_ptr& self) { self.reset(); });
 
     // New Client
@@ -1303,7 +1299,7 @@ void init_client(py::module& m, py::module&) {
             [](sensor::Sensor& self, int timeout) {
                 return self.fetch_metadata(timeout);
             },
-            py::arg("timeout") = 40)
+            py::arg("timeout") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("http_client", &sensor::Sensor::http_client)
         .def("desired_config", &sensor::Sensor::desired_config)
         .def("hostname", &sensor::Sensor::hostname);
@@ -1315,7 +1311,8 @@ void init_client(py::module& m, py::module&) {
                  return new sensor::SensorClient(sensors, config_timeout,
                                                  buffer_time);
              }),
-             py::arg("sensors"), py::arg("config_timeout") = 45,
+             py::arg("sensors"),
+             py::arg("config_timeout") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
              py::arg("buffer_time") = 0)
         .def(py::init([](std::vector<sensor::Sensor> sensors,
                          std::vector<sensor::sensor_info> metadata,
@@ -1325,7 +1322,8 @@ void init_client(py::module& m, py::module&) {
                                                  config_timeout, buffer_size);
              }),
              py::arg("sensors"), py::arg("metadata"),
-             py::arg("config_timeout") = 1, py::arg("buffer_time") = 0)
+             py::arg("config_timeout") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
+             py::arg("buffer_time") = 0)
         .def("get_sensor_info",
              [](sensor::SensorClient& self) { return self.get_sensor_info(); })
         .def("flush", &sensor::SensorClient::flush)
@@ -1349,7 +1347,8 @@ void init_client(py::module& m, py::module&) {
                  return new sensor::SensorScanSource(sensors, timeout,
                                                      queue_size, soft_id_check);
              }),
-             py::arg("sensors"), py::arg("config_timeout") = 45,
+             py::arg("sensors"),
+             py::arg("config_timeout") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
              py::arg("queue_size") = 2, py::arg("soft_id_check") = false)
         .def(py::init([](std::vector<sensor::Sensor> sensors,
                          std::vector<sensor::sensor_info> metadata,
@@ -1359,8 +1358,8 @@ void init_client(py::module& m, py::module&) {
                                                      queue_size, soft_id_check);
              }),
              py::arg("sensors"), py::arg("metadata"),
-             py::arg("config_timeout") = 45, py::arg("queue_size") = 2,
-             py::arg("soft_id_check") = false)
+             py::arg("config_timeout") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
+             py::arg("queue_size") = 2, py::arg("soft_id_check") = false)
         .def(py::init([](std::vector<sensor::Sensor> sensors,
                          std::vector<sensor::sensor_info> metadata,
                          const std::vector<std::vector<FieldType>>& field_types,
@@ -1371,8 +1370,8 @@ void init_client(py::module& m, py::module&) {
                                                      queue_size, soft_id_check);
              }),
              py::arg("sensors"), py::arg("metadata"), py::arg("fields"),
-             py::arg("config_timeout") = 45, py::arg("queue_size") = 2,
-             py::arg("soft_id_check") = false)
+             py::arg("config_timeout") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
+             py::arg("queue_size") = 2, py::arg("soft_id_check") = false)
         .def("get_sensor_info",
              [](sensor::SensorScanSource& self) {
                  return self.get_sensor_info();
@@ -1883,39 +1882,44 @@ void init_client(py::module& m, py::module&) {
     m.def("destagger_double", &ouster::destagger<double>);
 
     py::class_<SensorHttp>(m, "SensorHttp")
-        .def("metadata", &SensorHttp::metadata, py::arg("timeout_sec") = 1)
+        .def("metadata", &SensorHttp::metadata,
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("sensor_info", &SensorHttp::sensor_info,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("get_config_params", &SensorHttp::get_config_params,
-             py::arg("active"), py::arg("timeout_sec") = 1)
+             py::arg("active"),
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("set_config_param", &SensorHttp::set_config_param, py::arg("key"),
-             py::arg("value"), py::arg("timeout_sec") = 1)
+             py::arg("value"),
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("active_config_params", &SensorHttp::active_config_params,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("staged_config_params", &SensorHttp::staged_config_params,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("set_udp_dest_auto", &SensorHttp::set_udp_dest_auto,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("beam_intrinsics", &SensorHttp::beam_intrinsics,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("imu_intrinsics", &SensorHttp::imu_intrinsics,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("lidar_intrinsics", &SensorHttp::lidar_intrinsics,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("lidar_data_format", &SensorHttp::lidar_data_format,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("reinitialize", &SensorHttp::reinitialize,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("save_config_params", &SensorHttp::save_config_params,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("get_user_data", &SensorHttp::get_user_data,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         // TODO: get_user_data_and_policy is hard to bind, bind later if needed
         .def("set_user_data", &SensorHttp::set_user_data, py::arg("data"),
              py::arg("keep_on_config_delete") = true,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("delete_user_data", &SensorHttp::delete_user_data,
-             py::arg("timeout_sec") = 1)
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
+        .def("network", &SensorHttp::network,
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("firmware_version",
              [](SensorHttp& self) { return self.firmware_version(); })
         .def("hostname", &SensorHttp::hostname)
@@ -1924,7 +1928,8 @@ void init_client(py::module& m, py::module&) {
             [](const std::string& hostname, int timeout_sec) {
                 return SensorHttp::create(hostname, timeout_sec);
             },
-            py::arg("hostname"), py::arg("timeout_sec") = 40);
+            py::arg("hostname"),
+            py::arg("timeout_sec") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 
     py::class_<ScanBatcher>(m, "ScanBatcher")
         .def(py::init<int, packet_format>())
@@ -2158,15 +2163,37 @@ void init_client(py::module& m, py::module&) {
 
     m.def("dewarp",
           py::overload_cast<const py::array_t<double>&,
-                            const py::array_t<double>&, bool>(&dewarp),
-          "Dewarp points with given poses", py::arg("points"), py::arg("poses"),
-          py::arg("input_row_major") = true);
+                            const py::array_t<double>&>(&dewarp),
+          R"(
+	Applies a set of 4x4 pose transformations to a collection of 3D points.
+	Args:
+	  points: A NumPy array of shape (H, W, 3) representing the 3D points.
+	  poses: A NumPy array of shape (W, 4, 4) representing the 4x4 pose
+
+	Return:
+	  A NumPy array of shape (H, W, 3) containing the dewarped 3D points
+	  )",
+          py::arg("points"), py::arg("poses"));
 
     m.def("transform",
           py::overload_cast<const py::array_t<double>&,
                             const py::array_t<double>&>(&transform),
-          "Transform points with given a pose matrix", py::arg("points"),
-          py::arg("pose"));
+          R"(
+	Applies a single of 4x4 pose transformations to a collection of 3D points.
+	Args:
+	  points: A NumPy array of shape (H, W, 3), or (N, 3)
+	  pose: A NumPy array of shape (4, 4) representing the 4x4 pose
+
+	Return:
+	  A NumPy array of shape (H, W, 3) or (N, 3) containing the transformed 3D points
+	  after applying the corresponding 4x4 transformation matrices to the points
+	  )",
+          py::arg("points"), py::arg("pose"));
 
     m.attr("__version__") = ouster::SDK_VERSION;
+
+    m.attr("SHORT_HTTP_REQUEST_TIMEOUT_SECONDS") =
+        py::int_(SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
+    m.attr("LONG_HTTP_REQUEST_TIMEOUT_SECONDS") =
+        py::int_(LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 }

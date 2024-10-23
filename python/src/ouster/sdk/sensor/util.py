@@ -1,6 +1,7 @@
 from typing import Optional
 from copy import copy
-import requests
+from urllib import request
+import json
 import ouster.sdk.client as client
 from ouster.sdk.client import (SensorHttp, Version)
 
@@ -21,19 +22,24 @@ def _auto_detected_udp_dest(http_client: SensorHttp,
     hostname = http_client.hostname()
     orig_config = current_config or client.SensorConfig(http_client.get_config_params(True))
 
+    # escape ipv6 addresses
+    if hostname.count(':') >= 2:
+        hostname = "[" + hostname + "]"
+
     # get what the possible auto udp_dest is
     config_endpoint = f"http://{hostname}/api/v1/sensor/config"
-    response = requests.post(config_endpoint, params={'reinit': False, 'persist': False},
-                             json={'udp_dest': '@auto'})
-    response.raise_for_status()
+    req = request.Request(config_endpoint + "?reinit=False&persist=False", method="POST")
+    req.add_header('Content-Type', 'application/json')
+    data = json.dumps({'udp_dest': '@auto'})
+    request.urlopen(req, data = data.encode()).read()
 
     # get staged config
     udp_auto_config = client.SensorConfig(http_client.get_config_params(False))
 
-    # set staged config back to original
-    response = requests.post(config_endpoint, params={'reinit': False, 'persist': False},
-                             json={'udp_dest': str(orig_config.udp_dest)})
-    response.raise_for_status()
+    req = request.Request(config_endpoint + "?reinit=False&persist=False", method="POST")
+    req.add_header('Content-Type', 'application/json')
+    data = json.dumps({'udp_dest': str(orig_config.udp_dest)})
+    request.urlopen(req, data = data.encode()).read()
 
     return udp_auto_config.udp_dest
 

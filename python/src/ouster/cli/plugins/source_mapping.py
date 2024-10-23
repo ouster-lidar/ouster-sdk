@@ -398,7 +398,7 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                     # to remove out range points
                     valid_row_index = scan.field(ChanField.RANGE) > 0
                     out_range_row_index = scan.field(ChanField.RANGE) == 0
-                    dewarped_points = dewarp(points, column_poses, input_row_major=False)
+                    dewarped_points = dewarp(points, column_poses)
                     filtered_points = dewarped_points[valid_row_index]
                     filtered_keys = keys[valid_row_index]
 

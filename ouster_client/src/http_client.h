@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <string>
 
 namespace ouster {
@@ -25,7 +26,14 @@ class HttpClient {
      *
      * @param[in] base_url_ url to the http server.
      */
-    HttpClient(const std::string& base_url_) : base_url(base_url_) {}
+    HttpClient(const std::string& base_url_) {
+        // Properly escape URLs that look like IPv6 addresses (2 or more :'s)
+        if (std::count(base_url_.begin(), base_url_.end(), ':') >= 2) {
+            base_url = "[" + base_url_ + "]";
+        } else {
+            base_url = base_url_;
+        }
+    }
 
     virtual ~HttpClient() {}
 

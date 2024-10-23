@@ -747,8 +747,6 @@ class ScanBatcher {
      * 2048.
      * @param[in] pf expected format of the incoming packets used for parsing.
      */
-    [[deprecated("Use ScanBatcher::ScanBatcher(const sensor_info&) instead. "
-                 "This is planned to be removed in Q4 2024.")]]
     ScanBatcher(size_t w, const sensor::packet_format& pf);
     // clang-format on
 

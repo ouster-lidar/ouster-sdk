@@ -21,6 +21,8 @@ class SensorScanSource(ScansMulti):
         lidar_port: Optional[int] = None,
         imu_port: Optional[int] = None,
         complete: bool = False,
+        raw_headers: bool = False,
+        raw_fields: bool = False,
         soft_id_check: bool = False,
         do_not_reinitialize: bool = False,
         no_auto_udp_dest: bool = False,
@@ -36,6 +38,8 @@ class SensorScanSource(ScansMulti):
                 max time period at which every new collated scan is released/cut),
                 default is 0.21s
             complete: set to True to only release complete scans.
+            raw_headers: if True, include raw headers in decoded LidarScans
+            raw_fields: if True, include raw fields in decoded LidarScans
             extrinsics: list of extrinsincs to apply to each sensor
             field_names: list of fields to decode into a LidarScan, if not provided
                 decodes all fields
@@ -58,7 +62,7 @@ class SensorScanSource(ScansMulti):
         mode_metadata = []
         for hostname in hostnames:
             print(f"Contacting sensor {hostname}...")
-            sensor_http = SensorHttp.create(hostname, 10)
+            sensor_http = SensorHttp.create(hostname, client.LONG_HTTP_REQUEST_TIMEOUT_SECONDS)
             config = build_sensor_config(sensor_http,
                                       lidar_port,
                                       imu_port,
@@ -72,13 +76,16 @@ class SensorScanSource(ScansMulti):
                       f"lidar port {config.udp_port_lidar} with udp dest '{config.udp_dest}'...")
 
             sensor = _Sensor(hostname, config)
-            mode_metadata.append(sensor.fetch_metadata(45))
+            mode_metadata.append(sensor.fetch_metadata())
             s_list.append(_Sensor(hostname, config))
 
         self._field_types = []
         self._fields = []
+        raw_fields |= (field_names is not None and len(field_names) != 0)
         for m in mode_metadata:
-            ft = resolve_field_types(m)
+            ft = resolve_field_types(m,
+                                     raw_headers=raw_headers,
+                                     raw_fields=raw_fields)
             real_ft = []
             fnames = []
             for f in ft:
@@ -94,8 +101,11 @@ class SensorScanSource(ScansMulti):
             self._fields.append(fnames)
             self._field_types.append(real_ft)
 
-        self._cli = _SensorScanSource(s_list, [], config_timeout=45, queue_size=2,
-                                      soft_id_check=soft_id_check, fields=self._field_types)
+        self._cli = _SensorScanSource(
+            s_list, [],
+            config_timeout=client.LONG_HTTP_REQUEST_TIMEOUT_SECONDS, queue_size=2,
+            soft_id_check=soft_id_check, fields=self._field_types
+        )
 
         self._metadata = self._cli.get_sensor_info()
         self._dt = dt

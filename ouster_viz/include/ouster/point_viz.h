@@ -140,9 +140,17 @@ class PointViz {
      * @param[in] window_height Window height to set,
      *            else uses the default_window_height
      */
-    PointViz(const std::string& name, bool fix_aspect = false,
-             int window_width = default_window_width,
-             int window_height = default_window_height);
+    explicit PointViz(const std::string& name, bool fix_aspect = false,
+                      int window_width = default_window_width,
+                      int window_height = default_window_height);
+
+    // Because PointViz uses the PIMPL pattern
+    // and the Impl owns the window context,
+    // we can't realistically copy or move instances of PointViz.
+    PointViz(const PointViz&) = delete;
+    PointViz(PointViz&&) = delete;
+    PointViz& operator=(PointViz&) = delete;
+    PointViz& operator=(PointViz&&) = delete;
 
     /**
      * Tears down the rendering context and closes the viz window
@@ -187,28 +195,25 @@ class PointViz {
     /**
      * Update visualization state
      *
-     * Send state updates to be rendered on the next frame
-     *
-     * @return whether state was successfully sent. If not, will be sent on next
-     *         call to update(). This can happen if update() is called more
-     *         frequently than the frame rate.
+     * Send state updates to be rendered on the next frame.
      */
-    bool update();
+    void update();
 
     /**
      * Add a callback for handling keyboard input
      *
-     * @param[in] f the callback. The second argument is the ascii value of the
-     * key pressed. Third argument is a bitmask of the modifier keys
-     * The callback's return value determines whether
-     * the remaining key callbacks should be called.
+     * @param[in] callback the callback. The second argument is the ascii value
+     * of the key pressed. Third argument is a bitmask of the modifier keys The
+     * callback's return value determines whether the remaining key callbacks
+     * should be called.
      */
-    void push_key_handler(std::function<bool(const WindowCtx&, int, int)>&& f);
+    void push_key_handler(
+        std::function<bool(const WindowCtx&, int, int)>&& callback);
 
     /**
      * Add a callback for handling mouse button input
      *
-     * @param[in] f the callback. The callback's arguments are
+     * @param[in] callback the callback. The callback's arguments are
      *   ctx: the context containing information about the buttons
      *   pressed, the mouse position, and the viewport;
      *   button: the mouse button pressed;
@@ -221,12 +226,12 @@ class PointViz {
         std::function<bool(const WindowCtx& ctx,
                            ouster::viz::MouseButton button,
                            ouster::viz::MouseButtonEvent event,
-                           ouster::viz::EventModifierKeys mods)>&& f);
+                           ouster::viz::EventModifierKeys mods)>&& callback);
 
     /**
      * Add a callback for handling mouse scrolling input
      *
-     * @param[in] f the callback. The callback's arguments are
+     * @param[in] callback the callback. The callback's arguments are
      *   ctx: the context containing information about the buttons
      *   pressed, the mouse position, and the viewport;
      *   x: the amount of scrolling in the x direction;
@@ -235,12 +240,12 @@ class PointViz {
      *   the remaining mouse scroll callbacks should be called.
      */
     void push_scroll_handler(
-        std::function<bool(const WindowCtx&, double x, double y)>&& f);
+        std::function<bool(const WindowCtx&, double x, double y)>&& callback);
 
     /**
      * Add a callback for handling mouse movement
      *
-     * @param[in] f the callback. The callback's arguments are
+     * @param[in] callback the callback. The callback's arguments are
      *   ctx: the context containing information about the buttons
      *   pressed, the mouse position, and the viewport;
      *   x: the mouse position in the x direction;
@@ -249,7 +254,7 @@ class PointViz {
      *   the remaining mouse position callbacks should be called.
      */
     void push_mouse_pos_handler(
-        std::function<bool(const WindowCtx&, double x, double y)>&& f);
+        std::function<bool(const WindowCtx&, double x, double y)>&& callback);
 
     /**
      * Add a callback for processing every new draw frame buffer.
@@ -258,12 +263,12 @@ class PointViz {
      *       dramatically. Primary use to store frame buffer images to disk
      *       for further processing.
      *
-     * @param[in] f function callback of a form f(fb_data, fb_width, fb_height)
-     *   The callback's return value determines whether
-     *   the remaining frame buffer callbacks should be called.
+     * @param[in] callback function callback of a form f(fb_data, fb_width,
+     * fb_height) The callback's return value determines whether the remaining
+     * frame buffer callbacks should be called.
      */
     void push_frame_buffer_handler(
-        std::function<bool(const std::vector<uint8_t>&, int, int)>&& f);
+        std::function<bool(const std::vector<uint8_t>&, int, int)>&& callback);
 
     /**
      * Remove the last added callback for handling keyboard events
@@ -292,12 +297,12 @@ class PointViz {
 
     /**
      * Add a callback for handling frame buffer resize events.
-     * @param[in] f function callback of the form f(const WindowCtx&). The
-     * callback's return value determines whether the remaining frame buffer
+     * @param[in] callback function callback of the form f(const WindowCtx&).
+     * The callback's return value determines whether the remaining frame buffer
      * resize callbacks should be called.
      */
     void push_frame_buffer_resize_handler(
-        std::function<bool(const WindowCtx&)>&& f);
+        std::function<bool(const WindowCtx&)>&& callback);
 
     /**
      * Remove the last added callback for handling frame buffer resize events.
@@ -488,6 +493,12 @@ struct WindowCtx {
      */
     std::pair<double, double> window_coordinates(double normalized_x,
                                                  double normalized_y) const;
+
+    /**
+     * @brief raises std::logic_error if this WindowCtx doesn't satisfy class
+     * invariants.
+     */
+    void check_invariants() const;
 };
 
 /**
@@ -728,15 +739,17 @@ class Cloud {
     size_t w_{0};
     mat4d extrinsic_{};
 
-    bool range_changed_{false};
-    bool key_changed_{false};
-    bool mask_changed_{false};
-    bool xyz_changed_{false};
-    bool offset_changed_{false};
-    bool transform_changed_{false};
-    bool palette_changed_{false};
-    bool pose_changed_{false};
-    bool point_size_changed_{false};
+    // set everything to changed so on GLCloud object reuse we properly draw
+    // everything first time
+    bool range_changed_{true};
+    bool key_changed_{true};
+    bool mask_changed_{true};
+    bool xyz_changed_{true};
+    bool offset_changed_{true};
+    bool transform_changed_{true};
+    bool palette_changed_{true};
+    bool pose_changed_{true};
+    bool point_size_changed_{true};
 
     std::shared_ptr<std::vector<float>> range_data_{};
     std::shared_ptr<std::vector<float>> key_data_{};
@@ -761,7 +774,7 @@ class Cloud {
      * @param[in] extrinsic sensor extrinsic calibration. 4x4 column-major
      *        homogeneous transformation matrix
      */
-    Cloud(size_t n, const mat4d& extrinsic = identity4d);
+    explicit Cloud(size_t n, const mat4d& extrinsic = identity4d);
 
     /**
      * Structured point cloud for visualization.
@@ -777,6 +790,14 @@ class Cloud {
      */
     Cloud(size_t w, size_t h, const float* dir, const float* off,
           const mat4d& extrinsic = identity4d);
+
+    /**
+     * Updates this cloud's state with the state of other,
+     * accounting for prior changes to this objects's state.
+     *
+     * @param[in] other the object to update the state from.
+     */
+    void update_from(const Cloud& other);
 
     /**
      * Clear dirty flags.
@@ -941,6 +962,14 @@ class Image {
     Image();
 
     /**
+     * Updates this image's state with the state of other,
+     * accounting for prior changes to this objects's state.
+     *
+     * @param[in] other the object to update the state from.
+     */
+    void update_from(const Image& other);
+
+    /**
      * Clear dirty flags.
      *
      * Resets any changes since the last call to PointViz::update()
@@ -1099,6 +1128,14 @@ class Cuboid {
     Cuboid(const mat4d& transform, const vec4f& rgba);
 
     /**
+     * Updates this cuboid's state with the state of other,
+     * accounting for prior changes to this objects's state.
+     *
+     * @param[in] other the object to update the state from.
+     */
+    void update_from(const Cuboid& other);
+
+    /**
      * Clear dirty flags.
      *
      * Resets any changes since the last call to PointViz::update()
@@ -1162,6 +1199,14 @@ class Label {
      */
     Label(const std::string& text, float x, float y, bool align_right = false,
           bool align_top = false);
+
+    /**
+     * Updates this label's state with the state of other,
+     * accounting for prior changes to this objects's state.
+     *
+     * @param[in] other the object to update the state from.
+     */
+    void update_from(const Label& other);
 
     /**
      * Clear dirty flags.

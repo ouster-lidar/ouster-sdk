@@ -55,6 +55,7 @@ class BagScanSource(ScansMulti):
             raise
 
         # generate the field types per sensor with flags/raw_fields if specified
+        raw_fields |= (field_names is not None and len(field_names) != 0)
         field_types = resolve_field_types(self._source.metadata,
                                           raw_headers=raw_headers,
                                           raw_fields=raw_fields)
