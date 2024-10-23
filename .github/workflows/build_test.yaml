@@ -106,10 +106,10 @@ jobs:
     - name: install deps
       run: brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog flatbuffers
     - name: install python-deps
-      run: pip3 install pytest pytest-xdist --break-system-packages
+      run: python3.12 -m pip install pytest pytest-xdist --break-system-packages
     - name: build python
-      run: cd python && python3 -m pip install -e .[test] --break-system-packages
+      run: cd python && python3.12 -m pip install -e .[test] --break-system-packages
     - name: set netparams
       run: sudo sysctl -w net.inet.udp.maxdgram=65535
     - name: run tests
-      run: cd python/tests && pytest -n3
+      run: cd python/tests && python3.12 -m pytest -n3
