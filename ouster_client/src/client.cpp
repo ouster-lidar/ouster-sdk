@@ -407,7 +407,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         if (lidar_port) config.udp_port_lidar = lidar_port;
         if (imu_port) config.udp_port_imu = imu_port;
         if (persist_config) config_flags |= CONFIG_PERSIST;
-        if (operating_mode) config.operating_mode = OPERATING_NORMAL;
+        if (operating_mode) config.operating_mode = operating_mode;
         set_config(*sensor_http, config, config_flags, timeout_sec);
 
         // will block until no longer INITIALIZING
