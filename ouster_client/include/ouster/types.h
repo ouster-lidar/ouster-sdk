@@ -565,7 +565,7 @@ struct sensor_info {
     std::string user_data{};    ///< userdata from sensor if available
 
     /* Constructor from metadata */
-    [[deprecated("skip_beam_validation does not do anything anymore")]]
+    [[deprecated("skip_beam_validation does not do anything anymore")]] 
         explicit sensor_info(const std::string& metadata, bool skip_beam_validation);
     explicit sensor_info(const std::string& metadata);
 
@@ -576,7 +576,7 @@ struct sensor_info {
      * changes to the sensor_info.
      * Errors out if changes are incompatible but does not check for validity */
     std::string to_json_string() const;
-
+    
     /**
      * Parse and return version info about this sensor.
      *
@@ -1026,7 +1026,7 @@ namespace ChanField {
                           ///< sensitivity in FW 2.1+. See sensor docs for more details
     static constexpr cf_type REFLECTIVITY2 = "REFLECTIVITY2";    ///< 2nd return reflectivity, calibrated by range and sensor
                           ///< sensitivity in FW 2.1+. See sensor docs for more details
-
+    
     static constexpr cf_type NEAR_IR = "NEAR_IR";          ///< near_ir in photons
     static constexpr cf_type FLAGS = "FLAGS";            ///< 1st return flags
     static constexpr cf_type FLAGS2 = "FLAGS2";           ///< 2nd return flags
