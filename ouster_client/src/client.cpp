@@ -382,8 +382,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode ld_mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
-                                    OperatingMode operating_mode,
-                                    int timeout_sec, bool persist_config) {
+                                    int timeout_sec, bool persist_config,
+                                    OperatingMode operating_mode) {
     auto cli = init_client(hostname, lidar_port, imu_port);
     if (!cli) return std::shared_ptr<client>();
     logger().info("(0 means a random port will be chosen)");

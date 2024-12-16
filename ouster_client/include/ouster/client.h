@@ -89,10 +89,10 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
  * using zero the method will automatically acquire and assign any free port.
  * @param[in] imu_port port on which the sensor will send imu data. When
  * using zero the method will automatically acquire and assign any free port.
- * @param[in] operating_mode The lidar operating mode. When using zero the
  * method will leave the sensor in its current operating mode.
  * @param[in] timeout_sec how long to wait for the sensor to initialize.
  * @param[in] persist_config if true, persists sensor settings between restarts
+ * @param[in] operating_mode The lidar operating mode. When using zero the
  *
  * @return pointer owning the resources associated with the connection.
  */
@@ -100,9 +100,9 @@ std::shared_ptr<client> init_client(
     const std::string& hostname, const std::string& udp_dest_host,
     lidar_mode ld_mode = MODE_UNSPEC, timestamp_mode ts_mode = TIME_FROM_UNSPEC,
     int lidar_port = 0, int imu_port = 0,
-    OperatingMode operating_mode = OPERATING_NORMAL,
     int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS,
-    bool persist_config = false);
+    bool persist_config = false,
+    OperatingMode operating_mode = OPERATING_NORMAL);
 
 /**
  * [BETA] Connect to and configure the sensor and start listening for data via
