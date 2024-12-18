@@ -382,7 +382,8 @@ std::shared_ptr<client> init_client(const std::string& hostname,
                                     const std::string& udp_dest_host,
                                     lidar_mode ld_mode, timestamp_mode ts_mode,
                                     int lidar_port, int imu_port,
-                                    int timeout_sec, bool persist_config) {
+                                    int timeout_sec, bool persist_config,
+                                    OperatingMode operating_mode) {
     auto cli = init_client(hostname, lidar_port, imu_port);
     if (!cli) return std::shared_ptr<client>();
     logger().info("(0 means a random port will be chosen)");
@@ -406,7 +407,7 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         if (lidar_port) config.udp_port_lidar = lidar_port;
         if (imu_port) config.udp_port_imu = imu_port;
         if (persist_config) config_flags |= CONFIG_PERSIST;
-        config.operating_mode = OPERATING_NORMAL;
+        if (operating_mode) config.operating_mode = operating_mode;
         set_config(*sensor_http, config, config_flags, timeout_sec);
 
         // will block until no longer INITIALIZING

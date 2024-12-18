@@ -100,7 +100,8 @@ enum timestamp_mode {
  * meaning of each option.
  */
 enum OperatingMode {
-    OPERATING_NORMAL = 1,  ///< Normal sensor operation
+    OPERATING_UNSPEC = 0,  ///< Unspecified sensor operation
+    OPERATING_NORMAL,      ///< Normal sensor operation
     OPERATING_STANDBY      ///< Standby
 };
 
