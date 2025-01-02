@@ -105,9 +105,9 @@ sensor_info default_sensor_info(lidar_mode mode) {
     info.beam_altitude_angles = gen1_altitude_angles;
     info.lidar_origin_to_beam_origin_mm =
         default_lidar_origin_to_beam_origin(info.prod_line);
-    info.beam_to_lidar_transform = default_imu_to_sensor_transform;
-    info.imu_to_sensor_transform =
+    info.beam_to_lidar_transform = 
         default_beam_to_lidar_transform(info.prod_line);
+    info.imu_to_sensor_transform = default_imu_to_sensor_transform;
     info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
     info.extrinsic = mat4d::Identity();
     info.init_id = 0;
