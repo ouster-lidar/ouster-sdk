@@ -1,5 +1,7 @@
 message(STATUS "Found OusterSDK: ${CMAKE_CURRENT_LIST_FILE}")
 
+# We install custom find*.cmake modules, so clients need to be able to find them
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}")
 include(CMakeFindDependencyMacro)
 
 # ouster_client dependencies
