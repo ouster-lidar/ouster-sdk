@@ -24,12 +24,14 @@ constexpr int h = 8;
 float img_data[w * h];
 auto img = std::make_shared<Image>();
 
+// returns true if the provided window coordinates were within the image
 bool set_pixel_from_window_coordinates(ouster::viz::PointViz& viz,
                                        const WindowCtx& ctx, double x,
                                        double y) {
     auto pixel = img->window_coordinates_to_image_pixel(ctx, x, y);
-    if (pixel) {
-        img_data[pixel->first + pixel->second * w] = 1.0;
+    if (pixel.first >= 0 && pixel.first < w && pixel.second >= 0 &&
+        pixel.second < h) {
+        img_data[pixel.first + pixel.second * w] = 1.0;
         img->set_image(w, h, img_data);
         viz.update();
         return false;

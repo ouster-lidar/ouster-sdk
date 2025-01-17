@@ -10,6 +10,7 @@
 
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/writer.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -39,12 +40,13 @@ constexpr uint32_t STREAMING_DEFAULT_CHUNK_SIZE =
  * possible). However if a single message size is bigger than specified
  * `chunk_size` it's still recorded.
  */
-class StreamingLayoutCW : public ChunksWriter {
+class OUSTER_API_CLASS StreamingLayoutCW : public ChunksWriter {
    public:
     /**
      * @param[in] writer Writer object for use when writing messages
      * @param[in] chunk_size The chunk size to use, this arg is optional.
      */
+    OUSTER_API_FUNCTION
     StreamingLayoutCW(Writer& writer,
                       uint32_t chunk_size = STREAMING_DEFAULT_CHUNK_SIZE);
 
@@ -53,6 +55,7 @@ class StreamingLayoutCW : public ChunksWriter {
      *
      * @throws std::logic_error Exception on inconsistent timestamps.
      */
+    OUSTER_API_FUNCTION
     void save_message(const uint32_t stream_id, const ts_t receive_ts,
                       const ts_t sensor_ts,
                       const std::vector<uint8_t>& buf) override;
@@ -60,11 +63,13 @@ class StreamingLayoutCW : public ChunksWriter {
     /**
      * @copydoc ChunksWriter::finish
      */
+    OUSTER_API_FUNCTION
     void finish() override;
 
     /**
      * @copydoc ChunksWriter::chunk_size
      */
+    OUSTER_API_FUNCTION
     uint32_t chunk_size() const override;
 
    private:

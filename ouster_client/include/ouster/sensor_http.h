@@ -9,11 +9,13 @@
 
 #pragma once
 
-#include <json/json.h>
 #include <ouster/defaults.h>
+#include <ouster/types.h>
 #include <ouster/version.h>
 
 #include <memory>
+
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sensor {
@@ -22,7 +24,7 @@ namespace util {
 /**
  * Result for get_user_data_and_policy on SensorHttp
  */
-struct UserDataAndPolicy {
+struct OUSTER_API_CLASS UserDataAndPolicy {
     bool keep_on_config_delete;
     std::string data;
 };
@@ -30,7 +32,7 @@ struct UserDataAndPolicy {
 /**
  * An interface to communicate with Ouster sensors via http requests
  */
-class SensorHttp {
+class OUSTER_API_CLASS SensorHttp {
     ouster::util::version version_;
     std::string hostname_;
 
@@ -44,6 +46,7 @@ class SensorHttp {
     /**
      * Deconstruct the sensor http interface.
      */
+    OUSTER_API_FUNCTION
     virtual ~SensorHttp() = default;
 
     /**
@@ -51,6 +54,7 @@ class SensorHttp {
      *
      * @return returns the sensor FW version
      */
+    OUSTER_API_FUNCTION
     inline const ouster::util::version& firmware_version() const {
         return version_;
     }
@@ -60,6 +64,7 @@ class SensorHttp {
      *
      * @return returns the sensor FW version
      */
+    OUSTER_API_FUNCTION
     inline const std::string& hostname() const { return hostname_; }
 
     /**
@@ -67,9 +72,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return returns a Json object of the sensor metadata.
+     * @return returns a json string of the sensor metadata.
      */
-    virtual Json::Value metadata(
+    OUSTER_API_FUNCTION
+    virtual std::string metadata(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -77,9 +83,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return returns a Json object representing the sensor_info.
+     * @return returns a json string representing the sensor_info.
      */
-    virtual Json::Value sensor_info(
+    OUSTER_API_FUNCTION
+    virtual std::string sensor_info(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -88,8 +95,9 @@ class SensorHttp {
      * @param[in] active if true retrieve active, otherwise get staged configs.
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return a string represnting the active or staged config
+     * @return a string representing the active or staged config
      */
+    OUSTER_API_FUNCTION
     virtual std::string get_config_params(
         bool active,
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
@@ -102,6 +110,7 @@ class SensorHttp {
      * @param[in] value the new value to set for the selected configuration.
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
+    OUSTER_API_FUNCTION
     virtual void set_config_param(
         const std::string& key, const std::string& value,
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
@@ -111,9 +120,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return active configuration parameters set on the sensor
+     * @return json string of active configuration parameters set on the sensor
      */
-    virtual Json::Value active_config_params(
+    OUSTER_API_FUNCTION
+    virtual std::string active_config_params(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -121,9 +131,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return staged configuration parameters set on the sensor
+     * @return json string of staged configuration parameters set on the sensor
      */
-    virtual Json::Value staged_config_params(
+    OUSTER_API_FUNCTION
+    virtual std::string staged_config_params(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -131,6 +142,7 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
+    OUSTER_API_FUNCTION
     virtual void set_udp_dest_auto(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
@@ -139,9 +151,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return beam_intrinsics retrieved from sensor
+     * @return json string of beam_intrinsics retrieved from sensor
      */
-    virtual Json::Value beam_intrinsics(
+    OUSTER_API_FUNCTION
+    virtual std::string beam_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -149,9 +162,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return imu_intrinsics received from sensor
+     * @return json string of imu_intrinsics received from sensor
      */
-    virtual Json::Value imu_intrinsics(
+    OUSTER_API_FUNCTION
+    virtual std::string imu_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -159,9 +173,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return lidar_intrinsics retrieved from sensor
+     * @return json string of lidar_intrinsics retrieved from sensor
      */
-    virtual Json::Value lidar_intrinsics(
+    OUSTER_API_FUNCTION
+    virtual std::string lidar_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -169,9 +184,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return lidar_data_format received from sensor
+     * @return json string of lidar_data_format received from sensor
      */
-    virtual Json::Value lidar_data_format(
+    OUSTER_API_FUNCTION
+    virtual std::string lidar_data_format(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -179,9 +195,10 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return calibration status received from sensor
+     * @return json string ofcalibration status received from sensor
      */
-    virtual Json::Value calibration_status(
+    OUSTER_API_FUNCTION
+    virtual std::string calibration_status(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -189,6 +206,7 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
+    OUSTER_API_FUNCTION
     virtual void reinitialize(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
@@ -197,6 +215,7 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
+    OUSTER_API_FUNCTION
     virtual void save_config_params(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
@@ -207,6 +226,7 @@ class SensorHttp {
      *
      * @return user data retrieved from sensor
      */
+    OUSTER_API_FUNCTION
     virtual std::string get_user_data(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
@@ -217,6 +237,7 @@ class SensorHttp {
      *
      * @return user data and policy setting retrieved from the sensor
      */
+    OUSTER_API_FUNCTION
     virtual UserDataAndPolicy get_user_data_and_policy(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
@@ -228,6 +249,7 @@ class SensorHttp {
                                         configuration is deleted from the sensor
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
+    OUSTER_API_FUNCTION
     virtual void set_user_data(
         const std::string& data, bool keep_on_config_delete = true,
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
@@ -240,7 +262,28 @@ class SensorHttp {
      *
      * @return a JSON string containing sensor IP address information.
      */
+    OUSTER_API_FUNCTION
     virtual std::string network(
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Set's the sensor's static IP address.
+     *
+     * @param[in] ip_address The static IP to set on the sensor.
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     */
+    OUSTER_API_FUNCTION
+    virtual void set_static_ip(
+        const std::string& ip_address,
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Deletes any static IP address stored on the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     */
+    OUSTER_API_FUNCTION
+    virtual void delete_static_ip(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
@@ -248,8 +291,20 @@ class SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
+    OUSTER_API_FUNCTION
     virtual void delete_user_data(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
+
+    /**
+     * Downloads diagnostics data in zip format from the sensor.
+     *
+     * @param[in] timeout_sec The timeout for the request in seconds.
+     *
+     * @return diagnostics dump file contents
+     */
+    OUSTER_API_FUNCTION
+    virtual std::vector<uint8_t> diagnostics_dump(
+        int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) const = 0;
 
     /**
      * Retrieves sensor firmware version information as a string.
@@ -260,6 +315,7 @@ class SensorHttp {
      *
      * @return firmware version string from sensor
      */
+    OUSTER_API_FUNCTION
     static std::string firmware_version_string(
         const std::string& hostname,
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
@@ -273,6 +329,7 @@ class SensorHttp {
      *
      * @return parsed firmware version from sensor
      */
+    OUSTER_API_FUNCTION
     static ouster::util::version firmware_version(
         const std::string& hostname,
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);
@@ -286,6 +343,7 @@ class SensorHttp {
      *
      * @return a version specific implementation of the SensorHTTP instance
      */
+    OUSTER_API_FUNCTION
     static std::unique_ptr<SensorHttp> create(
         const std::string& hostname,
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS);

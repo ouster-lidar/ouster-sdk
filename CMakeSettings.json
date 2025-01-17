@@ -12,7 +12,7 @@
       "inheritEnvironments": [ "msvc_x64_x64" ],
       "variables": [
         {
-          "name": "BUILD_EXAMPLES",
+          "name": "VCPKG_MANIFEST_MODE",
           "value": "True",
           "type": "BOOL"
         }
@@ -30,7 +30,7 @@
       "ctestCommandArgs": "",
       "variables": [
         {
-          "name": "BUILD_EXAMPLES",
+          "name": "VCPKG_MANIFEST_MODE",
           "value": "True",
           "type": "BOOL"
         }

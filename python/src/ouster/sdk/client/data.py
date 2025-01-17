@@ -83,6 +83,25 @@ def _destagger(field: np.ndarray, shifts: List[int],
     }[field.dtype](field, shifts, inverse)
 
 
+def stagger(info: SensorInfo,
+            fields: np.ndarray) -> np.ndarray:
+    """Return a staggered copy of the provided fields.
+
+    In the default staggered representation, each column corresponds to a
+    single timestamp. A destaggered representation compensates for the
+    azimuth offset of each beam, returning columns that correspond to a
+    single azimuth angle.
+
+    Args:
+        info: Sensor metadata associated with the provided data
+        fields: A numpy array of shape H X W or H X W X N
+
+    Returns:
+        A staggered numpy array of the same shape
+    """
+    return destagger(info, fields, inverse=True)
+
+
 def destagger(info: SensorInfo,
               fields: np.ndarray,
               inverse=False) -> np.ndarray:

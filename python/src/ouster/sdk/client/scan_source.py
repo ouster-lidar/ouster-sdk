@@ -1,6 +1,7 @@
 from typing import Iterator, Union, Optional, List
 from typing_extensions import Protocol
 from ouster.sdk._bindings.client import SensorInfo, LidarScan, FieldType
+import numpy as np
 
 
 class ScanSource(Protocol):
@@ -85,4 +86,16 @@ class ScanSource(Protocol):
 
     def slice(self, key: slice) -> 'ScanSource':
         """Constructs a ScanSource matching the specificed slice"""
+        ...
+
+    def clip(self, fields: List[str], lower: int, upper: int) -> 'ScanSource':
+        """Constructs a ScanSource matching the specificed clip options"""
+        ...
+
+    def reduce(self, beams: int) -> 'ScanSource':
+        """Constructs a reduced ScanSource matching the beam count"""
+        ...
+
+    def mask(self, fields: List[str], mask: Optional[np.ndarray]) -> 'ScanSource':
+        """Constructs a masked ScanSource matching the beam count"""
         ...

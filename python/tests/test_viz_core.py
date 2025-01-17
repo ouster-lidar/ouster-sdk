@@ -1,6 +1,7 @@
 import numpy as np
 from .conftest import MockPointViz
-from ouster.sdk.client import ChanField, LidarScan, SensorInfo, LidarMode, Version, first_valid_column_ts
+from ouster.sdk.client import ChanField, LidarScan, SensorInfo, LidarMode, Version, first_valid_column_ts, FieldClass
+from ouster.sdk.viz import WindowCtx, MouseButtonEvent, MouseButton, EventModifierKeys
 from ouster.sdk.viz.model import LidarScanVizModel, SensorModel, Palettes
 from ouster.sdk.viz.core import LidarScanViz, _Seekable
 from ouster.sdk.viz.view_mode import SimpleMode, RGBMode
@@ -401,3 +402,83 @@ def test_osd_state():
     assert viz.osd_state == LidarScanViz.OsdState.HELP
     viz.toggle_help()
     assert viz.osd_state == LidarScanViz.OsdState.NONE
+
+
+def test_create_view_mode_for_field_6():
+    """It should only create a view mode for pixel fields."""
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    sensor = SensorModel(meta)
+
+    scan = LidarScan(meta.h, meta.w, [])
+    scan.add_field("customfield", np.zeros((1024, 1024)), FieldClass.COLUMN_FIELD)
+    assert sensor._create_view_mode_for_field("customfield", scan) is None
+
+    scan.add_field("customfield2", np.zeros((1024, 1024)), FieldClass.SCAN_FIELD)
+    assert sensor._create_view_mode_for_field("customfield2", scan) is None
+
+
+def test_setup_sensor_toggle_keys():
+    """It should only set up toggle keys for the keys 1 through 9."""
+
+    # there's only one toggle key for a single sensor
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    sensor_model_1 = [SensorModel(meta)]
+    viz = LidarScanViz([meta], MockPointViz())
+    key_bindings = {}
+    viz._setup_sensor_toggle_keys(sensor_model_1, key_bindings)
+    assert list(key_bindings.keys()) == [(ord('1'), 2)]
+
+    # there's only MAX_SENSOR_TOGGLE_KEYS for > MAX_SENSOR_TOGGLE_KEYS sensors
+    sensor_model_2 = [SensorModel(meta) for _ in range(LidarScanViz.MAX_SENSOR_TOGGLE_KEYS + 1)]
+    viz = LidarScanViz([meta] * (LidarScanViz.MAX_SENSOR_TOGGLE_KEYS + 1), MockPointViz())
+    viz._setup_sensor_toggle_keys(sensor_model_2, key_bindings)
+    assert len(key_bindings.keys()) == LidarScanViz.MAX_SENSOR_TOGGLE_KEYS
+
+    for i, key in enumerate(key_bindings.keys()):
+        assert key == (ord('1') + i, 2)
+
+
+def test_update_model_even_for_sensors_not_enabled():
+    """Clouds and images should be updated even when the sensor isn't enabled."""
+
+    # TODO: yet another example of how it should be possible to access Cloud and Image attrs
+    update_cloud_called = False
+    update_image_called = False
+
+    def update_cloud_mock(*args, **kwargs):
+        nonlocal update_cloud_called
+        update_cloud_called = True
+
+    def update_image_mock(*args, **kwargs):
+        nonlocal update_image_called
+        update_image_called = True
+
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    scan = LidarScan(meta.h, meta.w)
+    sensor = model._sensors[0]
+    sensor.update_cloud = update_cloud_mock
+    sensor.update_image = update_image_mock
+
+    # sensor is disabled
+    sensor._enabled = False
+
+    assert not update_cloud_called and not update_image_called
+
+    model.update([scan])
+
+    assert not sensor._enabled and update_cloud_called and update_image_called
+
+
+def test_viz_doesnt_crash_when_image_sizes_zero():
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    model = LidarScanVizModel([meta], _img_aspect_ratio=0)
+    image = model._sensors[0]._images[0]
+    image.set_position(0, 0, 0, 0)
+    model._img_size_fraction = 0
+    model.mouse_button_handler(
+        WindowCtx(),
+        MouseButton.MOUSE_BUTTON_RIGHT,
+        MouseButtonEvent.MOUSE_BUTTON_PRESSED,
+        EventModifierKeys.MOD_NONE
+    )

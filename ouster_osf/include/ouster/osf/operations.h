@@ -13,6 +13,7 @@
 #include "ouster/osf/basics.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -25,6 +26,7 @@ namespace osf {
  *             metas)
  * @return JSON formatted string of the OSF metadata + header
  */
+OUSTER_API_FUNCTION
 std::string dump_metadata(const std::string& file, bool full = true);
 
 /**
@@ -35,6 +37,7 @@ std::string dump_metadata(const std::string& file, bool full = true);
  * @param[in] with_decoding decode known messages (used to time a
  *                          reading + decoding together)
  */
+OUSTER_API_FUNCTION
 void parse_and_print(const std::string& file, bool with_decoding = false);
 
 /**
@@ -44,6 +47,7 @@ void parse_and_print(const std::string& file, bool with_decoding = false);
  * @param[in] backup_file_name The path to store the metadata blob backup.
  * @return The number of the bytes written to the backup file.
  */
+OUSTER_API_FUNCTION
 int64_t backup_osf_file_metablob(const std::string& osf_file_name,
                                  const std::string& backup_file_name);
 
@@ -54,6 +58,7 @@ int64_t backup_osf_file_metablob(const std::string& osf_file_name,
  * @param[in] backup_file_name The path to the metadata blob backup.
  * @return The number of the bytes written to the OSF file.
  */
+OUSTER_API_FUNCTION
 int64_t restore_osf_file_metablob(const std::string& osf_file_name,
                                   const std::string& backup_file_name);
 
@@ -61,9 +66,10 @@ int64_t restore_osf_file_metablob(const std::string& osf_file_name,
  * Modify an OSF files sensor_info metadata.
  *
  * @param[in] file_name The OSF file to modify.
- * @param[in] new_metadata The new metadata for the OSF file
+ * @param[out] new_metadata The new metadata for the OSF file
  * @return The number of the bytes written to the OSF file.
  */
+OUSTER_API_FUNCTION
 int64_t osf_file_modify_metadata(
     const std::string& file_name,
     const std::vector<ouster::sensor::sensor_info>& new_metadata);

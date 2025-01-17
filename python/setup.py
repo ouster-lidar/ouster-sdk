@@ -56,7 +56,8 @@ class CMakeBuild(build_ext):
 
         cmake_args = [
             '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
-            '-DPYTHON_EXECUTABLE=' + sys.executable
+            '-DPYTHON_EXECUTABLE=' + sys.executable,
+            '-DBUILD_SHARED_LIBS:BOOL=OFF'
         ]
 
         # Bug in pybind11 cmake strips symbols with RelWithDebInfo

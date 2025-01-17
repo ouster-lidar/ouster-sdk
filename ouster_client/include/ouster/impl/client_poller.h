@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include "ouster/client.h"
+#include "ouster/visibility.h"
+
 namespace ouster {
 namespace sensor {
 namespace impl {
@@ -12,11 +15,12 @@ namespace impl {
 /**
  * Poller used in multiclient scenarios
  */
-struct client_poller;
+struct OUSTER_API_CLASS client_poller;
 
 /**
  * produces uninitialized poller
  */
+OUSTER_API_FUNCTION
 std::shared_ptr<client_poller> make_poller();
 
 /**
@@ -24,6 +28,7 @@ std::shared_ptr<client_poller> make_poller();
  *
  * @param[in] poller client_poller to reset
  */
+OUSTER_API_FUNCTION
 void reset_poll(client_poller& poller);
 
 /**
@@ -32,6 +37,7 @@ void reset_poll(client_poller& poller);
  * @param[in] poller client_poller
  * @param[in] cli client to watch
  */
+OUSTER_API_FUNCTION
 void set_poll(client_poller& poller, const client& cli);
 
 /**
@@ -42,6 +48,7 @@ void set_poll(client_poller& poller, const client& cli);
  *
  * @return -1 for error, 0 for timeout, otherwise number of messages received
  */
+OUSTER_API_FUNCTION
 int poll(client_poller& poller, int timeout_sec = 1);
 
 /**
@@ -52,6 +59,7 @@ int poll(client_poller& poller, int timeout_sec = 1);
  * @return client_state which is one of CLIENT_ERROR or EXIT on error,
  *         otherwise returning TIMEOUT if no error occurred
  */
+OUSTER_API_FUNCTION
 client_state get_error(const client_poller& poller);
 
 /**
@@ -63,6 +71,7 @@ client_state get_error(const client_poller& poller);
  * @return client_state comprising of either LIDAR_DATA or IMU_DATA, or TIMEOUT
  *         if no data was received
  */
+OUSTER_API_FUNCTION
 client_state get_poll(const client_poller& poller, const client& cli);
 
 }  // namespace impl

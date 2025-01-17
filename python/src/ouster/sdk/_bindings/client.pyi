@@ -16,7 +16,7 @@ Note:
 
 import numpy as np
 from numpy import ndarray
-from typing import (Any, ClassVar, Dict, Iterator, List, Optional, overload, Tuple)
+from typing import (Any, ClassVar, Dict, Iterator, List, Optional, overload, Tuple, Union)
 
 from ouster.sdk.client.data import (BufferT, ColHeader, FieldDType, FieldTypes)
 
@@ -51,9 +51,37 @@ class PacketValidationFailure:
         ...
 
 
+class PacketType:
+    Unknown: ClassVar[PacketType]
+    Lidar: ClassVar[PacketType]
+    Imu: ClassVar[PacketType]
+
+    __members__: ClassVar[Dict[str, PacketType]]
+
+    def __init__(self, code: int) -> None:
+        ...
+
+    def __int__(self) -> int:
+        ...
+
+    @property
+    def name(self) -> str:
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
+
+    @classmethod
+    def from_string(cls, s: str) -> PacketType:
+        ...
+
+
 class Packet:
     host_timestamp: int
     capture_timestamp: Optional[float]
+    format: Optional[PacketFormat]
+    type: PacketType
 
     def __init__(self, size: int = ...) -> None:
         ...
@@ -64,12 +92,82 @@ class Packet:
 
 
 class LidarPacket(Packet):
+    @overload
     def validate(self, metadata: SensorInfo, packet_format: PacketFormat) -> PacketValidationFailure:
+        ...
+
+    @overload
+    def validate(self, metadata: SensorInfo) -> PacketValidationFailure:
+        ...
+
+    def packet_type(self) -> int:
+        ...
+
+    def frame_id(self) -> int:
+        ...
+
+    def init_id(self) -> int:
+        ...
+
+    def prod_sn(self) -> int:
+        ...
+
+    def alert_flags(self) -> int:
+        ...
+
+    def countdown_thermal_shutdown(self) -> int:
+        ...
+
+    def countdown_shot_limiting(self) -> int:
+        ...
+
+    def thermal_shutdown(self) -> int:
+        ...
+
+    def shot_limiting(self) -> int:
+        ...
+
+    def crc(self) -> int:
+        ...
+
+    def calculate_crc(self) -> int:
         ...
 
 
 class ImuPacket(Packet):
+    @overload
     def validate(self, metadata: SensorInfo, packet_format: PacketFormat) -> PacketValidationFailure:
+        ...
+
+    @overload
+    def validate(self, metadata: SensorInfo) -> PacketValidationFailure:
+        ...
+
+    def sys_ts(self) -> int:
+        ...
+
+    def accel_ts(self) -> int:
+        ...
+
+    def gyro_ts(self) -> int:
+        ...
+
+    def la_x(self) -> int:
+        ...
+
+    def la_y(self) -> int:
+        ...
+
+    def la_z(self) -> int:
+        ...
+
+    def av_x(self) -> int:
+        ...
+
+    def av_y(self) -> int:
+        ...
+
+    def av_z(self) -> int:
         ...
 
 
@@ -176,6 +274,15 @@ class SensorHttp:
     def firmware_version(self) -> Version:
         ...
 
+    def set_static_ip(self, ip_address: str, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        ...
+
+    def delete_static_ip(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        ...
+
+    def diagnostics_dump(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        ...
+
     @staticmethod
     def create(hostname: str, timeout_sec: int = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> SensorHttp:
         ...
@@ -213,8 +320,7 @@ class ClientEventType:
     Error: ClassVar[ClientEventType]
     Exit: ClassVar[ClientEventType]
     PollTimeout: ClassVar[ClientEventType]
-    ImuPacket: ClassVar[ClientEventType]
-    LidarPacket: ClassVar[ClientEventType]
+    Packet: ClassVar[ClientEventType]
 
     def __init__(self, x: int) -> None:
         ...
@@ -224,6 +330,8 @@ class ClientEvent:
     source: int
     type: ClientEventType
 
+    def packet(self) -> Union[LidarPacket, ImuPacket]:
+        ...
 
 class ProductInfo:
     full_product_info: str
@@ -234,7 +342,7 @@ class ProductInfo:
 
 
 class SensorInfo:
-    sn: str
+    sn: int
     fw_rev: str
     prod_line: str
     format: DataFormat
@@ -943,7 +1051,7 @@ class SensorClient:
     def get_sensor_info(self) -> List[SensorInfo]:
         ...
 
-    def get_packet(self, lp: LidarPacket, ip: ImuPacket, timeout: float = ...) -> ClientEvent:
+    def get_packet(self, timeout: float = ...) -> ClientEvent:
         ...
 
 
@@ -1018,6 +1126,7 @@ class LidarScan:
     frame_status: int  # contains both shutdown and shot limiting status bits
     shutdown_countdown: int
     shot_limiting_countdown: int
+    sensor_info: SensorInfo
 
     @overload
     def __init__(self, h: int, w: int) -> None:
@@ -1041,6 +1150,10 @@ class LidarScan:
 
     @overload
     def __init__(self, scan: LidarScan, fields: List[FieldType]) -> None:
+        ...
+
+    @overload
+    def __init__(self, info: SensorInfo) -> None:
         ...
 
     @property
@@ -1298,11 +1411,18 @@ class ValidatorIssues:
 
 
 def parse_and_validate_metadata(metadata: str) -> Tuple[SensorInfo, ValidatorIssues]:
-    ...                         
+    ...
 
+def parse_and_validate_sensor_config(metadata: str) -> Tuple[SensorConfig, ValidatorIssues]:
+    ...
 
 def dewarp(points: ndarray, poses: ndarray) -> ndarray:
     ...
 
+
 def transform(points: ndarray, pose: ndarray) -> ndarray:
+    ...
+
+
+def in_multicast(addr: str) -> bool:
     ...

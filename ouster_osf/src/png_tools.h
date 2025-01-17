@@ -5,12 +5,15 @@
 
 #pragma once
 
+#include <png.h>
+
 #include <memory>
 #include <vector>
 
 #include "os_sensor/common_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -21,45 +24,16 @@ using ScanChannelData = std::vector<uint8_t>;
 // Encoded PNG buffers
 using ScanData = std::vector<ScanChannelData>;
 
-// FieldTypes container
-using LidarScanFieldTypes =
-    std::vector<std::pair<std::string, sensor::ChanFieldType>>;
-
+bool png_osf_write_init(png_structpp png_ptrp, png_infopp png_info_ptrp);
+void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
+                         ScanChannelData& res_buf, uint32_t width,
+                         uint32_t height, int sample_depth, int color_type,
+                         int compression_amount);
 /**
  * libpng only versions for Encode/Decode LidarScan to PNG buffers
  */
 
 // ========== Decode Functions ===================================
-
-/**
- * Decode the PNG buffers into LidarScan object. This is a dispatch function to
- * the specific decoding functions.
- *
- * @param[out] lidar_scan The output object that will be filled as a result of
- *                        decoding.
- * @param[in] scan_data PNG buffers to decode.
- * @param[in] px_offset Pixel shift per row used to reconstruct staggered range
- *                      image form.
- * @param[in] fields Fields to deserialize in the correct order.
- * @return false (0) if operation is successful true (1) if error occured
- */
-bool scanDecode(LidarScan& lidar_scan, const ScanData& scan_data,
-                const std::vector<int>& px_offset,
-                const ouster::LidarScanFieldTypes& fields);
-
-#ifdef OUSTER_OSF_NO_THREADING
-/// Decoding eUDP LidarScan
-// TODO[pb]: Make decoding of just some fields from scan data?? Not now ...
-bool scanDecodeFieldsSingleThread(LidarScan& lidar_scan,
-                                  const ScanData& scan_data,
-                                  const std::vector<int>& px_offset,
-                                  const ouster::LidarScanFieldTypes& fields);
-#else
-/// Decoding eUDP LidarScan, multithreaded version
-bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
-                      const std::vector<int>& px_offset,
-                      const ouster::LidarScanFieldTypes& fields);
-#endif
 
 /**
  * Decode a single field to lidar_scan
@@ -74,10 +48,10 @@ bool scanDecodeFields(LidarScan& lidar_scan, const ScanData& scan_data,
  *                      image form.
  * @return false (0) if operation is successful true (1) if error occured
  */
-bool fieldDecode(
-    LidarScan& lidar_scan, const ScanData& scan_data, size_t scan_idx,
-    const std::pair<std::string, sensor::ChanFieldType>& field_type,
-    const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION
+bool fieldDecode(LidarScan& lidar_scan, const ScanData& scan_data,
+                 size_t scan_idx, const ouster::FieldType& field_type,
+                 const std::vector<int>& px_offset);
 
 /**
  * Decode multiple fields to lidar_scan
@@ -96,6 +70,7 @@ bool fieldDecode(
  *                   image form
  * @return false (0) if operation is successful true (1) if error occured
  */
+OUSTER_API_FUNCTION
 bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
                       const std::vector<size_t>& scan_idxs,
                       const LidarScanFieldTypes& field_types,
@@ -115,8 +90,8 @@ bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
 
 /** @copydoc OSFPngDecode8 */
 template <typename T>
-bool decode8bitImage(Eigen::Ref<img_t<T>> img,
-                     const ScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode8bitImage(Eigen::Ref<img_t<T>> img,
+                                         const ScanChannelData& channel_buf);
 
 /**
  * @copydoc OSFPngDecode8
@@ -124,9 +99,9 @@ bool decode8bitImage(Eigen::Ref<img_t<T>> img,
  *                      image form
  */
 template <typename T>
-bool decode8bitImage(Eigen::Ref<img_t<T>> img,
-                     const ScanChannelData& channel_buf,
-                     const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode8bitImage(Eigen::Ref<img_t<T>> img,
+                                         const ScanChannelData& channel_buf,
+                                         const std::vector<int>& px_offset);
 
 /**
  * @defgroup OSFPngDecode16 Decoding Functionality.
@@ -147,14 +122,14 @@ bool decode8bitImage(Eigen::Ref<img_t<T>> img,
  *                      image form
  */
 template <typename T>
-bool decode16bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode16bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf,
+                                          const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode16 */
 template <typename T>
-bool decode16bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode16bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf);
 
 /**
  * @defgroup OSFPngDecode24 Decoding Functionality.
@@ -175,14 +150,14 @@ bool decode16bitImage(Eigen::Ref<img_t<T>> img,
  *                      image form.
  */
 template <typename T>
-bool decode24bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode24bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf,
+                                          const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode24 */
 template <typename T>
-bool decode24bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode24bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf);
 
 /**
  * @defgroup OSFPngDecode32 Decoding Functionality.
@@ -203,14 +178,14 @@ bool decode24bitImage(Eigen::Ref<img_t<T>> img,
  *                      image form.
  */
 template <typename T>
-bool decode32bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode32bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf,
+                                          const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode32 */
 template <typename T>
-bool decode32bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf);
+OUSTER_API_FUNCTION bool decode32bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf);
 
 /**
  * @defgroup OSFPngDecode64 Decoding Functionality.
@@ -231,238 +206,14 @@ bool decode32bitImage(Eigen::Ref<img_t<T>> img,
  *                      image form.
  */
 template <typename T>
-bool decode64bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset);
+OUSTER_API_FUNCTION bool decode64bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf,
+                                          const std::vector<int>& px_offset);
 
 /** @copydoc OSFPngDecode64 */
 template <typename T>
-bool decode64bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf);
-
-// ========== Encode Functions ===================================
-
-/**
- * Encode LidarScan to PNG buffers storing all field_types present in an object.
- *
- * @param[in] lidar_scan The LidarScan object to encode.
- * @param[in] px_offset Pixel shift per row used to
- *                      destaggered LidarScan data.
- * @param[in] field_types the list of fields to encode.
- * @return encoded PNG buffers, empty() if error occured.
- */
-ScanData scanEncode(const LidarScan& lidar_scan,
-                    const std::vector<int>& px_offset,
-                    const LidarScanFieldTypes& field_types);
-
-#ifdef OUSTER_OSF_NO_THREADING
-/**
- * Encode the lidar scan fields to PNGs channel buffers (ScanData).
- * Single-threaded implementation.
- *
- * @param[in] lidar_scan A lidar scan object to encode.
- * @param[in] px_offset Pixel shift per row used to construct de-staggered range
- *                      image form.
- * @param[in] field_types the list of fields to encode.
- * @return Encoded PNGs in ScanData in order of field_types.
- */
-ScanData scanEncodeFieldsSingleThread(const LidarScan& lidar_scan,
-                                      const std::vector<int>& px_offset,
-                                      const LidarScanFieldTypes& field_types);
-#else
-/**
- * Encode the lidar scan fields to PNGs channel buffers (ScanData).
- * Multi-threaded implementation.
- *
- * @param[in] lidar_scan A lidar scan object to encode.
- * @param[in] px_offset Pixel shift per row used to construct de-staggered range
- *                      image form.
- * @param[in] field_types The field types to use for encoding.
- * @return Encoded PNGs in ScanData in order of field_types.
- */
-ScanData scanEncodeFields(const LidarScan& lidar_scan,
-                          const std::vector<int>& px_offset,
-                          const LidarScanFieldTypes& field_types);
-#endif
-/**
- * Encode a single lidar scan field to PNGs channel buffer and place it to a
- * specified `scan_data[scan_idx]` place
- *
- * @param[in] lidar_scan a lidar scan object to encode
- * @param[in] field_type a filed_type of lidar scan to encode
- * @param[in] px_offset  pixel shift per row used to construct de-staggered
- * range image form
- * @param[out] scan_data channel buffers storage for the encoded lidar_scan
- * @param[in] scan_idx index in `scan_data` of the beginning of field buffers
- * where the result of encoding will be inserted
- * @return false (0) if operation is successful true (1) if error occured
- */
-bool fieldEncode(
-    const LidarScan& lidar_scan,
-    const std::pair<std::string, sensor::ChanFieldType>& field_type,
-    const std::vector<int>& px_offset, ScanData& scan_data, size_t scan_idx);
-
-/**
- * Encode multiple lidar scan fields to PNGs channel buffers and insert them to
- * a specified places `scan_idxs` in `scan_data`.
- *
- * @param[in] lidar_scan a lidar scan object to encode
- * @param[in] field_types a vector of filed_types of
- *                        lidar scan to encode
- * @param[in] px_offset pixel shift per row used to construct de-staggered range
- *                      image form
- * @param[out] scan_data channel buffers storage for the encoded lidar_scan
- * @param[in] scan_idxs a vector of indices in `scan_data` of the beginning of
- *                      field buffers where the result of encoding will be
- *                      inserted. `field_types.size()` should be equal to
- *                      `scan_idxs.size()`
- */
-void fieldEncodeMulti(const LidarScan& lidar_scan,
-                      const LidarScanFieldTypes& field_types,
-                      const std::vector<int>& px_offset, ScanData& scan_data,
-                      const std::vector<size_t>& scan_idxs);
-
-/**
- * @defgroup OSFPngEncode8 Encoding Functionality.
- * Encode img object into a 8 bit, Gray, PNG buffer.
- *
- * @tparam T The type to use for the output array.
- *
- * @param[out] res_buf The output buffer with a single encoded PNG.
- * @param[in] img The image object to encode.
- * @return false (0) if operation is successful, true (1) if error occured
- */
-
-/**
- * @copydoc OSFPngEncode8
- * @param[in] px_offset Pixel shift per row used to destagger img data.
- */
-template <typename T>
-bool encode8bitImage(ScanChannelData& res_buf,
-                     const Eigen::Ref<const img_t<T>>& img,
-                     const std::vector<int>& px_offset);
-
-/** @copydoc OSFPngEncode8 */
-template <typename T>
-bool encode8bitImage(ScanChannelData& res_buf,
-                     const Eigen::Ref<const img_t<T>>& img);
-
-/**
- * Encode img object into a 16 bit, Gray, PNG buffer.
- *
- * @tparam T The type to use for the output array.
- *
- * @param[out] res_buf The output buffer with a single encoded PNG.
- * @param[in] img The image object to encode.
- * @param[in] px_offset Pixel shift per row used to destagger img data.
- * @return false (0) if operation is successful, true (1) if error occured
- */
-template <typename T>
-bool encode16bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img,
-                      const std::vector<int>& px_offset);
-
-/**
- * Encode 2D image of a typical lidar scan field channel into a 16 bit, Gray,
- * PNG buffer.
- *
- * @tparam T The type to use for the output array.
- *
- * @param[out] res_buf The output buffer with a single encoded PNG.
- * @param[in] img The image object to encode.
- * @return false (0) if operation is successful, true (1) if error occured
- */
-template <typename T>
-bool encode16bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img);
-
-/**
- * @defgroup OSFPngEncode32 Encoding Functionality.
- * Encode 2D image of a typical lidar scan field channel into a 32 bit, RGBA,
- * PNG buffer.
- *
- * @tparam T The type to use for the output array.
- *
- * @param[out] res_buf The output buffer with a single encoded PNG.
- * @param[in] img 2D image or a single LidarScan field data.
- * @return false (0) if operation is successful, true (1) if error occured
- */
-
-/**
- * @copydoc OSFPngEncode32
- * @param[in] px_offset Pixel shift per row used to destagger img data.
- */
-template <typename T>
-bool encode32bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img,
-                      const std::vector<int>& px_offset);
-
-/** @copydoc OSFPngEncode32 */
-template <typename T>
-bool encode32bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img);
-
-/**
- * @defgroup OSFPngEncode24 Encoding Functionality.
- * Encode 2D image of a typical lidar scan field channel into a 24 bit, RGB,
- * PNG buffer.
- *
- * @tparam T The type to use for the output array.
- *
- * @param[out] res_buf The output buffer with a single encoded PNG.
- * @param[in] img 2D image or a single LidarScan field data.
- * @return false (0) if operation is successful, true (1) if error occured
- */
-
-/**
- * @copydoc OSFPngEncode24
- * @param[in] px_offset Pixel shift per row used to destagger img data.
- */
-template <typename T>
-bool encode24bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img,
-                      const std::vector<int>& px_offset);
-
-/** @copydoc OSFPngEncode24 */
-template <typename T>
-bool encode24bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img);
-
-/**
- * @defgroup OSFPngEncode64 Encoding Functionality.
- * Encode 2D image of a typical lidar scan field channel into a 64 bit, RGBA,
- * PNG buffer.
- *
- * @tparam T The type to use for the output array.
- *
- * @param[out] res_buf The output buffer with a single encoded PNG.
- * @param[in] img 2D image or a single LidarScan field data.
- * @return false (0) if operation is successful, true (1) if error occured
- */
-
-/**
- * @copydoc OSFPngEncode64
- * @param[in] px_offset Pixel shift per row used to destagger img data.
- */
-template <typename T>
-bool encode64bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img,
-                      const std::vector<int>& px_offset);
-
-/** @copydoc OSFPngEncode64 */
-template <typename T>
-bool encode64bitImage(ScanChannelData& res_buf,
-                      const Eigen::Ref<const img_t<T>>& img);
-
-/**
- * Encode Field into a data buffer.
- * May use png compression, depending on field dimensionality.
- *
- * @param[in] field field to encode
- *
- * @return output buffer
- */
-ScanChannelData encodeField(const ouster::Field& field);
+OUSTER_API_FUNCTION bool decode64bitImage(Eigen::Ref<img_t<T>> img,
+                                          const ScanChannelData& channel_buf);
 
 /**
  * Decode Field from a data buffer.
@@ -471,6 +222,7 @@ ScanChannelData encodeField(const ouster::Field& field);
  * @param[inout] field field to store result in
  * @param[in] buffer buffer to decode
  */
+OUSTER_API_FUNCTION
 void decodeField(ouster::Field& field, const ScanChannelData& buffer);
 
 }  // namespace osf

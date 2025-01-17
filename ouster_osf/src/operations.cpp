@@ -8,11 +8,11 @@
 #include <atomic>
 #include <csignal>
 #include <iostream>
+#include <jsoncons/json.hpp>
+#include <jsoncons/json_parser.hpp>
 
 #include "compat_ops.h"
 #include "fb_utils.h"
-#include "json/json.h"
-#include "json_utils.h"
 #include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/file.h"
@@ -31,63 +31,69 @@ std::string dump_metadata(const std::string& file, bool full) {
     OsfFile osf_file(file);
     auto osf_header = get_osf_header_from_buf(osf_file.get_header_chunk_ptr());
 
-    Json::Value root{};
+    jsoncons::json root;
 
-    root["header"]["size"] = static_cast<Json::UInt64>(osf_file.size());
-    root["header"]["version"] = static_cast<Json::Int>(osf_file.version());
+    root["header"]["size"] = static_cast<uint64_t>(osf_file.size());
+    root["header"]["version"] = static_cast<int>(osf_file.version());
     root["header"]["status"] = to_string(osf_header->status());
     root["header"]["metadata_offset"] =
-        static_cast<Json::UInt64>(osf_file.metadata_offset());
+        static_cast<uint64_t>(osf_file.metadata_offset());
     root["header"]["chunks_offset"] =
-        static_cast<Json::UInt64>(osf_file.chunks_offset());
+        static_cast<uint64_t>(osf_file.chunks_offset());
 
     Reader reader(file);
 
     root["metadata"]["id"] = reader.metadata_id();
     root["metadata"]["start_ts"] =
-        static_cast<Json::UInt64>(reader.start_ts().count());
-    root["metadata"]["end_ts"] =
-        static_cast<Json::UInt64>(reader.end_ts().count());
+        static_cast<uint64_t>(reader.start_ts().count());
+    root["metadata"]["end_ts"] = static_cast<uint64_t>(reader.end_ts().count());
 
     auto osf_metadata =
         get_osf_metadata_from_buf(osf_file.get_metadata_chunk_ptr());
 
     if (full) {
-        root["metadata"]["chunks"] = Json::arrayValue;
+        jsoncons::json chunks(jsoncons::json_array_arg);
         for (size_t i = 0; i < osf_metadata->chunks()->size(); ++i) {
             auto osf_chunk = osf_metadata->chunks()->Get(i);
-            Json::Value chunk{};
-            chunk["start_ts"] =
-                static_cast<Json::UInt64>(osf_chunk->start_ts());
-            chunk["end_ts"] = static_cast<Json::UInt64>(osf_chunk->end_ts());
-            chunk["offset"] = static_cast<Json::UInt64>(osf_chunk->offset());
-            root["metadata"]["chunks"].append(chunk);
+            jsoncons::json chunk;
+            chunk["start_ts"] = static_cast<uint64_t>(osf_chunk->start_ts());
+            chunk["end_ts"] = static_cast<uint64_t>(osf_chunk->end_ts());
+            chunk["offset"] = static_cast<uint64_t>(osf_chunk->offset());
+            chunks.emplace_back(chunk);
         }
+        root["metadata"]["chunks"] = chunks;
     }
 
     const MetadataStore& meta_store = reader.meta_store();
-
-    root["metadata"]["entries"] = Json::arrayValue;
-
+    jsoncons::json entries(jsoncons::json_array_arg);
     for (const auto& me : meta_store.entries()) {
-        Json::Value meta_element{};
-        meta_element["id"] = static_cast<Json::Int>(me.first);
+        jsoncons::json meta_element;
+        meta_element["id"] = static_cast<int>(me.first);
         meta_element["type"] = me.second->type();
-
         if (full) {
-            const std::string me_str = me.second->repr();
-            Json::Value me_obj{};
-            if (parse_json(me_str, me_obj)) {
-                meta_element["buffer"] = me_obj;
+            const std::string temp_data = me.second->repr();
+            std::istringstream temp(temp_data);
+
+            jsoncons::json_decoder<jsoncons::json> temp_decoder;
+            jsoncons::json_stream_reader reader(temp, temp_decoder);
+
+            std::error_code temp_error_code;
+            reader.read(temp_error_code);
+            if (!temp_error_code) {
+                meta_element["buffer"] = temp_decoder.get_result();
             } else {
-                meta_element["buffer"] = me_str;
+                jsoncons::json buffer = temp_data;
+                meta_element["buffer"] = buffer;
             }
         }
 
-        root["metadata"]["entries"].append(meta_element);
+        entries.emplace_back(meta_element);
     }
+    root["metadata"]["entries"] = entries;
 
-    return json_string(root);
+    std::string out;
+    root.dump(out);
+    return out;
 }
 
 void parse_and_print(const std::string& file, bool with_decoding) {

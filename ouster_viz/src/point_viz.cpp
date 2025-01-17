@@ -232,6 +232,109 @@ PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
 
 PointViz::~PointViz() { glDeleteVertexArrays(1, &pimpl->vao); }
 
+void PointViz::add_default_controls(std::mutex* mx) {
+    bool orthographic = false;
+
+    this->push_key_handler(
+        [this, mx, orthographic](const WindowCtx&, int key, int mods) mutable {
+            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
+                           : std::unique_lock<std::mutex>{};
+            if (mods == 0) {
+                switch (key) {
+                    case GLFW_KEY_W:
+                        this->camera().pitch(5);
+                        this->current_camera().pitch(5);
+                        break;
+                    case GLFW_KEY_S:
+                        this->camera().pitch(-5);
+                        this->current_camera().pitch(-5);
+                        break;
+                    case GLFW_KEY_A:
+                        this->camera().yaw(5);
+                        this->current_camera().yaw(5);
+                        break;
+                    case GLFW_KEY_D:
+                        this->camera().yaw(-5);
+                        this->current_camera().yaw(-5);
+                        break;
+                    case GLFW_KEY_EQUAL:
+                        this->camera().dolly(5);
+                        this->current_camera().dolly(5);
+                        break;
+                    case GLFW_KEY_MINUS:
+                        this->camera().dolly(-5);
+                        this->current_camera().dolly(-5);
+                        break;
+                    case GLFW_KEY_0:
+                        orthographic = !orthographic;
+                        this->camera().set_orthographic(orthographic);
+                        this->current_camera().set_orthographic(orthographic);
+                        break;
+                    case GLFW_KEY_ESCAPE:
+                        this->running(false);
+                        break;
+                    default:
+                        break;
+                }
+            } else if (mods == GLFW_MOD_SHIFT) {
+                switch (key) {
+                    case GLFW_KEY_R:
+                        this->camera().reset();
+                        this->current_camera().reset();
+                        break;
+                    default:
+                        break;
+                }
+            } else if (mods == GLFW_MOD_CONTROL) {
+                switch (key) {
+                    case GLFW_KEY_R:
+                        this->camera().birds_eye_view();
+                        this->current_camera().birds_eye_view();
+                        break;
+                    default:
+                        break;
+                }
+            }
+            return true;
+        });
+
+    this->push_scroll_handler(
+        [this, mx](const WindowCtx&, double, double yoff) {
+            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
+                           : std::unique_lock<std::mutex>{};
+            this->camera().dolly(static_cast<int>(yoff * 5));
+            this->current_camera().dolly(static_cast<int>(yoff * 5));
+            return true;
+        });
+
+    this->push_mouse_pos_handler(
+        [this, mx](const WindowCtx& wc, double xpos, double ypos) {
+            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
+                           : std::unique_lock<std::mutex>{};
+            double dx = (xpos - wc.mouse_x);
+            double dy = (ypos - wc.mouse_y);
+            // orbit or dolly in xy
+            if (wc.lbutton_down) {
+                constexpr double sensitivity = 0.3;
+                this->camera().yaw(sensitivity * dx);
+                this->camera().pitch(sensitivity * dy);
+                this->current_camera().yaw(sensitivity * dx);
+                this->current_camera().pitch(sensitivity * dy);
+            } else if (wc.mbutton_down) {
+                // convert from screen coordinated to fractions of window size
+                // TODO: factor out conversion?
+                const double window_diagonal =
+                    std::sqrt(wc.window_width * wc.window_width +
+                              wc.window_height * wc.window_height);
+                dx *= 2.0 / window_diagonal;
+                dy *= 2.0 / window_diagonal;
+                this->camera().dolly_xy(dx, dy);
+                this->current_camera().dolly_xy(dx, dy);
+            }
+            return true;
+        });
+}
+
 void PointViz::run() {
     pimpl->glfw->running(true);
     pimpl->glfw->visible(true);
@@ -846,9 +949,17 @@ std::pair<double, double> WindowCtx::window_coordinates(
     return std::pair<double, double>(window_x, window_y);
 }
 
-nonstd::optional<std::pair<int, int>> Image::window_coordinates_to_image_pixel(
+std::pair<int, int> Image::window_coordinates_to_image_pixel(
     const WindowCtx& ctx, double x, double y) const {
     ctx.check_invariants();
+    if (image_width_ == 0 || image_height_ == 0) {
+        throw std::runtime_error("image data has zero width or height");
+    }
+    // the image width or height in window coordinates is zero
+    if (position_[1] - position_[0] == 0.0 ||
+        position_[2] - position_[3] == 0.0) {
+        throw std::runtime_error("image has an invalid position");
+    }
     auto world = ctx.normalized_coordinates(x, y);
 
     // compute image pixel coordinates, accounting for hshift
@@ -858,15 +969,11 @@ nonstd::optional<std::pair<int, int>> Image::window_coordinates_to_image_pixel(
 
     // Important! position_ values are in a different order than the parameters
     // to set_position. :-/
-    if (mx >= position_[0] && mx <= position_[1] && my >= position_[3] &&
-        my <= position_[2]) {
-        double img_rel_x = (mx - position_[0]) / (position_[1] - position_[0]);
-        double img_rel_y = (position_[2] - my) / (position_[2] - position_[3]);
-        int px = static_cast<int>(img_rel_x * image_width_);
-        int py = static_cast<int>(img_rel_y * image_height_);
-        pixel = std::pair<int, int>(px, py);
-    }
-    return pixel;
+    double img_rel_x = (mx - position_[0]) / (position_[1] - position_[0]);
+    double img_rel_y = (position_[2] - my) / (position_[2] - position_[3]);
+    int px = static_cast<int>(img_rel_x * image_width_);
+    int py = static_cast<int>(img_rel_y * image_height_);
+    return std::make_pair(px, py);
 }
 
 std::pair<double, double> Image::image_pixel_to_window_coordinates(
@@ -999,105 +1106,7 @@ void TargetDisplay::set_ring_line_width(int line_width) {
 }
 
 void add_default_controls(viz::PointViz& viz, std::mutex* mx) {
-    bool orthographic = false;
-
-    viz.push_key_handler(
-        [=, &viz](const WindowCtx&, int key, int mods) mutable {
-            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
-                           : std::unique_lock<std::mutex>{};
-            if (mods == 0) {
-                switch (key) {
-                    case GLFW_KEY_W:
-                        viz.camera().pitch(5);
-                        viz.current_camera().pitch(5);
-                        break;
-                    case GLFW_KEY_S:
-                        viz.camera().pitch(-5);
-                        viz.current_camera().pitch(-5);
-                        break;
-                    case GLFW_KEY_A:
-                        viz.camera().yaw(5);
-                        viz.current_camera().yaw(5);
-                        break;
-                    case GLFW_KEY_D:
-                        viz.camera().yaw(-5);
-                        viz.current_camera().yaw(-5);
-                        break;
-                    case GLFW_KEY_EQUAL:
-                        viz.camera().dolly(5);
-                        viz.current_camera().dolly(5);
-                        break;
-                    case GLFW_KEY_MINUS:
-                        viz.camera().dolly(-5);
-                        viz.current_camera().dolly(-5);
-                        break;
-                    case GLFW_KEY_0:
-                        orthographic = !orthographic;
-                        viz.camera().set_orthographic(orthographic);
-                        viz.current_camera().set_orthographic(orthographic);
-                        break;
-                    case GLFW_KEY_ESCAPE:
-                        viz.running(false);
-                        break;
-                    default:
-                        break;
-                }
-            } else if (mods == GLFW_MOD_SHIFT) {
-                switch (key) {
-                    case GLFW_KEY_R:
-                        viz.camera().reset();
-                        viz.current_camera().reset();
-                        break;
-                    default:
-                        break;
-                }
-            } else if (mods == GLFW_MOD_CONTROL) {
-                switch (key) {
-                    case GLFW_KEY_R:
-                        viz.camera().birds_eye_view();
-                        viz.current_camera().birds_eye_view();
-                        break;
-                    default:
-                        break;
-                }
-            }
-            return true;
-        });
-
-    viz.push_scroll_handler([=, &viz](const WindowCtx&, double, double yoff) {
-        auto lock = mx ? std::unique_lock<std::mutex>{*mx}
-                       : std::unique_lock<std::mutex>{};
-        viz.camera().dolly(static_cast<int>(yoff * 5));
-        viz.current_camera().dolly(static_cast<int>(yoff * 5));
-        return true;
-    });
-
-    viz.push_mouse_pos_handler(
-        [=, &viz](const WindowCtx& wc, double xpos, double ypos) {
-            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
-                           : std::unique_lock<std::mutex>{};
-            double dx = (xpos - wc.mouse_x);
-            double dy = (ypos - wc.mouse_y);
-            // orbit or dolly in xy
-            if (wc.lbutton_down) {
-                constexpr double sensitivity = 0.3;
-                viz.camera().yaw(sensitivity * dx);
-                viz.camera().pitch(sensitivity * dy);
-                viz.current_camera().yaw(sensitivity * dx);
-                viz.current_camera().pitch(sensitivity * dy);
-            } else if (wc.mbutton_down) {
-                // convert from screen coordinated to fractions of window size
-                // TODO: factor out conversion?
-                const double window_diagonal =
-                    std::sqrt(wc.window_width * wc.window_width +
-                              wc.window_height * wc.window_height);
-                dx *= 2.0 / window_diagonal;
-                dy *= 2.0 / window_diagonal;
-                viz.camera().dolly_xy(dx, dy);
-                viz.current_camera().dolly_xy(dx, dy);
-            }
-            return true;
-        });
+    viz.add_default_controls(mx);
 }
 
 }  // namespace viz

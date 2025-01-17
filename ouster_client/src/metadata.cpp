@@ -8,6 +8,7 @@
 
 #include "ouster/metadata.h"
 
+#include <algorithm>
 #include <exception>
 #include <functional>
 #include <jsoncons/json.hpp>
@@ -63,6 +64,9 @@ ValidatorIssues::ValidatorEntry::ValidatorEntry(const std::string& path,
                                                 const std::string& msg)
     : path(path), msg(msg) {}
 
+ValidatorIssues::ValidatorEntry::ValidatorEntry(const ValidatorEntry& other)
+    : path(other.path), msg(other.msg) {}
+
 std::string ValidatorIssues::ValidatorEntry::to_string() const {
     std::stringstream errorMessage;
     errorMessage << path << ": ";
@@ -74,58 +78,57 @@ std::string ValidatorIssues::ValidatorEntry::to_string() const {
 const std::string& ValidatorIssues::ValidatorEntry::get_path() const {
     return path;
 }
+
 const std::string& ValidatorIssues::ValidatorEntry::get_msg() const {
     return msg;
 }
 
+std::string to_string(const ValidatorIssues::EntryList& list) {
+    std::stringstream output_string;
+    for (auto it : list) {
+        output_string << it.to_string() << std::endl;
+    }
+    return output_string.str();
+}
+
+std::string ValidatorIssues::to_string() const {
+    std::stringstream output_string;
+    if (critical.size() > 0) {
+        output_string << "Critical Issues:" << std::endl;
+        output_string << ouster::to_string(critical);
+    }
+    if (warning.size() > 0) {
+        output_string << "Warning Issues:" << std::endl;
+        output_string << ouster::to_string(warning);
+    }
+    if (information.size() > 0) {
+        output_string << "Information Issues:" << std::endl;
+        output_string << ouster::to_string(information);
+    }
+    return output_string.str();
+}
+
 class MetadataImpl {
-   public:
+   protected:
     /**
      * Internal class for parsing and validating metadata.
      *
      * @param[in] root The root of the json object to parse and validate.
      * @param[out] result The resulting metadata parsed and validated.
      */
-    MetadataImpl(const jsoncons::json& root,
-                 ouster::sensor::sensor_info& sensor_info,
-                 ValidatorIssues& issues)
+    MetadataImpl(const jsoncons::json& root, ValidatorIssues& issues)
         : root(root),
-          sensor_info(sensor_info),
           issues(issues),
           have_prod_line(false),
           prod_line_string("$.sensor_info.prod_line"),
           have_lidar_mode(false),
           lidar_mode_string("$.config_params.lidar_mode"),
           have_pixels_per_column(false),
-          pixels_per_column_string("$.lidar_data_format.pixels_per_column") {
-        parse_and_validate_sensor_info();
-        parse_and_validate_config_params();
-        // parse_and_validate_sensor_info must be run before
-        // parse_and_validate_data_format
-        //  due to requirements on prod_line
-        // parse_and_validate_config_params must be run before
-        // parse_and_validate_data_format
-        //  due to requirements on lidar_mode
-        parse_and_validate_data_format();
-        parse_and_validate_calibration_status();
-        // parse_and_validate_sensor_info must be run before
-        // parse_and_validate_data_format
-        //  due to requirements on prod_line
-        //  parse_and_validate_config_params must be run before
-        //  parse_and_validate_data_format due to requirements on lidar_mode
-        //  parse_and_validate_data_format must be run before
-        //  parse_and_validate_intrinsics due to requirements on
-        //  pixels_per_column
-        parse_and_validate_intrinsics();
-        parse_and_validate_misc();
-    }
+          pixels_per_column_string("$.lidar_data_format.pixels_per_column") {}
 
-   protected:
     // Data
     const jsoncons::json& root;  ///< The json root
-
-    ouster::sensor::sensor_info& sensor_info;  ///< The output sensor info
-    ValidatorIssues& issues;                   ///< The validation output
+    ValidatorIssues& issues;     ///< The validation output
 
     /**
      * Variable to keep track of the status of the prodline.
@@ -182,9 +185,10 @@ class MetadataImpl {
                              const std::string& cause_item,
                              const std::string explanation = "") {
         std::stringstream errorMessage;
-        errorMessage << "Item \"" << item_skipped << "\" Skipped"
-                     << " Due to failures with \"" << cause_item << "\" "
-                     << explanation;
+        errorMessage << "Validation step for path: \"" << item_skipped
+                     << "\" skipped"
+                     << " due to failures validating path: \"" << cause_item
+                     << "\"." << explanation;
 
         auto entry =
             ValidatorIssues::ValidatorEntry(item_skipped, errorMessage.str());
@@ -225,7 +229,7 @@ class MetadataImpl {
      */
     void default_message(const std::string& path) {
         auto entry = ValidatorIssues::ValidatorEntry(
-            path, "Item not found, using defaults");
+            path, "Metadata entry not found (" + path + "), using defaults");
         issues.information.push_back(entry);
     }
 
@@ -257,7 +261,8 @@ class MetadataImpl {
 
         if (zeros == data.size()) {
             std::stringstream errorMessage;
-            errorMessage << "Expected at least some non-zero values in path";
+            errorMessage
+                << "Expected at least some non-zero values in metadata array";
 
             auto entry =
                 ValidatorIssues::ValidatorEntry(path, errorMessage.str());
@@ -287,7 +292,7 @@ class MetadataImpl {
         } else {
             std::stringstream errorMessage;
             errorMessage << "String that was expected to contain data"
-                         << " was empty.";
+                         << " was empty";
 
             auto entry =
                 ValidatorIssues::ValidatorEntry(path, errorMessage.str());
@@ -376,6 +381,8 @@ class MetadataImpl {
             if (value.is<T>() ||
                 (relaxed_number_verification && value.is_number() &&
                  std::is_arithmetic<T>::value)) {
+                // Warning: ran into a really weird argument swapping issue here
+                // we think it was related to ABI issues.
                 output = value.as<T>();
                 bool temp_result =
                     verification_callback(severity, path, value.as<T>());
@@ -396,7 +403,7 @@ class MetadataImpl {
             }
         } else {
             std::stringstream errorMessage;
-            errorMessage << "Expected One Item In Query, "
+            errorMessage << "Expected One Item In Data, "
                          << "Number Of Items: " << value_array.size()
                          << " Values: \"" << value_array << "\"";
             auto entry =
@@ -529,8 +536,8 @@ class MetadataImpl {
         bool result = (index == matches && matches > 0);
         if (verify_count > 0 && matches != verify_count) {
             std::stringstream errorMessage;
-            errorMessage << "Invalid array, got " << index << " items, "
-                         << matches << " matching items,"
+            errorMessage << "Invalid metadata array, got " << index
+                         << " items, " << matches << " matching items,"
                          << " was expecting " << verify_count
                          << " matching items";
             severity.push_back(
@@ -586,8 +593,8 @@ class MetadataImpl {
         bool result = (index == matches && matches > 0);
         if (verify_count > 0 && matches != verify_count) {
             std::stringstream errorMessage;
-            errorMessage << "Invalid array, got " << index << " items, "
-                         << matches << " matching items,"
+            errorMessage << "Invalid metadata array, got " << index
+                         << " items, " << matches << " matching items,"
                          << " was expecting " << verify_count
                          << " matching items";
             severity.push_back(
@@ -625,7 +632,7 @@ class MetadataImpl {
                 output = f(data);
             } catch (std::exception& e) {
                 std::stringstream errorMessage;
-                errorMessage << "Failed To Parse: " << data
+                errorMessage << "Failed To Parse Enum: " << data
                              << " Error Message: \"" << e.what() << "\"";
                 severity.push_back(
                     ValidatorIssues::ValidatorEntry(path, errorMessage.str()));
@@ -694,7 +701,7 @@ class MetadataImpl {
                                     verify_string_not_empty)) {
             std::istringstream date_data(data);
             std::tm t = {};
-            date_data.imbue(std::locale("en_US.utf-8"));
+            date_data.imbue(std::locale("C"));
             date_data >> std::get_time(&t, date_format.c_str());
             if (date_data.fail()) {
                 std::stringstream errorMessage;
@@ -744,7 +751,8 @@ class MetadataImpl {
     }
 
     // Sections
-    void parse_and_validate_sensor_info() {
+    void parse_and_validate_sensor_info(
+        ouster::sensor::sensor_info& sensor_info) {
         parse_and_validate_datetime(issues.information,
                                     "$.sensor_info.build_date", "%Y-%m-%dT%TZ",
                                     sensor_info.build_date);
@@ -774,82 +782,106 @@ class MetadataImpl {
         parse_and_validate_item(issues.information, "$.sensor_info.prod_pn",
                                 sensor_info.prod_pn, verify_string_not_empty);
 
+        std::string sn_string;
         parse_and_validate_item(issues.information, "$.sensor_info.prod_sn",
-                                sensor_info.sn, verify_string_not_empty);
+                                sn_string, verify_string_not_empty);
+        char* end;
+        sensor_info.sn = std::strtoull(sn_string.c_str(), &end, 10);
+        const char* expected_end = sn_string.c_str() + sn_string.length();
+        if (end != expected_end) {
+            std::stringstream errorMessage;
+            errorMessage << "prod_sn not a valid integer string: \"";
+            errorMessage << sn_string << "\"";
+
+            auto entry = ValidatorIssues::ValidatorEntry(
+                "$.sensor_info.prod_sn", errorMessage.str());
+            issues.information.push_back(entry);
+        }
 
         parse_and_validate_item(issues.information, "$.sensor_info.status",
                                 sensor_info.status, verify_string_not_empty);
     }
 
-    void parse_and_validate_config_params() {
+    void parse_and_validate_config_params(
+        ouster::sensor::sensor_config& config) {
         std::vector<uint64_t> azimuth_window_data;
         if (parse_and_validate_item(
                 issues.information, "$.config_params.azimuth_window.*",
                 azimuth_window_data, 2,
                 make_verify_in_bounds<uint64_t>(0, 360000))) {
-            sensor_info.config.azimuth_window = {azimuth_window_data[0],
-                                                 azimuth_window_data[1]};
+            config.azimuth_window = {azimuth_window_data[0],
+                                     azimuth_window_data[1]};
         }
 
         parse_and_validate_item(issues.information,
                                 "$.config_params.columns_per_packet",
-                                sensor_info.config.columns_per_packet);
+                                config.columns_per_packet);
 
         if (parse_and_validate_enum<std::string>(
-                issues.information, lidar_mode_string,
-                sensor_info.config.lidar_mode, sensor::lidar_mode_of_string)) {
+                issues.information, lidar_mode_string, config.lidar_mode,
+                sensor::lidar_mode_of_string)) {
             have_lidar_mode = true;
         }
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.multipurpose_io_mode",
-            sensor_info.config.multipurpose_io_mode,
+            config.multipurpose_io_mode,
             ouster::sensor::multipurpose_io_mode_of_string);
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.nmea_baud_rate",
-            sensor_info.config.nmea_baud_rate,
-            ouster::sensor::nmea_baud_rate_of_string);
+            config.nmea_baud_rate, ouster::sensor::nmea_baud_rate_of_string);
 
         uint64_t nmea_ignore_valid_char;
         if (parse_and_validate_item(issues.information,
                                     "$.config_params.nmea_ignore_valid_char",
                                     nmea_ignore_valid_char)) {
-            sensor_info.config.nmea_ignore_valid_char =
-                (nmea_ignore_valid_char != 0);
+            config.nmea_ignore_valid_char = (nmea_ignore_valid_char != 0);
         }
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.nmea_in_polarity",
-            sensor_info.config.nmea_in_polarity,
-            ouster::sensor::polarity_of_string);
+            config.nmea_in_polarity, ouster::sensor::polarity_of_string);
 
         parse_and_validate_item(issues.information,
                                 "$.config_params.nmea_leap_seconds",
-                                sensor_info.config.nmea_leap_seconds, true);
+                                config.nmea_leap_seconds, true);
 
         const std::string operating_mode_string =
             "$.config_params.operating_mode";
         if (!parse_and_validate_enum<std::string>(
                 issues.information, operating_mode_string,
-                sensor_info.config.operating_mode,
+                config.operating_mode,
                 ouster::sensor::operating_mode_of_string)) {
             const std::string auto_start_flag_string =
                 "$.config_params.auto_start_flag";
             bool auto_start_flag;
+            int auto_start_int;
+            std::string auto_start_flag_deprecation =
+                "Please note that auto_start_flag has been deprecated in "
+                "favor "
+                "of operating_mode. Will set operating_mode "
+                "appropriately...";
             if (parse_and_validate_item<bool>(issues.information,
                                               auto_start_flag_string,
                                               auto_start_flag)) {
                 auto entry = ValidatorIssues::ValidatorEntry(
-                    auto_start_flag_string,
-                    "Please note that auto_start_flag has been deprecated in "
-                    "favor "
-                    "of operating_mode. Will set operating_mode "
-                    "appropriately...");
+                    auto_start_flag_string, auto_start_flag_deprecation);
                 issues.information.push_back(entry);
-                sensor_info.config.operating_mode =
-                    auto_start_flag ? sensor::OPERATING_NORMAL
-                                    : sensor::OPERATING_STANDBY;
+                config.operating_mode = auto_start_flag
+                                            ? sensor::OPERATING_NORMAL
+                                            : sensor::OPERATING_STANDBY;
+            } else if (parse_and_validate_item<int>(issues.information,
+                                                    auto_start_flag_string,
+                                                    auto_start_int, true)) {
+                auto entry = ValidatorIssues::ValidatorEntry(
+                    auto_start_flag_string, auto_start_flag_deprecation);
+                issues.information.push_back(entry);
+                auto_start_flag = (auto_start_int != 0);
+                config.operating_mode = auto_start_flag
+                                            ? sensor::OPERATING_NORMAL
+                                            : sensor::OPERATING_STANDBY;
+
             } else {
                 default_message(operating_mode_string);
             }
@@ -857,108 +889,100 @@ class MetadataImpl {
 
         parse_and_validate_item(issues.information,
                                 "$.config_params.phase_lock_enable",
-                                sensor_info.config.phase_lock_enable);
+                                config.phase_lock_enable);
 
         parse_and_validate_item(issues.information,
                                 "$.config_params.phase_lock_offset",
-                                sensor_info.config.phase_lock_offset, true);
+                                config.phase_lock_offset, true);
 
         const std::string signal_multiplier_string =
             "$.config_params.signal_multiplier";
-        if (parse_and_validate_item(
-                issues.information, signal_multiplier_string,
-                sensor_info.config.signal_multiplier, true)) {
+        if (parse_and_validate_item(issues.information,
+                                    signal_multiplier_string,
+                                    config.signal_multiplier, true)) {
             try {
                 ouster::sensor::check_signal_multiplier(
-                    *sensor_info.config.signal_multiplier);
+                    *config.signal_multiplier);
             } catch (std::runtime_error& e) {
                 auto entry = ValidatorIssues::ValidatorEntry(
                     signal_multiplier_string, e.what());
-                issues.information.push_back(entry);
+                issues.critical.push_back(entry);
             }
         }
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.sync_pulse_in_polarity",
-            sensor_info.config.sync_pulse_in_polarity,
-            ouster::sensor::polarity_of_string);
+            config.sync_pulse_in_polarity, ouster::sensor::polarity_of_string);
 
         parse_and_validate_item(issues.information,
                                 "$.config_params.sync_pulse_out_angle",
-                                sensor_info.config.sync_pulse_out_angle,
+                                config.sync_pulse_out_angle,
                                 make_verify_in_bounds<int>(0, 360), true);
 
-        parse_and_validate_item(
-            issues.information, "$.config_params.sync_pulse_out_frequency",
-            sensor_info.config.sync_pulse_out_frequency, true);
+        parse_and_validate_item(issues.information,
+                                "$.config_params.sync_pulse_out_frequency",
+                                config.sync_pulse_out_frequency, true);
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.sync_pulse_out_polarity",
-            sensor_info.config.sync_pulse_out_polarity,
-            ouster::sensor::polarity_of_string);
+            config.sync_pulse_out_polarity, ouster::sensor::polarity_of_string);
 
-        parse_and_validate_item(
-            issues.information, "$.config_params.sync_pulse_out_pulse_width",
-            sensor_info.config.sync_pulse_out_pulse_width, true);
+        parse_and_validate_item(issues.information,
+                                "$.config_params.sync_pulse_out_pulse_width",
+                                config.sync_pulse_out_pulse_width, true);
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.timestamp_mode",
-            sensor_info.config.timestamp_mode,
-            ouster::sensor::timestamp_mode_of_string);
+            config.timestamp_mode, ouster::sensor::timestamp_mode_of_string);
 
         if (!parse_and_validate_item(
-                issues.information, "$.config_params.udp_dest",
-                sensor_info.config.udp_dest, verify_string_not_empty)) {
-            parse_and_validate_item(
-                issues.information, "$.config_params.udp_ip",
-                sensor_info.config.udp_dest, verify_string_not_empty);
+                issues.information, "$.config_params.udp_dest", config.udp_dest,
+                verify_string_not_empty)) {
+            parse_and_validate_item(issues.information,
+                                    "$.config_params.udp_ip", config.udp_dest,
+                                    verify_string_not_empty);
         }
 
-        parse_and_validate_item(issues.information,
-                                "$.config_params.udp_port_imu",
-                                sensor_info.config.udp_port_imu,
-                                make_verify_in_bounds<uint16_t>(0, 65535));
+        parse_and_validate_item(
+            issues.information, "$.config_params.udp_port_imu",
+            config.udp_port_imu, make_verify_in_bounds<uint16_t>(0, 65535));
 
-        parse_and_validate_item(issues.information,
-                                "$.config_params.udp_port_lidar",
-                                sensor_info.config.udp_port_lidar,
-                                make_verify_in_bounds<uint16_t>(0, 65535));
+        parse_and_validate_item(
+            issues.information, "$.config_params.udp_port_lidar",
+            config.udp_port_lidar, make_verify_in_bounds<uint16_t>(0, 65535));
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.udp_profile_imu",
-            sensor_info.config.udp_profile_imu,
-            ouster::sensor::udp_profile_imu_of_string);
+            config.udp_profile_imu, ouster::sensor::udp_profile_imu_of_string);
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.udp_profile_lidar",
-            sensor_info.config.udp_profile_lidar,
+            config.udp_profile_lidar,
             ouster::sensor::udp_profile_lidar_of_string);
 
         parse_and_validate_enum<std::string>(
-            issues.information, "$.config_params.gyro_fsr",
-            sensor_info.config.gyro_fsr,
+            issues.information, "$.config_params.gyro_fsr", config.gyro_fsr,
             ouster::sensor::full_scale_range_of_string);
 
         parse_and_validate_enum<std::string>(
-            issues.information, "$.config_params.accel_fsr",
-            sensor_info.config.accel_fsr,
+            issues.information, "$.config_params.accel_fsr", config.accel_fsr,
             ouster::sensor::full_scale_range_of_string);
 
         parse_and_validate_enum<std::string>(
             issues.information, "$.config_params.return_order",
-            sensor_info.config.return_order,
-            ouster::sensor::return_order_of_string);
+            config.return_order, ouster::sensor::return_order_of_string);
 
         parse_and_validate_item(issues.information,
                                 "$.config_params.min_range_threshold_cm",
-                                sensor_info.config.min_range_threshold_cm);
+                                config.min_range_threshold_cm);
     }
 
     // parse_and_validate_sensor_info must be run before
     // parse_and_validate_data_format due to requirements on prod_line
     // parse_and_validate_config_params must be run before
     // parse_and_validate_data_format due to requirements on lidar_mode
-    void parse_and_validate_data_format() {
+    void parse_and_validate_data_format(
+        ouster::sensor::sensor_info& sensor_info) {
         if (have_lidar_mode) {
             // lidar mode is present, create default data format
             sensor_info.format = ouster::sensor::default_data_format(
@@ -992,9 +1016,10 @@ class MetadataImpl {
             } else {
                 // lidar mode not present but columns_per_frame available,
                 // nothing to match
-                skipped_due_to_item(issues.information,
-                                    columns_per_frame_string,
-                                    lidar_mode_string);
+                skipped_due_to_item(
+                    issues.information, columns_per_frame_string,
+                    lidar_mode_string,
+                    "Lidar mode not found, can't verify columns per frame");
             }
         } else {
             // need either lidar mode or columns_per_frame
@@ -1013,7 +1038,8 @@ class MetadataImpl {
         if (!columns_per_frame_success) {
             skipped_due_to_item(issues.information, column_window_string,
                                 columns_per_frame_string,
-                                "Couldnt verify bounds on column window data");
+                                "Columns per frame not found, can't verify "
+                                "numeric bounds on column window");
         }
         auto column_window_callback = [&](ValidatorIssues::EntryList& severity,
                                           const std::string& path,
@@ -1087,7 +1113,9 @@ class MetadataImpl {
         } else {
             skipped_due_to_item(issues.information,
                                 pixel_shift_string + ".length()",
-                                prod_line_string);
+                                prod_line_string,
+                                "Product line not found, can't verify size of "
+                                "pixel shift array");
         }
         parse_and_validate_item<int>(issues.information, pixel_shift_string,
                                      sensor_info.format.pixel_shift_by_row,
@@ -1118,13 +1146,15 @@ class MetadataImpl {
                     frequency_of_lidar_mode(*sensor_info.config.lidar_mode);
                 default_message(fps_string);
             } else {
-                skipped_due_to_item(issues.information, fps_string,
-                                    lidar_mode_string);
+                skipped_due_to_item(
+                    issues.information, fps_string, lidar_mode_string,
+                    "Lidar mode not found, can't verify FPS value");
             }
         }
     }
 
-    void parse_and_validate_calibration_status() {
+    void parse_and_validate_calibration_status(
+        ouster::sensor::sensor_info& sensor_info) {
         parse_and_validate_datetime(
             issues.information, "$.calibration_status.reflectivity.timestamp",
             "%Y-%m-%dT%T", sensor_info.cal.reflectivity_timestamp);
@@ -1195,7 +1225,7 @@ class MetadataImpl {
                     }
                     if (count != height) {
                         auto entry = ValidatorIssues::ValidatorEntry(
-                            path, "Each sub-array must have " +
+                            path, "Each beam angle sub-array must have " +
                                       std::to_string(height) + " elements.");
                         issues.critical.push_back(entry);
                         return;
@@ -1217,7 +1247,7 @@ class MetadataImpl {
             if (is_doubles || is_arrays) {
                 if (angles.size() != width) {
                     auto entry = ValidatorIssues::ValidatorEntry(
-                        path, "Must have " + std::to_string(width) +
+                        path, "Must have beam angle " + std::to_string(width) +
                                   " elements. Had " +
                                   std::to_string(angles.size()) + " elements.");
                     issues.critical.push_back(entry);
@@ -1226,7 +1256,7 @@ class MetadataImpl {
             } else {
                 // zero size
                 auto entry = ValidatorIssues::ValidatorEntry(
-                    path, "Cannot be empty array.");
+                    path, "Cannot be empty beam angle array.");
                 issues.critical.push_back(entry);
                 return;
             }
@@ -1235,7 +1265,8 @@ class MetadataImpl {
             verify_all_not_zero(issues.warning, path, output);
         } else {
             // error
-            auto entry = ValidatorIssues::ValidatorEntry(path, "Missing.");
+            auto entry =
+                ValidatorIssues::ValidatorEntry(path, "Missing beam angle.");
             issues.warning.push_back(entry);
         }
     }
@@ -1246,7 +1277,8 @@ class MetadataImpl {
     // parse_and_validate_data_format due to requirements on lidar_mode
     // parse_and_validate_data_format must be run before
     // parse_and_validate_intrinsics due to requirements on pixels_per_column
-    void parse_and_validate_intrinsics() {
+    void parse_and_validate_intrinsics(
+        ouster::sensor::sensor_info& sensor_info) {
         std::vector<double> imu_intrinsics_data;
         const std::string imu_intrinsics_string =
             "$.imu_intrinsics.imu_to_sensor_transform.*";
@@ -1313,7 +1345,7 @@ class MetadataImpl {
         }
     }
 
-    void parse_and_validate_misc() {
+    void parse_and_validate_misc(ouster::sensor::sensor_info& sensor_info) {
         std::vector<double> extrinsic_data;
         const std::string extrinsic_string = "$.'ouster-sdk'.extrinsic.*";
         if (parse_and_validate_item<double>(issues.information,
@@ -1327,6 +1359,44 @@ class MetadataImpl {
 
         parse_and_validate_item(issues.information, "$.user_data",
                                 sensor_info.user_data);
+    }
+};
+
+class SensorInfoImpl : public MetadataImpl {
+   public:
+    SensorInfoImpl(const jsoncons::json& root,
+                   ouster::sensor::sensor_info& sensor_info,
+                   ValidatorIssues& issues)
+        : MetadataImpl(root, issues) {
+        parse_and_validate_sensor_info(sensor_info);
+        parse_and_validate_config_params(sensor_info.config);
+        // parse_and_validate_sensor_info must be run before
+        // parse_and_validate_data_format
+        //  due to requirements on prod_line
+        // parse_and_validate_config_params must be run before
+        // parse_and_validate_data_format
+        //  due to requirements on lidar_mode
+        parse_and_validate_data_format(sensor_info);
+        parse_and_validate_calibration_status(sensor_info);
+        // parse_and_validate_sensor_info must be run before
+        // parse_and_validate_data_format
+        //  due to requirements on prod_line
+        //  parse_and_validate_config_params must be run before
+        //  parse_and_validate_data_format due to requirements on lidar_mode
+        //  parse_and_validate_data_format must be run before
+        //  parse_and_validate_intrinsics due to requirements on
+        //  pixels_per_column
+        parse_and_validate_intrinsics(sensor_info);
+        parse_and_validate_misc(sensor_info);
+    }
+};
+
+class ConfigImpl : public MetadataImpl {
+   public:
+    ConfigImpl(const jsoncons::json& root,
+               ouster::sensor::sensor_config& config, ValidatorIssues& issues)
+        : MetadataImpl(root, issues) {
+        parse_and_validate_config_params(config);
     }
 };
 
@@ -1355,8 +1425,9 @@ bool is_new_format(const jsoncons::json& root) {
     return nonlegacy_fields_present == nonlegacy_metadata_fields.size();
 }
 
-jsoncons::json convert_legacy_to_nonlegacy(jsoncons::json& root) {
+jsoncons::json convert_legacy_to_nonlegacy(const jsoncons::json& root) {
     jsoncons::json result;
+    std::vector<std::string> skip;
 
     // just convert to non-legacy and run the non-legacy parse
     const std::vector<std::string> config_fields{
@@ -1377,57 +1448,58 @@ jsoncons::json convert_legacy_to_nonlegacy(jsoncons::json& root) {
     if (root.contains("lidar_to_sensor_transform")) {
         result["lidar_intrinsics"]["lidar_to_sensor_transform"] =
             root.at("lidar_to_sensor_transform");
-        root.erase("lidar_to_sensor_transform");
+        skip.push_back("lidar_to_sensor_transform");
     }
 
     if (root.contains("imu_to_sensor_transform")) {
         result["imu_intrinsics"]["imu_to_sensor_transform"] =
             root.at("imu_to_sensor_transform");
-        root.erase("imu_to_sensor_transform");
+        skip.push_back("imu_to_sensor_transform");
     }
+
     if (root.contains("data_format")) {
         result["lidar_data_format"] = root.at("data_format");
-        root.erase("data_format");
+        skip.push_back("data_format");
     }
 
     if (root.contains("client_version")) {
         result["ouster-sdk"]["client_version"] = root.at("client_version");
-        root.erase("client_version");
+        skip.push_back("client_version");
     }
 
     for (const auto& field : config_fields) {
         if (root.contains(field)) {
             result["config_params"][field] = root.at(field);
-            root.erase(field);
+            skip.push_back(field);
         }
     }
 
     for (const auto& field : beam_intrinsics_fields) {
         if (root.contains(field)) {
             result["beam_intrinsics"][field] = root.at(field);
-            root.erase(field);
+            skip.push_back(field);
         }
     }
 
     for (const auto& field : sensor_info_fields) {
         if (root.contains(field)) {
             result["sensor_info"][field] = root.at(field);
-            root.erase(field);
+            skip.push_back(field);
         }
     }
 
     for (const auto& it : root.object_range()) {
-        result[it.key()] = it.value();
+        if (std::find(skip.begin(), skip.end(), it.key()) == skip.end()) {
+            result[it.key()] = it.value();
+        }
     }
 
     return result;
 }
 
-bool parse_and_validate_metadata(const std::string& json_data,
+bool parse_and_validate_metadata(const jsoncons::json& root,
                                  ouster::sensor::sensor_info& sensor_info,
                                  ValidatorIssues& issues) {
-    auto root = jsoncons::json::parse(json_data);
-
     size_t nonlegacy_fields_present = 0;
     std::vector<ValidatorIssues::ValidatorEntry> missing_fields;
     for (const auto& field_pair : nonlegacy_metadata_fields) {
@@ -1442,9 +1514,12 @@ bool parse_and_validate_metadata(const std::string& json_data,
     }
 
     if (nonlegacy_fields_present != nonlegacy_metadata_fields.size()) {
-        root = convert_legacy_to_nonlegacy(root);
+        SensorInfoImpl impl(convert_legacy_to_nonlegacy(root), sensor_info,
+                            issues);
+    } else {
+        SensorInfoImpl impl(root, sensor_info, issues);
     }
-    MetadataImpl impl(root, sensor_info, issues);
+
     if (nonlegacy_fields_present > 0 &&
         nonlegacy_fields_present < nonlegacy_metadata_fields.size()) {
         for (auto it : missing_fields) {
@@ -1474,6 +1549,13 @@ bool parse_and_validate_metadata(const std::string& json_data,
 }
 
 bool parse_and_validate_metadata(const std::string& json_data,
+                                 ouster::sensor::sensor_info& sensor_info,
+                                 ValidatorIssues& issues) {
+    jsoncons::json data = jsoncons::json::parse(json_data);
+    return parse_and_validate_metadata(data, sensor_info, issues);
+}
+
+bool parse_and_validate_metadata(const std::string& json_data,
                                  ValidatorIssues& issues) {
     nonstd::optional<ouster::sensor::sensor_info> sensor_info;
     return parse_and_validate_metadata(json_data, sensor_info, issues);
@@ -1495,4 +1577,31 @@ bool parse_and_validate_metadata(
 
     return result;
 }
+
+bool parse_and_validate_config(const std::string& json_data,
+                               ouster::sensor::sensor_config& config_out,
+                               ValidatorIssues& issues) {
+    jsoncons::json root;
+    root["config_params"] = jsoncons::json::parse(json_data);
+
+    ConfigImpl impl(root, config_out, issues);
+
+    return issues.critical.size() == 0;
+}
+
+bool parse_and_validate_config(const std::string& json_data,
+                               ouster::sensor::sensor_config& sensor_config) {
+    ValidatorIssues issues;
+    return parse_and_validate_config(json_data, sensor_config, issues);
+}
+
+namespace sensor {
+sensor_config parse_config(const std::string& config) {
+    ouster::sensor::sensor_config sensor_config;
+    parse_and_validate_config(config, sensor_config);
+
+    return sensor_config;
+}
+}  // namespace sensor
+
 };  // namespace ouster

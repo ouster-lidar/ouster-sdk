@@ -14,14 +14,6 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <spdlog/common.h>
-#include <spdlog/sinks/base_sink.h>
-#include <spdlog/spdlog.h>
-#if ((SPDLOG_VER_MAJOR == 1) && (SPDLOG_VER_MINOR <= 5))
-#include <spdlog/details/pattern_formatter.h>
-#else
-#include <spdlog/pattern_formatter.h>
-#endif
 
 #include <algorithm>
 #include <array>
@@ -38,6 +30,7 @@
 #include "ouster/client.h"
 #include "ouster/image_processing.h"
 #include "ouster/impl/build.h"
+#include "ouster/impl/logging.h"
 #include "ouster/impl/packet_writer.h"
 #include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
@@ -49,7 +42,6 @@
 
 namespace py = pybind11;
 namespace chrono = std::chrono;
-using spdlog::sinks::base_sink;
 
 using ouster::sensor::calibration_status;
 using ouster::sensor::data_format;
@@ -67,56 +59,10 @@ using namespace ouster;
 using client_shared_ptr = std::shared_ptr<sensor::client>;
 PYBIND11_MAKE_OPAQUE(client_shared_ptr);
 
-inline py::object from_json(const Json::Value& j) {
-    switch (j.type()) {
-        case Json::nullValue:
-            return py::none();
-        case Json::intValue:
-        case Json::uintValue:
-            return py::int_(j.asInt64());
-        case Json::realValue:
-            return py::float_(j.asDouble());
-        case Json::stringValue:
-            return py::str(j.asString());
-        case Json::booleanValue:
-            return py::bool_(j.asBool());
-        case Json::arrayValue: {
-            py::list obj(j.size());
-            for (std::size_t i = 0; i < j.size(); i++) {
-                obj[i] = from_json(j[(int)i]);
-            }
-            return obj;
-        }
-        case Json::objectValue: {
-            py::dict obj;
-            for (const auto& member : j.getMemberNames()) {
-                obj[py::str(member)] = from_json(j[member]);
-            }
-            return obj;
-        }
-    }
-    throw std::runtime_error("Unhandled Json Type");
-}
-
 namespace pybind11 {
 namespace detail {
 template <typename T>
 struct type_caster<nonstd::optional<T>> : optional_caster<nonstd::optional<T>> {
-};
-template <>
-struct type_caster<Json::Value> {
-   public:
-    PYBIND11_TYPE_CASTER(Json::Value, _("Value"));
-
-    bool load(handle /*src*/, bool) {
-        throw std::runtime_error("Unimplemented");
-    }
-
-    static handle cast(Json::Value src, return_value_policy /* policy */,
-                       handle /* parent */) {
-        object obj = from_json(src);
-        return obj.release();
-    }
 };
 }  // namespace detail
 }  // namespace pybind11
@@ -126,8 +72,6 @@ using Table = std::array<std::pair<K, V>, N>;
 
 namespace ouster {
 namespace sensor {
-
-extern spdlog::logger& logger();
 
 namespace impl {
 
@@ -416,8 +360,26 @@ struct set_field {
 
 py::array_t<double> dewarp(const py::array_t<double>& points,
                            const py::array_t<double>& poses) {
-    auto poses_buf = poses.request();
-    auto points_buf = points.request();
+    py::array_t<double> c_style_points;
+    py::array_t<double> c_style_poses;
+
+    // Ensure poses is in C-style format
+    const py::array_t<double>* poses_ptr = &poses;
+    if (!(poses.flags() & py::array::c_style)) {
+        c_style_poses = py::array_t<double, py::array::c_style>(poses);
+        poses_ptr = &c_style_poses;
+    }
+
+    // Ensure points is in C-style format
+    const py::array_t<double>* points_ptr = &points;
+    if (!(points.flags() & py::array::c_style)) {
+        c_style_points = py::array_t<double, py::array::c_style>(points);
+        points_ptr = &c_style_points;
+    }
+
+    // Get buffer info for poses and points
+    auto poses_buf = poses_ptr->request();
+    auto points_buf = points_ptr->request();
 
     // Validate input dimensions for poses
     if (poses_buf.ndim != 3 || poses_buf.shape[1] != 4 ||
@@ -441,7 +403,7 @@ py::array_t<double> dewarp(const py::array_t<double>& points,
             "Number of points per set must match the number of poses");
     }
 
-    // poses reshape into (W, 16)
+    // Reshape poses into (W, 16)
     Eigen::Map<pose_util::Poses> poses_mat(static_cast<double*>(poses_buf.ptr),
                                            num_poses, 16);
 
@@ -450,21 +412,13 @@ py::array_t<double> dewarp(const py::array_t<double>& points,
     Eigen::Map<pose_util::Points> dewarped_points(
         static_cast<double*>(result_buf.ptr), num_rows * num_poses, point_dim);
 
-    if (points.flags() & py::array_t<double>::c_style) {
-        Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>>
-            points_mat(static_cast<double*>(points_buf.ptr),
-                       num_rows * num_poses, point_dim);
-        pose_util::dewarp(dewarped_points, points_mat, poses_mat);
-    } else {
-        // TODO[UN]: Optimize for the ColMajor case
-        // needs tests in place
-        Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::ColMajor>>
-            points_mat_col_major(static_cast<double*>(points_buf.ptr),
-                                 num_rows * num_poses, point_dim);
-        Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> points_mat =
-            points_mat_col_major;
-        pose_util::dewarp(dewarped_points, points_mat, poses_mat);
-    }
+    // Map points data, assuming it is C-style row-major
+    Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>>
+        points_mat(static_cast<double*>(points_buf.ptr), num_rows * num_poses,
+                   point_dim);
+
+    // Perform dewarp transformation
+    pose_util::dewarp(dewarped_points, points_mat, poses_mat);
 
     return result;
 }
@@ -501,13 +455,30 @@ py::array_t<double> transform(const py::array_t<double>& points,
         throw std::runtime_error("pose array must have shape (4, 4)");
     }
 
-    Eigen::Map<const pose_util::Pose> pose_eigen(pose.data());
+    py::array_t<double> c_style_points;
+    py::array_t<double> c_style_pose;
+
+    // Create a C-style copy of points if it's neither C-style nor F-style
+    const py::array_t<double>* points_ptr = &points;
+    if (!(points.flags() & py::array::c_style)) {
+        c_style_points = py::array_t<double, py::array::c_style>(points);
+        points_ptr = &c_style_points;  // Use the C-style array for processing
+    }
+    const py::array_t<double>* pose_ptr = &pose;
+    if (!(pose.flags() & py::array::c_style)) {
+        c_style_pose = py::array_t<double, py::array::c_style>(pose);
+        pose_ptr = &c_style_pose;  // Use the C-style array for processing
+    }
+
+    // Convert pose to Eigen format
+    Eigen::Map<const pose_util::Pose> pose_eigen(pose_ptr->data());
 
     // Handle case where points is a 2D array: (N, 3)
-    if (points.ndim() == 2 && points.shape(1) == 3) {
-        const int n = points.shape(0);
+    if (points_ptr->ndim() == 2 && points_ptr->shape(1) == 3) {
+        const int n = points_ptr->shape(0);
 
-        Eigen::Map<const pose_util::Points> points_eigen(points.data(), n, 3);
+        Eigen::Map<const pose_util::Points> points_eigen(points_ptr->data(), n,
+                                                         3);
 
         auto result = py::array_t<double>({n, 3});
         auto result_buf = result.request();
@@ -519,12 +490,12 @@ py::array_t<double> transform(const py::array_t<double>& points,
     }
 
     // Handle case where points is a 3D array: (H, W, 3)
-    else if (points.ndim() == 3 && points.shape(2) == 3) {
-        const int h = points.shape(0);
-        const int w = points.shape(1);
+    else if (points_ptr->ndim() == 3 && points_ptr->shape(2) == 3) {
+        const int h = points_ptr->shape(0);
+        const int w = points_ptr->shape(1);
 
-        Eigen::Map<const pose_util::Points> points_eigen(points.data(), h * w,
-                                                         3);
+        Eigen::Map<const pose_util::Points> points_eigen(points_ptr->data(),
+                                                         h * w, 3);
 
         auto result = py::array_t<double>({h, w, 3});
         auto result_buf = result.request();
@@ -551,36 +522,9 @@ void init_client(py::module& m, py::module&) {
     py::options options;
     options.disable_function_signatures();
 
-    // TODO (1/4): Enable automatically directing ouster sensor logs to the
-    // python::logging in the future. This is disabled for now so the user will
-    // have to use init_logger API to practice any control over the logs
-    // ouster::sensor::logger().sinks() = {
-    //     std::make_shared<PySink>(py::module::import("logging"))
-    // };
-
-    // TODO (2/4): parse python::logging level and set spdlog logger to the same
-    // level rather than forwarding everything to Python as set here:
-    // ouster::sensor::logger().set_level(spdlog::level::trace);
-
-    // TODO (3/4): configure the formatter.
-    // spdlog adds newline by default, not needed when forwarding to python. Use
-    // a custom formatter to avoid this (check the "") argument
-    // https://github.com/gabime/spdlog/issues/579
-    // ouster::sensor::logger().set_formatter(
-    //     std::make_unique<spdlog::pattern_formatter>(
-    //         "%v", spdlog::pattern_time_type::local, ""));
-
-    // TODO (4/4): Remove the PySink.
-    // since the static logger sink keeps a reference to Python objects, they
-    // must be cleaned up before the Python runtime exits
-    // m.add_object("_cleanup", py::capsule([]() {
-    //                  ouster::sensor::logger().sinks().clear();
-    //              }));
-
     // clang-format off
-
     // Packet Format
-    py::class_<packet_format>(m, "PacketFormat")
+    py::class_<packet_format, std::shared_ptr<packet_format>>(m, "PacketFormat")
         .def(py::init([](const sensor_info& info) {
             return new packet_format(info);
         }))
@@ -747,7 +691,7 @@ void init_client(py::module& m, py::module&) {
         .def("imu_la_z", [](packet_format& pf, py::buffer buf) { return pf.imu_la_z(getptr(pf.imu_packet_size, buf)); });
 
     // PacketWriter
-    py::class_<packet_writer, packet_format>(m, "PacketWriter")
+    py::class_<packet_writer, packet_format, std::shared_ptr<packet_writer>>(m, "PacketWriter")
         // this is safe so long as packet_writer does not carry any extra state
         .def_static("from_info",
                     [](const sensor_info& info) -> const packet_writer& {
@@ -910,7 +854,7 @@ void init_client(py::module& m, py::module&) {
         .def("__str__", [](const product_info& i) {return to_string(i);});
 
     // Sensor Info
-    py::class_<sensor_info>(m, "SensorInfo", R"(
+    py::class_<sensor_info, std::shared_ptr<sensor_info>>(m, "SensorInfo", R"(
         Sensor Info required to interpret UDP data streams.
 
         See the sensor documentation for the meaning of each property.
@@ -983,7 +927,7 @@ void init_client(py::module& m, py::module&) {
         .def("__repr__", [](const sensor_info& self) {
             const auto mode = self.config.lidar_mode ? to_string(self.config.lidar_mode.value()) : std::to_string(self.format.fps) + "fps";
             return "<ouster.sdk.client.SensorInfo " + self.prod_line + " " +
-                self.sn + " " + self.fw_rev + " " + mode + ">";
+                std::to_string(self.sn) + " " + self.fw_rev + " " + mode + ">";
         })
         .def("get_version", [](const sensor_info& self) { return self.get_version(); }, R"(Get parsed sensor version)")
         .def("get_product_info", [](const sensor_info& self) { return self.get_product_info(); }, R"(Get parsed product info)")
@@ -1077,14 +1021,28 @@ void init_client(py::module& m, py::module&) {
     auto FieldClass = py::enum_<ouster::FieldClass>(m, "FieldClass", "LidarScan field classes", py::arithmetic());
     def_enum(FieldClass, sensor::impl::field_class_strings);
 
+    m.def("parse_and_validate_sensor_config",
+          [](const std::string& metadata)
+              -> std::tuple<sensor_config,
+                            ouster::ValidatorIssues> {
+              sensor_config config;
+              ValidatorIssues issues;
+              ouster::parse_and_validate_config(metadata, config, issues);
+              return std::make_pair(config, issues);
+          });
     // Sensor Config
-    py::class_<sensor_config>(m, "SensorConfig", R"(
-        Corresponds to sensor config parameters. Please see sensor documentation for the meaning of each property.
+    py::class_<sensor_config>(m, "SensorConfig",  R"(
+        Corresponds to sensor config parameters.
+
+        Please see sensor documentation for the meaning of each property.
         )")
         .def(py::init<>(), "Construct an empty SensorConfig.")
         .def(py::init([](const std::string& s) {
             auto config = new sensor_config{};
-            *config = sensor::parse_config(s);
+            ValidatorIssues issues;
+            if (!ouster::parse_and_validate_config(s, *config, issues)) {
+                throw std::runtime_error(to_string(issues.critical));
+            }
             return config;
         }), py::arg("s"), R"(Construct a SensorConfig from a json string.
         Args:
@@ -1283,13 +1241,24 @@ void init_client(py::module& m, py::module&) {
         .value("Error", sensor::ClientEvent::Error)
         .value("Exit", sensor::ClientEvent::Exit)
         .value("PollTimeout", sensor::ClientEvent::PollTimeout)
-        .value("ImuPacket", sensor::ClientEvent::ImuPacket)
-        .value("LidarPacket", sensor::ClientEvent::LidarPacket);
+        .value("Packet", sensor::ClientEvent::Packet);
 
     py::class_<sensor::ClientEvent>(m, "ClientEvent")
         .def(py::init())
         .def_readwrite("source", &sensor::ClientEvent::source)
-        .def_readwrite("type", &sensor::ClientEvent::type);
+        .def_readwrite("type", &sensor::ClientEvent::type)
+        .def("packet", [](sensor::ClientEvent& self) {
+            if (self.type == sensor::ClientEvent::Packet) {
+                if (self.packet().type() == sensor::PacketType::Lidar) {
+                    return py::cast(
+                        static_cast<sensor::LidarPacket&>(self.packet()));
+                } else if (self.packet().type() == sensor::PacketType::Imu) {
+                    return py::cast(
+                        static_cast<sensor::ImuPacket&>(self.packet()));
+                }
+            }
+            throw std::runtime_error("No packet available in event.");
+        });
 
     py::class_<sensor::Sensor>(m, "Sensor")
         .def(py::init<const std::string&, const sensor_config&>(),
@@ -1331,13 +1300,11 @@ void init_client(py::module& m, py::module&) {
         .def("buffer_size", &sensor::SensorClient::buffer_size)
         .def(
             "get_packet",
-            [](sensor::SensorClient& self, LidarPacket& lp, ImuPacket& ip,
-               double timeout) {
+            [](sensor::SensorClient& self, double timeout) {
                 py::gil_scoped_release release;
-                auto packet = self.get_packet(lp, ip, timeout);
+                auto packet = self.get_packet(timeout);
                 return packet;
             },
-            py::arg("lidar_packet"), py::arg("imu_packet"),
             py::arg("timeout") = 0.1);
 
     py::class_<sensor::SensorScanSource>(m, "SensorScanSource")
@@ -1529,6 +1496,20 @@ void init_client(py::module& m, py::module&) {
              py::arg("w"), py::arg("h"), py::arg("field_types"),
              py::arg("columns_per_packet") = DEFAULT_COLUMNS_PER_PACKET)
         .def(py::init([](const sensor_info& sensor_info) {
+                 return new LidarScan(sensor_info);
+             }),
+             R"(
+        Initialize a scan with defaults fields and size for a given sensor_info
+
+        Args:
+            sensor_info: SensorInfo to construct a scan for
+
+        Returns:
+            New LidarScan approprate for the sensor_info
+
+         )",
+             py::arg("sensor_info"))
+        .def(py::init([](std::shared_ptr<sensor_info> sensor_info) {
                  return new LidarScan(sensor_info);
              }),
              R"(
@@ -1855,6 +1836,8 @@ void init_client(py::module& m, py::module&) {
                 return self.get_first_valid_column_timestamp();
             },
             "Return first valid column timestamp in the scan.")
+        .def_readwrite("sensor_info", &LidarScan::sensor_info,
+                       "The SensorInfo associated with this LidarScan.")
         .def("__eq__",
              [](const LidarScan& l, const LidarScan& r) { return l == r; })
         .def("__copy__", [](const LidarScan& self) { return LidarScan{self}; })
@@ -1920,6 +1903,17 @@ void init_client(py::module& m, py::module&) {
              py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("network", &SensorHttp::network,
              py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
+        .def("set_static_ip", &SensorHttp::set_static_ip, py::arg("ip_address"),
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
+        .def("delete_static_ip", &SensorHttp::delete_static_ip,
+             py::arg("timeout_sec") = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS)
+        .def(
+            "diagnostics_dump",
+            [](SensorHttp& self, int timeout_sec) {
+                auto vec = self.diagnostics_dump(timeout_sec);
+                return py::bytes((const char*)vec.data(), vec.size());
+            },
+            py::arg("timeout_sec") = LONG_HTTP_REQUEST_TIMEOUT_SECONDS)
         .def("firmware_version",
              [](SensorHttp& self) { return self.firmware_version(); })
         .def("hostname", &SensorHttp::hostname)
@@ -2082,32 +2076,13 @@ void init_client(py::module& m, py::module&) {
         )");
 
     py::class_<Packet>(m, "Packet")
-        .def(py::init<int>(), py::arg("size") = 65536)
         // direct access to timestamp field
         .def_readwrite("host_timestamp", &Packet::host_timestamp)
-        // access via seconds (deprecated)
-        .def_property(
-            "capture_timestamp",
-            [](Packet& self) -> nonstd::optional<double> {
-                ouster::sensor::logger().warn(
-                    "Packet.capture_timestamp is deprecated, use "
-                    "Packet.host_timestamp instead.");
-                if (self.host_timestamp) {
-                    return self.host_timestamp / 1e9;
-                } else {
-                    return nonstd::nullopt;
-                }
-            },
-            [](Packet& self, nonstd::optional<double> v) {
-                ouster::sensor::logger().warn(
-                    "Packet.capture_timestamp is deprecated, use "
-                    "Packet.host_timestamp instead.");
-                if (v) {
-                    self.host_timestamp = static_cast<uint64_t>(*v * 1e9);
-                } else {
-                    self.host_timestamp = 0;
-                }
-            })
+        .def_readwrite("format", &Packet::format)
+        .def("type", &Packet::type)
+        .def("__copy__", [](const Packet& self) { return Packet(self); })
+        .def("__deepcopy__",
+             [](const Packet& self, py::dict) { return Packet(self); })
         // NOTE: returned array is writeable, but not reassignable
         .def_property_readonly(
             "buf",
@@ -2121,6 +2096,11 @@ void init_client(py::module& m, py::module&) {
                 },
                 py::keep_alive<0, 1>()));
 
+    py::enum_<sensor::PacketType>(m, "PacketType", py::arithmetic())
+        .value("Unknown", sensor::PacketType::Unknown)
+        .value("Lidar", sensor::PacketType::Lidar)
+        .value("Imu", sensor::PacketType::Imu);
+
     py::enum_<sensor::PacketValidationFailure>(m, "PacketValidationFailure",
                                                py::arithmetic())
         .value("NONE", sensor::PacketValidationFailure::NONE)
@@ -2133,14 +2113,49 @@ void init_client(py::module& m, py::module&) {
              [](const LidarPacket& self) { return LidarPacket(self); })
         .def("__deepcopy__", [](const LidarPacket& self,
                                 py::dict) { return LidarPacket(self); })
-        .def("validate", &LidarPacket::validate);
+        .def("packet_type", &LidarPacket::packet_type)
+        .def("frame_id", &LidarPacket::frame_id)
+        .def("init_id", &LidarPacket::init_id)
+        .def("prod_sn", &LidarPacket::prod_sn)
+        .def("alert_flags", &LidarPacket::alert_flags)
+        .def("countdown_thermal_shutdown",
+             &LidarPacket::countdown_thermal_shutdown)
+        .def("countdown_shot_limiting", &LidarPacket::countdown_shot_limiting)
+        .def("thermal_shutdown", &LidarPacket::thermal_shutdown)
+        .def("shot_limiting", &LidarPacket::shot_limiting)
+        .def("crc", &LidarPacket::crc)
+        .def("calculate_crc", &LidarPacket::calculate_crc)
+        .def("validate",
+             [](const LidarPacket& self, const sensor_info& info,
+                const ouster::sensor::packet_format& format) {
+                 return self.validate(info, format);
+             })
+        .def("validate", [](const LidarPacket& self, const sensor_info& info) {
+            return self.validate(info);
+        });
 
     py::class_<ImuPacket, Packet>(m, "ImuPacket")
         .def(py::init<int>(), py::arg("size") = 65536)
         .def("__copy__", [](const ImuPacket& self) { return ImuPacket(self); })
         .def("__deepcopy__",
              [](const ImuPacket& self, py::dict) { return ImuPacket(self); })
-        .def("validate", &ImuPacket::validate);
+        .def("sys_ts", &ImuPacket::sys_ts)
+        .def("accel_ts", &ImuPacket::accel_ts)
+        .def("gyro_ts", &ImuPacket::gyro_ts)
+        .def("la_x", &ImuPacket::la_x)
+        .def("la_y", &ImuPacket::la_y)
+        .def("la_z", &ImuPacket::la_z)
+        .def("la_x", &ImuPacket::av_x)
+        .def("la_y", &ImuPacket::av_y)
+        .def("la_z", &ImuPacket::av_z)
+        .def("validate",
+             [](const ImuPacket& self, const sensor_info& info,
+                const ouster::sensor::packet_format& format) {
+                 return self.validate(info, format);
+             })
+        .def("validate", [](const ImuPacket& self, const sensor_info& info) {
+            return self.validate(info);
+        });
 
     using ouster::sensor::impl::FieldInfo;
     py::class_<FieldInfo>(m, "FieldInfo")

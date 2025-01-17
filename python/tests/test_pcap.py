@@ -453,7 +453,7 @@ def test_pcap_read_real(real_pcap: pcap.Pcap) -> None:
     assert len(lidar_packets) == 64
 
     # and should have timestamps
-    assert all(p.capture_timestamp != 0 for p in packets)
+    assert all(p.host_timestamp != 0 for p in packets)
 
 
 def test_pcap_guess_real(meta: client.SensorInfo, real_pcap_path: str) -> None:

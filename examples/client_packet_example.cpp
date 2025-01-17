@@ -103,27 +103,27 @@ int main(int argc, char* argv[]) {
      */
     std::cerr << "Capturing points... ";
 
-    // buffer to store raw packet data
-    auto lidar_packet = sensor::LidarPacket();
-    auto imu_packet = sensor::ImuPacket();
-
     while (true) {
-        auto ev = client.get_packet(lidar_packet, imu_packet, 0.1);
-        if (ev.type == ouster::sensor::ClientEvent::LidarPacket) {
-            if (count[ev.source] == N_SCANS) continue;
-            //  batcher will return "true" when the current scan is complete
-            if (batch_to_scan[ev.source](lidar_packet,
-                                         scans[ev.source][count[ev.source]])) {
-                // retry until we receive a full set of valid measurements
-                // (accounting for azimuth_window settings if any)
-                if (scans[ev.source][count[ev.source]].complete(
-                        client.get_sensor_info()[ev.source]
-                            .format.column_window)) {
-                    count[ev.source]++;
+        auto ev = client.get_packet(0.1);
+        if (ev.type == ouster::sensor::ClientEvent::Packet) {
+            if (ev.packet().type() == ouster::sensor::PacketType::Lidar) {
+                auto& lidar_packet =
+                    static_cast<ouster::sensor::LidarPacket&>(ev.packet());
+                if (count[ev.source] == N_SCANS) continue;
+                //  batcher will return "true" when the current scan is complete
+                if (batch_to_scan[ev.source](
+                        lidar_packet, scans[ev.source][count[ev.source]])) {
+                    // retry until we receive a full set of valid measurements
+                    // (accounting for azimuth_window settings if any)
+                    if (scans[ev.source][count[ev.source]].complete(
+                            client.get_sensor_info()[ev.source]
+                                .format.column_window)) {
+                        count[ev.source]++;
+                    }
                 }
+            } else if (ev.packet().type() == ouster::sensor::PacketType::Imu) {
+                // got an IMU packet
             }
-        } else if (ev.type == ouster::sensor::ClientEvent::ImuPacket) {
-            // got an IMU packet
         }
 
         if (ev.type == ouster::sensor::ClientEvent::Error) {

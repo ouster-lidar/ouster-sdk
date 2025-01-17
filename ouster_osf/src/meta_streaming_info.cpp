@@ -5,11 +5,10 @@
 
 #include "ouster/osf/meta_streaming_info.h"
 
+#include <jsoncons/json.hpp>
 #include <map>
 #include <sstream>
 
-#include "json/json.h"
-#include "json_utils.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "streaming/streaming_info_generated.h"
 
@@ -173,41 +172,43 @@ std::unique_ptr<MetadataEntry> StreamingInfo::from_buffer(
 }
 
 std::string StreamingInfo::repr() const {
-    Json::Value si_obj{};
+    jsoncons::json si_obj;
 
-    si_obj["chunks"] = Json::arrayValue;
+    jsoncons::json chunks(jsoncons::json_array_arg);
     for (const auto& ci : chunks_info_) {
-        Json::Value chunk_info{};
-        chunk_info["offset"] = static_cast<Json::UInt64>(ci.second.offset);
+        jsoncons::json chunk_info;
+        chunk_info["offset"] = static_cast<uint64_t>(ci.second.offset);
         chunk_info["stream_id"] = ci.second.stream_id;
         chunk_info["message_count"] = ci.second.message_count;
-        si_obj["chunks"].append(chunk_info);
+        chunks.emplace_back(chunk_info);
     }
+    si_obj["chunks"] = chunks;
 
-    si_obj["stream_stats"] = Json::arrayValue;
+    jsoncons::json stream_stats(jsoncons::json_array_arg);
     for (const auto& stat : stream_stats_) {
-        Json::Value ss{};
+        jsoncons::json ss{};
         ss["stream_id"] = stat.first;
-        ss["start_ts"] =
-            static_cast<Json::UInt64>(stat.second.start_ts.count());
-        ss["end_ts"] = static_cast<Json::UInt64>(stat.second.end_ts.count());
-        ss["message_count"] =
-            static_cast<Json::UInt64>(stat.second.message_count);
+        ss["start_ts"] = static_cast<uint64_t>(stat.second.start_ts.count());
+        ss["end_ts"] = static_cast<uint64_t>(stat.second.end_ts.count());
+        ss["message_count"] = static_cast<uint64_t>(stat.second.message_count);
         ss["message_avg_size"] = stat.second.message_avg_size;
-        Json::Value st = Json::arrayValue;
-        Json::Value rt = Json::arrayValue;
+        jsoncons::json st(jsoncons::json_array_arg);
+        jsoncons::json rt(jsoncons::json_array_arg);
         for (const auto& t : stat.second.sensor_timestamps) {
-            st.append(static_cast<Json::UInt64>(t));
+            st.emplace_back(static_cast<uint64_t>(t));
         }
         for (const auto& t : stat.second.receive_timestamps) {
-            rt.append(static_cast<Json::UInt64>(t));
+            rt.emplace_back(static_cast<uint64_t>(t));
         }
         ss["sensor_timestamps"] = st;
         ss["receive_timestamps"] = rt;
-        si_obj["stream_stats"].append(ss);
+        stream_stats.emplace_back(ss);
     }
+    si_obj["stream_stats"] = stream_stats;
 
-    return json_string(si_obj);
+    std::string out;
+    si_obj.dump(out);
+    return out;
 };
 
 }  // namespace osf

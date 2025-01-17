@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "nonstd/optional.hpp"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace viz {
@@ -117,9 +118,8 @@ constexpr int default_window_height = 600;
  * when a nontrivial amount of processing needs to run concurrently with
  * rendering (e.g. when streaming data from a running sensor).
  */
-class PointViz {
-    friend void add_default_controls(viz::PointViz& viz, std::mutex* mx);
-
+class OUSTER_API_CLASS PointViz {
+   protected:
     /**
      * Get a reference to the current camera controls
      *
@@ -128,6 +128,18 @@ class PointViz {
     Camera& current_camera();
 
    public:
+    /**
+     * Add default keyboard and mouse bindings to a visualizer instance
+     *
+     * Controls will modify the camera from the thread that calls run() or
+     * run_once(), which will require synchronization when using multiple
+     * threads.
+     *
+     * @param[in] mx mutex to lock while modifying camera
+     */
+    OUSTER_API_FUNCTION
+    void add_default_controls(std::mutex* mx);
+
     struct Impl;
 
     /**
@@ -140,6 +152,7 @@ class PointViz {
      * @param[in] window_height Window height to set,
      *            else uses the default_window_height
      */
+    OUSTER_API_FUNCTION
     explicit PointViz(const std::string& name, bool fix_aspect = false,
                       int window_width = default_window_width,
                       int window_height = default_window_height);
@@ -147,14 +160,19 @@ class PointViz {
     // Because PointViz uses the PIMPL pattern
     // and the Impl owns the window context,
     // we can't realistically copy or move instances of PointViz.
+    OUSTER_API_FUNCTION
     PointViz(const PointViz&) = delete;
+    OUSTER_API_FUNCTION
     PointViz(PointViz&&) = delete;
+    OUSTER_API_FUNCTION
     PointViz& operator=(PointViz&) = delete;
+    OUSTER_API_FUNCTION
     PointViz& operator=(PointViz&&) = delete;
 
     /**
      * Tears down the rendering context and closes the viz window
      */
+    OUSTER_API_FUNCTION
     ~PointViz();
 
     /**
@@ -162,6 +180,7 @@ class PointViz {
      *
      * Should be called from the main thread for macos compatibility
      */
+    OUSTER_API_FUNCTION
     void run();
 
     /**
@@ -169,6 +188,7 @@ class PointViz {
      *
      * Should be called from the main thread for macos compatibility
      */
+    OUSTER_API_FUNCTION
     void run_once();
 
     /**
@@ -176,6 +196,7 @@ class PointViz {
      *
      * @return true if the run() loop is currently executing
      */
+    OUSTER_API_FUNCTION
     bool running();
 
     /**
@@ -183,6 +204,7 @@ class PointViz {
      *
      * @param[in] state new value of the flag
      */
+    OUSTER_API_FUNCTION
     void running(bool state);
 
     /**
@@ -190,6 +212,7 @@ class PointViz {
      *
      * @param[in] state true to show
      */
+    OUSTER_API_FUNCTION
     void visible(bool state);
 
     /**
@@ -197,6 +220,7 @@ class PointViz {
      *
      * Send state updates to be rendered on the next frame.
      */
+    OUSTER_API_FUNCTION
     void update();
 
     /**
@@ -207,6 +231,7 @@ class PointViz {
      * callback's return value determines whether the remaining key callbacks
      * should be called.
      */
+    OUSTER_API_FUNCTION
     void push_key_handler(
         std::function<bool(const WindowCtx&, int, int)>&& callback);
 
@@ -222,6 +247,7 @@ class PointViz {
      *   The callback's return value determines whether
      *   the remaining mouse button callbacks should be called.
      */
+    OUSTER_API_FUNCTION
     void push_mouse_button_handler(
         std::function<bool(const WindowCtx& ctx,
                            ouster::viz::MouseButton button,
@@ -239,6 +265,7 @@ class PointViz {
      *   The callback's return value determines whether
      *   the remaining mouse scroll callbacks should be called.
      */
+    OUSTER_API_FUNCTION
     void push_scroll_handler(
         std::function<bool(const WindowCtx&, double x, double y)>&& callback);
 
@@ -253,6 +280,7 @@ class PointViz {
      *   The callback's return value determines whether
      *   the remaining mouse position callbacks should be called.
      */
+    OUSTER_API_FUNCTION
     void push_mouse_pos_handler(
         std::function<bool(const WindowCtx&, double x, double y)>&& callback);
 
@@ -267,46 +295,55 @@ class PointViz {
      * fb_height) The callback's return value determines whether the remaining
      * frame buffer callbacks should be called.
      */
+    OUSTER_API_FUNCTION
     void push_frame_buffer_handler(
         std::function<bool(const std::vector<uint8_t>&, int, int)>&& callback);
 
     /**
      * Remove the last added callback for handling keyboard events
      */
+    OUSTER_API_FUNCTION
     void pop_key_handler();
 
     /**
      * Remove the last added callback for handling mouse button events
      */
+    OUSTER_API_FUNCTION
     void pop_mouse_button_handler();
 
     /**
      * Remove the last added callback for handling mouse scroll events
      */
+    OUSTER_API_FUNCTION
     void pop_scroll_handler();
 
     /**
      * Remove the last added callback for handling mouse position events
      */
+    OUSTER_API_FUNCTION
     void pop_mouse_pos_handler();
 
     /**
      * Remove the last added callback for handling frame buffer events
      */
+    OUSTER_API_FUNCTION
     void pop_frame_buffer_handler();
 
     /**
      * Add a callback for handling frame buffer resize events.
+     *
      * @param[in] callback function callback of the form f(const WindowCtx&).
      * The callback's return value determines whether the remaining frame buffer
      * resize callbacks should be called.
      */
+    OUSTER_API_FUNCTION
     void push_frame_buffer_resize_handler(
         std::function<bool(const WindowCtx&)>&& callback);
 
     /**
      * Remove the last added callback for handling frame buffer resize events.
      */
+    OUSTER_API_FUNCTION
     void pop_frame_buffer_resize_handler();
 
     /**
@@ -314,6 +351,7 @@ class PointViz {
      *
      * @return Handler to the camera object
      */
+    OUSTER_API_FUNCTION
     Camera& camera();
 
     /**
@@ -321,6 +359,7 @@ class PointViz {
      *
      * @return Handler to the target display controls
      */
+    OUSTER_API_FUNCTION
     TargetDisplay& target_display();
 
     /**
@@ -328,6 +367,7 @@ class PointViz {
      *
      * @param[in] cloud Adds a point cloud to the scene
      */
+    OUSTER_API_FUNCTION
     void add(const std::shared_ptr<Cloud>& cloud);
 
     /**
@@ -335,6 +375,7 @@ class PointViz {
      *
      * @param[in] image Adds an image to the scene
      */
+    OUSTER_API_FUNCTION
     void add(const std::shared_ptr<Image>& image);
 
     /**
@@ -342,6 +383,7 @@ class PointViz {
      *
      * @param[in] cuboid Adds a cuboid to the scene
      */
+    OUSTER_API_FUNCTION
     void add(const std::shared_ptr<Cuboid>& cuboid);
 
     /**
@@ -349,6 +391,7 @@ class PointViz {
      *
      * @param[in] label Adds a label to the scene
      */
+    OUSTER_API_FUNCTION
     void add(const std::shared_ptr<Label>& label);
 
     /**
@@ -358,6 +401,7 @@ class PointViz {
      *
      * @return true if successfully removed else false
      */
+    OUSTER_API_FUNCTION
     bool remove(const std::shared_ptr<Cloud>& cloud);
 
     /**
@@ -367,6 +411,7 @@ class PointViz {
      *
      * @return true if successfully removed else false
      */
+    OUSTER_API_FUNCTION
     bool remove(const std::shared_ptr<Image>& image);
 
     /**
@@ -376,6 +421,7 @@ class PointViz {
      *
      * @return true if successfully removed else false
      */
+    OUSTER_API_FUNCTION
     bool remove(const std::shared_ptr<Cuboid>& cuboid);
 
     /**
@@ -385,6 +431,7 @@ class PointViz {
      *
      * @return true if successfully removed else false
      */
+    OUSTER_API_FUNCTION
     bool remove(const std::shared_ptr<Label>& label);
 
     /**
@@ -392,6 +439,7 @@ class PointViz {
      *
      * @return viewport width reported by glfw
      */
+    OUSTER_API_FUNCTION
     int viewport_width() const;
 
     /**
@@ -399,6 +447,7 @@ class PointViz {
      *
      * @return viewport height reported by glfw
      */
+    OUSTER_API_FUNCTION
     int viewport_height() const;
 
     /**
@@ -409,6 +458,7 @@ class PointViz {
      *
      * @return window width reported by glfw
      */
+    OUSTER_API_FUNCTION
     int window_width() const;
 
     /**
@@ -419,6 +469,7 @@ class PointViz {
      *
      * @return window height reported by glfw
      */
+    OUSTER_API_FUNCTION
     int window_height() const;
 
     /**
@@ -428,6 +479,7 @@ class PointViz {
      *
      * @return fps value,
      */
+    OUSTER_API_FUNCTION
     double fps() const;
 
    private:
@@ -444,12 +496,13 @@ class PointViz {
  * @param[in] viz the visualizer instance
  * @param[in] mx mutex to lock while modifying camera
  */
+OUSTER_API_FUNCTION
 void add_default_controls(viz::PointViz& viz, std::mutex* mx = nullptr);
 
 /**
  * @brief Context for input callbacks.
  */
-struct WindowCtx {
+struct OUSTER_API_CLASS WindowCtx {
     bool lbutton_down{false};  ///< True if the left mouse button is held
     bool mbutton_down{false};  ///< True if the middle mouse button is held
     double mouse_x{0};         ///< Current mouse x position
@@ -464,6 +517,7 @@ struct WindowCtx {
      *
      * @return The aspect ratio of the viewport.
      */
+    OUSTER_API_FUNCTION
     double aspect_ratio() const;
 
     /**
@@ -479,6 +533,7 @@ struct WindowCtx {
      *
      * @return 2d coordinates normalized to (-1, 1) in the y-axis
      */
+    OUSTER_API_FUNCTION
     std::pair<double, double> normalized_coordinates(double x, double y) const;
 
     /**
@@ -491,6 +546,7 @@ struct WindowCtx {
      *
      * @return 2d coordinates in window pixel space.
      */
+    OUSTER_API_FUNCTION
     std::pair<double, double> window_coordinates(double normalized_x,
                                                  double normalized_y) const;
 
@@ -498,13 +554,14 @@ struct WindowCtx {
      * @brief raises std::logic_error if this WindowCtx doesn't satisfy class
      * invariants.
      */
+    OUSTER_API_FUNCTION
     void check_invariants() const;
 };
 
 /**
  * @brief Controls the camera view and projection.
  */
-class Camera {
+class OUSTER_API_CLASS Camera {
     /* view parameters */
     mat4d target_;
     vec3d view_offset_;
@@ -523,6 +580,7 @@ class Camera {
     /**
      * @todo document me
      */
+    OUSTER_API_FUNCTION
     Camera();
 
     /**
@@ -532,16 +590,19 @@ class Camera {
      *
      * @return projection, view matrices and target location.
      */
+    OUSTER_API_FUNCTION
     impl::CameraData matrices(double aspect) const;
 
     /**
      * Reset the camera view and fov.
      */
+    OUSTER_API_FUNCTION
     void reset();
 
     /**
      * Set camera view as looking from the top as a bird (Birds Eye View).
      */
+    OUSTER_API_FUNCTION
     void birds_eye_view();
 
     /**
@@ -549,6 +610,7 @@ class Camera {
      *
      * @param[in] degrees offset to the current yaw angle
      */
+    OUSTER_API_FUNCTION
     void yaw(float degrees);
 
     /**
@@ -556,6 +618,7 @@ class Camera {
      *
      * @param[in] degrees yaw angle
      */
+    OUSTER_API_FUNCTION
     void set_yaw(float degrees);
 
     /**
@@ -563,6 +626,7 @@ class Camera {
      *
      * @return yaw in degrees
      */
+    OUSTER_API_FUNCTION
     float get_yaw() const;
 
     /**
@@ -570,6 +634,7 @@ class Camera {
      *
      * @param[in] degrees offset to the current pitch angle
      */
+    OUSTER_API_FUNCTION
     void pitch(float degrees);
 
     /**
@@ -577,6 +642,7 @@ class Camera {
      *
      * @param[in] degrees pitch angle
      */
+    OUSTER_API_FUNCTION
     void set_pitch(float degrees);
 
     /**
@@ -584,6 +650,7 @@ class Camera {
      *
      * @return pitch in degrees
      */
+    OUSTER_API_FUNCTION
     float get_pitch() const;
 
     /**
@@ -591,6 +658,7 @@ class Camera {
      *
      * @param[in] amount offset to the current camera distance from the target
      */
+    OUSTER_API_FUNCTION
     void dolly(double amount);
 
     /**
@@ -598,6 +666,7 @@ class Camera {
      *
      * @param[in] log_distance log of the distance from the target
      */
+    OUSTER_API_FUNCTION
     void set_dolly(double log_distance);
 
     /**
@@ -605,6 +674,7 @@ class Camera {
      *
      * @return log_distance
      */
+    OUSTER_API_FUNCTION
     double get_dolly() const;
 
     /**
@@ -617,6 +687,7 @@ class Camera {
      * @param[in] x horizontal offset
      * @param[in] y vertical offset
      */
+    OUSTER_API_FUNCTION
     void dolly_xy(double x, double y);
 
     /**
@@ -624,6 +695,7 @@ class Camera {
      *
      * @param[in] view_offset view offset of the camera
      */
+    OUSTER_API_FUNCTION
     void set_view_offset(const vec3d& view_offset);
 
     /**
@@ -631,6 +703,7 @@ class Camera {
      *
      * @return view offset of the camera
      */
+    OUSTER_API_FUNCTION
     vec3d get_view_offset() const;
 
     /**
@@ -638,6 +711,7 @@ class Camera {
      *
      * @param[in] degrees the diagonal field of view, in degrees
      */
+    OUSTER_API_FUNCTION
     void set_fov(float degrees);
 
     /**
@@ -645,6 +719,7 @@ class Camera {
      *
      * @return fov in degrees
      */
+    OUSTER_API_FUNCTION
     float get_fov() const;
 
     /**
@@ -652,6 +727,7 @@ class Camera {
      *
      * @param[in] state true for orthographic, false for perspective
      */
+    OUSTER_API_FUNCTION
     void set_orthographic(bool state);
 
     /**
@@ -659,6 +735,7 @@ class Camera {
      *
      * @return true if orthographic, false if perspective
      */
+    OUSTER_API_FUNCTION
     bool is_orthographic() const;
 
     /**
@@ -667,6 +744,7 @@ class Camera {
      * @param[in] x horizontal position in in normalized coordinates [-1, 1]
      * @param[in] y vertical position in in normalized coordinates [-1, 1]
      */
+    OUSTER_API_FUNCTION
     void set_proj_offset(float x, float y);
 
     /**
@@ -674,6 +752,7 @@ class Camera {
      *
      * @return (x, y) position of a camera target in the viewport
      */
+    OUSTER_API_FUNCTION
     vec2d get_proj_offset() const;
 
     /**
@@ -681,6 +760,7 @@ class Camera {
      *
      * @param[in] target target where camera is looking at
      */
+    OUSTER_API_FUNCTION
     void set_target(const mat4d& target);
 
     /**
@@ -688,13 +768,14 @@ class Camera {
      *
      * @return target camera pose
      */
+    OUSTER_API_FUNCTION
     mat4d get_target() const;
 };
 
 /**
  * @brief Manages the state of the camera target display.
  */
-class TargetDisplay {
+class OUSTER_API_CLASS TargetDisplay {
     int ring_size_{1};
     bool rings_enabled_{false};
     int ring_line_width_{1};
@@ -705,6 +786,7 @@ class TargetDisplay {
      *
      * @param[in] state true to display rings
      */
+    OUSTER_API_FUNCTION
     void enable_rings(bool state);
 
     /**
@@ -712,6 +794,7 @@ class TargetDisplay {
      *
      * @param[in] n space between rings will be 10^n meters
      */
+    OUSTER_API_FUNCTION
     void set_ring_size(int n);
 
     /**
@@ -719,6 +802,7 @@ class TargetDisplay {
      *
      * @param[in] line_width of the rings line
      */
+    OUSTER_API_FUNCTION
     void set_ring_line_width(int line_width);
 
     friend class impl::GLRings;
@@ -734,7 +818,8 @@ class TargetDisplay {
  * We also keep track of a per-cloud pose to efficiently transform the
  * whole point cloud without having to update all ~2048 poses.
  */
-class Cloud {
+class OUSTER_API_CLASS Cloud {
+   protected:
     size_t n_{0};
     size_t w_{0};
     mat4d extrinsic_{};
@@ -774,6 +859,7 @@ class Cloud {
      * @param[in] extrinsic sensor extrinsic calibration. 4x4 column-major
      *        homogeneous transformation matrix
      */
+    OUSTER_API_FUNCTION
     explicit Cloud(size_t n, const mat4d& extrinsic = identity4d);
 
     /**
@@ -788,6 +874,7 @@ class Cloud {
      * @param[in] extrinsic sensor extrinsic calibration. 4x4 column-major
      *        homogeneous transformation matrix
      */
+    OUSTER_API_FUNCTION
     Cloud(size_t w, size_t h, const float* dir, const float* off,
           const mat4d& extrinsic = identity4d);
 
@@ -797,6 +884,7 @@ class Cloud {
      *
      * @param[in] other the object to update the state from.
      */
+    OUSTER_API_FUNCTION
     void update_from(const Cloud& other);
 
     /**
@@ -804,6 +892,7 @@ class Cloud {
      *
      * Resets any changes since the last call to PointViz::update()
      */
+    OUSTER_API_FUNCTION
     void clear();
 
     /**
@@ -811,6 +900,7 @@ class Cloud {
      *
      * Re-sets everything so the object is always redrawn.
      */
+    OUSTER_API_FUNCTION
     void dirty();
 
     /**
@@ -818,6 +908,7 @@ class Cloud {
      *
      * @return @todo document me
      */
+    OUSTER_API_FUNCTION
     size_t get_size() const { return n_; }
 
     /**
@@ -825,6 +916,7 @@ class Cloud {
      *
      * @return number of columns in point cloud. (1 - for unstructured)
      */
+    OUSTER_API_FUNCTION
     size_t get_cols() const { return w_; }
 
     /**
@@ -833,15 +925,26 @@ class Cloud {
      * @param[in] range pointer to array of at least as many elements as there
      * are points, representing the range of the points
      */
+    OUSTER_API_FUNCTION
     void set_range(const uint32_t* range);
 
     /**
      * Set the key values, used for coloring.
      *
      * @param[in] key pointer to array of at least as many elements as there are
-     *        points, preferably normalized between 0 and 1
+     *                points, preferably normalized between 0 and 1
      */
+    OUSTER_API_FUNCTION
     void set_key(const float* key);
+
+    /**
+     * Set the key alpha values, leaving the color the same.
+     *
+     * @param[in] key_alpha pointer to array of at least as many elements as
+     *                      there are points, normalized between 0 and 1
+     */
+    OUSTER_API_FUNCTION
+    void set_key_alpha(const float* key_alpha);
 
     /**
      * Set the key values in RGB format, used for coloring.
@@ -849,6 +952,7 @@ class Cloud {
      * @param[in] key_rgb pointer to array of at least 3x as many elements as
      * there are points, normalized between 0 and 1
      */
+    OUSTER_API_FUNCTION
     void set_key_rgb(const float* key_rgb);
 
     /**
@@ -857,6 +961,7 @@ class Cloud {
      * @param[in] key_rgba pointer to array of at least 4x as many elements as
      * there are points, normalized between 0 and 1
      */
+    OUSTER_API_FUNCTION
     void set_key_rgba(const float* key_rgba);
 
     /**
@@ -865,6 +970,7 @@ class Cloud {
      * @param[in] mask pointer to array of at least 4x as many elements as there
      * are points, preferably normalized between 0 and 1
      */
+    OUSTER_API_FUNCTION
     void set_mask(const float* mask);
 
     /**
@@ -873,6 +979,7 @@ class Cloud {
      * @param[in] xyz pointer to array of exactly 3n where n is number of
      * points, so that the xyz position of the ith point is i, i + n, i + 2n
      */
+    OUSTER_API_FUNCTION
     void set_xyz(const float* xyz);
 
     /**
@@ -883,6 +990,7 @@ class Cloud {
      * @param[in] offset pointer to array of exactly 3n where n is number of
      * points, so that the xyz position of the ith point is i, i + n, i + 2n
      */
+    OUSTER_API_FUNCTION
     void set_offset(const float* offset);
 
     /**
@@ -890,6 +998,7 @@ class Cloud {
      *
      * @param[in] pose 4x4 column-major homogeneous transformation matrix
      */
+    OUSTER_API_FUNCTION
     void set_pose(const mat4d& pose);
 
     /**
@@ -897,6 +1006,7 @@ class Cloud {
      *
      * @param[in] size point size
      */
+    OUSTER_API_FUNCTION
     void set_point_size(float size);
 
     /**
@@ -911,6 +1021,7 @@ class Cloud {
      * row is a translation vector. That is, the vth translation is t[v], t[w +
      * v], t[2 * w + v]
      */
+    OUSTER_API_FUNCTION
     void set_column_poses(const float* rotation, const float* translation);
 
     /**
@@ -921,6 +1032,7 @@ class Cloud {
      * @param[in] column_poses array of 4x4 pose elements and length w
      * (i.e. [wx4x4]) column-storage
      */
+    OUSTER_API_FUNCTION
     void set_column_poses(const float* column_poses);
 
     /**
@@ -929,6 +1041,7 @@ class Cloud {
      * @param[in] palette the new palette to use, must have size 3*palette_size
      * @param[in] palette_size the number of colors in the new palette
      */
+    OUSTER_API_FUNCTION
     void set_palette(const float* palette, size_t palette_size);
 
     friend class impl::GLCloud;
@@ -937,7 +1050,7 @@ class Cloud {
 /**
  * @brief Manages the state of an image.
  */
-class Image {
+class OUSTER_API_CLASS Image {
     bool position_changed_{false};
     bool image_changed_{false};
     bool mask_changed_{false};
@@ -959,6 +1072,7 @@ class Image {
     /**
      * @todo document me
      */
+    OUSTER_API_FUNCTION
     Image();
 
     /**
@@ -967,6 +1081,7 @@ class Image {
      *
      * @param[in] other the object to update the state from.
      */
+    OUSTER_API_FUNCTION
     void update_from(const Image& other);
 
     /**
@@ -974,6 +1089,7 @@ class Image {
      *
      * Resets any changes since the last call to PointViz::update()
      */
+    OUSTER_API_FUNCTION
     void clear();
 
     /**
@@ -984,6 +1100,7 @@ class Image {
      * @param[in] image_data pointer to an array of width * height elements
      *        interpreted as a row-major monochrome image
      */
+    OUSTER_API_FUNCTION
     void set_image(size_t width, size_t height, const float* image_data);
 
     /**
@@ -994,6 +1111,7 @@ class Image {
      * @param[in] image_data_rgb pointer to an array of width * height elements
      *        interpreted as a row-major RGB image
      */
+    OUSTER_API_FUNCTION
     void set_image_rgb(size_t width, size_t height,
                        const float* image_data_rgb);
 
@@ -1005,6 +1123,7 @@ class Image {
      * @param[in] image_data_rgba pointer to an array of width * height elements
      *        interpreted as a row-major RGBA image
      */
+    OUSTER_API_FUNCTION
     void set_image_rgba(size_t width, size_t height,
                         const float* image_data_rgba);
 
@@ -1018,6 +1137,7 @@ class Image {
      * @param[in] mask_data pointer to array of 4 * width * height elements
      * interpreted as a row-major rgba image
      */
+    OUSTER_API_FUNCTION
     void set_mask(size_t width, size_t height, const float* mask_data);
 
     /**
@@ -1038,6 +1158,7 @@ class Image {
      * I believe it was done this way to allow scaling
      * with the window while maintaining the aspect ratio.
      */
+    OUSTER_API_FUNCTION
     void set_position(float x_min, float x_max, float y_min, float y_max);
 
     /**
@@ -1056,6 +1177,7 @@ class Image {
      * the center [-1.0..1.0]
      *
      */
+    OUSTER_API_FUNCTION
     void set_hshift(float hshift);
 
     /**
@@ -1064,12 +1186,14 @@ class Image {
      * @param[in] palette the new palette to use, must have size 3*palette_size
      * @param[in] palette_size the number of colors in the new palette
      */
+    OUSTER_API_FUNCTION
     void set_palette(const float* palette, size_t palette_size);
 
     /**
      * Removes the image color palette.
      *
      */
+    OUSTER_API_FUNCTION
     void clear_palette();
 
     /**
@@ -1079,28 +1203,41 @@ class Image {
      * @param[in] x X coordinate for the window
      * @param[in] y Y coordinate for the window
      *
+     * @throw std::runtime_error if the image data has not been set,
+     * or if the image size (set by set_position) is zero in either dimension.
+     *
      * @return Image pixel corresponding to the provided window coordinates.
+     * IMPORTANT: the pixel is outside the image if either the (x, y) are less
+     * than zero or greater than the image (width, height).
      */
-    nonstd::optional<std::pair<int, int>> window_coordinates_to_image_pixel(
-        const WindowCtx& ctx, double x, double y) const;
+    OUSTER_API_FUNCTION
+    std::pair<int, int> window_coordinates_to_image_pixel(const WindowCtx& ctx,
+                                                          double x,
+                                                          double y) const;
 
     /**
      * @brief Returns the inverse of "window_coordinates_to_image_pixel"
      * This is useful for computing positions relative to an image pixel.
+     *
      * @param[in] ctx the WindowCtx.
      * @param[in] px X pixel coordinate
      * @param[in] py Y pixel coordinate
+     *
      * @return a coordinate normalized to -1, 1 in the window's Y axis
      */
+    OUSTER_API_FUNCTION
     std::pair<double, double> image_pixel_to_window_coordinates(
         const WindowCtx& ctx, int px, int py) const;
 
     /**
      * @brief Returns the pixel size as a pair representing width and height in
      * window pixels.
+     *
      * @param[in] ctx the WindowCtx.
+     *
      * @return a pair representing the image pixel size in window pixels.
      */
+    OUSTER_API_FUNCTION
     std::pair<double, double> pixel_size(const WindowCtx& ctx) const;
 
     friend class impl::GLImage;
@@ -1109,7 +1246,7 @@ class Image {
 /**
  * @brief Manages the state of a single cuboid.
  */
-class Cuboid {
+class OUSTER_API_CLASS Cuboid {
     bool transform_changed_{false};
     bool rgba_changed_{false};
 
@@ -1125,6 +1262,7 @@ class Cuboid {
      * @param[in] rgba 4x4 float matrix representing cuboid color in RGBA format
      *
      */
+    OUSTER_API_FUNCTION
     Cuboid(const mat4d& transform, const vec4f& rgba);
 
     /**
@@ -1133,6 +1271,7 @@ class Cuboid {
      *
      * @param[in] other the object to update the state from.
      */
+    OUSTER_API_FUNCTION
     void update_from(const Cuboid& other);
 
     /**
@@ -1140,6 +1279,7 @@ class Cuboid {
      *
      * Resets any changes since the last call to PointViz::update()
      */
+    OUSTER_API_FUNCTION
     void clear();
 
     /**
@@ -1149,6 +1289,7 @@ class Cuboid {
      *
      * @param[in] pose @todo document me
      */
+    OUSTER_API_FUNCTION
     void set_transform(const mat4d& pose);
 
     /**
@@ -1156,6 +1297,7 @@ class Cuboid {
      *
      * @param[in] rgba @todo document me
      */
+    OUSTER_API_FUNCTION
     void set_rgba(const vec4f& rgba);
 
     friend class impl::GLCuboid;
@@ -1164,7 +1306,7 @@ class Cuboid {
 /**
  * @brief Manages the state of a text label.
  */
-class Label {
+class OUSTER_API_CLASS Label {
     bool pos_changed_{false};
     bool scale_changed_{true};
     bool text_changed_{false};
@@ -1187,6 +1329,7 @@ class Label {
      * @param[in] position Set 3D position of label as x,y,z coordinates
      *            of type double
      */
+    OUSTER_API_FUNCTION
     Label(const std::string& text, const vec3d& position);
     /**
      * Sets the 2D position of the lavel
@@ -1197,6 +1340,7 @@ class Label {
      * @param[in] align_right interpret position as right of the label
      * @param[in] align_top interpret position as top of the label
      */
+    OUSTER_API_FUNCTION
     Label(const std::string& text, float x, float y, bool align_right = false,
           bool align_top = false);
 
@@ -1206,6 +1350,7 @@ class Label {
      *
      * @param[in] other the object to update the state from.
      */
+    OUSTER_API_FUNCTION
     void update_from(const Label& other);
 
     /**
@@ -1213,6 +1358,7 @@ class Label {
      *
      * Resets any changes since the last call to PointViz::update()
      */
+    OUSTER_API_FUNCTION
     void clear();
 
     /**
@@ -1220,6 +1366,7 @@ class Label {
      *
      * Re-sets everything so the object is always redrawn.
      */
+    OUSTER_API_FUNCTION
     void dirty();
 
     /**
@@ -1227,6 +1374,7 @@ class Label {
      *
      * @param[in] text new text to display
      */
+    OUSTER_API_FUNCTION
     void set_text(const std::string& text);
 
     /**
@@ -1234,6 +1382,7 @@ class Label {
      *
      * @param[in] position 3d position of the label
      */
+    OUSTER_API_FUNCTION
     void set_position(const vec3d& position);
 
     /**
@@ -1244,6 +1393,7 @@ class Label {
      * @param[in] align_right interpret position as right of the label
      * @param[in] align_top interpret position as top of the label
      */
+    OUSTER_API_FUNCTION
     void set_position(float x, float y, bool align_right = false,
                       bool align_top = false);
 
@@ -1252,6 +1402,7 @@ class Label {
      *
      * @param[in] scale text scaling factor
      */
+    OUSTER_API_FUNCTION
     void set_scale(float scale);
 
     /**
@@ -1259,6 +1410,7 @@ class Label {
      *
      * @param[in] rgba color in RGBA format
      */
+    OUSTER_API_FUNCTION
     void set_rgba(const vec4f& rgba);
 
     friend class impl::GLLabel;

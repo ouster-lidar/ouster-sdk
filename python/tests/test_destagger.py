@@ -65,7 +65,9 @@ def test_destagger_inverse(meta) -> None:
 
     d = client.destagger(meta, a)
     e = client.destagger(meta, d, inverse=True)
+    f = client.stagger(meta, d)  # also test the stagger version
     assert np.array_equal(a, e)
+    assert np.array_equal(a, f)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])

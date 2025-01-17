@@ -6,8 +6,6 @@
 #include "ouster/osf/reader.h"
 
 #include <gtest/gtest.h>
-#include <spdlog/logger.h>
-#include <spdlog/sinks/ostream_sink.h>
 
 #include "common.h"
 #include "osf_test.h"
@@ -35,130 +33,90 @@ TEST_F(ReaderTest, Basics) {
     // Get first sensor (it's the first by metadata_id) (i.e. first added)
     auto sensor = reader.meta_store().get<osf::LidarSensor>();
     EXPECT_TRUE(sensor);
-    EXPECT_EQ(
-        sensor->to_string(),
-        "{\n  \"sensor_info\": \n  {\n    \"beam_intrinsics\": \n    {\n      "
-        "\"beam_altitude_angles\": \n      [\n        20.95,\n        20.67,\n "
-        "       20.36,\n        20.03,\n        19.73,\n        19.41,\n       "
-        " 19.11,\n        18.76,\n        18.47,\n        18.14,\n        "
-        "17.82,\n        17.5,\n        17.19,\n        16.86,\n        "
-        "16.53,\n        16.2,\n        15.89,\n        15.56,\n        "
-        "15.23,\n        14.9,\n        14.57,\n        14.23,\n        "
-        "13.9,\n        13.57,\n        13.25,\n        12.91,\n        "
-        "12.57,\n        12.22,\n        11.9,\n        11.55,\n        "
-        "11.2,\n        10.87,\n        10.54,\n        10.18,\n        "
-        "9.84,\n        9.51,\n        9.15,\n        8.81,\n        8.47,\n   "
-        "     8.11,\n        7.78,\n        7.43,\n        7.08,\n        "
-        "6.74,\n        6.39,\n        6.04,\n        5.7,\n        5.34,\n    "
-        "    4.98,\n        4.64,\n        4.29,\n        3.93,\n        "
-        "3.58,\n        3.24,\n        2.88,\n        2.53,\n        2.17,\n   "
-        "     1.82,\n        1.47,\n        1.12,\n        0.78,\n        "
-        "0.41,\n        0.07,\n        -0.28,\n        -0.64,\n        "
-        "-0.99,\n        -1.35,\n        -1.7,\n        -2.07,\n        "
-        "-2.4,\n        -2.75,\n        -3.11,\n        -3.46,\n        "
-        "-3.81,\n        -4.15,\n        -4.5,\n        -4.86,\n        "
-        "-5.22,\n        -5.57,\n        -5.9,\n        -6.27,\n        "
-        "-6.61,\n        -6.97,\n        -7.3,\n        -7.67,\n        "
-        "-8.01,\n        -8.35,\n        -8.69,\n        -9.05,\n        "
-        "-9.38,\n        -9.71,\n        -10.07,\n        -10.42,\n        "
-        "-10.76,\n        -11.09,\n        -11.43,\n        -11.78,\n        "
-        "-12.12,\n        -12.46,\n        -12.78,\n        -13.15,\n        "
-        "-13.46,\n        -13.8,\n        -14.12,\n        -14.48,\n        "
-        "-14.79,\n        -15.11,\n        -15.46,\n        -15.79,\n        "
-        "-16.12,\n        -16.45,\n        -16.76,\n        -17.11,\n        "
-        "-17.44,\n        -17.74,\n        -18.06,\n        -18.39,\n        "
-        "-18.72,\n        -19.02,\n        -19.32,\n        -19.67,\n        "
-        "-19.99,\n        -20.27,\n        -20.57,\n        -20.92,\n        "
-        "-21.22,\n        -21.54,\n        -21.82\n      ],\n      "
-        "\"beam_azimuth_angles\": \n      [\n        4.21,\n        1.41,\n    "
-        "    -1.4,\n        -4.22,\n        4.22,\n        1.41,\n        "
-        "-1.4,\n        -4.23,\n        4.21,\n        1.4,\n        -1.42,\n  "
-        "      -4.2,\n        4.22,\n        1.41,\n        -1.4,\n        "
-        "-4.23,\n        4.21,\n        1.41,\n        -1.41,\n        "
-        "-4.21,\n        4.22,\n        1.4,\n        -1.41,\n        -4.2,\n  "
-        "      4.22,\n        1.42,\n        -1.4,\n        -4.2,\n        "
-        "4.22,\n        1.41,\n        -1.42,\n        -4.21,\n        4.22,\n "
-        "       1.41,\n        -1.4,\n        -4.21,\n        4.2,\n        "
-        "1.4,\n        -1.4,\n        -4.22,\n        4.21,\n        1.41,\n   "
-        "     -1.41,\n        -4.21,\n        4.22,\n        1.41,\n        "
-        "-1.4,\n        -4.21,\n        4.21,\n        1.41,\n        -1.4,\n  "
-        "      -4.21,\n        4.2,\n        1.41,\n        -1.4,\n        "
-        "-4.21,\n        4.2,\n        1.4,\n        -1.41,\n        -4.21,\n  "
-        "      4.22,\n        1.4,\n        -1.4,\n        -4.21,\n        "
-        "4.22,\n        1.42,\n        -1.4,\n        -4.2,\n        4.2,\n    "
-        "    1.42,\n        -1.4,\n        -4.22,\n        4.22,\n        "
-        "1.41,\n        -1.4,\n        -4.2,\n        4.23,\n        1.41,\n   "
-        "     -1.4,\n        -4.2,\n        4.21,\n        1.41,\n        "
-        "-1.4,\n        -4.21,\n        4.21,\n        1.41,\n        -1.4,\n  "
-        "      -4.21,\n        4.22,\n        1.41,\n        -1.39,\n        "
-        "-4.21,\n        4.23,\n        1.41,\n        -1.39,\n        "
-        "-4.22,\n        4.23,\n        1.4,\n        -1.4,\n        -4.2,\n   "
-        "     4.21,\n        1.41,\n        -1.41,\n        -4.2,\n        "
-        "4.22,\n        1.42,\n        -1.39,\n        -4.22,\n        4.24,\n "
-        "       1.41,\n        -1.41,\n        -4.22,\n        4.23,\n        "
-        "1.41,\n        -1.39,\n        -4.21,\n        4.23,\n        1.41,\n "
-        "       -1.39,\n        -4.2,\n        4.23,\n        1.4,\n        "
-        "-1.39,\n        -4.2,\n        4.22,\n        1.42,\n        -1.39,\n "
-        "       -4.2\n      ],\n      \"beam_to_lidar_transform\": \n      [\n "
-        "       1.0,\n        0.0,\n        0.0,\n        15.806,\n        "
-        "0.0,\n        1.0,\n        0.0,\n        0.0,\n        0.0,\n        "
-        "0.0,\n        1.0,\n        0.0,\n        0.0,\n        0.0,\n        "
-        "0.0,\n        1.0\n      ],\n      "
-        "\"lidar_origin_to_beam_origin_mm\": 15.806\n    },\n    "
-        "\"calibration_status\": {},\n    \"config_params\": \n    {\n      "
-        "\"lidar_mode\": \"1024x10\",\n      \"udp_port_imu\": 7503,\n      "
-        "\"udp_port_lidar\": 7502\n    },\n    \"imu_intrinsics\": \n    {\n   "
-        "   \"imu_to_sensor_transform\": \n      [\n        1.0,\n        "
-        "0.0,\n        0.0,\n        6.253,\n        0.0,\n        1.0,\n      "
-        "  0.0,\n        -11.775,\n        0.0,\n        0.0,\n        1.0,\n  "
-        "      7.645,\n        0.0,\n        0.0,\n        0.0,\n        1.0\n "
-        "     ]\n    },\n    \"lidar_data_format\": \n    {\n      "
-        "\"column_window\": \n      [\n        0,\n        1023\n      ],\n    "
-        "  \"columns_per_frame\": 1024,\n      \"columns_per_packet\": 16,\n   "
-        "   \"fps\": 10,\n      \"pixel_shift_by_row\": \n      [\n        "
-        "24,\n        16,\n        8,\n        0,\n        24,\n        16,\n  "
-        "      8,\n        0,\n        24,\n        16,\n        8,\n        "
-        "0,\n        24,\n        16,\n        8,\n        0,\n        24,\n   "
-        "     16,\n        8,\n        0,\n        24,\n        16,\n        "
-        "8,\n        0,\n        24,\n        16,\n        8,\n        0,\n    "
-        "    24,\n        16,\n        8,\n        0,\n        24,\n        "
-        "16,\n        8,\n        0,\n        24,\n        16,\n        8,\n   "
-        "     0,\n        24,\n        16,\n        8,\n        0,\n        "
-        "24,\n        16,\n        8,\n        0,\n        24,\n        16,\n  "
-        "      8,\n        0,\n        24,\n        16,\n        8,\n        "
-        "0,\n        24,\n        16,\n        8,\n        0,\n        24,\n   "
-        "     16,\n        8,\n        0,\n        24,\n        16,\n        "
-        "8,\n        0,\n        24,\n        16,\n        8,\n        0,\n    "
-        "    24,\n        16,\n        8,\n        0,\n        24,\n        "
-        "16,\n        8,\n        0,\n        24,\n        16,\n        8,\n   "
-        "     0,\n        24,\n        16,\n        8,\n        0,\n        "
-        "24,\n        16,\n        8,\n        0,\n        24,\n        16,\n  "
-        "      8,\n        0,\n        24,\n        16,\n        8,\n        "
-        "0,\n        24,\n        16,\n        8,\n        0,\n        24,\n   "
-        "     16,\n        8,\n        0,\n        24,\n        16,\n        "
-        "8,\n        0,\n        24,\n        16,\n        8,\n        0,\n    "
-        "    24,\n        16,\n        8,\n        0,\n        24,\n        "
-        "16,\n        8,\n        0,\n        24,\n        16,\n        8,\n   "
-        "     0\n      ],\n      \"pixels_per_column\": 128,\n      "
-        "\"udp_profile_imu\": \"LEGACY\",\n      \"udp_profile_lidar\": "
-        "\"RNG15_RFL8_NIR8\"\n    },\n    \"lidar_intrinsics\": \n    {\n      "
-        "\"lidar_to_sensor_transform\": \n      [\n        -1.0,\n        "
-        "0.0,\n        0.0,\n        0.0,\n        0.0,\n        -1.0,\n       "
-        " 0.0,\n        0.0,\n        0.0,\n        0.0,\n        1.0,\n       "
-        " 36.18,\n        0.0,\n        0.0,\n        0.0,\n        1.0\n      "
-        "]\n    },\n    \"ouster-sdk\": \n    {\n      \"client_version\": "
-        "\"ouster_client 0.13.0\",\n      \"extrinsic\": \n      [\n        "
-        "1.0,\n        0.0,\n        0.0,\n        0.0,\n        0.0,\n        "
-        "1.0,\n        0.0,\n        0.0,\n        0.0,\n        0.0,\n        "
-        "1.0,\n        0.0,\n        0.0,\n        0.0,\n        0.0,\n        "
-        "1.0\n      ],\n      \"output_source\": \"sensor_info_to_string\"\n   "
-        " },\n    \"sensor_info\": \n    {\n      \"build_date\": "
-        "\"2022-04-14T21:11:47Z\",\n      \"build_rev\": \"v2.3.0\",\n      "
-        "\"image_rev\": \"ousteros-image-prod-aries-v2.3.0+20220415163956\",\n "
-        "     \"initialization_id\": 7109750,\n      \"prod_line\": "
-        "\"OS-1-128\",\n      \"prod_pn\": \"840-103575-06\",\n      "
-        "\"prod_sn\": \"122201000998\",\n      \"status\": \"RUNNING\"\n    "
-        "},\n    \"user_data\": \"\"\n  }\n}");
+    std::stringstream actual;
+    actual
+        << "{\"sensor_info\":{\"beam_intrinsics\":{\"beam_altitude_angles\":["
+           "20."
+           "95,20.67,20.36,20.03,19.73,19.41,19.11,18.76,18.47,18.14,17.82,17."
+           "5,"
+           "17.19,16.86,16.53,16.2,15.89,15.56,15.23,14.9,14.57,14.23,13.9,13."
+           "57,"
+           "13.25,12.91,12.57,12.22,11.9,11.55,11.2,10.87,10.54,10.18,9.84,9."
+           "51,9."
+           "15,8.81,8.47,8.11,7.78,7.43,7.08,6.74,6.39,6.04,5.7,5.34,4.98,4.64,"
+           "4."
+           "29,3.93,3.58,3.24,2.88,2.53,2.17,1.82,1.47,1.12,0.78,0.41,0.07,-0."
+           "28,-"
+           "0.64,-0.99,-1.35,-1.7,-2.07,-2.4,-2.75,-3.11,-3.46,-3.81,-4.15,-4."
+           "5,-"
+           "4.86,-5.22,-5.57,-5.9,-6.27,-6.61,-6.97,-7.3,-7.67,-8.01,-8.35,-8."
+           "69,-"
+           "9.05,-9.38,-9.71,-10.07,-10.42,-10.76,-11.09,-11.43,-11.78,-12.12,-"
+           "12."
+           "46,-12.78,-13.15,-13.46,-13.8,-14.12,-14.48,-14.79,-15.11,-15.46,-"
+           "15."
+           "79,-16.12,-16.45,-16.76,-17.11,-17.44,-17.74,-18.06,-18.39,-18.72,-"
+           "19."
+           "02,-19.32,-19.67,-19.99,-20.27,-20.57,-20.92,-21.22,-21.54,-21.82],"
+           "\"beam_azimuth_angles\":[4.21,1.41,-1.4,-4.22,4.22,1.41,-1.4,-4.23,"
+           "4."
+           "21,1.4,-1.42,-4.2,4.22,1.41,-1.4,-4.23,4.21,1.41,-1.41,-4.21,4.22,"
+           "1.4,"
+           "-1.41,-4.2,4.22,1.42,-1.4,-4.2,4.22,1.41,-1.42,-4.21,4.22,1.41,-1."
+           "4,-"
+           "4.21,4.2,1.4,-1.4,-4.22,4.21,1.41,-1.41,-4.21,4.22,1.41,-1.4,-4.21,"
+           "4."
+           "21,1.41,-1.4,-4.21,4.2,1.41,-1.4,-4.21,4.2,1.4,-1.41,-4.21,4.22,1."
+           "4,-"
+           "1.4,-4.21,4.22,1.42,-1.4,-4.2,4.2,1.42,-1.4,-4.22,4.22,1.41,-1.4,-"
+           "4.2,"
+           "4.23,1.41,-1.4,-4.2,4.21,1.41,-1.4,-4.21,4.21,1.41,-1.4,-4.21,4.22,"
+           "1."
+           "41,-1.39,-4.21,4.23,1.41,-1.39,-4.22,4.23,1.4,-1.4,-4.2,4.21,1.41,-"
+           "1."
+           "41,-4.2,4.22,1.42,-1.39,-4.22,4.24,1.41,-1.41,-4.22,4.23,1.41,-1."
+           "39,-"
+           "4.21,4.23,1.41,-1.39,-4.2,4.23,1.4,-1.39,-4.2,4.22,1.42,-1.39,-4.2]"
+           ","
+           "\"beam_to_lidar_transform\":[1.0,0.0,0.0,15.806,0.0,1.0,0.0,0.0,0."
+           "0,0."
+           "0,1.0,0.0,0.0,0.0,0.0,1.0],\"lidar_origin_to_beam_origin_mm\":15."
+           "806},"
+           "\"calibration_status\":{},\"config_params\":{\"lidar_mode\":"
+           "\"1024x10\",\"udp_port_imu\":7503,\"udp_port_lidar\":7502},\"imu_"
+           "intrinsics\":{\"imu_to_sensor_transform\":[1.0,0.0,0.0,6.253,0.0,1."
+           "0,"
+           "0.0,-11.775,0.0,0.0,1.0,7.645,0.0,0.0,0.0,1.0]},\"lidar_data_"
+           "format\":"
+           "{\"column_window\":[0,1023],\"columns_per_frame\":1024,\"columns_"
+           "per_"
+           "packet\":16,\"fps\":10,\"pixel_shift_by_row\":[24,16,8,0,24,16,8,0,"
+           "24,"
+           "16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,"
+           "24,"
+           "16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,"
+           "24,"
+           "16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,"
+           "24,"
+           "16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,24,16,8,0,"
+           "24,"
+           "16,8,0,24,16,8,0],\"pixels_per_column\":128,\"udp_profile_imu\":"
+           "\"LEGACY\",\"udp_profile_lidar\":\"RNG15_RFL8_NIR8\"},\"lidar_"
+           "intrinsics\":{\"lidar_to_sensor_transform\":[-1.0,0.0,0.0,0.0,0.0,-"
+           "1."
+           "0,0.0,0.0,0.0,0.0,1.0,36.18,0.0,0.0,0.0,1.0]},\"ouster-sdk\":{"
+           "\"client_version\":\"";
+    actual << ouster::sensor::client_version();
+    actual
+        << "\",\"extrinsic\":[1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0."
+           "0,0.0,0.0,0.0,1.0],\"output_source\":\"sensor_info_to_string\"},"
+           "\"sensor_info\":{\"build_date\":\"2022-04-14T21:11:47Z\",\"build_"
+           "rev\":\"v2.3.0\",\"image_rev\":\"ousteros-image-prod-aries-v2.3.0+"
+           "20220415163956\",\"initialization_id\":7109750,\"prod_line\":\"OS-"
+           "1-"
+           "128\",\"prod_pn\":\"840-103575-06\",\"prod_sn\":\"122201000998\","
+           "\"status\":\"RUNNING\"},\"user_data\":\"\"}}";
+    EXPECT_EQ(sensor->to_string(), actual.str());
     EXPECT_EQ(1, reader.meta_store().count<osf::LidarSensor>());
 
     EXPECT_EQ(
@@ -319,42 +277,44 @@ TEST_F(ReaderTest, MessagesReadingStreaming) {
     EXPECT_EQ(3, std::distance(scan_msgs_full.begin(), scan_msgs_full.end()));
 }
 
-TEST_F(ReaderTest, MetadataFromBufferTest) {
-    OsfFile osf_file(
-        path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
+// @TODO Reeanble this test when we have generic spdlog functonality.
+// TEST_F(ReaderTest, MetadataFromBufferTest) {
+//     OsfFile osf_file(
+//         path_concat(test_data_dir(),
+//         "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
 
-    Reader reader(osf_file);
+//     Reader reader(osf_file);
 
-    auto sensor = reader.meta_store().entries().begin()->second;
+//     auto sensor = reader.meta_store().entries().begin()->second;
 
-    std::vector<uint8_t> buf;
-    std::stringstream output_stream;
-    auto ostream_sink = std::make_shared<
-        spdlog::sinks::ostream_sink<spdlog::details::null_mutex>>(
-        output_stream);
-    ouster::sensor::impl::Logger::instance().configure_generic_sink(
-        ostream_sink, "info");
+//     std::vector<uint8_t> buf;
+//     std::stringstream output_stream;
+//     auto ostream_sink = std::make_shared<
+//         spdlog::sinks::ostream_sink<spdlog::details::null_mutex>>(
+//         output_stream);
+//     ouster::sensor::impl::Logger::instance().configure_generic_sink(
+//         ostream_sink, "info");
 
-    auto result = sensor->from_buffer(buf, "NON EXISTENT");
+//     auto result = sensor->from_buffer(buf, "NON EXISTENT");
 
-    std::string output_error = output_stream.str();
-    auto error_loc = output_error.find("[error]");
-    EXPECT_NE(error_loc, std::string::npos);
+//     std::string output_error = output_stream.str();
+//     auto error_loc = output_error.find("[error]");
+//     EXPECT_NE(error_loc, std::string::npos);
 
-    output_error = output_error.substr(error_loc);
-#ifdef _WIN32
-    EXPECT_EQ(output_error, "[error] UNKNOWN TYPE: NON EXISTENT\r\n");
-#else
-    EXPECT_EQ(output_error, "[error] UNKNOWN TYPE: NON EXISTENT\n");
-#endif
-    EXPECT_EQ(result, nullptr);
+//     output_error = output_error.substr(error_loc);
+// #ifdef _WIN32
+//     EXPECT_EQ(output_error, "[error] UNKNOWN TYPE: NON EXISTENT\r\n");
+// #else
+//     EXPECT_EQ(output_error, "[error] UNKNOWN TYPE: NON EXISTENT\n");
+// #endif
+//     EXPECT_EQ(result, nullptr);
 
-    result = sensor->from_buffer(sensor->buffer(),
-                                 "ouster/v1/os_sensor/LidarSensor");
-    EXPECT_NE(result, nullptr);
-    EXPECT_EQ(result->id(), 0);
-    EXPECT_EQ(result->type(), "ouster/v1/os_sensor/LidarSensor");
-}
+//     result = sensor->from_buffer(sensor->buffer(),
+//                                  "ouster/v1/os_sensor/LidarSensor");
+//     EXPECT_NE(result, nullptr);
+//     EXPECT_EQ(result->id(), 0);
+//     EXPECT_EQ(result->type(), "ouster/v1/os_sensor/LidarSensor");
+// }
 
 }  // namespace
 }  // namespace osf

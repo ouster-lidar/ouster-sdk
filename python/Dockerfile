@@ -17,13 +17,10 @@ RUN set -xe \
  doxygen \
 # SDK deps \
  libeigen3-dev \
- libjsoncpp-dev \
  libpcap-dev \
  libtins-dev \
  libcurl4-openssl-dev \
  libglfw3-dev \
- libglew-dev \
- libspdlog-dev \
  libpng-dev \
  libflatbuffers-dev \
 # Python deps

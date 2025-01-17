@@ -5,6 +5,7 @@ import click
 
 import ouster.sdk.client as client
 
+from typing import Optional
 from ouster.sdk._bindings.client import Sensor as _Sensor
 
 from .source_util import (SourceCommandContext,
@@ -16,6 +17,51 @@ from .source_util import (SourceCommandContext,
 def sensor_group() -> None:
     """Commands for working with sensors."""
     pass
+
+
+@click.command
+@click.pass_context
+@click.option('--set-static-ip', type=str, default=None,
+              help='Set sensor static IP address. A subnet mask should be appended at the end using the /24 form.')
+@click.option('--clear-static-ip', is_flag=True, help='Clear current static IP address.')
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
+                     retrieve_click_context=True)
+def sensor_network(ctx: SourceCommandContext, click_ctx: click.core.Context,
+                   set_static_ip: Optional[str], clear_static_ip: bool) -> None:
+    """Manages and queries network settings on the sensor. Run with no arguments to print network details."""
+    if set_static_ip and clear_static_ip:
+        raise click.ClickException("Cannot both set and clear sensor static ip.")
+    try:
+        http = client.SensorHttp.create(ctx.source_uri)
+        if clear_static_ip:
+            http.delete_static_ip()
+        elif set_static_ip is not None:
+            http.set_static_ip(set_static_ip)
+        else:
+            click.echo(json.dumps(json.loads(http.network()), indent=4))
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
+
+
+@click.command
+@click.pass_context
+@click.argument('filename', metavar='[FILENAME]', type=str, nargs=-1)
+@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
+                     retrieve_click_context=True)
+def sensor_diagnostics(ctx: SourceCommandContext, click_ctx: click.core.Context, filename: str) -> None:
+    """Download diagnostics dump from a sensor."""
+    if len(filename) > 1:
+        raise click.ClickException("Can only provide at most one filename")
+    try:
+        http = client.SensorHttp.create(ctx.source_uri)
+        click.echo("Starting download. This may take a while....")
+        data = http.diagnostics_dump(100)
+        filename = filename[0] if len(filename) > 0 else ctx.source_uri + "_diagnostics.bin"
+        with open(filename, 'wb') as dump_file:
+            dump_file.write(data)
+        click.echo(f"Saved diagnostic dump to: {filename}")
+    except RuntimeError as e:
+        raise click.ClickException(str(e))
 
 
 @click.command
@@ -37,7 +83,7 @@ def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context) ->
                      retrieve_click_context=True)
 def sensor_userdata(ctx: SourceCommandContext, click_ctx: click.core.Context, s: str) -> None:
     """Retrieve or set userdata from the current sensor (if supported by the firmware)"""
-    from ouster.sdk.client._client import SensorHttp
+    from ouster.sdk.client import SensorHttp
     try:
         http = SensorHttp.create(ctx.source_uri)
         if s is None:
@@ -51,7 +97,7 @@ def sensor_userdata(ctx: SourceCommandContext, click_ctx: click.core.Context, s:
 @click.command()
 @click.argument('keyval', metavar='[KEY VAL]...', type=str, nargs=-1)
 @click.option('-d', 'dump', is_flag=True, help='Dump current configuration')
-@click.option('-c', 'file', type=click.File(), help='Read config from file')
+@click.option('-c', 'file', type=click.Path(), help='Read config from file')
 @click.option('-u', 'auto', is_flag=True, help='Set automatic udp dest')
 @click.option('-p', 'persist', is_flag=True, help='Persist configuration')
 @click.option('-s/-n', 'standby', default=None, help='Set STANDBY or NORMAL')
@@ -92,8 +138,9 @@ keyval, dump, file, auto, persist, standby) -> None:
     elif file:
         if keyval:
             raise click.ClickException("Cannot specify extra config keys with `-c`")
-        cfg = client.SensorConfig(file.read())
-        click.echo("Setting config from file:")
+        with open(file, 'r') as f:
+            click.echo(f"Setting config from file: {file}")
+            cfg = client.SensorConfig(f.read())
     elif not keyval and not auto and standby is None:
         auto = True
         cfg = client.SensorConfig()

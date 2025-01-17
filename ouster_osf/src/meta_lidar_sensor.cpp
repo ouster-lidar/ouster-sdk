@@ -5,13 +5,14 @@
 
 #include "ouster/osf/meta_lidar_sensor.h"
 
+#include <jsoncons/json.hpp>
+#include <jsoncons/json_parser.hpp>
+
 #include "fb_utils.h"
 #include "flatbuffers/flatbuffers.h"
-#include "json_utils.h"
 #include "ouster/osf/basics.h"
 
 using sensor_info = ouster::sensor::sensor_info;
-
 namespace ouster {
 namespace osf {
 
@@ -84,16 +85,24 @@ std::unique_ptr<MetadataEntry> LidarSensor::from_buffer(
 }
 
 std::string LidarSensor::repr() const {
-    Json::Value lidar_sensor_obj{};
-    Json::Value sensor_info_obj{};
+    jsoncons::json root;
 
-    if (!parse_json(metadata_, sensor_info_obj)) {
-        lidar_sensor_obj["sensor_info"] = metadata_;
+    std::istringstream temp(sensor_info_.to_json_string());
+
+    jsoncons::json_decoder<jsoncons::json> temp_decoder;
+    jsoncons::json_stream_reader reader(temp, temp_decoder);
+
+    std::error_code temp_error_code;
+    reader.read(temp_error_code);
+    if (!temp_error_code) {
+        root["sensor_info"] = temp_decoder.get_result();
     } else {
-        lidar_sensor_obj["sensor_info"] = sensor_info_obj;
+        root["sensor_info"] = metadata_;
     }
 
-    return json_string(lidar_sensor_obj);
+    std::string out;
+    root.dump(out);
+    return out;
 };
 
 std::string LidarSensor::to_string() const { return repr(); };

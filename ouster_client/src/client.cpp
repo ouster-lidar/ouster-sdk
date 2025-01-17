@@ -5,8 +5,6 @@
 
 #include "ouster/client.h"
 
-#include <json/json.h>
-
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
@@ -15,6 +13,9 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <jsoncons/json.hpp>
+#include <jsoncons/json_type.hpp>
+#include <jsoncons_ext/jsonpath/json_query.hpp>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -26,6 +27,7 @@
 #include "ouster/impl/client_poller.h"
 #include "ouster/impl/logging.h"
 #include "ouster/impl/netcompat.h"
+#include "ouster/metadata.h"
 #include "ouster/sensor_http.h"
 #include "ouster/types.h"
 
@@ -48,7 +50,7 @@ struct client {
 };
 
 // defined in types.cpp
-Json::Value config_to_json(const sensor_config& config);
+jsoncons::json config_to_json(const sensor_config& config);
 
 // default udp receive buffer size on windows is very low -- use 1MB
 const int RCVBUF_SIZE = 1024 * 1024;
@@ -87,7 +89,8 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
         if (preferred_af == AF_INET6 &&
             setsockopt(sock_fd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&off,
                        sizeof(off))) {
-            logger().warn("udp setsockopt(): {}", impl::socket_get_error());
+            logger().warn("udp setsockopt(IPV6_V6ONLY): {}",
+                          impl::socket_get_error());
             impl::socket_close(sock_fd);
             continue;
         }
@@ -134,7 +137,8 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
 
             if (setsockopt(sock_fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq,
                            sizeof(mreq))) {
-                logger().warn("udp setsockopt(): {}", impl::socket_get_error());
+                logger().warn("udp setsockopt(IP_ADD_MEMBERSHIP): {}",
+                              impl::socket_get_error());
                 impl::socket_close(sock_fd);
                 continue;
             }
@@ -149,7 +153,8 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
 
         if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, (char*)&RCVBUF_SIZE,
                        sizeof(RCVBUF_SIZE))) {
-            logger().warn("udp setsockopt(): {}", impl::socket_get_error());
+            logger().warn("udp setsockopt(SO_RCVBUF): {}",
+                          impl::socket_get_error());
             impl::socket_close(sock_fd);
             continue;
         }
@@ -164,7 +169,7 @@ SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
 
 SOCKET udp_data_socket(int port) { return mtp_data_socket(port, {}); }
 
-Json::Value collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
+jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
     // Note, this function throws std::runtime_error if
     // 1. the metadata couldn't be retrieved
     // 2. the sensor is in the INITIALIZING state when timeout is reached
@@ -179,7 +184,10 @@ Json::Value collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
                 "A timeout occurred while waiting for the sensor to "
                 "initialize.");
         }
-        status = sensor_http.sensor_info(timeout_sec)["status"].asString();
+
+        status = jsoncons::json::parse(
+                     sensor_http.sensor_info(timeout_sec))["status"]
+                     .as<std::string>();
         if (status != "INITIALIZING") {
             break;
         }
@@ -197,7 +205,8 @@ Json::Value collect_metadata(SensorHttp& sensor_http, int timeout_sec) {
     }
 
     try {
-        auto metadata = sensor_http.metadata(timeout_sec);
+        auto metadata =
+            jsoncons::json::parse(sensor_http.metadata(timeout_sec));
 
         metadata["ouster-sdk"]["client_version"] = client_version();
         metadata["ouster-sdk"]["output_source"] = "collect_metadata";
@@ -235,7 +244,10 @@ bool get_config(SensorHttp& sensor_http, sensor_config& config,
                 bool active = true,
                 int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) {
     auto res = sensor_http.get_config_params(active, timeout_sec);
-    config = parse_config(res);
+    ValidatorIssues issues;
+    if (!parse_and_validate_config(res, config, issues)) {
+        throw std::runtime_error(to_string(issues.critical));
+    }
     return true;
 }
 
@@ -248,17 +260,18 @@ bool get_config(const std::string& hostname, sensor_config& config, bool active,
 bool set_config(SensorHttp& sensor_http, const sensor_config& config,
                 uint8_t config_flags, int timeout_sec) {
     // reset staged config to avoid spurious errors
-    auto config_params = sensor_http.active_config_params(timeout_sec);
-    Json::Value config_params_copy = config_params;
+    jsoncons::json config_params =
+        jsoncons::json::parse(sensor_http.active_config_params(timeout_sec));
+    jsoncons::json config_params_copy = config_params;
 
     // set all desired config parameters
-    Json::Value config_json = config_to_json(config);
-    for (const auto& key : config_json.getMemberNames()) {
-        config_params[key] = config_json[key];
+    jsoncons::json config_json = config_to_json(config);
+    for (const auto& it : config_json.object_range()) {
+        config_params[it.key()] = it.value();
     }
 
-    if (config_json.isMember("operating_mode") &&
-        config_params.isMember("auto_start_flag")) {
+    if (config_json.contains("operating_mode") &&
+        config_params.contains("auto_start_flag")) {
         // we're setting operating mode and this sensor has a FW with
         // auto_start_flag
         config_params["auto_start_flag"] =
@@ -268,12 +281,13 @@ bool set_config(SensorHttp& sensor_http, const sensor_config& config,
     // Signal multiplier changed from int to double for FW 3.0/2.5+, with
     // corresponding change to config.signal_multiplier.
     // Change values 1, 2, 3 back to ints to support older FWs
-    if (config_json.isMember("signal_multiplier")) {
-        check_signal_multiplier(config_params["signal_multiplier"].asDouble());
-        if (config_params["signal_multiplier"].asDouble() != 0.25 &&
-            config_params["signal_multiplier"].asDouble() != 0.5) {
+    if (config_json.contains("signal_multiplier")) {
+        check_signal_multiplier(
+            config_params["signal_multiplier"].as<double>());
+        if (config_params["signal_multiplier"].as<double>() != 0.25 &&
+            config_params["signal_multiplier"].as<double>() != 0.5) {
             config_params["signal_multiplier"] =
-                config_params["signal_multiplier"].asInt();
+                config_params["signal_multiplier"].as<int>();
         }
     }
 
@@ -289,15 +303,16 @@ bool set_config(SensorHttp& sensor_http, const sensor_config& config,
                 "UDP_DEST_AUTO flag set but provided config has udp_dest");
         sensor_http.set_udp_dest_auto(timeout_sec);
 
-        auto staged = sensor_http.staged_config_params(timeout_sec);
+        auto staged = jsoncons::json::parse(
+            sensor_http.staged_config_params(timeout_sec));
 
         // now we set config_params according to the staged udp_dest from the
         // sensor
-        if (staged.isMember("udp_ip")) {  // means the FW version carries udp_ip
-            config_params["udp_ip"] = staged["udp_ip"];
-            config_params["udp_dest"] = staged["udp_ip"];
+        if (staged.contains("udp_ip")) {  // means the FW version carries udp_ip
+            config_params["udp_ip"] = staged["udp_ip"].as<std::string>();
+            config_params["udp_dest"] = staged["udp_ip"].as<std::string>();
         } else {  // don't need to worry about udp_ip
-            config_params["udp_dest"] = staged["udp_dest"];
+            config_params["udp_dest"] = staged["udp_dest"].as<std::string>();
         }
     }
 
@@ -306,11 +321,10 @@ bool set_config(SensorHttp& sensor_http, const sensor_config& config,
     // introduced after the verison of FW the sensor is on
     if (config_flags & CONFIG_FORCE_REINIT ||
         config_params_copy != config_params) {
-        Json::StreamWriterBuilder builder;
-        builder["indentation"] = "";
         // send full string -- depends on older FWs not rejecting a blob even
         // when it contains unknown keys
-        auto config_params_str = Json::writeString(builder, config_params);
+        std::string config_params_str;
+        config_params.dump(config_params_str);
         sensor_http.set_config_param(".", config_params_str, timeout_sec);
         // reinitialize to make all staged parameters effective
         sensor_http.reinitialize(timeout_sec);
@@ -334,20 +348,16 @@ std::string get_metadata(client& cli, int timeout_sec) {
     // Note, this function calls functions that throw std::runtime_error
     // on timeout.
     auto sensor_http = SensorHttp::create(cli.hostname, timeout_sec);
-    Json::Value meta;
+    std::string meta;
     try {
-        meta = collect_metadata(*sensor_http, timeout_sec);
+        auto temp_data = collect_metadata(*sensor_http, timeout_sec);
+        temp_data.dump(meta);
     } catch (const std::exception& e) {
         logger().warn(std::string("Unable to retrieve sensor metadata: ") +
                       e.what());
         throw;
     }
-
-    Json::StreamWriterBuilder builder;
-    builder["enableYAMLCompatibility"] = true;
-    builder["precision"] = 6;
-    builder["indentation"] = "    ";
-    return Json::writeString(builder, meta);
+    return meta;
 }
 
 bool init_logger(const std::string& log_level, const std::string& log_file_path,
@@ -413,9 +423,10 @@ std::shared_ptr<client> init_client(const std::string& hostname,
         // will block until no longer INITIALIZING
         auto meta = collect_metadata(*sensor_http, timeout_sec);
         // check for sensor error states
-        auto status = meta["sensor_info"]["status"].asString();
-        if (status == "ERROR" || status == "UNCONFIGURED")
+        std::string status = meta["sensor_info"]["status"].as<std::string>();
+        if (status == "ERROR" || status == "UNCONFIGURED") {
             return std::shared_ptr<client>();
+        }
     } catch (const std::runtime_error& e) {
         // log error message
         logger().error("init_client(): {}", e.what());
@@ -465,7 +476,7 @@ std::shared_ptr<client> mtp_init_client(const std::string& hostname,
             // will block until no longer INITIALIZING
             auto meta = collect_metadata(*sensor_http, timeout_sec);
             // check for sensor error states
-            auto status = meta["sensor_info"]["status"].asString();
+            auto status = meta["sensor_info"]["status"].as<std::string>();
             if (status == "ERROR" || status == "UNCONFIGURED")
                 return std::shared_ptr<client>();
         } catch (const std::runtime_error& e) {

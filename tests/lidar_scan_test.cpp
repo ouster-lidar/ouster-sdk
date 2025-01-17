@@ -390,15 +390,15 @@ TEST(LidarScan, packet_timestamp_2) {
               scan.w / DEFAULT_COLUMNS_PER_PACKET);
     EXPECT_TRUE((scan.packet_timestamp() == 0).all());
 
-    LidarPacket packet;
-    packet.host_timestamp = 123;
-
     ouster::sensor::sensor_info info;
     info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
     info.format.pixels_per_column = h;
     // not enough columns per packet according to the measurement id
     info.format.columns_per_packet = 1;
     auto pf = ouster::sensor::get_format(info);
+
+    LidarPacket packet(pf.lidar_packet_size);
+    packet.host_timestamp = 123;
 
     uint8_t* col_buf = const_cast<uint8_t*>(pf.nth_col(0, packet.buf.data()));
     uint16_t bogus_measurement_id = 1234;
@@ -429,9 +429,6 @@ TEST(LidarScan, packet_timestamp_3) {
     EXPECT_EQ(scan.packet_timestamp().rows(), w / DEFAULT_COLUMNS_PER_PACKET);
     EXPECT_TRUE((scan.packet_timestamp() == 0).all());
 
-    LidarPacket packet;
-    packet.host_timestamp = 123;
-
     ouster::sensor::sensor_info info;
     info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
     info.format.pixels_per_column = h;
@@ -442,6 +439,9 @@ TEST(LidarScan, packet_timestamp_3) {
     info.format.columns_per_packet = DEFAULT_COLUMNS_PER_PACKET;
     info.format.pixels_per_column = h;
     auto pf = ouster::sensor::get_format(info);
+
+    LidarPacket packet(pf.lidar_packet_size);
+    packet.host_timestamp = 123;
 
     uint8_t* col_buf = const_cast<uint8_t*>(pf.nth_col(0, packet.buf.data()));
     uint16_t bogus_measurement_id = 0;
@@ -555,4 +555,18 @@ TEST(TransformTest, TransformN3) {
                         1e-3);  // Small tolerance for floating-point comparison
         }
     }
+}
+
+TEST(LidarScan, sensor_info_being_copied) {
+    ouster::sensor::sensor_info info;
+    info.format.udp_profile_lidar = PROFILE_LIDAR_LEGACY;
+    info.format.columns_per_frame = 1024;
+    info.format.pixels_per_column = 128;
+    info.format.columns_per_packet = DEFAULT_COLUMNS_PER_PACKET;
+    info.format.columns_per_packet = DEFAULT_COLUMNS_PER_PACKET;
+
+    ouster::LidarScan orig_scan(info);
+    ouster::LidarScan copy_scan(orig_scan);
+
+    EXPECT_EQ(copy_scan.sensor_info, orig_scan.sensor_info);
 }

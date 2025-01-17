@@ -1,3 +1,4 @@
+from re import escape
 import pytest
 import numpy as np
 import hashlib
@@ -8,10 +9,10 @@ from typing import cast, Iterator
 from more_itertools import ilen
 from ouster.sdk import open_source
 
-import ouster.sdk.osf as osf
+import ouster.sdk._bindings.osf as osf
 import ouster.sdk.client as client
 from ouster.sdk.client import ChanField, FieldType, LidarMode, LidarScan, SensorInfo
-from ouster.sdk._bindings.osf import LidarScanStream
+from ouster.sdk._bindings.osf import LidarScanStream, Encoder, PngLidarScanEncoder
 
 
 @pytest.fixture
@@ -296,6 +297,8 @@ def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
     hash1 = _get_file_hash(test_path)
 
     metadata1 = osf.dump_metadata(test_path)
+
+    print(osf.dump_metadata(test_path))
     assert not os.path.exists(backup_path)
     osf.backup_osf_file_metablob(test_path, backup_path)
     assert os.path.exists(backup_path)
@@ -408,3 +411,43 @@ def test_osf_slice_and_cast() -> None:
     # IMPORTANT: casting may be narrowing without warning or error!
     # Notice that values were truncated to the bottom 8 bits here.
     assert np.array_equal(casted_range_field, np.ones(casted_range_field.shape))
+
+
+def get_size_for_compression_amount(tmp_path, input_info, compression_amount) -> int:
+    file_name = tmp_path / "test.osf"
+    with osf.Writer(str(file_name), input_info, [], 0, Encoder(PngLidarScanEncoder(compression_amount))) as writer:
+        scan = client.LidarScan(128, 1024)
+        writer.save(0, scan)
+        writer.close()
+        return os.path.getsize(file_name)
+
+
+def test_writer_with_encoder(tmp_path, input_info) -> None:
+    """Files encoded with a higher PNG compression level should be smaller than those encoded with a compression level
+    of zero."""
+    assert get_size_for_compression_amount(
+        tmp_path, input_info, 4) < get_size_for_compression_amount(tmp_path, input_info, 0)
+
+
+def test_async_writer_exception(tmp_path, input_info) -> None:
+    """Calling get() on the future returned from the save method should propagate an exception raised from the save
+    thread."""
+    file_name = tmp_path / "test.osf"
+    assert len(input_info.format.pixel_shift_by_row) == 128
+    with osf.AsyncWriter(str(file_name), [input_info], [], 0, Encoder(PngLidarScanEncoder(4))) as writer:
+        scan = client.LidarScan(4, 1024)  # scan size doesn't match sensor info
+        future = writer.save(0, scan)
+        with pytest.raises(ValueError, match=escape(
+            "lidar scan size (1024, 4) does not match the sensor info resolution (1024, 128)")
+        ):
+            future.get()
+
+
+def test_writer_enforces_lidarscan_correct_size(tmp_path, input_info):
+    file_name = tmp_path / "test.osf"
+    with osf.Writer(str(file_name), [input_info]) as w:
+        scan = client.LidarScan(128, 128)  # scan size is wrong
+        with pytest.raises(ValueError, match=escape(
+            "lidar scan size (128, 128) does not match the sensor info resolution (1024, 128)")
+        ):
+            w.save(0, scan)

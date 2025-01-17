@@ -110,9 +110,12 @@ commands also have subcommands that further extend or specify what
       * Sensors and files
 
         * ``viz`` - visualizes data in a 3D point cloud viewer.
+        * ``slice`` - use the slice command to extract a subset of lidar frames from a source by specifing a frame index 
+          interval or time duration.
+        * ``clip`` - the clip command can be used to limit the range of values of scan fields.
+        * ``mask`` - use the mask command to mask certain pixel from the lidar frames.
+        * ``reduce`` - use the reduce command to downsample the vertical resolution of any ouster Lidar.
         * ``slam`` - computes trajectories by determining the change in pose between lidar frames.
-        * ``slice`` - reads a subset of lidar frames from the source using counts or time duration.
-        * ``clip`` - restrict the minimum or maximum range of lidar measurements in the source data.
         * ``stats`` - calculates statistics from the source data.
         * ``metadata`` - displays the metadata (e.g. sensor information) associated with the source data.
         * ``save`` - saves the source data, optionally converting to a new format.

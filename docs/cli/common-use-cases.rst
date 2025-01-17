@@ -126,3 +126,42 @@ metadata json file with the same name as PCAP FILE by default, but you can speci
 .. code:: bash
 
     $ ouster-cli source <PCAP FILE> viz
+
+
+Masking Lidar Data
+++++++++++++++++++
+
+The following command applies an image mask ``MASK-IMAGE`` to the ``RANGE`` data field of incoming
+scans:
+
+.. code:: bash
+
+    $ ouster-cli source <SOURCE_URL> mask --fields RANGE <MASK-IMAGE> viz
+
+
+The ``MASK-IMAGE`` is expected to be of composed solely of black and white pixels; black pixels
+represent the pixels that will be zeroed out and white pixels represent areas of the RANGE that
+will stay intact. The ``MASK-IMAGE`` is expected to have the same size of the streamed LidarScans.
+If not the command will scale the mask image to the same size as the incoming LidarScans.
+The ``MASK-IMAGE`` will be applied to all sensors in case of a multi-sensor dataset.
+
+
+Reduce Beam Count
++++++++++++++++++
+Use the ``reduce`` command to reduce the lower vertical resolution or beam count of stream LidarScans.
+For example, let's assume you have an OS-1-128 Ouster sensor which has 128 beams, using the following
+command you can reduce the effective vertical resolution of the sensor to 32:
+
+.. code:: bash
+
+    $ ouster-cli source <SOURCE_URL> reduce --fields 32 viz
+
+
+The reduced LidarScans will applied to the rest of the chain, that means if you chain a ``save`` command
+afterwords the generated file will have LidarScans with 32 beams only.
+One thing to note is that the beams are sampled uniformally across the original beam count.
+
+.. note::
+
+    Currently, the ``reduce`` command can't occure more than once in the ouster-cli command chain and needs
+    to be the very first command after the ``source`` args.

@@ -28,63 +28,6 @@ def osf_get_sensors_info(osf_file: str) -> None:
     # [doc-etag-osf-get-sensors-info]
 
 
-def osf_read_all_messages(osf_file: str) -> None:
-    """Read all message from an OSF file."""
-    import ouster.sdk.osf as osf
-    # [doc-stag-osf-read-all-messages]
-    reader = osf.Reader(osf_file)
-    # Reading all messages
-    for msg in reader.messages():
-        print(f'ts = {msg.ts}, stream_im = {msg.id}')
-        if msg.of(osf.LidarScanStream):
-            scan = msg.decode()
-            print(f'  got lidar scan = {scan.h}x{scan.w}')
-    # [doc-etag-osf-read-all-messages]
-
-
-def osf_check_layout(osf_file: str) -> None:
-    """Checks chunks layout of an OSF file.
-
-    Open file and checks for the presence of osf.StreamingInfo metadata entry, which signals the
-    STREAMING layout OSF. Also reads StreamingInfo and prints message counts and avg size of per
-    stream.
-
-    NOTE: All OSFs produced from June 15, 2022 have the STREAMING layout which the
-          default and only layout available.
-    """
-    import ouster.sdk.osf as osf
-    # [doc-stag-osf-check-layout]
-    reader = osf.Reader(osf_file)
-    # finds the first StreamingInfo metadata entry if any present
-    streaming_info = reader.meta_store.get(osf.StreamingInfo)
-    if streaming_info:
-        print("Stats available (STREAMING layout):")
-        for stream_id, stream_stat in streaming_info.stream_stats:
-            msg_cnt = stream_stat.message_count
-            msg_avg_size = stream_stat.message_avg_size
-            print(f"  stream[{stream_id}]: msg_count = {msg_cnt},",
-                  f"msg_avg_size = {msg_avg_size}")
-    else:
-        print("No stats available (STANDARD layout)")
-    # [doc-etag-osf-check-layout]
-
-
-def osf_get_lidar_streams(osf_file: str) -> None:
-    """Reads info about available Lidar Scan streams in an OSF file.
-
-    Find all LidarScanStream metadata entries and prints sensor_meta_id.
-    """
-    import ouster.sdk.osf as osf
-    # [doc-stag-osf-get-lidar-streams]
-    reader = osf.Reader(osf_file)
-    lidar_streams = reader.meta_store.find(osf.LidarScanStream)
-    for stream_id, stream_meta in lidar_streams.items():
-        sensor_id = stream_meta.sensor_meta_id
-        print(f"LidarScanStream[{stream_id}]:")
-        print(f"  sensor_id = {sensor_id}")
-    # [doc-etag-osf-get-lidar-streams]
-
-
 def osf_slice_scans(osf_file: str) -> None:
     """Copy scans from input OSF file with reduction using the Writer API.
 
@@ -116,50 +59,12 @@ def osf_slice_scans(osf_file: str) -> None:
     # [doc-etag-osf-slice-scans]
 
 
-def osf_split_scans(osf_file: str) -> None:
-    """Splits scans from input OSF into N=2 files.
-
-    Spliting is done by timestamp.
-    """
-    import ouster.sdk.osf as osf
-    # [doc-stag-osf-split-scans]
-    reader = osf.Reader(osf_file)
-    start_ts = reader.start_ts
-    end_ts = reader.end_ts
-    n_splits = 2
-    split_dur = int((end_ts - start_ts) / n_splits)
-
-    # Scans reader from input OSF
-    scans = osf.OsfScanSource(osf_file).single_source(0)
-
-    output_file_base = os.path.splitext(os.path.basename(osf_file))[0]
-
-    # Create N writers and create N output Lidar Streams to write too
-    writers = []
-    for i in range(n_splits):
-        writers.append(osf.Writer(f"{output_file_base}_s{i:02d}.osf", scans.metadata))
-
-    # Read scans and write to a corresponding output stream
-    for scan in scans:
-        ts = scan.get_first_valid_packet_timestamp()
-        split_idx = min(int((ts - start_ts) / split_dur), n_splits - 1)
-        print(f"writing scan to split {split_idx:02d} file")
-        writers[split_idx].save(0, scan)
-
-    # No need to call close, underlying writers will close automatically on destroy
-    # [doc-etag-osf-split-scans]
-
-
 def main():
     """OSF examples runner."""
     examples = {
         "read-scans": osf_read_scans,
-        "read-messages": osf_read_all_messages,
-        "split-scans": osf_split_scans,
         "slice-scans": osf_slice_scans,
-        "get-lidar-streams": osf_get_lidar_streams,
         "get-sensors-info": osf_get_sensors_info,
-        "check-layout": osf_check_layout
     }
 
     description = "Ouster Python SDK OSF examples. The EXAMPLE must be one of:\n  " + str.join(

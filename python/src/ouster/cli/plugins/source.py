@@ -11,7 +11,8 @@ from ouster.cli.core import cli
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.core.util import click_ro_file
 from ouster.sdk import open_source, SourceURLException
-from ouster.sdk.client import first_valid_packet_ts, SensorInfo, ImuPacket, Sensor, PacketFormat
+from ouster.sdk.client import (LidarScan, SensorInfo, ImuPacket, Sensor,
+                               PacketFormat, first_valid_packet_ts)
 from ouster.sdk.client.core import ClientTimeout
 from ouster.sdk.pcap import PcapDuplicatePortException
 from ouster.sdk.util import resolve_metadata
@@ -20,8 +21,9 @@ from ouster.sdk.osf import OsfScanSource
 import ouster.cli.plugins.source_pcap as pcap_cli
 import ouster.cli.plugins.source_osf as osf_cli
 import ouster.cli.plugins.source_sensor as sensor_cli
+from ouster.sdk.util.extrinsics import parse_extrinsics_from_string
 import ouster.sdk.util.pose_util as pu
-from typing import (List, Optional, Iterable, Tuple, Union)
+from typing import (Optional, Iterable, Tuple, Union)
 from .source_save import (SourceSaveCommand, source_save_raw)
 from .source_util import (CoupledTee,
                           SourceCommandContext,
@@ -80,11 +82,27 @@ def is_ouster_mapping_installed():
 @click.option("--map-size",
               default=None, type=int,
               help="Maximum number of points in overall map before discarding. [default: 1500000]")
+@click.option("--global-map", default=None, type=str,
+              help="A path to a ply file that represents the global map to display in the ouster-viz. "
+                   "When using this option with the `localize` command it will replace the visualized global "
+                   " map but it won't affect the map used during localization")
+@click.option("--global-map-min-z", default=None, type=float,
+              help="Filter out points below this value on the z-axis of the global map")
+@click.option("--global-map-max-z", default=None, type=float,
+              help="Filter out points above this value on the z-axis in the global map")
+@click.option("--global-map-flatten", default=True, type=bool, show_default=True,
+              help="Flatten the global map")
+@click.option("--global-map-voxel-size", default=None, type=float,
+              help="When set, the global map will be downsampled using the specified voxel size (meters)")
+@click.option("--global-map-point-size", default=1.0, type=float, show_default=True,
+              help="Set the point size of the the global map")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: int, accum_num: Optional[int],
-               accum_every: Optional[int], accum_every_m: Optional[float],
-               _map: bool, map_ratio: float, rate: str, map_size: int) -> SourceCommandCallback:
+               accum_every: Optional[int], accum_every_m: Optional[float], _map: bool, map_ratio: float,
+               rate: str, map_size: int, global_map: Optional[str], global_map_min_z: Optional[float],
+               global_map_max_z: Optional[float], global_map_flatten: bool,
+               global_map_voxel_size: Optional[float], global_map_point_size: float) -> SourceCommandCallback:
     """Visualize LidarScans in a 3D viewer."""
     try:
         from ouster.sdk.viz import SimpleViz
@@ -156,8 +174,32 @@ def source_viz(ctx: SourceCommandContext, pause: bool, on_eof: str, pause_at: in
             accum_min_dist_meters=accum_every_m,
             map_enabled=_map,
             map_select_ratio=map_ratio,
-            map_max_points=map_size
+            map_max_points=map_size,
+            title="Ouster Viz: " + ctx.source_uri
         )
+
+        map_path = ctx.get("localization.map", None) if global_map is None else global_map
+
+        if map_path is not None:
+            import point_cloud_utils as pcu
+            from ouster.sdk.viz import Cloud
+            click.echo("Start loading global points into VIZ")
+            pts = pcu.load_mesh_v(map_path)
+            if global_map_min_z:
+                pts = pts[pts[:, 2] >= global_map_min_z]
+            if global_map_max_z:
+                pts = pts[pts[:, 2] <= global_map_max_z]
+            if global_map_voxel_size:
+                pts = pcu.downsample_point_cloud_on_voxel_grid(
+                        global_map_voxel_size, pts)
+            if global_map_flatten:
+                pts[:, 2] = 0
+            cloud_xyz = Cloud(len(pts))
+            cloud_xyz.set_xyz(pts)
+            cloud_xyz.set_key(np.full(len(pts), 1))
+            cloud_xyz.set_point_size(global_map_point_size)
+            sv._viz.add(cloud_xyz)
+
         sv.run(scans)
         ctx.terminate_evt.set()
 
@@ -174,27 +216,22 @@ _last_slice = None
 def extract_slice_indices(click_ctx: Optional[click.core.Context],
                           param: Optional[click.core.Argument], value: str):
     """Validate and extract slice indices of the form [start]:[stop][:step]."""
-    index_matches = re.findall(r"^(-?\d*):(-?\d*):?(-?\d*)$", value)  # noqa: W605
-    time_index_matches = re.findall(r"^(?:(\d+(?:\.\d+)?)(h|min|s|ms))?"
-                                    r":(?:(\d+(?:\.\d+)?)(h|min|s|ms))?(?::(-?\d*))?$", value)  # noqa: W605
+    matches = re.findall(r"^(?:(\d+(?:\.\d+)?)(h|min|s|ms)?)?"
+                         r":(?:(\d+(?:\.\d+)?)(h|min|s|ms)?)?(?::(-?\d*))?$", value)  # noqa: W605
 
-    if time_index_matches and len(time_index_matches[0]) == 5:
-        # it was a time index, convert everything to float seconds and handle units
-        match = time_index_matches[0]
-        multipliers = {}
-        multipliers['h'] = 60.0 * 60.0
-        multipliers['min'] = 60.0
-        multipliers['s'] = 1.0
-        multipliers['ms'] = 0.001
-        start = float(match[0]) * multipliers[match[1]] if match[0] != "" else None
-        end = float(match[2]) * multipliers[match[3]] if match[2] != "" else None
-        skip = int(match[4]) if match[4] != "" else None
-        return start, end, skip
-
-    if not index_matches or len(index_matches[0]) != 3:
+    if not matches or len(matches[0]) != 5:
         raise click.exceptions.BadParameter(
             "slice indices must be of the form [start]:[stop][:step]")
-    parsed_indices = [int(i) if i != "" else None for i in index_matches[0]]
+
+    multipliers = {'': 1, 'ms': 0.001, 's': 1.0, 'min': 60, 'h': 3600}
+    m = matches[0]
+    has_units = m[1] != "" or m[3] != ""
+    has_decimals = (m[0] is not None and '.' in m[0]) or (m[0] is not None and '.' in m[2])
+    frame_based = not (has_units or has_decimals)
+    parsed_indices = [
+        float(m[0]) * multipliers[m[1]] if m[0] != "" else None,
+        float(m[2]) * multipliers[m[3]] if m[2] != "" else None,
+        int(m[4]) if m[4] != "" else None]
     start, stop, step = parsed_indices[0], parsed_indices[1], parsed_indices[2]
     start = start if start is not None else 0
     # Check that indices are non-negative
@@ -210,10 +247,43 @@ def extract_slice_indices(click_ctx: Optional[click.core.Context],
         raise click.exceptions.BadParameter(
             "slice step index must be greater than 0")
 
+    # since some of the code logic depends on the type if float or int make sure
+    # to apply the approprite the case
+    type_caster = int if frame_based else float
+    start = type_caster(start) if start is not None else start
+    stop = type_caster(stop) if stop is not None else stop
+    step = int(step) if step is not None else step
     # Store the argument so we can extract it for fast slicing if possible
     global _last_slice
     _last_slice = (start, stop, step)
-    return start, stop, step
+    return start, stop, step, frame_based
+
+
+def tslice(scans_iter, start, stop, step):
+    start_time = None
+    counter = 0
+    for scan in scans_iter:
+        scan_time = None
+        for s in scan:
+            if s:
+                scan_time = first_valid_packet_ts(s)
+                break
+        if scan_time == 0 or scan_time is None:
+            click.secho("WARNING: Scan missing packet timestamps. "
+                        "Yielding scan in time slice anyways.", fg='yellow')
+            yield scan
+            continue
+        scan_time = scan_time / 1e9
+        if start_time is None:
+            start_time = scan_time
+        dt = scan_time - start_time
+        if dt >= start:
+            if not stop or dt <= stop:
+                if not step or counter % step == 0:
+                    yield scan
+                counter = counter + 1
+            else:
+                return
 
 
 @click.command()
@@ -226,40 +296,82 @@ def source_slice(ctx: SourceCommandContext,
     Optionally can specify start and stop as times relative to the start of the file
     using the units h (hours), min (minutes), s (seconds), or ms (milliseconds).
     For example: 10s:20s:2"""
-    start, stop, step = indices
-    if type(start) is float:
-        scans = ctx.scan_iter
 
-        def iter():
-            start_time = None
-            counter = 0
-            for scan in scans:
-                scan_time = None
-                for s in scan:
-                    if s:
-                        scan_time = first_valid_packet_ts(s)
-                        break
-                if scan_time == 0 or scan_time is None:
-                    click.echo(click.style(
-                        "WARNING: Scan missing packet timestamps. Yielding scan in time slice anyways.",
-                        fg='yellow'))
-                    yield scan
-                    continue
-                scan_time = scan_time / 1e9
-                if start_time is None:
-                    start_time = scan_time
-                dt = scan_time - start_time
-                if dt >= start:
-                    if not stop or dt <= stop:
-                        if not step or counter % step == 0:
-                            yield scan
-                        counter = counter + 1
-                    else:
-                        return
+    start, stop, step, frame_based = indices
+    slice_method = islice if frame_based else tslice
+    scans_iter = ctx.scan_iter
+    ctx.scan_iter = slice_method(scans_iter, start, stop, step)
 
-        ctx.scan_iter = iter()
-    else:
-        ctx.scan_iter = islice(ctx.scan_iter, start, stop, step)
+
+def extract_clip_indices(click_ctx: Optional[click.core.Context],
+                         param: Optional[click.core.Argument], value: str):
+    """Validate and extract slice indices of the form [lower]:[upper]."""
+
+    matches = re.findall(r"^(?:(\-?\d+(?:\.\d+)?)(mm|cm|dm|m)?)?"
+                         r":(?:(\-?\d+(?:\.\d+)?)(mm|cm|dm|m)?)?$", value)
+
+    if not matches or len(matches[0]) != 4:
+        raise click.exceptions.BadParameter(
+            "slice indices must be of the form [lower]:[upper]")
+
+    multipliers = {'': 1, 'mm': 1, 'cm': 10, 'dm': 100, 'm': 1000}
+    m = matches[0]
+    parsed_indices = [
+        float(m[0]) * multipliers[m[1]] if m[0] != "" else None,
+        float(m[2]) * multipliers[m[3]] if m[2] != "" else None]
+    start, stop = parsed_indices[0], parsed_indices[1]
+    start = start if start is not None else 0
+    # Check that stop >= start
+    if (stop is not None) and (not stop >= start):
+        raise click.exceptions.BadParameter(
+            "clip `upper` value must be greater or equal to `lower`")
+    return start, stop
+
+
+@click.command
+@click.argument('fields', required=True, type=str)
+@click.argument('indices', required=True, callback=extract_clip_indices)
+@click.option('--out-of-range-value', default=0, show_default=True,
+              help="The value used when replacing out of range values")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.PROCESSOR)
+def source_clip(ctx: SourceCommandContext, fields: Optional[str],
+                indices: Tuple[Optional[int]], out_of_range_value: int,
+                **kwargs) -> None:
+    """
+    Constraints the range of values of the specified fields to the range [lower, upper] inclusive.
+    Any value beyond this range is replaced with the out-of-range-value (default is zero).
+    Use the form clip FIELDS [lower[u]]:[upper[u]]; where `FIELDS` is a comma separated list of fields
+    names (no spaces) that this operation will be applied to, the `u` is an optional unit specifier;
+    Supported units and their effects {mm: 1x, cm: 10x, dm: 100x, m: 1000x}.
+
+    Usage example 1: `clip RANGE,RANGE2 :50m` would zero any RANGE values of the scan higher than 50
+    meters. If the metric unit is not supplied the passed value will be used with no change, that is if
+    a user passes :50 then it would be evaluated as 50 millimeters for RANGE values and merely as 50 units
+    for other fields.
+
+    Usage example 2: `clip RANGE 50m:50m` would only forward RANGE values of the scan that are
+    exactly 50 meters.
+    """
+    import ouster.sdk.client.scan_ops as so
+
+    scan_iter = ctx.scan_iter
+    field_list = fields.strip().split(',')
+    start, stop = indices
+    start = start if start else 0
+    stop = stop if stop else float('inf')   # NOTE: this probably should be sys.maxint
+
+    def clip_iter():
+        for scans in scan_iter:
+            out = [None] * len(scans)
+            for idx, scan in enumerate(scans):
+                if scan:
+                    result = LidarScan(scan)
+                    so.clip(result, field_list, start, stop, out_of_range_value)
+                    out[idx] = result
+            yield out
+
+    ctx.scan_iter = clip_iter()
 
 
 @click.command
@@ -298,8 +410,8 @@ def source_plumb(ctx: SourceCommandContext, click_ctx: click.core.Context) -> No
     az_sum = 0
     count = 0
 
-    for i, packet in enumerate(source):
-        if i >= 10:
+    for packet in source:
+        if count >= 100:
             break
 
         if isinstance(packet, ImuPacket):
@@ -396,6 +508,75 @@ def source_stats(ctx: SourceCommandContext, verbose: bool) -> SourceCommandCallb
     atexit.register(exit_handler)
 
 
+@click.command
+@click.argument('beams', required=True,
+              type=click.Choice(['8', '16', '32', '64', '128']))
+@click.pass_context
+@source_multicommand(type=SourceCommandType.PROCESSOR_UNREPEATABLE)
+def source_reduce(ctx: SourceCommandContext, beams: str, **kwargs) -> None:
+    """
+    reduce the number of beams for each source to the specified beam count
+    """
+    # validate input
+    for i, m in enumerate(ctx.scan_source.metadata):
+        if int(beams) > m.format.columns_per_frame:
+            raise click.exceptions.UsageError(
+                f"selected beams count can't be larger than input, source[{i}] has"
+                f" a beam count of {m.format.pixels_per_column}, but {beams} selected")
+
+
+@click.command
+@click.argument("image_path", required=True,
+              type=click.Path(exists=True, dir_okay=False))
+@click.option('--fields', default=None, type=str,
+              help="Comma separated list of field names to narrow down which fields "
+                   " the mask will be applied to.")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.PROCESSOR)
+def source_mask(ctx: SourceCommandContext, image_path: str, fields: str, **kwargs) -> None:
+    """
+    Applies a 2D mask to all streamed lidar scans
+    """
+    from PIL import Image
+    import ouster.sdk.client.scan_ops as so
+    from ouster.sdk.client.data import destagger
+
+    image = Image.open(image_path)
+
+    if image.mode != 'L':
+        click.secho(f"image [{image_path}] is not an 8-bit grayscale,"
+                    " performing conversion", fg="yellow")
+        image = image.convert('L')
+
+    # validate input
+    masks = []
+    for i, m in enumerate(ctx.scan_source.metadata):
+        H, W = m.format.pixels_per_column, m.format.columns_per_frame
+        image_cpy = image
+        if image.height != H or image.width != W:
+            click.secho(f"mask image doesn't match the size ({W}, {H}) "
+                        f"for sensor[{i}], will scale", fg="yellow")
+            image_cpy = image.resize((W, H))
+
+        # mask should always be in the range value of {0, 1} the mask operator is applied
+        # to the raw scans, so we need to stagger the input image correctly per input sensor
+        mask = np.array(np.array(image_cpy) / 255.0)
+        mask = destagger(m, mask, inverse=True)
+        masks.append(mask)
+
+    field_list = None if fields is None else fields.strip().split(',')
+    scan_iter = ctx.scan_iter
+
+    def mask_iter():
+        for scans in scan_iter:
+            for idx, scan in enumerate(scans):
+                if scan:
+                    so.mask(scan, field_list, masks[idx])
+            yield scans
+
+    ctx.scan_iter = mask_iter()
+
+
 class SourceMultiCommand(click.MultiCommand):
     """This class implements the ouster-cli source command group.  It uses the
     `io_type` method to determine the source type and map it to the
@@ -412,6 +593,9 @@ class SourceMultiCommand(click.MultiCommand):
             'ANY': {
                 'viz': source_viz,
                 'slice': source_slice,
+                'clip': source_clip,
+                'reduce': source_reduce,
+                'mask': source_mask,
                 'stats': source_stats
             },
             OusterIoType.SENSOR: {
@@ -422,6 +606,8 @@ class SourceMultiCommand(click.MultiCommand):
                 'userdata': sensor_cli.sensor_userdata,
                 'save_raw': source_save_raw,
                 'plumb': source_plumb,
+                'network': sensor_cli.sensor_network,
+                'diagnostics': sensor_cli.sensor_diagnostics,
             },
             OusterIoType.PCAP: {
                 'info': pcap_cli.pcap_info,
@@ -557,23 +743,31 @@ class SourceMultiCommand(click.MultiCommand):
               help="Continue parsing lidar packets even if init_id/sn doesn't match with metadata")  # noqa
 @click.option('-t', '--timeout', default=1.0, help="Seconds to wait for data", show_default=True)
 @click.option('-F', '--filter', is_flag=True, help="Drop scans missing data")
-@click.option('-e', '--extrinsics', type=float, required=False, nargs=16,
-              help="Lidar sensor extrinsics to use (instead of possible"
-                   " extrinsics stored in metadata). If more than one sensor is"
-                   " in the source and this argument is used then"
-                   " the same extrinsics will be applied to all sensors."
-                   " Cannot be combined with -E.")
-@click.option("-E", "--extrinsics-file",
-              type=click.Path(exists=True, dir_okay=False),
-              required=False,
-              help="Path to a file containing extrinsics. Cannot be combined with -e.")
+@click.option('-e', '--extrinsics', type=str, required=False,
+              help="Use this arg to adjust Lidar sensor extrinsics of the source."
+                    "\nSupported formats:"
+                    "\n\n-e extrinsics.json ; A json file containing a per sensor extrinsics"
+                    "\n\n-e identity ; Use this to override any stored extrinsics with identity matrix"
+                    "\n\n-e X,Y,Z,R,P,Y ; 'X Y Z' for position (meters), 'R P Y' represent euler angles (deg)"
+                    "\n\n-e X,Y,Z,QX,QY,QZ,QW ; 'X Y Z' for position (meters), 'QX, QY QZ, QW' represent a quaternion"
+                    "\n\n-e n1,n2,..,n16 ; 16 float representing a 2D array in a row-major order"
+                    "\n\nIf more than one sensor is present in the source and this argument is used"
+                    " then the same extrinsics will be applied to all sensors except when using"
+                    " an extrinsics file.")
+@click.option('-p', '--initial-pose', type=str, required=False,
+              help="Use this arg to set the starting pose of the source relative to the map origin when using "
+                    "localization.\nSupported formats:"
+                    "\n\n-e X,Y,Z,R,P,Y ; 'X Y Z' for position (meters), 'R P Y' represent euler angles (deg)"
+                    "\n\n-e X,Y,Z,QX,QY,QZ,QW ; 'X Y Z' for position (meters), 'QX, QY QZ, QW' represent a quaternion"
+                    "\n\n-e n1,n2,..,n16 ; 16 float representing a 2D array in a row-major order")
 @click.option('--fields', default=None, type=str,
               help="Comma separated list of field names to retrieve from the source."
                    " If not specified all (OSF) or defaults based on the packet format"
                    " (PCAP, Sensor, BAG) are loaded.")
 def source(source, loop: bool, meta: Tuple[str, ...],
-           lidar_port: int, imu_port: int, extrinsics: Optional[List[float]],
-           extrinsics_file: Optional[str], do_not_reinitialize: bool, no_auto_udp_dest: bool,
+           lidar_port: int, imu_port: int,
+           extrinsics: Optional[str], initial_pose: Optional[str],
+           do_not_reinitialize: bool, no_auto_udp_dest: bool,
            soft_id_check: bool, timeout: int, filter: bool, fields: Optional[str]):
     """Run a command with the specified source (SENSOR, PCAP, BAG, or OSF) as SOURCE.
     For example, a sensor source: ouster-cli source os1-992xxx.local viz.
@@ -583,38 +777,38 @@ def source(source, loop: bool, meta: Tuple[str, ...],
     # old ouster-mapping package may interfere the ouster-sdk package
     is_ouster_mapping_installed()
 
-    pass
-
 
 @source.result_callback()
 @click.pass_context
 def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCommandCallback],
                      source: str, loop: bool,
                      meta: Optional[Tuple[str, ...]], lidar_port: int, imu_port: int,
-                     extrinsics: Optional[List[float]], extrinsics_file: Optional[str],
-                     do_not_reinitialize: bool, no_auto_udp_dest: bool, soft_id_check: bool,
-                     timeout: int, filter: bool, fields: Optional[str]) -> None:
+                     extrinsics: Optional[str], initial_pose: Optional[str],
+                     do_not_reinitialize: bool, no_auto_udp_dest: bool,
+                     soft_id_check: bool, timeout: int, filter: bool, fields: Optional[str]) -> None:
     """Process all commands in a SourceMultiCommand, using each command's callback"""
 
     callbacks = list(callbacks)
     ctx: SourceCommandContext = click_ctx.obj
     command_names = ctx.invoked_command_names
-
     resolved_extrinsics: Optional[Union[str, np.ndarray]] = None
+    resolved_initial_pose: Optional[np.ndarray] = None
 
-    if extrinsics is not None and extrinsics_file is not None:
-        raise click.exceptions.UsageError("Cannot provide both '-e' / '--extrinsics'"
-                                          " and '-E' / '--extrinsics-file' arguments")
+    if extrinsics:
+        resolved_extrinsics = parse_extrinsics_from_string(extrinsics)
+
+    if initial_pose:
+        resolved_initial_pose = parse_extrinsics_from_string(initial_pose)
+        if (not isinstance(resolved_initial_pose, np.ndarray) or
+                resolved_initial_pose.shape != (4, 4)):
+            raise click.exceptions.UsageError(f"'error processing initial_pose: {initial_pose},"
+                                              " check help for proper usage")
 
     if not meta:
         meta = None
 
-    if extrinsics_file:
-        resolved_extrinsics = extrinsics_file
-    if extrinsics:
-        resolved_extrinsics = np.array(extrinsics).reshape((4, 4))
-
     # save some options for use later
+    ctx.source_options["meta"] = meta
     ctx.source_options["do_not_reinitialize"] = do_not_reinitialize
     ctx.source_options["no_auto_udp_dest"] = no_auto_udp_dest
     ctx.source_options["soft_id_check"] = soft_id_check
@@ -624,9 +818,11 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
     ctx.source_options["resolved_extrinsics"] = resolved_extrinsics
 
     # ---- Lint commands ----
-    # Ensure that no commands are duplicated
+    # Ensure that no commands are duplicated unless command type is PROCESSOR
     names_duplicate_check = set()
-    for name in command_names:
+    for idx, name in enumerate(command_names):
+        if callbacks[idx].type == SourceCommandType.PROCESSOR:
+            continue
         if name in names_duplicate_check:
             raise click.exceptions.UsageError(f"'{name}' is duplicated in the multi-command chain. "
                                               "Please invoke it only once. ")
@@ -646,7 +842,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
     last_consumer_name, last_consumer_idx = None, None
     last_processor_name, last_processor_idx = None, None
     for idx, c in enumerate(callbacks):
-        if c.type is SourceCommandType.PROCESSOR:
+        if c.type in [SourceCommandType.PROCESSOR_UNREPEATABLE, SourceCommandType.PROCESSOR]:
             last_processor_idx = idx
             last_processor_name = command_names[idx]
         elif c.type is SourceCommandType.CONSUMER:
@@ -675,28 +871,51 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
         source_list = [url.strip() for url in source.split(',') if url.strip()]
 
         try:
-            ctx.scan_source = open_source(source_list,
-                                          sensor_idx=-1,
-                                          extrinsics=resolved_extrinsics,
-                                          meta=meta,
-                                          cycle=loop,
-                                          lidar_port=lidar_port, imu_port=imu_port,
-                                          do_not_reinitialize=do_not_reinitialize,
-                                          no_auto_udp_dest=no_auto_udp_dest,
-                                          soft_id_check=soft_id_check,
-                                          timeout=timeout, complete=filter,
-                                          field_names=field_names)
+            source = open_source(source_list,
+                                 sensor_idx=-1,
+                                 extrinsics=resolved_extrinsics,
+                                 meta=meta,
+                                 cycle=loop,
+                                 lidar_port=lidar_port, imu_port=imu_port,
+                                 do_not_reinitialize=do_not_reinitialize,
+                                 no_auto_udp_dest=no_auto_udp_dest,
+                                 soft_id_check=soft_id_check,
+                                 timeout=timeout, complete=filter,
+                                 field_names=field_names)
+
+            if resolved_initial_pose is not None:
+                for meta in source.metadata:
+                    meta.extrinsic = meta.extrinsic @ resolved_initial_pose
+
+            # HACK: We need to redesign how the ScanSource is passed is passed and
+            # used, the current pipeline skips the scan_source and simply uses the
+            # iterators which then results in this problem where any operation that
+            # may affect the scan_source isn't taking effect such as the reduce
+            if command_names[0] == "reduce":
+                beams_idx = sys.argv.index("reduce")
+                beams = [int(sys.argv[beams_idx + 1])] * source.sensors_count
+                from ouster.sdk.client import MultiReducedScanSource
+                ctx.scan_source = MultiReducedScanSource(
+                    source, beams=beams)
+            else:
+                if "reduce" in command_names[1:]:
+                    click.secho("ERROR: reduce needs to be the first command after source.",
+                                fg="red")
+                    return
+                ctx.scan_source = source
+
         except SourceURLException as e:
             sub_exception = e.get_sub_exception()
             is_dupe_port = isinstance(sub_exception, PcapDuplicatePortException)
             if is_dupe_port and soft_id_check:
-                click.echo(click.style("ERROR: --soft-id-check is not supported for multi-sensor datasets.", fg="red"))
+                click.secho("ERROR: --soft-id-check is not supported for multi-sensor datasets.",
+                            fg="red")
                 return
             else:
                 raise
 
         if ctx.scan_source.is_indexed and len(ctx.scan_source) == 0:
-            click.echo(click.style("WARNING: Source contains no scans.", fg="yellow"))
+            click.secho("WARNING: Source contains no scans.", fg="yellow")
 
         # print any timeout exceptions we get and lazily instantiate the scan
         # source iterator so consumers have a chance to set flags like loop
@@ -727,7 +946,7 @@ def process_commands(click_ctx: click.core.Context, callbacks: Iterable[SourceCo
             if isinstance(ctx.scan_source, OsfScanSource) and ctx.scan_source.is_indexed:
                 # at the moment we can only handle index based slices (where the start is not a float)
                 # TODO: support time based slices
-                if not _last_slice[0] is float:
+                if type(_last_slice[0]) is not float and type(_last_slice[1]) is not float:
                     # finally calculate wrap-around start and end indexes assuming cycle is set
                     # TODO: revist when we revist cycle/loop
                     start_index = _last_slice[0]

@@ -12,6 +12,8 @@
 #include <memory>
 #include <string>
 
+#include "ouster/visibility.h"
+
 namespace ouster {
 namespace sensor_utils {
 
@@ -20,7 +22,7 @@ struct pcap_writer_impl;
 
 static constexpr int IANA_UDP = 17;
 
-struct packet_info {
+struct OUSTER_API_CLASS packet_info {
     using ts = std::chrono::microseconds;
 
     // TODO: use numerical IPs for efficient filtering
@@ -42,7 +44,7 @@ struct packet_info {
 /**
  * Class for dealing with reading pcap files
  */
-class PcapReader {
+class OUSTER_API_CLASS PcapReader {
    protected:
     std::unique_ptr<pcap_impl> impl;    ///< Private implementation pointer
     packet_info info;                   ///< Cached packet info
@@ -53,7 +55,9 @@ class PcapReader {
     /**
      * @param[in] file A filepath of the pcap to read
      */
+    OUSTER_API_FUNCTION
     PcapReader(const std::string& file);
+    OUSTER_API_FUNCTION
     virtual ~PcapReader();
 
     /**
@@ -63,6 +67,7 @@ class PcapReader {
      *
      * @return The size of the packet payload
      */
+    OUSTER_API_FUNCTION
     size_t next_packet();
 
     /**
@@ -72,6 +77,7 @@ class PcapReader {
      *
      * @return A pointer to a byte array containing the packet data
      */
+    OUSTER_API_FUNCTION
     const uint8_t* current_data() const;
 
     /**
@@ -80,6 +86,7 @@ class PcapReader {
      *
      * @return The size of the byte array
      */
+    OUSTER_API_FUNCTION
     size_t current_length() const;
 
     /**
@@ -88,16 +95,19 @@ class PcapReader {
      *
      * @return A packet_info object on the current packet
      */
+    OUSTER_API_FUNCTION
     const packet_info& current_info() const;
 
     /**
      * @return The size of the PCAP file in bytes
      */
+    OUSTER_API_FUNCTION
     int64_t file_size() const;
 
     /**
      * Return the read position to the start of the PCAP file
      */
+    OUSTER_API_FUNCTION
     void reset();
 
     /**
@@ -112,8 +122,10 @@ class PcapReader {
      * subsequent packet reads from this PcapReader will be
      * invalid until PcapReader::reset is called.
      */
+    OUSTER_API_FUNCTION
     void seek(uint64_t offset);
 
+    OUSTER_API_FUNCTION
     int64_t current_offset() const;
 
    private:
@@ -124,7 +136,7 @@ class PcapReader {
 /**
  * Class for dealing with writing udp pcap files
  */
-class PcapWriter {
+class OUSTER_API_CLASS PcapWriter {
    public:
     /**
      * Enum to describe the current encapsulation for a pcap file
@@ -140,8 +152,10 @@ class PcapWriter {
      * @param[in] encap The encapsulation to use for the pcap
      * @param[in] frag_size The fragmentation size to use (Currently broken)
      */
+    OUSTER_API_FUNCTION
     PcapWriter(const std::string& file, PacketEncapsulation encap,
                uint16_t frag_size);
+    OUSTER_API_FUNCTION
     virtual ~PcapWriter();
 
     /**
@@ -157,6 +171,7 @@ class PcapWriter {
      * @note The timestamp parameter does not affect the order of packets being
      * recorded, it is strictly recorded FIFO.
      */
+    OUSTER_API_FUNCTION
     void write_packet(const uint8_t* buf, size_t buf_size,
                       const std::string& src_ip, const std::string& dst_ip,
                       uint16_t src_port, uint16_t dst_port,
@@ -172,17 +187,20 @@ class PcapWriter {
      * @note The timestamp parameter in info does not affect the order of
      * packets being recorded, it is strictly recorded FIFO.
      */
+    OUSTER_API_FUNCTION
     void write_packet(const uint8_t* buf, size_t buf_size,
                       const packet_info& info);
 
     /**
      * Write all pending data to the pcap file
      */
+    OUSTER_API_FUNCTION
     void flush();
 
     /**
      * Flushes and cleans up all memory in use by the pap writer
      */
+    OUSTER_API_FUNCTION
     void close();
 
    protected:
@@ -202,6 +220,7 @@ class PcapWriter {
  *
  * @return The new output stream containing concatted stream_in and data.
  */
+OUSTER_API_FUNCTION
 std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
 }  // namespace sensor_utils
 }  // namespace ouster

@@ -70,7 +70,7 @@ TEST(FusaProfileTest, fields) {
     ASSERT_EQ(pf.packet_type(pcap.current_data()), 1u);
     ASSERT_EQ(pf.frame_id(pcap.current_data()), 229u);
     ASSERT_EQ(pf.init_id(pcap.current_data()), info.init_id);
-    ASSERT_EQ(std::to_string(pf.prod_sn(pcap.current_data())), info.sn);
+    ASSERT_EQ(pf.prod_sn(pcap.current_data()), info.sn);
     ASSERT_EQ(pf.countdown_thermal_shutdown(pcap.current_data()), 0u);
     ASSERT_EQ(pf.countdown_shot_limiting(pcap.current_data()), 0u);
     ASSERT_EQ(pf.thermal_shutdown(pcap.current_data()), 0u);

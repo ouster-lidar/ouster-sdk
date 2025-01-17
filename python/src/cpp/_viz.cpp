@@ -331,6 +331,7 @@ void init_viz(py::module& m, py::module&) {
         "Add default keyboard and mouse bindings to a visualizer instance.");
 
     py::class_<viz::WindowCtx>(m, "WindowCtx", "Context for input callbacks.")
+        .def(py::init<>())
         .def_readonly("lbutton_down", &viz::WindowCtx::lbutton_down,
                       "True if the left mouse button is held")
         .def_readonly("mbutton_down", &viz::WindowCtx::mbutton_down,
@@ -575,18 +576,45 @@ void init_viz(py::module& m, py::module&) {
         .def(
             "set_xyz",
             [](viz::Cloud& self, py::array_t<float> xyz) {
-                check_array(xyz, self.get_size() * 3, 0);
+                // array of "vector3s"
+                if (xyz.ndim() == 2) {
+                    if (xyz.shape(1) != 3) {
+                        throw std::invalid_argument(
+                            "Expected array with size of 2nd dimension: 3 but "
+                            "got: " +
+                            std::to_string(xyz.shape(1)));
+                    }
+                    check_array(xyz, self.get_size() * 3, 2);
+                    // force F contiguous, our expected layout
+                    py::array_t<float, py::array::f_style> copy = xyz;
+                    self.set_xyz(copy.data());
+                    return;
+                }
+                // pixel layout from XYZLut
+                if (xyz.ndim() == 3) {
+                    check_array(xyz, self.get_size() * 3, 3);
+                    py::array_t<float, py::array::f_style> copy = xyz;
+                    self.set_xyz(copy.data());
+                    return;
+                }
+                // other arrangement, common reshape from XYZLut output
+                // e.g. set_xyz(np.reshape(xyz, (-1,3))
+                check_array(xyz, self.get_size() * 3, 1);
                 self.set_xyz(xyz.data());
             },
             py::arg("xyz"),
             R"(
                  Set the XYZ values.
 
-                 :param xyz:  array of exactly 3n where n is the number of points, so
-                              that the xyz position of the ith point is ``i``, ``i+n``
-                              , ``i+2n``
-                 :type xyz: array of np.float32. Pybind should also cast other numpy types 
-                            (but we haven't tested thoroughly)
+                 :param xyz:  Supports 3 formats:
+                              * array of exactly 3n where n is the number of 
+                                points, so that the xyz position of the ith 
+                                point is ``i``, ``i+n``, ``i+2n``.
+                              * array of (N, 3) where N is the number of points
+                              * array of (H, W, 3) where H*W is the number of 
+                                points
+                 :type xyz: array of np.float32. Pybind should also cast other
+                            numpy types (but we haven't tested thoroughly)
              )")
         .def(
             "set_column_poses",
@@ -771,11 +799,10 @@ void init_viz(py::module& m, py::module&) {
             "window_coordinates_to_image_pixel",
             [](viz::Image& self, const viz::WindowCtx& ctx, double x,
                double y) -> nonstd::optional<std::pair<int, int>> {
-                auto pixel = self.window_coordinates_to_image_pixel(ctx, x, y);
-                if (pixel) {
-                    return std::pair<int, int>(pixel->second, pixel->first);
-                }
-                return nonstd::nullopt;
+                // swap the coordinates for python, since that's the convention
+                // for the numpy array
+                auto p = self.window_coordinates_to_image_pixel(ctx, x, y);
+                return std::make_pair(p.second, p.first);
             },
             R"(Returns the image pixel as a (row, col) tuple given window coordinates,
              or None if the given window coordinate is not within the image.)")

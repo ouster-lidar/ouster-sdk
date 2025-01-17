@@ -35,18 +35,14 @@ Every example is wrapped into a CLI and available for quick tests by running
 
     Ouster Python SDK OSF examples. The EXAMPLE must be one of:
       read-scans
-      read-messages
-      split-scans
       slice-scans
-      get-lidar-streams
       get-sensors-info
-      check-layout
 
-For example to execute the ``get-lidar-streams`` example you can run:
+For example to execute the ``read-scans`` example you can run:
 
 .. code:: bash
     
-    $ python3 -m ouster.sdk.examples.osf <OSF_FILE.osf> get-lidar-streams
+    $ python3 -m ouster.sdk.examples.osf <OSF_FILE.osf> read-scans
 
 
 Read Lidar Scans with ``osf.Scans``
@@ -87,47 +83,6 @@ case it's of type ``osf.LidarSensor``):
     :dedent:
 
 
-Read All Messages with ``osf.Reader``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-With ``osf.Reader``, you can use ``reader.messages()`` iterator to read messages in ``timestamp``
-order.
-
-.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
-    :start-after: [doc-stag-osf-read-all-messages]
-    :end-before: [doc-etag-osf-read-all-messages]
-    :dedent:
-
-
-Checking Chunks Layout via ``osf.StreamingInfo``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Building on top of an example from above we can check for stream
-statistics information from ``osf.StreamingInfo``:
-
-.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
-    :start-after: [doc-stag-osf-check-layout]
-    :end-before: [doc-etag-osf-check-layout]
-    :dedent:
-
-For more information about ``osf.StreamingInfo`` metadata entry please refer to [RFC 0018]_.
-
-
-Get Lidar Scan streams info via ``osf.LidarScanStream``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Every message in an OSF belongs to a stream of a particular type (i.e. ``osf.LidarScanStream``,
-``osf.LidarImuStream``, etc.). Streams information stored as **metadata entry** within
-``osf.Reader.meta_store`` object that can be read and decoded in various ways. Below is an example
-of how we can check parameters of an available LidarScan streams (``osf.LidarScanStream``) by
-checking the metadata entries:
-
-.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
-    :start-after: [doc-stag-osf-get-lidar-streams]
-    :end-before: [doc-etag-osf-get-lidar-streams]
-    :dedent:
-
-
 Write Lidar Scan with sliced fields with ``osf.Writer``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -145,16 +100,4 @@ A general scheme of writing scans to the OSF with Writer:
 .. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
     :start-after: [doc-stag-osf-slice-scans]
     :end-before: [doc-etag-osf-slice-scans]
-    :dedent:
-
-
-Split Lidar Scan stream into multiple files
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Another example of using ``osf.Writer`` that we will see is the splitting of Lidar Scan stream from
-one OSF file into 2 files.
-
-.. literalinclude:: /../python/src/ouster/sdk/examples/osf.py
-    :start-after: [doc-stag-osf-split-scans]
-    :end-before: [doc-etag-osf-split-scans]
     :dedent:

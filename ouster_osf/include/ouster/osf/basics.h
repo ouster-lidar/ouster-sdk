@@ -13,6 +13,7 @@
 #include "metadata_generated.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 // OSF basic types for LidarSensor and LidarScan/Imu Streams
 #include "os_sensor/common_generated.h"
@@ -63,6 +64,7 @@ enum ChunksLayout {
  * @param[in] chunks_layout The data to get the string representation format
  * @return The string representation
  */
+OUSTER_API_FUNCTION
 std::string to_string(ChunksLayout chunks_layout);
 
 /**
@@ -71,6 +73,7 @@ std::string to_string(ChunksLayout chunks_layout);
  * @param[in] s The String Representation of ChunksLayout
  * @return The corrosponding ChunksLayout object
  */
+OUSTER_API_FUNCTION
 ChunksLayout chunks_layout_of_string(const std::string& s);
 
 // stable common types mapped to ouster::osf
@@ -94,6 +97,7 @@ static constexpr uint32_t FLATBUFFERS_PREFIX_LENGTH = 4;
  * @param[in] status The data to get the string representation format
  * @return The string representation
  */
+OUSTER_API_FUNCTION
 std::string to_string(const HEADER_STATUS status);
 
 /**
@@ -104,6 +108,7 @@ std::string to_string(const HEADER_STATUS status);
  * @param[in] max_show_count The number of bytes to dump. This arg is optional.
  * @return The string representation
  */
+OUSTER_API_FUNCTION
 std::string to_string(const uint8_t* buf, const size_t count,
                       const size_t max_show_count = 0);
 
@@ -114,6 +119,7 @@ std::string to_string(const uint8_t* buf, const size_t count,
  * @param[in] filename The file to read.
  * @return The text of the file specified.
  */
+OUSTER_API_FUNCTION
 std::string read_text_file(const std::string& filename);
 
 /**
@@ -122,6 +128,7 @@ std::string read_text_file(const std::string& filename);
  * @param[in] buf Pointer to Flatbuffers buffer stared with prefixed size
  * @return the size recovered from the stored prefix size
  */
+OUSTER_API_FUNCTION
 uint32_t get_prefixed_size(const uint8_t* buf);
 
 /**
@@ -130,6 +137,7 @@ uint32_t get_prefixed_size(const uint8_t* buf);
  * @param[in] buf Pointer to Flatbuffers buffer stared with prefixed size
  * @return the calculated size of the block
  */
+OUSTER_API_FUNCTION
 uint32_t get_block_size(const uint8_t* buf);
 
 /**
@@ -144,6 +152,7 @@ uint32_t get_block_size(const uint8_t* buf);
  *                     if first prefixed size bytes are broken.
  * @return true if CRC field is correct, false otherwise
  */
+OUSTER_API_FUNCTION
 bool check_prefixed_size_block_crc(
     const uint8_t* buf,
     const uint32_t max_size = std::numeric_limits<uint32_t>::max());

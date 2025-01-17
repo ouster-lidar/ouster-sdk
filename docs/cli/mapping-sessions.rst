@@ -131,7 +131,7 @@ file to a PLY file and keep only the point within 20 to 80 meters range you can 
 
 .. code:: bash
 
-        ouster-cli source sample.osf clip --min-range 20 --max-range 80 save clipped_output.ply
+        ouster-cli source sample.osf clip RANGE,RANGE2 20:80 save clipped_output.ply
 
 More details about the clip command usage can be found in the :ref:`Clip Command <ouster-cli-clip>`
 
@@ -255,6 +255,50 @@ displaying the preview of the lidar trajectory:
    Data fully replayed with map and accum enabled (last current scan is displayed here in gray
    palette)
 
+
+Localize Command
+----------------
+Starting with SDK 0.14.0 the ouster-cli has a new command ``localize`` which allows users to load a
+map of a given site, then use it to query the position and orientation of the sensor starting from
+a known position. Here is an example:
+
+.. code:: bash
+
+        ouster-cli source <SOURCE_URL> localize <map.ply> viz
+
+Once this command is invoked the viz will load the given map and display it in the background (flattened
+by default) while simultaneously streaming the lidar data from the ``SOURCE_URL`` and updating the
+position of the sensor relative to the map origin as show in the image below:
+
+.. figure:: /images/localization-map-main.png
+
+
+.. note::
+
+        Currently ply is the only supported format for the localization map.
+
+This above example works fine when the input source begins from the same place as the origin of the map,
+however, in many situations this isn't the case. In the case of wanting to start from a different
+starting point than the map origin, the user could do that using the following:
+
+.. code:: bash
+
+        ouster-cli source --initial-pose PX,PY,PZ,R,P,Y <SOURCE_URL> localize <map.ply> viz
+
+This would set the initial pose of the input source with respect to the map origin, where PX,PY,PZ
+represent the position and R,P,Y represent orientation in Euler angles (roll, pitch, yaw)
+specified in degrees.
+
+As part of the localization feature the ``viz`` command was extended to give control the visuals of the
+localization map. All these options start with the ``--global-map`` prefix. For example, it is possible
+to show the localization map in its 3D form without flattening by passing the option
+``--global-map-flatten False`` to the ``viz`` command. With this the command becomes like this:
+
+.. code:: bash
+
+        ouster-cli source <SOURCE_URL> localize <map.ply> viz --global-map-flatten False
+
+To see the full list of available options to modify the map visuals check the ``viz`` help menu
 
 .. _Networking Guide: https://static.ouster.dev/sensor-docs/image_route1/image_route3/networking_guide/networking_guide.html
 

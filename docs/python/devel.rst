@@ -13,14 +13,11 @@ Building the Python SDK from source requires several dependencies:
 - `cmake <https://cmake.org/>`_  >= 3.5
 - `eigen <https://eigen.tuxfamily.org>`_ >= 3.3
 - `curl <https://curl.se/libcurl/>`_ >= 7.58
-- `jsoncpp <https://github.com/open-source-parsers/jsoncpp>`_ >= 1.7
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
 - `libpng <http://www.libpng.org>`_ >= 1.6
 - `flatbuffers <https://flatbuffers.dev/>`_ >= 1.1
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
-- `libglew <http://glew.sourceforge.net/>`_ >= 2.1 or `glad <https://github.com/Dav1dde/glad>`_
-- `spdlog <https://github.com/gabime/spdlog>`_ >= 1.9
 - `python <https://www.python.org/>`_ >= 3.8 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
@@ -34,16 +31,15 @@ On supported Debian-based Linux systems, you can install all build dependencies 
 .. code:: console
 
    $ sudo apt install build-essential cmake \
-                      libeigen3-dev libjsoncpp-dev libtins-dev libpcap-dev \
+                      libeigen3-dev libtins-dev libpcap-dev \
                       python3-dev python3-pip libcurl4-openssl-dev \
-                      libglfw3-dev libglew-dev libspdlog-dev \
-                      libpng-dev libflatbuffers-dev
+                      libglfw3-dev libpng-dev libflatbuffers-dev
 
 On macOS >= 11, using Homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen curl jsoncpp libtins python3 glfw glew spdlog libpng flatbuffers
+  $ brew install cmake eigen curl libtins python3 glfw libpng flatbuffers
 
 After you have the system dependencies, you can build the SDK with:
 
@@ -80,7 +76,7 @@ package manager and run:
 
 .. code:: powershell
 
-   PS > vcpkg install --triplet=x64-windows curl eigen3 jsoncpp libtins glfw3 glad[gl-api-33] spdlog libpng flatbuffers
+   PS > vcpkg install --triplet=x64-windows curl eigen3 libtins glfw3 glad[gl-api-33] libpng flatbuffers
 
 The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer powershell prompt:
 
@@ -108,7 +104,7 @@ The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer 
    # or just install directly (virtualenv recommended)
    PS > py -m pip install "$env:OUSTER_SDK_PATH\python"
 
-See the top-level README in the `Ouster Example repository`_ for more details on setting up a
+See the top-level README in the `Ouster SDK repository`_ for more details on setting up a
 development environment on Windows.
 
 .. _vcpkg: https://github.com/microsoft/vcpkg/blob/master/README.md

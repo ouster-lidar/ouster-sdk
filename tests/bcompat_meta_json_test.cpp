@@ -27,7 +27,7 @@ inline std::string getenvs(const std::string& var) {
 }
 
 void sinfo_populator(sensor_info& info, const std::string& /*name*/,
-                     const std::string& sn, const std::string& fw_rev,
+                     uint64_t sn, const std::string& fw_rev,
                      const lidar_mode mode, const std::string& prod_line,
                      const data_format& format,
                      const std::vector<double>& beam_azimuth_angles,
@@ -139,7 +139,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.columns_per_packet",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
-      "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
       "$.config_params.signal_multiplier",
@@ -180,6 +180,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_in_polarity",
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
@@ -226,7 +227,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.columns_per_packet",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
-      "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
       "$.config_params.signal_multiplier",
@@ -267,6 +268,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_in_polarity",
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
@@ -313,6 +315,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
+      "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
@@ -358,6 +361,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
+      "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
@@ -402,6 +406,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_in_polarity",
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
@@ -454,6 +459,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_in_polarity",
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
@@ -509,6 +515,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
+      "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
@@ -550,6 +557,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_in_polarity",
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
@@ -614,6 +622,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
+      "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
@@ -676,6 +685,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
+      "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
@@ -720,6 +730,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_in_polarity",
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
@@ -766,6 +777,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
+      "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
@@ -811,6 +823,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
       "$.config_params.auto_start_flag",
+      "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
       "$.config_params.phase_lock_offset",
@@ -851,6 +864,7 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.config_params.nmea_in_polarity",
       "$.config_params.nmea_leap_seconds",
       "$.config_params.operating_mode",
+      "$.config_params.auto_start_flag",
       "$.config_params.auto_start_flag",
       "$.config_params.operating_mode",
       "$.config_params.phase_lock_enable",
@@ -913,10 +927,11 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.nmea_ignore_valid_char = false;
         config.sync_pulse_out_angle = 360;
         config.sync_pulse_out_frequency = 1;
+        config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.sync_pulse_out_pulse_width = 10;
         sinfo_populator(si_1_12_os1_991913000010_64,
             "",
-            "991913000010",
+            991913000010,
             "v1.12.0",
             MODE_1024x10,
             "OS-1-64",
@@ -941,7 +956,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_1_12_os1_991937000062_16A0_legacy,
             "os1-991937000062.local",
-            "991937000062",
+            991937000062,
             "v1.12.0",
             MODE_1024x10,
             "OS-1-16-A0",
@@ -966,7 +981,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_1_12_os1_991937000062_64_legacy,
             "os1-991937000062.local",
-            "991937000062",
+            991937000062,
             "v1.12.0",
             MODE_1024x10,
             "OS-1-64",
@@ -1006,9 +1021,10 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_dest="169.254.91.92";
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502;
+        config.operating_mode = OperatingMode::OPERATING_NORMAL;
         sinfo_populator(si_1_13_os1_991913000010_64,
             "",
-            "991913000010",
+            991913000010,
             "v1.13.0",
             MODE_1024x10,
             "OS-1-64",
@@ -1033,7 +1049,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_1_13_os1_991937000062_32A02_legacy,
             "os1-991937000062.local",
-            "991937000062",
+            991937000062,
             "v1.13.0",
             MODE_1024x10,
             "OS-1-32-A02",
@@ -1058,7 +1074,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_1_13_os1_991937000062_16A0_legacy,
             "os1-991937000062.local",
-            "991937000062",
+            991937000062,
             "v1.13.0",
             MODE_1024x10,
             "OS-1-16-A0",
@@ -1083,7 +1099,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_1_14_6cccd_os_882002000138_128_legacy,
             "os-882002000138.local",
-            "882002000138",
+            882002000138,
             "v1.14.0-beta.1-928-g6cccd78",
             MODE_1024x10,
             "OS-0-128",
@@ -1108,7 +1124,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_1_14_6cccd_os_882002000138_32U0_legacy,
             "os-882002000138.local",
-            "882002000138",
+            882002000138,
             "v1.14.0-beta.1-928-g6cccd78",
             MODE_1024x10,
             "OS-0-32-U0",
@@ -1133,7 +1149,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator( si_1_14_beta_os1_991937000062_16A0_legacy,
             "os1-991937000062.local",
-            "991937000062",
+            991937000062,
             "v1.14.0-beta.1-87-gde6f92c",
             MODE_1024x10,
             "OS-1-16-A0",
@@ -1158,7 +1174,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_1_14_beta_os1_991937000062_64_legacy,
             "os1-991937000062.local",
-            "991937000062",
+            991937000062,
             "v1.14.0-beta.1-87-gde6f92c",
             MODE_1024x10,
             "OS-1-64",
@@ -1183,7 +1199,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_ouster_studio_reduced_config_v1,
             "",
-            "",
+            0,
             "",
             MODE_2048x10,
             "",
@@ -1208,7 +1224,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_2_0_rc2_os_992011000121_32U0_legacy,
             "os-992011000121.local",
-            "992011000121",
+            992011000121,
             "v2.0.0-rc.2",
             MODE_512x10,
             "OS-1-32-U0",
@@ -1233,7 +1249,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_2_0_0_os1_992008000494_128_col_win_legacy,
             "192.168.87.249",
-            "992008000494",
+            992008000494,
             "v2.0.0",
             MODE_2048x10,
             "OS-1-128",
@@ -1278,7 +1294,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_port_lidar = 55426;
         sinfo_populator( si_2_0_0_os1_991913000010_64,
             "",
-            "991913000010",
+            991913000010,
             "v2.0.0",
             MODE_1024x10,
             "OS-1-64",
@@ -1303,7 +1319,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_2_1_2_os1_991913000010_64_legacy,
             "",
-            "991913000010",
+            991913000010,
             "v2.1.2",
             MODE_1024x10,
             "OS-1-64",
@@ -1348,7 +1364,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_port_lidar = 7502; 
         sinfo_populator(si_2_1_2_os1_991913000010_64,
             "",
-            "991913000010",
+            991913000010,
             "v2.1.2",
             MODE_1024x10,
             "OS-1-64",
@@ -1373,7 +1389,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_2_2_os_992119000444_128_legacy,
             "",
-            "992119000444",
+            992119000444,
             "v2.2.0-rc.1",
             MODE_1024x10,
             "OS-1-128",
@@ -1422,7 +1438,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_profile_lidar = UDPProfileLidar::PROFILE_LIDAR_LEGACY;
         sinfo_populator(si_2_2_os_992119000444_128,
             "",
-            "992119000444",
+            992119000444,
             "v2.2.0-rc.1",
             MODE_1024x10,
             "OS-1-128",
@@ -1447,7 +1463,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_2_3_1_os_992146000760_128_legacy,
             "",
-            "992146000760",
+            992146000760,
             "v2.3.1-rc.1",
             MODE_1024x10,
             "OS-1-128",
@@ -1496,7 +1512,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_profile_lidar = UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8;
         sinfo_populator( si_2_3_1_os_992146000760_128,
             "",
-            "992146000760",
+            992146000760,
             "v2.3.1-rc.1",
             MODE_1024x10,
             "OS-1-128",
@@ -1545,7 +1561,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_profile_lidar = UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16;
         sinfo_populator(si_2_4_0_os_992146000760_128,
             "",
-            "992146000760",
+            992146000760,
             "v2.4.0",
             MODE_1024x10,
             "OS-1-128",
@@ -1570,7 +1586,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator(si_2_4_0_os_992146000760_128_legacy,
             "",
-            "992146000760",
+            992146000760,
             "v2.4.0",
             MODE_1024x10,
             "OS-1-128",
@@ -1595,7 +1611,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator( si_3_0_1_os_122246000293_128_legacy,
             "",
-            "122246000293",
+            122246000293,
             "v3.0.1-rc.1",
             MODE_1024x10,
             "OS-1-128",
@@ -1644,7 +1660,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_profile_lidar = UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL;
         sinfo_populator(si_3_0_1_os_122246000293_128,
             "",
-            "122246000293",
+            122246000293,
             "v3.0.1-rc.1",
             MODE_1024x10,
             "OS-1-128",
@@ -1669,7 +1685,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
 
         sinfo_populator( si_2_5_0_os_992146000760_128_legacy,
             "",
-            "992146000760",
+            992146000760,
             "v2.5.0-omega.8",
             MODE_1024x10,
             "OS-1-128",
@@ -1718,7 +1734,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.udp_profile_lidar = UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16;
         sinfo_populator(si_2_5_0_os_992146000760_128,
             "",
-            "992146000760",
+            992146000760,
             "v2.5.0-omega.8",
             MODE_1024x10,
             "OS-1-128",
@@ -1820,10 +1836,16 @@ TEST_P(MetaJsonTest, MetadataFromJson) {
     EXPECT_EQ(si.prod_pn, si_expected.prod_pn);
     EXPECT_EQ(si.status, si_expected.status);
     if (si.cal != si_expected.cal) {
+        std::cout << param << std::endl;
         std::cout << "Expected: " << to_string(si_expected.cal) << std::endl;
         std::cout << "Actual: " << to_string(si.cal) << std::endl;
     }
     EXPECT_EQ(si.cal, si_expected.cal);
+    if (si.config != si_expected.config) {
+        std::cout << param << std::endl;
+        std::cout << "Expected: " << to_string(si_expected.config) << std::endl;
+        std::cout << "Actual: " << to_string(si.config) << std::endl;
+    }
     EXPECT_EQ(si.config, si_expected.config);
 
     EXPECT_TRUE(si == si_expected);

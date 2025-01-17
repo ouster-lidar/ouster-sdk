@@ -183,7 +183,7 @@ class Cloud:
         ...
 
     def set_key(self, key: np.ndarray) -> None:
-        ...
+     ...
 
     def set_mask(self, mask: np.ndarray) -> None:
         ...
@@ -235,7 +235,7 @@ class Image:
     def clear_palette(self) -> None:
         ...
 
-    def window_coordinates_to_image_pixel(self, ctx: WindowCtx, x: float, y: float) -> Optional[Tuple[int, int]]:
+    def window_coordinates_to_image_pixel(self, ctx: WindowCtx, x: float, y: float) -> Tuple[int, int]:
         ...
 
     def image_pixel_to_window_coordinates(self, ctx: WindowCtx, pixel: Tuple[int, int]) -> Tuple[float, float]:
@@ -280,7 +280,8 @@ class Label:
     def set_position(self,
                      x: float,
                      y: float,
-                     align_right: bool = ...) -> None:
+                     align_right: bool = ...,
+                     align_top: bool = ...) -> None:
         ...
 
     def set_scale(self, scale: float) -> None:

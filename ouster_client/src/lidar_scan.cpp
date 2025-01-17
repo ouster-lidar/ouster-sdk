@@ -17,6 +17,7 @@
 #include "ouster/impl/logging.h"
 #include "ouster/strings.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -109,7 +110,7 @@ static const Table<std::string, ChanFieldType, 7> fusa_two_word_slots{{
     {sensor::ChanField::FLAGS2, ChanFieldType::UINT8},
 }};
 
-struct DefaultFieldsEntry {
+struct OUSTER_API_CLASS DefaultFieldsEntry {
     const std::pair<std::string, ChanFieldType>* fields;
     size_t n_fields;
 };
@@ -201,6 +202,14 @@ static FieldDescriptor get_field_type_descriptor(const LidarScan& scan,
 LidarScan::LidarScan(const sensor::sensor_info& info)
     : LidarScan{info.format.columns_per_frame, info.format.pixels_per_column,
                 info.format.udp_profile_lidar, info.format.columns_per_packet} {
+    sensor_info = std::make_shared<sensor::sensor_info>(info);
+}
+
+LidarScan::LidarScan(std::shared_ptr<sensor::sensor_info> info)
+    : LidarScan{info->format.columns_per_frame, info->format.pixels_per_column,
+                info->format.udp_profile_lidar,
+                info->format.columns_per_packet} {
+    sensor_info = info;
 }
 
 // specify sensor:: namespace for doxygen matching
@@ -247,7 +256,8 @@ LidarScan::LidarScan(const LidarScan& ls_src,
       h(ls_src.h),
       columns_per_packet_(ls_src.columns_per_packet_),
       frame_status(ls_src.frame_status),
-      frame_id(ls_src.frame_id) {
+      frame_id(ls_src.frame_id),
+      sensor_info(ls_src.sensor_info) {
     for (const auto& ft : field_types) {
         const std::string& name = ft.name;
         FieldDescriptor dst_desc = get_field_type_descriptor(*this, ft);
@@ -302,10 +312,20 @@ sensor::ThermalShutdownStatus LidarScan::thermal_shutdown() const {
         frame_status_shifts::FRAME_STATUS_THERMAL_SHUTDOWN_SHIFT);
 }
 
-Field& LidarScan::field(const std::string& name) { return fields().at(name); }
+Field& LidarScan::field(const std::string& name) {
+    try {
+        return fields().at(name);
+    } catch (std::out_of_range& e) {
+        throw std::out_of_range("Field '" + name + "' not found in LidarScan.");
+    }
+}
 
 const Field& LidarScan::field(const std::string& name) const {
-    return fields().at(name);
+    try {
+        return fields().at(name);
+    } catch (std::out_of_range& e) {
+        throw std::out_of_range("Field '" + name + "' not found in LidarScan.");
+    }
 }
 
 bool LidarScan::has_field(const std::string& name) const {
@@ -544,14 +564,18 @@ bool LidarScan::complete(sensor::ColumnWindow window) const {
 
 size_t LidarScan::packet_count() const { return packet_count_; }
 
-bool operator==(const LidarScan& a, const LidarScan& b) {
-    return a.frame_id == b.frame_id && a.w == b.w && a.h == b.h &&
-           a.frame_status == b.frame_status &&
-           a.measurement_id_ == b.measurement_id_ &&
-           a.timestamp_ == b.timestamp_ &&
-           a.packet_timestamp_ == b.packet_timestamp_ && a.pose() == b.pose() &&
-           a.fields() == b.fields();
+bool LidarScan::equals(const LidarScan& other) const {
+    return frame_id == other.frame_id && w == other.w && h == other.h &&
+           frame_status == other.frame_status &&
+           measurement_id_ == other.measurement_id_ &&
+           timestamp_ == other.timestamp_ &&
+           packet_timestamp_ == other.packet_timestamp_ &&
+           pose() == other.pose() && fields() == other.fields();
 }
+
+bool operator==(const LidarScan& a, const LidarScan& b) { return a.equals(b); }
+
+bool operator!=(const LidarScan& a, const LidarScan& b) { return !(a == b); }
 
 LidarScanFieldTypes LidarScan::field_types() const {
     LidarScanFieldTypes ft;
@@ -771,8 +795,7 @@ ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
       h(pf.pixels_per_column),
       next_valid_m_id(0),
       next_headers_m_id(0),
-      cache(pf.lidar_packet_size),
-      cache_packet_ts(0),
+      cache(0),
       pf(pf) {
     if (pf.columns_per_packet == 0)
         throw std::invalid_argument("unexpected columns_per_packet: 0");
@@ -806,6 +829,7 @@ ScanBatcher::ScanBatcher(const sensor::sensor_info& info)
 
         expected_packets = end_packet - start_packet + 1;
     }
+    sensor_info = std::make_shared<sensor::sensor_info>(info);
 }
 
 namespace {
@@ -911,7 +935,7 @@ struct pack_raw_headers_col {
 
 }  // namespace
 
-void ScanBatcher::_parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
+void ScanBatcher::parse_by_col(const uint8_t* packet_buf, LidarScan& ls) {
     const bool raw_headers = impl::raw_headers_enabled(pf, ls);
     for (int icol = 0; icol < pf.columns_per_packet; icol++) {
         const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
@@ -972,7 +996,7 @@ struct parse_field_block {
     }
 };
 
-void ScanBatcher::_parse_by_block(const uint8_t* packet_buf, LidarScan& ls) {
+void ScanBatcher::parse_by_block(const uint8_t* packet_buf, LidarScan& ls) {
     // zero out missing columns if we jumped forward
     const uint16_t first_m_id =
         pf.col_measurement_id(pf.nth_col(0, packet_buf));
@@ -1013,25 +1037,7 @@ void ScanBatcher::_parse_by_block(const uint8_t* packet_buf, LidarScan& ls) {
     }
 }
 
-bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
-    return this->operator()(packet_buf, 0, ls);
-}
-
 bool ScanBatcher::operator()(const ouster::sensor::LidarPacket& packet,
-                             LidarScan& ls) {
-    return (*this)(packet.buf.data(), packet.host_timestamp, ls);
-}
-
-void ScanBatcher::finalize_scan(LidarScan& ls, bool raw_headers) {
-    impl::foreach_channel_field(ls, pf, zero_field_cols{}, next_valid_m_id, w);
-
-    if (raw_headers) {
-        impl::visit_field(ls, sensor::ChanField::RAW_HEADERS, zero_field_cols{},
-                          "", next_headers_m_id, w);
-    }
-}
-
-bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
                              LidarScan& ls) {
     if (ls.w != w || ls.h != h)
         throw std::invalid_argument("unexpected scan dimensions");
@@ -1040,12 +1046,10 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         throw std::invalid_argument("unexpected scan columns_per_packet: " +
                                     std::to_string(pf.columns_per_packet));
 
-    // process cached packet and packet ts
-    if (cached_packet) {
-        cached_packet = false;
-        this->operator()(cache.data(), cache_packet_ts, ls);
-    }
+    // process cached packet and packet ts, if present
+    batch_cached_packet(ls);
 
+    const uint8_t* packet_buf = packet.buf.data();
     const int64_t f_id = pf.frame_id(packet_buf);
 
     const bool raw_headers = impl::raw_headers_enabled(pf, ls);
@@ -1079,19 +1083,17 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
         // given scan.
         ls.shutdown_countdown = pf.countdown_thermal_shutdown(packet_buf);
         ls.shot_limiting_countdown = pf.countdown_shot_limiting(packet_buf);
+        ls.sensor_info = sensor_info;
     } else if (ls.frame_id ==
                ((f_id + 1) % (static_cast<int64_t>(pf.max_frame_id) + 1))) {
         // drop reordered packets from the previous frame
         return false;
     } else if (ls.frame_id != f_id) {
         // got a packet from a new frame, release the old one
-        finished_scan_id = ls.frame_id;
-        finalize_scan(ls, raw_headers);
+        finalize_scan(ls);
 
         // store packet buf and ts data to the cache for later processing
-        std::memcpy(cache.data(), packet_buf, cache.size());
-        cache_packet_ts = packet_ts;
-        cached_packet = true;
+        cache_packet(packet);
         return true;
     }
 
@@ -1102,7 +1104,7 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
     const uint16_t packet_id =
         pf.col_measurement_id(col0_buf) / pf.columns_per_packet;
     if (packet_id < ls.packet_timestamp().rows()) {
-        ls.packet_timestamp()[packet_id] = packet_ts;
+        ls.packet_timestamp()[packet_id] = packet.host_timestamp;
         ls.alert_flags()[packet_id] = pf.alert_flags(packet_buf);
     }
 
@@ -1121,20 +1123,61 @@ bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
     }
 
     if (pf.block_parsable() && happy_packet && !raw_headers) {
-        _parse_by_block(packet_buf, ls);
+        parse_by_block(packet_buf, ls);
     } else {
-        _parse_by_col(packet_buf, ls);
+        parse_by_col(packet_buf, ls);
     }
 
     // if we have enough packets and are packet-complete release the scan
-    if (batched_packets >= expected_packets &&
-        (size_t)ls.packet_timestamp().count() == expected_packets) {
-        finished_scan_id = f_id;
-        finalize_scan(ls, raw_headers);
+    if (check_scan_complete(ls)) {
+        finalize_scan(ls);
         return true;
     }
 
     return false;
+}
+
+void ScanBatcher::cache_packet(const sensor::LidarPacket& packet) {
+    cache = packet;
+    cached_packet = true;
+}
+
+void ScanBatcher::batch_cached_packet(LidarScan& ls) {
+    if (cached_packet) {
+        cached_packet = false;
+        this->operator()(cache.as<sensor::LidarPacket>(), ls);
+    }
+}
+
+bool ScanBatcher::check_scan_complete(const LidarScan& ls) const {
+    return batched_packets >= expected_packets &&
+           static_cast<size_t>(ls.packet_timestamp().count()) ==
+               expected_packets;
+}
+
+void ScanBatcher::finalize_scan(LidarScan& ls) {
+    impl::foreach_channel_field(ls, pf, zero_field_cols{}, next_valid_m_id, w);
+
+    if (impl::raw_headers_enabled(pf, ls)) {
+        impl::visit_field(ls, sensor::ChanField::RAW_HEADERS, zero_field_cols{},
+                          "", next_headers_m_id, w);
+    }
+
+    finished_scan_id = ls.frame_id;
+}
+
+bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
+    return this->operator()(packet_buf, 0, ls);
+}
+
+bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
+                             LidarScan& ls) {
+    // backwards compatibility method
+    // induces an extra copy but this is a deprecated method
+    sensor::LidarPacket packet(pf.lidar_packet_size);
+    packet.host_timestamp = packet_ts;
+    std::memcpy(packet.buf.data(), packet_buf, packet.buf.size());
+    return this->operator()(packet, ls);
 }
 
 FieldType::FieldType() {}

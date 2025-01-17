@@ -2,7 +2,77 @@
 Changelog
 =========
 
-**Important: as of 0.13.0, the SDK is no longer compatible with firmware versions older than 2.1.0.**
+Important announcements
+-----------------------
+* As of 0.13.0, the SDK is no longer compatible with firmware versions older than 2.1.0.
+* Official SDK support for firmware versions 2.2 and 2.3 will end at the end of June, 2025.
+* Update vcpkg ref of build to 2024.11.16
+
+[20250117] [0.14.0]
+======================
+
+ouster_client/C++ SDK
+---------------------
+
+* Jsoncpp fully removed for jsoncons
+* [BREAKING] All the HTTP endpoint methods in the ``SensorHttpImp`` class now return a ``std::string`` instead of a ``Json::Value`` object. The result can be parsed with any json parser.
+* Add CMake logic for packaging c++ sdk in binary format when ``-DBUILD_SHARED_LIBRARY=ON`` is enabled. 
+
+ouster_client/Python SDK
+------------------------
+* Add a new command ``localize`` to perform localization and tracking within a SLAM-generated map of a given site.
+* Add ``LidarScan.sensor_info`` to store the relevant ``SensorInfo`` for each scan
+* [BREAKING] Deprecated ``ScanBatcher::operator()(const uint8_t*, uint64_t, LidarScan&)`` for ``ScanBatcher::operator()(const LidarPacket&, LidarScan&)``
+* [BREAKING] Disabled ``OUSTER_USE_EIGEN_MAX_ALIGN_BYTES_32`` by default to help avoid ABI mismatches
+* [BREAKING] Changed ``SensorClient`` ``get_packet`` API to return packet in the ``ClientEvent`` rather than through reference parameters
+* Updated to Kiss ICP 1.1.0 version
+* [BUGFIX] Fixed OSF failing to load scans saved in 4096 * 5 mode
+* [BUGFIX] Fixed Python ``client.transform`` and ``client.dewarp`` methods returning incorrect results due to ignoring column layout of input data
+* Refactored logging to remove spdlog API exposure
+* Vendored spdlog in third party dependencies
+* [BREAKING] Change ``sensor_info.sn`` type from string to uint64_t
+* Support additional array types and formats for Cloud.set_xyz
+* Added new ``mask``, ``reduce`` and ``clip`` ScanSource operations to the SDK CLI and API
+* The ``clip`` command can now specify which fields to be applied to and accepts unit
+* Add relevant methods from ``packet_format`` to ``LidarPacket`` and ``ImuPacket`` classes
+* Add ``format`` to each ``Packet`` object with the relevant packet format
+* Tolerate off-by-1-byte for bag files recorded using an older version of the ouster-ros driver
+* Fix yaw axis to zero in the get_rot_matrix_to_align_to_gravity function
+* [BUGFIX] Fix the ``-c`` option in ouster-cli ``config`` command to set config from file
+
+ouster_cli
+----------
+* Add ``ouster-cli source SENSOR set_static_ip`` command to set sensor static IPs.
+* Add ``ouster-cli source SENSOR diagnostics`` command to download sensor diagnostic dumps.
+* [BREAKING] Merge the handling of ``--extrinsics-file`` ouster-cli option into ``--extrinsics`` option.
+* [BREAKING] ouster-cli ``--extrinsics`` option requires adding double quotes for space separated values.
+* ouster-cli ``--extrinsics`` option now accepts ``identity`` as a keyword for overrideng sensor extriniscs with identity.
+* ouster-cli ``--extrinsics`` option now accepts the following additional formats besides the ``16`` numbers array format:
+  * ``--extrinsics X,Y,Z,R,PY`` for position + euler angles.
+  * ``--extrinsics X,Y,Z,QX,QY,QZ,QW`` for position + quaternion.
+* Add cursor-driven AOI selection feature to 2d images in ouster-cli ``viz`` command.
+
+ouster_osf
+----------
+* Introduce ``ouster::osf::AsyncWriter`` to offload saving ``LidarScan`` as OSF to a background thread, improving CLI performance when saving OSF files.
+* Add the ``ouster::osf::Encoder`` type, which allows parameterizing the OSF compression level.
+* Change the default OSF PNG encoder compression level to 1 from 4.
+* [BREAKING] ``ouster.sdk.osf`` no longer exports lower-level OSF API classes (such as ``osf.Reader``.)
+* ``ouster::osf::Writer::save`` now throws if the resolution of a ``LidarScan`` being saved doesn't match what is specified in sensor info/metadata.
+* [BUGFIX] Fix incorrect ``OsfScanSource`` data when reading from an OSF file containing empty or missing streams.
+
+ouster_viz
+----------
+* ``SimpleViz`` now drops frames when necessary to keep up with a live data source (i.e. sensor.)
+* Add a map origin axis and label.
+* Invoke frame buffer resize handlers added to ``PointViz`` when GLFW's window resize event fires.
+* [BREAKING] Change ``PointViz::window_coordinates_to_image_pixel`` so that it always returns a pixel location (even outside the image), which can be useful in some situations.
+* [BUGFIX] On screen display frame number starts at zero instead of one.
+* [BUGFIX] ``LidarScanViz`` now only creates view modes for PIXEL fields.
+* [BUGFIX] Use the last valid column pose as a ``LidarScan``'s origin, instead of the first.
+* [BUGFIX] Limit number of keyboard shortcuts to toggle sensors from CTRL+1 to CTRL+9.
+* [BUGFIX] Fix a key shortcut help rendering issue and improve consistency of key shortcut help.
+
 
 [20241017] [0.13.1]
 ======================
@@ -101,7 +171,7 @@ ouster_viz
 * [BREAKING] removed ``bool update_on_input()`` and ``update_on_input(bool)`` methods from ``PointViz``.
 * [BUGFIX] SimpleViz throws a 'generator already executing' exception.
 
-ouster_cli
+ouster-cli
 ----------
 
 * Add support for reading and writing ROS1 and ROS2 bag files.
@@ -449,9 +519,7 @@ ouster_client
 -------------
 
 * Add ``LidarScan.pose`` with poses per column
-* Add ``_client.IndexedPcapReader`` and ``_client.PcapIndex`` to enable random
-  pcap file access by frame number
-
+* Add ``_client.IndexedPcapReader`` and ``_client.PcapIndex`` to enable random pcap file access by frame number
 * [BREAKING] remove ``ouster::Imu`` object
 * [BREAKING] change the return type of ``ouster::packet_format::frame_id`` from ``uint16_t`` to ``uint32_t``
 * [BREAKING] remove methods ``px_range``, ``px_reflectivity``, ``px_signal``, and ``px_ambient`` from ``ouster::packet_format``
@@ -1073,3 +1141,4 @@ Fixed
   - fixed clipping issues with parallel projection
   - fixed point coloring issues in z-color mode
   - improved visualizer performance
+

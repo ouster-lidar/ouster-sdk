@@ -54,11 +54,8 @@ SensorScanSource::SensorScanSource(
 
     run_thread_ = true;
     batcher_thread_ = std::thread([this, queue_size, soft_id_check]() {
-        LidarPacket lp;
-        ImuPacket ip;
         std::vector<std::unique_ptr<LidarScan>> scans;
         std::vector<ScanBatcher> batchers;
-        std::vector<packet_format> pfs;
         auto infos = get_sensor_info();
         for (size_t i = 0; i < infos.size(); i++) {
             const auto& info = infos[i];
@@ -68,24 +65,22 @@ SensorScanSource::SensorScanSource(
             scans.push_back(std::make_unique<LidarScan>(
                 w, h, fields_[i].begin(), fields_[i].end(),
                 info.format.columns_per_packet));
-            pfs.push_back(packet_format(info));
         }
         while (run_thread_) {
-            auto p = client_.get_packet(lp, ip, 0.05);
-            if (p.type == ClientEvent::LidarPacket) {
-                const auto& pf = pfs[p.source];
+            auto p = client_.get_packet(0.05);
+            if (p.type == ClientEvent::Packet &&
+                p.packet().type() == PacketType::Lidar) {
                 const auto& info = infos[p.source];
-                auto result = lp.validate(info, pf);
+                const auto& lp = static_cast<LidarPacket&>(p.packet());
+                auto result = lp.validate(info);
                 if (result == PacketValidationFailure::ID) {
                     id_error_count_++;
                     if (!soft_id_check) {
-                        auto init_id = pf.init_id(lp.buf.data());
-                        auto prod_sn = pf.prod_sn(lp.buf.data());
                         logger().warn(
                             "Metadata init_id/sn does not match: expected by "
                             "metadata - {}/{}, but got from packet buffer - "
                             "{}/{}",
-                            info.init_id, info.sn, init_id, prod_sn);
+                            info.init_id, info.sn, lp.init_id(), lp.prod_sn());
                         continue;
                     }
                 }

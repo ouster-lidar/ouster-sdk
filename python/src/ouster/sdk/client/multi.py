@@ -8,9 +8,9 @@ from ouster.sdk._bindings.client import (SensorInfo, LidarScan, PacketFormat, Sc
                       SensorConfig, SensorClient, ClientEvent, FieldType,
                       get_field_types, Packet, ImuPacket, LidarPacket, PacketValidationFailure)
 from .data import packet_ts, FieldTypes
-from .scan_source import ScanSource
 from .multi_scan_source import MultiScanSource
 from ouster.sdk._bindings.client import Sensor as _Sensor
+import numpy as np
 import logging
 import time
 
@@ -39,11 +39,11 @@ def collate_scans(
     Returns:
         List of LidarScans elements
     """
-    min_ts = -1
-    max_ts = -1
+    min_ts = np.int64(-1)
+    max_ts = np.int64(-1)
     collated = [None] * sensors_count
     for idx, m in source:
-        ts = get_ts(m)
+        ts = np.int64(get_ts(m))
         if min_ts < 0 or max_ts < 0 or (
                 ts >= min_ts + dt or ts < max_ts - dt):
             if any(collated):
@@ -133,8 +133,6 @@ class SensorPacketSource(PacketMultiSource):
     _metadata: List[SensorInfo]
     _pf: List[PacketFormat]
     _cache: Optional[ClientEvent]
-    _lidarbuf: LidarPacket
-    _imubuf: ImuPacket
 
     def __init__(self, sensors: List[Tuple[str, SensorConfig]],
                  *,
@@ -187,7 +185,6 @@ class SensorPacketSource(PacketMultiSource):
             self._pf.append(PacketFormat(meta))
 
         self._lidarbuf = LidarPacket()
-        self._imubuf = ImuPacket()
 
         self._metadata = self._cli.get_sensor_info()
         self._last_times = [time.monotonic()] * len(self._metadata)
@@ -224,40 +221,37 @@ class SensorPacketSource(PacketMultiSource):
     def _next_packet(self) -> Optional[Tuple[int, Packet]]:
         st = self._peek()
         self._cache = None
-
         # TODO: revise this part and upper loop to eliminate ValueError
         if self._overflow_err:
             new = self._cli.dropped_packets()
             if self._last_dropped < new:
                 self._last_dropped = new
                 raise ClientOverflow("client packets overflow")
-        if st.type == ClientEventType.LidarPacket:
-            msg = self._lidarbuf
-            self._lidarbuf = LidarPacket(self._pf[st.source].lidar_packet_size)
-            res = msg.validate(self._metadata[st.source], self._pf[st.source])
-            if res == PacketValidationFailure.PACKET_SIZE:
-                raise ValueError(f"Packet was unexpected size {len(msg.buf)}")
-            if res == PacketValidationFailure.ID:
-                self._id_error_count += 1
-                init_id = self._pf[st.source].init_id(msg.buf)
-                prod_sn = self._pf[st.source].prod_sn(msg.buf)
-                error_msg = f"Metadata init_id/sn does not match: " \
-                    f"expected by metadata - {self._metadata[st.source].init_id}/{self._metadata[st.source].sn}, " \
-                    f"but got from packet buffer - {init_id}/{prod_sn}"
-                if not self._soft_id_check:
-                    raise ValueError(error_msg)
-                else:
-                    # Continue with warning. When init_ids/sn doesn't match
-                    # the resulting LidarPacket has high chances to be
-                    # incompatible with data format set in metadata json file
-                    logger.warn(f"LidarPacket validation: {error_msg}")
-            self._last_times[st.source] = time.monotonic()
-            return (st.source, msg)
-        elif st.type == ClientEventType.ImuPacket:
-            msg2 = self._imubuf
-            self._imubuf = ImuPacket(self._pf[st.source].imu_packet_size)
-            self._last_times[st.source] = time.monotonic()
-            return (st.source, msg2)
+        if st.type == ClientEventType.Packet:
+            msg = self._packetbuf
+            if isinstance(msg, LidarPacket):
+                res = msg.validate(self._metadata[st.source])
+                if res == PacketValidationFailure.PACKET_SIZE:
+                    raise ValueError(f"Packet was unexpected size {len(msg.buf)}")
+                if res == PacketValidationFailure.ID:
+                    self._id_error_count += 1
+                    init_id = self._pf[st.source].init_id(msg.buf)
+                    prod_sn = self._pf[st.source].prod_sn(msg.buf)
+                    error_msg = f"Metadata init_id/sn does not match: " \
+                        f"expected by metadata - {self._metadata[st.source].init_id}/{self._metadata[st.source].sn}, " \
+                        f"but got from packet buffer - {init_id}/{prod_sn}"
+                    if not self._soft_id_check:
+                        raise ValueError(error_msg)
+                    else:
+                        # Continue with warning. When init_ids/sn doesn't match
+                        # the resulting LidarPacket has high chances to be
+                        # incompatible with data format set in metadata json file
+                        logger.warn(f"LidarPacket validation: {error_msg}")
+                self._last_times[st.source] = time.monotonic()
+                return (st.source, msg)
+            elif isinstance(msg, ImuPacket):
+                self._last_times[st.source] = time.monotonic()
+                return (st.source, msg)
         elif st.type == ClientEventType.Error:
             raise ClientError("Client returned ERROR state")
         elif st.type == ClientEventType.Exit:
@@ -268,9 +262,11 @@ class SensorPacketSource(PacketMultiSource):
     def _peek(self) -> ClientEvent:
         if self._cache is None:
             while True:
-                st = self._cli.get_packet(self._lidarbuf, self._imubuf)
+                st = self._cli.get_packet()
                 self.check_timeout()
                 if st.type != ClientEventType.PollTimeout:
+                    if st.type == ClientEventType.Packet:
+                        self._packetbuf = st.packet()
                     break
             self._cache = st
         return self._cache
@@ -335,14 +331,15 @@ class SensorPacketSource(PacketMultiSource):
         while True:
             # check next packet to see if it's the start of a new frame
             st = self._peek()
-            if st.type == ClientEventType.LidarPacket:
-                frame = self._pf[st.source].frame_id(self._lidarbuf.buf)
-                if frame != last_frame:
-                    last_frame = frame
-                    n_frames -= 1
-                    if n_frames < 0:
-                        break
-                self._last_times[st.source] = time.monotonic()
+            if st.type == ClientEventType.Packet:
+                if isinstance(self._packetbuf, LidarPacket):
+                    frame = self._pf[st.source].frame_id(self._packetbuf.buf)
+                    if frame != last_frame:
+                        last_frame = frame
+                        n_frames -= 1
+                        if n_frames < 0:
+                            break
+                    self._last_times[st.source] = time.monotonic()
             elif st.type == ClientEventType.Error:
                 raise ClientError("Client returned ERROR state")
             elif st.type == ClientEventType.Exit:
@@ -534,7 +531,7 @@ class ScansMulti(MultiScanSource):
             h[i] = sinfo.format.pixels_per_column
             col_window[i] = sinfo.format.column_window
             columns_per_packet[i] = sinfo.format.columns_per_packet
-            pf.append(PacketFormat.from_info(sinfo))
+            pf.append(PacketFormat(sinfo))
 
         # autopep8: off
         scan_shallow_yield = lambda x: x
@@ -602,7 +599,3 @@ class ScansMulti(MultiScanSource):
 
     def __del__(self) -> None:
         self.close()
-
-    def single_source(self, stream_idx: int) -> ScanSource:
-        from .scan_source_adapter import ScanSourceAdapter
-        return ScanSourceAdapter(self, stream_idx)

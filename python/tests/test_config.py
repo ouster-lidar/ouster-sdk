@@ -8,6 +8,7 @@ from copy import copy, deepcopy
 import pytest
 import warnings
 import inspect
+import json
 
 from ouster.sdk import client
 
@@ -270,7 +271,7 @@ def test_read_config(complete_config_string: str) -> None:
     assert config.sync_pulse_out_angle == 360
     assert config.sync_pulse_out_polarity == client.Polarity.POLARITY_ACTIVE_HIGH
     assert config.timestamp_mode == client.TimestampMode.TIME_FROM_INTERNAL_OSC
-    assert config.udp_dest == ""
+    assert config.udp_dest is None
     assert config.udp_port_imu == 7503
     assert config.udp_port_lidar == 7502
     assert config.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
@@ -279,8 +280,15 @@ def test_read_config(complete_config_string: str) -> None:
     assert config.columns_per_packet == 8
 
     # check output of string
-    assert ''.join(str(config).split()) == ''.join(
-        complete_config_string.split())
+    config_output = json.loads((str(config)))
+    ground_truth = json.loads(complete_config_string)
+    assert len(ground_truth) > 0
+    assert len(config_output) > 0
+
+    skip = ["udp_dest"]
+    for key in ground_truth:
+        if key not in skip:
+            assert config_output[key] == ground_truth[key]
 
 
 def test_equality_config(complete_config_string: str, all_different_config_string: str) -> None:
@@ -410,5 +418,6 @@ def deprecated_params_config() -> client.SensorConfig:
 
 def test_deprecated_config(deprecated_params_config) -> None:
     """Check that deprecated params are properly translated."""
+    print(deprecated_params_config)
     assert deprecated_params_config.udp_dest == "169.254.148.183"
     assert deprecated_params_config.operating_mode == client.OperatingMode.OPERATING_NORMAL

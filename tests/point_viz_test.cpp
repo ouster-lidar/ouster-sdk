@@ -23,31 +23,39 @@ TEST(PointViz, window_coordinates_to_image_pixel) {
     ctx.window_width = ctx.viewport_width = 400;
     ctx.window_height = ctx.viewport_height = 300;
     Image img;
-    auto pixel = img.window_coordinates_to_image_pixel(ctx, 0, 0);
-    EXPECT_FALSE(pixel.has_value());  // by default, images have no width/height
+    EXPECT_THROW(
+        {
+            try {
+                img.window_coordinates_to_image_pixel(ctx, 0, 0);
+            } catch (std::runtime_error& e) {
+                EXPECT_STREQ(e.what(), "image data has zero width or height");
+                throw;
+            }
+        },
+        std::runtime_error);
 
     constexpr int w = 4;
     constexpr int h = 3;
     float img_data[w * h];
     img.set_image(w, h, img_data);
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
-    pixel =
+    auto pixel =
         img.window_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
-    EXPECT_EQ(pixel->first, 0);
-    EXPECT_EQ(pixel->second, 2);
+    EXPECT_EQ(pixel.first, 0);
+    EXPECT_EQ(pixel.second, 2);
 
     pixel = img.window_coordinates_to_image_pixel(ctx, 0, 0);
-    EXPECT_EQ(pixel->first, 0);
-    EXPECT_EQ(pixel->second, 0);
+    EXPECT_EQ(pixel.first, 0);
+    EXPECT_EQ(pixel.second, 0);
 
     pixel = img.window_coordinates_to_image_pixel(ctx, ctx.window_width - 1, 0);
-    EXPECT_EQ(pixel->first, 3);
-    EXPECT_EQ(pixel->second, 0);
+    EXPECT_EQ(pixel.first, 3);
+    EXPECT_EQ(pixel.second, 0);
 
     pixel = img.window_coordinates_to_image_pixel(ctx, ctx.window_width - 1,
                                                   ctx.window_height - 1);
-    EXPECT_EQ(pixel->first, 3);
-    EXPECT_EQ(pixel->second, 2);
+    EXPECT_EQ(pixel.first, 3);
+    EXPECT_EQ(pixel.second, 2);
 }
 
 TEST(PointViz, image_pixel_to_window_coordinates) {
@@ -63,15 +71,15 @@ TEST(PointViz, image_pixel_to_window_coordinates) {
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
     auto pixel =
         img.window_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
-    EXPECT_EQ(pixel->first, 0);
-    EXPECT_EQ(pixel->second, 2);
+    EXPECT_EQ(pixel.first, 0);
+    EXPECT_EQ(pixel.second, 2);
 
     auto pixel_size = img.pixel_size(ctx);
     EXPECT_FLOAT_EQ(pixel_size.first, 100);
     EXPECT_FLOAT_EQ(pixel_size.second, 100);
 
     auto window_pixel =
-        img.image_pixel_to_window_coordinates(ctx, pixel->first, pixel->second);
+        img.image_pixel_to_window_coordinates(ctx, pixel.first, pixel.second);
     EXPECT_FLOAT_EQ(window_pixel.first, 50);
     EXPECT_FLOAT_EQ(window_pixel.second, 250);
 }

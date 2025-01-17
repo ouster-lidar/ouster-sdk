@@ -57,6 +57,10 @@ void handle_window_resize(GLFWwindow* window, int window_width,
     auto ctx = static_cast<GLFWContext*>(glfwGetWindowUserPointer(window));
     ctx->window_context.window_width = window_width;
     ctx->window_context.window_height = window_height;
+    // GLFW invokes the window resize callback after the fb resize callback,
+    // Which means the resize handler doesn't get the most up-to-date window
+    // size. Calling the resize handler again here fixes this.
+    if (ctx->resize_handler) ctx->resize_handler(ctx->window_context);
 }
 
 /*
@@ -165,17 +169,10 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     }
     glfwMakeContextCurrent(window);
 
-#ifdef OUSTER_VIZ_USE_GLAD
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if (!gladLoadGL(glfwGetProcAddress)) {
         glfwTerminate();
         throw std::runtime_error("Failed to initialize GLAD");
     }
-#else
-    if (glewInit() != GLEW_OK) {
-        glfwTerminate();
-        throw std::runtime_error("Failed to initialize GLEW");
-    }
-#endif
 
     std::cerr << "GL Renderer: " << glGetString(GL_RENDERER) << std::endl;
     std::cerr << "GL Version: " << glGetString(GL_VERSION)

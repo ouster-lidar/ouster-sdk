@@ -5,19 +5,21 @@
  * @file
  * @brief Simple version struct
  */
+#pragma once
 
 #include <cstdint>
 #include <string>
 
-#pragma once
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace util {
 
-struct version {
-    uint16_t major;          ///< Major version number
-    uint16_t minor;          ///< Minor version number
-    uint16_t patch;          ///< Patch(or revision) version number
+struct OUSTER_API_CLASS version {
+    uint16_t major;  ///< Major version number
+    uint16_t minor;  ///< Minor version number
+    uint16_t patch;  ///< Patch(or revision) version number
+
     std::string stage;       ///< Release stage name, if present.
     std::string machine;     ///< Machine name, if present.
     std::string prerelease;  ///< Prerelease name (e.g. rc1), if present.
@@ -37,6 +39,7 @@ const version invalid_version = {0, 0, 0, "", "", "", ""};
  *
  * @return If the versions are the same.
  */
+OUSTER_API_FUNCTION
 inline bool operator==(const version& u, const version& v) {
     return u.major == v.major && u.minor == v.minor && u.patch == v.patch &&
            u.stage == v.stage && u.machine == v.machine && u.build == v.build &&
@@ -51,6 +54,7 @@ inline bool operator==(const version& u, const version& v) {
  *
  * @return If the first version is less than the second version.
  */
+OUSTER_API_FUNCTION
 inline bool operator<(const version& u, const version& v) {
     return (u.major < v.major) || (u.major == v.major && u.minor < v.minor) ||
            (u.major == v.major && u.minor == v.minor && u.patch < v.patch);
@@ -64,6 +68,7 @@ inline bool operator<(const version& u, const version& v) {
  *
  * @return If the first version is less than or equal to the second version.
  */
+OUSTER_API_FUNCTION
 inline bool operator<=(const version& u, const version& v) {
     return u < v || u == v;
 }
@@ -76,6 +81,7 @@ inline bool operator<=(const version& u, const version& v) {
  *
  * @return If the versions are not the same.
  */
+OUSTER_API_FUNCTION
 inline bool operator!=(const version& u, const version& v) { return !(u == v); }
 
 /**
@@ -86,6 +92,7 @@ inline bool operator!=(const version& u, const version& v) { return !(u == v); }
  *
  * @return If the first version is greater than or equal to the second version.
  */
+OUSTER_API_FUNCTION
 inline bool operator>=(const version& u, const version& v) { return !(u < v); }
 
 /**
@@ -96,6 +103,7 @@ inline bool operator>=(const version& u, const version& v) { return !(u < v); }
  *
  * @return If the first version is greater than the second version.
  */
+OUSTER_API_FUNCTION
 inline bool operator>(const version& u, const version& v) { return !(u <= v); }
 /** @}*/
 
@@ -108,6 +116,7 @@ inline bool operator>(const version& u, const version& v) { return !(u <= v); }
  *
  * @return version corresponding to the string, or invalid_version on error.
  */
+OUSTER_API_FUNCTION
 version version_from_string(const std::string& ver);
 
 }  // namespace util

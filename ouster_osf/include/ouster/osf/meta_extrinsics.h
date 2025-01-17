@@ -13,6 +13,7 @@
 
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -26,7 +27,7 @@ namespace osf {
  * Flat Buffer Reference:
  *   fb/os_sensor/extrinsics.fbs
  */
-class Extrinsics : public MetadataEntryHelper<Extrinsics> {
+class OUSTER_API_CLASS Extrinsics : public MetadataEntryHelper<Extrinsics> {
    public:
     /**
      * @param[in] extrinsics ///< The extrinsic matrix to store
@@ -39,6 +40,7 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
      *                 ///< system of records or just name the source
      *                 ///< originator of the extrinsics information.
      */
+    OUSTER_API_FUNCTION
     explicit Extrinsics(const mat4d& extrinsics, uint32_t ref_meta_id = 0,
                         const std::string& name = "");
 
@@ -47,6 +49,7 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
      *
      * @return The eigen extrinsics matrix.
      */
+    OUSTER_API_FUNCTION
     const mat4d& extrinsics() const;
 
     /**
@@ -54,6 +57,7 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
      *
      * @return The extrinsics name.
      */
+    OUSTER_API_FUNCTION
     const std::string& name() const;
 
     /**
@@ -61,11 +65,13 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
      *
      * @return The reference metadata id.
      */
+    OUSTER_API_FUNCTION
     uint32_t ref_meta_id() const;
 
     /**
      * @copydoc MetadataEntry::buffer
      */
+    OUSTER_API_FUNCTION
     std::vector<uint8_t> buffer() const final;
 
     /**
@@ -78,6 +84,7 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
      * @param[in] buf The byte vector to construct an Extrinsics object from.
      * @return The new Extrinsics cast as a MetadataEntry
      */
+    OUSTER_API_FUNCTION
     static std::unique_ptr<MetadataEntry> from_buffer(
         const std::vector<uint8_t>& buf);
 
@@ -88,6 +95,7 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
      *
      * @return The string representation for the Extrinsics object.
      */
+    OUSTER_API_FUNCTION
     std::string repr() const override;
 
    private:
@@ -123,12 +131,13 @@ class Extrinsics : public MetadataEntryHelper<Extrinsics> {
  * @ingroup OSFTraitsExtrinsics
  */
 template <>
-struct MetadataTraits<Extrinsics> {
+struct OUSTER_API_CLASS MetadataTraits<Extrinsics> {
     /**
      * Return the OSF type string.
      *
      * @return The OSF type string "ouster/v1/os_sensor/Extrinsics".
      */
+    OUSTER_API_FUNCTION
     static const std::string type() { return "ouster/v1/os_sensor/Extrinsics"; }
 };
 

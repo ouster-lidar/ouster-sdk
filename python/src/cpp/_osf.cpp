@@ -12,17 +12,33 @@
 #include "ouster/client.h"
 #include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/osf/async_writer.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/meta_extrinsics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/operations.h"
+#include "ouster/osf/png_lidarscan_encoder.h"
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_scan.h"
 #include "ouster/osf/writer.h"
 
 namespace py = pybind11;
+
+class FutureWrapper {
+   public:
+    explicit FutureWrapper(std::future<void>&& fut) : fut_(std::move(fut)) {}
+
+    void get() { return fut_.get(); }
+
+    bool valid() const { return fut_.valid(); }
+
+    void wait() { fut_.wait(); }
+
+   private:
+    std::future<void> fut_;
+};
 
 using namespace ouster;
 
@@ -585,13 +601,14 @@ to work with OSF files.
         .def(py::init([](const std::string& filename,
                          const sensor::sensor_info& info,
                          const std::vector<std::string>& fields_to_write,
-                         uint32_t chunk_size) {
+                         uint32_t chunk_size,
+                         std::shared_ptr<ouster::osf::Encoder> encoder) {
                  return new osf::Writer(filename, info, fields_to_write,
-                                        chunk_size);
+                                        chunk_size, encoder);
              }),
              py::arg("filename"), py::arg("info"),
              py::arg("fields_to_write") = std::vector<std::string>{},
-             py::arg("chunk_size") = 0,
+             py::arg("chunk_size") = 0, py::arg("encoder") = nullptr,
              R"(
             Creates a `Writer` with deafault ``STREAMING`` layout chunks writer.
             
@@ -620,13 +637,14 @@ to work with OSF files.
         .def(py::init([](const std::string& filename,
                          const std::vector<sensor::sensor_info>& info,
                          const std::vector<std::string>& fields_to_write,
-                         uint32_t chunk_size) {
+                         uint32_t chunk_size,
+                         std::shared_ptr<ouster::osf::Encoder> encoder) {
                  return new osf::Writer(filename, info, fields_to_write,
-                                        chunk_size);
+                                        chunk_size, encoder);
              }),
              py::arg("filename"), py::arg("info"),
              py::arg("fields_to_write") = std::vector<std::string>{},
-             py::arg("chunk_size") = 0,
+             py::arg("chunk_size") = 0, py::arg("encoder") = nullptr,
              R"(
              Creates a `Writer` with specified ``chunk_size``.
 
@@ -652,7 +670,7 @@ to work with OSF files.
                Save a lidar scan to the OSF file.
 
                Args:
-                   stream_index (int): The index of the corrosponding 
+                   stream_index (int): The index of the corresponding 
                        sensor_info to use.
                    scan (LidarScan): The scan to save.
 
@@ -668,7 +686,7 @@ to work with OSF files.
                Save a lidar scan to the OSF file.
 
                Args:
-                   stream_index (int): The index of the corresponding 
+                   stream_index (int): The index of the corresponding
                        sensor_info to use.
                    scan (LidarScan): The scan to save.
                    ts (int): The timestamp to index the scan with.
@@ -779,7 +797,7 @@ to work with OSF files.
 
             )")
         .def("close", &osf::Writer::close,
-             "Finish OSF file and flush everything on disk.")
+             "Finish OSF file and flush everything to disk.")
         .def(
             "is_closed", [](osf::Writer& writer) { return writer.is_closed(); },
             R"(
@@ -798,7 +816,7 @@ to work with OSF files.
                Save a lidar scan to the OSF file.
 
                Args:
-                   stream_index (int): The index of the corrosponding 
+                   stream_index (int): The index of the corresponding
                        sensor_info to use.
                    scan (LidarScan): The scan to save.
 
@@ -871,6 +889,134 @@ to work with OSF files.
             R"(
                  Allow Writer to work within `with` blocks.
             )");
+
+    py::class_<ouster::osf::AsyncWriter>(m, "AsyncWriter")
+        .def(py::init([](const std::string& filename,
+                         const std::vector<sensor::sensor_info>& info,
+                         const std::vector<std::string>& fields_to_write,
+                         uint32_t chunk_size,
+                         std::shared_ptr<ouster::osf::Encoder> encoder) {
+                 return new osf::AsyncWriter(filename, info, fields_to_write,
+                                             chunk_size, encoder);
+             }),
+             py::arg("filename"), py::arg("info"),
+             py::arg("fields_to_write") = std::vector<std::string>{},
+             py::arg("chunk_size") = 0, py::arg("encoder") = nullptr,
+             R"(
+             Creates an `AsyncWriter` with specified ``chunk_size``.
+
+             Default ``chunk_size`` is ``2MB``.
+
+             Args:
+                filename (str): The filename to output to.
+                info (List[sensor_info]): The sensor info vector to use for a
+                    multi stream OSF file.
+                fields_to_write (List[str]): The fields from scans to
+                    actually save into the OSF. If not provided uses the fields from
+                    the first saved lidar scan for each stream. This parameter is optional.
+                chunk_size (int): The chunksize to use for the OSF file, this arg
+                    is optional.
+                encoder (Encoder): an optional encoder instance,
+                    used to configure how writer encodes the OSF.
+        )")
+        .def("close", &osf::AsyncWriter::close,
+             "Finish OSF file and flush everything to disk.")
+        .def(
+            "save",
+            [](osf::AsyncWriter& writer, uint32_t stream_index,
+               const LidarScan& scan) {
+                return FutureWrapper(writer.save(stream_index, scan));
+            },
+            py::arg("stream_index"), py::arg("scan"),
+            R"(
+               Save a lidar scan to the OSF file.
+
+               Args:
+                   stream_index (int): The index of the corresponding
+                       sensor_info to use.
+                   scan (LidarScan): The scan to save.
+
+               Returns: a future.
+
+            )")
+        .def(
+            "save",
+            [](osf::AsyncWriter& writer, uint32_t stream_index,
+               const LidarScan& scan, uint64_t ts) {
+                return FutureWrapper(
+                    writer.save(stream_index, scan, ouster::osf::ts_t(ts)));
+            },
+            py::arg("stream_index"), py::arg("scan"), py::arg("ts"),
+            R"(
+               Save a lidar scan to the OSF file.
+
+               Args:
+                   stream_index (int): The index of the corresponding
+                       sensor_info to use.
+                   scan (LidarScan): The scan to save.
+                   ts (int): The timestamp to index the scan with.
+
+               Returns: a future.
+            )")
+        .def(
+            "save",
+            [](osf::AsyncWriter& writer, const std::vector<LidarScan>& scans) {
+                auto save_futures = writer.save(scans);
+                std::vector<FutureWrapper> wrapped_futures;
+                std::transform(
+                    save_futures.begin(), save_futures.end(),
+                    std::back_inserter(wrapped_futures),
+                    [](auto&& f) { return FutureWrapper(std::move(f)); });
+                return wrapped_futures;
+            },
+            py::arg("scan"),
+            R"(
+               Save a set of lidar scans to the OSF file.
+
+               Args:
+                   scans (List[LidarScan]): The scans to save. This will correspond
+                       to the list of sensor_infos.
+
+               Returns: a list of futures.
+            )")
+        .def(
+            "__enter__", [](osf::AsyncWriter* writer) { return writer; },
+            R"(
+                 Allow AsyncWriter to work within `with` blocks.
+            )")
+        .def(
+            "__exit__",
+            [](osf::AsyncWriter& writer, pybind11::object& /*exc_type*/,
+               pybind11::object& /*exc_value*/,
+               pybind11::object& /*traceback*/) {
+                writer.close();
+
+                return py::none();
+            },
+            R"(
+                 Allow AsyncWriter to work within `with` blocks.
+            )");
+
+    py::class_<FutureWrapper>(m, "FutureWrapper")
+        .def("get", &FutureWrapper::get)
+        .def("valid", &FutureWrapper::valid)
+        .def("wait", &FutureWrapper::wait);
+
+    py::class_<ouster::osf::LidarScanEncoder,
+               std::shared_ptr<ouster::osf::LidarScanEncoder>>(
+        m, "LidarScanEncoder");
+
+    py::class_<ouster::osf::PngLidarScanEncoder, ouster::osf::LidarScanEncoder,
+               std::shared_ptr<ouster::osf::PngLidarScanEncoder>>(
+        m, "PngLidarScanEncoder", R"(Used by the Writer class to
+    encode LidarScans using PNG compression.)")
+        .def(py::init<int>(), py::arg("compression_amount"));
+
+    py::class_<ouster::osf::Encoder, std::shared_ptr<ouster::osf::Encoder>>(
+        m, "Encoder",
+        R"(Used by the Writer class to encode LidarScans, depending on configuration.)")
+        .def(py::init<std::shared_ptr<ouster::osf::LidarScanEncoder>>(),
+             py::arg("lidar_scan_encoder"));
 
     m.def("slice_and_cast", &ouster::osf::slice_with_cast,
           py::arg("lidar_scan"), py::arg("field_types"),

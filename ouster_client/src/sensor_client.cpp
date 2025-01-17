@@ -5,19 +5,26 @@
 
 #include "ouster/sensor_client.h"
 
+#include <jsoncons/json.hpp>
+
 #include "ouster/defaults.h"
 #include "ouster/impl/logging.h"
+#include "ouster/metadata.h"
 
 using ouster::sensor::impl::Logger;
 using ouster::sensor::util::SensorHttp;
 
 namespace ouster {
+bool parse_and_validate_metadata(const jsoncons::json& json_data,
+                                 ouster::sensor::sensor_info& sensor_info,
+                                 ValidatorIssues& issues);
 namespace sensor {
 
 // External imports of internal methods
 SOCKET udp_data_socket(int port);
 int32_t get_sock_port(SOCKET sock_fd);
-Json::Value collect_metadata(SensorHttp& sensor_http, int timeout_sec);
+jsoncons::json collect_metadata(SensorHttp& sensor_http, int timeout_sec);
+
 SOCKET mtp_data_socket(int port, const std::vector<std::string>& udp_dest_hosts,
                        const std::string& mtp_dest_host = "");
 bool set_config(SensorHttp& sensor_http, const sensor_config& config,
@@ -47,8 +54,16 @@ Sensor::Sensor(const std::string& hostname, const sensor_config& config)
     : hostname_(hostname), config_(config) {}
 
 sensor_info Sensor::fetch_metadata(int timeout) const {
-    Json::FastWriter writer;
-    return sensor_info(writer.write(collect_metadata(*http_client(), timeout)));
+    auto data = collect_metadata(*http_client(), timeout);
+
+    sensor_info result;
+    ValidatorIssues issues;
+    ouster::parse_and_validate_metadata(data, result, issues);
+    if (issues.critical.size() > 0) {
+        throw std::runtime_error(to_string(issues.critical));
+    }
+
+    return result;
 }
 
 std::shared_ptr<ouster::sensor::util::SensorHttp> Sensor::http_client() const {
@@ -226,7 +241,7 @@ SensorClient::SensorClient(const std::vector<Sensor>& sensors,
     for (const auto& info : sensor_info_) {
         ports[info.config.udp_port_lidar.value()] = true;
         ports[info.config.udp_port_imu.value()] = true;
-        formats_.push_back(packet_format(info));
+        formats_.push_back(std::make_shared<packet_format>(info));
     }
 
     // now open sockets
@@ -262,8 +277,8 @@ void SensorClient::start_buffer_thread(double buffer_time) {
         const uint64_t buffer_ns = buffer_time * 1000000000.0;
         while (do_buffer_) {
             uint64_t ts;
-            ClientEvent ev = get_packet_internal(data, ts, 0.01);
-            if (ev.type == ClientEvent::PollTimeout) {
+            InternalEvent ev = get_packet_internal(data, ts, 0.01);
+            if (ev.event_type == ClientEvent::PollTimeout) {
                 continue;
             }
             // Enqueue received packets
@@ -273,6 +288,8 @@ void SensorClient::start_buffer_thread(double buffer_time) {
                 be.event = ev;
                 be.timestamp = ts;
                 std::swap(be.data, data);
+                be.data.shrink_to_fit();  // can save a lot of memory, though
+                                          // does force a copy
                 buffer_.push_back(std::move(be));
 
                 // Discard old buffered packets if our consumer couldn't keep up
@@ -317,16 +334,16 @@ size_t SensorClient::buffer_size() {
     return 0;
 }
 
-ClientEvent SensorClient::get_packet_internal(std::vector<uint8_t>& data,
-                                              uint64_t& ts,
-                                              double timeout_sec) {
+SensorClient::InternalEvent SensorClient::get_packet_internal(
+    std::vector<uint8_t>& data, uint64_t& ts, double timeout_sec) {
     if (sockets_.size() == 0) {
         auto now = std::chrono::system_clock::now();
         auto now_ts = std::chrono::duration_cast<std::chrono::nanoseconds>(
                           now.time_since_epoch())
                           .count();
         ts = now_ts;
-        return {-1, ClientEvent::Exit};  // someone called us while shut down
+        return {-1, PacketType::Unknown,
+                ClientEvent::Exit};  // someone called us while shut down
     }
     // setup poll
     SOCKET max_fd = 0;
@@ -349,19 +366,18 @@ ClientEvent SensorClient::get_packet_internal(std::vector<uint8_t>& data,
              now.time_since_epoch())
              .count();
     if (ret == 0) {
-        return {-1, ClientEvent::PollTimeout};
+        return {-1, PacketType::Unknown, ClientEvent::PollTimeout};
     } else if (ret < 0) {
-        return {-1, ClientEvent::Error};
+        return {-1, PacketType::Unknown, ClientEvent::Error};
     }
     struct sockaddr_storage from_addr;
     socklen_t addr_len = sizeof(from_addr);
 
-    char buffer[65535];  // this isnt great, but otherwise have to reserve this
-                         // much in every packet
+    data.resize(65535);  // need enough room for maximum possible packet size
     for (auto sock : sockets_) {
         if (!FD_ISSET(sock, &fds)) continue;
 
-        auto size = recvfrom(sock, buffer, 65535, 0,
+        auto size = recvfrom(sock, (char*)data.data(), 65535, 0,
                              (struct sockaddr*)&from_addr, &addr_len);
         if (size <= 0) continue;  // this is unexpected
 
@@ -387,33 +403,30 @@ ClientEvent SensorClient::get_packet_internal(std::vector<uint8_t>& data,
         }
         if (source == -1) {
             // if we got a random packet, just say we got nothing
-            return {-1, ClientEvent::PollTimeout};
+            return {-1, PacketType::Unknown, ClientEvent::PollTimeout};
         }
 
         // detect packet type by size
-        const int imu_size = formats_[source].imu_packet_size;
+        const int imu_size = formats_[source]->imu_packet_size;
         if (size > imu_size) {
             data.resize(size);
-            memcpy(data.data(), buffer, size);
-            return {(int)source, ClientEvent::LidarPacket};
+            return {source, PacketType::Lidar, ClientEvent::Packet};
         } else if (size == imu_size) {
             data.resize(size);
-            memcpy(data.data(), buffer, size);
-            return {(int)source, ClientEvent::ImuPacket};
+            return {source, PacketType::Imu, ClientEvent::Packet};
         } else {
             // The sensor returned an invalid packet size, say we got nothing
-            return {-1, ClientEvent::PollTimeout};
+            return {-1, PacketType::Unknown, ClientEvent::PollTimeout};
         }
     }
-    return {-1, ClientEvent::Error};  // this shouldnt happen
+    return {-1, PacketType::Unknown,
+            ClientEvent::Error};  // this shouldnt happen
 }
 
-ClientEvent SensorClient::get_packet(LidarPacket& lp, ImuPacket& ip,
-                                     double timeout_sec) {
+ClientEvent SensorClient::get_packet(double timeout_sec) {
     // poll on all our sockets
-    ClientEvent ev;
+    InternalEvent ev;
     uint64_t ts;
-    std::vector<uint8_t> data;
     if (do_buffer_) {
         std::unique_lock<std::mutex> lock(buffer_mutex_);
         // if the buffer if empty, wait for a new event
@@ -423,34 +436,46 @@ ClientEvent SensorClient::get_packet(LidarPacket& lp, ImuPacket& ip,
             // check for timeout or for spurious wakeup of "wait_for"
             // by checking whether the buffer is empty
             if (res == std::cv_status::timeout || buffer_.empty()) {
-                return {-1, ClientEvent::PollTimeout};
+                return ClientEvent(0, -1, ClientEvent::PollTimeout);
             }
         }
         // dequeue
         auto& buf = buffer_.front();
         ev = buf.event;
         ts = buf.timestamp;
-        std::swap(data, buf.data);
+        std::swap(staging_buffer, buf.data);
         buffer_.pop_front();
         lock.unlock();  // unlock asap
     } else {
-        ev = get_packet_internal(data, ts, timeout_sec);
+        ev = get_packet_internal(staging_buffer, ts, timeout_sec);
     }
 
-    if (ev.type == ClientEvent::LidarPacket) {
-        lp.host_timestamp = ts;
-        std::swap(data, lp.buf);
-    } else if (ev.type == ClientEvent::ImuPacket) {
-        ip.host_timestamp = ts;
-        std::swap(data, ip.buf);
+    ClientEvent rev;
+    rev.source = ev.source;
+    rev.type = ev.event_type;
+    if (ev.event_type == ClientEvent::Packet) {
+        if (ev.packet_type == PacketType::Imu) {
+            rev.packet_ = &imu_packet_;
+        } else if (ev.packet_type == PacketType::Lidar) {
+            rev.packet_ = &lidar_packet_;
+        } else {
+            throw;  // Should never happen, but who knows
+        }
+        rev.packet_->host_timestamp = ts;
+        rev.packet_->format = formats_[ev.source];
+        std::swap(rev.packet_->buf, staging_buffer);
+    } else {
+        rev.packet_ = 0;
     }
-    return ev;  // todo finish
+    return rev;
 }
 
 uint64_t SensorClient::dropped_packets() {
     std::unique_lock<std::mutex> lock(buffer_mutex_);
     return dropped_packets_;
 }
+
+ClientEvent::ClientEvent() {}
 
 }  // namespace sensor
 }  // namespace ouster

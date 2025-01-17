@@ -9,8 +9,11 @@
 
 #include <string>
 
+#include "ouster/lidar_scan.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/metadata.h"
+#include "ouster/osf/osf_encoder.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -21,7 +24,7 @@ class LidarScanStream;
  * Chunks writing strategy that decides when and how exactly write chunks
  * to a file. See RFC 0018 for Standard and Streaming Layout description.
  */
-class ChunksWriter {
+class OUSTER_API_CLASS ChunksWriter {
    public:
     /**
      * Save a message to a specified stream.
@@ -31,6 +34,7 @@ class ChunksWriter {
      * @param[in] sensor_ts The sensor timestamp for the messages.
      * @param[in] buf A vector of message buffers to record.
      */
+    OUSTER_API_FUNCTION
     virtual void save_message(const uint32_t stream_id, const ts_t receive_ts,
                               const ts_t sensor_ts,
                               const std::vector<uint8_t>& buf) = 0;
@@ -38,6 +42,7 @@ class ChunksWriter {
     /**
      * Finish the process of saving messages and write out the stream stats.
      */
+    OUSTER_API_FUNCTION
     virtual void finish() = 0;
 
     /**
@@ -45,26 +50,33 @@ class ChunksWriter {
      *
      * @return the chunk size
      */
+    OUSTER_API_FUNCTION
     virtual uint32_t chunk_size() const = 0;
 
     /**
      * Default deconstructor.
      */
+    OUSTER_API_FUNCTION
     virtual ~ChunksWriter() = default;
 };
 
 /**
- * %OSF Writer provides the base universal interface to store the collection
- * of metadata entries, streams and corresponding objects.
+ * @class Writer
+ * @brief OSF Writer provides the base universal interface to store the
+ * collection of metadata entries, streams, and corresponding objects. Detailed
+ * description of the class follows here.
+ *
  */
-class Writer {
+class OUSTER_API_CLASS Writer {
     friend class StreamingLayoutCW;
+    friend class AsyncWriter;  // TODO[tws] provide access to necessary
+                               // internals through public iface
 
    public:
     /**
      * @throws std::runtime_error Exception on file writing issues.
      *
-     * @param[in] file_name The filename of the output OSF file.
+     * @param[in] file_name The file name of the output OSF file.
      * @param[in] chunk_size The chunk size in bytes to use for the OSF file.
      *     This argument is optional, and if not provided the default value of
      *     2MB is used. If the current chunk being written exceeds
@@ -76,25 +88,29 @@ class Writer {
      *     index entries. A more granular index allows for more precise
      *     seeking at the slight expense of a larger file.
      */
+    OUSTER_API_FUNCTION
     Writer(const std::string& file_name, uint32_t chunk_size = 0);
 
     /**
-     * @param[in] filename The filename to output to.
+     * @param[in] filename The file name to output to.
      * @param[in] info The sensor info to use for a single stream OSF file.
-     * @param[in] chunk_size The chunksize to use for the OSF file, this
-     *                       parameter is optional.
      * @param[in] fields_to_write The fields from scans to actually save into
      *                            the OSF. If not provided uses the fields from
      *                            the first saved lidar scan for this sensor.
      *                            This parameter is optional.
+     * @param[in] chunk_size The chunksize to use for the OSF file, this
+     *                       parameter is optional.
+     * @param[in] encoder An optional Encoder instance for configuring how the
+     *                            Writer should encode the OSF.
      */
+    OUSTER_API_FUNCTION
     Writer(const std::string& filename, const ouster::sensor::sensor_info& info,
            const std::vector<std::string>& fields_to_write =
                std::vector<std::string>(),
-           uint32_t chunk_size = 0);
+           uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
 
     /**
-     * @param[in] filename The filename to output to.
+     * @param[in] filename The file name to output to.
      * @param[in] info The sensor info vector to use for a multi stream OSF
      *                 file.
      * @param[in] chunk_size The chunksize to use for the OSF file, this
@@ -103,12 +119,15 @@ class Writer {
      *                            the OSF. If not provided uses the fields from
      *                            the first saved lidar scan for this sensor.
      *                            This parameter is optional.
+     * @param[in] encoder An optional Encoder instance for configuring how the
+     *                            Writer should encode the OSF.
      */
+    OUSTER_API_FUNCTION
     Writer(const std::string& filename,
            const std::vector<ouster::sensor::sensor_info>& info,
            const std::vector<std::string>& fields_to_write =
                std::vector<std::string>(),
-           uint32_t chunk_size = 0);
+           uint32_t chunk_size = 0, std::shared_ptr<Encoder> encoder = nullptr);
 
     /**
      * Add metadata to the OSF file.
@@ -133,11 +152,13 @@ class Writer {
      *
      * @return The corresponding lidar id of the metadata entry
      */
+    OUSTER_API_FUNCTION
     uint32_t add_metadata(MetadataEntry&& entry);
 
     /**
      * @copydoc add_metadata(MetadataEntry&& entry)
      */
+    OUSTER_API_FUNCTION
     uint32_t add_metadata(MetadataEntry& entry);
 
     /**
@@ -151,6 +172,7 @@ class Writer {
     /**
      * @copydoc OSFGetMetadataGroup
      */
+    OUSTER_API_FUNCTION
     std::shared_ptr<MetadataEntry> get_metadata(
         const uint32_t metadata_id) const;
 
@@ -161,7 +183,7 @@ class Writer {
      */
     template <class MetadataEntryClass>
     std::shared_ptr<MetadataEntryClass> get_metadata(
-        const uint32_t metadata_id) const {
+        uint32_t metadata_id) const {
         return meta_store_.get<MetadataEntryClass>(metadata_id);
     }
 
@@ -194,6 +216,7 @@ class Writer {
      * @param[in] sensor_ts The sensor timestamp to use for the message.
      * @param[in] buf The message to save in the form of a byte vector.
      */
+    OUSTER_API_FUNCTION
     void save_message(const uint32_t stream_id, const ts_t receive_ts,
                       const ts_t sensor_ts, const std::vector<uint8_t>& buf);
 
@@ -209,12 +232,15 @@ class Writer {
      *
      * @return The stream index for the newly added sensor.
      */
+    OUSTER_API_FUNCTION
     uint32_t add_sensor(const ouster::sensor::sensor_info& info,
                         const std::vector<std::string>& fields_to_write =
                             std::vector<std::string>());
 
     /**
-     * Save a single scan to the specified stream_index in an OSF file.
+     * Save a single scan to the specified stream_index in an OSF
+     * file.
+     *
      * The concept of the stream_index is related to the sensor_info vector.
      * Consider the following:
      @code{.cpp}
@@ -247,11 +273,12 @@ class Writer {
      *                         use.
      * @param[in] scan The scan to save.
      */
+    OUSTER_API_FUNCTION
     void save(uint32_t stream_index, const LidarScan& scan);
 
     /**
-     * Save a single scan to the specified stream_index in an OSF file indexed
-     * with the provided timestamp.
+     * Save a single scan with the specified timestamp to the
+     * specified stream_index in an OSF file.
      *
      * @throws std::logic_error Will throw exception on writer being closed.
      * @throws std::logic_error ///< Will throw exception on
@@ -262,11 +289,13 @@ class Writer {
      * @param[in] scan The scan to save.
      * @param[in] timestamp Receive timestamp to index this scan with.
      */
+    OUSTER_API_FUNCTION
     void save(uint32_t stream_index, const LidarScan& scan,
-              const ouster::osf::ts_t timestamp);
+              ouster::osf::ts_t timestamp);
 
     /**
-     * Save multiple scans in an OSF file.
+     * Save multiple scans to the OSF file.
+     *
      * The concept of the stream_index is related to the sensor_info vector.
      * Consider the following:
      @code{.cpp}
@@ -290,6 +319,7 @@ class Writer {
      *
      * @param[in] scans The vector of scans to save.
      */
+    OUSTER_API_FUNCTION
     void save(const std::vector<LidarScan>& scans);
 
     /**
@@ -298,6 +328,7 @@ class Writer {
      *
      * @return The flatbuffer metadata entries.
      */
+    OUSTER_API_FUNCTION
     const MetadataStore& meta_store() const;
 
     /**
@@ -305,6 +336,7 @@ class Writer {
      *
      * @return The metadata id label.
      */
+    OUSTER_API_FUNCTION
     const std::string& metadata_id() const;
 
     /**
@@ -312,13 +344,15 @@ class Writer {
      *
      * @param[in] id The metadata id label to set.
      */
+    OUSTER_API_FUNCTION
     void set_metadata_id(const std::string& id);
 
     /**
      * Return the filename for the OSF file.
      *
-     * @return The filename for the OSF file.
+     * @return The file name for the OSF file.
      */
+    OUSTER_API_FUNCTION
     const std::string& filename() const;
 
     /**
@@ -328,6 +362,7 @@ class Writer {
      *
      * @return The chunks layout of the OSF file.
      */
+    OUSTER_API_FUNCTION
     ChunksLayout chunks_layout() const;
 
     /**
@@ -335,6 +370,7 @@ class Writer {
      *
      * @return The chunk size for the OSF file.
      */
+    OUSTER_API_FUNCTION
     uint32_t chunk_size() const;
 
     /**
@@ -353,6 +389,7 @@ class Writer {
      *
      * @return The sensor info vector.
      */
+    OUSTER_API_FUNCTION
     const std::vector<ouster::sensor::sensor_info>& sensor_info() const;
 
     /**
@@ -374,6 +411,7 @@ class Writer {
      * @param[in] stream_index The sensor info to return.
      * @return The correct sensor info.
      */
+    OUSTER_API_FUNCTION
     const ouster::sensor::sensor_info sensor_info(int stream_index) const;
 
     /**
@@ -381,11 +419,15 @@ class Writer {
      *
      * @return The sensor_info count.
      */
+    OUSTER_API_FUNCTION
     uint32_t sensor_info_count() const;
 
     /**
      * Finish file with a proper metadata object, and header.
+     * This method blocks until all remaining tasks generated by save() have
+     * been finalized.
      */
+    OUSTER_API_FUNCTION
     void close();
 
     /**
@@ -393,34 +435,52 @@ class Writer {
      *
      * @return If the writer is closed or not.
      */
+    OUSTER_API_FUNCTION
     inline bool is_closed() const { return finished_; }
+
+    /**
+     * Returns the Encoder object used by this Writer.
+     *
+     * @return the Encoder.
+     */
+    OUSTER_API_FUNCTION
+    Encoder& encoder() const { return *encoder_; }
 
     /**
      * @relates close
      */
+    OUSTER_API_FUNCTION
     ~Writer();
 
     /**
      * Disallow copying and moving.
      */
+    OUSTER_API_FUNCTION
     Writer(const Writer&) = delete;
 
     /**
      * Disallow copying and moving.
      */
+    OUSTER_API_FUNCTION
     Writer& operator=(const Writer&) = delete;
 
     /**
      * Disallow copying and moving.
      */
+    OUSTER_API_FUNCTION
     Writer(Writer&&) = delete;
 
     /**
      * Disallow copying and moving.
      */
+    OUSTER_API_FUNCTION
     Writer& operator=(Writer&&) = delete;
 
    private:
+    /**
+     * A runnable used to handle writes in the thread 'save_thread_'.
+     */
+    void save_thread_method();
     /**
      * Helper to construct the Metadata OSF Block at the end of writing.
      * This function takes the metadata entries from the metadata store
@@ -454,7 +514,7 @@ class Writer {
      * @param[in] size The size of the buffer to append.
      * @return The number of bytes writen to the OSF file.
      */
-    uint64_t append(const uint8_t* buf, const uint64_t size);
+    uint64_t append(const uint8_t* buf, uint64_t size);
 
     /**
      * Save a specified chunk to the OSF file.
@@ -466,13 +526,13 @@ class Writer {
      * @param[in] chunk_buf The byte vector representation of the chunk.
      * @return The result offset in the OSF file.
      */
-    uint64_t emit_chunk(const ts_t start_ts, const ts_t end_ts,
+    uint64_t emit_chunk(ts_t start_ts, ts_t end_ts,
                         const std::vector<uint8_t>& chunk_buf);
 
     /**
      * Internal filename of the OSF file.
      */
-    std::string file_name_;
+    std::string filename_;
 
     /**
      * The size of the flatbuffer header blob.
@@ -561,13 +621,17 @@ class Writer {
      * The internal sensor_info store ordered by stream_index.
      */
     std::vector<ouster::sensor::sensor_info> sensor_info_;
+
+    // TODO[tws] make private, access from LidarScanStream via "friend class"
+    std::shared_ptr<Encoder> encoder_;
 };
 
 /**
  * Encapsulate chunk seriualization operations.
  */
-class ChunkBuilder {
+class OUSTER_API_CLASS ChunkBuilder {
    public:
+    OUSTER_API_FUNCTION
     ChunkBuilder(){};
 
     /**
@@ -580,6 +644,7 @@ class ChunkBuilder {
      * @param[in] sensor_ts The sensor timestamp to use for the message.
      * @param[in] msg_buf The message to save in the form of a byte vector.
      */
+    OUSTER_API_FUNCTION
     void save_message(const uint32_t stream_id, const ts_t receive_ts,
                       const ts_t sensor_ts,
                       const std::vector<uint8_t>& msg_buf);
@@ -587,6 +652,7 @@ class ChunkBuilder {
     /**
      * Completely wipe all data and start the chunk anew.
      */
+    OUSTER_API_FUNCTION
     void reset();
 
     /**
@@ -595,6 +661,7 @@ class ChunkBuilder {
      *
      * @return The serialized chunk in a raw flatbuffer byte vector.
      */
+    OUSTER_API_FUNCTION
     std::vector<uint8_t> finish();
 
     /**
@@ -602,6 +669,7 @@ class ChunkBuilder {
      *
      * @return The flatbufferbuilder size.
      */
+    OUSTER_API_FUNCTION
     uint32_t size() const;
 
     /**
@@ -609,6 +677,7 @@ class ChunkBuilder {
      *
      * @return The number of messages saved so far.
      */
+    OUSTER_API_FUNCTION
     uint32_t messages_count() const;
 
     /**
@@ -616,6 +685,7 @@ class ChunkBuilder {
      *
      * @return The lowest timestamp in the chunk.
      */
+    OUSTER_API_FUNCTION
     ts_t start_ts() const;
 
     /**
@@ -623,6 +693,7 @@ class ChunkBuilder {
      *
      * @return The highest timestamp in the chunk.
      */
+    OUSTER_API_FUNCTION
     ts_t end_ts() const;
 
    private:

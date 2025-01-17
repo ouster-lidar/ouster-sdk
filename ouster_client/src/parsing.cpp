@@ -153,6 +153,7 @@ static int count_set_bits(uint64_t value) {
     return count;
 };
 
+OUSTER_API_FUNCTION
 uint64_t get_value_mask(const FieldInfo& f) {
     uint64_t type_mask = sensor::field_type_mask(f.ty_tag);
 
@@ -166,6 +167,7 @@ uint64_t get_value_mask(const FieldInfo& f) {
     return mask;
 }
 
+OUSTER_API_FUNCTION
 int get_bitness(const FieldInfo& f) {
     return count_set_bits(get_value_mask(f));
 }
@@ -251,20 +253,26 @@ static const Table<std::string, FieldInfo, 9> fusa_two_word_pixel_info{{
     {ChanField::RAW32_WORD2, field_info(32, 32)},
 }};
 
-Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles{{
-    {UDPProfileLidar::PROFILE_LIDAR_LEGACY,
-     {legacy_field_info.data(), legacy_field_info.size(), 12}},
-    {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
-     {dual_field_info.data(), dual_field_info.size(), 16}},
-    {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
-     {single_field_info.data(), single_field_info.size(), 12}},
-    {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
-     {lb_field_info.data(), lb_field_info.size(), 4}},
-    {UDPProfileLidar::PROFILE_FIVE_WORD_PIXEL,
-     {five_word_pixel_info.data(), five_word_pixel_info.size(), 20}},
-    {UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
-     {fusa_two_word_pixel_info.data(), fusa_two_word_pixel_info.size(), 8}},
-}};
+Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> OUSTER_API_FUNCTION
+    profiles{{
+        {UDPProfileLidar::PROFILE_LIDAR_LEGACY,
+         {legacy_field_info.data(), legacy_field_info.size(), 12}},
+        {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
+         {dual_field_info.data(), dual_field_info.size(), 16}},
+        {UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16,
+         {single_field_info.data(), single_field_info.size(), 12}},
+        {UDPProfileLidar::PROFILE_RNG15_RFL8_NIR8,
+         {lb_field_info.data(), lb_field_info.size(), 4}},
+        {UDPProfileLidar::PROFILE_FIVE_WORD_PIXEL,
+         {five_word_pixel_info.data(), five_word_pixel_info.size(), 20}},
+        {UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
+         {fusa_two_word_pixel_info.data(), fusa_two_word_pixel_info.size(), 8}},
+    }};
+
+OUSTER_API_FUNCTION Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES>
+get_profiles() {
+    return profiles;
+}
 
 static const ProfileEntry& lookup_profile_entry(UDPProfileLidar profile) {
     auto end = profiles.end();
@@ -819,6 +827,7 @@ int packet_format::field_bitness(const std::string& i) const {
 
 /* packet_writer implementation */
 namespace impl {
+packet_writer::packet_writer(const packet_format& pf) : packet_format(pf) {}
 
 uint8_t* packet_writer::nth_col(int n, uint8_t* lidar_buf) const {
     return const_cast<uint8_t*>(packet_format::nth_col(n, lidar_buf));
@@ -853,9 +862,9 @@ void packet_writer::set_init_id(uint8_t* lidar_buf, uint32_t init_id) const {
     impl_->init_id_info.set(lidar_buf, init_id);
 }
 
-void packet_writer::set_packet_type(uint8_t* lidar_buf,
+void packet_writer::set_packet_type(uint8_t* packet_buf,
                                     uint16_t packet_type) const {
-    impl_->packet_type_info.set(lidar_buf, packet_type);
+    impl_->packet_type_info.set(packet_buf, packet_type);
 }
 
 void packet_writer::set_prod_sn(uint8_t* lidar_buf, uint64_t sn) const {

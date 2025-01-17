@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-import ouster.sdk.osf as osf
+import ouster.sdk._bindings.osf as osf
 from ouster.sdk import open_source
 
 

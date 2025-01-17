@@ -6,6 +6,8 @@ from typing import List, Optional
 
 def getKissICPInputData(scans: List[Optional[client.LidarScan]], xyz_lut, ts_offsets):
     # processes a list of Lidar scans and prepares the input data required for the KISS ICP
+    # ts_offsets (List[int]): the timestamp offsets for a list of LidarScans relative to the
+    # smallest packet timestamp. Use it to align all scan timestamp within the same packet ts period
     # return:
     # * total_pts (np.ndarray): The array has a shape of (N, 3), where N is the total
     # number of valid points across all scans. Same with total_ts, they discard the out of ranged (range 0) points
@@ -21,10 +23,9 @@ def getKissICPInputData(scans: List[Optional[client.LidarScan]], xyz_lut, ts_off
     # raw_ts contains all normalized ts. Keep the out of ranged points
     raw_ts = []
 
-    # Determine overall start and stop timestamps
-    total_start_ts = min(scan.timestamp[client.first_valid_column(scan)] + ts_off
-                         for scan, ts_off in zip(scans, ts_offsets) if scan)
-    total_stop_ts = max(scan.timestamp[client.last_valid_column(scan)] + ts_off
+    total_start_ts = min(np.int64(scan.timestamp[client.first_valid_column(scan)]) + ts_off
+                        for scan, ts_off in zip(scans, ts_offsets) if scan)
+    total_stop_ts = max(np.int64(scan.timestamp[client.last_valid_column(scan)]) + ts_off
                         for scan, ts_off in zip(scans, ts_offsets) if scan)
     ts_dur = total_stop_ts - total_start_ts
 
@@ -35,7 +36,7 @@ def getKissICPInputData(scans: List[Optional[client.LidarScan]], xyz_lut, ts_off
         stop_col = client.last_valid_column(scan)
 
         ts = np.zeros(scan.w)
-        ts_actual = scan.timestamp + ts_offsets[idx]
+        ts_actual = np.int64(scan.timestamp) + ts_offsets[idx]
 
         if np.any(np.diff(ts_actual[scan.status == 1]) <= 0):
             # when scan has any out of order timestamp, use the linspaced ts

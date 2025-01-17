@@ -237,7 +237,7 @@ def test_rotation_alignment_vector2():
 
 def test_transform_N_3():
     # Define known input points of shape (10, 3)
-    points = np.array([[1.0, 2.0, 3.0],
+    points_c = np.array([[1.0, 2.0, 3.0],
                        [4.0, 5.0, 6.0],
                        [7.0, 8.0, 9.0],
                        [10.0, 11.0, 12.0],
@@ -246,14 +246,18 @@ def test_transform_N_3():
                        [19.0, 20.0, 21.0],
                        [22.0, 23.0, 24.0],
                        [25.0, 26.0, 27.0],
-                       [28.0, 29.0, 30.0]])
+                       [28.0, 29.0, 30.0]], order='C')
 
     # Define a non-identity transformation matrix (4x4)
-    # yawl 30 degree with (1, 2 ,-3) translation
-    transformation_matrix = np.array([[0.866, -0.5, 0.0, 1.0],
+    # yawl 30 degree with (1, 2 ,-1) translation
+    transformation_matrix_c = np.array([[0.866, -0.5, 0.0, 1.0],
                                       [0.5, 0.866, 0.0, 2.0],
                                       [0.0, 0.0, 1.0, -1.0],
-                                      [0.0, 0.0, 0.0, 1.0]])
+                                      [0.0, 0.0, 0.0, 1.0]], order='C')
+
+    # Convert to F-order
+    points_f = np.asfortranarray(points_c)
+    transformation_matrix_f = np.asfortranarray(transformation_matrix_c)
 
     # Expected transformed points (manually calculated)
     expected_points = np.array([[0.866, 4.232, 2],
@@ -267,13 +271,19 @@ def test_transform_N_3():
                                 [9.65, 37.016, 26],
                                 [10.748, 41.114, 29]])
 
-    transformed_points = transform(points, transformation_matrix)
-    np.testing.assert_almost_equal(transformed_points, expected_points, decimal=5)
+    transformed_points_cc = transform(points_c, transformation_matrix_c)
+    transformed_points_cf = transform(points_c, transformation_matrix_f)
+    transformed_points_fc = transform(points_f, transformation_matrix_c)
+    transformed_points_ff = transform(points_f, transformation_matrix_f)
+    np.testing.assert_almost_equal(transformed_points_cc, expected_points, decimal=5)
+    np.testing.assert_almost_equal(transformed_points_cf, expected_points, decimal=5)
+    np.testing.assert_almost_equal(transformed_points_fc, expected_points, decimal=5)
+    np.testing.assert_almost_equal(transformed_points_ff, expected_points, decimal=5)
 
 
 def test_transform_N_M_3():
     # Define known input points of shape (2, 4, 3)
-    points = np.array([[[1.0, 2.0, 3.0],
+    points_c = np.array([[[1.0, 2.0, 3.0],
                         [4.0, 5.0, 6.0],
                         [7.0, 8.0, 9.0],
                         [10.0, 11.0, 12.0]],
@@ -281,14 +291,20 @@ def test_transform_N_M_3():
                        [[13.0, 14.0, 15.0],
                         [16.0, 17.0, 18.0],
                         [19.0, 20.0, 21.0],
-                        [22.0, 23.0, 24.0]]])
+                        [22.0, 23.0, 24.0]]], order='C')
 
     # Define a non-identity transformation matrix (4x4)
-    # yawl 30 degree with (1, 2 ,-3) translation
-    transformation_matrix = np.array([[0.866, -0.5, 0.0, 1.0],
+    # yawl 30 degree with (1, 2 ,-1) translation
+    transformation_matrix_c = np.array([[0.866, -0.5, 0.0, 1.0],
                                       [0.5, 0.866, 0.0, 2.0],
                                       [0.0, 0.0, 1.0, -1.0],
-                                      [0.0, 0.0, 0.0, 1.0]])
+                                      [0.0, 0.0, 0.0, 1.0]], order='C')
+
+    # Convert to F-order
+    points_f = np.asfortranarray(points_c)
+    assert (points_f == points_c).all()
+    transformation_matrix_f = np.asfortranarray(transformation_matrix_c)
+    assert (transformation_matrix_f == transformation_matrix_c).all()
 
     # Expected transformed points (manually calculated)
 
@@ -302,8 +318,14 @@ def test_transform_N_M_3():
                                  [7.454, 28.82, 20],
                                  [8.552, 32.918, 23]]])
 
-    transformed_points = transform(points, transformation_matrix)
-    np.testing.assert_almost_equal(transformed_points, expected_points, decimal=5)
+    transformed_points_cc = transform(points_c, transformation_matrix_c)
+    transformed_points_cf = transform(points_c, transformation_matrix_f)
+    transformed_points_fc = transform(points_f, transformation_matrix_c)
+    transformed_points_ff = transform(points_f, transformation_matrix_f)
+    np.testing.assert_almost_equal(transformed_points_cc, expected_points, decimal=5)
+    np.testing.assert_almost_equal(transformed_points_cf, expected_points, decimal=5)
+    np.testing.assert_almost_equal(transformed_points_fc, expected_points, decimal=5)
+    np.testing.assert_almost_equal(transformed_points_ff, expected_points, decimal=5)
 
 
 def test_dewarp():
@@ -315,6 +337,11 @@ def test_dewarp():
     poses_reshaped = poses.reshape(num_poses, 4, 4)
     points_reshaped = points.reshape(pts_per_pose, num_poses, 3)
 
+    poses_c = np.ascontiguousarray(poses_reshaped)
+    points_c = np.ascontiguousarray(points_reshaped)
+    poses_f = np.asfortranarray(poses_reshaped)
+    points_f = np.asfortranarray(points_reshaped)
+
     expected_points = np.array([[[-2, -1, 5],
                                  [-1, 0, 6],
                                  [0, 1, 7],
@@ -325,7 +352,16 @@ def test_dewarp():
                                  [4, 5, 11],
                                  [5, 6, 12]]])
 
-    dewarped_points = dewarp(points_reshaped, poses_reshaped)
+    dewarped_points_cc = dewarp(points_c, poses_c)
+    dewarped_points_cf = dewarp(points_c, poses_f)
+    dewarped_points_fc = dewarp(points_f, poses_c)
+    dewarped_points_ff = dewarp(points_f, poses_f)
 
-    np.testing.assert_allclose(dewarped_points.shape, (2, 4, 3))
-    np.testing.assert_allclose(dewarped_points, expected_points, rtol=1e-5, atol=1e-8)
+    np.testing.assert_allclose(dewarped_points_cc.shape, (2, 4, 3))
+    np.testing.assert_allclose(dewarped_points_cc, expected_points, rtol=1e-5, atol=1e-8)
+    np.testing.assert_allclose(dewarped_points_cf.shape, (2, 4, 3))
+    np.testing.assert_allclose(dewarped_points_cf, expected_points, rtol=1e-5, atol=1e-8)
+    np.testing.assert_allclose(dewarped_points_fc.shape, (2, 4, 3))
+    np.testing.assert_allclose(dewarped_points_fc, expected_points, rtol=1e-5, atol=1e-8)
+    np.testing.assert_allclose(dewarped_points_ff.shape, (2, 4, 3))
+    np.testing.assert_allclose(dewarped_points_ff, expected_points, rtol=1e-5, atol=1e-8)

@@ -11,6 +11,22 @@ from ouster.sdk._bindings.viz import PointViz, Cloud, Label, WindowCtx
 T = TypeVar('T')
 
 
+class BoundMethod:
+    """Used to wrap a bound method's instance with a weak ref,
+    which is necessary to use the method as a PointViz event callback
+    while allowing the bound method's instance to be deleted.
+    """
+    # TODO[tws] type annotation
+    def __init__(self, method):
+        self._instance = weakref.ref(method.__self__)
+        self._function = method.__func__
+
+    def __call__(self, *args, **kwargs):
+        instance = self._instance()
+        if instance:
+            return self._function(instance, *args, **kwargs)
+
+
 def push_point_viz_handler(
         viz: PointViz, arg: T, handler: Callable[[T, WindowCtx, int, int],
                                                  bool]) -> None:

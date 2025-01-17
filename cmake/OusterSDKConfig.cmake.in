@@ -1,38 +1,94 @@
+# configure vcpkg from environment variables, if present
+include("${CMAKE_CURRENT_LIST_DIR}/VcpkgEnv.cmake")
+
+cmake_minimum_required(VERSION 3.12)
+
 message(STATUS "Found OusterSDK: ${CMAKE_CURRENT_LIST_FILE}")
 
 include(CMakeFindDependencyMacro)
 
-# ouster_client dependencies
-find_dependency(Eigen3)
-find_dependency(jsoncpp)
-find_dependency(CURL)
-find_dependency(spdlog)
+get_filename_component(OUSTER_LINK_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../" ABSOLUTE)
+get_filename_component(OUSTER_INCLUDE_DIRS "${CMAKE_CURRENT_LIST_DIR}/../../../include/" ABSOLUTE)
 
-# ouster_osf dependencies
-if(@BUILD_OSF@)
+set(BUILD_SHARED_LIBRARY "@BUILD_SHARED_LIBRARY@")
+set(OUSTER_SDK_COMPONENT_STATIC FALSE)
+set(OUSTER_SDK_COMPONENT_SHARED FALSE)
+set(OUSTER_SDK_COMPONENT_NUMBER 0)
+foreach(component ${OusterSDK_FIND_COMPONENTS})
+  set(OUSTER_SDK_COMPONENT_FOUND FALSE)
+  if("${component}" STREQUAL "Static")
+    set(OUSTER_SDK_COMPONENT_FOUND TRUE)
+    set(OUSTER_SDK_COMPONENT_STATIC TRUE)
+  elseif("${component}" STREQUAL "Shared" AND BUILD_SHARED_LIBRARY)
+    set(OUSTER_SDK_COMPONENT_FOUND TRUE)
+    set(OUSTER_SDK_COMPONENT_SHARED TRUE)
+  endif()
+  if(OUSTER_SDK_COMPONENT_FOUND)
+    math(EXPR OUSTER_SDK_COMPONENT_NUMBER "${OUSTER_SDK_COMPONENT_NUMBER} + 1")
+  else()
+    message(FATAL_ERROR "Unknown OusterSDK Component: ${component}")
+  endif()
+endforeach()
+if(OUSTER_SDK_COMPONENT_NUMBER EQUAL 0)
+  set(OUSTER_SDK_COMPONENT_STATIC TRUE)
+  set(OUSTER_SDK_COMPONENT_SHARED TRUE)
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/Coverage.cmake")
+
+if(OUSTER_SDK_COMPONENT_STATIC)
+  # ouster_client dependencies
+  SET(OUSTER_SKIP_FIND_PACKAGE_STANDARD TRUE)
+  include("${CMAKE_CURRENT_LIST_DIR}/FindEigen3.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/Findlibtins.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/FindPcap.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/FindCURL.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/Findglfw3.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/FindFlatbuffers.cmake")
+  SET(OUSTER_SKIP_FIND_PACKAGE_STANDARD FALSE)
+
+  find_package(Threads REQUIRED)
   find_package(ZLIB REQUIRED)
   find_package(PNG REQUIRED)
-  find_package(Flatbuffers NAMES Flatbuffers FlatBuffers)
+  include("${CMAKE_CURRENT_LIST_DIR}/OusterSDKTargets.cmake")
 endif()
 
-# viz dependencies
-if(@BUILD_VIZ@)
-  set(OpenGL_GL_PREFERENCE GLVND)
-  find_dependency(OpenGL)
-  find_dependency(glfw3)
+if(OUSTER_SDK_COMPONENT_SHARED)
+  SET(OUSTER_SKIP_FIND_PACKAGE_STANDARD TRUE)
+  include("${CMAKE_CURRENT_LIST_DIR}/FindEigen3.cmake")
+  include("${CMAKE_CURRENT_LIST_DIR}/FindFlatbuffers.cmake")
+  SET(OUSTER_SKIP_FIND_PACKAGE_STANDARD FALSE)
 
-  if(@OUSTER_VIZ_USE_GLAD@)
-    find_dependency(glad)
-  else()
-    find_dependency(GLEW)
+  add_library(shared_library SHARED IMPORTED)
+  # find shared library
+  find_library(OUSTER_SHARED_LIBRARY shared_library REQUIRED
+    HINTS "${OUSTER_LINK_DIRS}"
+  )
+  if(NOT OUSTER_SHARED_LIBRARY)
+    message(FATAL_ERROR "FAILED FINDING LIBRARY: ${OUSTER_SHARED_LIBRARY}")
   endif()
-endif()
 
-if(@BUILD_PCAP@)
-  # make libtins dependency optional; on debian distros, libtins doesn't include
-  # a config module and sdk targets will just include paths in that case
-  find_package(libtins QUIET)
-  find_package(Pcap REQUIRED HINTS ${CMAKE_CURRENT_LIST_DIR})
-endif()
+  message("OusterSDK::shared_library: \"${OUSTER_SHARED_LIBRARY}\"")
+  if(WIN32)
+    set_target_properties(shared_library PROPERTIES
+      IMPORTED_IMPLIB ${OUSTER_SHARED_LIBRARY}
+    )
+  else()
+    set_target_properties(shared_library PROPERTIES
+      IMPORTED_LOCATION ${OUSTER_SHARED_LIBRARY}
+    )
+  endif()
+  get_target_property(target_location shared_library LOCATION)
+  message("OusterSDK::shared_library target_location: \"${target_location}\"")
 
-include("${CMAKE_CURRENT_LIST_DIR}/OusterSDKTargets.cmake")
+  set_target_properties(shared_library PROPERTIES
+    IMPORTED_GLOBAL TRUE
+  )
+  target_link_libraries(shared_library INTERFACE Eigen3::Eigen)
+  set_property(TARGET shared_library APPEND PROPERTY INTERFACE_COMPILE_DEFINITIONS BUILD_SHARED_LIBS_IMPORT)
+  target_include_directories(shared_library INTERFACE
+    ${OUSTER_INCLUDE_DIRS}
+    ${OUSTER_INCLUDE_DIRS}/optional-lite
+    ${OUSTER_INCLUDE_DIRS}/fb_generated
+  )
+  add_library(OusterSDK::shared_library ALIAS shared_library)
+endif()

@@ -11,12 +11,13 @@
 #include <Eigen/Core>
 
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace viz {
 
 /** Adjusts brightness to between 0 and 1. */
-class AutoExposure {
+class OUSTER_API_CLASS AutoExposure {
     const double lo_percentile, hi_percentile;  // percentiles used for scaling
     const int ae_update_every;
 
@@ -33,6 +34,7 @@ class AutoExposure {
 
    public:
     /** Default constructor using default percentile and update values. */
+    OUSTER_API_FUNCTION
     AutoExposure();
 
     /**
@@ -40,6 +42,7 @@ class AutoExposure {
      *
      * @param[in] update_every update every this number of frames.
      */
+    OUSTER_API_FUNCTION
     AutoExposure(int update_every);
 
     /**
@@ -49,6 +52,7 @@ class AutoExposure {
      * @param[in] hi_percentile high percentile to use for adjustment.
      * @param[in] update_every update every this number of frames.
      */
+    OUSTER_API_FUNCTION
     AutoExposure(double lo_percentile, double hi_percentile, int update_every);
 
     /**
@@ -60,6 +64,7 @@ class AutoExposure {
      * @param[in] image Reference to the image, modified in place.
      * @param[in] update_state Update lo/hi percentiles if true.
      */
+    OUSTER_API_FUNCTION
     void operator()(Eigen::Ref<img_t<float>> image, bool update_state = true);
 
     /**
@@ -71,6 +76,7 @@ class AutoExposure {
      * @param[in] image Reference to the image, modified in place.
      * @param[in] update_state Update lo/hi percentiles if true.
      */
+    OUSTER_API_FUNCTION
     void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
 
@@ -79,7 +85,7 @@ class AutoExposure {
  * thereby correcting subtle horizontal line artifacts in images, especially the
  * ambient image.
  */
-class BeamUniformityCorrector {
+class OUSTER_API_CLASS BeamUniformityCorrector {
    private:
     int counter = 0;
     Eigen::ArrayXd dark_count;
@@ -95,6 +101,7 @@ class BeamUniformityCorrector {
      * @param[in] image Reference to the image, modified in-place.
      * @param[in] update_state Update dark counts if true.
      */
+    OUSTER_API_FUNCTION
     void operator()(Eigen::Ref<img_t<float>> image, bool update_state = true);
 
     /**
@@ -104,6 +111,7 @@ class BeamUniformityCorrector {
      * @param[in] image Reference to the image, modified in-place.
      * @param[in] update_state Update dark counts if true.
      */
+    OUSTER_API_FUNCTION
     void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
 }  // namespace viz

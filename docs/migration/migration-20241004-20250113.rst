@@ -1,0 +1,58 @@
+=================================================
+Migration from 20241004/0.13.0 to 20250117/0.14.0
+=================================================
+
+The OusterSDK 0.14.0 release brings a few breaking changes.  Here we summarize how to migrate 
+from 0.13.0 to 0.14.0
+
+ouster_client c++ module changes
+++++++++++++++++++++++++++++++++
+The ``SensorClient`` ``get_packet`` signature was changed. 
+
+Before, this method was used as follows:
+
+.. code:: c++
+
+    ouster::sensor::SensorClient sensor_client(sensors); // sensors is a std::vector<ouster::sensor::Sensor>
+
+    auto lidar_packet = sensor::LidarPacket();
+    auto imu_packet = sensor::ImuPacket();
+
+    while(true) {
+        auto client_event = sensor_client.get_packet(lidar_packet, imu_packet, 0.1);
+
+        if (client_event.type == ouster::sensor::ClientEvent::LidarPacket) {
+            // do something with lidar_packet here
+        } else if (client_event.type == ouster::sensor::ClientEvent::ImuPacket) {
+            // do something with imu_packet here
+        }
+    }
+
+This interface would have to be broken every time a new packet type is added. For that reason,
+this was changed and the same logic would be written now as follows:
+
+.. code:: c++
+
+    ouster::sensor::SensorClient sensor_client(sensors); // sensors is a std::vector<ouster::sensor::Sensor>
+
+    while(true) {
+        auto client_event = sensor_client.get_packet(0.1);
+
+        if (client_event.type == ouster::sensor::ClientEvent::Packet) {
+            if (client_event.packet().type() == ouster::sensor::PacketType::Lidar) {
+                auto& lidar_packet = client_event.packet().as<ouster::sensor::LidarPacket&>();
+                // do something with lidar_packet here
+            } else if (client_event.packet().type() == ouster::sensor::PacketType::Imu) {
+                auto& imu_packet = static_cast<ouster::sensor::ImuPacket&>(client_event.packet());
+                // do something with imu_packet here
+            }
+        }
+
+        if (client_event.type == ouster::sensor::ClientEvent::PollTimeout) {
+            // handle timeout here
+        }
+    }
+
+
+Now, ``LidarPacket`` and ``ImuPacket`` provide convenient methods that return the parsed fields that 
+are specific to each packet type.

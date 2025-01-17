@@ -58,6 +58,7 @@
     Migrating from 20220927/0.5.1 to 20230114/0.7.1 <migration/migration-20220927-20230114>
     Migrating from 20230114/0.7.1 to 20230403/0.8.1 <migration/migration-20230114-20230403>
     Migration from 20231031/0.10.0 to 20240423/0.11.0 <migration/migration-20231031-20240423>
+    Migration from 20241004/0.13.1 to 20250113/0.14.0 <migration/migration-20241004-20250113>
 ..
    FAQ <faq>
 

@@ -1,6 +1,5 @@
 from typing import Optional, Iterator, Union, List
 from itertools import islice
-from ouster.sdk.client.scan_source import ScanSource
 from ouster.sdk.client.multi_scan_source import MultiScanSource
 from ouster.sdk._bindings.client import SensorInfo, LidarScan
 from ouster.sdk.client.data import FieldTypes
@@ -93,19 +92,8 @@ class MultiSlicedScanSource(MultiScanSource):
     def __del__(self) -> None:
         self.close()
 
-    def single_source(self, stream_idx: int) -> ScanSource:
-        from ouster.sdk.client.scan_source_adapter import ScanSourceAdapter
-        return ScanSourceAdapter(self, stream_idx)
-
     def _slice_iter(self, key: slice) -> Iterator[List[Optional[LidarScan]]]:
         # here we are slicing the current slice
         L = len(self)
         k = ForwardSlicer.normalize(key, L)
         return islice(iter(self), k.start, k.stop, k.step)
-
-    def slice(self, key: slice) -> MultiScanSource:
-        L = len(self)
-        k = ForwardSlicer.normalize(key, L)
-        if k.step < 0:
-            raise TypeError("slice() can't work with negative step")
-        return MultiSlicedScanSource(self, k)

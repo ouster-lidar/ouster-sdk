@@ -10,12 +10,15 @@
 #include <openssl/evp.h>
 #include <stdio.h>
 
+#include <algorithm>
 #include <fstream>
+#include <jsoncons/json.hpp>
+#include <jsoncons/json_type.hpp>
+#include <jsoncons_ext/jsonpath/json_query.hpp>
+#include <set>
 #include <sstream>
 
 #include "fb_utils.h"
-#include "json/json.h"
-#include "json_utils.h"
 #include "osf_test.h"
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
@@ -113,23 +116,29 @@ TEST_F(OperationsTest, GetOsfDumpInfo) {
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"),
         true);
 
-    Json::Value osf_info_obj{};
+    jsoncons::json osf_info_obj;
 
-    EXPECT_TRUE(parse_json(osf_info_str, osf_info_obj));
+    bool failure = false;
+    try {
+        osf_info_obj = jsoncons::json::parse(osf_info_str);
+    } catch (const jsoncons::ser_error&) {
+        failure = true;
+    }
+    EXPECT_FALSE(failure);
 
-    ASSERT_TRUE(osf_info_obj.isMember("header"));
-    EXPECT_TRUE(osf_info_obj["header"].isMember("status"));
-    EXPECT_TRUE(osf_info_obj["header"].isMember("version"));
-    EXPECT_TRUE(osf_info_obj["header"].isMember("size"));
-    EXPECT_TRUE(osf_info_obj["header"].isMember("metadata_offset"));
-    EXPECT_TRUE(osf_info_obj["header"].isMember("chunks_offset"));
+    ASSERT_TRUE(osf_info_obj.contains("header"));
+    EXPECT_TRUE(osf_info_obj["header"].contains("status"));
+    EXPECT_TRUE(osf_info_obj["header"].contains("version"));
+    EXPECT_TRUE(osf_info_obj["header"].contains("size"));
+    EXPECT_TRUE(osf_info_obj["header"].contains("metadata_offset"));
+    EXPECT_TRUE(osf_info_obj["header"].contains("chunks_offset"));
 
-    ASSERT_TRUE(osf_info_obj.isMember("metadata"));
-    EXPECT_TRUE(osf_info_obj["metadata"].isMember("id"));
-    EXPECT_EQ("ouster_sdk", osf_info_obj["metadata"]["id"].asString());
-    EXPECT_TRUE(osf_info_obj["metadata"].isMember("start_ts"));
-    EXPECT_TRUE(osf_info_obj["metadata"].isMember("end_ts"));
-    EXPECT_TRUE(osf_info_obj["metadata"].isMember("entries"));
+    ASSERT_TRUE(osf_info_obj.contains("metadata"));
+    EXPECT_TRUE(osf_info_obj["metadata"].contains("id"));
+    EXPECT_EQ("ouster_sdk", osf_info_obj["metadata"]["id"].as<std::string>());
+    EXPECT_TRUE(osf_info_obj["metadata"].contains("start_ts"));
+    EXPECT_TRUE(osf_info_obj["metadata"].contains("end_ts"));
+    EXPECT_TRUE(osf_info_obj["metadata"].contains("entries"));
     EXPECT_EQ(3, osf_info_obj["metadata"]["entries"].size());
 }
 
@@ -195,17 +204,19 @@ TEST_F(OperationsTest, BackupMetadataTest) {
     remove_dir(temp_dir);
 }
 
-bool _parse_json(const std::string& json, Json::Value& root) {
-    Json::CharReaderBuilder build;
-    JSONCPP_STRING error;
-    const std::unique_ptr<Json::CharReader> read(build.newCharReader());
-    return read->parse(json.c_str(), (json.c_str() + json.length()), &root,
-                       &error);
+bool _parse_json(const std::string& json, jsoncons::json& root) {
+    bool failure = false;
+    try {
+        root = jsoncons::json::parse(json);
+    } catch (const jsoncons::ser_error&) {
+        failure = true;
+    }
+    return !failure;
 }
 
 ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
     ouster::sensor::sensor_info new_metadata;
-    new_metadata.sn = "DEADBEEF";
+    new_metadata.sn = 123456;
     new_metadata.fw_rev = "sqrt(-1) friends";
     new_metadata.config.lidar_mode = ouster::sensor::MODE_512x10;
     new_metadata.prod_line = "OS-1-128";
@@ -213,9 +224,6 @@ ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
     new_metadata.format.pixels_per_column = 128;
     new_metadata.format.columns_per_packet = 2 + start_number;
     new_metadata.format.columns_per_frame = 3 + start_number;
-    new_metadata.format.pixel_shift_by_row = {
-        4 + start_number, 5 + start_number, 6 + start_number, 7 + start_number,
-        8 + start_number};
     new_metadata.format.column_window = {9 + start_number, 10 + start_number};
     new_metadata.format.udp_profile_lidar =
         ouster::sensor::PROFILE_RNG15_RFL8_NIR8;
@@ -235,15 +243,28 @@ ouster::sensor::sensor_info _gen_new_metadata(int start_number) {
     new_metadata.config.udp_port_lidar = 24 + start_number;
     new_metadata.config.udp_port_imu = 25 + start_number;
 
-    new_metadata.build_date = "Made in SAN FRANCISCO";
+    new_metadata.build_date = "2023-02-03T21:45:40Z";
     new_metadata.image_rev = "IDK, ask someone else";
     new_metadata.prod_pn = "import random; print(random.random())";
     new_metadata.status = "Not just good but great";
 
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            double value = 0.0;
+            if (i == j) {
+                value = 1.0;
+            }
+            new_metadata.extrinsic(i, j) = value;
+        }
+    }
+
+    for (size_t i = 0; i < new_metadata.format.pixels_per_column; i++) {
+        new_metadata.format.pixel_shift_by_row.push_back(i + start_number);
+    }
     return new_metadata;
 }
 
-void _verify_empty_metadata(Json::Value& test_root, int entry_count = 0) {
+void _verify_empty_metadata(jsoncons::json& test_root, int entry_count = 0) {
     EXPECT_EQ(test_root["metadata"]["chunks"].size(), 0);
     EXPECT_EQ(test_root["metadata"]["entries"].size(), entry_count);
     EXPECT_EQ(test_root["metadata"]["end_ts"], 0);
@@ -289,7 +310,7 @@ TEST_F(OperationsTest, MetadataRewriteTestSimple) {
     _write_init_metadata(temp_file, header_size);
 
     std::string metadata_json = dump_metadata(temp_file, true);
-    Json::Value test_root{};
+    jsoncons::json test_root{};
     EXPECT_TRUE(_parse_json(metadata_json, test_root));
 
     _verify_empty_metadata(test_root);
@@ -298,13 +319,12 @@ TEST_F(OperationsTest, MetadataRewriteTestSimple) {
 
     osf_file_modify_metadata(temp_file, {new_metadata});
     std::string output_metadata_json = dump_metadata(temp_file, true);
-    Json::Value output_root{};
+    jsoncons::json output_root{};
     EXPECT_TRUE(_parse_json(output_metadata_json, output_root));
     EXPECT_NE(test_root, output_root);
 
-    Json::Value new_root{};
+    jsoncons::json new_root{};
     EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
-
     EXPECT_EQ(new_root,
               output_root["metadata"]["entries"][0]["buffer"]["sensor_info"]);
     unlink_path(temp_file);
@@ -319,7 +339,7 @@ TEST_F(OperationsTest, MetadataRewriteTestMulti) {
     _write_init_metadata(temp_file, header_size);
 
     std::string metadata_json = dump_metadata(temp_file, true);
-    Json::Value test_root{};
+    jsoncons::json test_root{};
     EXPECT_TRUE(_parse_json(metadata_json, test_root));
 
     _verify_empty_metadata(test_root);
@@ -329,13 +349,13 @@ TEST_F(OperationsTest, MetadataRewriteTestMulti) {
 
     osf_file_modify_metadata(temp_file, {new_metadata, new_metadata2});
     std::string output_metadata_json = dump_metadata(temp_file, true);
-    Json::Value output_root{};
+    jsoncons::json output_root{};
     EXPECT_TRUE(_parse_json(output_metadata_json, output_root));
     EXPECT_NE(test_root, output_root);
 
-    Json::Value new_root{};
+    jsoncons::json new_root{};
     EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
-    Json::Value new_root2{};
+    jsoncons::json new_root2{};
     auto temp_string = new_metadata2.to_json_string();
     EXPECT_TRUE(_parse_json(temp_string, new_root2));
 
@@ -357,7 +377,7 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
     _write_init_metadata(temp_file, header_size, meta_store_);
 
     std::string metadata_json = dump_metadata(temp_file, true);
-    Json::Value test_root{};
+    jsoncons::json test_root{};
     EXPECT_TRUE(_parse_json(metadata_json, test_root));
 
     _verify_empty_metadata(test_root, 1);
@@ -371,11 +391,11 @@ TEST_F(OperationsTest, MetadataRewriteTestPreExisting) {
 
     osf_file_modify_metadata(temp_file, {new_metadata});
     std::string output_metadata_json = dump_metadata(temp_file, true);
-    Json::Value output_root{};
+    jsoncons::json output_root{};
     EXPECT_TRUE(_parse_json(output_metadata_json, output_root));
     EXPECT_NE(test_root, output_root);
 
-    Json::Value new_root{};
+    jsoncons::json new_root{};
     EXPECT_TRUE(_parse_json(new_metadata.to_json_string(), new_root));
 
     EXPECT_EQ(output_root["metadata"]["entries"][0]["buffer"],

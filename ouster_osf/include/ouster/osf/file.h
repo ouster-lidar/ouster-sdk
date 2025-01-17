@@ -12,6 +12,7 @@
 #include <string>
 
 #include "ouster/osf/basics.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -41,11 +42,12 @@ using ChunkBuffer = std::vector<uint8_t>;
  * Interface to abstract the way of how we handle file system read/write
  * operations.
  */
-class OsfFile {
+class OUSTER_API_CLASS OsfFile {
    public:
     /**
      * Default constructor, sets most data to nullptr and 0.
      */
+    OUSTER_API_FUNCTION
     explicit OsfFile();
 
     /**
@@ -55,12 +57,14 @@ class OsfFile {
      * @param[in] filename The OSF file to open
      * @param[in] mode The mode to open the file in, this argument is optional.
      */
+    OUSTER_API_FUNCTION
     explicit OsfFile(const std::string& filename,
                      OpenMode mode = OpenMode::READ);
 
     /**
      * Cleans up any filebuffers/memory mapping.
      */
+    OUSTER_API_FUNCTION
     ~OsfFile();
 
     // Header Info
@@ -70,6 +74,7 @@ class OsfFile {
      *
      * @return The size of the OSF file in bytes.
      */
+    OUSTER_API_FUNCTION
     uint64_t size() const;
 
     /**
@@ -77,6 +82,7 @@ class OsfFile {
      *
      * @return The filename of the open OSF file.
      */
+    OUSTER_API_FUNCTION
     std::string filename() const;
 
     /**
@@ -84,6 +90,7 @@ class OsfFile {
      *
      * @return The version of the OSF file.
      */
+    OUSTER_API_FUNCTION
     OSF_VERSION version();
 
     /**
@@ -94,6 +101,7 @@ class OsfFile {
      *
      * @return Offset to the metadata in bytes
      */
+    OUSTER_API_FUNCTION
     uint64_t metadata_offset();
 
     /**
@@ -104,6 +112,7 @@ class OsfFile {
      *
      * @return Offset to the chunks in bytes
      */
+    OUSTER_API_FUNCTION
     uint64_t chunks_offset();
 
     /**
@@ -111,6 +120,7 @@ class OsfFile {
      *
      * @return If the header, session, and file_info blocks are valid.
      */
+    OUSTER_API_FUNCTION
     bool valid();
 
     /**
@@ -119,6 +129,7 @@ class OsfFile {
      *
      * @return If the OSF file is good or not.
      */
+    OUSTER_API_FUNCTION
     bool good() const;
 
     // Convenience operators
@@ -129,6 +140,7 @@ class OsfFile {
      *
      * @return If the OSF file is good or not, negated.
      */
+    OUSTER_API_FUNCTION
     bool operator!() const;
 
     /**
@@ -138,6 +150,7 @@ class OsfFile {
      *
      * @return If the OSF file is good or not.
      */
+    OUSTER_API_FUNCTION
     explicit operator bool() const;
 
     /**
@@ -145,6 +158,7 @@ class OsfFile {
      *
      * @return The current offset in the OSF file.
      */
+    OUSTER_API_FUNCTION
     uint64_t offset() const;
 
     /**
@@ -157,6 +171,7 @@ class OsfFile {
      * @param[in] pos position in the file
      * @return A reference to `this` object.
      */
+    OUSTER_API_FUNCTION
     OsfFile& seek(uint64_t pos);
 
     /**
@@ -173,6 +188,7 @@ class OsfFile {
      * @param[in] count The number of bytes to write to buf.
      * @return A reference to `this` object.
      */
+    OUSTER_API_FUNCTION
     OsfFile& read(uint8_t* buf, const uint64_t count);
 
     /**
@@ -180,6 +196,7 @@ class OsfFile {
      *
      * @return Is the OSF file memory mapped or not.
      */
+    OUSTER_API_FUNCTION
     bool is_memory_mapped() const;
 
     /**
@@ -194,6 +211,7 @@ class OsfFile {
      *                   argument is optional.
      * @return The pointer to the OSF file.
      */
+    OUSTER_API_FUNCTION
     const uint8_t* buf(const uint64_t offset = 0) const;
 
     /**
@@ -203,6 +221,7 @@ class OsfFile {
      * and Reader.
      * @sa ouster::osf::MessageRef, ouster::osf::Reader
      */
+    OUSTER_API_FUNCTION
     void close();
 
     /**
@@ -210,17 +229,20 @@ class OsfFile {
      *
      * @return The string representation of OsfFile
      */
+    OUSTER_API_FUNCTION
     std::string to_string();
 
     /**
      * Copy policy:
      * Don't allow the copying of the file handler
      */
+    OUSTER_API_FUNCTION
     OsfFile(const OsfFile&) = delete;
 
     /**
      * @copydoc OsfFile::OsfFile(const OsfFile&)
      */
+    OUSTER_API_FUNCTION
     OsfFile& operator=(const OsfFile&) = delete;
 
     /**
@@ -230,11 +252,13 @@ class OsfFile {
      *
      * @param[in] other The OSF file to move
      */
+    OUSTER_API_FUNCTION
     OsfFile(OsfFile&& other);
 
     /**
      * @copydoc OsfFile::OsfFile(OsfFile&& other)
      */
+    OUSTER_API_FUNCTION
     OsfFile& operator=(OsfFile&& other);
 
     /**
@@ -245,6 +269,7 @@ class OsfFile {
      * @param[in] offset The offset to read the chunk from.
      * @return Shared pointer to the chunk. nullptr if osf file is bad
      */
+    OUSTER_API_FUNCTION
     std::shared_ptr<ChunkBuffer> read_chunk(uint64_t offset);
 
     /**
@@ -252,6 +277,7 @@ class OsfFile {
      *
      * @return Pointer to the header chunk. nullptr if filestream is bad.
      */
+    OUSTER_API_FUNCTION
     uint8_t* get_header_chunk_ptr();
 
     /**
@@ -259,6 +285,7 @@ class OsfFile {
      *
      * @return Pointer to the metadata chunk. nullptr if filestream is bad.
      */
+    OUSTER_API_FUNCTION
     uint8_t* get_metadata_chunk_ptr();
 
    private:

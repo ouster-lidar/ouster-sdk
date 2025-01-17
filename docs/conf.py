@@ -186,7 +186,7 @@ def do_doxygen_generate_xml(app):
         raise SystemError(
             "Expects 'doxygen' command on the PATH to generate C++ docs")
 
-    print("===== Generating Doxygen XML ======")
+    print("====== Generating Doxygen XML ======")
 
     # Prepare temp Doxyfile with resolved param values
     temp_doxy_file_dir = tempfile.mkdtemp()
