@@ -50,7 +50,7 @@ def test_lidar_mode_misc() -> None:
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_read_info(meta: client.SensorInfo) -> None:
     """Check the particular values in the test data."""
-    assert meta.sn == "992029000352"
+    assert meta.sn == 992029000352
     assert meta.fw_rev == "v2.0.0-rc.2"
     assert meta.config.lidar_mode == client.LidarMode.MODE_1024x20
     assert meta.prod_line == "OS-2-32-U0"
@@ -100,7 +100,7 @@ def test_read_info(meta: client.SensorInfo) -> None:
 
 def test_write_info(meta: client.SensorInfo) -> None:
     """Check modifying metadata."""
-    meta.sn = ""
+    meta.sn = 0
     meta.fw_rev = ""
     meta.prod_line = ""
     meta.format.columns_per_frame = 0
@@ -172,7 +172,7 @@ def test_copy_info(meta: client.SensorInfo) -> None:
     assert meta1 != meta
 
     meta2 = copy(meta)
-    meta2.sn = "foo"
+    meta2.sn = 1234
     assert meta2 != meta
 
 

@@ -17,6 +17,7 @@
 
 #include "ouster/array_view.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 
@@ -29,6 +30,7 @@ namespace impl {
  *
  * @return vector of stride offsets
  */
+OUSTER_API_FUNCTION
 std::vector<size_t> calculate_strides(const std::vector<size_t>& shape);
 
 }  // namespace impl
@@ -39,24 +41,24 @@ namespace impl {
 // clang-format off
 
 template <typename T> int type_size() { return sizeof(T); }
-template <> int type_size<void>();
+template <> OUSTER_API_FUNCTION int type_size<void>();
 
 template <typename T> size_t type_hash() { return typeid(T).hash_code(); }
-template <> size_t type_hash<void>();
+template <> OUSTER_API_FUNCTION size_t type_hash<void>();
 
 template <typename T>
 ChanFieldType type_cft() { return ChanFieldType::UNREGISTERED; }
-template <> ChanFieldType type_cft<void>();
-template <> ChanFieldType type_cft<uint8_t>();
-template <> ChanFieldType type_cft<uint16_t>();
-template <> ChanFieldType type_cft<uint32_t>();
-template <> ChanFieldType type_cft<uint64_t>();
-template <> ChanFieldType type_cft<int8_t>();
-template <> ChanFieldType type_cft<int16_t>();
-template <> ChanFieldType type_cft<int32_t>();
-template <> ChanFieldType type_cft<int64_t>();
-template <> ChanFieldType type_cft<float>();
-template <> ChanFieldType type_cft<double>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<void>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint8_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint16_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint32_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<uint64_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int8_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int16_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int32_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<int64_t>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<float>();
+template <> OUSTER_API_FUNCTION ChanFieldType type_cft<double>();
 
 // clang-format on
 
@@ -68,7 +70,7 @@ template <> ChanFieldType type_cft<double>();
  * Unlike FieldType this fully describes a Field's dimensions rather than
  * abstract away the lidar width and height or packet count.
  */
-struct FieldDescriptor {
+struct OUSTER_API_CLASS FieldDescriptor {
     /**
      * type hash of the described field
      */
@@ -79,6 +81,7 @@ struct FieldDescriptor {
      *
      * @return type size in bytes
      */
+    OUSTER_API_FUNCTION
     size_t bytes() const;
 
     // TODO: ideally we need something like llvm::SmallVector here -- Tim T.
@@ -117,6 +120,7 @@ struct FieldDescriptor {
      *
      * @return size in elements
      */
+    OUSTER_API_FUNCTION
     size_t size() const;
 
     /**
@@ -125,8 +129,10 @@ struct FieldDescriptor {
      *
      * @return ChanFieldType
      */
+    OUSTER_API_FUNCTION
     sensor::ChanFieldType tag() const;
 
+    OUSTER_API_FUNCTION
     bool operator==(const FieldDescriptor& other) const noexcept {
         return type == other.type && shape == other.shape &&
                strides == other.strides && element_size == other.element_size;
@@ -137,6 +143,7 @@ struct FieldDescriptor {
      *
      * @param[in,out] other Handle to swapped FieldDescriptor.
      */
+    OUSTER_API_FUNCTION
     void swap(FieldDescriptor& other);
 
     /**
@@ -160,6 +167,7 @@ struct FieldDescriptor {
      * @param[in] other A constant of type FieldDescriptor.
      * @return true if compatible, otherwise false.
      */
+    OUSTER_API_FUNCTION
     bool is_type_compatible(const FieldDescriptor& other) const noexcept;
 
     /**
@@ -167,6 +175,7 @@ struct FieldDescriptor {
      *
      * @return number of dimensions.
      */
+    OUSTER_API_FUNCTION
     size_t ndim() const noexcept;
 
     // Factory functions
@@ -262,13 +271,14 @@ auto fd_array(sensor::ChanFieldType tag, Args&&... args) -> FieldDescriptor {
  * Non-owning wrapper over a memory pointer that allows for type safe
  * conversion to typed pointer, eigen array or ArrayView
  */
-class FieldView {
+class OUSTER_API_CLASS FieldView {
    protected:
     void* ptr_;
     FieldDescriptor desc_;
 
    public:
     /** Default constructor for empty FieldView */
+    OUSTER_API_FUNCTION
     FieldView() noexcept;
 
     /**
@@ -277,6 +287,7 @@ class FieldView {
      * @param[in] ptr Memory pointer.
      * @param[in] desc Field descriptor.
      */
+    OUSTER_API_FUNCTION
     FieldView(void* ptr, const FieldDescriptor& desc);
 
     /**
@@ -298,7 +309,10 @@ class FieldView {
     const T* get() const {
         if (!desc_.eligible_type<T>()) {
             throw std::invalid_argument(
-                "FieldView: ineligible dereference type");
+                "FieldView: ineligible dereference type for field of element "
+                "type " +
+                ouster::sensor::to_string(desc_.tag()) +
+                ". Dereference type must match or be void.");
         }
         return reinterpret_cast<T*>(ptr_);
     }
@@ -336,7 +350,9 @@ class FieldView {
         if (desc_.ndim() != Dim) {
             throw std::invalid_argument(
                 "FieldView: ArrayView conversion failed due to dimension "
-                "mismatch");
+                "mismatch. Expected " +
+                std::to_string(desc_.ndim()) + " got " + std::to_string(Dim) +
+                " dimensions.");
         }
 
         return ArrayView<T, Dim>(get<T>(), desc_.shape, desc_.strides);
@@ -353,7 +369,9 @@ class FieldView {
         if (desc_.ndim() != Dim) {
             throw std::invalid_argument(
                 "FieldView: ArrayView conversion failed due to dimension "
-                "mismatch");
+                "mismatch. Expected " +
+                std::to_string(desc_.ndim()) + " got " + std::to_string(Dim) +
+                " dimensions.");
         }
 
         return ConstArrayView<T, Dim>(get<T>(), desc_.shape, desc_.strides);
@@ -370,7 +388,9 @@ class FieldView {
         if (desc_.ndim() != 2) {
             throw std::invalid_argument(
                 "Field: Eigen array conversion failed due to dimension "
-                "mismatch");
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) +
+                " dimensions but must have 2 dimensions.");
         }
 
         if (sparse()) {
@@ -393,7 +413,9 @@ class FieldView {
         if (desc_.ndim() != 2) {
             throw std::invalid_argument(
                 "Field: Eigen array conversion failed due to dimension "
-                "mismatch");
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) +
+                " dimensions but must have 2 dimensions.");
         }
 
         if (sparse()) {
@@ -416,7 +438,9 @@ class FieldView {
         if (desc_.ndim() != 1) {
             throw std::invalid_argument(
                 "Field: Eigen array conversion failed due to dimension "
-                "mismatch");
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) +
+                " dimensions but must have 1 dimensions.");
         }
 
         if (sparse()) {
@@ -439,7 +463,9 @@ class FieldView {
         if (desc_.ndim() != 1) {
             throw std::invalid_argument(
                 "Field: Eigen array conversion failed due to dimension "
-                "mismatch");
+                "mismatch. Underlying data has " +
+                std::to_string(desc_.ndim()) +
+                " dimensions but must have 1 dimensions.");
         }
 
         if (sparse()) {
@@ -457,6 +483,7 @@ class FieldView {
      *
      * @return true if FieldView is owning a resource
      */
+    OUSTER_API_FUNCTION
     explicit operator bool() const noexcept;
 
     /**
@@ -533,9 +560,13 @@ class FieldView {
                 "FieldView: cannot reshape sparse views");
         }
 
-        if (impl::product<size_t>{}(dims...) != size()) {
+        auto requested_size = impl::product<size_t>{}(dims...);
+        if (requested_size != size()) {
             throw std::invalid_argument(
-                "ArrayView: cannot reshape due to size mismatch");
+                "ArrayView: cannot reshape due to size mismatch. Requested "
+                "dimensions had " +
+                std::to_string(requested_size) + " but we have " +
+                std::to_string(size()) + " elements.");
         }
 
         auto new_desc = FieldDescriptor{};
@@ -551,6 +582,7 @@ class FieldView {
      *
      * @return size in bytes
      */
+    OUSTER_API_FUNCTION
     size_t bytes() const noexcept;
 
     /**
@@ -558,6 +590,7 @@ class FieldView {
      *
      * @return size in elements
      */
+    OUSTER_API_FUNCTION
     size_t size() const;
 
     /**
@@ -567,6 +600,7 @@ class FieldView {
      *
      * @return true if matched, otherwise false
      */
+    OUSTER_API_FUNCTION
     bool matches(const FieldDescriptor& d) const noexcept;
 
     /**
@@ -574,6 +608,7 @@ class FieldView {
      *
      * @return FieldDescriptor
      */
+    OUSTER_API_FUNCTION
     const FieldDescriptor& desc() const;
 
     /**
@@ -583,6 +618,7 @@ class FieldView {
      *
      * @return vector of dimensions
      */
+    OUSTER_API_FUNCTION
     const std::vector<size_t>& shape() const;
 
     /**
@@ -590,6 +626,7 @@ class FieldView {
      *
      * @return ChanFieldType
      */
+    OUSTER_API_FUNCTION
     sensor::ChanFieldType tag() const;
 
     /**
@@ -597,6 +634,7 @@ class FieldView {
      *
      * @return true if sparse
      */
+    OUSTER_API_FUNCTION
     bool sparse() const;
 };
 
@@ -634,6 +672,7 @@ enum class FieldClass {
  *
  * @return string representation of the FieldClass, or "UNKNOWN".
  */
+OUSTER_API_FUNCTION
 std::string to_string(FieldClass f);
 
 /**
@@ -642,15 +681,17 @@ std::string to_string(FieldClass f);
  *
  * For usage examples, check unit tests
  */
-class Field : public FieldView {
+class OUSTER_API_CLASS Field : public FieldView {
    protected:
     FieldClass class_;
 
    public:
     /** Default constructor, representing invalid Field */
+    OUSTER_API_FUNCTION
     Field() noexcept;
 
     /** Field destructor */
+    OUSTER_API_FUNCTION
     ~Field();
 
     /**
@@ -659,6 +700,7 @@ class Field : public FieldView {
      * @param[in] desc FieldDescriptor
      * @param[in] field_class FieldClass
      */
+    OUSTER_API_FUNCTION
     Field(const FieldDescriptor& desc, FieldClass field_class = {});
 
     /**
@@ -666,6 +708,7 @@ class Field : public FieldView {
      *
      * @param[in] other Field to copy
      */
+    OUSTER_API_FUNCTION
     Field(const Field& other);
 
     /**
@@ -673,6 +716,7 @@ class Field : public FieldView {
      *
      * @param[in] other Field to copy
      */
+    OUSTER_API_FUNCTION
     Field& operator=(const Field& other);
 
     /**
@@ -680,6 +724,7 @@ class Field : public FieldView {
      *
      * @param[in] other Field to steal resource from
      */
+    OUSTER_API_FUNCTION
     Field(Field&& other) noexcept;
 
     /**
@@ -687,6 +732,7 @@ class Field : public FieldView {
      *
      * @param[in] other Field to steal resource from
      */
+    OUSTER_API_FUNCTION
     Field& operator=(Field&& other) noexcept;
 
     /**
@@ -694,6 +740,7 @@ class Field : public FieldView {
      *
      * @return FieldClass
      */
+    OUSTER_API_FUNCTION
     FieldClass field_class() const;
 
     /**
@@ -701,6 +748,7 @@ class Field : public FieldView {
      *
      * @param[in] other Field to swap resources with
      */
+    OUSTER_API_FUNCTION
     void swap(Field& other) noexcept;
 
     /**
@@ -708,6 +756,7 @@ class Field : public FieldView {
      *
      * @return true if type, shape and memory contents are equal to other
      */
+    OUSTER_API_FUNCTION
     bool operator==(const Field& other) const;
 };
 
@@ -725,6 +774,7 @@ class Field : public FieldView {
  *
  * @return reinterpreted view of uint8_t, uint16_t, uint32_t or uint64_t type
  */
+OUSTER_API_FUNCTION
 FieldView uint_view(const FieldView& other);
 
 }  // namespace ouster
@@ -737,6 +787,7 @@ namespace std {
  * @param[in] a Field to swap with b
  * @param[in] b Field to swap with a
  */
+OUSTER_API_FUNCTION
 void swap(ouster::Field& a, ouster::Field& b);
 
 }  // namespace std

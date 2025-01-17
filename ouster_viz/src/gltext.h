@@ -43,6 +43,8 @@
 #ifndef GL_TEXT_H
 #define GL_TEXT_H
 
+#include "glfw.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -791,9 +793,9 @@ static const GLchar* _gltText2DVertexShaderSource =
     "\n"
     "void main()\n"
     "{\n"
-    "	fTexCoord = texCoord;\n"
-    "	\n"
-    "	gl_Position = mvp * vec4(position, 0.0, 1.0);\n"
+    "   fTexCoord = texCoord;\n"
+    "   \n"
+    "   gl_Position = mvp * vec4(position, 0.0, 1.0);\n"
     "}\n";
 
 static const GLchar* _gltText2DFragmentShaderSource =
@@ -809,7 +811,7 @@ static const GLchar* _gltText2DFragmentShaderSource =
     "\n"
     "void main()\n"
     "{\n"
-    "	fragColor = texture(diffuse, fTexCoord) * color;\n"
+    "   fragColor = texture(diffuse, fTexCoord) * color;\n"
     "}\n";
 
 GLT_API GLboolean _gltCreateText2DShader(void) {

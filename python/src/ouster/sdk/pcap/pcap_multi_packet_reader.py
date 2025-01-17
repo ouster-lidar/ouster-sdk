@@ -114,7 +114,7 @@ class PcapMultiPacketReader(PacketMultiSource):
             if meta_info.config.udp_profile_lidar == UDPProfileLidar.PROFILE_LIDAR_LEGACY:
                 lidar_sn = "LEGACY_LIDAR"
             else:
-                lidar_sn = meta_info.sn
+                lidar_sn = str(meta_info.sn)
             imu_sn = "LEGACY_IMU"
             port_to_packet = [
                 (meta_info.config.udp_port_lidar, lidar_sn),
@@ -200,6 +200,7 @@ class PcapMultiPacketReader(PacketMultiSource):
                     idx = item['idx']
                     res = packet.validate(self._metadata[idx], self._pf[idx])
                     if res == PacketValidationFailure.NONE:
+                        packet.format = self._pf[idx]
                         yield (idx, packet)
                         match_found = True
                         break
@@ -216,6 +217,7 @@ class PcapMultiPacketReader(PacketMultiSource):
                         raise RuntimeError("Soft ID Checking Does NOT Work With Multiple Sensors")
                     else:
                         if self._soft_id_check:
+                            packet.format = self._pf[idx]
                             yield (idx, packet)
                 elif size_errors > 0:
                     self._size_error_count += 1

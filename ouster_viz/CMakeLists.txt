@@ -3,20 +3,6 @@ set(OpenGL_GL_PREFERENCE LEGACY)
 find_package(OpenGL REQUIRED)
 include(Coverage)
 
-# default to glad, if found. Note: this can be overridden from the command line
-find_package(glad QUIET)
-option(OUSTER_VIZ_USE_GLAD "Use GLAD instead of GLEW." ${glad_FOUND})
-if(OUSTER_VIZ_USE_GLAD)
-  message(STATUS "Configured GL loader: glad")
-  find_package(glad REQUIRED)
-  set(GL_LOADER glad::glad)
-  add_definitions("-DOUSTER_VIZ_USE_GLAD")
-else()
-  message(STATUS "Configured GL loader: GLEW")
-  find_package(GLEW REQUIRED)
-  set(GL_LOADER GLEW::GLEW)
-endif()
-
 find_package(glfw3 REQUIRED)
 find_package(Eigen3 REQUIRED)
 
@@ -24,22 +10,29 @@ find_package(Eigen3 REQUIRED)
 # use only MPL-licensed parts of eigen
 add_definitions(-DEIGEN_MPL2_ONLY)
 
-add_library(ouster_viz src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp
+add_library(ouster_viz STATIC src/point_viz.cpp src/cloud.cpp src/camera.cpp src/image.cpp
   src/gltext.cpp src/misc.cpp src/glfw.cpp)
 target_link_libraries(ouster_viz
-  PRIVATE Eigen3::Eigen glfw ${GL_LOADER} OpenGL::GL ouster_client)
+  PRIVATE Eigen3::Eigen glfw ${GL_LOADER} OpenGL::GL ouster_client glad)
+set_property(TARGET ouster_viz PROPERTY POSITION_INDEPENDENT_CODE ON)
+if(BUILD_SHARED_LIBRARY)
+  set_target_properties(ouster_viz PROPERTIES CXX_VISIBILITY_PRESET hidden)
+endif()
 CodeCoverageFunctionality(ouster_viz)
 
-target_include_directories(ouster_viz PUBLIC
-  $<INSTALL_INTERFACE:include>
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+if(BUILD_SHARED_LIBRARY)
+  target_compile_definitions(ouster_viz PRIVATE BUILD_SHARED_LIBS_EXPORT)
+endif()
+
+target_include_directories(ouster_viz 
+  PUBLIC
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 add_library(OusterSDK::ouster_viz ALIAS ouster_viz)
 
 # ==== Install ====
 install(TARGETS ouster_viz
         EXPORT ouster-sdk-targets
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin
         INCLUDES DESTINATION include)
 

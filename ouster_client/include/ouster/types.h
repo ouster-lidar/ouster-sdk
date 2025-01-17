@@ -19,8 +19,8 @@
 #include <utility>
 #include <vector>
 
-#include "json/json.h"
 #include "nonstd/optional.hpp"
+#include "ouster/visibility.h"
 #include "version.h"
 
 namespace ouster {
@@ -153,6 +153,26 @@ enum Polarity {
     POLARITY_ACTIVE_HIGH      ///< ACTIVE_HIGH
 };
 
+#if defined(_WIN32)
+#if defined(BAUD_9600)
+/**
+ * @note On windows platforms, the windows headers do a global define on
+ * BAUD_9600 which causes issues with defines in types.h. Netcompat.h must
+ * be included after every other header file to avoid this issue. This #error
+ * is included to notify people of the issue.
+ */
+#undef BAUD_9600
+#endif
+#if defined(BAUD_115200)
+/**
+ * @note On windows platforms, the windows headers do a global define on
+ * BAUD_115200 which causes issues with defines in types.h. Netcompat.h must
+ * be included after every other header file to avoid this issue. This #error
+ * is included to notify people of the issue.
+ */
+#undef BAUD_115200
+#endif
+#endif
 /**
  * Baud rate the sensor attempts for NMEA UART input $GPRMC messages
  * See sensor docs for more details.
@@ -261,7 +281,7 @@ using ColumnWindow = std::pair<int, int>;
 /**
  * Struct for sensor configuration parameters.
  */
-struct sensor_config {
+struct OUSTER_API_CLASS sensor_config {
     optional<std::string> udp_dest;     ///< The destination address for the
                                         ///< lidar/imu data to be sent to
     optional<uint16_t> udp_port_lidar;  ///< The destination port for the lidar
@@ -415,7 +435,7 @@ struct sensor_config {
 };
 
 /** Stores data format information. */
-struct data_format {
+struct OUSTER_API_CLASS data_format {
     uint32_t pixels_per_column;   ///< pixels per column
     uint32_t columns_per_packet;  ///< columns per packet
     uint32_t
@@ -429,13 +449,13 @@ struct data_format {
 };
 
 /** Stores from-sensor calibration information */
-struct calibration_status {
+struct OUSTER_API_CLASS calibration_status {
     optional<bool> reflectivity_status;
     optional<std::string> reflectivity_timestamp;
 };
 
 /** Stores parsed information about the prod line */
-class product_info {
+class OUSTER_API_CLASS product_info {
    public:
     /**
      * The original full product line string.
@@ -472,12 +492,14 @@ class product_info {
      *                                the product_info class from.
      * @return The new product_info class.
      */
+    OUSTER_API_FUNCTION
     static product_info create_product_info(std::string product_info_string);
 
     /**
      * Default constructor for product_info that
      * sets everything to blank.
      */
+    OUSTER_API_FUNCTION
     product_info();
 
    protected:
@@ -493,6 +515,7 @@ class product_info {
      *
      * @internal
      */
+    OUSTER_API_FUNCTION
     product_info(std::string product_info_string, std::string form_factor,
                  bool short_range, std::string beam_config, int beam_count);
 };
@@ -505,6 +528,7 @@ class product_info {
  *
  * @return lhs == rhs
  */
+OUSTER_API_FUNCTION
 bool operator==(const product_info& lhs, const product_info& rhs);
 
 /**
@@ -515,6 +539,7 @@ bool operator==(const product_info& lhs, const product_info& rhs);
  *
  * @return lhs != rhs
  */
+OUSTER_API_FUNCTION
 bool operator!=(const product_info& lhs, const product_info& rhs);
 
 /**
@@ -524,12 +549,25 @@ bool operator!=(const product_info& lhs, const product_info& rhs);
  *
  * @return string representation of the product info.
  */
+OUSTER_API_FUNCTION
 std::string to_string(const product_info& info);
 
-/** Stores parsed information from metadata and */
-struct sensor_info {
+/**
+ * Stores parsed information from metadata.
+ */
+class OUSTER_API_CLASS sensor_info {
+   public:
+    OUSTER_API_FUNCTION
+    sensor_info(const sensor_info&) = default;
+    OUSTER_API_FUNCTION
+    sensor_info(sensor_info&&) = default;
+    OUSTER_API_FUNCTION
+    ~sensor_info() = default;
+    OUSTER_API_FUNCTION
+    sensor_info& operator=(const ouster::sensor::sensor_info&) = default;
+
     // clang-format off
-    std::string sn{};           ///< sensor serial number corresponding to prod_sn in
+    uint64_t sn{};              ///< sensor serial number corresponding to prod_sn in
                                 ///< metadata.json
     std::string
         fw_rev{};               ///< fw revision corresponding to build_rev in metadata.json
@@ -566,15 +604,22 @@ struct sensor_info {
 
     /* Constructor from metadata */
     [[deprecated("skip_beam_validation does not do anything anymore")]] 
-        explicit sensor_info(const std::string& metadata, bool skip_beam_validation);
+    OUSTER_API_FUNCTION
+    explicit sensor_info(const std::string& metadata, bool skip_beam_validation);
+    OUSTER_API_FUNCTION
     explicit sensor_info(const std::string& metadata);
 
     /* Empty constructor -- keep for  */
+    OUSTER_API_FUNCTION
     sensor_info();
 
-    /* Return an updated version of the metadata string reflecting any
+    /** Return an updated version of the metadata string reflecting any
      * changes to the sensor_info.
-     * Errors out if changes are incompatible but does not check for validity */
+     * Errors out if changes are incompatible but does not check for validity
+     *
+     * @return json serialized version of this object
+     */
+    OUSTER_API_FUNCTION
     std::string to_json_string() const;
     
     /**
@@ -582,10 +627,13 @@ struct sensor_info {
      *
      * @return sensor version info
      */
+    OUSTER_API_FUNCTION
     ouster::util::version get_version() const;
 
+    OUSTER_API_FUNCTION
     product_info get_product_info() const;
 
+    OUSTER_API_FUNCTION
     bool has_fields_equal(const sensor_info& other) const;
 
     /**
@@ -593,6 +641,7 @@ struct sensor_info {
      *
      * @return width of a frame.
      */
+    OUSTER_API_FUNCTION
     auto w() const -> decltype(format.columns_per_frame);  ///< returns the width of a frame (equivalent to format.columns_per_frame)
 
     /**
@@ -600,6 +649,7 @@ struct sensor_info {
      *
      * @return height of a frame.
      */
+    OUSTER_API_FUNCTION
     auto h() const -> decltype(format.pixels_per_column);  ///< returns the height of a frame (equivalent to format.pixels_per_column)
 
    private:
@@ -615,6 +665,7 @@ struct sensor_info {
  *
  * @return lhs == rhs
  */
+OUSTER_API_FUNCTION
 bool operator==(const data_format& lhs, const data_format& rhs);
 
 /**
@@ -625,6 +676,7 @@ bool operator==(const data_format& lhs, const data_format& rhs);
  *
  * @return lhs != rhs
  */
+OUSTER_API_FUNCTION
 bool operator!=(const data_format& lhs, const data_format& rhs);
 
 /**
@@ -635,6 +687,7 @@ bool operator!=(const data_format& lhs, const data_format& rhs);
  *
  * @return lhs == rhs
  */
+OUSTER_API_FUNCTION
 bool operator==(const sensor_info& lhs, const sensor_info& rhs);
 
 /**
@@ -645,6 +698,7 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs);
  *
  * @return lhs != rhs
  */
+OUSTER_API_FUNCTION
 bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
 
 /**
@@ -655,6 +709,7 @@ bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
  *
  * @return lhs == rhs
  */
+OUSTER_API_FUNCTION
 bool operator==(const sensor_config& lhs, const sensor_config& rhs);
 
 /**
@@ -665,6 +720,7 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs);
  *
  * @return lhs != rhs
  */
+OUSTER_API_FUNCTION
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
 
 /**
@@ -673,6 +729,7 @@ bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
  * @param[in] lhs The first object to compare.
  * @param[out] rhs The second object to compare.
  */
+OUSTER_API_FUNCTION
 bool operator==(const calibration_status& lhs, const calibration_status& rhs);
 
 /**
@@ -681,6 +738,7 @@ bool operator==(const calibration_status& lhs, const calibration_status& rhs);
  * @param[in] lhs The first object to compare.
  * @param[out] rhs The second object to compare.
  */
+OUSTER_API_FUNCTION
 bool operator!=(const calibration_status& lhs, const calibration_status& rhs);
 
 /**
@@ -690,6 +748,7 @@ bool operator!=(const calibration_status& lhs, const calibration_status& rhs);
  *
  * @return default sensor_info for the OS1-64.
  */
+OUSTER_API_FUNCTION
 sensor_info default_sensor_info(lidar_mode mode);
 
 /**
@@ -699,6 +758,7 @@ sensor_info default_sensor_info(lidar_mode mode);
  *
  * @return string representation of the lidar mode, or "UNKNOWN".
  */
+OUSTER_API_FUNCTION
 std::string to_string(lidar_mode mode);
 
 /**
@@ -708,6 +768,7 @@ std::string to_string(lidar_mode mode);
  *
  * @return lidar mode corresponding to the string, or 0 on error.
  */
+OUSTER_API_FUNCTION
 lidar_mode lidar_mode_of_string(const std::string& s);
 
 /**
@@ -717,6 +778,7 @@ lidar_mode lidar_mode_of_string(const std::string& s);
  *
  * @return number of columns per rotation for the mode.
  */
+OUSTER_API_FUNCTION
 uint32_t n_cols_of_lidar_mode(lidar_mode mode);
 
 /**
@@ -726,6 +788,7 @@ uint32_t n_cols_of_lidar_mode(lidar_mode mode);
  *
  * @return lidar rotation frequency in Hz.
  */
+OUSTER_API_FUNCTION
 int frequency_of_lidar_mode(lidar_mode mode);
 
 /**
@@ -735,6 +798,7 @@ int frequency_of_lidar_mode(lidar_mode mode);
  *
  * @return string representation of the timestamp mode, or "UNKNOWN".
  */
+OUSTER_API_FUNCTION
 std::string to_string(timestamp_mode mode);
 
 /**
@@ -744,6 +808,7 @@ std::string to_string(timestamp_mode mode);
  *
  * @return timestamp mode corresponding to the string, or 0 on error.
  */
+OUSTER_API_FUNCTION
 timestamp_mode timestamp_mode_of_string(const std::string& s);
 
 /**
@@ -753,6 +818,7 @@ timestamp_mode timestamp_mode_of_string(const std::string& s);
  *
  * @return string representation of the operating mode, or "UNKNOWN".
  */
+OUSTER_API_FUNCTION
 std::string to_string(OperatingMode mode);
 
 /**
@@ -762,6 +828,7 @@ std::string to_string(OperatingMode mode);
  *
  * @return operating mode corresponding to the string, or 0 on error.
  */
+OUSTER_API_FUNCTION
 optional<OperatingMode> operating_mode_of_string(const std::string& s);
 
 /**
@@ -771,6 +838,7 @@ optional<OperatingMode> operating_mode_of_string(const std::string& s);
  *
  * @return string representation of the multipurpose io mode, or "UNKNOWN".
  */
+OUSTER_API_FUNCTION
 std::string to_string(MultipurposeIOMode mode);
 
 /**
@@ -780,6 +848,7 @@ std::string to_string(MultipurposeIOMode mode);
  *
  * @return multipurpose io mode corresponding to the string, or 0 on error.
  */
+OUSTER_API_FUNCTION
 optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
     const std::string& s);
 
@@ -790,6 +859,7 @@ optional<MultipurposeIOMode> multipurpose_io_mode_of_string(
  *
  * @return string representation of the polarity, or "UNKNOWN".
  */
+OUSTER_API_FUNCTION
 std::string to_string(Polarity polarity);
 
 /**
@@ -799,6 +869,7 @@ std::string to_string(Polarity polarity);
  *
  * @return polarity corresponding to the string, or 0 on error.
  */
+OUSTER_API_FUNCTION
 optional<Polarity> polarity_of_string(const std::string& s);
 
 /**
@@ -808,6 +879,7 @@ optional<Polarity> polarity_of_string(const std::string& s);
  *
  * @return string representation of the NMEA baud rate, or "UNKNOWN".
  */
+OUSTER_API_FUNCTION
 std::string to_string(NMEABaudRate rate);
 
 /**
@@ -817,6 +889,7 @@ std::string to_string(NMEABaudRate rate);
  *
  * @return nmea baud rate corresponding to the string, or 0 on error.
  */
+OUSTER_API_FUNCTION
 optional<NMEABaudRate> nmea_baud_rate_of_string(const std::string& s);
 
 /**
@@ -827,6 +900,7 @@ representation. of
  *
  * @return string representation of the azimuth window.
  */
+OUSTER_API_FUNCTION
 std::string to_string(AzimuthWindow azimuth_window);
 
 /**
@@ -836,6 +910,7 @@ std::string to_string(AzimuthWindow azimuth_window);
  *
  * @return string representation of the lidar profile.
  */
+OUSTER_API_FUNCTION
 std::string to_string(UDPProfileLidar profile);
 
 /**
@@ -845,6 +920,7 @@ std::string to_string(UDPProfileLidar profile);
  *
  * @return lidar profile corresponding to the string, or nullopt on error.
  */
+OUSTER_API_FUNCTION
 optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s);
 
 /**
@@ -854,6 +930,7 @@ optional<UDPProfileLidar> udp_profile_lidar_of_string(const std::string& s);
  *
  * @return string representation of the lidar profile.
  */
+OUSTER_API_FUNCTION
 std::string to_string(UDPProfileIMU profile);
 
 /**
@@ -863,6 +940,7 @@ std::string to_string(UDPProfileIMU profile);
  *
  * @return imu profile corresponding to the string, or nullopt on error.
  */
+OUSTER_API_FUNCTION
 optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
 
 /**
@@ -872,6 +950,7 @@ optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
  *
  * @return full scale range corresponding to the string, or nullopt on error.
  */
+OUSTER_API_FUNCTION
 optional<FullScaleRange> full_scale_range_of_string(const std::string& s);
 
 /**
@@ -881,6 +960,7 @@ optional<FullScaleRange> full_scale_range_of_string(const std::string& s);
  *
  * @return return order corresponding to the string, or nullopt on error.
  */
+OUSTER_API_FUNCTION
 optional<ReturnOrder> return_order_of_string(const std::string& s);
 
 /**
@@ -891,6 +971,7 @@ optional<ReturnOrder> return_order_of_string(const std::string& s);
  *
  * @return string representation of the return order.
  */
+OUSTER_API_FUNCTION
 std::string to_string(ReturnOrder return_order);
 
 /**
@@ -901,6 +982,7 @@ std::string to_string(ReturnOrder return_order);
  *
  * @return string representation of the full scale range.
  */
+OUSTER_API_FUNCTION
 std::string to_string(FullScaleRange full_scale_range);
 
 /**
@@ -911,6 +993,7 @@ std::string to_string(FullScaleRange full_scale_range);
  *
  * @return string representation of the shot limiting status.
  */
+OUSTER_API_FUNCTION
 std::string to_string(ShotLimitingStatus shot_limiting_status);
 
 /**
@@ -921,6 +1004,7 @@ std::string to_string(ShotLimitingStatus shot_limiting_status);
  *
  * @return string representation of thermal shutdown status.
  */
+OUSTER_API_FUNCTION
 std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
 
 /**
@@ -928,6 +1012,7 @@ std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
  *
  * @param[in] signal_multiplier Signal multiplier value.
  */
+OUSTER_API_FUNCTION
 void check_signal_multiplier(const double signal_multiplier);
 
 /**
@@ -942,9 +1027,11 @@ void check_signal_multiplier(const double signal_multiplier);
  *
  * @return a sensor_info struct populated with a subset of the metadata.
  */
+OUSTER_API_FUNCTION
 sensor_info metadata_from_json(const std::string& json_file,
                                bool skip_beam_validation = false);
 
+// clang-format off
 /**
  * String representation of the sensor_info. All fields included. NOT equivalent
  * or interchangeable with metadata from sensor.
@@ -953,10 +1040,11 @@ sensor_info metadata_from_json(const std::string& json_file,
  *
  * @return a debug string in json format
  */
-// clang-format off
 [[deprecated("This is a debug function. Use original_string() or "
-              "updated_metadata_string()")]] std::string
-to_string(const sensor_info& info);
+              "updated_metadata_string()")]]
+OUSTER_API_FUNCTION
+std::string to_string(const sensor_info& info);
+
 // clang-format on
 
 /**
@@ -971,7 +1059,10 @@ to_string(const sensor_info& info);
  * @return a sensor_config struct populated with the sensor config.
  * parameters.
  */
-sensor_config parse_config(const std::string& config);
+[[deprecated(
+    "Please switch to using parse_and_validate_config")]] OUSTER_API_FUNCTION
+    sensor_config
+    parse_config(const std::string& config);
 
 /**
  * Get a string representation of sensor config. Only set fields will be
@@ -981,6 +1072,7 @@ sensor_config parse_config(const std::string& config);
  *
  * @return a json sensor config string.
  */
+OUSTER_API_FUNCTION
 std::string to_string(const sensor_config& config);
 
 /**
@@ -991,7 +1083,7 @@ std::string to_string(const sensor_config& config);
  *
  * @return string representation of sensor calibration.
  */
-
+OUSTER_API_FUNCTION
 std::string to_string(const calibration_status& cal);
 
 /**
@@ -999,8 +1091,10 @@ std::string to_string(const calibration_status& cal);
  *
  * @return client version string
  */
+OUSTER_API_FUNCTION
 std::string client_version();
 
+// clang-format off
 /**
  * Get version information from the metadata.
  *
@@ -1008,10 +1102,10 @@ std::string client_version();
  *
  * @return version corresponding to the string, or invalid_version on error.
  */
-[[deprecated("Use sensor_info::get_version() instead")]] ouster::util::version
-firmware_version_from_metadata(const std::string& metadata);
+[[deprecated("Use sensor_info::get_version() instead")]] 
+OUSTER_API_FUNCTION
+ouster::util::version firmware_version_from_metadata(const std::string& metadata);
 
-// clang-format off
 typedef const char* cf_type;
 /**
  * @namespace ChanField
@@ -1041,11 +1135,16 @@ namespace ChanField {
     static constexpr cf_type RAW32_WORD3 = "RAW32_WORD3";     ///< raw word access to packet for dev use
     static constexpr cf_type RAW32_WORD4 = "RAW32_WORD4";     ///< raw word access to packet for dev use
 };
-// clang-format on
 
+// clang-format on
 /**
  * Types of channel fields.
  */
+#if defined(VOID)
+#define OUSTER_REMOVED_VOID
+#pragma push_macro("VOID")
+#undef VOID
+#endif
 enum ChanFieldType {
     VOID = 0,
     UINT8 = 1,
@@ -1060,6 +1159,10 @@ enum ChanFieldType {
     FLOAT64 = 10,
     UNREGISTERED = 100
 };
+#if defined(OUSTER_REMOVED_VOID)
+#pragma pop_macro("VOID")
+#undef OUSTER_REMOVED_VOID
+#endif
 
 /**
  * Get the size of the ChanFieldType in bytes.
@@ -1068,6 +1171,7 @@ enum ChanFieldType {
  *
  * @return size of the field type in bytes
  */
+OUSTER_API_FUNCTION
 size_t field_type_size(ChanFieldType ft);
 
 /**
@@ -1077,6 +1181,7 @@ size_t field_type_size(ChanFieldType ft);
  *
  * @return 64 bit mask
  */
+OUSTER_API_FUNCTION
 uint64_t field_type_mask(ChanFieldType ft);
 
 /**
@@ -1086,6 +1191,7 @@ uint64_t field_type_mask(ChanFieldType ft);
  *
  * @return string representation of the channel field type.
  */
+OUSTER_API_FUNCTION
 std::string to_string(ChanFieldType ft);
 
 /**
@@ -1101,7 +1207,7 @@ std::string to_string(ChanFieldType ft);
  * Use imu_la_{x,y,z} to access the acceleration in the corresponding
  * direction. Use imu_av_{x,y,z} to read the angular velocity.
  */
-class packet_format {
+class OUSTER_API_CLASS packet_format {
    protected:
     struct Impl;
     std::shared_ptr<const Impl> impl_;
@@ -1109,9 +1215,11 @@ class packet_format {
     std::vector<std::pair<std::string, sensor::ChanFieldType>> field_types_;
 
    public:
+    OUSTER_API_FUNCTION
     packet_format(UDPProfileLidar udp_profile_lidar, size_t pixels_per_column,
                   size_t columns_per_packet);
 
+    OUSTER_API_FUNCTION
     packet_format(
         const sensor_info& info);  //< create packet_format from sensor_info
 
@@ -1141,6 +1249,7 @@ class packet_format {
      *
      * @return the packet type.
      */
+    OUSTER_API_FUNCTION
     uint16_t packet_type(const uint8_t* lidar_buf) const;
 
     /**
@@ -1150,6 +1259,7 @@ class packet_format {
      *
      * @return the frame id.
      */
+    OUSTER_API_FUNCTION
     uint32_t frame_id(const uint8_t* lidar_buf) const;
 
     /**
@@ -1159,6 +1269,7 @@ class packet_format {
      *
      * @return the init id.
      */
+    OUSTER_API_FUNCTION
     uint32_t init_id(const uint8_t* lidar_buf) const;
 
     /**
@@ -1168,6 +1279,7 @@ class packet_format {
      *
      * @return the serial number.
      */
+    OUSTER_API_FUNCTION
     uint64_t prod_sn(const uint8_t* lidar_buf) const;
 
     /**
@@ -1177,6 +1289,7 @@ class packet_format {
      *
      * @return the alert flags byte.
      */
+    OUSTER_API_FUNCTION
     uint8_t alert_flags(const uint8_t* lidar_buf) const;
 
     /**
@@ -1186,6 +1299,7 @@ class packet_format {
      *
      * @return the thermal shutdown countdown.
      */
+    OUSTER_API_FUNCTION
     uint16_t countdown_thermal_shutdown(const uint8_t* lidar_buf) const;
 
     /**
@@ -1195,6 +1309,7 @@ class packet_format {
      *
      * @return the shot limiting countdown.
      */
+    OUSTER_API_FUNCTION
     uint16_t countdown_shot_limiting(const uint8_t* lidar_buf) const;
 
     /**
@@ -1204,6 +1319,7 @@ class packet_format {
      *
      * @return the thermal shutdown status
      */
+    OUSTER_API_FUNCTION
     uint8_t thermal_shutdown(const uint8_t* lidar_buf) const;
 
     /**
@@ -1213,6 +1329,7 @@ class packet_format {
      *
      * @return the shot limiting status
      */
+    OUSTER_API_FUNCTION
     uint8_t shot_limiting(const uint8_t* lidar_buf) const;
 
     /**
@@ -1223,6 +1340,7 @@ class packet_format {
      * @return a type tag specifying the bitwidth of the requested field or
      * ChannelFieldType::VOID if it is not supported by the packet format.
      */
+    OUSTER_API_FUNCTION
     ChanFieldType field_type(const std::string& f) const;
 
     /**
@@ -1232,6 +1350,7 @@ class packet_format {
      * packets.
      *
      */
+    OUSTER_API_FUNCTION
     FieldIter begin() const;
 
     /**
@@ -1240,6 +1359,7 @@ class packet_format {
      * @return Iterator pointing to the last element in the field type of
      * packets.
      */
+    OUSTER_API_FUNCTION
     FieldIter end() const;
 
     /**
@@ -1250,6 +1370,7 @@ class packet_format {
      * @return pointer to packet footer of lidar buffer, can be nullptr if
      * packet format doesn't have packet footer.
      */
+    OUSTER_API_FUNCTION
     const uint8_t* footer(const uint8_t* lidar_buf) const;
 
     // Measurement block accessors
@@ -1261,6 +1382,7 @@ class packet_format {
      *
      * @return pointer to nth column of lidar buffer.
      */
+    OUSTER_API_FUNCTION
     const uint8_t* nth_col(int n, const uint8_t* lidar_buf) const;
 
     /**
@@ -1270,6 +1392,7 @@ class packet_format {
      *
      * @return column timestamp.
      */
+    OUSTER_API_FUNCTION
     uint64_t col_timestamp(const uint8_t* col_buf) const;
 
     /**
@@ -1279,6 +1402,7 @@ class packet_format {
      *
      * @return column measurement id.
      */
+    OUSTER_API_FUNCTION
     uint16_t col_measurement_id(const uint8_t* col_buf) const;
 
     /**
@@ -1288,7 +1412,10 @@ class packet_format {
      *
      * @return column status.
      */
+    OUSTER_API_FUNCTION
     uint32_t col_status(const uint8_t* col_buf) const;
+
+    // clang-format off
     /**
      * @brief Encodes the column value.
      *
@@ -1301,11 +1428,16 @@ class packet_format {
      *
      * @return Encoded column value.
      */
-    [[deprecated("Use col_measurement_id instead")]] uint32_t col_encoder(
+    [[deprecated("Use col_measurement_id instead")]] 
+    OUSTER_API_FUNCTION
+	uint32_t col_encoder(
         const uint8_t* col_buf)
         const;  ///< @deprecated Encoder count is deprecated as it is redundant
                 ///< with measurement id, barring a multiplication factor which
                 ///< varies by lidar mode. Use col_measurement_id instead
+    // clang-format on
+
+    // clang-format off
     /**
      * @brief Retrieves the current frame id
      *
@@ -1318,8 +1450,11 @@ class packet_format {
      *
      * @return The current frame id.
      */
-    [[deprecated("Use frame_id instead")]] uint16_t col_frame_id(
+    [[deprecated("Use frame_id instead")]]
+    OUSTER_API_FUNCTION
+	uint16_t col_frame_id(
         const uint8_t* col_buf) const;  ///< @deprecated Use frame_id instead
+    // clang-format on
 
     /**
      * Copy the specified channel field out of a packet measurement block.
@@ -1341,6 +1476,7 @@ class packet_format {
      *
      * @return if packet format does not allow for block parsing, returns 0
      */
+    OUSTER_API_FUNCTION
     int block_parsable() const;
 
     /**
@@ -1368,6 +1504,7 @@ class packet_format {
      *
      * @return pointer to nth pixel of a column buffer.
      */
+    OUSTER_API_FUNCTION
     const uint8_t* nth_px(int n, const uint8_t* col_buf) const;
 
     // IMU packet accessors
@@ -1377,6 +1514,7 @@ class packet_format {
      *
      * @return sys ts from imu pacet buffer.
      */
+    OUSTER_API_FUNCTION
     uint64_t imu_sys_ts(const uint8_t* imu_buf) const;
 
     /**
@@ -1386,6 +1524,7 @@ class packet_format {
      *
      * @return acceleration ts from imu packet buffer.
      */
+    OUSTER_API_FUNCTION
     uint64_t imu_accel_ts(const uint8_t* imu_buf) const;
 
     /**
@@ -1395,6 +1534,7 @@ class packet_format {
      *
      * @return gyro ts from imu packet buffer.
      */
+    OUSTER_API_FUNCTION
     uint64_t imu_gyro_ts(const uint8_t* imu_buf) const;
 
     /**
@@ -1404,6 +1544,7 @@ class packet_format {
      *
      * @return acceleration in x.
      */
+    OUSTER_API_FUNCTION
     float imu_la_x(const uint8_t* imu_buf) const;
 
     /**
@@ -1413,6 +1554,7 @@ class packet_format {
      *
      * @return acceleration in y.
      */
+    OUSTER_API_FUNCTION
     float imu_la_y(const uint8_t* imu_buf) const;
 
     /**
@@ -1422,6 +1564,7 @@ class packet_format {
      *
      * @return acceleration in z.
      */
+    OUSTER_API_FUNCTION
     float imu_la_z(const uint8_t* imu_buf) const;
 
     /**
@@ -1431,6 +1574,7 @@ class packet_format {
      *
      * @return angular velocity in x.
      */
+    OUSTER_API_FUNCTION
     float imu_av_x(const uint8_t* imu_buf) const;
 
     /**
@@ -1440,6 +1584,7 @@ class packet_format {
      *
      * @return angular velocity in y.
      */
+    OUSTER_API_FUNCTION
     float imu_av_y(const uint8_t* imu_buf) const;
 
     /**
@@ -1449,6 +1594,7 @@ class packet_format {
      *
      * @return angular velocity in z.
      */
+    OUSTER_API_FUNCTION
     float imu_av_z(const uint8_t* imu_buf) const;
 
     /**
@@ -1458,6 +1604,7 @@ class packet_format {
      *
      * @return mask of possible values
      */
+    OUSTER_API_FUNCTION
     uint64_t field_value_mask(const std::string& f) const;
 
     /**
@@ -1467,6 +1614,7 @@ class packet_format {
      *
      * @return number of bits
      */
+    OUSTER_API_FUNCTION
     int field_bitness(const std::string& f) const;
 
     /**
@@ -1476,6 +1624,7 @@ class packet_format {
      *
      * @return crc contained in the packet if present
      */
+    OUSTER_API_FUNCTION
     optional<uint64_t> crc(const uint8_t* lidar_buf) const;
 
     /**
@@ -1485,6 +1634,7 @@ class packet_format {
      *
      * @return calculated crc of the packet
      */
+    OUSTER_API_FUNCTION
     uint64_t calculate_crc(const uint8_t* lidar_buf) const;
 };
 
@@ -1499,6 +1649,7 @@ class packet_format {
  *
  * @return a packet_format suitable for parsing UDP packets sent by the sensor.
  */
+OUSTER_API_FUNCTION
 const packet_format& get_format(const sensor_info& info);
 
 /**
@@ -1512,98 +1663,10 @@ const packet_format& get_format(const sensor_info& info);
  *
  * @return a packet_format suitable for parsing UDP packets sent by the sensor.
  */
+OUSTER_API_FUNCTION
 const packet_format& get_format(UDPProfileLidar udp_profile_lidar,
                                 size_t pixels_per_column,
                                 size_t columns_per_packet);
-
-/**
- * Encapsulate a packet buffer and attributes associated with it.
- */
-struct Packet {
-    uint64_t host_timestamp;
-    std::vector<uint8_t> buf;
-
-    Packet(int size = 65536) : host_timestamp{0} {
-        // this is necessary due to how client works - it may read size() + 1
-        // bytes into the packet in case of rogue packet coming through
-        buf.reserve(size + 1);
-        buf.resize(size, 0);
-    }
-
-    template <typename PacketType>
-    PacketType& as() {
-        return static_cast<PacketType&>(*this);
-    }
-};
-
-/**
- * Reasons for failure of packet validation.
- */
-enum class PacketValidationFailure {
-    NONE = 0,         ///< No validation errors were found
-    PACKET_SIZE = 1,  ///< The packet size does not match the expected size
-    ID = 2            ///< The prod_sn or init_id does not match the metadata
-};
-
-/**
- * Enum for packet validation types.
- */
-enum class PacketValidationType {
-    LIDAR,      ///< Validate as if the buffer was a lidar buffer
-    IMU,        ///< Validate as if the buffer was an imu buffer
-    GUESS_TYPE  ///< Try to guess the type and validate as that
-};
-
-/**
- * Validate a packet buffer against a given type.
- *
- * @param[in] info The sensor info to try to check the buffer against.
- * @param[in] format The packet format to try to check the buffer against.
- * @param[in] buf The packet buffer to validate.
- * @param[in] buf_size The size of the packet buffer.
- * @param[in] type Optional type of packet to try and validate as.
- * @return Result of the validation
- */
-PacketValidationFailure validate_packet(
-    const sensor_info& info, const packet_format& format, const uint8_t* buf,
-    uint64_t buf_size,
-    PacketValidationType type = PacketValidationType::GUESS_TYPE);
-
-/**
- * Encapsulate a lidar packet buffer and attributes associated with it.
- */
-struct LidarPacket : public Packet {
-    using Packet::Packet;
-
-    /**
-     * Validates that the packet matches the expected format and metadata.
-     *
-     * @param[in] info   expected sensor metadata
-     * @param[in] format   expected packet_format
-     *
-     * @return a PacketValdationFailure with either NONE or a failure reason.
-     */
-    PacketValidationFailure validate(const sensor_info& info,
-                                     const packet_format& format);
-};
-
-/**
- * Encapsulate an imu packet buffer and attributes associated with it.
- */
-struct ImuPacket : public Packet {
-    using Packet::Packet;
-
-    /**
-     * Validates that the packet matches the expected format and metadata.
-     *
-     * @param[in] info   expected sensor metadata
-     * @param[in] format   expected packet_format
-     *
-     * @return a PacketValdationFailure with either NONE or a failure reason.
-     */
-    PacketValidationFailure validate(const sensor_info& info,
-                                     const packet_format& format);
-};
 
 namespace impl {
 
@@ -1613,4 +1676,8 @@ constexpr int MAX_NUM_PROFILES = 32;
 }  // namespace impl
 
 }  // namespace sensor
+/**
+ * The type to represent json data in string form.
+ */
+typedef std::string json_string;
 }  // namespace ouster

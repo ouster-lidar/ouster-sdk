@@ -634,12 +634,10 @@ class TrajectoryEvaluator(Poser):
         return self._poses[idx]
 
 
-def get_rot_matrix_to_align_to_gravity(accel_x: float,
-                                       accel_y: float,
-                                       accel_z: float):
+def get_rot_matrix_to_align_to_gravity(accel_x: float, accel_y: float, accel_z: float):
     """
-    computes the rotation matrix needed to align a given acceleration vector
-    with the direction of gravity.
+    Computes the rotation matrix needed to align a given acceleration vector
+    with the direction of gravity, fixing the yaw angle to zero.
 
     Args:
         accel_x: x-component of the acceleration vector.
@@ -647,16 +645,17 @@ def get_rot_matrix_to_align_to_gravity(accel_x: float,
         accel_z: z-component of the acceleration vector.
 
     Returns:
-    A 3x3 rotation matrix that, when applied to the acceleration vector, aligns
-    it with the gravity vector [0,0,1]
+        A 3x3 rotation matrix that aligns the acceleration vector with the gravity vector [0,0,1]
+        while fixing the yaw angle to zero.
     """
     gravity_vector = np.array([0, 0, 1])
+
     accel_vector = np.array([accel_x, accel_y, accel_z])
     accel_vector = normalize_vector(accel_vector)
 
     axis = np.cross(accel_vector, gravity_vector)
-    axis = normalize_vector(axis)
-
+    if np.linalg.norm(axis) > 0:
+        axis = normalize_vector(axis)
     angle = np.arccos(np.dot(accel_vector, gravity_vector))
 
     # Rodrigues' rotation formula
@@ -664,7 +663,18 @@ def get_rot_matrix_to_align_to_gravity(accel_x: float,
                   [axis[2], 0, -axis[0]],
                   [-axis[1], axis[0], 0]])
 
-    rotation_matrix = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
+    rot_align_gravity = np.eye(3) + np.sin(angle) * K + (1 - np.cos(angle)) * (K @ K)
+
+    forward = np.dot(rot_align_gravity, np.array([1, 0, 0]))
+
+    yaw_angle = np.arctan2(forward[1], forward[0])
+
+    rot_counter_yaw = np.array([[np.cos(-yaw_angle), -np.sin(-yaw_angle), 0],
+                            [np.sin(-yaw_angle), np.cos(-yaw_angle), 0],
+                            [0, 0, 1]])
+
+    # Final rotation matrix
+    rotation_matrix = rot_counter_yaw @ rot_align_gravity
 
     return rotation_matrix
 

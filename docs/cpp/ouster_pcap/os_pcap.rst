@@ -13,13 +13,6 @@ Packet Info
 
 .. doxygenfunction:: ouster::sensor_utils::operator<<(std::ostream& stream_in, const packet_info& data)
 
-Handles
-=======
-
-.. doxygenstruct:: ouster::sensor_utils::record_handle
-
-.. doxygenstruct:: ouster::sensor_utils::playback_handle
-
 Functions
 =========
 

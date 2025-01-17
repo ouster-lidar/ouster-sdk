@@ -73,6 +73,8 @@ def test_multiple_scan_source_pcap(tmp_path) -> None:
     if not test_scans[1] or not test_scans[0]:
         assert False
 
+    assert test_scans[0].sensor_info == scan_source.metadata[0]
+
     assert test_scans[1].frame_id == 883
     assert test_scans[1].h == 64
 

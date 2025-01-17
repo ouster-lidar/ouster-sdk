@@ -248,9 +248,9 @@ def get_all_sensor_info(info, socket_timeout, show_user_data) -> str:
         try:
             sensor_http = SensorHttp.create(address, socket_timeout)
             if not sensor_info:
-                sensor_info = sensor_http.sensor_info()
+                sensor_info = json.loads(sensor_http.sensor_info())
             if not config:
-                config = sensor_http.active_config_params()
+                config = json.loads(sensor_http.active_config_params())
             if not network:
                 network = json.loads(sensor_http.network(socket_timeout))
             if show_user_data and not user_data:

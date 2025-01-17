@@ -34,6 +34,6 @@ Impact of the issue, including how an attacker might exploit the issue
 We prefer all communications to be in English.
 
 ### Response time 
-You should receive a response within 24 hours. 
+You should receive a response within 3 business days. 
 
 If for some reason you do not, please follow up via email to ensure we received your original message.

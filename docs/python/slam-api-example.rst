@@ -55,7 +55,7 @@ between consecutive scans
 
 
 SLAM with Visualizer and Accumulated Scans
-=========================================
+==========================================
 Visualizers and Accumulated Scans are also available for monitoring the performance of the algorithm,
 as well as for demonstration and feedback purposes.
 

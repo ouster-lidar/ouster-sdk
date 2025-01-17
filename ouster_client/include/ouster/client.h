@@ -14,13 +14,15 @@
 #include <string>
 
 #include "ouster/defaults.h"
+#include "ouster/packet.h"
 #include "ouster/types.h"
 #include "ouster/version.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sensor {
 
-struct client;
+struct OUSTER_API_CLASS client;
 
 /** Returned by poll_client. */
 enum client_state {
@@ -57,6 +59,7 @@ const util::version min_version = {1, 12, 0, "", "", "", ""};
  *
  * @return true on success, otherwise false.
  */
+OUSTER_API_FUNCTION
 bool init_logger(const std::string& log_level,
                  const std::string& log_file_path = "", bool rotating = false,
                  int max_size_in_bytes = 0, int max_files = 0);
@@ -74,6 +77,7 @@ bool init_logger(const std::string& log_level,
  *
  * @return pointer owning the resources associated with the connection.
  */
+OUSTER_API_FUNCTION
 std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
                                     int imu_port);
 
@@ -96,6 +100,7 @@ std::shared_ptr<client> init_client(const std::string& hostname, int lidar_port,
  *
  * @return pointer owning the resources associated with the connection.
  */
+OUSTER_API_FUNCTION
 std::shared_ptr<client> init_client(
     const std::string& hostname, const std::string& udp_dest_host,
     lidar_mode ld_mode = MODE_UNSPEC, timestamp_mode ts_mode = TIME_FROM_UNSPEC,
@@ -123,6 +128,7 @@ std::shared_ptr<client> init_client(
  * the sensor, otherwise only the port values within the config object will be
  * used and the rest will be ignored.
  */
+OUSTER_API_FUNCTION
 std::shared_ptr<client> mtp_init_client(
     const std::string& hostname, const sensor_config& config,
     const std::string& mtp_dest_host, bool main,
@@ -144,6 +150,7 @@ std::shared_ptr<client> mtp_init_client(
  * LIDAR_DATA) is true if lidar data is ready to read, and (s & IMU_DATA) is
  * true if imu data is ready to read.
  */
+OUSTER_API_FUNCTION
 client_state poll_client(const client& cli, int timeout_sec = 1);
 
 /**
@@ -156,6 +163,7 @@ client_state poll_client(const client& cli, int timeout_sec = 1);
  *
  * @return true if a lidar packet was successfully read.
  */
+OUSTER_API_FUNCTION
 bool read_lidar_packet(const client& cli, uint8_t* buf,
                        const packet_format& pf);
 
@@ -169,6 +177,7 @@ bool read_lidar_packet(const client& cli, uint8_t* buf,
  *
  * @return true if a lidar packet was successfully read.
  */
+OUSTER_API_FUNCTION
 bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes);
 
 /**
@@ -181,6 +190,7 @@ bool read_lidar_packet(const client& cli, uint8_t* buf, size_t bytes);
  *
  * @return true if a lidar packet was successfully read.
  */
+OUSTER_API_FUNCTION
 bool read_lidar_packet(const client& cli, LidarPacket& packet);
 
 /**
@@ -193,6 +203,7 @@ bool read_lidar_packet(const client& cli, LidarPacket& packet);
  *
  * @return true if a lidar packet was successfully read.
  */
+OUSTER_API_FUNCTION
 bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes);
 
 /**
@@ -205,6 +216,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, size_t bytes);
  *
  * @return true if an imu packet was successfully read.
  */
+OUSTER_API_FUNCTION
 bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
 
 /**
@@ -217,6 +229,7 @@ bool read_imu_packet(const client& cli, uint8_t* buf, const packet_format& pf);
  *
  * @return true if an imu packet was successfully read.
  */
+OUSTER_API_FUNCTION
 bool read_imu_packet(const client& cli, ImuPacket& packet);
 
 /**
@@ -235,6 +248,7 @@ bool read_imu_packet(const client& cli, ImuPacket& packet);
  *
  * @return a text blob of metadata parseable into a sensor_info struct.
  */
+OUSTER_API_FUNCTION
 std::string get_metadata(client& cli,
                          int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
 
@@ -251,6 +265,7 @@ std::string get_metadata(client& cli,
  *
  * @return true if sensor config successfully populated.
  */
+OUSTER_API_FUNCTION
 bool get_config(const std::string& hostname, sensor_config& config,
                 bool active = true,
                 int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
@@ -281,6 +296,7 @@ enum config_flags : uint8_t {
  *
  * @return true if config params successfuly set on sensor.
  */
+OUSTER_API_FUNCTION
 bool set_config(const std::string& hostname, const sensor_config& config,
                 uint8_t config_flags = 0,
                 int timeout_sec = LONG_HTTP_REQUEST_TIMEOUT_SECONDS);
@@ -292,6 +308,7 @@ bool set_config(const std::string& hostname, const sensor_config& config,
  *
  * @return the port number.
  */
+OUSTER_API_FUNCTION
 int get_lidar_port(const client& cli);
 
 /**
@@ -301,6 +318,7 @@ int get_lidar_port(const client& cli);
  *
  * @return the port number.
  */
+OUSTER_API_FUNCTION
 int get_imu_port(const client& cli);
 
 /**
@@ -310,6 +328,7 @@ int get_imu_port(const client& cli);
  *
  * @return true if addr is in multicast range.
  */
+OUSTER_API_FUNCTION
 bool in_multicast(const std::string& addr);
 
 }  // namespace sensor

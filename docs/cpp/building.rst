@@ -5,7 +5,7 @@ Building the C++ Client from Source
 ===================================
 
 Building the example code requires a compiler supporting C++14 and CMake 3.1 or newer and the
-jsoncpp, Eigen3, and tins libraries with headers installed on the system. The sample visualizer also
+Eigen3 and tins libraries with headers installed on the system. The sample visualizer also
 requires the GLFW3 and GLEW libraries.
 
 The C++ example code is available `on the Ouster Github
@@ -18,9 +18,9 @@ To install build dependencies on Ubuntu:20.04+, run:
 
 .. code:: console
 
-   $ sudo apt install build-essential cmake libjsoncpp-dev libeigen3-dev libcurl4-openssl-dev \
-                      libtins-dev libpcap-dev libglfw3-dev libglew-dev libspdlog-dev \
-                      libpng-dev libflatbuffers-dev
+   $ sudo apt install build-essential cmake libeigen3-dev libcurl4-openssl-dev \
+                      libtins-dev libpcap-dev libglfw3-dev libpng-dev \
+                      libflatbuffers-dev
 
 You may also install curl with a different ssl backend, for example libcurl4-gnutls-dev or
 libcurl4-nss-dev.
@@ -29,9 +29,9 @@ On macOS, install XCode and `homebrew <https://brew.sh>`_ and run:
 
 .. code:: console
 
-   $ brew install cmake pkg-config jsoncpp eigen curl libtins glfw glew spdlog libpng flatbuffers
+   $ brew install cmake pkg-config eigen curl libtins glfw libpng flatbuffers
 
-To build run the following commands:
+To build on macOS and Ubuntu:20.04+ run the following commands:
 
 .. code:: console
 
@@ -51,7 +51,7 @@ defaults:
    -DBUILD_OSF=OFF                    # Do not build OSF lib
    -DBUILD_EXAMPLES=ON                # Build C++ examples
    -DBUILD_TESTING=ON                 # Build tests
-   -DBUILD_SHARED_LIBS=ON             # Build shared instead of static libraries
+   -DBUILD_SHARED_LIBRARY=ON          # Build the shared library and binary artifacts
 
 
 Building on Windows
@@ -82,7 +82,7 @@ You should be able to install dependencies with
 
 .. code:: powershell
 
-   PS > .\vcpkg.exe install --triplet x64-windows jsoncpp eigen3 curl libtins glfw3 glew spdlog libpng flatbuffers
+   PS > .\vcpkg.exe install --triplet x64-windows eigen3 curl libtins glfw3 libpng flatbuffers
 
 After these steps are complete, you should be able to open, build and run the ``ouster-sdk``
 project using Visual Studio:
@@ -125,3 +125,14 @@ supply ``""``, an empty string, to utilize automatic detection.
 
 On Windows, you may need to allow the client/visualizer through the Windows firewall to receive
 sensor data.
+
+Building Against The Library
+============================
+
+Navigate to ``examples`` under the ouster-sdk source directory, which should contain several linux 
+example folders building against the sdk library. To run each use the example.bash script.
+
+1. compiled_in_linking_example - Compile ouster_sdk as a sub-project under a larger codebase.
+2. static_linking_example - Use installed static libs of ouster_sdk under a larger codebase.
+3. shared_linking_example - Use installed shared libs of ouster_sdk under a larger codebase.
+

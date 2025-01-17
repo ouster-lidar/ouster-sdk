@@ -41,6 +41,10 @@ The Ouster SDK currently provides backwards compatibility with any FW 2.0 and la
 releases. Older SDK versions are not, however, generally forward-compatible with later FW releases,
 e.g., the SDK version 20210608 (ouster-sdk 0.2.0) is not compatible with FW 3.0.
 
+.. important::
+
+    Official SDK support for firmware versions 2.2 and 2.3 will end at the end of June, 2025.
+
 .. note::
 
     Please note that compatibility does not indicate that upgrading between SDK versions can happen
@@ -51,6 +55,7 @@ The following table indicates the compatibility of each released SDK version and
 ===================================== ======= ======= ======= ======= ======= ======= ======= =======
 SDK Tag (Release) / Python SDK        FW 2.0  FW 2.1  FW 2.2  FW 2.3  FW 2.4  FW 2.5  FW 3.0  FW 3.1
 ===================================== ======= ======= ======= ======= ======= ======= ======= =======
+C++ SDK 20250117 /  Python SDK 0.14.0 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20240703 /  Python SDK 0.13.1 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20240703 /  Python SDK 0.13.0 no      **yes** **yes** **yes** **yes** **yes** **yes** **yes**
 C++ SDK 20240703 /  Python SDK 0.12.0 **yes** **yes** **yes** **yes** **yes** **yes** **yes** **yes**

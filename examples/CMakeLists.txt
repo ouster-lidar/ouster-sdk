@@ -1,3 +1,5 @@
+find_package(Threads REQUIRED)
+
 add_executable(client_example client_example.cpp)
 target_link_libraries(client_example PRIVATE OusterSDK::ouster_client)
 

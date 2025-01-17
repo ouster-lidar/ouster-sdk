@@ -10,11 +10,12 @@
 #include "ouster/os_pcap.h"
 #include "ouster/pcap.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sensor_utils {
 
-class PcapIndex {
+class OUSTER_API_CLASS PcapIndex {
    public:
     using frame_index =
         std::vector<uint64_t>;  ///< Maps a frame number to a file offset
@@ -33,6 +34,7 @@ class PcapIndex {
     // over 50 mins.
     std::vector<frame_id_index> frame_id_indices_;
 
+    OUSTER_API_FUNCTION
     PcapIndex(size_t num_sensors)
         : frame_indices_(num_sensors),
           frame_timestamp_indices_(num_sensors),
@@ -41,6 +43,7 @@ class PcapIndex {
     /**
      * Simple method to clear the index.
      */
+    OUSTER_API_FUNCTION
     void clear();
 
     /**
@@ -51,6 +54,7 @@ class PcapIndex {
      * the desired frame count.
      * @return The number of frames in the sensor's frame index.
      */
+    OUSTER_API_FUNCTION
     size_t frame_count(size_t sensor_index) const;
 
     // TODO[UN]: in my opinion we are better off removing this method from this
@@ -68,6 +72,7 @@ class PcapIndex {
      *                         seek for.
      * @param[in] frame_number The frame number to seek to.
      */
+    OUSTER_API_FUNCTION
     void seek_to_frame(PcapReader& reader, size_t sensor_index,
                        unsigned int frame_number);
 };
@@ -78,12 +83,13 @@ class PcapIndex {
  * The index must be computed by iterating through all packets and calling
  * `update_index_for_current_packet()` for each one.
  */
-class IndexedPcapReader : public PcapReader {
+class OUSTER_API_CLASS IndexedPcapReader : public PcapReader {
    public:
     /**
      * @param[in] pcap_filename A file path of the pcap to read
      * @param[in] metadata_filenames A vector of sensor metadata filepaths
      */
+    OUSTER_API_FUNCTION
     IndexedPcapReader(
         const std::string&
             pcap_filename,  ///<  [in] - A file path of the pcap to read
@@ -97,6 +103,7 @@ class IndexedPcapReader : public PcapReader {
      * @param[in] sensor_infos A vector of sensor info structures for each
      * sensors
      */
+    OUSTER_API_FUNCTION
     IndexedPcapReader(
         const std::string& pcap_filename,
         const std::vector<ouster::sensor::sensor_info>& sensor_infos);
@@ -105,6 +112,7 @@ class IndexedPcapReader : public PcapReader {
      * This method constructs the index. Call this method before requesting the
      * index information using get_index()
      */
+    OUSTER_API_FUNCTION
     void build_index();
 
     /**
@@ -112,6 +120,7 @@ class IndexedPcapReader : public PcapReader {
      *
      * @return returns a PcapIndex object
      */
+    OUSTER_API_FUNCTION
     const PcapIndex& get_index() const;
 
     /**
@@ -120,6 +129,7 @@ class IndexedPcapReader : public PcapReader {
      *
      * @return An optional packet format for the current packet
      */
+    OUSTER_API_FUNCTION
     nonstd::optional<size_t> sensor_idx_for_current_packet() const;
 
     /**
@@ -127,6 +137,7 @@ class IndexedPcapReader : public PcapReader {
      * if the packet is associated with a sensor (and its corresponding packet
      * format)
      */
+    OUSTER_API_FUNCTION
     nonstd::optional<uint16_t> current_frame_id() const;
 
     /**
@@ -139,6 +150,7 @@ class IndexedPcapReader : public PcapReader {
      *
      * @return the progress of indexing as an int from [0, 100]
      */
+    OUSTER_API_FUNCTION
     int update_index_for_current_packet();
 
     /**
@@ -150,6 +162,7 @@ class IndexedPcapReader : public PcapReader {
      * @param[in] current The current frame id.
      * @return true if the frame id has rolled over.
      */
+    OUSTER_API_FUNCTION
     static bool frame_id_rolled_over(uint16_t previous, uint16_t current);
 
    protected:

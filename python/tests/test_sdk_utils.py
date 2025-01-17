@@ -128,7 +128,7 @@ def test_scan_to_packets():
     profile = UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
     info = SensorInfo()
     info.init_id = 1234
-    info.sn = "5678"
+    info.sn = 5678
 
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16

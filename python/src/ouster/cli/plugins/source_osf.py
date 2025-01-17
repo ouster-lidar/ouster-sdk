@@ -2,6 +2,8 @@ import click
 
 from typing import Any, Iterator, Dict, cast
 
+from ouster.sdk import client
+import ouster.sdk._bindings.osf as osf
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
                           source_multicommand,
@@ -12,14 +14,10 @@ from .source_util import (SourceCommandContext,
 @click.pass_context
 def osf_group(ctx) -> None:
     """Commands for working with OSF files and converting data to OSF."""
-    try:
-        import ouster.sdk._bindings.osf as _osf
-    except ImportError as e:
-        raise click.ClickException("Error: " + str(e))
     ctx.ensure_object(dict)
     sdk_log_level = ctx.obj.get('SDK_LOG_LEVEL', None)
     if sdk_log_level:
-        _osf.init_logger(sdk_log_level)
+        osf.init_logger(sdk_log_level)
 
 
 @click.command
@@ -33,18 +31,14 @@ def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
     Parses all metadata entries, output is in JSON format.
     """
     file = ctx.source_uri or ""
-    try:
-        import ouster.sdk._bindings.osf as _osf
-    except ImportError as e:
-        raise click.ClickException("Error: " + str(e))
 
     if not click_ctx.obj.get('SDK_LOG_LEVEL', None):
         # If not SDK_LOG_LEVEL passed we set to "error" logging so to ensure
         # that json output is not interferred with other SDK logging messages
         # and thus ruining valid json structure
-        _osf.init_logger("error")
+        osf.init_logger("error")
 
-    print(_osf.dump_metadata(file, not short))
+    print(osf.dump_metadata(file, not short))
 
 
 @click.command
@@ -61,10 +55,6 @@ def osf_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context, n: in
     Display sensor metadata about the SOURCE.
     """
     file = ctx.source_uri or ""
-    try:
-        import ouster.sdk.osf as osf
-    except ImportError as e:
-        raise click.ClickException("Error: " + str(e))
 
     reader = osf.Reader(file)
     msensors = reader.meta_store.find(osf.LidarSensor)
@@ -93,10 +83,6 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
     Useful to check chunks layout and decoding of all known messages (-d option).
     """
     file = ctx.source_uri or ""
-    try:
-        import ouster.sdk.osf as osf
-    except ImportError as e:
-        raise click.ClickException("Error: " + str(e))
 
     from ouster.sdk._bindings.osf import LidarScanStream
     import os
@@ -276,11 +262,6 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
     Useful to check chunks layout and decoding of all known messages (-d option).
     """
     file = ctx.source_uri or ""
-    try:
-        from ouster.sdk import client
-        import ouster.sdk.osf as osf
-    except ImportError as e:
-        raise click.ClickException("Error: " + str(e))
 
     # NOTE[pb]: Mypy quirks or some of our Python packages structure quirks, idk :(
     from ouster.sdk.util.parsing import scan_to_packets, packets_to_scan, cut_raw32_words  # type: ignore

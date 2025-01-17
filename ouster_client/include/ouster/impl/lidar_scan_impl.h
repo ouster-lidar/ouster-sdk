@@ -13,6 +13,7 @@
 #include "ouster/impl/packet_writer.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace impl {
@@ -23,52 +24,52 @@ template <typename T>
 struct FieldTag;
 
 template <>
-struct FieldTag<uint8_t> {
+struct OUSTER_API_CLASS FieldTag<uint8_t> {
     static constexpr ChanFieldType tag = ChanFieldType::UINT8;
 };
 
 template <>
-struct FieldTag<uint16_t> {
+struct OUSTER_API_CLASS FieldTag<uint16_t> {
     static constexpr ChanFieldType tag = ChanFieldType::UINT16;
 };
 
 template <>
-struct FieldTag<uint32_t> {
+struct OUSTER_API_CLASS FieldTag<uint32_t> {
     static constexpr ChanFieldType tag = ChanFieldType::UINT32;
 };
 
 template <>
-struct FieldTag<uint64_t> {
+struct OUSTER_API_CLASS FieldTag<uint64_t> {
     static constexpr ChanFieldType tag = ChanFieldType::UINT64;
 };
 
 template <>
-struct FieldTag<int8_t> {
+struct OUSTER_API_CLASS FieldTag<int8_t> {
     static constexpr ChanFieldType tag = ChanFieldType::INT8;
 };
 
 template <>
-struct FieldTag<int16_t> {
+struct OUSTER_API_CLASS FieldTag<int16_t> {
     static constexpr ChanFieldType tag = ChanFieldType::INT16;
 };
 
 template <>
-struct FieldTag<int32_t> {
+struct OUSTER_API_CLASS FieldTag<int32_t> {
     static constexpr ChanFieldType tag = ChanFieldType::INT32;
 };
 
 template <>
-struct FieldTag<int64_t> {
+struct OUSTER_API_CLASS FieldTag<int64_t> {
     static constexpr ChanFieldType tag = ChanFieldType::INT64;
 };
 
 template <>
-struct FieldTag<float> {
+struct OUSTER_API_CLASS FieldTag<float> {
     static constexpr ChanFieldType tag = ChanFieldType::FLOAT32;
 };
 
 template <>
-struct FieldTag<double> {
+struct OUSTER_API_CLASS FieldTag<double> {
     static constexpr ChanFieldType tag = ChanFieldType::FLOAT64;
 };
 
@@ -209,17 +210,20 @@ void visit_field(SCAN&& ls, const std::string& name, OP&& op, Args&&... args) {
                    std::forward<Args>(args)...);
 }
 
+// clang-format off
 /*
  * Call a generic operation op<T>(f, Args...) for each field of the lidar scan
  * with type parameter T having the correct field type
  */
 template <typename SCAN, typename OP, typename... Args>
-[[deprecated("Use either ls.fields() or foreach_channel_field instead")]] void
-foreach_field(SCAN&& ls, OP&& op, Args&&... args) {
+[[deprecated("Use either ls.fields() or foreach_channel_field instead")]]
+
+void foreach_field(SCAN&& ls, OP&& op, Args&&... args) {
     for (const auto& ft : ls)
         visit_field(std::forward<SCAN>(ls), ft.first, std::forward<OP>(op),
                     ft.first, std::forward<Args>(args)...);
 }
+// clang-format on
 
 /*
  * Call a generic operation op<T>(f, Args...) for each parsed channel field of
@@ -237,7 +241,7 @@ void foreach_channel_field(SCAN&& ls, const sensor::packet_format& pf, OP&& op,
 }
 
 // Read LidarScan field and cast to the destination
-struct read_and_cast {
+struct OUSTER_API_CLASS read_and_cast {
     template <typename T, typename U>
     void operator()(Eigen::Ref<const img_t<T>> src, Eigen::Ref<img_t<U>> dest) {
         dest = src.template cast<U>();
@@ -258,7 +262,7 @@ struct read_and_cast {
 
 // Copy fields from `ls_source` LidarScan to `field_dest` img with casting
 // to the img_t<T> type of `field_dest`.
-struct copy_and_cast {
+struct OUSTER_API_CLASS copy_and_cast {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field_dest, const LidarScan& ls_source,
                     const std::string& ls_source_field) {
@@ -269,7 +273,7 @@ struct copy_and_cast {
 /**
  * Zeros fields in LidarScans
  */
-struct zero_field {
+struct OUSTER_API_CLASS zero_field {
     /**
      * Zeros the field dest.
      *
@@ -288,6 +292,7 @@ struct zero_field {
  * @param[in] pf packet format
  * @param[in] ls lidar scan to check for RAW_HEADERS field presence.
  */
+OUSTER_API_FUNCTION
 bool raw_headers_enabled(const sensor::packet_format& pf, const LidarScan& ls);
 
 /**
@@ -321,7 +326,8 @@ void scan_to_packets(const LidarScan& ls,
 
     auto frame_id = ls.frame_id;
     LidarPacket packet(pw.lidar_packet_size);
-
+    // TODO: avoid this copy if we combine packet_writer and packet_format
+    packet.format = std::make_shared<ouster::sensor::packet_format>(pw);
     for (size_t p_id = 0; p_id < total_packets; ++p_id) {
         uint8_t* lidar_buf = packet.buf.data();
         std::memset(packet.buf.data(), 0, packet.buf.size());

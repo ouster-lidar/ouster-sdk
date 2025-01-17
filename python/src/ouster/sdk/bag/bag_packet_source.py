@@ -124,17 +124,36 @@ class BagPacketSource(PacketMultiSource):
                     break
                 msg = self._reader.deserialize(rawdata, connection.msgtype)
                 idx = self._id_map[connection.topic][0]
-                type = self._id_map[connection.topic][1]
-
+                msg_type = self._id_map[connection.topic][1]
+                msg_len = len(msg.buf)
                 packet: Union[LidarPacket, ImuPacket]
-                if type == 0:
-                    packet = LidarPacket(len(msg.buf))  # type: ignore
-                elif type == 1:
-                    packet = ImuPacket(len(msg.buf))  # type: ignore
+                if msg_type == 0:
+                    msg_len = len(msg.buf)
+                    if msg_len != self._pf[idx].lidar_packet_size:
+                        # are we off by one? (older ouster-ros bags are off by 1)
+                        if msg_len == self._pf[idx].lidar_packet_size + 1:
+                            msg_len -= 1
+                        else:
+                            print(f"got an unexpected lidar packet size {msg_len} != "
+                                  f"{self._pf[idx].lidar_packet_size} for sensor {idx}")
+                            continue
+                    packet = LidarPacket(msg_len)  # type: ignore
+                    packet.buf[:] = msg.buf[:msg_len]  # type: ignore
+                elif msg_type == 1:
+                    if msg_len != self._pf[idx].imu_packet_size:
+                        # are we off by one? (older ouster-ros bags are off by 1)
+                        if msg_len == self._pf[idx].imu_packet_size + 1:
+                            msg_len -= 1
+                        else:
+                            print(f"got an unexpected lidar packet size {msg_len} != "
+                                  f"{self._pf[idx].imu_packet_size} for sensor {idx}")
+                            continue
+                    packet = ImuPacket(msg_len)  # type: ignore
+                    packet.buf[:] = msg.buf[:msg_len]  # type: ignore
                 else:
                     continue
-                packet.buf[:] = msg.buf  # type: ignore
                 packet.host_timestamp = timestamp
+                packet.format = self._pf[idx]
 
                 res = packet.validate(self._metadata[idx], self._pf[idx])
                 if res == PacketValidationFailure.NONE:

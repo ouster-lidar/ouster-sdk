@@ -3,6 +3,7 @@ from typing_extensions import Protocol
 from ouster.sdk._bindings.client import SensorInfo, LidarScan
 from .data import FieldTypes
 from .scan_source import ScanSource
+import numpy as np
 
 
 class MultiScanSource(Protocol):
@@ -87,11 +88,33 @@ class MultiScanSource(Protocol):
         ...
 
     def single_source(self, stream_idx: int) -> ScanSource:
-        ...
+        from .scan_source_adapter import ScanSourceAdapter
+        return ScanSourceAdapter(self, stream_idx)
 
     def _slice_iter(self, key: slice) -> Iterator[List[Optional[LidarScan]]]:
         ...
 
     def slice(self, key: slice) -> 'MultiScanSource':
         """Constructs a MultiScanSource matching the specificed slice"""
-        ...
+        from ouster.sdk.util.forward_slicer import ForwardSlicer
+        from ouster.sdk.client.multi_sliced_scan_source import MultiSlicedScanSource
+        L = len(self)
+        k = ForwardSlicer.normalize(key, L)
+        if k.step < 0:
+            raise TypeError("slice() can't work with negative step")
+        return MultiSlicedScanSource(self, k)
+
+    def clip(self, fields: List[str], lower: int, upper: int) -> 'MultiScanSource':
+        """Constructs a MultiScanSource matching the specificed clip options"""
+        from ouster.sdk.client.multi_clipped_scan_source import MultiClippedScanSource
+        return MultiClippedScanSource(self, fields, lower, upper)
+
+    def reduce(self, beams: List[int]) -> 'MultiScanSource':
+        """Constructs a reduced MultiScanSource matching the beam count"""
+        from ouster.sdk.client.multi_reduced_scan_source import MultiReducedScanSource
+        return MultiReducedScanSource(self, beams)
+
+    def mask(self, fields: List[str], masks: List[Optional[np.ndarray]]) -> 'MultiScanSource':
+        """Constructs a masked MultiScanSource"""
+        from ouster.sdk.client.multi_masked_scan_source import MultiMaskedScanSource
+        return MultiMaskedScanSource(self, fields, masks)

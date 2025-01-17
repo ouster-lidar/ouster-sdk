@@ -11,8 +11,7 @@ from ouster.cli.plugins.source_save import (SourceSaveCommand,
                                             determine_filename,
                                             create_directories_if_missing,
                                             _file_exists_error)
-from ouster.sdk.client import (LidarScan,
-                               ChanField,
+from ouster.sdk.client import (ChanField,
                                XYZLut,
                                first_valid_column_ts,
                                first_valid_column_pose,
@@ -29,77 +28,18 @@ _min_range = None
 
 
 @click.command
-@click.option('--max-range', required=False, type=float,
-              default=None, help="Discard points further than this distance in meters")
-@click.option('--min-range', required=False, type=float,
-              default=None, help="Discard points closer that this distance in meters")
-@click.option('--percent-range', required=False, type=float,
-              default=None, help="Discards points with a range greater than this "
-              "percentile of ranges in the scan")
-@click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR)
-def source_clip(ctx: SourceCommandContext, max_range: float,
-                min_range: float, percent_range, **kwargs) -> None:
-    """
-    Clip points outside of a specified range. By default uses min/max ranges used
-    by the preceding slam command if present.
-    """
-
-    min_range = _min_range if min_range is None else min_range
-    max_range = _max_range if max_range is None else max_range
-
-    if min_range is None and max_range is None and percent_range is None:
-        raise click.exceptions.UsageError("You must provide --max-range, --min-range, or"
-                                          "--range-percent to clip.")
-
-    if percent_range is not None and (percent_range <= 0 or percent_range > 100):
-        raise click.exceptions.UsageError(
-                f"Expected 'percent_range' value to be between (0, 100], but received {percent_range}")
-
-    low_range = min_range * 1000 if min_range else 0
-    high_range = max_range * 1000 if max_range else float('inf')
-
-    scans = ctx.scan_iter
-
-    def clip_iter():
-        for scanl in scans:
-            out = []
-            for scan in scanl:
-                if scan is None:
-                    out.append(None)
-                    continue
-                copy = LidarScan(scan)
-
-                range1 = copy.field(ChanField.RANGE)
-
-                if percent_range and percent_range != 100:
-                    nonlocal high_range
-                    non_zero_range1 = range1[range1 != 0]  # Filter out zeros
-                    percentile_range = np.percentile(non_zero_range1, percent_range)
-                    high_range = min(high_range, percentile_range)
-
-                range1[(range1 < low_range) | (range1 > high_range)] = 0
-
-                if copy.has_field(ChanField.RANGE2):
-                    range2 = copy.field(ChanField.RANGE2)
-                    range2[(range2 < low_range) | (range2 > high_range)] = 0
-                out.append(copy)
-            yield out
-
-    ctx.scan_iter = clip_iter()
-
-
-@click.command
-@click.option('--max-range', required=False,
+@click.option('--max-range', required=False, show_default=True,
               default=150.0, help="Max valid range")
-@click.option('--min-range', required=False,
+@click.option('--min-range', required=False, show_default=True,
               default=1.0, help="Min valid range")
 @click.option('-v', '--voxel-size', required=False,
-              type=float, help="Voxel map size")
+              type=float, help="Voxel map size (meters)")
+@click.option('-d', '--dump-map', required=False,
+              default="", type=str, help="Dumps the map to a ply file")
 @click.pass_context
-@source_multicommand(type=SourceCommandType.PROCESSOR)
+@source_multicommand(type=SourceCommandType.PROCESSOR_UNREPEATABLE)
 def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
-                voxel_size: float, **kwargs) -> None:
+                voxel_size: float, dump_map: str) -> None:
     """
     Run SLAM with a SOURCE.\n
 
@@ -116,6 +56,14 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
     global _max_range, _min_range
     _max_range = max_range
     _min_range = min_range
+
+    if dump_map:
+        if not dump_map.endswith(".ply"):
+            raise click.UsageError("--dump-map must be be in .ply format")
+        try:
+            import point_cloud_utils as pcu  # type: ignore
+        except ImportError:
+            raise click.UsageError("The --dump-map option requires point-cloud-utils to be installed")
 
     def make_kiss_slam():
         try:
@@ -136,7 +84,7 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
         logger.error(str(e))
         return
 
-    def slam_iter(scan_source, slam_engine):
+    def slam_iter(scan_source, slam_engine, dump_map):
         scan_start_ts = None
         for scans in scan_source:
             # Use the first valid scan to check if the iteration restarts
@@ -147,13 +95,21 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
             scan_ts = first_valid_column_ts(scan)
             if scan_ts == scan_start_ts:
                 logger.info("SLAM restarts as scan iteration restarts")
+                if dump_map:
+                    points = slam_engine.ouster_kiss_icp.local_map.point_cloud()
+                    pcu.save_mesh_v(dump_map, points)
+                    logger.info(f"map was dumped to {dump_map}")
+                    dump_map = False
                 slam_engine = make_kiss_slam()
             if not scan_start_ts:
                 scan_start_ts = scan_ts
             slam_scans = slam_engine.update(scans)
             yield slam_scans
+        if dump_map:
+            points = slam_engine.ouster_kiss_icp.local_map.point_cloud()
+            pcu.save_mesh_v(dump_map, points)
 
-    ctx.scan_iter = slam_iter(ctx.scan_iter, slam_engine)
+    ctx.scan_iter = slam_iter(ctx.scan_iter, slam_engine, dump_map)
 
 
 @click.command(context_settings=dict(
@@ -450,7 +406,6 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
 
 
 source.commands['ANY']['slam'] = source_slam
-source.commands['ANY']['clip'] = source_clip
 SourceSaveCommand.implementations[OusterIoType.PCD] = point_cloud_convert
 SourceSaveCommand.implementations[OusterIoType.LAS] = point_cloud_convert
 SourceSaveCommand.implementations[OusterIoType.PLY] = point_cloud_convert

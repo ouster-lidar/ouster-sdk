@@ -121,9 +121,9 @@ class LidarScanVizAccumulators:
         }
 
         key_definitions: Dict[str, str] = {
-            'j / J': "Increase/decrease point size of accumulated clouds or map",
-            'k / K': "Cycle point cloud coloring mode of accumulated clouds or map",
-            'g / G': "Cycle point cloud color palette of accumulated clouds or map",
+            'j / SHIFT+j': "Increase/decrease point size of accumulated clouds or map",
+            'k / SHIFT+k': "Cycle point cloud coloring mode of accumulated clouds or map",
+            'g / SHIFT+g': "Cycle point cloud color palette of accumulated clouds or map",
             '6': "Toggle scans accumulation view mode (ACCUM)",
             '7': "Toggle overall map view mode (MAP)",
             '8': "Toggle poses/trajectory view mode (TRACK)",

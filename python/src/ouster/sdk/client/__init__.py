@@ -43,6 +43,7 @@ from ouster.sdk._bindings.client import Sensor as _Sensor
 from ouster.sdk._bindings.client import SensorScanSource as _SensorScanSource
 from ouster.sdk._bindings.client import Version
 from ouster.sdk._bindings.client import parse_and_validate_metadata
+from ouster.sdk._bindings.client import parse_and_validate_sensor_config
 from ouster.sdk._bindings.client import ValidatorIssues
 from ouster.sdk._bindings.client import ValidatorEntry
 from ouster.sdk._bindings.client import ScanBatcher
@@ -56,6 +57,7 @@ from .data import FieldTypes
 from .data import ColHeader
 from .data import XYZLut
 from .data import destagger
+from .data import stagger
 from .data import packet_ts
 from .data import ChanField
 
@@ -64,6 +66,11 @@ from .sensor import Sensor
 from .scan_source import ScanSource
 from .multi_scan_source import MultiScanSource
 from .scan_source_adapter import ScanSourceAdapter
+from .multi_sliced_scan_source import MultiSlicedScanSource
+from .multi_reduced_scan_source import MultiReducedScanSource
+from .multi_masked_scan_source import MultiMaskedScanSource
+from .multi_clipped_scan_source import MultiClippedScanSource
+
 
 from .core import ClientError
 from .core import ClientTimeout

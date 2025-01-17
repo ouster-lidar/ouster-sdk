@@ -9,8 +9,17 @@
 
 #pragma once
 
-#include "ouster/impl/netcompat.h"
 #include "ouster/sensor_http.h"
+#include "ouster/types.h"
+
+/**
+ * @note On windows platforms, the windows headers do a global define on
+ * BAUD_9600 which causes issues with defines in types.h. Netcompat.h must
+ * be included after every other header file to avoid this issue.
+ */
+// clang-format off
+#include "ouster/impl/netcompat.h"
+// clang-format on
 
 namespace ouster {
 namespace sensor {
@@ -44,7 +53,7 @@ class SensorTcpImp : public util::SensorHttp {
      *
      * @return returns a Json object of the sensor metadata.
      */
-    Json::Value metadata(int timeout_sec = 1) const override;
+    std::string metadata(int timeout_sec = 1) const override;
 
     /**
      * Queries the sensor_info.
@@ -53,7 +62,7 @@ class SensorTcpImp : public util::SensorHttp {
      *
      * @return returns a Json object representing the sensor_info.
      */
-    Json::Value sensor_info(int timeout_sec = 1) const override;
+    std::string sensor_info(int timeout_sec = 1) const override;
 
     /**
      * Queries active/staged configuration on the sensor
@@ -61,7 +70,7 @@ class SensorTcpImp : public util::SensorHttp {
      * @param[in] active if true retrieve active, otherwise get staged configs.
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return a string represnting the active or staged config
+     * @return a string representing the active or staged config
      */
     std::string get_config_params(bool active,
                                   int timeout_sec = 1) const override;
@@ -82,14 +91,14 @@ class SensorTcpImp : public util::SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value active_config_params(int timeout_sec = 1) const override;
+    std::string active_config_params(int timeout_sec = 1) const override;
 
     /**
      * Retrieves the staged configuration on the sensor
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value staged_config_params(int timeout_sec = 1) const override;
+    std::string staged_config_params(int timeout_sec = 1) const override;
 
     /**
      * Enables automatic assignment of udp destination ports.
@@ -103,35 +112,35 @@ class SensorTcpImp : public util::SensorHttp {
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value beam_intrinsics(int timeout_sec = 1) const override;
+    std::string beam_intrinsics(int timeout_sec = 1) const override;
 
     /**
      * Retrieves imu intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value imu_intrinsics(int timeout_sec = 1) const override;
+    std::string imu_intrinsics(int timeout_sec = 1) const override;
 
     /**
      * Retrieves lidar intrinsics of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value lidar_intrinsics(int timeout_sec = 1) const override;
+    std::string lidar_intrinsics(int timeout_sec = 1) const override;
 
     /**
      * Retrieves lidar data format.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value lidar_data_format(int timeout_sec = 1) const override;
+    std::string lidar_data_format(int timeout_sec = 1) const override;
 
     /**
      * Gets the calibaration status of the sensor.
      *
      * @param[in] timeout_sec The timeout for the request in seconds.
      */
-    Json::Value calibration_status(int timeout_sec = 1) const override;
+    std::string calibration_status(int timeout_sec = 1) const override;
 
     /**
      * Restarts the sensor applying all staged configurations.
@@ -192,6 +201,16 @@ class SensorTcpImp : public util::SensorHttp {
     std::string network(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
+    void set_static_ip(
+        const std::string& ip_address,
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
+    void delete_static_ip(
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
+    std::vector<uint8_t> diagnostics_dump(
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
    private:
     SOCKET cfg_socket(const char* addr);
 
@@ -199,9 +218,6 @@ class SensorTcpImp : public util::SensorHttp {
 
     void tcp_cmd_with_validation(const std::vector<std::string>& cmd_tokens,
                                  const std::string& validation) const;
-
-    Json::Value tcp_cmd_json(const std::vector<std::string>& cmd_tokens,
-                             bool exception_on_parse_errors = true) const;
 
    private:
     SOCKET socket_handle;

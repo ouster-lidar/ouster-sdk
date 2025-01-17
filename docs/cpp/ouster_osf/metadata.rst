@@ -11,9 +11,6 @@ Public API
 .. doxygenclass:: ouster::osf::MetadataEntryRef
    :members:
 
-.. doxygenclass:: ouster::osf::MetadataStore
-   :members:
-
 .. doxygenfunction:: ouster::osf::metadata_pointer_as
 
 

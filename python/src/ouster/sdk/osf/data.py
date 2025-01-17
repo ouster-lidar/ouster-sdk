@@ -5,7 +5,8 @@ from ouster.sdk import client
 from ouster.sdk.client.data import FieldTypes
 from ouster.sdk.client import ScanSource
 from ouster.sdk._bindings.client import LidarScan
-import ouster.sdk.osf as osf
+import ouster.sdk._bindings.osf as osf
+import numpy as np
 
 
 class Scans(ScanSource):
@@ -100,6 +101,7 @@ class Scans(ScanSource):
 
     @property
     def is_live(self) -> bool:
+        """Returns true if the source is a live data stream."""
         return False
 
     @property
@@ -142,5 +144,14 @@ class Scans(ScanSource):
     def _slice_iter(self, _: slice) -> Iterator[Optional[LidarScan]]:
         raise NotImplementedError
 
-    def slice(self, _: slice) -> 'ScanSource':
+    def slice(self, _: slice) -> ScanSource:
+        raise NotImplementedError
+
+    def clip(self, fields: List[str], lower: int, upper: int) -> ScanSource:
+        raise NotImplementedError
+
+    def reduce(self, beams: int) -> ScanSource:
+        raise NotImplementedError
+
+    def mask(self, fields: List[str], mask: Optional[np.ndarray]) -> ScanSource:
         raise NotImplementedError

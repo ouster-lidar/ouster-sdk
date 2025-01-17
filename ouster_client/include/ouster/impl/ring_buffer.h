@@ -8,8 +8,12 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <numeric>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
+
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace sensor {
@@ -47,6 +51,7 @@ class RingBuffer {
     std::atomic<size_t> r_idx_, w_idx_;
     std::vector<T> bufs_;
 
+    OUSTER_API_IGNORE
     size_t _capacity() const { return bufs_.size(); }
 
    public:

@@ -42,23 +42,24 @@ def main():
         description=main.__doc__,
         formatter_class=argparse.RawTextHelpFormatter)
 
-    parser.add_argument('pcap_path',
+    parser.add_argument('data_path',
                         nargs='?',
-                        metavar='PCAP',
-                        help='path to pcap file')
+                        metavar='DATA_PATH',
+                        help='path to data file')
 
     args = parser.parse_args()
 
-    pcap_path = os.getenv("SAMPLE_DATA_PCAP_PATH", args.pcap_path)
+    env_var_name = 'SAMPLE_DATA_PATH'
+    data_path = os.getenv(env_var_name, args.data_path)
 
-    if not pcap_path:
+    if not data_path:
         print(
-            "ERROR: Please add SAMPLE_DATA_PCAP_PATH and SAMPLE_DATA_JSON_PATH to"
-            + " environment variables or pass <pcap_path> and <meta_path>")
+            f"ERROR: Please set the {env_var_name} environment variable to the path of a PCAP or OSF file"
+            + " or provide a path to a file as the argument to this script.")
         sys.exit()
 
     # Getting data sources
-    source = open_source(pcap_path)
+    source = open_source(data_path)
     meta = source.metadata
     scans = iter(source)
 

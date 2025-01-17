@@ -370,14 +370,14 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     cloud = viz.Cloud(1024)
     point_viz.add(cloud)
 
-    points = np.random.rand(3, 1024).astype(np.float32) * 30 - 15
+    points = np.random.rand(1024, 3).astype(np.float32) * 30 - 15
 
     # should be r, g, b from top to bottom
     key = np.zeros(1024, dtype=float)
 
-    key[5.0 < points[2, :]] = 0.2
-    key[(-5.0 < points[2, :]) & (points[2, :] <= 5.0)] = 0.5
-    key[points[2, :] < -5.0] = 0.8
+    key[5.0 < points[:, 2]] = 0.2
+    key[(-5.0 < points[:, 2]) & (points[:, 2] <= 5.0)] = 0.5
+    key[points[:, 2] < -5.0] = 0.8
 
     cloud.set_xyz(points)
 
@@ -410,7 +410,7 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
                    "in RED with transparency")
     ones = np.ones([1024, 1], dtype=float)
     mask_rgba = np.hstack((0.1 * ones, 0.1 * ones, 0.1 * ones, 0.5 * ones))
-    mask_rgba[points[0, :] > 5.0] = np.array([0.8, 0.1, 0.1, 0.8])
+    mask_rgba[points[:, 0] > 5.0] = np.array([0.8, 0.1, 0.1, 0.8])
     cloud.set_mask(mask_rgba)
     show_viz()
 
@@ -458,7 +458,7 @@ def test_point_viz_rgb_cloud(point_viz: viz.PointViz) -> None:
     big_key = big_points[0]
     big_points = big_points * 300 - 14
 
-    big_cloud.set_xyz(big_points)
+    big_cloud.set_xyz(big_points.transpose())
     big_cloud.set_key(big_key)
     point_viz.add(big_cloud)
     show_viz()

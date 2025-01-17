@@ -41,7 +41,7 @@ def test_fusa_fields():
     assert packet_format.packet_type(arr) == 1
     assert packet_format.frame_id(arr) == 229
     assert packet_format.init_id(arr) == si.init_id
-    assert str(packet_format.prod_sn(arr)) == si.sn
+    assert packet_format.prod_sn(arr) == si.sn
     # assert packet_format.countdown_thermal_shutdown(arr) == 0   # Note: doesn't exist in python iface
     # assert packet_format.countdown_shot_limiting(arr) == 0   # Note: doesn't exist in python iface
     # assert packet_format.thermal_shutdown(arr) == 0  # Note: doesn't exist in python iface

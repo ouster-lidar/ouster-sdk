@@ -1,0 +1,59 @@
+Checks: '*,
+         -llvmlibc-*, -altera-*, -fuchsia-*,
+         -modernize-use-trailing-return-type,
+         -cppcoreguidelines-avoid-magic-numbers,
+         -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+         -readability-magic-numbers,
+         -misc-const-correctness,
+         -llvm-header-guard,
+         -hicpp-uppercase-literal-suffix,
+         -readability-uppercase-literal-suffix,
+         -readability-else-after-return,
+         -llvm-else-after-return,
+         -bugprone-easily-swappable-parameters,
+         -google-readability-todo,
+         -abseil-*,
+         -android-cloexec-open'
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: 'i|j|k|w|h|x|y|z|it'
+  - key: readability-identifier-length.IgnoredLoopCounterNames
+    value: 'i|j|k|w|h|x|y|z|it'
+  - key: readability-identifier-length.IgnoredParameterNames
+    value: 'w|h|x|y|z'
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: 'Eigen::Ref|sync_ptr'
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.MemberCase
+    value: lower_case
+  - key: readability-identifier-naming.ProtectedMemberSuffix
+    value: _
+  - key: readability-identifier-naming.PrivateMemberSuffix
+    value: _
+  - key: readability-identifier-naming.ClassMethodCase
+    value: lower_case
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.TemplateParameterCase
+    value: CamelCase
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case

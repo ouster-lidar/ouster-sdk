@@ -49,7 +49,7 @@ def test_resolve_extrinscs_with_sensor_infos():
 
     sensor_infos = [SensorInfo()] * len(sensor_names)
     for si, sn in zip(sensor_infos, sensor_names):
-        si.sn = sn
+        si.sn = int(sn)
 
     extrinsics = resolve_extrinsics(data_path=PCAP_PATH_WITH_EXT)
     assert len(extrinsics) == 0

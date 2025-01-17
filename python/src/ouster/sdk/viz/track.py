@@ -37,7 +37,7 @@ class Track:
     """Represents a sequence of scans with their poses and "key frames", which are scans
     representing every Nth scan or every few meters."""
     # TODO[tws] consider moving "key" (e.g. color) arrays to TracksAccumulator
-    def __init__(self, config: LidarScanVizAccumulatorsConfig):
+    def __init__(self, config: LidarScanVizAccumulatorsConfig, extrinsics: np.ndarray = np.eye(4)):
         self._scan_num = -1
         self._scan_records: List[Optional[ScanRecord]] = []
 
@@ -71,6 +71,7 @@ class Track:
         self._kf_key = np.zeros((self._kf_max_num + 1, 4),
                            dtype=np.float32)
         self._kf_key_color = np.array([0.9, 0.9, 0.2, 1.0])
+        self._extrinsics = extrinsics
 
     def _update_track(self) -> None:
         """Extract and update the scans poses TRACK"""
@@ -193,7 +194,8 @@ class Track:
             return
 
         if scan:
-            self._scan_records[self._scan_num] = ScanRecord(pose=client.first_valid_column_pose(scan), scan=scan)
+            pose = client.last_valid_column_pose(scan) @ self._extrinsics
+            self._scan_records[self._scan_num] = ScanRecord(pose=pose, scan=scan)
         self._update_track()
         self._update_accum()
 
@@ -203,7 +205,7 @@ class MultiTrack:
     # TODO[tws] can probably just the number of sensors instead of a LidarScanVizModel
     def __init__(self, model: LidarScanVizModel, config: LidarScanVizAccumulatorsConfig):
         self._tracks = [
-            Track(config) for _ in model._sensors
+            Track(config, m.extrinsic) for m in model.metadata
         ]
         self._kf_max_num = config._accum_max_num
         self._scan_num = -1

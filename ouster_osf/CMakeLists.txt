@@ -10,8 +10,7 @@ option(OUSTER_OSF_NO_THREADING "Don't use threads, useful for WASM targets" OFF)
 find_package(ZLIB REQUIRED)
 find_package(PNG REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(jsoncpp REQUIRED)
-find_package(spdlog REQUIRED)
+find_package(Threads)
 include(Coverage)
 
 # TODO: Extract to a separate FindFlatbuffers cmake file
@@ -20,19 +19,10 @@ include(Coverage)
 #   because it started failing out of blue :idk:scream: will see.
 if(NOT CONAN_EXPORTED)
   find_package(Flatbuffers REQUIRED)
-  if(NOT DEFINED FLATBUFFERS_FLATC_EXECUTABLE)
-    set(FLATBUFFERS_FLATC_EXECUTABLE flatbuffers::flatc)
-  endif()
-  message(STATUS "Flatbuffers found: ${Flatbuffers_DIR}" )
 else()
   find_package(flatbuffers REQUIRED)
-  if(WIN32)
-    set(FLATBUFFERS_FLATC_EXECUTABLE flatc.exe)
-  else()
-    set(FLATBUFFERS_FLATC_EXECUTABLE flatc)
-  endif()
-  message(STATUS "flatbuffers found: ${Flatbuffers_DIR}" )
 endif()
+
 
 # TODO[pb]: Move to flatbuffers 2.0 and check do we still need this???
 # Using this link lib search method so to get shared .so library and not
@@ -100,12 +90,20 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/file.cpp
                               src/reader.cpp
                               src/operations.cpp
-                              src/json_utils.cpp
                               src/fb_utils.cpp
                               src/writer.cpp
+                              src/async_writer.cpp
+                              src/png_lidarscan_encoder.cpp
 )
-
+set_property(TARGET ouster_osf PROPERTY POSITION_INDEPENDENT_CODE ON)
+if(BUILD_SHARED_LIBRARY)
+  set_target_properties(ouster_osf PROPERTIES CXX_VISIBILITY_PRESET hidden)
+endif()
 CodeCoverageFunctionality(ouster_osf)
+
+if(BUILD_SHARED_LIBRARY)
+  target_compile_definitions(ouster_osf PRIVATE BUILD_SHARED_LIBS_EXPORT)
+endif()
 
 if (OUSTER_OSF_NO_MMAP)
   target_compile_definitions(ouster_osf PRIVATE OUSTER_OSF_NO_MMAP)
@@ -116,14 +114,21 @@ if (OUSTER_OSF_NO_THREADING)
 endif()
 
 # Include Flatbuffers generated C++ headers
+target_include_directories(ouster_osf INTERFACE ${FLATBUFFERS_INCLUDE_DIR})
+
 target_include_directories(ouster_osf PUBLIC
     $<BUILD_INTERFACE:${FB_CPP_GENERATED_DIR}>
     $<INSTALL_INTERFACE:include/fb_generated>
+    PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty>
 )
 target_link_libraries(ouster_osf
   PUBLIC
-    OusterSDK::ouster_client OusterSDK::ouster_pcap PNG::PNG
-    flatbuffers::flatbuffers ZLIB::ZLIB jsoncpp_lib
+    OusterSDK::ouster_client 
+    OusterSDK::ouster_pcap
+  PRIVATE
+    PNG::PNG
+    flatbuffers::flatbuffers ZLIB::ZLIB
 )
 target_include_directories(ouster_osf PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -131,7 +136,6 @@ target_include_directories(ouster_osf PUBLIC
 )
 add_dependencies(ouster_osf cpp_gen)
 add_library(OusterSDK::ouster_osf ALIAS ouster_osf)
-
 
 # Check if ouster_client compiled with -mavx2 option and add those to ouster_osf
 # If we are not matching -mavx2 compile flag Eigen lib functions might crash with

@@ -112,7 +112,7 @@ def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
     cfg1 = client.get_config(hil_sensor_hostname)
     logger.debug(f"Sanity check new config (New UDP dest: {cfg1.udp_dest})")
     assert no_udp_cfg.udp_dest != cfg1.udp_dest
-    cfg1.udp_dest = ""
+    cfg1.udp_dest = None
     assert no_udp_cfg == cfg1
 
 

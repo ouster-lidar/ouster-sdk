@@ -195,6 +195,8 @@ def test_scans_meta(packets: client.PacketSource) -> None:
 
     assert scan.complete()
 
+    assert packets.metadata == scan.sensor_info
+
     # all timestamps valid
     assert np.count_nonzero(scan.timestamp) == scan.w
 

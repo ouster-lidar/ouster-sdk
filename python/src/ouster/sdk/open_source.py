@@ -91,7 +91,7 @@ def open_source(source_url: Union[str, List[str]], sensor_idx: int = 0, *args,
         raise RuntimeError(
             f"Failed to create scan_source for url {source_url}")
 
-    _populate_extrinsics(scan_source, first_url, source_type, extrinsics)
+    _populate_extrinsics(scan_source, extrinsics)
 
     if sensor_idx < 0:
         return scan_source
@@ -106,8 +106,6 @@ def open_source(source_url: Union[str, List[str]], sensor_idx: int = 0, *args,
 
 
 def _populate_extrinsics(scan_source: MultiScanSource,
-                         source_url: str,
-                         source_type: OusterIoType,
                          _extrinsics: Optional[Union[str, np.ndarray, List[np.ndarray]]] = None) -> None:
 
     from ouster.sdk.util import _parse_extrinsics_file
@@ -125,7 +123,7 @@ def _populate_extrinsics(scan_source: MultiScanSource,
             extrinsics = _extrinsics
         # handle extrinsics as a file path
         elif isinstance(_extrinsics, str):
-            sensors_serial = [info.sn for info in scan_source.metadata]
+            sensors_serial = [str(info.sn) for info in scan_source.metadata]
             extrinsics_from_file = _parse_extrinsics_file(
                 _extrinsics, sensors_serial)
             if extrinsics_from_file:

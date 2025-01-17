@@ -13,11 +13,7 @@ Let's make a :py:class:`.PacketMultiSource` from our sample data using :py:class
 
 .. code:: python
 
-    from ouster.sdk import pcap
-    with open(metadata_path, 'r') as f:
-        metadata = client.SensorInfo(f.read())
-
-    source = pcap.PcapMultiPacketReader(pcap_path, metadatas=[metadata])
+    source = pcap.PcapMultiPacketReader(pcap_path).single_source(0)
 
 Now we can read packets from ``source`` with the following code:
 

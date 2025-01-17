@@ -37,7 +37,10 @@ def draw_pixels(ctx: WindowCtx, x: float, y: float):
     global hello_pixel
     if ctx.lbutton_down:
         hello_pixel = img.window_coordinates_to_image_pixel(ctx, x, y)
-        if hello_pixel:
+        # if the pixel location is a valid location in the image data
+        if hello_pixel[0] >= 0 and hello_pixel[0] < img_size[0] and \
+            hello_pixel[1] >= 0 and hello_pixel[1] < img_size[1]:
+
             img_data[hello_pixel] = 1.0
             img.set_image(img_data)
             pixel_center = img.image_pixel_to_window_coordinates(ctx, hello_pixel)

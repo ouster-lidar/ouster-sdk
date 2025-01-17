@@ -11,6 +11,7 @@
 
 #include "http_client.h"
 #include "ouster/sensor_http.h"
+#include "ouster/types.h"
 
 namespace ouster {
 namespace sensor {
@@ -38,7 +39,7 @@ class SensorHttpImp : public util::SensorHttp {
      *
      * @return returns a Json object of the sensor metadata.
      */
-    Json::Value metadata(
+    std::string metadata(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
@@ -46,7 +47,7 @@ class SensorHttpImp : public util::SensorHttp {
      *
      * @return returns a Json object representing the sensor_info.
      */
-    Json::Value sensor_info(
+    std::string sensor_info(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
@@ -55,7 +56,7 @@ class SensorHttpImp : public util::SensorHttp {
      * @param[in] active if true retrieve active, otherwise get staged configs.
      * @param[in] timeout_sec The timeout for the request in seconds.
      *
-     * @return a string represnting the active or staged config
+     * @return a string representing the active or staged config
      */
     std::string get_config_params(
         bool active,
@@ -76,13 +77,13 @@ class SensorHttpImp : public util::SensorHttp {
     /**
      * Retrieves the active configuration on the sensor
      */
-    Json::Value active_config_params(
+    std::string active_config_params(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves the staged configuration on the sensor
      */
-    Json::Value staged_config_params(
+    std::string staged_config_params(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
@@ -94,31 +95,31 @@ class SensorHttpImp : public util::SensorHttp {
     /**
      * Retrieves beam intrinsics of the sensor.
      */
-    Json::Value beam_intrinsics(
+    std::string beam_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves imu intrinsics of the sensor.
      */
-    Json::Value imu_intrinsics(
+    std::string imu_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves lidar intrinsics of the sensor.
      */
-    Json::Value lidar_intrinsics(
+    std::string lidar_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves lidar data format.
      */
-    Json::Value lidar_data_format(
+    std::string lidar_data_format(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Gets the calibaration status of the sensor.
      */
-    Json::Value calibration_status(
+    std::string calibration_status(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
@@ -169,10 +170,18 @@ class SensorHttpImp : public util::SensorHttp {
     std::string network(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
+    void set_static_ip(
+        const std::string& ip_address,
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
+    void delete_static_ip(
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
+    std::vector<uint8_t> diagnostics_dump(
+        int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
+
    protected:
     std::string get(const std::string& url, int timeout_sec) const;
-
-    Json::Value get_json(const std::string& url, int timeout_sec) const;
 
     void execute(const std::string& url, const std::string& validation,
                  int timeout_sec) const;
@@ -235,47 +244,47 @@ class SensorHttpImp_2_1 : public SensorHttpImp_2_2 {
     /**
      * Queries the sensor metadata.
      *
-     * @return returns a Json object of the sensor metadata.
+     * @return returns a Json string of the sensor metadata.
      */
-    Json::Value metadata(
+    std::string metadata(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Queries the sensor_info.
      *
-     * @return returns a Json object representing the sensor_info.
+     * @return returns a Json string representing the sensor_info.
      */
-    Json::Value sensor_info(
+    std::string sensor_info(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves beam intrinsics of the sensor.
      */
-    Json::Value beam_intrinsics(
+    std::string beam_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves imu intrinsics of the sensor.
      */
-    Json::Value imu_intrinsics(
+    std::string imu_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves lidar intrinsics of the sensor.
      */
-    Json::Value lidar_intrinsics(
+    std::string lidar_intrinsics(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Retrieves lidar data format.
      */
-    Json::Value lidar_data_format(
+    std::string lidar_data_format(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 
     /**
      * Gets the calibaration status of the sensor.
      */
-    Json::Value calibration_status(
+    std::string calibration_status(
         int timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) const override;
 };
 

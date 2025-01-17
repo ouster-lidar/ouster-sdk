@@ -26,12 +26,15 @@ endif()
 option(BUILD_VIZ "Enabled for Python build" ON)
 option(BUILD_OSF "Build OSF library." ON)
 option(BUILD_PCAP "Enabled for Python build" ON)
+option(SKIP_SDK_FIND "Skip finding the sdk" OFF)
 
 # ==== Requirements ====
 find_package(Pybind11Internal)
 find_package(Eigen3 REQUIRED)
-find_package(OusterSDK REQUIRED)
-find_package(spdlog REQUIRED)
+find_package(Flatbuffers NAMES Flatbuffers FlatBuffers)
+if(NOT SKIP_SDK_FIND)
+  find_package(OusterSDK REQUIRED)
+endif()
 
 # when building as a top-level project
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -56,7 +59,8 @@ target_link_libraries(_bindings
     ouster_pcap
     ouster_osf
     ouster_viz
-    spdlog::spdlog)
+    flatbuffers::flatbuffers
+  )
 CodeCoverageFunctionality(_bindings)
   
 target_include_directories(_bindings SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})

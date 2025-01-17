@@ -13,6 +13,7 @@
 
 #include "ouster/impl/cuda_macros.h"
 #include "ouster/impl/idx_range.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 

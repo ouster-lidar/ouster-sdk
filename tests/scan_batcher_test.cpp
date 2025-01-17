@@ -106,7 +106,8 @@ TEST_P(ScanBatcherTest, scan_batcher_skips_test) {
 
     uint32_t frame_id = pf.frame_id(packets[0].buf.data());
 
-    auto next_frame_packet = std::make_unique<LidarPacket>();
+    auto next_frame_packet =
+        std::make_unique<LidarPacket>(pf.lidar_packet_size);
     pw.set_frame_id(next_frame_packet->buf.data(), frame_id + 1);
 
     // produce a reordered packet from "previous frame" with data from one of
@@ -322,7 +323,8 @@ TEST_P(ScanBatcherTest, scan_batcher_block_parse_dropped_packets_test) {
 
     uint32_t frame_id = pf.frame_id(packets[0].buf.data());
 
-    auto next_frame_packet = std::make_unique<LidarPacket>();
+    auto next_frame_packet =
+        std::make_unique<LidarPacket>(pf.lidar_packet_size);
     pw.set_frame_id(next_frame_packet->buf.data(), frame_id + 1);
 
     // dropping in reverse order for easier erase
@@ -458,7 +460,7 @@ TEST_P(ScanBatcherTest, scan_batcher_wraparound_test) {
     ls.measurement_id() = 10000;
     ls.frame_id = 0;
 
-    auto packet = std::make_unique<LidarPacket>();
+    auto packet = std::make_unique<LidarPacket>(pf.lidar_packet_size);
     std::memset(packet->buf.data(), 0, packet->buf.size());
     packet->host_timestamp = 100;
     pw.set_frame_id(packet->buf.data(), pw.max_frame_id);
@@ -513,7 +515,7 @@ INSTANTIATE_TEST_CASE_P(
                         {ChanField::REFLECTIVITY2, 0x415f5e481688fe5a},
                         {ChanField::NEAR_IR, 0x2c32a3e5be6b01d5},
                         {ChanField::FLAGS, 6902511898004997142},
-                        {ChanField::FLAGS2, 14986456617710294519}}},
+                        {ChanField::FLAGS2, 14986456617710294519U}}},
         // fusa dual return
         snapshot_param{"OS-1-128_767798045_1024x10_20230712_120049.pcap",
                        "OS-1-128_767798045_1024x10_20230712_120049.json",
@@ -522,7 +524,7 @@ INSTANTIATE_TEST_CASE_P(
                         {ChanField::REFLECTIVITY, 0x6912ca3fa04b0d1f},
                         {ChanField::REFLECTIVITY2, 0xf58aa5594d9749dc},
                         {ChanField::NEAR_IR, 0xc99384623c5d9feb},
-                        {ChanField::FLAGS, 15585490641324286966},
+                        {ChanField::FLAGS, 15585490641324286966U},
                         {ChanField::FLAGS2, 3655442015794344596}}},
         // single return
         snapshot_param{"OS-2-128-U1_v2.3.0_1024x10.pcap",
@@ -707,4 +709,68 @@ TEST(ScanBatcherLegacyTest, legacy_col_status) {
             }
         }
     }
+}
+
+TEST(ScanBatcherTest, cached_packet_test) {
+    data_format df{128,
+                   16,
+                   1024,
+                   {},
+                   {0, 1023},
+                   PROFILE_RNG15_RFL8_NIR8,
+                   PROFILE_IMU_LEGACY,
+                   10};
+    sensor_info meta{};
+    meta.format = df;
+    packet_writer pw{meta};
+
+    uint16_t frame_id = 1337;
+
+    auto packets_first =
+        random_frame(df.udp_profile_lidar, df.columns_per_frame,
+                     df.pixels_per_column, df.columns_per_packet);
+    // drop one last packet so that the scan does not finalize
+    packets_first.pop_back();
+
+    auto packets_second =
+        random_frame(df.udp_profile_lidar, df.columns_per_frame,
+                     df.pixels_per_column, df.columns_per_packet);
+
+    for (auto& p : packets_first) {
+        pw.set_frame_id(p.buf.data(), frame_id);
+    }
+    for (auto& p : packets_second) {
+        pw.set_frame_id(p.buf.data(), frame_id + 1);
+    }
+
+    auto ref_second = LidarScan(df.columns_per_frame, df.pixels_per_column,
+                                df.udp_profile_lidar, df.columns_per_packet);
+    {  // parse ref_second only for final reference
+        ScanBatcher batcher{df.columns_per_frame, pw};
+        for (const auto& p : packets_second) {
+            batcher(p, ref_second);
+        }
+    }
+
+    auto ls = LidarScan(df.columns_per_frame, df.pixels_per_column,
+                        df.udp_profile_lidar, df.columns_per_packet);
+    ScanBatcher batcher{df.columns_per_frame, pw};
+    for (const auto& p : packets_first) {
+        ASSERT_FALSE(batcher(p, ls));
+    }
+
+    LidarScan ref_first = ls;
+
+    // get packet to cache and check lidar scan did not change
+    EXPECT_TRUE(batcher(packets_second[0], ls));
+    EXPECT_EQ(ls, ref_first);
+
+    std::for_each(packets_second.begin() + 1, packets_second.end() - 1,
+                  [&batcher, &ls](const auto& packet) {
+                      ASSERT_FALSE(batcher(packet, ls));
+                  });
+    EXPECT_TRUE(batcher(packets_second.back(), ls));
+
+    // check scan gets fully batched
+    EXPECT_EQ(ls, ref_second);
 }

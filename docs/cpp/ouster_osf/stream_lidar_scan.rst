@@ -9,7 +9,4 @@ stream_lidar_scan.h
     :members:
     :content-only:
 
-.. doxygenclass:: ouster::osf::LidarScanStream
-    :members:
-
 .. doxygenfunction:: ouster::osf::slice_with_cast

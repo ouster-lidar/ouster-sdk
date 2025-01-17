@@ -12,6 +12,7 @@
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/layout_streaming.h"
+#include "ouster/osf/png_lidarscan_encoder.h"
 #include "ouster/osf/stream_lidar_scan.h"
 
 using namespace ouster::sensor;
@@ -22,9 +23,11 @@ namespace ouster {
 namespace osf {
 
 Writer::Writer(const std::string& filename, uint32_t chunk_size)
-    : file_name_(filename),
+    : filename_(filename),
       metadata_id_{"ouster_sdk"},
-      chunks_layout_{ChunksLayout::LAYOUT_STREAMING} {
+      chunks_layout_{ChunksLayout::LAYOUT_STREAMING},
+      encoder_{std::make_shared<Encoder>(std::make_shared<PngLidarScanEncoder>(
+          ouster::osf::DEFAULT_PNG_OSF_ZLIB_COMPRESSION_LEVEL))} {
     // chunks STREAMING_LAYOUT
     chunks_writer_ = std::make_shared<StreamingLayoutCW>(*this, chunk_size);
 
@@ -34,7 +37,7 @@ Writer::Writer(const std::string& filename, uint32_t chunk_size)
 
     // TODO[pb]: Check if file exists, add flag overwrite/not overwrite, etc
 
-    header_size_ = start_osf_file(file_name_);
+    header_size_ = start_osf_file(filename_);
 
     if (header_size_ > 0) {
         pos_ = static_cast<int>(header_size_);
@@ -46,20 +49,24 @@ Writer::Writer(const std::string& filename, uint32_t chunk_size)
 Writer::Writer(const std::string& filename,
                const ouster::sensor::sensor_info& info,
                const std::vector<std::string>& desired_fields,
-               uint32_t chunk_size)
+               uint32_t chunk_size, std::shared_ptr<Encoder> encoder)
     : Writer(filename, std::vector<ouster::sensor::sensor_info>{info},
-             desired_fields, chunk_size) {}
+             desired_fields, chunk_size, encoder) {}
 
 Writer::Writer(const std::string& filename,
                const std::vector<ouster::sensor::sensor_info>& info,
                const std::vector<std::string>& desired_fields,
-               uint32_t chunk_size)
+               uint32_t chunk_size, std::shared_ptr<Encoder> encoder)
     : Writer(filename, chunk_size) {
     sensor_info_ = info;
     for (uint32_t i = 0; i < info.size(); i++) {
         lidar_meta_id_[i] = add_metadata(ouster::osf::LidarSensor(info[i]));
         field_types_.push_back({});
         desired_fields_.push_back(desired_fields);
+    }
+    if (encoder) {
+        // set encoder if one is specified
+        encoder_ = encoder;
     }
 }
 
@@ -211,7 +218,7 @@ uint64_t Writer::append(const uint8_t* buf, const uint64_t size) {
         logger().info("Writer::append has nothing to append");
         return 0;
     }
-    uint64_t saved_bytes = buffer_to_file(buf, size, file_name_, true);
+    uint64_t saved_bytes = buffer_to_file(buf, size, filename_, true);
     pos_ += static_cast<int>(saved_bytes);
     return saved_bytes;
 }
@@ -240,7 +247,7 @@ const std::string& Writer::metadata_id() const { return metadata_id_; }
 
 void Writer::set_metadata_id(const std::string& id) { metadata_id_ = id; }
 
-const std::string& Writer::filename() const { return file_name_; }
+const std::string& Writer::filename() const { return filename_; }
 
 ChunksLayout Writer::chunks_layout() const { return chunks_layout_; }
 
@@ -289,8 +296,7 @@ std::vector<uint8_t> Writer::make_metadata() const {
 }
 
 void Writer::close() {
-    if (finished_) {
-        // already did everything
+    if (is_closed()) {
         return;
     }
 
@@ -305,7 +311,7 @@ void Writer::close() {
         append(metadata_buf.data(), metadata_buf.size());
     if (metadata_saved_size &&
         metadata_saved_size == metadata_buf.size() + CRC_BYTES_SIZE) {
-        if (finish_osf_file(file_name_, metadata_offset, metadata_saved_size) ==
+        if (finish_osf_file(filename_, metadata_offset, metadata_saved_size) ==
             header_size_) {
             finished_ = true;
         } else {

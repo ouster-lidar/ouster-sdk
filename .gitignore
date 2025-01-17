@@ -28,3 +28,4 @@ generated
 rules.ninja
 *.a
 **/_build
+clang-tidy-output.{txt,json}

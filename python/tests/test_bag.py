@@ -125,6 +125,7 @@ def test_bag_open(test_bag_file):
     c = 0
     for s in src:
         assert len(s[0].fields) == 4
+        assert s[0].sensor_info == src.metadata[0]
         c += 1
     assert c == 1
 

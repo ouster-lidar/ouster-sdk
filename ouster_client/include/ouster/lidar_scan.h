@@ -11,19 +11,20 @@
 #include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "ouster/defaults.h"
 #include "ouster/field.h"
+#include "ouster/packet.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 
 /*
  * Description for a field that we desire in a lidar scan
  */
-struct FieldType {
+struct OUSTER_API_CLASS FieldType {
     std::string name;                    ///< Name of the field
     sensor::ChanFieldType element_type;  ///< Type of field elements
     std::vector<size_t> extra_dims;      ///< Additional dimensions of the field
@@ -34,6 +35,7 @@ struct FieldType {
     /**
      * Initialize a default FieldType with no name.
      */
+    OUSTER_API_FUNCTION
     FieldType();
 
     /**
@@ -46,6 +48,7 @@ struct FieldType {
      * @param[in] class_ Category of field, determins the first dimensions of
                          the field
      */
+    OUSTER_API_FUNCTION
     FieldType(const std::string& name_, sensor::ChanFieldType element_type_,
               const std::vector<size_t> extra_dims_ = {},
               FieldClass class_ = FieldClass::PIXEL_FIELD);
@@ -57,6 +60,7 @@ struct FieldType {
      *
      * @return if the name is "less than" the provided FieldType
      */
+    OUSTER_API_FUNCTION
     inline bool operator<(const FieldType& other) const {
         return name < other.name;
     }
@@ -69,6 +73,7 @@ struct FieldType {
  *
  * @return string representation of the FieldType.
  */
+OUSTER_API_FUNCTION
 std::string to_string(const FieldType& field_type);
 
 /**
@@ -79,6 +84,7 @@ std::string to_string(const FieldType& field_type);
  *
  * @return if a == b.
  */
+OUSTER_API_FUNCTION
 bool operator==(const FieldType& a, const FieldType& b);
 
 /**
@@ -89,6 +95,7 @@ bool operator==(const FieldType& a, const FieldType& b);
  *
  * @return if a != b.
  */
+OUSTER_API_FUNCTION
 bool operator!=(const FieldType& a, const FieldType& b);
 
 /**
@@ -107,7 +114,7 @@ using LidarScanFieldTypes = std::vector<FieldType>;
  * to a single measurement in time. Use the destagger() function to create an
  * image where columns correspond to a single azimuth angle.
  */
-class LidarScan {
+class OUSTER_API_CLASS LidarScan {
    public:
     template <typename T>
     using Header = Eigen::Array<T, Eigen::Dynamic, 1>;  ///< Header typedef
@@ -190,7 +197,13 @@ class LidarScan {
      */
     int64_t frame_id{-1};
 
+    /**
+     * The associated sensor info for this lidar scan
+     */
+    std::shared_ptr<sensor::sensor_info> sensor_info;
+
     /** The default constructor creates an invalid 0 x 0 scan. */
+    OUSTER_API_FUNCTION
     LidarScan();
 
     /**
@@ -203,6 +216,7 @@ class LidarScan {
      * Note, the number of columns per packet is set to the default
      * (DEFAULT_COLUMNS_PER_PACKET).
      */
+    OUSTER_API_FUNCTION
     LidarScan(size_t w, size_t h);
 
     /**
@@ -211,7 +225,17 @@ class LidarScan {
      *
      * @param[in] sensor_info description of sensor to create scan for
      */
+    OUSTER_API_FUNCTION
     LidarScan(const sensor::sensor_info& sensor_info);
+
+    /**
+     * Initialize a scan with fields configured as default for the provided
+     * SensorInfo's configuration
+     *
+     * @param[in] sensor_info a shared_ptr to the sensor_info object
+     */
+    OUSTER_API_FUNCTION
+    LidarScan(std::shared_ptr<sensor::sensor_info> sensor_info);
 
     /**
      * Initialize a scan with the default fields for a particular udp profile.
@@ -223,6 +247,7 @@ class LidarScan {
      * @param[in] columns_per_packet The number of columns per packet,
      *                               this argument is optional.
      */
+    OUSTER_API_FUNCTION
     LidarScan(size_t w, size_t h, sensor::UDPProfileLidar profile,
               size_t columns_per_packet = DEFAULT_COLUMNS_PER_PACKET);
 
@@ -249,6 +274,7 @@ class LidarScan {
      *
      * @param[in] other The other lidar scan to initialize from.
      */
+    OUSTER_API_FUNCTION
     LidarScan(const LidarScan& other);
 
     /**
@@ -260,9 +286,11 @@ class LidarScan {
      * @param[in] other The other lidar scan to initialize from.
      * @param[in] fields Fields to have in new lidar scan.
      */
+    OUSTER_API_FUNCTION
     LidarScan(const LidarScan& other, const LidarScanFieldTypes& fields);
 
     /** @copydoc LidarScan(const LidarScan& other) */
+    OUSTER_API_FUNCTION
     LidarScan(LidarScan&& other);
 
     /**
@@ -270,6 +298,7 @@ class LidarScan {
      *
      * @param[in] other The lidar scan to copy from.
      */
+    OUSTER_API_FUNCTION
     LidarScan& operator=(const LidarScan& other);
 
     /**
@@ -277,11 +306,13 @@ class LidarScan {
      *
      * @param[in] other The lidar scan to copy from.
      */
+    OUSTER_API_FUNCTION
     LidarScan& operator=(LidarScan&& other);
 
     /**
      * Lidar scan destructor.
      */
+    OUSTER_API_FUNCTION
     ~LidarScan();
 
     /**
@@ -289,6 +320,7 @@ class LidarScan {
      *
      * @return true if sensor is shot limiting
      */
+    OUSTER_API_FUNCTION
     sensor::ShotLimitingStatus shot_limiting() const;
 
     /**
@@ -296,6 +328,7 @@ class LidarScan {
      *
      * @return true if sensor is in thermal shutdown state.
      */
+    OUSTER_API_FUNCTION
     sensor::ThermalShutdownStatus thermal_shutdown() const;
 
     /**
@@ -337,11 +370,13 @@ class LidarScan {
     /**
      * @copydoc ClientLidarScanFieldString
      */
+    OUSTER_API_FUNCTION
     Field& field(const std::string& name);
 
     /**
      * @copydoc ClientLidarScanFieldString
      */
+    OUSTER_API_FUNCTION
     const Field& field(const std::string& name) const;
 
     /**
@@ -351,6 +386,7 @@ class LidarScan {
      *
      * @return true if the lidar scan has the field, else false
      */
+    OUSTER_API_FUNCTION
     bool has_field(const std::string& name) const;
 
     /**
@@ -366,6 +402,7 @@ class LidarScan {
      *
      * @return field
      */
+    OUSTER_API_FUNCTION
     Field& add_field(const std::string& name, FieldDescriptor d,
                      FieldClass field_class = FieldClass::PIXEL_FIELD);
 
@@ -378,6 +415,7 @@ class LidarScan {
      *
      * @return field The value of the field added.
      */
+    OUSTER_API_FUNCTION
     Field& add_field(const FieldType& type);
 
     /**
@@ -389,6 +427,7 @@ class LidarScan {
      *
      * @return field The deleted field.
      */
+    OUSTER_API_FUNCTION
     Field del_field(const std::string& name);
 
     /**
@@ -398,6 +437,7 @@ class LidarScan {
      *
      * @return the type associated with the field.
      */
+    OUSTER_API_FUNCTION
     FieldType field_type(const std::string& name) const;
 
     /**
@@ -405,6 +445,7 @@ class LidarScan {
      *
      * @return The type associated with every field in the scan.
      */
+    OUSTER_API_FUNCTION
     LidarScanFieldTypes field_types() const;
 
     /**
@@ -412,9 +453,11 @@ class LidarScan {
      *
      * @return The unordered map of field type and field.
      */
+    OUSTER_API_FUNCTION
     std::unordered_map<std::string, Field>& fields();
 
     /** @copydoc fields() */
+    OUSTER_API_FUNCTION
     const std::unordered_map<std::string, Field>& fields() const;
 
     /**
@@ -422,11 +465,13 @@ class LidarScan {
      *
      * @return a view of timestamp as a w-element vector.
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<Header<uint64_t>> timestamp();
 
     /**
      * @copydoc timestamp()
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<const Header<uint64_t>> timestamp() const;
 
     /**
@@ -435,6 +480,7 @@ class LidarScan {
      * @return a view of timestamp as a vector with w / columns-per-packet
      * elements.
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<Header<uint64_t>> packet_timestamp();
 
     /**
@@ -443,6 +489,7 @@ class LidarScan {
      * @return a view of timestamp as a vector with w / columns-per-packet
      * elements.
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<const Header<uint64_t>> packet_timestamp() const;
 
     /**
@@ -451,6 +498,7 @@ class LidarScan {
      * @return a view of timestamp as a vector with w / columns-per-packet
      * elements.
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<Header<uint8_t>> alert_flags();
 
     /**
@@ -459,6 +507,7 @@ class LidarScan {
      * @return a view of timestamp as a vector with w / columns-per-packet
      * elements.
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<const Header<uint8_t>> alert_flags() const;
 
     /**
@@ -466,6 +515,7 @@ class LidarScan {
      *
      * @return the first valid packet timestamp, 0 if none available
      */
+    OUSTER_API_FUNCTION
     uint64_t get_first_valid_packet_timestamp() const;
 
     /**
@@ -473,6 +523,7 @@ class LidarScan {
      *
      * @return the first valid column timestamp, 0 if none available
      */
+    OUSTER_API_FUNCTION
     uint64_t get_first_valid_column_timestamp() const;
 
     /**
@@ -480,9 +531,11 @@ class LidarScan {
      *
      * @return a view of measurement ids as a w-element vector.
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<Header<uint16_t>> measurement_id();
 
     /** @copydoc measurement_id() */
+    OUSTER_API_FUNCTION
     Eigen::Ref<const Header<uint16_t>> measurement_id() const;
 
     /**
@@ -490,9 +543,11 @@ class LidarScan {
      *
      * @return a view of measurement statuses as a w-element vector.
      */
+    OUSTER_API_FUNCTION
     Eigen::Ref<Header<uint32_t>> status();
 
     /** @copydoc status() */
+    OUSTER_API_FUNCTION
     Eigen::Ref<const Header<uint32_t>> status() const;
 
     /**
@@ -500,9 +555,11 @@ class LidarScan {
      * ArrayView3<double> in order to access as 3d
      * @return 3d field of homogenous pose matrices, shaped (w, 4, 4).
      */
+    OUSTER_API_FUNCTION
     Field& pose();
 
     /** @copydoc pose() */
+    OUSTER_API_FUNCTION
     const Field& pose() const;
 
     /**
@@ -510,6 +567,7 @@ class LidarScan {
      * @param[in] window The column window to use for validity assessment
      * @return whether all columns within given column window were valid
      */
+    OUSTER_API_FUNCTION
     bool complete(sensor::ColumnWindow window) const;
 
     /**
@@ -517,10 +575,41 @@ class LidarScan {
      *
      * @return the number of packets
      */
+    OUSTER_API_FUNCTION
     size_t packet_count() const;
 
-    friend bool operator==(const LidarScan& a, const LidarScan& b);
+    /**
+     * Equality for scans.
+     *
+     * @param[in] other The other scan to compare to.
+     *
+     * @return if a == b.
+     */
+    OUSTER_API_FUNCTION
+    bool equals(const LidarScan& other) const;
 };
+
+/**
+ * Equality for LidarScan.
+ *
+ * @param[in] a The first scan to compare.
+ * @param[in] b The second scan to compare.
+ *
+ * @return if a == b.
+ */
+OUSTER_API_FUNCTION
+bool operator==(const LidarScan& a, const LidarScan& b);
+
+/**
+ * Inequality for LidarScan.
+ *
+ * @param[in] a The first scan to compare.
+ * @param[in] b The second scan to compare.
+ *
+ * @return if a != b.
+ */
+OUSTER_API_FUNCTION
+bool operator!=(const LidarScan& a, const LidarScan& b);
 
 /**
  * Get string representation of lidar scan field types.
@@ -529,6 +618,7 @@ class LidarScan {
  *
  * @return string representation of the lidar scan field types.
  */
+OUSTER_API_FUNCTION
 std::string to_string(const LidarScanFieldTypes& field_types);
 
 /**
@@ -538,6 +628,7 @@ std::string to_string(const LidarScanFieldTypes& field_types);
  *
  * @return The lidar scan field types
  */
+OUSTER_API_FUNCTION
 LidarScanFieldTypes get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
 
 /**
@@ -547,6 +638,7 @@ LidarScanFieldTypes get_field_types(sensor::UDPProfileLidar udp_profile_lidar);
  *
  * @return The lidar scan field types
  */
+OUSTER_API_FUNCTION
 LidarScanFieldTypes get_field_types(const sensor::sensor_info& info);
 
 /**
@@ -556,6 +648,7 @@ LidarScanFieldTypes get_field_types(const sensor::sensor_info& info);
  *
  * @return string representation of the lidar scan.
  */
+OUSTER_API_FUNCTION
 std::string to_string(const LidarScan& ls);
 
 /** \defgroup ouster_client_lidar_scan_operators Ouster Client lidar_scan.h
@@ -563,31 +656,10 @@ std::string to_string(const LidarScan& ls);
  * @{
  */
 
-/**
- * Equality for scans.
- *
- * @param[in] a The first scan to compare.
- * @param[in] b The second scan to compare.
- *
- * @return if a == b.
- */
-bool operator==(const LidarScan& a, const LidarScan& b);
-
-/**
- * NOT Equality for scans.
- *
- * @param[in] a The first scan to compare.
- * @param[in] b The second scan to compare.
- *
- * @return if a != b.
- */
-inline bool operator!=(const LidarScan& a, const LidarScan& b) {
-    return !(a == b);
-}
 /** @}*/
 
 /** Lookup table of beam directions and offsets. */
-struct XYZLut {
+struct OUSTER_API_CLASS XYZLut {
     LidarScan::Points direction;  ///< Lookup table of beam directions
     LidarScan::Points offset;     ///< Lookup table of beam offsets
 };
@@ -619,6 +691,7 @@ struct XYZLut {
  *
  * @return xyz direction and offset vectors for each point in the lidar scan.
  */
+OUSTER_API_FUNCTION
 XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
                     const mat4d& beam_to_lidar_transform,
                     const mat4d& transform,
@@ -638,6 +711,7 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
  *
  * @return xyz direction and offset vectors for each point in the lidar scan.
  */
+OUSTER_API_FUNCTION
 XYZLut make_xyz_lut(const sensor::sensor_info& sensor, bool use_extrinsics);
 
 /** \defgroup ouster_client_lidar_scan_cartesian Ouster Client lidar_scan.h
@@ -653,6 +727,7 @@ XYZLut make_xyz_lut(const sensor::sensor_info& sensor, bool use_extrinsics);
  * @return Cartesian points where ith row is a 3D point which corresponds
  *         to ith pixel in LidarScan where i = row * w + col.
  */
+OUSTER_API_FUNCTION
 LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
 
 /**
@@ -665,6 +740,7 @@ LidarScan::Points cartesian(const LidarScan& scan, const XYZLut& lut);
  * @return Cartesian points where ith row is a 3D point which corresponds
  *         to ith pixel in LidarScan where i = row * w + col.
  */
+OUSTER_API_FUNCTION
 LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
                             const XYZLut& lut);
 /** @}*/
@@ -718,22 +794,27 @@ inline img_t<T> stagger(const Eigen::Ref<const img_t<T>>& img,
  * Make a function that batches a single scan (revolution) of data to a
  * LidarScan.
  */
-class ScanBatcher {
+class OUSTER_API_CLASS ScanBatcher {
     size_t w;
     size_t h;
     uint16_t next_valid_m_id;
     uint16_t next_headers_m_id;
     uint16_t next_valid_packet_id;
-    std::vector<uint8_t> cache;
-    uint64_t cache_packet_ts;
+    sensor::LidarPacket cache;
     bool cached_packet = false;
     int64_t finished_scan_id = -1;
     size_t expected_packets;
     size_t batched_packets = 0;
+    std::shared_ptr<sensor::sensor_info> sensor_info;
 
-    void _parse_by_col(const uint8_t* packet_buf, LidarScan& ls);
-    void _parse_by_block(const uint8_t* packet_buf, LidarScan& ls);
-    void finalize_scan(LidarScan& ls, bool raw_headers);
+    void parse_by_col(const uint8_t* packet_buf, LidarScan& ls);
+    void parse_by_block(const uint8_t* packet_buf, LidarScan& ls);
+
+    void cache_packet(const sensor::LidarPacket& packet);
+    void batch_cached_packet(LidarScan& ls);
+
+    bool check_scan_complete(const LidarScan& ls) const;
+    void finalize_scan(LidarScan& ls);
 
    public:
     sensor::packet_format pf;  ///< The packet format object used for decoding
@@ -747,6 +828,7 @@ class ScanBatcher {
      * 2048.
      * @param[in] pf expected format of the incoming packets used for parsing.
      */
+    OUSTER_API_FUNCTION
     ScanBatcher(size_t w, const sensor::packet_format& pf);
     // clang-format on
 
@@ -755,7 +837,10 @@ class ScanBatcher {
      *
      * @param[in] info sensor metadata returned from the client.
      */
+    OUSTER_API_FUNCTION
     ScanBatcher(const sensor::sensor_info& info);
+
+    // clang-format off
 
     /**
      * Add a packet to the scan.
@@ -767,19 +852,11 @@ class ScanBatcher {
      *
      * @return true when the provided lidar scan is ready to use.
      */
+    // clang-format off
     [[deprecated(
-        "Use ScanBatcher::operator(LidarPacket&, LidarScan&) instead.")]] bool
-    operator()(const uint8_t* packet_buf, LidarScan& ls);
-
-    /**
-     * Add a packet to the scan.
-     *
-     * @param[in] packet a LidarPacket.
-     * @param[in] ls lidar scan to populate.
-     *
-     * @return true when the provided lidar scan is ready to use.
-     */
-    bool operator()(const ouster::sensor::LidarPacket& packet, LidarScan& ls);
+        "Use ScanBatcher::operator(const LidarPacket&, LidarScan&) instead.")]]
+    OUSTER_API_FUNCTION
+    bool operator()(const uint8_t* packet_buf, LidarScan& ls);
 
     /**
      * Add a packet to the scan.
@@ -791,8 +868,24 @@ class ScanBatcher {
      *
      * @return true when the provided lidar scan is ready to use.
      */
+    [[deprecated(
+        "Use ScanBatcher::operator(const LidarPacket&, LidarScan&) instead.")]]
+    OUSTER_API_FUNCTION
     bool operator()(const uint8_t* packet_buf, uint64_t packet_ts,
                     LidarScan& ls);
+
+    // clang-format on
+
+    /**
+     * Add a packet to the scan.
+     *
+     * @param[in] packet a LidarPacket.
+     * @param[in] ls lidar scan to populate.
+     *
+     * @return true when the provided lidar scan is ready to use.
+     */
+    OUSTER_API_FUNCTION
+    bool operator()(const ouster::sensor::LidarPacket& packet, LidarScan& ls);
 };
 
 namespace pose_util {
@@ -811,7 +904,7 @@ typedef Eigen::Matrix<double, 1, 16, Eigen::RowMajor> Pose;
  * @param[in] poses A Eigen matrix of shape (W, 16) representing W 4x4
  * transformation matrices. Each row is a flattened 4x4 pose matrix
  */
-
+OUSTER_API_FUNCTION
 void dewarp(Eigen::Ref<Points> dewarped, const Eigen::Ref<const Points> points,
             const Eigen::Ref<const Poses> poses);
 
@@ -827,7 +920,7 @@ void dewarp(Eigen::Ref<Points> dewarped, const Eigen::Ref<const Points> points,
  * where the same number of points are transformed by each corresponding pose
  * matrix.
  */
-
+OUSTER_API_FUNCTION
 Points dewarp(const Eigen::Ref<const Points> points,
               const Eigen::Ref<const Poses> poses);
 
@@ -844,7 +937,7 @@ Points dewarp(const Eigen::Ref<const Points> points,
  * @param[in] pose A vector of 16 elements representing a flattened 4x4
  * transformation matrix.
  */
-
+OUSTER_API_FUNCTION
 void transform(Eigen::Ref<Points> transformed,
                const Eigen::Ref<const Points> points,
                const Eigen::Ref<const Pose> pose);
@@ -862,7 +955,7 @@ void transform(Eigen::Ref<Points> transformed,
  * @return A matrix of shape (N, 3) containing the transformed 3D points,
  *         where each point is rotated and translated by the given pose.
  */
-
+OUSTER_API_FUNCTION
 Points transform(const Eigen::Ref<const Points> points,
                  const Eigen::Ref<const Pose> pose);
 

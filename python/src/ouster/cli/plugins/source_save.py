@@ -88,13 +88,15 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         packets = SensorPacketSource(sensors, timeout=src_opts["timeout"],
                               soft_id_check=src_opts["soft_id_check"])  # type: ignore
     elif uri_type == OusterIoType.PCAP:
-        packets = PcapMultiPacketReader(uri, soft_id_check=src_opts["soft_id_check"])  # type: ignore
+        packets = PcapMultiPacketReader(uri, soft_id_check=src_opts["soft_id_check"],
+                                        metadata_paths=src_opts["meta"])  # type: ignore
     elif uri_type == OusterIoType.BAG:
-        packets = BagPacketSource(uri, soft_id_check=src_opts["soft_id_check"])  # type: ignore
+        packets = BagPacketSource(uri, soft_id_check=src_opts["soft_id_check"],
+                                  meta=src_opts["meta"])  # type: ignore
     else:
         raise click.exceptions.BadParameter("Can only save raw packets from PCAP, BAG or Sensor sources.")
 
-    _populate_extrinsics(packets, uri, uri_type, resolved_extrinsics)  # type: ignore
+    _populate_extrinsics(packets, resolved_extrinsics)  # type: ignore
 
     if extension == "pcap":
         save_pcap_impl(packets, filename, prefix, dir, raw=True, overwrite=overwrite,
@@ -135,10 +137,12 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
               "scans after an error is encountered, dropping bad data if necessary.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option("--ts", default='packet', help="Timestamp to use for indexing.", type=click.Choice(['packet', 'lidar']))
+@click.option("--compression-level", default=1, help="Specifies the level of compression for OSF files. Higher values "
+    "are slower but more space-efficient; lower values are faster but less space-efficient.", type=click.IntRange(0, 9))
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
-                    overwrite: bool, ts: str, continue_anyways: bool, **kwargs) -> None:
+                    overwrite: bool, ts: str, continue_anyways: bool, compression_level: int, **kwargs) -> None:
     """Save source as an OSF"""
     scans = ctx.scan_iter
     info = ctx.scan_source.metadata  # type: ignore
@@ -155,7 +159,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         exit(1)
 
     # Initialize osf writer
-    osf_writer = osf.Writer(filename, info)
+    osf_writer = osf.AsyncWriter(filename, info, [], 0, osf.Encoder(osf.PngLidarScanEncoder(compression_level)))
 
     wrote_scans = False
     dropped_scans = 0
@@ -404,7 +408,7 @@ def determine_filename(prefix: str, dir: str, filename: str, extension: str, inf
         filename = str(outpath / f"{prefix}{filename}")
     else:
         filename = str(outpath / f"{prefix}{info.prod_line}_{info.fw_rev}_"
-                                 f"{info.config.lidar_mode}_{time_str}{extension}")
+                       f"{info.config.lidar_mode}_{time_str}{extension}")
 
     return filename
 

@@ -3,7 +3,7 @@ from typing import cast, Iterator, Dict, Optional, List, Tuple, Union
 from more_itertools import ilen
 from ouster.sdk import client
 from ouster.sdk.client import LidarScan, SensorInfo, first_valid_packet_ts
-from ouster.sdk.client import ScanSource, MultiScanSource
+from ouster.sdk.client import MultiScanSource
 
 from ouster.sdk._bindings.osf import (Reader, Writer, MessageRef, LidarSensor,
                                  Extrinsics, LidarScanStream, StreamingInfo)
@@ -99,12 +99,12 @@ class OsfScanSource(MultiScanSource):
             self._stream_ids.append(stream_id)
 
         # extract necessary values from the index/stats to calculate lengths
-        self._scans_num: List[Optional[int]] = [None] * len(self._stream_ids)
+        self._scans_num: List[Optional[int]] = [0] * len(self._metadatas)
         self._times = []  # a list of all scans and their times/indexes
         for stream_id, stream_meta in self._reader.meta_store.find(StreamingInfo).items():
             for id, stats in stream_meta.stream_stats:
                 if id in self._stream_ids:
-                    sensor_index = self._stream_ids.index(id)
+                    sensor_index = self._stream_sensor_idx[id]
                     self._scans_num[sensor_index] = stats.message_count
                     rts = stats.receive_timestamps
                     for t in rts:
@@ -114,24 +114,23 @@ class OsfScanSource(MultiScanSource):
         self._times.sort(key=lambda x: x[1])
 
         # get the first scan of each to get field types
-        self._field_types = []
-        self._fields = []
-        for sid, mid in enumerate(self._stream_ids):
+        self._field_types: List[client.FieldTypes] = [[]] * len(self._metadatas)
+        self._fields: List[List[str]] = [[]] * len(self._metadatas)
+        for mid in self._stream_ids:
+            sid = self._stream_sensor_idx[mid]
             ts_start = self._reader.ts_by_message_idx(mid, 0)
             if ts_start is None:
                 # There are no messages in this stream,
                 # so there are no fields for this stream.
-                self._field_types.append([])
-                self._fields.append([])
                 continue
             for idx, scan in self._scans_iter(ts_start, ts_start, False):
                 if idx == sid:
                     fts = scan.field_types
-                    self._field_types.append(fts)
+                    self._field_types[idx] = fts
                     l = []
                     for ft in fts:
                         l.append(ft.name)
-                    self._fields.append(l)
+                    self._fields[idx] = l
                     break
 
         if has_index:
@@ -204,11 +203,12 @@ class OsfScanSource(MultiScanSource):
                 window = self.metadata[idx].format.column_window
                 scan = cast(LidarScan, ls)
                 if not self._complete or scan.complete(window):
+                    scan.sensor_info = self._metadatas[idx]
                     yield idx, scan
 
     @property
     def sensors_count(self) -> int:
-        return len(self._stream_ids)
+        return len(self._metadatas)
 
     @property
     def metadata(self) -> List[SensorInfo]:
@@ -295,10 +295,6 @@ class OsfScanSource(MultiScanSource):
         # self.close() # TODO: currently this causes an exception, avoid
         pass
 
-    def single_source(self, stream_idx: int) -> ScanSource:
-        from ouster.sdk.client.scan_source_adapter import ScanSourceAdapter
-        return ScanSourceAdapter(self, stream_idx)
-
     def _slice_iter(self, key: slice) -> Iterator[List[Optional[LidarScan]]]:
         # NOTE: In this method if key.step was negative, this won't be
         # result in the output being reversed, it is the responisbility of
@@ -316,12 +312,3 @@ class OsfScanSource(MultiScanSource):
                                   self.sensors_count, first_valid_packet_ts,
                                   dt=self._dt)
         return ForwardSlicer.slice_iter(scans_itr, k)
-
-    def slice(self, key: slice) -> 'MultiScanSource':
-        """Constructs a MultiScanSource matching the specificed slice"""
-        from ouster.sdk.client.multi_sliced_scan_source import MultiSlicedScanSource
-        L = len(self)
-        k = ForwardSlicer.normalize(key, L)
-        if k.step < 0:
-            raise TypeError("slice() can't work with negative step")
-        return MultiSlicedScanSource(self, k)

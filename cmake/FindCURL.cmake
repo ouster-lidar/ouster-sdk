@@ -2,12 +2,16 @@
 # Note: curl from VCPKG appears to completely ignore curl find modules despite
 # CMAKE_MODULE_PATH settings
 
-include(FindPackageHandleStandardArgs)
+if(NOT OUSTER_SKIP_FIND_PACKAGE_STANDARD)
+  include(FindPackageHandleStandardArgs)
+endif()
 
 # Prefer package config if it exists
-find_package(CURL CONFIG QUIET)
+find_package(CURL CONFIG QUIET NO_CMAKE_FIND_ROOT_PATH)
 if(CURL_FOUND)
-  find_package_handle_standard_args(CURL CONFIG_MODE)
+  if(NOT OUSTER_SKIP_FIND_PACKAGE_STANDARD)
+    find_package_handle_standard_args(CURL CONFIG_MODE)
+  endif()
   return()
 endif()
 
@@ -32,9 +36,11 @@ find_library(CURL_LIBRARIES NAMES
 mark_as_advanced(CURL_LIBRARIES)
 
 # Check that we have everything that we need
-find_package_handle_standard_args(CURL
-  REQUIRED_VARS CURL_INCLUDE_DIRS CURL_LIBRARIES
-  VERSION_VAR CURL_VERSION_STRING)
+if(NOT OUSTER_SKIP_FIND_PACKAGE_STANDARD)
+  find_package_handle_standard_args(CURL
+    REQUIRED_VARS CURL_INCLUDE_DIRS CURL_LIBRARIES
+    VERSION_VAR CURL_VERSION_STRING)
+endif()
 
 if(NOT TARGET CURL::libcurl)
   add_library(CURL::libcurl UNKNOWN IMPORTED)

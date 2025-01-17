@@ -10,11 +10,16 @@
 #include <vector>
 
 #include "ouster/impl/cuda_macros.h"
-
+#include "ouster/visibility.h"
 namespace ouster {
 namespace impl {
 
-struct idx_range {
+struct OUSTER_API_CLASS idx_range {
+    OUSTER_API_FUNCTION
+    idx_range(){};
+    OUSTER_API_FUNCTION
+    idx_range(int start, int end) : start(start), end(end){};
+
     int start = 0;
     int end = 0;
 };
@@ -50,7 +55,9 @@ OSDK_FN int range_or_idx(T idx) {
     return idx;
 }
 
-inline OSDK_FN int range_or_idx(idx_range e) { return e.start; }
+inline OSDK_FN OUSTER_API_FUNCTION int range_or_idx(idx_range e) {
+    return e.start;
+}
 
 template <typename T, typename U>
 OSDK_FN std::enable_if_t<!is_idx_range_t<U>::v, T> range_replace_dim(T dim, U) {
@@ -148,8 +155,10 @@ OSDK_FN_HOST std::vector<T> range_args_reshape(const std::vector<T>& shape,
 }  // namespace impl
 
 OSDK_FN
+OUSTER_API_FUNCTION
 inline impl::idx_range keep() { return {0, 0}; }
 OSDK_FN
+OUSTER_API_FUNCTION
 inline impl::idx_range keep(int start, int end) { return {start, end}; }
 
 }  // namespace ouster

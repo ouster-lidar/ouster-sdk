@@ -14,6 +14,7 @@
 #include "ouster/osf/file.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -37,7 +38,7 @@ enum class ChunkValidity {
  * This struct is partially mapped to the Flat Buffer data.
  * Flat Buffer Reference: fb/metadata.fbs :: ChunkOffset
  */
-struct ChunkState {
+struct OUSTER_API_CLASS ChunkState {
     /**
      * The current chunk's offset from the begining of the chunks section.
      *
@@ -84,7 +85,7 @@ struct ChunkState {
  *
  * This struct is partially mapped to the Flat Buffer data.
  */
-struct ChunkInfoNode {
+struct OUSTER_API_CLASS ChunkInfoNode {
     /**
      * The chunk offset from the begining of the chunks section.
      *
@@ -134,7 +135,7 @@ struct ChunkInfoNode {
 /**
  * Chunks state map. Validity info and next offset.
  */
-class ChunksPile {
+class OUSTER_API_CLASS ChunksPile {
    public:
     /**
      * stream_id to offset map.
@@ -145,6 +146,7 @@ class ChunksPile {
     /**
      * Default blank constructor.
      */
+    OUSTER_API_FUNCTION
     ChunksPile();
 
     /**
@@ -154,6 +156,7 @@ class ChunksPile {
      * @param[in] start_ts The first timestamp in the chunk.
      * @param[in] end_ts The first timestamp in the chunk.
      */
+    OUSTER_API_FUNCTION
     void add(uint64_t offset, ts_t start_ts, ts_t end_ts);
 
     /**
@@ -162,6 +165,7 @@ class ChunksPile {
      * @param[in] offset The offset to return the chunk for.
      * @return The chunk if found, or nullptr.
      */
+    OUSTER_API_FUNCTION
     ChunkState* get(uint64_t offset);
 
     /**
@@ -171,6 +175,7 @@ class ChunksPile {
      * @param[in] stream_id The stream_id associated.
      * @param[in] message_count The number of messages.
      */
+    OUSTER_API_FUNCTION
     void add_info(uint64_t offset, uint32_t stream_id, uint32_t message_count);
 
     /**
@@ -179,6 +184,7 @@ class ChunksPile {
      * @param[in] offset The offset to return the streaming info for.
      * @return The streaming info if found, or nullptr.
      */
+    OUSTER_API_FUNCTION
     ChunkInfoNode* get_info(uint64_t offset);
 
     /**
@@ -188,6 +194,7 @@ class ChunksPile {
      * @param[in] message_idx The specific message index to look for.
      * @return The streaming info if found, or nullptr.
      */
+    OUSTER_API_FUNCTION
     ChunkInfoNode* get_info_by_message_idx(uint32_t stream_id,
                                            uint32_t message_idx);
 
@@ -198,6 +205,7 @@ class ChunksPile {
      * @param[in] ts The lower bound for the chunk.
      * @return The chunk if found, or nullptr.
      */
+    OUSTER_API_FUNCTION
     ChunkState* get_by_lower_bound_ts(uint32_t stream_id, const ts_t ts);
 
     /**
@@ -206,6 +214,7 @@ class ChunksPile {
      * @param[in] offset The offset to return the next chunk for.
      * @return The chunk if found, or nullptr.
      */
+    OUSTER_API_FUNCTION
     ChunkState* next(uint64_t offset);
 
     /**
@@ -214,6 +223,7 @@ class ChunksPile {
      * @param[in] offset The offset to return the next chunk for.
      * @return The chunk if found, or nullptr.
      */
+    OUSTER_API_FUNCTION
     ChunkState* next_by_stream(uint64_t offset);
 
     /**
@@ -221,6 +231,7 @@ class ChunksPile {
      *
      * @return The chunk if found, or nullptr.
      */
+    OUSTER_API_FUNCTION
     ChunkState* first();
 
     /**
@@ -228,6 +239,7 @@ class ChunksPile {
      *
      * @return The size of the chunk pile.
      */
+    OUSTER_API_FUNCTION
     size_t size() const;
 
     /**
@@ -235,6 +247,7 @@ class ChunksPile {
      *
      * @return If there is  a message index.
      */
+    OUSTER_API_FUNCTION
     bool has_message_idx() const;
 
     /**
@@ -242,6 +255,7 @@ class ChunksPile {
      *
      * @return The stream_id to chunk offset map.
      */
+    OUSTER_API_FUNCTION
     StreamChunksMap& stream_chunks();
 
     /**
@@ -250,6 +264,7 @@ class ChunksPile {
      * @throws std::logic_error exception on non increasing timestamps.
      * @throws std::logic_error exception on non existent info.
      */
+    OUSTER_API_FUNCTION
     void link_stream_chunks();
 
    private:
@@ -276,6 +291,7 @@ class ChunksPile {
  * @param[in] chunk_state The data to get the string representation for
  * @return The string representation
  */
+OUSTER_API_FUNCTION
 std::string to_string(const ChunkState& chunk_state);
 
 /**
@@ -284,6 +300,7 @@ std::string to_string(const ChunkState& chunk_state);
  * @param[in] chunk_info The data to get the string representation format
  * @return The string representation
  */
+OUSTER_API_FUNCTION
 std::string to_string(const ChunkInfoNode& chunk_info);
 
 // Forward Decls
@@ -299,7 +316,7 @@ class MessagesStreamingRange;
 /**
  * Chunk forward iterator in order of offset.
  */
-struct ChunksIter {
+struct OUSTER_API_CLASS ChunksIter {
     using iterator_category = std::forward_iterator_tag;
     using value_type = const ChunkRef;
     using difference_type = std::ptrdiff_t;
@@ -309,6 +326,7 @@ struct ChunksIter {
     /**
      * Default construction that zeros out member variables.
      */
+    OUSTER_API_FUNCTION
     ChunksIter();
 
     /**
@@ -316,6 +334,7 @@ struct ChunksIter {
      *
      * @param[in] other The other ChunksIter object to initalize from.
      */
+    OUSTER_API_FUNCTION
     ChunksIter(const ChunksIter& other);
 
     /**
@@ -323,6 +342,7 @@ struct ChunksIter {
      *
      * @param[in] other The other ChunksIter to assign to this.
      */
+    OUSTER_API_FUNCTION
     ChunksIter& operator=(const ChunksIter& other) = default;
 
     /**
@@ -332,6 +352,7 @@ struct ChunksIter {
      *
      * @return The ChunkRef object associated with this ChunksIter object.
      */
+    OUSTER_API_FUNCTION
     const ChunkRef operator*() const;
 
     /**
@@ -339,6 +360,7 @@ struct ChunksIter {
      *
      * @return The ChunkRef pointer associated with this ChunksIter object.
      */
+    OUSTER_API_FUNCTION
     const std::unique_ptr<ChunkRef> operator->() const;
 
     /**
@@ -346,6 +368,7 @@ struct ChunksIter {
      *
      * @return The current ChunksIter object.
      */
+    OUSTER_API_FUNCTION
     ChunksIter& operator++();
 
     /**
@@ -354,6 +377,7 @@ struct ChunksIter {
      * @param[in] other The other object to compare.
      * @return Whether the two ChunksIter objects are the same.
      */
+    OUSTER_API_FUNCTION
     bool operator==(const ChunksIter& other) const;
 
     /**
@@ -363,6 +387,7 @@ struct ChunksIter {
      * @param[in] other The other object to compare.
      * @return Whether the two ChunksIter objects are not the same.
      */
+    OUSTER_API_FUNCTION
     bool operator!=(const ChunksIter& other) const;
 
     /**
@@ -370,6 +395,7 @@ struct ChunksIter {
      *
      * @return The string representation
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const;
 
    private:
@@ -420,13 +446,14 @@ struct ChunksIter {
 /**
  * std iterator class for iterating through chunks.
  */
-class ChunksRange {
+class OUSTER_API_CLASS ChunksRange {
    public:
     /**
      * Begin function for std iterator support.
      *
      * @return A ChunksIter object for iteration.
      */
+    OUSTER_API_FUNCTION
     ChunksIter begin() const;
 
     /**
@@ -435,6 +462,7 @@ class ChunksRange {
      * @return A ChunksIter object for signifying
      *         the end of iteration.
      */
+    OUSTER_API_FUNCTION
     ChunksIter end() const;
 
     /**
@@ -442,6 +470,7 @@ class ChunksRange {
      *
      * @return The string representation.
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const;
 
    private:
@@ -477,13 +506,14 @@ class ChunksRange {
  *
  * @todo Add filtered reads, and other nice things...
  */
-class Reader {
+class OUSTER_API_CLASS Reader {
    public:
     /**
      * Creates reader from %OSF file resource.
      *
      * @param[in] osf_file The OsfFile object to use to read from.
      */
+    OUSTER_API_FUNCTION
     Reader(OsfFile& osf_file);
 
     /**
@@ -491,6 +521,7 @@ class Reader {
      *
      * @param[in] file The OSF file path to read from.
      */
+    OUSTER_API_FUNCTION
     Reader(const std::string& file);
 
     /**
@@ -502,6 +533,7 @@ class Reader {
      * @return The MessageStreamingRange object to iterate
      *         through the messages.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingRange messages();
 
     /**
@@ -511,18 +543,21 @@ class Reader {
      * @param[in] end_ts Specify the end of the timestamps that
      *                   should be iterated through.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingRange messages(const ts_t start_ts, const ts_t end_ts);
 
     /**
      * @copydoc messages()
      * @param[in] stream_ids Filter the message iteration to specific streams.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingRange messages(const std::vector<uint32_t>& stream_ids);
 
     /**
      * @copydoc messages(const ts_t start_ts, const ts_t end_ts)
      * @param[in] stream_ids Filter the message iteration to specific streams.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingRange messages(const std::vector<uint32_t>& stream_ids,
                                     const ts_t start_ts, const ts_t end_ts);
 
@@ -540,6 +575,7 @@ class Reader {
      * @return message timestamp that corresponds to the message_idx in the
      *                 stream_id
      */
+    OUSTER_API_FUNCTION
     nonstd::optional<ts_t> ts_by_message_idx(uint32_t stream_id,
                                              uint32_t message_idx);
 
@@ -553,6 +589,7 @@ class Reader {
      * @return Whether OSF contains the message counts that are needed for
      *         ``ts_by_message_idx()``
      */
+    OUSTER_API_FUNCTION
     bool has_message_idx() const;
 
     /**
@@ -561,6 +598,7 @@ class Reader {
      *
      * @return Whether OSF contains the message timestamp index
      */
+    OUSTER_API_FUNCTION
     bool has_timestamp_idx() const;
 
     /**
@@ -570,6 +608,7 @@ class Reader {
      *
      * @return The iterator to valid chunks only.
      */
+    OUSTER_API_FUNCTION
     ChunksRange chunks();
 
     /**
@@ -577,6 +616,7 @@ class Reader {
      *
      * @return The metadata id.
      */
+    OUSTER_API_FUNCTION
     std::string metadata_id() const;
 
     /**
@@ -584,6 +624,7 @@ class Reader {
      *
      * @return The lowest timestamp in the ChunksIter.
      */
+    OUSTER_API_FUNCTION
     ts_t start_ts() const;
 
     /**
@@ -591,6 +632,7 @@ class Reader {
      *
      * @return The highest timestamp in the ChunksIter.
      */
+    OUSTER_API_FUNCTION
     ts_t end_ts() const;
 
     /**
@@ -598,6 +640,7 @@ class Reader {
      *
      * @return All of the metadata entries as a MetadataStore.
      */
+    OUSTER_API_FUNCTION
     const MetadataStore& meta_store() const;
 
     /**
@@ -606,6 +649,7 @@ class Reader {
      *
      * @return The chunks can be read by stream and timestamps are sane.
      */
+    OUSTER_API_FUNCTION
     bool has_stream_info() const;
 
    private:
@@ -676,7 +720,7 @@ class Reader {
  * and reconstructs underlying data to the corresponding object type given
  * the Stream type.
  */
-class MessageRef {
+class OUSTER_API_CLASS MessageRef {
    public:
     using ts_t = osf::ts_t;
 
@@ -688,6 +732,7 @@ class MessageRef {
      * @param[in] meta_provider The metadata store that is used in types
      *                          reconstruction
      */
+    OUSTER_API_FUNCTION
     MessageRef(const uint8_t* buf, const MetadataStore& meta_provider);
 
     /**
@@ -699,6 +744,7 @@ class MessageRef {
      *                          reconstruction
      * @param[in,out] chunk_buf The pre-existing chunk buffer to use.
      */
+    OUSTER_API_FUNCTION
     MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
                std::shared_ptr<std::vector<uint8_t>> chunk_buf);
 
@@ -707,6 +753,7 @@ class MessageRef {
      *
      * @return The message stream id.
      */
+    OUSTER_API_FUNCTION
     uint32_t id() const;
 
     /**
@@ -714,6 +761,7 @@ class MessageRef {
      *
      * @return The timestamp of the message.
      */
+    OUSTER_API_FUNCTION
     ts_t ts() const;
 
     /// @todo [pb] Type of the stored data (meta of the stream?)
@@ -724,6 +772,7 @@ class MessageRef {
      *
      * @return The pointer to the underlying data.
      */
+    OUSTER_API_FUNCTION
     const uint8_t* buf() const;
 
     /**
@@ -731,6 +780,7 @@ class MessageRef {
      *
      * @return The string representation of a MessageRef.
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const;
 
     /**
@@ -751,6 +801,7 @@ class MessageRef {
      * @param[in] type_str The data type in string form to check against.
      * @return If the current MessageRef is of type type_str.
      */
+    OUSTER_API_FUNCTION
     bool is(const std::string& type_str) const;
 
     /**
@@ -788,6 +839,7 @@ class MessageRef {
      *
      * @return Return the underlying raw message byte vector.
      */
+    OUSTER_API_FUNCTION
     std::vector<uint8_t> buffer() const;
 
     /**
@@ -796,6 +848,7 @@ class MessageRef {
      * @param[in] other The other MessageRef to check against.
      * @return If the two MessageRefs are equal.
      */
+    OUSTER_API_FUNCTION
     bool operator==(const MessageRef& other) const;
 
     /**
@@ -804,6 +857,7 @@ class MessageRef {
      * @param[in] other The other MessageRef to check against.
      * @return If the two MessageRefs are not equal.
      */
+    OUSTER_API_FUNCTION
     bool operator!=(const MessageRef& other) const;
 
    private:
@@ -828,11 +882,12 @@ class MessageRef {
  * messages reading routines. It expects that Chunk was "verified" before
  * creating a ChunkRef.
  */
-class ChunkRef {
+class OUSTER_API_CLASS ChunkRef {
    public:
     /**
      * Default ChunkRef constructor that just zeros the internal fields.
      */
+    OUSTER_API_FUNCTION
     ChunkRef();
 
     /**
@@ -840,6 +895,7 @@ class ChunkRef {
      *                   chunk.
      * @param[in] reader The reader object to use for reading.
      */
+    OUSTER_API_FUNCTION
     ChunkRef(const uint64_t offset, Reader* reader);
 
     /**
@@ -848,6 +904,7 @@ class ChunkRef {
      * @param[in] other The other ChunkRef to check against.
      * @return If the two ChunkRef are equal.
      */
+    OUSTER_API_FUNCTION
     bool operator==(const ChunkRef& other) const;
 
     /**
@@ -856,6 +913,7 @@ class ChunkRef {
      * @param[in] other The other ChunkRef to check against.
      * @return If the two ChunkRef are not equal.
      */
+    OUSTER_API_FUNCTION
     bool operator!=(const ChunkRef& other) const;
 
     /**
@@ -865,11 +923,13 @@ class ChunkRef {
      *
      * @return The ChunkState associated with this ChunkRef.
      */
+    OUSTER_API_FUNCTION
     ChunkState* state();
 
     /**
      * @copydoc state()
      */
+    OUSTER_API_FUNCTION
     const ChunkState* state() const;
 
     /**
@@ -879,11 +939,13 @@ class ChunkRef {
      *
      * @return The ChunkInfoNode associated with this ChunkRef.
      */
+    OUSTER_API_FUNCTION
     ChunkInfoNode* info();
 
     /**
      * @copydoc info()
      */
+    OUSTER_API_FUNCTION
     const ChunkInfoNode* info() const;
 
     /**
@@ -891,6 +953,7 @@ class ChunkRef {
      *
      * @return A MessagesChunkIter object for iteration.
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter begin() const;
 
     /**
@@ -899,6 +962,7 @@ class ChunkRef {
      * @return A MessagesChunkIter object for signifying
      *         the end of iteration.
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter end() const;
 
     /**
@@ -909,6 +973,7 @@ class ChunkRef {
      * @param[in] msg_idx The message index to get.
      * @return The resulting message.
      */
+    OUSTER_API_FUNCTION
     const MessageRef operator[](size_t msg_idx) const;
 
     /**
@@ -920,6 +985,7 @@ class ChunkRef {
      * @return The resulting message smart pointer,
      *         returns nullptr if non existent.
      */
+    OUSTER_API_FUNCTION
     std::unique_ptr<const MessageRef> messages(size_t msg_idx) const;
 
     /**
@@ -927,6 +993,7 @@ class ChunkRef {
      *
      * @return The string representation of a ChunkRef.
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const;
 
     /**
@@ -934,6 +1001,7 @@ class ChunkRef {
      *
      * @return The chunk offset in the larger flatbuffer array.
      */
+    OUSTER_API_FUNCTION
     uint64_t offset() const;
 
     /**
@@ -943,6 +1011,7 @@ class ChunkRef {
      * @relates state
      * @return starting timestamp in the received chunk
      */
+    OUSTER_API_FUNCTION
     ts_t start_ts() const;
 
     /**
@@ -952,6 +1021,7 @@ class ChunkRef {
      * @relates state
      * @return last timestamp in the received chunk
      */
+    OUSTER_API_FUNCTION
     ts_t end_ts() const;
 
     /**
@@ -960,6 +1030,7 @@ class ChunkRef {
      * @return The summation of the sizes of the chunks messages,
      *         0 on chunk invalidity.
      */
+    OUSTER_API_FUNCTION
     size_t size() const;
 
     /**
@@ -967,6 +1038,7 @@ class ChunkRef {
      *
      * @return The validity of the chunk.
      */
+    OUSTER_API_FUNCTION
     bool valid() const;
 
    private:
@@ -998,7 +1070,7 @@ class ChunkRef {
  * Convenient iterator class to go over all of the
  * messages in a chunk.
  */
-struct MessagesChunkIter {
+struct OUSTER_API_CLASS MessagesChunkIter {
     using iterator_category = std::forward_iterator_tag;
     using value_type = const MessageRef;
     using difference_type = std::ptrdiff_t;
@@ -1009,6 +1081,7 @@ struct MessagesChunkIter {
      * Default MessagesChunkIter constructor that just zeros
      * the internal fields.
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter();
 
     /**
@@ -1017,6 +1090,7 @@ struct MessagesChunkIter {
      *
      * @param[in] other The other MessagesChunkIter to initalize from.
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter(const MessagesChunkIter& other);
 
     /**
@@ -1024,6 +1098,7 @@ struct MessagesChunkIter {
      *
      * @param[in] other The other MessageChunkIter to assign to.
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter& operator=(const MessagesChunkIter& other) = default;
 
     /**
@@ -1031,6 +1106,7 @@ struct MessagesChunkIter {
      *
      * @return The current ChunkRef value.
      */
+    OUSTER_API_FUNCTION
     const MessageRef operator*() const;
 
     /**
@@ -1038,6 +1114,7 @@ struct MessagesChunkIter {
      *
      * @return The current ChunkRef smart pointer.
      */
+    OUSTER_API_FUNCTION
     std::unique_ptr<const MessageRef> operator->() const;
 
     /**
@@ -1045,11 +1122,13 @@ struct MessagesChunkIter {
      *
      * @return *this
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter& operator++();
 
     /**
      * @copydoc operator++()
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter operator++(int);
 
     /**
@@ -1057,11 +1136,13 @@ struct MessagesChunkIter {
      *
      * @return *this
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter& operator--();
 
     /**
      * @copydoc operator--()
      */
+    OUSTER_API_FUNCTION
     MessagesChunkIter operator--(int);
 
     /**
@@ -1070,6 +1151,7 @@ struct MessagesChunkIter {
      * @param[in] other The other MessagesChunkIter to check against.
      * @return If the two MessagesChunkIter are equal.
      */
+    OUSTER_API_FUNCTION
     bool operator==(const MessagesChunkIter& other) const;
 
     /**
@@ -1078,6 +1160,7 @@ struct MessagesChunkIter {
      * @param[in] other The other MessagesChunkIter to check against.
      * @return If the two MessagesChunkIter are not equal.
      */
+    OUSTER_API_FUNCTION
     bool operator!=(const MessagesChunkIter& other) const;
 
     /**
@@ -1085,6 +1168,7 @@ struct MessagesChunkIter {
      *
      * @return The string representation of a MessagesChunkIter.
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const;
 
    private:
@@ -1121,13 +1205,14 @@ struct MessagesChunkIter {
     friend class ChunkRef;
 };  // MessagesChunkIter
 
-class MessagesStreamingRange {
+class OUSTER_API_CLASS MessagesStreamingRange {
    public:
     /**
      * Begin function for std iterator support.
      *
      * @return A MessagesStreamingIter object for iteration.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingIter begin() const;
 
     /**
@@ -1136,6 +1221,7 @@ class MessagesStreamingRange {
      * @return A MessagesStreamingIter object for signifying
      *         the end of iteration.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingIter end() const;
 
     /**
@@ -1143,6 +1229,7 @@ class MessagesStreamingRange {
      *
      * @return The string representation of a MessagesStreamingRange.
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const;
 
    private:
@@ -1186,7 +1273,7 @@ class MessagesStreamingRange {
  * Iterator over all messages in Streaming Layout order for specified
  * timestamp range.
  */
-struct MessagesStreamingIter {
+struct OUSTER_API_CLASS MessagesStreamingIter {
     using iterator_category = std::forward_iterator_tag;
     using value_type = const MessageRef;
     using difference_type = std::ptrdiff_t;
@@ -1198,7 +1285,7 @@ struct MessagesStreamingIter {
     /**
      * Comparison struct used for determining which chunk is greater.
      */
-    struct greater_chunk_type {
+    struct OUSTER_API_CLASS greater_chunk_type {
         /**
          * Comparison operator used for determining if the first is greater
          * than the second. The comparison is based on the timestamps.
@@ -1207,6 +1294,7 @@ struct MessagesStreamingIter {
          * @param[in] b The second chunk to compare.
          * @return If the first chunk is greater than the second chunk.
          */
+        OUSTER_API_FUNCTION
         bool operator()(const opened_chunk_type& a, const opened_chunk_type& b);
     };
 
@@ -1214,6 +1302,7 @@ struct MessagesStreamingIter {
      * Default MessagesStreamingIter constructor that just zeros
      * the internal fields.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingIter();
 
     /**
@@ -1222,6 +1311,7 @@ struct MessagesStreamingIter {
      *
      * @param[in] other The other MessagesStreamingIter to initalize from.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingIter(const MessagesStreamingIter& other);
 
     /**
@@ -1229,6 +1319,7 @@ struct MessagesStreamingIter {
      *
      * @param[in] other The other MessagesStreamingIter to assign to.
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingIter& operator=(const MessagesStreamingIter& other) =
         default;
 
@@ -1237,6 +1328,7 @@ struct MessagesStreamingIter {
      *
      * @return The current MessageRef value.
      */
+    OUSTER_API_FUNCTION
     const MessageRef operator*() const;
 
     /**
@@ -1244,6 +1336,7 @@ struct MessagesStreamingIter {
      *
      * @return The current MessageRef smart pointer.
      */
+    OUSTER_API_FUNCTION
     std::unique_ptr<const MessageRef> operator->() const;
 
     /**
@@ -1251,11 +1344,13 @@ struct MessagesStreamingIter {
      *
      * @return *this
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingIter& operator++();
 
     /**
      * @copydoc operator++()
      */
+    OUSTER_API_FUNCTION
     MessagesStreamingIter operator++(int);
 
     /**
@@ -1264,6 +1359,7 @@ struct MessagesStreamingIter {
      * @param[in] other The other MessagesStreamingIter to check against.
      * @return If the two MessagesStreamingIter are equal.
      */
+    OUSTER_API_FUNCTION
     bool operator==(const MessagesStreamingIter& other) const;
 
     /**
@@ -1272,6 +1368,7 @@ struct MessagesStreamingIter {
      * @param[in] other The other MessagesStreamingIter to check against.
      * @return If the two MessagesStreamingIter are not equal.
      */
+    OUSTER_API_FUNCTION
     bool operator!=(const MessagesStreamingIter& other) const;
 
     /**
@@ -1279,6 +1376,7 @@ struct MessagesStreamingIter {
      *
      * @return The string representation of a MessagesStreamingIter.
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const;
 
    private:

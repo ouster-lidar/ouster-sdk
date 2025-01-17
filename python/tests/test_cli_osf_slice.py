@@ -55,7 +55,7 @@ def test_osf_slice(test_osf_file) -> None:
             assert os.path.isfile(result_osf.name)
 
             result_src = open_source(result_osf.name, -1)
-            assert result_src.scans_num == []  # FIXME
+            assert result_src.scans_num == [0]
             result_src.close()
     finally:
         os.unlink(result_osf.name)
@@ -123,7 +123,7 @@ def test_osf_slice_time(test_osf_file_new) -> None:
             assert os.path.isfile(result_osf.name)
 
             result_src = open_source(result_osf.name, -1)
-            assert result_src.scans_num == []
+            assert result_src.scans_num == [0]
             # TODO[tws] figure out how to capture "WARNING: No scans saved."
             result_src.close()
     finally:
@@ -188,13 +188,9 @@ def test_osf_slice_time_3(test_osf_file_new) -> None:
                     'slice', '0.0000ms:0.0000ms',
                     'save', '--overwrite', result_osf.name
                 ]).args, catch_exceptions=False)
-            assert result.exit_code == 0  # FIXME?
+            assert result.exit_code != 0
             print(result.output)
-            assert os.path.isfile(result_osf.name)
-
-            result_src = open_source(result_osf.name, -1)
-            assert result_src.scans_num == [expected_num_scans]  # FIXME?
-            result_src.close()
+            assert "slice stop index must be greater than start" in result.output
     finally:
         os.unlink(result_osf.name)
 
@@ -216,16 +212,11 @@ def test_osf_slice_time_4(test_osf_file_new) -> None:
                 CliArgs([
                     '--traceback',
                     'source', test_osf_file_new,
-                    'slice', '1.0000ms:1.0000ms',  # TODO[tws] should we force the user to specify stop > start?
+                    'slice', '1.0000ms:1.0000ms',
                     'save', '--overwrite', result_osf.name
                 ]).args, catch_exceptions=False)
-            assert result.exit_code == 0  # FIXME?
-            print(result.output)
-            assert os.path.isfile(result_osf.name)
-
-            result_src = open_source(result_osf.name, -1)
-            assert result_src.scans_num == []
-            result_src.close()
+            assert result.exit_code != 0
+            assert "slice stop index must be greater than start" in result.output
     finally:
         os.unlink(result_osf.name)
 

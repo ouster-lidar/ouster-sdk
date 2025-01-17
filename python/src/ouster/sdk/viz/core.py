@@ -12,6 +12,7 @@ from functools import partial
 from enum import Enum, auto
 import os
 import threading
+import queue
 import time
 from datetime import datetime
 from typing import (Callable, ClassVar, cast, Deque, Dict, Iterable, Iterator, List,
@@ -24,14 +25,14 @@ from PIL import Image as PILImage
 from ouster.sdk import client
 from ouster.sdk.client import (first_valid_packet_ts, LidarScan, ChanField)
 from ouster.sdk._bindings.viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
-                   TargetDisplay, add_default_controls)
-from .util import push_point_viz_handler, push_point_viz_fb_handler
-from .model import VizExtraMode
+                   TargetDisplay, add_default_controls, MouseButton, MouseButtonEvent, EventModifierKeys)
+from .util import push_point_viz_handler, push_point_viz_fb_handler, BoundMethod
+from .model import VizExtraMode, LidarScanVizModel
 from . import util as vizu
 from .view_mode import (ImageMode, CloudMode, LidarScanVizMode, CloudPaletteItem)
 from .accumulators import LidarScanVizAccumulators
 from .accumulators_config import LidarScanVizAccumulatorsConfig, MAP_MAX_POINTS_NUM, MAP_SELECT_RATIO
-from .model import LidarScanVizModel
+from .model import SensorModel
 
 
 logger = logging.getLogger("viz-logger")
@@ -85,11 +86,12 @@ class LidarScanViz:
         self._osd_text_extra: Callable[[], str] = lambda: ""
 
         # set initial image sizes
-        self._img_size_fraction = 4
         self._image_size_initialized = False
 
         # initial point size in scan clouds
         self._viz = point_viz or PointViz("Ouster Viz")
+        for label in self._model._aoi_labels:
+            self._viz.add(label)
 
         self._scans_accum: Optional[LidarScanVizAccumulators] = None
         if accumulators_config:
@@ -109,10 +111,6 @@ class LidarScanViz:
                 # re-draw of ScansAccumulator state (osd included)
                 self._scans_accum._key_press_pre_draw = (
                     lambda: self.draw(update=False))
-
-            if hasattr(self, "_key_definitions") and self._scans_accum:
-                self._key_definitions.update(
-                    getattr(self._scans_accum, "_key_definitions", {}))
 
         # add images and clouds to viz
         for sensor in self._model._sensors:
@@ -148,11 +146,17 @@ class LidarScanViz:
                                    pose=sensor._meta.extrinsic,
                                    label=str(idx + 1),
                                    thickness=3))
-        # system center axis
-        self._scan_axis_origin = vizu.AxisWithLabel(self._viz,
-                                                    label="O",
-                                                    thickness=5,
-                                                    label_scale=0.4)
+        # map origin axis
+        self._map_origin_axis = vizu.AxisWithLabel(self._viz,
+                                                   label="M",
+                                                   thickness=5,
+                                                   label_scale=0.4)
+
+        # base link axis
+        self._base_link_axis = vizu.AxisWithLabel(self._viz,
+                                                  label="O",
+                                                  thickness=5,
+                                                  label_scale=0.4)
 
         self._camera_follow_enabled = True
         # TODO[UN]: assign a key to select a sensor to be tracked
@@ -163,8 +167,35 @@ class LidarScanViz:
         self._scans: List[Optional[LidarScan]] = []
         self._scan_num = -1
         self._first_frame_ts = None
-
         self._setup_controls()
+
+        if hasattr(self, "_key_definitions") and self._scans_accum:
+            self._key_definitions.update(
+                getattr(self._scans_accum, "_key_definitions", {}))
+
+    def mouse_button_handler(self, ctx: WindowCtx,
+        button: MouseButton, event: MouseButtonEvent, mods: EventModifierKeys) -> bool:
+        with self._lock:
+            ret = self._model.mouse_button_handler(ctx, button, event, mods)
+            if not ret:
+                self._flags_mode = LidarScanViz.FlagsMode.NONE
+                self._update_multi_viz_osd()
+                self._viz.update()
+            return ret
+
+    def mouse_pos_handler(self, ctx: WindowCtx, x: float, y: float) -> bool:
+        with self._lock:
+            ret = self._model.mouse_pos_handler(ctx, x, y)
+            if not ret:
+                self._model.update_aoi_label(self._scans)
+                self._viz.update()
+            return ret
+
+    def frame_buffer_resize_handler(self, ctx: WindowCtx):
+        with self._lock:
+            self._model.update_aoi(ctx)
+            self._viz.update()
+            return True
 
     # TODO[tws] likely remove
     @property
@@ -201,7 +232,7 @@ class LidarScanViz:
             (ord('U'), 0): LidarScanViz.toggle_camera_follow,
             # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
             (ord('C'), 0): LidarScanViz.update_flags_mode,
-            (ord('9'), 0): LidarScanViz.toggle_scan_axis,
+            (ord('9'), 0): LidarScanViz.toggle_axis_markers,
             (ord('/'), 1): LidarScanViz.toggle_help,
         }
 
@@ -210,9 +241,9 @@ class LidarScanViz:
             's': "Camera pitch up",
             'a': "Camera yaw right",
             'd': "Camera yaw left",
-            "e / E": "Increase/decrease size of displayed 2D images",
-            "p / P": "Increase/decrease point size",
-            "R": "Reset camera orientation",
+            "e / SHIFT+e": "Increase/decrease size of displayed 2D images",
+            "p / SHIFT+p": "Increase/decrease point size",
+            "SHIFT+r": "Reset camera orientation",
             "CTRL+r": "Camera bird-eye view",
             "0": "Toggle orthographic camera",
             "1": "Toggle first return point cloud",
@@ -226,18 +257,13 @@ class LidarScanViz:
             "9": "Toggle axis helpers at scan origin",
             '?': "Print keys to standard out",
             "= / -": "Dolly in and out",
-            "' / \"": "Increase/decrease spacing in range markers",
-            "CTRL+'": "Cycle through thickness of range markers or hide",
+            "\" / SHIFT+\"": "Increase/decrease spacing in range markers",
+            "CTRL+\"": "Cycle through thickness of range markers or hide",
             'SHIFT': "Camera Translation with mouse drag",
             'ESC': "Exit the application",
         }
 
-        # dynamically assign sensor toggle keys
-        # TODO[tws]: there should be a sane limit
-        for sensor_index in range(len(self._model._sensors)):
-            key_bindings[(ord(str(sensor_index + 1)), 2)] = \
-                partial(LidarScanViz.toggle_sensor, sensor_index=sensor_index)
-            self._key_definitions[f"CTRL+{str(sensor_index + 1)}"] = f"Toggle sensor {sensor_index + 1} point cloud(s)"
+        self._setup_sensor_toggle_keys(self._model._sensors, key_bindings)
 
         def handle_keys(self: LidarScanViz, ctx: WindowCtx, key: int,
                         mods: int) -> bool:
@@ -246,15 +272,32 @@ class LidarScanViz:
                 self.draw(update=self.update_on_input)
             return True
 
-        push_point_viz_handler(self._viz, self, handle_keys)
         if isinstance(self._viz, PointViz):
             add_default_controls(self._viz)
+            push_point_viz_handler(self._viz, self, handle_keys)
+            self._viz.push_mouse_button_handler(BoundMethod(self.mouse_button_handler))
+            self._viz.push_mouse_pos_handler(BoundMethod(self.mouse_pos_handler))
+            self._viz.push_frame_buffer_resize_handler(BoundMethod(self.frame_buffer_resize_handler))
+
         print("Press \'?\' while viz window is focused to print key bindings")
+
+    MAX_SENSOR_TOGGLE_KEYS = 9
+
+    def _setup_sensor_toggle_keys(self, sensors: List[SensorModel],
+        key_bindings: Dict[Tuple[int, int],
+        Callable[['LidarScanViz'], None]]) -> None:
+
+        for sensor_index in range(min(len(self._model._sensors), LidarScanViz.MAX_SENSOR_TOGGLE_KEYS)):
+            key_bindings[(ord(str(sensor_index + 1)), 2)] = \
+                partial(LidarScanViz.toggle_sensor, sensor_index=sensor_index)
+            self._key_definitions[f"CTRL+{str(sensor_index + 1)}"] = f"Toggle sensor {sensor_index + 1} point cloud(s)"
 
     def cycle_img_mode(self, i: int, *, direction: int = 1) -> None:
         """Change the displayed field of the i'th image."""
         with self._lock:
             self._model.cycle_image_mode(i, direction)
+            self._model.update_aoi()
+            self._model.update_aoi_label(self._scans)
 
             # Note, updating the image mode needs the current scan
             # because ImageMode.enabled requires it.
@@ -279,6 +322,8 @@ class LidarScanViz:
     def toggle_cloud(self, i: int) -> None:
         """Toggle whether the i'th return is displayed."""
         with self._lock:
+            if i >= len(self._model._cloud_enabled):
+                return
             if self._model._cloud_enabled[i]:
                 self._model._cloud_enabled[i] = False
                 for sensor in self._model._sensors:
@@ -299,7 +344,7 @@ class LidarScanViz:
             sensor._enabled = not sensor._enabled
             if sensor._enabled:
                 for i, cld in enumerate(sensor._clouds):
-                    if self._model._cloud_enabled[i]:
+                    if i < len(self._model._cloud_enabled) and self._model._cloud_enabled[i]:
                         self._viz.add(cld)
                 for img in sensor._images:
                     self._viz.add(img)
@@ -310,8 +355,14 @@ class LidarScanViz:
                 for img in sensor._images:
                     self._viz.remove(img)
                 self._scan_axis[sensor_index].disable()
+
+            #  clear the selection if we're hiding the sensor
+            if any([selection._sensor_index == sensor_index for selection in self._model._current_selection]):
+                self._model.clear_aoi()
+
             if self._scans_accum:
                 self._scans_accum.toggle_sensor(sensor_index, sensor._enabled)
+
         self.update_image_size(0)
 
     def update_point_size(self, amount: int) -> None:
@@ -325,31 +376,7 @@ class LidarScanViz:
     def update_image_size(self, amount: int) -> None:
         """Change the size of the 2D image and position image labels."""
         with self._lock:
-            size_fraction_max = 20
-            self._img_size_fraction = (self._img_size_fraction + amount +
-                                       (size_fraction_max + 1)) % (
-                                           size_fraction_max + 1)
-        enabled_sensors = [sensor for sensor in self._model._sensors if sensor._enabled]
-        image_h = self._img_size_fraction / size_fraction_max
-
-        # compute the total width
-        total_image_w = 0.0
-        for sensor in enabled_sensors:
-            image_w = image_h / sensor._img_aspect_ratio
-            total_image_w += image_w
-
-        # set image positions
-        center_x = -total_image_w / 2
-        last_image_right = 0.0
-        for sensor in enabled_sensors:
-            image_w = image_h / sensor._img_aspect_ratio
-            image_left = last_image_right
-            image_right = last_image_right + image_w
-            last_image_right = image_right
-            for image_idx, image in enumerate(sensor._images):
-                image_top = 1.0 - image_h * image_idx
-                image_bottom = 1.0 - image_h * (image_idx + 1)
-                image.set_position(image_left + center_x, image_right + center_x, image_bottom, image_top)
+            self._model.update_image_size(amount)
 
     def update_ring_size(self, amount: int) -> None:
         """Change distance ring size."""
@@ -389,6 +416,9 @@ class LidarScanViz:
             else:
                 self._flags_mode = mode
 
+            if self._flags_mode != LidarScanViz.FlagsMode.NONE:
+                self._model.clear_aoi()
+
             # if no scan is set yet, skip updating the cloud masks
             if not self._scans:
                 return
@@ -415,6 +445,10 @@ class LidarScanViz:
                 sensor._clouds[0].set_mask(sensor._cloud_masks[0])
                 sensor._clouds[1].set_mask(sensor._cloud_masks[1])
 
+            # update masks based on AOI if one is set
+            if self._flags_mode == LidarScanViz.FlagsMode.NONE:
+                self._model.update_aoi()
+
     def _draw_update_flags_mode(self) -> None:
         """Apply selected FlagsMode to the cloud"""
         # set a cloud mask based where first flags bit is set
@@ -439,17 +473,19 @@ class LidarScanViz:
                         rng[scan.field(flag_field) & 0x1 == 0x1] = 0
                         sensor._clouds[i].set_range(rng)
 
-    def toggle_scan_axis(self) -> None:
+    def toggle_axis_markers(self) -> None:
         """Toggle the helper axis of a scan ON/OFF"""
         with self._lock:
             if self._scan_axis_enabled:
                 self._scan_axis_enabled = False
-                self._scan_axis_origin.disable()
+                self._map_origin_axis.disable()
+                self._base_link_axis.disable()
                 for axis in self._scan_axis:
                     axis.disable()
             else:
                 self._scan_axis_enabled = True
-                self._scan_axis_origin.enable()
+                self._map_origin_axis.enable()
+                self._base_link_axis.enable()
                 for axis, sensor in zip(self._scan_axis, self._model._sensors):
                     if sensor._enabled:
                         axis.enable()
@@ -478,6 +514,9 @@ class LidarScanViz:
         self._model.update(self._scans)
         if self._scans_accum:
             self._scans_accum.update(scans, self._scan_num)
+
+        with self._lock:
+            self._model.update_aoi_label(self._scans)
 
     def draw(self, update: bool = True) -> None:
         """Process and draw the latest state to the screen."""
@@ -573,7 +612,7 @@ class LidarScanViz:
 
     def _get_pose_with_min_ts(self) -> np.ndarray:
         first_scan = min([s for s in self._scans if s], key=lambda s: first_valid_packet_ts(s))
-        return client.first_valid_column_pose(first_scan)
+        return client.last_valid_column_pose(first_scan)
 
     def _draw_update_scan_poses(self) -> None:
         """Apply poses from the Scans to the scene"""
@@ -581,8 +620,7 @@ class LidarScanViz:
         # scan with the minimal timestamp determines the
         # center of the system (by it's scan pose)
         pose = self._get_pose_with_min_ts()
-        self._viz.camera.set_target(np.linalg.inv(pose))
-        self._scan_axis_origin.pose = pose
+        self._base_link_axis.pose = pose
         # update all sensor axis positions
         for axis, sensor in zip(self._scan_axis, self._model._sensors):
             axis.pose = pose @ sensor._meta.extrinsic
@@ -590,7 +628,7 @@ class LidarScanViz:
         if self._camera_follow_enabled:
             scan = self._scans[self._tracked_sensor]
             if scan:    # if picked scan is None don't update camera
-                self._scan_pose = client.first_valid_column_pose(scan)
+                self._scan_pose = client.last_valid_column_pose(scan)
         self._viz.camera.set_target(np.linalg.inv(self._scan_pose))
 
     def print_key_bindings(self) -> None:
@@ -729,6 +767,55 @@ def _save_fb_to_png(fb_data: List,
     return img_fname
 
 
+class LiveConsumer:
+    """
+    Spawns a thread to consume scans as soon as they're available.
+    This is a work-around to deal with situations where the visualizer is too slow to keep up with a live sensor.
+    """
+    def __init__(self, iterable, should_count_dropped_frame_method):
+        self._stopped = threading.Event()
+        self._queue = queue.Queue(1)
+        self._iterable = iterable
+        self._consumer_thread = threading.Thread(target=partial(self.__consume))
+        self._dropped_frames = 0
+        self._should_count_dropped_frame_method = should_count_dropped_frame_method
+
+    def __consume(self):
+        for scans in self._iterable:
+            try:
+                if self._stopped.is_set():
+                    break
+                self._queue.put_nowait(scans)
+            except queue.Full:
+                if self._should_count_dropped_frame_method():
+                    self._dropped_frames += 1
+        self._stopped.set()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            if self._stopped.is_set():
+                raise StopIteration()
+            try:
+                return self._queue.get(timeout=1)
+            except queue.Empty:
+                pass
+
+    def start(self):
+        assert not self._stopped.is_set()
+        self._consumer_thread.start()
+
+    def shutdown(self):
+        self._stopped.set()
+        self._consumer_thread.join()
+
+    @property
+    def dropped_frames(self):
+        return self._dropped_frames
+
+
 class SimpleViz:
     """Visualize a stream of LidarScans.
 
@@ -749,6 +836,7 @@ class SimpleViz:
                  map_enabled: bool = False,
                  map_select_ratio: float = MAP_SELECT_RATIO,
                  map_max_points: int = MAP_MAX_POINTS_NUM,
+                 title: str = "Ouster Viz",
                  _override_pointviz: Optional[PointViz] = None,
                  _override_lidarscanviz: Optional[LidarScanViz] = None,
                  _buflen: int = 50) -> None:
@@ -765,7 +853,7 @@ class SimpleViz:
             ValueError: if the specified rate isn't one of the options
         """
         self._metadata = [metadata] if isinstance(metadata, client.SensorInfo) else metadata
-        self._viz = _override_pointviz if _override_pointviz else PointViz("Ouster Viz")
+        self._viz = _override_pointviz if _override_pointviz else PointViz(title)
         accum_config = LidarScanVizAccumulatorsConfig(
             accum_max_num=accum_max_num,
             accum_min_dist_meters=accum_min_dist_meters,
@@ -1002,10 +1090,10 @@ class SimpleViz:
                         last_time_update = time.monotonic()
 
                     # Queue up the scans to be viewed
-                    self._scan_viz.update(scan, scan_idx)
+                    self._scan_viz.update(scan, scan_idx - 1)
                     self._scan_viz.draw(update=False)
 
-                    if self._pause_at == scan_idx:
+                    if self._pause_at == scan_idx - 1:
                         self._paused = True
 
                     self._update_playback_osd()
@@ -1070,7 +1158,13 @@ class SimpleViz:
             When the stream is consumed or the visualizer window is closed.
         """
 
+        if self._live:
+            # If live, create a "LiveConsumer" to drop frames if the viz is too slow
+            # to keep up with the source. The lambda indicates whether a dropped frame should be counted.
+            scans = LiveConsumer(scans, lambda: not self._paused)
+
         seekable = _Seekable(scans, maxlen=self._buflen)
+
         try:
             logger.info("Starting processing thread...")
             self._proc_exit = False
@@ -1080,11 +1174,20 @@ class SimpleViz:
             proc_thread.start()
 
             logger.info("Starting rendering loop...")
+            if isinstance(scans, LiveConsumer):
+                scans.start()
             self._viz.run()
             logger.info("Done rendering loop")
         except KeyboardInterrupt:
             print("Termination requested, shutting down...")
         finally:
+            if isinstance(scans, LiveConsumer):
+                scans.shutdown()
+                if scans.dropped_frames:
+                    logging.warning("The visualizer dropped %d frames during playback - "
+                        "please make sure to specify a playback rate if working with "
+                        "a file-based source!", scans.dropped_frames)
+
             # processing thread will still be running if e.g. viz window was closed
             with self._cv:
                 self._proc_exit = True

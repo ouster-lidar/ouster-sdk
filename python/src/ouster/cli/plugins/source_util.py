@@ -13,8 +13,9 @@ from datetime import datetime
 
 class SourceCommandType(IntEnum):
     MULTICOMMAND_UNSUPPORTED = 0
-    PROCESSOR = 1
-    CONSUMER = 2
+    PROCESSOR_UNREPEATABLE = 1
+    PROCESSOR = 2
+    CONSUMER = 3
 
 
 @dataclass(init=False)

@@ -12,6 +12,8 @@
 
 #include <cstdint>
 
+#include "ouster/visibility.h"
+
 namespace ouster {
 namespace osf {
 
@@ -31,6 +33,7 @@ const uint32_t CRC_BYTES_SIZE = 4;
  * @param[in] size Size of the buffer in bytes.
  * @return CRC32 value
  */
+OUSTER_API_FUNCTION
 uint32_t crc32(const uint8_t* buf, uint32_t size);
 
 /**
@@ -44,6 +47,7 @@ uint32_t crc32(const uint8_t* buf, uint32_t size);
  * @param[in] size Size of the buffer in bytes.
  * @return CRC32 value
  */
+OUSTER_API_FUNCTION
 uint32_t crc32(uint32_t initial_crc, const uint8_t* buf, uint32_t size);
 
 }  // namespace osf

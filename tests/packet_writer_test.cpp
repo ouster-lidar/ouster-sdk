@@ -39,16 +39,26 @@ struct ProfileEntry {
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-extern Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES> profiles;
+OUSTER_API_FUNCTION Table<UDPProfileLidar, ProfileEntry, MAX_NUM_PROFILES>
+get_profiles();
 
+/**
+ * @todo please find some way around removing this, this is causing shared lib
+ * issues
+ */
 uint64_t get_value_mask(const FieldInfo& f);
+/**
+ * @todo please find some way around removing this, this is causing shared lib
+ * issues
+ */
 int get_bitness(const FieldInfo& f);
 
 std::map<std::string, FieldInfo> get_fields(UDPProfileLidar profile) {
+    auto profiles = get_profiles();
     auto end = profiles.end();
-    auto it =
-        std::find_if(impl::profiles.begin(), end,
-                     [profile](const auto& kv) { return kv.first == profile; });
+    auto it = std::find_if(profiles.begin(), end, [profile](const auto& kv) {
+        return kv.first == profile;
+    });
 
     auto& entry = it->second;
     return {entry.fields, entry.fields + entry.n_fields};
@@ -180,9 +190,9 @@ TEST_P(PacketWriterTest, packet_writer_headers_test) {
     size_t pixels_per_column = std::get<2>(param);
     size_t columns_per_packet = std::get<3>(param);
 
-    LidarPacket p;
     packet_format pf(profile, pixels_per_column, columns_per_packet);
     packet_writer pw{pf};
+    LidarPacket p(pf.lidar_packet_size);
 
     pw.set_col_status(pw.nth_col(9, p.buf.data()), 123);
     EXPECT_EQ(pf.col_status(pf.nth_col(9, p.buf.data())), 123);

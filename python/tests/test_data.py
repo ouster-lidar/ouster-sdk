@@ -650,28 +650,39 @@ def test_scan_int() -> None:
         64, 1024,
         client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL)
 
-    ls.add_field("i8", np.int8, (), client.FieldClass.PIXEL_FIELD)
-    ls.add_field("i16", np.int16, (), client.FieldClass.PIXEL_FIELD)
-    ls.add_field("i32", np.int32, (), client.FieldClass.PIXEL_FIELD)
-    ls.add_field("i64", np.int64, (), client.FieldClass.PIXEL_FIELD)
+    fields = [
+        ("i8", np.int8, (), client.FieldClass.PIXEL_FIELD),
+        ("i16", np.int16, (), client.FieldClass.PIXEL_FIELD),
+        ("i32", np.int32, (), client.FieldClass.PIXEL_FIELD),
+        ("i64", np.int64, (), client.FieldClass.PIXEL_FIELD),
+    ]
 
-    ls.field("i8")[:] = 0x7FF
-    ls.field("i8")[1, 2] = -2
-    ls.field("i16")[:] = 0x7FFFF
-    ls.field("i16")[1, 2] = -2
-    ls.field("i32")[:] = 0x7FFFFFFF
-    ls.field("i32")[1, 2] = -2
-    ls.field("i64")[:] = 0x7FFFFFFFFFFFFFFF
-    ls.field("i64")[1, 2] = -2
+    # add fields with various integer dtype as defined above
+    for field in fields:
+        ls.add_field(*field)
 
-    assert ls.field("i8")[1, 1] == -1
-    assert ls.field("i8")[1, 2] == -2
-    assert ls.field("i16")[1, 1] == -1
-    assert ls.field("i16")[1, 2] == -2
-    assert ls.field("i32")[1, 1] == 0x7FFFFFFF
-    assert ls.field("i32")[1, 2] == -2
-    assert ls.field("i64")[1, 1] == 0x7FFFFFFFFFFFFFFF
-    assert ls.field("i64")[1, 2] == -2
+    field_types_by_name = {name: field_type for name, field_type in zip(ls.fields, ls.field_types)}
+
+    # for each of the fields we added
+    for field in fields:
+        name, dtype, extra_dims, field_class = field
+
+        # the numpy array should have the correct shape and type
+        field_value = ls.field(name)
+        assert field_value.dtype == dtype
+        assert field_value.shape == (ls.h, ls.w)
+
+        # the FieldType that corresponds to this field should have the correct attributes too
+        field_type = field_types_by_name[name]
+        assert field_type.element_type == dtype
+        assert field_type.field_class == field_class
+        assert field_type.extra_dims == extra_dims
+
+        # setting values should work
+        field_value[:] = -1
+        field_value[1, 2] = -2
+        assert field_value[1, 1] == -1
+        field_value[1, 2] == -2
 
 
 def test_scan_empty_field() -> None:

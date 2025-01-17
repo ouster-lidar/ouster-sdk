@@ -13,6 +13,7 @@
 
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
+#include "ouster/visibility.h"
 
 namespace ouster {
 namespace osf {
@@ -26,19 +27,21 @@ namespace osf {
  * Flat Buffer Reference:
  *   fb/os_sensor/lidar_sensor.fbs
  */
-class LidarSensor : public MetadataEntryHelper<LidarSensor> {
+class OUSTER_API_CLASS LidarSensor : public MetadataEntryHelper<LidarSensor> {
     using sensor_info = ouster::sensor::sensor_info;
 
    public:
     /**
      * @param[in] si Initialize the LidarSensor with a sensor_info object.
      */
+    OUSTER_API_FUNCTION
     explicit LidarSensor(const sensor_info& si);
 
     /**
      * @param[in] sensor_metadata Initialize the LidarSensor with a json string
      *                            representation of the sensor_info object.
      */
+    OUSTER_API_FUNCTION
     explicit LidarSensor(const std::string& sensor_metadata);
 
     /**
@@ -46,6 +49,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
      *
      * @return The sensor_info associated with the LidarSensor.
      */
+    OUSTER_API_FUNCTION
     const sensor_info& info() const;
 
     /**
@@ -55,11 +59,13 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
      * @return  ///< The json string representation of the
      *          ///< sensor_info object.
      */
+    OUSTER_API_FUNCTION
     const std::string& metadata() const;
 
     /**
      * @copydoc MetadataEntry::buffer
      */
+    OUSTER_API_FUNCTION
     std::vector<uint8_t> buffer() const final;
 
     /**
@@ -72,6 +78,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
      * @param[in] buf The raw flatbuffer byte vector to initialize from.
      * @return The new LidarSensor cast as a MetadataEntry
      */
+    OUSTER_API_FUNCTION
     static std::unique_ptr<MetadataEntry> from_buffer(
         const std::vector<uint8_t>& buf);
 
@@ -82,6 +89,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
      *
      * @return The string representation for the LidarSensor object.
      */
+    OUSTER_API_FUNCTION
     std::string repr() const override;
 
     /**
@@ -91,6 +99,7 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
      *
      * @copydoc LidarSensor::repr
      */
+    OUSTER_API_FUNCTION
     std::string to_string() const override;
 
    private:
@@ -113,12 +122,13 @@ class LidarSensor : public MetadataEntryHelper<LidarSensor> {
  * @ingroup OSFTraitsLidarSensor
  */
 template <>
-struct MetadataTraits<LidarSensor> {
+struct OUSTER_API_CLASS MetadataTraits<LidarSensor> {
     /**
      * Return the OSF type string.
      *
      * @return The OSF type string "ouster/v1/os_sensor/LidarSensor".
      */
+    OUSTER_API_FUNCTION
     static const std::string type() {
         return "ouster/v1/os_sensor/LidarSensor";
     }

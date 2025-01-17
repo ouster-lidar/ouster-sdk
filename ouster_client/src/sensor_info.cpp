@@ -3,12 +3,13 @@
  * All rights reserved.
  */
 
-#include <json/json.h>
-
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <fstream>
+#include <jsoncons/json.hpp>
+#include <jsoncons/json_type.hpp>
+#include <jsoncons_ext/jsonpath/json_query.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -19,7 +20,6 @@
 #include "ouster/impl/logging.h"
 #include "ouster/metadata.h"
 #include "ouster/types.h"
-#include "ouster/util.h"
 #include "ouster/version.h"
 
 namespace ouster {
@@ -50,10 +50,8 @@ extern data_format default_data_format(lidar_mode mode);
 extern double default_lidar_origin_to_beam_origin(std::string prod_line);
 extern mat4d default_beam_to_lidar_transform(std::string prod_line);
 extern calibration_status default_calibration_status();
-extern sensor_config parse_config(const Json::Value& root);
-extern data_format parse_data_format(const Json::Value& root);
-extern Json::Value cal_to_json(const calibration_status& cal);
-extern Json::Value config_to_json(const sensor_config& config);
+extern jsoncons::json cal_to_json(const calibration_status& cal);
+extern jsoncons::json config_to_json(const sensor_config& config);
 
 /* Equality operators and functions */
 
@@ -95,7 +93,7 @@ auto sensor_info::h() const -> decltype(format.pixels_per_column) {
 
 sensor_info default_sensor_info(lidar_mode mode) {
     auto info = sensor_info();
-    info.sn = "000000000000";
+    info.sn = 0;
     info.fw_rev = "UNKNOWN";
 
     info.prod_line = "OS-1-64";
@@ -105,7 +103,7 @@ sensor_info default_sensor_info(lidar_mode mode) {
     info.beam_altitude_angles = gen1_altitude_angles;
     info.lidar_origin_to_beam_origin_mm =
         default_lidar_origin_to_beam_origin(info.prod_line);
-    info.beam_to_lidar_transform = 
+    info.beam_to_lidar_transform =
         default_beam_to_lidar_transform(info.prod_line);
     info.imu_to_sensor_transform = default_imu_to_sensor_transform;
     info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
@@ -182,8 +180,6 @@ sensor_info::sensor_info() {
 }
 
 sensor_info::sensor_info(const std::string& metadata) {
-    Json::Value root{};
-    Json::CharReaderBuilder builder{};
     ValidatorIssues issues;
 
     if (metadata.size() > 0) {
@@ -201,122 +197,129 @@ sensor_info::sensor_info(const std::string& metadata) {
         throw std::runtime_error("ERROR: empty metadata passed in");
     }
 }
+
 sensor_info::sensor_info(const std::string& metadata,
                          bool /*skip_beam_validation*/)
     : sensor_info(metadata) {}
 
-void mat4d_to_json(Json::Value& val, mat4d mat) {
+void mat4d_to_json(jsoncons::json& val, mat4d mat) {
     for (size_t i = 0; i < 4; i++) {
         for (size_t j = 0; j < 4; j++) {
-            val.append(mat(i, j));
+            val.emplace_back(mat(i, j));
         }
     }
-}
-
-/* DO NOT make public - internal logic use only
- * Powers outputting a sensor_info to a nested json resembling non-legacy
- * metadata
- */
-Json::Value info_to_nested_json(const sensor_info& info) {
-    Json::Value result{};
-
-    result["sensor_info"]["build_date"] = info.build_date;
-    result["sensor_info"]["build_rev"] = info.fw_rev;
-    result["sensor_info"]["image_rev"] = info.image_rev;
-    result["sensor_info"]["initialization_id"] = info.init_id;
-    result["sensor_info"]["prod_line"] = info.prod_line;
-    result["sensor_info"]["prod_pn"] = info.prod_pn;
-    result["sensor_info"]["prod_sn"] = info.sn;
-    result["sensor_info"]["status"] = info.status;
-
-    // data_format
-    result["lidar_data_format"]["pixels_per_column"] =
-        info.format.pixels_per_column;
-    result["lidar_data_format"]["columns_per_packet"] =
-        info.format.columns_per_packet;
-    result["lidar_data_format"]["columns_per_frame"] =
-        info.format.columns_per_frame;
-    result["lidar_data_format"]["fps"] = info.format.fps;
-    result["lidar_data_format"]["column_window"].append(
-        info.format.column_window.first);
-    result["lidar_data_format"]["column_window"].append(
-        info.format.column_window.second);
-    result["lidar_data_format"]["udp_profile_lidar"] =
-        to_string(info.format.udp_profile_lidar);
-    result["lidar_data_format"]["udp_profile_imu"] =
-        to_string(info.format.udp_profile_imu);
-
-    for (auto i : info.format.pixel_shift_by_row)
-        result["lidar_data_format"]["pixel_shift_by_row"].append(i);
-
-    // beam intrinsics
-    //
-    mat4d_to_json(result["beam_intrinsics"]["beam_to_lidar_transform"],
-                  info.beam_to_lidar_transform);
-    result["beam_intrinsics"]["lidar_origin_to_beam_origin_mm"] =
-        info.lidar_origin_to_beam_origin_mm;
-
-    if (info.beam_azimuth_angles.size() == info.format.pixels_per_column) {
-        // OS sensor path
-        for (auto angle : info.beam_azimuth_angles)
-            result["beam_intrinsics"]["beam_azimuth_angles"].append(angle);
-        for (auto angle : info.beam_altitude_angles)
-            result["beam_intrinsics"]["beam_altitude_angles"].append(angle);
-    } else {
-        // DF sensor path
-        int j = 0;
-        for (size_t i = 0; i < info.beam_azimuth_angles.size(); i++) {
-            int col_index_within_row = i % info.format.columns_per_frame;
-            if (col_index_within_row == 0) {  // start new array
-                result["beam_intrinsics"]["beam_azimuth_angles"].append(
-                    Json::Value(Json::arrayValue));
-                j++;
-            }
-            result["beam_intrinsics"]["beam_azimuth_angles"][j - 1].append(
-                info.beam_azimuth_angles[i]);
-        }
-
-        j = 0;
-        for (size_t i = 0; i < info.beam_altitude_angles.size(); i++) {
-            int col_index_within_row = i % info.format.columns_per_frame;
-            if (col_index_within_row == 0) {  // start new array
-                result["beam_intrinsics"]["beam_altitude_angles"].append(
-                    Json::Value(Json::arrayValue));
-                j++;
-            }
-            result["beam_intrinsics"]["beam_altitude_angles"][j - 1].append(
-                info.beam_altitude_angles[i]);
-        }
-    }
-
-    result["calibration_status"] = cal_to_json(info.cal);
-
-    result["config_params"] = config_to_json(info.config);
-
-    result["user_data"] = info.user_data;
-
-    mat4d_to_json(result["imu_intrinsics"]["imu_to_sensor_transform"],
-                  info.imu_to_sensor_transform);
-
-    mat4d_to_json(result["lidar_intrinsics"]["lidar_to_sensor_transform"],
-                  info.lidar_to_sensor_transform);
-
-    mat4d_to_json(result["ouster-sdk"]["extrinsic"], info.extrinsic);
-
-    return result;
 }
 
 std::string sensor_info::to_json_string() const {
-    Json::Value result = info_to_nested_json(*this);
+    jsoncons::json result;
+
+    result["sensor_info"]["build_date"] = build_date;
+    result["sensor_info"]["build_rev"] = fw_rev;
+    result["sensor_info"]["image_rev"] = image_rev;
+    result["sensor_info"]["initialization_id"] = init_id;
+    result["sensor_info"]["prod_line"] = prod_line;
+    result["sensor_info"]["prod_pn"] = prod_pn;
+    result["sensor_info"]["prod_sn"] = std::to_string(sn);
+    result["sensor_info"]["status"] = status;
+
+    // data_format
+    result["lidar_data_format"]["pixels_per_column"] = format.pixels_per_column;
+    result["lidar_data_format"]["columns_per_packet"] =
+        format.columns_per_packet;
+    result["lidar_data_format"]["columns_per_frame"] = format.columns_per_frame;
+    result["lidar_data_format"]["fps"] = format.fps;
+    result["lidar_data_format"]["column_window"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    result["lidar_data_format"]["column_window"].emplace_back(
+        format.column_window.first);
+    result["lidar_data_format"]["column_window"].emplace_back(
+        format.column_window.second);
+    result["lidar_data_format"]["udp_profile_lidar"] =
+        to_string(format.udp_profile_lidar);
+    result["lidar_data_format"]["udp_profile_imu"] =
+        to_string(format.udp_profile_imu);
+
+    result["lidar_data_format"]["pixel_shift_by_row"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    for (auto i : format.pixel_shift_by_row)
+        result["lidar_data_format"]["pixel_shift_by_row"].emplace_back(i);
+
+    // beam intrinsics
+    //
+    result["beam_intrinsics"] = jsoncons::json();
+    result["beam_intrinsics"]["beam_to_lidar_transform"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    mat4d_to_json(result["beam_intrinsics"]["beam_to_lidar_transform"],
+                  beam_to_lidar_transform);
+    result["beam_intrinsics"]["lidar_origin_to_beam_origin_mm"] =
+        lidar_origin_to_beam_origin_mm;
+
+    result["beam_intrinsics"]["beam_azimuth_angles"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    result["beam_intrinsics"]["beam_altitude_angles"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    if (beam_azimuth_angles.size() == format.pixels_per_column) {
+        // OS sensor path
+        for (auto angle : beam_azimuth_angles)
+            result["beam_intrinsics"]["beam_azimuth_angles"].emplace_back(
+                angle);
+        for (auto angle : beam_altitude_angles)
+            result["beam_intrinsics"]["beam_altitude_angles"].emplace_back(
+                angle);
+    } else {
+        // DF sensor path
+        int j = 0;
+        for (size_t i = 0; i < beam_azimuth_angles.size(); i++) {
+            int col_index_within_row = i % format.columns_per_frame;
+            if (col_index_within_row == 0) {
+                result["beam_intrinsics"]["beam_azimuth_angles"].emplace_back(
+                    jsoncons::json(jsoncons::json_array_arg));
+                j++;
+            }
+            result["beam_intrinsics"]["beam_azimuth_angles"][j - 1]
+                .emplace_back(beam_azimuth_angles[i]);
+        }
+
+        j = 0;
+        for (size_t i = 0; i < beam_altitude_angles.size(); i++) {
+            int col_index_within_row = i % format.columns_per_frame;
+            if (col_index_within_row == 0) {
+                result["beam_intrinsics"]["beam_altitude_angles"].emplace_back(
+                    jsoncons::json(jsoncons::json_array_arg));
+                j++;
+            }
+            result["beam_intrinsics"]["beam_altitude_angles"][j - 1]
+                .emplace_back(beam_altitude_angles[i]);
+        }
+    }
+    result["calibration_status"] = cal_to_json(cal);
+
+    result["config_params"] = config_to_json(config);
+
+    result["user_data"] = user_data;
+
+    result["imu_intrinsics"] = jsoncons::json();
+    result["imu_intrinsics"]["imu_to_sensor_transform"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    mat4d_to_json(result["imu_intrinsics"]["imu_to_sensor_transform"],
+                  imu_to_sensor_transform);
+
+    result["lidar_intrinsics"] = jsoncons::json();
+    result["lidar_intrinsics"]["lidar_to_sensor_transform"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    mat4d_to_json(result["lidar_intrinsics"]["lidar_to_sensor_transform"],
+                  lidar_to_sensor_transform);
+
+    result["ouster-sdk"] = jsoncons::json();
+    result["ouster-sdk"]["extrinsic"] =
+        jsoncons::json(jsoncons::json_array_arg);
+    mat4d_to_json(result["ouster-sdk"]["extrinsic"], extrinsic);
 
     result["ouster-sdk"]["output_source"] = "sensor_info_to_string";
     result["ouster-sdk"]["client_version"] = client_version();
-
-    Json::StreamWriterBuilder write_builder;
-    write_builder["enableYAMLCompatibility"] = true;
-    write_builder["precision"] = 6;
-    write_builder["indentation"] = "    ";
-    return Json::writeString(write_builder, result);
+    std::string out;
+    result.dump(out);
+    return out;
 }
 
 ouster::util::version sensor_info::get_version() const {
@@ -346,17 +349,6 @@ sensor_info metadata_from_json(const std::string& json_file,
 
 std::string to_string(const sensor_info& info) { return info.to_json_string(); }
 
-std::string get_firmware_version(const Json::Value& metadata_root) {
-    auto fw_ver = std::string{};
-    if (metadata_root["sensor_info"].isObject()) {
-        if (metadata_root["sensor_info"].isMember("image_rev")) {
-            // image_rev is preferred over build_rev
-            fw_ver = metadata_root["sensor_info"]["image_rev"].asString();
-        }
-    }
-    return fw_ver;
-}
-
 ouster::util::version firmware_version_from_metadata(
     const std::string& metadata) {
     if (metadata.empty()) {
@@ -364,23 +356,16 @@ ouster::util::version firmware_version_from_metadata(
             "firmware_version_from_metadata metadata empty!");
     }
 
-    Json::Value root{};
-    Json::CharReaderBuilder builder{};
-    std::string errors{};
-    std::stringstream ss{metadata};
-
-    if (!Json::parseFromStream(builder, ss, &root, &errors))
-        throw std::runtime_error{
-            "Errors parsing metadata for parse_metadata: " + errors};
-
-    auto fw_ver = get_firmware_version(root);
-    if (fw_ver.empty()) {
-        throw std::runtime_error(
+    jsoncons::json value_array = jsoncons::jsonpath::json_query(
+        jsoncons::json::parse(metadata), "$.sensor_info.image_rev");
+    if (value_array.size() == 1) {
+        return ouster::util::version_from_string(
+            value_array[0].as<std::string>());
+    } else {
+        throw std::invalid_argument(
             "firmware_version_from_metadata failed to deduce version info from "
             "metadata!");
     }
-
-    return ouster::util::version_from_string(fw_ver);
 }
 
 }  // namespace sensor

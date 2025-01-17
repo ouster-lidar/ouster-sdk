@@ -5,13 +5,11 @@
 
 #pragma once
 
-#ifdef OUSTER_VIZ_USE_GLAD
-#include <glad/glad.h>
-#else
-#include <GL/glew.h>
-#endif
-
+// clang-format off
+// GLAD must be included before GLFW
+#include "glad.h"
 #include <GLFW/glfw3.h>
+// clang-format on
 
 #include <functional>
 #include <string>

@@ -293,7 +293,7 @@ def pcap_to_csv(
     # leave comment directing users to ouster-cli
     print("NOTICE: The pcap-to-csv example has been retired in favor of "
           "the ouster-cli utility installed with the Python Ouster SDK.\n"
-          "To try: ouster-cli source <PCAP> convert <OUT.CSV>")
+          "To try: ouster-cli source <PCAP> save <OUT.CSV>")
 
 
 def main():

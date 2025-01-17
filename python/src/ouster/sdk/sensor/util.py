@@ -4,6 +4,7 @@ from urllib import request
 import json
 import ouster.sdk.client as client
 from ouster.sdk.client import (SensorHttp, Version)
+from ouster.sdk._bindings.client import in_multicast
 
 MIN_AUTO_DEST_FW = Version.from_string("2.3.1")
 
@@ -25,6 +26,9 @@ def _auto_detected_udp_dest(http_client: SensorHttp,
     # escape ipv6 addresses
     if hostname.count(':') >= 2:
         hostname = "[" + hostname + "]"
+
+    if orig_config.udp_dest is not None and in_multicast(orig_config.udp_dest):
+        return orig_config.udp_dest
 
     # get what the possible auto udp_dest is
     config_endpoint = f"http://{hostname}/api/v1/sensor/config"

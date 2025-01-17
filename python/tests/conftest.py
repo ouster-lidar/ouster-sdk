@@ -33,6 +33,16 @@ def pytest_addoption(parser):
                      default=False,
                      help="Run interactive tests")
 
+    parser.addoption("--performance",
+                     action="store_true",
+                     required=False,
+                     default=False,
+                     help="Run longer performance tests")
+    parser.addoption("--num-iterations",
+                     required=False,
+                     default=0,
+                     help="Number of iterations to run for each performance test.")
+
 
 def pytest_configure(config):
     """Register custom "interactive" marker."""
@@ -40,7 +50,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(items, config) -> None:
-    """Deselect any items marked "full" unless the --full flag is set."""
+    """Deselect any items marked "interactive" unless the --interactive flag is set."""
 
     normal, interactive = partition(
         lambda item: bool(item.get_closest_marker("interactive")), items)

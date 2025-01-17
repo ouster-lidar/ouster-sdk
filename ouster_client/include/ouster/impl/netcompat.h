@@ -21,6 +21,13 @@
 #include <BaseTsd.h>
 #define ssize_t SSIZE_T
 #endif
+/**
+ * Windows for some reason globally defines BAUD_9600 and BAUD_115200
+ * which causes issues when you try and use those inside of something
+ * like an enum. Undefine BAUD_9600 and BAUD_115200 coming from windows.
+ */
+#undef BAUD_9600
+#undef BAUD_115200
 
 #else  // --------- Compiling on *nix ---------
 
@@ -41,15 +48,6 @@
 #endif
 
 #define SOCKET_ERROR -1
-
-/**
- * Windows for some reason globally defines BAUD_9600 and BAUD_115200
- * which causes issues when you try and use those inside of something
- * like an enum. Undefine BAUD_9600 and BAUD_115200 coming from windows.
- */
-#undef BAUD_9600
-#undef BAUD_115200
-
 #endif  // --------- End Platform Differentiation Block ---------
 
 namespace ouster {

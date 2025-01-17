@@ -282,6 +282,20 @@ following snippet shows few examples to demonstrate this capability:
    >>> print("source3 length:", len(source3))   # Should print 2
 
 
+Additional ScanSource operators
+-------------------------------
+besides the indexing and slicing capabilities, the ``ScanSource`` API also supports the following operators:
+
+    * ``clip(fields, lower, upper)``: generates a ``ScanSource`` that limits the range of values of scan fields to [lower, upper].
+    * ``reduce(beams)``: returns a downsampled version of the main ``ScanSource`` (vertical resolution only as set by the beams).
+    * ``mask(fields, mask_image)``: creates a ``ScanSource`` that has the pixels of specified fields masked by the mask_image.
+
+All of these operations can be invoked directly through the ``ScanSource`` object and yield another ``ScanSource`` allowing
+the user to cascade these operations. For example, one could execute the following command chain in one line:
+``source.clip(["RANGE"], 0, 1000)[0:10].reduce(16)`` which essentially means to clip any ``RANGE`` value that exceed 1000
+taking a subset of 10 frames from the main dataset and have the vertical resolution of the sensscans reduced to 16 beams.
+
+
 Using the client API
 ====================
 

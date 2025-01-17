@@ -158,12 +158,3 @@ class PcapScanSource(ScansMulti):
         scans_itr = self._collated_scans_itr(
             self._scans_iter(False, False, True))
         return ForwardSlicer.slice_iter(scans_itr, k)
-
-    def slice(self, key: slice) -> MultiScanSource:
-        """Constructs a MultiScanSource matching the specificed slice"""
-        from ouster.sdk.client.multi_sliced_scan_source import MultiSlicedScanSource
-        L = len(self)
-        k = ForwardSlicer.normalize(key, L)
-        if k.step < 0:
-            raise TypeError("slice() can't work with negative step")
-        return MultiSlicedScanSource(self, k)

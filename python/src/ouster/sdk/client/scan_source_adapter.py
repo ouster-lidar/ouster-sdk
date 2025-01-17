@@ -5,6 +5,7 @@ from ouster.sdk.util.forward_slicer import ForwardSlicer
 from .scan_source import ScanSource
 from .multi_scan_source import MultiScanSource
 from .data import FieldTypes
+import numpy as np
 
 # TODO: since we have more than one adapter we out to rename this class
 # to something specific
@@ -124,4 +125,22 @@ class ScanSourceAdapter(ScanSource):
             raise TypeError("slice() can't work with negative step")
         sliced = MultiSlicedScanSource(self._scan_source, k)        # type: ignore
         scan_source = ScanSourceAdapter(sliced, self._stream_idx)   # type: ignore
+        return cast(ScanSource, scan_source)
+
+    def clip(self, fields: List[str], lower: int, upper: int) -> ScanSource:
+        from ouster.sdk.client.multi_clipped_scan_source import MultiClippedScanSource
+        clipped = MultiClippedScanSource(self._scan_source, fields, lower, upper)
+        scan_source = ScanSourceAdapter(clipped, self._stream_idx)
+        return cast(ScanSource, scan_source)
+
+    def reduce(self, beams: int) -> ScanSource:
+        from ouster.sdk.client.multi_reduced_scan_source import MultiReducedScanSource
+        reduced = MultiReducedScanSource(self._scan_source, [beams] * self._scan_source.sensors_count)
+        scan_source = ScanSourceAdapter(reduced, self._stream_idx)
+        return cast(ScanSource, scan_source)
+
+    def mask(self, fields: List[str], masks: Optional[np.ndarray]) -> ScanSource:
+        from ouster.sdk.client.multi_masked_scan_source import MultiMaskedScanSource
+        masked = MultiMaskedScanSource(self._scan_source, fields, [masks] * self._scan_source.sensors_count)
+        scan_source = ScanSourceAdapter(masked, self._stream_idx)
         return cast(ScanSource, scan_source)

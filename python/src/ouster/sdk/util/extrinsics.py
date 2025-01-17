@@ -139,7 +139,7 @@ def resolve_extrinsics(
     TODO[pb]: Update and extend this method in future to also look for a set of
               `extrinsics.json` files when it will be fully defined.
     """
-    snames = sensor_names or [info.sn for info in infos]
+    snames = sensor_names or [str(info.sn) for info in infos]
     if os.path.splitext(data_path)[1] == ".pcap" or os.path.isdir(data_path):
         ext_file = os.path.join(
             os.path.dirname(data_path) if not os.path.isdir(data_path) else
@@ -188,3 +188,108 @@ def resolve_extrinsics(
                                           sensor_names=snames,
                                           destination_frame="base_link")
     return []
+
+
+def euler_to_rotation_matrix(roll, pitch, yaw):
+    """
+    Convert Euler angles (roll, pitch, yaw) to a 3D rotation matrix.
+
+    Parameters:
+        roll   : Rotation about the x-axis (rad)
+        pitch  : Rotation about the y-axis (rad)
+        yaw    : Rotation about the z-axis (rad)
+
+    Returns:
+        R : 3x3 rotation matrix
+    """
+    R_x = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+    R_y = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+    R_z = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    return R_z @ (R_y @ R_x)
+
+
+def xyzrpy_to_matrix(px, py, pz, r, p, y):
+    """
+    A method that takes position + euler angles (rad) and produces an equivalent 4x4 transform.
+
+    Parameters:
+        px, py, pz: position
+        r, p, y: rotation expressed in euler angles (rad)
+
+    Returns:
+        R : 4x4 transformation matrix
+    """
+    out = np.eye(4)
+    out[:3, 3] = np.array([px, py, pz])
+    out[:3, :3] = euler_to_rotation_matrix(r, p, y)
+    return out
+
+
+def xyzq_to_matrix(px, py, pz, qx, qy, qz, qw):
+    """
+    A method that takes position + quaternion (rad) and produces an equivalent 4x4 transform.
+
+    Parameters:
+        px, py, pz: position
+        qx, qy, qz, qw: rotation expressed in a quaternion
+
+    Returns:
+        R : 4x4 transformation matrix
+    """
+    out = np.eye(4)
+    out[:3, 3] = np.array([px, py, pz])
+    out[:3, :3] = quatToRotMat(np.array([qw, qx, qy, qz]))
+    return out
+
+
+def parse_extrinsics_from_string(extrinsics: str, degrees=True) -> np.ndarray:
+    """
+    A utility method to parse extrinsics in multiple formats.
+
+    Parameters:
+        extrinsics: a string representing a file or extrinsics in a supported format
+        degrees: whether angles should be parsed as degress (True by default)
+
+        Acceptale extrinsics formats:
+        - A json with containing a per sensor extrinsics
+        - identity ; Use this to override any stored extrinsics with identity
+        - X Y Z R P Y ; 'R P Y' represent euler angles (deg)
+        - X Y Z QX QY QZ QW ; (QX, QY QZ, QW) represent a quaternion
+        - n1 n2 .. n16 ; 16 floats representing a 2D array in a row-major order
+
+    Returns:
+        R : 4x4 transformation matrix or a filename
+    """
+    sep = ',' if ',' in extrinsics else ' '
+    elements = extrinsics.split(sep)
+    if len(elements) == 1:
+        # treat as a filename if not 'identity' keyword
+        return np.eye(4) if elements[0] == "identity" else elements[0]
+
+    try:
+        elements = [float(e) for e in elements]
+    except Exception:
+        raise ValueError(f"extrinsics values: {elements} could not parsed as numbers")
+
+    if len(elements) == 6:
+        xyz = elements[:3]
+        rpy = [np.deg2rad(e) for e in elements[3:7]] if degrees else elements[3:7]
+        return xyzrpy_to_matrix(*xyz, *rpy)
+    if len(elements) == 7:
+        return xyzq_to_matrix(*elements)
+    if len(elements) == 16:
+        return np.array([*elements]).reshape((4, 4))
+    raise ValueError("Unsupported extrinsics format, check `ouster-cli source --help`"
+                     " for proper usage")

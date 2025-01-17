@@ -19,6 +19,7 @@
 
 #include "flatbuffers/flatbuffers.h"
 #include "ouster/osf/basics.h"
+#include "ouster/visibility.h"
 
 /// @todo fix api docs in this file
 /// @todo add equality operators
@@ -94,7 +95,7 @@ inline const std::string metadata_type() {
  * from_buffer(buf, type) function.
  *
  */
-class MetadataEntry {
+class OUSTER_API_CLASS MetadataEntry {
    public:
     /**
      * Function type to recover metadata object from buffer.
@@ -106,6 +107,7 @@ class MetadataEntry {
      * @return Type of the metadata, used to identify the object type in
      *         serialized OSF and as key in deserialization registry
      */
+    OUSTER_API_FUNCTION
     virtual std::string type() const = 0;
 
     /**
@@ -114,6 +116,7 @@ class MetadataEntry {
      *         NOTE: Introduced as a convenience/(HACK?) to simpler reconstruct
      *         and cast dynamic objects from MetadataEntryRef
      */
+    OUSTER_API_FUNCTION
     virtual std::string static_type() const = 0;
 
     /**
@@ -122,6 +125,7 @@ class MetadataEntry {
      *
      * @return Should return a clone of the current MetadataEntry
      */
+    OUSTER_API_FUNCTION
     virtual std::unique_ptr<MetadataEntry> clone() const = 0;
 
     /**
@@ -130,6 +134,7 @@ class MetadataEntry {
      *
      * @return The byte vector representation of the metadata.
      */
+    OUSTER_API_FUNCTION
     virtual std::vector<uint8_t> buffer() const = 0;
 
     /**
@@ -140,6 +145,7 @@ class MetadataEntry {
      * @param[in] type_str The type string from the derived type.
      * @return A new object of the derived type cast as a MetadataEntry
      */
+    OUSTER_API_FUNCTION
     static std::unique_ptr<MetadataEntry> from_buffer(
         const std::vector<uint8_t>& buf, const std::string type_str);
 
@@ -149,6 +155,7 @@ class MetadataEntry {
      *
      * @return The string representation for the internal metadata object.
      */
+    OUSTER_API_FUNCTION
     virtual std::string repr() const;
 
     /**
@@ -158,6 +165,7 @@ class MetadataEntry {
      *
      * @return The string representation of the whole metadata entry.
      */
+    OUSTER_API_FUNCTION
     virtual std::string to_string() const;
 
     /**
@@ -166,6 +174,7 @@ class MetadataEntry {
      *
      * @param[in] id The unique id to set.
      */
+    OUSTER_API_FUNCTION
     void setId(uint32_t id);
 
     /**
@@ -176,6 +185,7 @@ class MetadataEntry {
      *
      * @return The unique id of this object.
      */
+    OUSTER_API_FUNCTION
     uint32_t id() const;
 
     /**
@@ -220,6 +230,7 @@ class MetadataEntry {
      * @param[in] fbb The flatbuffer builder to use to make the entry.
      * @return An offset into a flatbuffer for the new entry.
      */
+    OUSTER_API_FUNCTION
     flatbuffers::Offset<ouster::osf::gen::MetadataEntry> make_entry(
         flatbuffers::FlatBufferBuilder& fbb) const;
 
@@ -230,8 +241,10 @@ class MetadataEntry {
      *
      * @return The static registry used to register metadata types.
      */
+    OUSTER_API_FUNCTION
     static std::map<std::string, from_buffer_func>& get_registry();
 
+    OUSTER_API_FUNCTION
     virtual ~MetadataEntry() = default;
 
    private:
@@ -264,6 +277,7 @@ std::shared_ptr<MetadataDerived> metadata_pointer_as(
 };
 
 /** @internal */
+OUSTER_API_FUNCTION
 void RegisterMetadata_internal_error_function_(std::string error);
 
 /**
@@ -438,7 +452,7 @@ class MetadataEntryHelper : public MetadataEntry,
  *  as<MetadataDerived>() OR metadata_pointer_as<MetadataDerived>() - using the
  *  specified derived metadata class.
  */
-class MetadataEntryRef : public MetadataEntry {
+class OUSTER_API_CLASS MetadataEntryRef : public MetadataEntry {
    public:
     /**
      * Creates the metadata reference from Flatbuffers v2::MetadataEntry buffer.
@@ -446,6 +460,7 @@ class MetadataEntryRef : public MetadataEntry {
      *
      * @param[in] buf The buffer to create the MetadataEntryRef from.
      */
+    OUSTER_API_FUNCTION
     explicit MetadataEntryRef(const uint8_t* buf);
 
     /**
@@ -453,11 +468,13 @@ class MetadataEntryRef : public MetadataEntry {
      *
      * @return The type of the MetadataEntry.
      */
+    OUSTER_API_FUNCTION
     std::string type() const override;
 
     /**
      * @copydoc type()
      */
+    OUSTER_API_FUNCTION
     std::string static_type() const override;
 
     /**
@@ -465,6 +482,7 @@ class MetadataEntryRef : public MetadataEntry {
      *
      * @return The cloned MetadataEntry object.
      */
+    OUSTER_API_FUNCTION
     std::unique_ptr<MetadataEntry> clone() const override;
 
     /**
@@ -472,6 +490,7 @@ class MetadataEntryRef : public MetadataEntry {
      *
      * @return The raw underlying byte vector.
      */
+    OUSTER_API_FUNCTION
     std::vector<uint8_t> buffer() const final;
 
     /**
@@ -481,6 +500,7 @@ class MetadataEntryRef : public MetadataEntry {
      *
      * @return The reconstructed object.
      */
+    OUSTER_API_FUNCTION
     std::unique_ptr<MetadataEntry> as_type() const;
 
    private:
@@ -514,6 +534,7 @@ struct MetadataTraits<MetadataEntryRef> {
      *
      * @return The type string "impl/MetadataEntryRef".
      */
+    OUSTER_API_FUNCTION
     static const std::string type() { return "impl/MetadataEntryRef"; }
 };
 
@@ -525,7 +546,7 @@ struct MetadataTraits<MetadataEntryRef> {
  *
  * Also can serialize itself to Flatbuffers collection of metadata.
  */
-class MetadataStore {
+class OUSTER_API_CLASS MetadataStore {
     /**
      * Metadata id to MetadataEntry map.
      */
@@ -542,11 +563,13 @@ class MetadataStore {
      *
      * @return The metadata id of the entry added.
      */
+    OUSTER_API_FUNCTION
     uint32_t add(MetadataEntry&& entry);
 
     /**
      * @copydoc add(MetadataEntry&& entry)
      */
+    OUSTER_API_FUNCTION
     uint32_t add(MetadataEntry& entry);
 
     /**
@@ -611,6 +634,7 @@ class MetadataStore {
      * @param[in] metadata_id The id to try and return the associated entry.
      * @return The MetadataEntry.
      */
+    OUSTER_API_FUNCTION
     std::shared_ptr<MetadataEntry> get(const uint32_t metadata_id) const {
         auto it = metadata_entries_.find(metadata_id);
         if (it == metadata_entries_.end()) return nullptr;
@@ -642,6 +666,7 @@ class MetadataStore {
      *
      * @return The number of MetadataEntry objects.
      */
+    OUSTER_API_FUNCTION
     size_t size() const;
 
     /**
@@ -649,6 +674,7 @@ class MetadataStore {
      *
      * @return The entire map of MetadataEnty objects.
      */
+    OUSTER_API_FUNCTION
     const MetadataEntriesMap& entries() const;
 
     /**
@@ -658,6 +684,7 @@ class MetadataStore {
      * @param[in] fbb The flatbuffer builder to use.
      * @return The resulting serialized byte vector.
      */
+    OUSTER_API_FUNCTION
     std::vector<flatbuffers::Offset<ouster::osf::gen::MetadataEntry>>
     make_entries(flatbuffers::FlatBufferBuilder& fbb) const;
 

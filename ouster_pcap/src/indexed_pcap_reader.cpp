@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "ouster/packet.h"
 #include "ouster/types.h"
 
 namespace ouster {
@@ -34,7 +35,7 @@ IndexedPcapReader::IndexedPcapReader(
 void IndexedPcapReader::init_() {
     uint64_t index = 0;
     for (auto it : sensor_infos_) {
-        std::string sn_lidar = it.sn;
+        std::string sn_lidar = std::to_string(it.sn);
         std::string sn_imu = "LEGACY_IMU";
         if (it.config.udp_profile_lidar ==
             ouster::sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
@@ -77,8 +78,7 @@ nonstd::optional<size_t> IndexedPcapReader::sensor_idx_for_current_packet()
         for (auto it : temp_match->second) {
             auto res = validate_packet(
                 sensor_infos_[it.second], packet_formats_[it.second], data,
-                pkt_info.payload_size,
-                ouster::sensor::PacketValidationType::LIDAR);
+                pkt_info.payload_size, ouster::sensor::PacketType::Lidar);
             if (res == ouster::sensor::PacketValidationFailure::NONE) {
                 return it.second;
             }

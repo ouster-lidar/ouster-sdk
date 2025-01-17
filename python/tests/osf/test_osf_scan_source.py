@@ -4,6 +4,7 @@ import tempfile
 import ouster.sdk.osf as osf
 import ouster.sdk.client as client
 import os
+import sys
 import numpy as np
 
 
@@ -47,6 +48,51 @@ def test_scans_num(input_info):
     finally:
         if src:
             src.close()
+        os.unlink(f.name)
+
+
+def test_osf_open(input_osf_file):
+    """Make sure the file opens and has correct metadata in the scans"""
+    source = osf.OsfScanSource(str(input_osf_file))
+    got_scan = False
+    for scan in source:
+        got_scan = True
+        assert scan[0].sensor_info == source.metadata[0]
+    assert got_scan
+
+
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Broken on Windows")
+def test_missing_streams(input_osf_file):
+    """Make sure the OsfScanSource can handle empty streams"""
+    data = osf.OsfScanSource(str(input_osf_file))
+    scan = next(iter(data))[0]
+    data.close()
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            w = osf.Writer(f.name, [scan.sensor_info, scan.sensor_info, scan.sensor_info])
+            scan.frame_id = 0
+            w.save(0, scan)
+            scan.frame_id = 2
+            w.save(2, scan)
+            w.close()
+
+        result = osf.OsfScanSource(f.name)
+        scan = next(iter(result))[0]
+
+        data = None
+        for res in result:
+            data = res
+        assert data[1] is None
+        assert data[0] is not None
+        assert data[2] is not None
+        assert result.scans_num == [1, 0, 1]
+        assert result.field_types[1] == []
+        assert result.field_types[2] != []
+        assert result.fields[1] == []
+        assert result.fields[2] != []
+    finally:
+        if result:
+            result.close()
         os.unlink(f.name)
 
 

@@ -159,7 +159,7 @@ class Scans(ScanSource):
 
         ls_write = None
         pf = PacketFormat.from_info(self._source.metadata)
-        batch = ScanBatcher(w, pf)
+        batch = ScanBatcher(self._source.metadata)
 
         # Time from which to measure timeout
         start_ts = time.monotonic()
@@ -215,6 +215,7 @@ class Scans(ScanSource):
 
     @property
     def is_live(self) -> bool:
+        """Returns true if the source is a live data stream."""
         return self._source.is_live
 
     @property
@@ -256,6 +257,15 @@ class Scans(ScanSource):
         raise NotImplementedError
 
     def slice(self, _: slice) -> ScanSource:
+        raise NotImplementedError
+
+    def clip(self, fields: List[str], lower: int, upper: int) -> ScanSource:
+        raise NotImplementedError
+
+    def reduce(self, beams: int) -> 'ScanSource':
+        raise NotImplementedError
+
+    def mask(self, fields: List[str], mask: Optional[np.ndarray]) -> ScanSource:
         raise NotImplementedError
 
     @classmethod

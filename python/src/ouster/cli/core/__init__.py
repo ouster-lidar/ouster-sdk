@@ -238,7 +238,7 @@ def run(args=None) -> None:
         exit_code = 3
         logger.debug(e.get_unexpected_args())
     except Exception as e:
-        print(e)
+        click.secho(f"ERROR: {e}", fg="red")
         if TRACEBACK:
             print("-" * 70)
             traceback.print_exc(file=sys.stderr)
@@ -246,6 +246,8 @@ def run(args=None) -> None:
             print(f'Internal error: {e}', file=sys.stderr)
             exit_code = 4
             logger.debug(e)
+        else:
+            print("Add the --traceback option after ouster-cli for more information.")
     logger.debug("return code: " + str(exit_code))
     if exit_code != 0:
         logger.debug("error detected, listing packages")
