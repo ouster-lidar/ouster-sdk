@@ -5,8 +5,6 @@
 
 #include "ouster/image_processing.h"
 
-#include <Eigen/src/Core/util/Meta.h>
-
 #include <Eigen/Core>
 #include <Eigen/LU>
 #include <algorithm>
