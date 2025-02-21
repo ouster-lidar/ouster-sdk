@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
     - name: install deps
@@ -20,7 +20,7 @@ jobs:
     - name: python-lint
       run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
   linux-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
     - name: install deps
@@ -32,7 +32,7 @@ jobs:
     - name: run tests
       run: cd build/ && ctest -j4 --output-on-failure
   linux-python-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
     - name: install python
