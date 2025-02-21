@@ -14,7 +14,7 @@ jobs:
     - name: install python-deps one
       run: cd python && python3 setup.py egg_info && pip3 install `grep -v '^\[' src/*.egg-info/requires.txt`
     - name: install python-deps
-      run: pip3 install mypy flake8 clang-format==14.0.0
+      run: pip3 install mypy==1.13.0 flake8 clang-format==14.0.0
     - name: cpp-lint
       run: ./clang-linting.sh
     - name: python-lint
