@@ -57,6 +57,7 @@ jobs:
         triplet: x64-windows
         token: ${{ github.token }}
         github-binarycache: true
+        revision: 2024.11.16
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake
     - name: cmake build
@@ -77,6 +78,7 @@ jobs:
         triplet: x64-windows
         token: ${{ github.token }}
         github-binarycache: true
+        revision: 2024.11.16
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
     - name: build python
