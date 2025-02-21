@@ -62,7 +62,7 @@ jobs:
         github-binarycache: true
         revision: 2024.11.16
     - name: cmake configure
-      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
