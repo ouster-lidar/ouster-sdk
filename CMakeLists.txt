@@ -156,9 +156,10 @@ install(FILES "cmake/Findglfw3.cmake"
   DESTINATION lib/cmake/OusterSDK)
 install(FILES "cmake/FindPcap.cmake"
   DESTINATION lib/cmake/OusterSDK)
-install(FILES "cmake/FindFlatbuffers.cmake"
-  DESTINATION lib/cmake/OusterSDK)
-
+if(BUILD_OSF)
+  install(FILES "cmake/FindFlatbuffers.cmake"
+    DESTINATION lib/cmake/OusterSDK)
+endif()
 
 install(FILES LICENSE LICENSE-bin
   DESTINATION share)
