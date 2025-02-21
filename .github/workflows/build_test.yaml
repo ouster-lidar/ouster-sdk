@@ -1,26 +1,29 @@
 name: Lint Build and Test
 
-on: [push, pull_request]
-
+on:
+  pull_request:
+  push:
+    branches:
+      - master
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: sudo apt install build-essential cmake libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libpng-dev libglfw3-dev libflatbuffers-dev libgtest-dev clang-format
-    - name: cpp-lint
-      run: ./clang-linting.sh
+      run: sudo apt install build-essential cmake libeigen3-dev libcurl4-openssl-dev libtins-dev libpcap-dev libpng-dev libglfw3-dev libflatbuffers-dev libgtest-dev
     - name: install python
       run: sudo apt install python3 python3-pip
     - name: install python-deps one
       run: cd python && python3 setup.py egg_info && pip3 install `grep -v '^\[' src/*.egg-info/requires.txt`
     - name: install python-deps
-      run: pip3 install mypy flake8
+      run: pip3 install mypy==1.13.0 flake8 clang-format==14.0.0
+    - name: cpp-lint
+      run: ./clang-linting.sh
     - name: python-lint
       run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
   linux-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
     - name: install deps
@@ -32,7 +35,7 @@ jobs:
     - name: run tests
       run: cd build/ && ctest -j4 --output-on-failure
   linux-python-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v1
     - name: install python
@@ -53,13 +56,13 @@ jobs:
       uses: johnwason/vcpkg-action@v6
       id: vcpkg
       with:
-        pkgs: eigen3 curl libtins glfw3 libpng flatbuffers gtest
+        manifest-dir: ${{ github.workspace }}
         triplet: x64-windows
-        revision: 2024.11.16
         token: ${{ github.token }}
         github-binarycache: true
+        revision: 2024.11.16
     - name: cmake configure
-      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake
+      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE=D:/a/ouster-sdk/ouster-sdk/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
     - name: cmake build
       run: cmake --build build -j4
     - name: run tests
@@ -74,11 +77,11 @@ jobs:
       uses: johnwason/vcpkg-action@v6
       id: vcpkg
       with:
-        pkgs: eigen3 curl libtins glfw3 libpng flatbuffers gtest
+        manifest-dir: ${{ github.workspace }}
         triplet: x64-windows
-        revision: 2024.11.16
         token: ${{ github.token }}
         github-binarycache: true
+        revision: 2024.11.16
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
     - name: build python

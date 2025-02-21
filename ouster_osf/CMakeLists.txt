@@ -126,9 +126,10 @@ target_link_libraries(ouster_osf
   PUBLIC
     OusterSDK::ouster_client 
     OusterSDK::ouster_pcap
+    flatbuffers::flatbuffers
   PRIVATE
     PNG::PNG
-    flatbuffers::flatbuffers ZLIB::ZLIB
+    ZLIB::ZLIB
 )
 target_include_directories(ouster_osf PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
