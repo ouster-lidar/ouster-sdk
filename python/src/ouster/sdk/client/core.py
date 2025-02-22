@@ -8,13 +8,12 @@ generated using pybind11.
 """
 from contextlib import closing
 from typing import (cast, Iterable, Iterator, List, Optional, Tuple,
-                    Union, Callable)
+                    Union, Callable, Protocol)
 import time
 import logging
 import numpy as np
 import warnings
 from more_itertools import take
-from typing_extensions import Protocol
 
 from ouster.sdk._bindings.client import (SensorInfo, PacketFormat, LidarScan, ScanBatcher, get_field_types,
                       LidarPacket, Packet, FieldType)
