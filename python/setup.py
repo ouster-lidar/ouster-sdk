@@ -157,7 +157,6 @@ def install_requires():
         'more-itertools >=8.6',
         'numpy >=1.19, <2, !=1.19.4',
         'laspy >=2.5.0, <3',
-        'typing-extensions >=3.7.4.3',
         'threadpoolctl >=3.5.0',
         'Pillow >=9.2',
         'packaging',

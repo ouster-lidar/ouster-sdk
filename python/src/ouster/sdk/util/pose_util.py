@@ -1,5 +1,4 @@
-from typing_extensions import Protocol
-from typing import (Union, Tuple, List, Optional, Sequence)
+from typing import (Union, Tuple, List, Optional, Sequence, Protocol)
 
 import numpy as np
 

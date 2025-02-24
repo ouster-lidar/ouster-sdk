@@ -1,5 +1,4 @@
-from typing_extensions import Protocol
-from typing import Any, Tuple, List, Union, Optional, Iterator, Iterable, Callable
+from typing import Any, Tuple, List, Union, Optional, Iterator, Iterable, Callable, Protocol
 
 import copy
 

@@ -1,5 +1,4 @@
-from typing import Iterator, Union, Optional, List
-from typing_extensions import Protocol
+from typing import Iterator, Union, Optional, List, Protocol
 from ouster.sdk._bindings.client import SensorInfo, LidarScan, FieldType
 import numpy as np
 

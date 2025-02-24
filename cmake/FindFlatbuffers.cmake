@@ -11,7 +11,12 @@ if(NOT OUSTER_SKIP_FIND_PACKAGE_STANDARD)
   include(FindPackageHandleStandardArgs)
 endif()
 
-find_package(Flatbuffers CONFIG REQUIRED QUIET NO_CMAKE_FIND_ROOT_PATH)
+find_package(Flatbuffers CONFIG QUIET NO_CMAKE_FIND_ROOT_PATH)
+
+# The package is named FlatBuffers on some platforms, try that next
+if(NOT Flatbuffers_FOUND)
+    find_package(FlatBuffers CONFIG REQUIRED QUIET NO_CMAKE_FIND_ROOT_PATH)
+endif()
 
 if(NOT TARGET flatbuffers::flatbuffers)
     add_library(flatbuffers::flatbuffers INTERFACE IMPORTED)
