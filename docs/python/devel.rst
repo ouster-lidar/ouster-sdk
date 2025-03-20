@@ -33,7 +33,7 @@ On supported Debian-based Linux systems, you can install all build dependencies 
    $ sudo apt install build-essential cmake \
                       libeigen3-dev libtins-dev libpcap-dev \
                       python3-dev python3-pip libcurl4-openssl-dev \
-                      libglfw3-dev libpng-dev libflatbuffers-dev
+                      libglfw3-dev libpng-dev libflatbuffers-dev libssl-dev
 
 On macOS >= 11, using Homebrew, you should be able to run:
 

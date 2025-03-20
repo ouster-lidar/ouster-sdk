@@ -1,5 +1,4 @@
-from typing import (List, Optional, Union)
-from typing_extensions import Protocol, runtime_checkable
+from typing import (List, Optional, Union, Protocol, runtime_checkable)
 
 from dataclasses import dataclass
 import numpy as np
