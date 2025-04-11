@@ -11,6 +11,8 @@
 #include <iostream>
 #include <memory>
 
+#include "qoi.h"
+
 #include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
 

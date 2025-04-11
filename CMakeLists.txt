@@ -48,12 +48,13 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_compile_options(/W2 /bigobj /Zf)
     add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
   else()
-    add_compile_options(-Wall -Wextra)
+    add_compile_options(-Wall -Wextra -march=native)
   endif()
 
   include(CTest)
 else()
   set(OUSTER_TOP_LEVEL OFF)
+  add_compile_options(-Wall -Wextra -march=native)
 endif()
 
 # === Subdirectories ===
