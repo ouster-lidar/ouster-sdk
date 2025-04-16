@@ -93,6 +93,7 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/fb_utils.cpp
                               src/writer.cpp
                               src/async_writer.cpp
+                              src/zpng.cpp
                               src/png_lidarscan_encoder.cpp
 )
 set_property(TARGET ouster_osf PROPERTY POSITION_INDEPENDENT_CODE ON)
