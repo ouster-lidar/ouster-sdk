@@ -21,8 +21,13 @@
 
 #include <zlib.h>
 
+#define QOIR_IMPLEMENTATION
+//#include "qoir.h"
+
 #include "fpnge.h"
 #include "fpnge.cc"
+
+#include "zpng.h"
 
 /* Check for the older version of libpng and add missing macros as necessary */
 
@@ -85,7 +90,46 @@ bool PngLidarScanEncoder::fieldEncode(const LidarScan& lidar_scan,
     auto len = FPNGEEncode(bytewidth, channels, data, lidar_scan.w, stride, lidar_scan.h, output, &options);
     scan_data[scan_idx].resize(len);
     memcpy(scan_data[scan_idx].data(), output, len);
-    free(output);*/
+    free(output);
+    return false;*/
+    
+    ZPNG_ImageData opts;
+    opts.HeightPixels = lidar_scan.h;
+    opts.WidthPixels = lidar_scan.w;
+    
+    auto field = lidar_scan.field(field_type.name);
+    auto data = field.get();
+    
+    opts.Buffer.Data = (unsigned char*)data;
+    opts.Buffer.Bytes = field.bytes();
+    
+    int channels = 1;
+    int bytewidth = 1;
+    switch (field_type.element_type) {
+        case sensor::ChanFieldType::UINT8:
+            break;
+        case sensor::ChanFieldType::UINT16:
+            bytewidth = 2;
+            break;
+        case sensor::ChanFieldType::UINT32:
+            channels = 4;
+            break;
+        case sensor::ChanFieldType::UINT64:
+            break;
+    }
+    
+    opts.BytesPerChannel = bytewidth;
+    opts.Channels = channels;
+    int stride = lidar_scan.w * channels * bytewidth;
+    opts.StrideBytes = stride;
+    
+    auto out = ZPNG_Compress(&opts);
+    
+    auto len = out.Bytes;
+    scan_data[scan_idx].resize(len);
+    memcpy(scan_data[scan_idx].data(), out.Data, len);
+    ZPNG_Free(&out);
+    return false;
     
     /*qoi_desc desc;
     desc.width = lidar_scan.w/4;
