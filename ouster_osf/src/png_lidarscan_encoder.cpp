@@ -43,7 +43,6 @@ bool PngLidarScanEncoder::fieldEncode(const LidarScan& lidar_scan,
             "ERROR: scan_data size is not sufficient to hold idx: " +
             std::to_string(scan_idx));
     }
-    
     bool res = true;
     switch (field_type.element_type) {
         case sensor::ChanFieldType::UINT8:
@@ -77,7 +76,7 @@ bool PngLidarScanEncoder::fieldEncode(const LidarScan& lidar_scan,
         logger().error("ERROR: fieldEncode: Can't encode field {}",
                        field_type.name);
     }
-    return false;
+    return res;
 }
 
 ScanChannelData PngLidarScanEncoder::encodeField(
@@ -188,7 +187,7 @@ bool PngLidarScanEncoder::encode16bitImage(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
-    
+
     // 16 bit Gray
     const int sample_depth = 16;
     const int color_type = PNG_COLOR_TYPE_GRAY;
@@ -312,7 +311,7 @@ bool PngLidarScanEncoder::encode32bitImage(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
-    
+
     // 8bit RGBA
     const int sample_depth = 8;
     const int color_type = PNG_COLOR_TYPE_RGB_ALPHA;
