@@ -54,7 +54,6 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   include(CTest)
 else()
   set(OUSTER_TOP_LEVEL OFF)
-  add_compile_options(-Wall -Wextra)
 endif()
 
 # === Subdirectories ===
