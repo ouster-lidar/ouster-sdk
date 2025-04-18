@@ -48,6 +48,7 @@ static const int kCompressionLevel = 1;
 #define ZPNG_HEADER_OVERHEAD_BYTES 8
 
 // File format header
+#pragma pack(1)
 struct ZPNG_Header
 {
     uint16_t Magic;
@@ -56,6 +57,7 @@ struct ZPNG_Header
     uint8_t Channels;
     uint8_t BytesPerChannel;
 };
+#pragma pack()
 
 
 //------------------------------------------------------------------------------

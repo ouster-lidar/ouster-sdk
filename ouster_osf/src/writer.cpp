@@ -12,7 +12,7 @@
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/layout_streaming.h"
-#include "ouster/osf/png_lidarscan_encoder.h"
+#include "ouster/osf/zpng_lidarscan_encoder.h"
 #include "ouster/osf/stream_lidar_scan.h"
 
 using namespace ouster::sensor;
@@ -26,8 +26,8 @@ Writer::Writer(const std::string& filename, uint32_t chunk_size)
     : filename_(filename),
       metadata_id_{"ouster_sdk"},
       chunks_layout_{ChunksLayout::LAYOUT_STREAMING},
-      encoder_{std::make_shared<Encoder>(std::make_shared<PngLidarScanEncoder>(
-          ouster::osf::DEFAULT_PNG_OSF_ZLIB_COMPRESSION_LEVEL))} {
+      encoder_{std::make_shared<Encoder>(std::make_shared<ZPngLidarScanEncoder>(
+          ouster::osf::DEFAULT_ZPNG_OSF_COMPRESSION_LEVEL))} {
     // chunks STREAMING_LAYOUT
     chunks_writer_ = std::make_shared<StreamingLayoutCW>(*this, chunk_size);
 

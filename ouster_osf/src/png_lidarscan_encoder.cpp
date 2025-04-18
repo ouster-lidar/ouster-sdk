@@ -9,25 +9,10 @@
 
 #include "ouster/osf/png_lidarscan_encoder.h"
 
-#define QOI_IMPLEMENTATION
-#include "qoi.h"
-
 #include <png.h>
 
 #include "ouster/impl/logging.h"
 #include "png_tools.h"
-
-#include <lz4.h>
-
-#include <zlib.h>
-
-#define QOIR_IMPLEMENTATION
-//#include "qoir.h"
-
-#include "fpnge.h"
-#include "fpnge.cc"
-
-#include "zpng.h"
 
 /* Check for the older version of libpng and add missing macros as necessary */
 
@@ -58,156 +43,6 @@ bool PngLidarScanEncoder::fieldEncode(const LidarScan& lidar_scan,
             "ERROR: scan_data size is not sufficient to hold idx: " +
             std::to_string(scan_idx));
     }
-    
-    /*FPNGEOptions options;
-    options.channel_order = 0;
-    options.huffman_sample = 10;
-    options.cicp_colorspace = 0;
-    options.num_additional_chunks = 0;
-    options.predictor = FPNGE_PREDICTOR_BEST;
-    FPNGEFillOptions(&options, 5, 0);
-    
-    auto field = lidar_scan.field(field_type.name);
-    auto data = field.get();
-    
-    int channels = 1;
-    int bytewidth = 1;
-    switch (field_type.element_type) {
-        case sensor::ChanFieldType::UINT8:
-            break;
-        case sensor::ChanFieldType::UINT16:
-            bytewidth = 2;
-            break;
-        case sensor::ChanFieldType::UINT32:
-            channels = 4;
-            break;
-        case sensor::ChanFieldType::UINT64:
-            break;
-    }
-    int stride = lidar_scan.w * channels * bytewidth;
-    auto buf_size = FPNGEOutputAllocSize(bytewidth, channels, lidar_scan.w, lidar_scan.h);
-    auto output = malloc(buf_size);
-    auto len = FPNGEEncode(bytewidth, channels, data, lidar_scan.w, stride, lidar_scan.h, output, &options);
-    scan_data[scan_idx].resize(len);
-    memcpy(scan_data[scan_idx].data(), output, len);
-    free(output);
-    return false;*/
-    
-    ZPNG_ImageData opts;
-    opts.HeightPixels = lidar_scan.h;
-    opts.WidthPixels = lidar_scan.w;
-    
-    auto field = lidar_scan.field(field_type.name);
-    auto data = field.get();
-    
-    opts.Buffer.Data = (unsigned char*)data;
-    opts.Buffer.Bytes = field.bytes();
-    
-    int channels = 1;
-    int bytewidth = 1;
-    switch (field_type.element_type) {
-        case sensor::ChanFieldType::UINT8:
-            break;
-        case sensor::ChanFieldType::UINT16:
-            bytewidth = 2;
-            break;
-        case sensor::ChanFieldType::UINT32:
-            channels = 4;
-            break;
-        case sensor::ChanFieldType::UINT64:
-            break;
-    }
-    
-    opts.BytesPerChannel = bytewidth;
-    opts.Channels = channels;
-    int stride = lidar_scan.w * channels * bytewidth;
-    opts.StrideBytes = stride;
-    
-    auto out = ZPNG_Compress(&opts);
-    
-    auto len = out.Bytes;
-    scan_data[scan_idx].resize(len);
-    memcpy(scan_data[scan_idx].data(), out.Data, len);
-    ZPNG_Free(&out);
-    return false;
-    
-    /*qoi_desc desc;
-    desc.width = lidar_scan.w/4;
-    desc.height = lidar_scan.h;
-    desc.channels = 4;
-    desc.colorspace = 0;
-    
-    switch (field_type.element_type) {
-        case sensor::ChanFieldType::UINT8:
-            desc.width *= 4;
-            desc.channels = 1;
-            break;
-        case sensor::ChanFieldType::UINT16:
-            desc.height *= 2;
-            break;
-        case sensor::ChanFieldType::UINT32:
-            desc.height *= 4;
-            break;
-        case sensor::ChanFieldType::UINT64:
-            desc.height *= 8;
-            break;
-    }
-    
-    int qlen;
-    void* result = qoi_encode(lidar_scan.field(field_type.name).get(), &desc, &qlen);
-    
-    auto field = lidar_scan.field(field_type.name);
-    auto bytes = qlen;
-    auto len = LZ4_compressBound(bytes);
-    scan_data[scan_idx].resize(len);
-    auto real_len = LZ4_compress_default((char*)result, (char*)scan_data[scan_idx].data(), bytes, len);
-    scan_data[scan_idx].resize(real_len);
-    free(result);*/
-    
-    /*qoi_desc desc;
-    desc.width = lidar_scan.w/4;
-    desc.height = lidar_scan.h;
-    desc.channels = 4;
-    desc.colorspace = 0;
-    
-    switch (field_type.element_type) {
-        case sensor::ChanFieldType::UINT8:
-            desc.width *= 4;
-            desc.channels = 1;
-            break;
-        case sensor::ChanFieldType::UINT16:
-            desc.height *= 2;
-            break;
-        case sensor::ChanFieldType::UINT32:
-            desc.height *= 4;
-            break;
-        case sensor::ChanFieldType::UINT64:
-            desc.height *= 8;
-            break;
-    }
-    
-    int len;
-    void* result = qoi_encode(lidar_scan.field(field_type.name).get(), &desc, &len);
-    bool res = true;
-    scan_data[scan_idx].resize(len);
-    memcpy(scan_data[scan_idx].data(), result, len);
-    free(result);*/
-    
-    /*auto field = lidar_scan.field(field_type.name);
-    auto bytes = field.bytes();
-    auto len = LZ4_compressBound(bytes);
-    scan_data[scan_idx].resize(len);
-    auto real_len = LZ4_compress_default((char*)field.get(), (char*)scan_data[scan_idx].data(), bytes, len);
-    scan_data[scan_idx].resize(real_len);*/
-    
-    /*auto field = lidar_scan.field(field_type.name);
-    auto bytes = field.bytes();
-    auto len = compressBound(bytes);
-    scan_data[scan_idx].resize(len);
-    auto real_len = len;
-    compress((unsigned char*)scan_data[scan_idx].data(), &real_len, (unsigned char*)field.get(), bytes);
-    scan_data[scan_idx].resize(real_len);*/
-    //printf("%li vs %li %f\n", bytes, real_len, (float)real_len/(float)bytes);
     
     bool res = true;
     switch (field_type.element_type) {
@@ -307,28 +142,6 @@ bool PngLidarScanEncoder::encode8bitImage(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
-    
-    FPNGEOptions options;
-    options.channel_order = 0;
-    options.huffman_sample = 10;
-    options.cicp_colorspace = 0;
-    options.num_additional_chunks = 0;
-    options.predictor = FPNGE_PREDICTOR_BEST;
-    FPNGEFillOptions(&options, 5, 0);
-    
-    auto data = img.data();
-    
-    int channels = 1;
-    int bytewidth = 1;
-    int stride = width * channels * bytewidth;
-    auto buf_size = FPNGEOutputAllocSize(bytewidth, channels, width, height);
-    auto output = malloc(buf_size);
-    auto len = FPNGEEncode(bytewidth, channels, data, width, stride, height, output, &options);
-    res_buf.resize(len);
-    memcpy(res_buf.data(), output, len);
-    free(output);
-    
-    return false;
 
     // 8 bit Gray
     const int sample_depth = 8;
@@ -375,36 +188,6 @@ bool PngLidarScanEncoder::encode16bitImage(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
-
-    FPNGEOptions options;
-    options.channel_order = 0;
-    options.huffman_sample = 10;
-    options.cicp_colorspace = 0;
-    options.num_additional_chunks = 0;
-    options.predictor = FPNGE_PREDICTOR_BEST;
-    FPNGEFillOptions(&options, 5, 0);
-    
-    std::vector<uint8_t> data2(height*width*2);
-    for (size_t u = 0; u < height; ++u) {
-        for (size_t v = 0; v < width; ++v) {
-            const uint64_t key_val = img(u, v);
-
-            // 16bit Encoding Logic
-            data2[u*width*2 + v * 2 + 1] = static_cast<uint8_t>(key_val & 0xff);
-            data2[u*width*2 + v * 2 + 0] = static_cast<uint8_t>((key_val >> 8u) & 0xff);
-        }
-    }
-    
-    int channels = 1;
-    int bytewidth = 2;
-    int stride = width * channels * bytewidth;
-    auto buf_size = FPNGEOutputAllocSize(bytewidth, channels, width, height);
-    res_buf.resize(buf_size);
-    auto output = res_buf.data();
-    auto len = FPNGEEncode(bytewidth, channels, data2.data(), width, stride, height, output, &options);
-    res_buf.resize(len);
-    
-    return false;
     
     // 16 bit Gray
     const int sample_depth = 16;
@@ -529,28 +312,6 @@ bool PngLidarScanEncoder::encode32bitImage(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
-
-    FPNGEOptions options;
-    options.channel_order = 0;
-    options.huffman_sample = 10;
-    options.cicp_colorspace = 0;
-    options.num_additional_chunks = 0;
-    options.predictor = FPNGE_PREDICTOR_BEST;
-    FPNGEFillOptions(&options, 5, 0);
-    
-    auto data = img.data();
-    
-    int channels = 4;
-    int bytewidth = 1;
-    int stride = width * channels * bytewidth;
-    auto buf_size = FPNGEOutputAllocSize(bytewidth, channels, width, height);
-    auto output = malloc(buf_size);
-    auto len = FPNGEEncode(bytewidth, channels, data, width, stride, height, output, &options);
-    res_buf.resize(len);
-    memcpy(res_buf.data(), output, len);
-    free(output);
-    
-    return false;
     
     // 8bit RGBA
     const int sample_depth = 8;

@@ -11,8 +11,6 @@
 #include <iostream>
 #include <memory>
 
-#include "qoi.h"
-
 #include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
 
@@ -343,12 +341,14 @@ template bool decode32bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
                                          const ScanChannelData&,
                                          const std::vector<int>&);
 
+
 template <typename T>
 bool decode32bitImage(Eigen::Ref<img_t<T>> img,
                       const ScanChannelData& channel_buf) {
     if (sizeof(T) < 4) {
         print_bad_pixel_size();
     }
+    
     // libpng main structs
     png_structp png_ptr;
     png_infop png_info_ptr;
@@ -753,6 +753,18 @@ void decodeField(ouster::Field& field, const ScanChannelData& buffer) {
         size_t rows = view.shape()[0];
         size_t cols = view.size() / rows;
         view = view.reshape(rows, cols);
+    }
+    
+    ZPNG_Buffer zbuffer;
+    zbuffer.Bytes = buffer.size();
+    zbuffer.Data = (unsigned char*)buffer.data();
+    auto out = ZPNG_Decompress(zbuffer);
+    
+    if (out.Buffer.Data) {
+        // we can avoid a copy here if we want to microoptimize by changing zpng decompress
+        memcpy(view.get(), out.Buffer.Data, out.Buffer.Bytes);
+        ZPNG_Free(&out.Buffer);
+        return;
     }
 
     bool res = true;
