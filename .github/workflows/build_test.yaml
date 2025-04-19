@@ -130,7 +130,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: brew install cmake pkg-config eigen curl libtins glfw flatbuffers googletest
+      run: brew install cmake pkg-config eigen curl libtins glfw flatbuffers googletest zstd
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
@@ -142,7 +142,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install deps
-      run: brew install cmake pkg-config eigen curl libtins glfw flatbuffers
+      run: brew install cmake pkg-config eigen curl libtins glfw flatbuffers zstd
     - name: install python-deps
       run: python3.12 -m pip install pytest pytest-xdist --break-system-packages
     - name: build python

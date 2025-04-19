@@ -93,7 +93,6 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/fb_utils.cpp
                               src/writer.cpp
                               src/async_writer.cpp
-                              src/zpng.cpp
                               src/png_lidarscan_encoder.cpp
                               src/zpng_lidarscan_encoder.cpp
 )
@@ -132,7 +131,7 @@ target_link_libraries(ouster_osf
   PRIVATE
     PNG::PNG
     ZLIB::ZLIB
-    zstd
+    zpng
 )
 target_include_directories(ouster_osf PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

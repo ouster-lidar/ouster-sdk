@@ -368,6 +368,14 @@ ZPNG_Buffer ZPNG_Compress(
     const ZPNG_ImageData* imageData
 )
 {
+    return ZPNG_CompressEx(imageData, 0);
+}
+
+ZPNG_Buffer ZPNG_CompressEx(
+    const ZPNG_ImageData* imageData,
+    const ZPNG_Allocator* allocator
+)
+{
     uint8_t* packing = nullptr;
     uint8_t* output = nullptr;
 
@@ -389,7 +397,7 @@ ZPNG_Buffer ZPNG_Compress(
 
     if (!packing) {
 ReturnResult:
-        if (bufferOutput.Data != output) {
+        if (bufferOutput.Data != output && !allocator) {
             free(output);
         }
         free(packing);
@@ -399,7 +407,14 @@ ReturnResult:
     const unsigned maxOutputBytes = (unsigned)ZSTD_compressBound(byteCount);
 
     // Space for output
-    output = (uint8_t*)calloc(1, ZPNG_HEADER_OVERHEAD_BYTES + maxOutputBytes);
+    if (allocator)
+    {
+        output = (uint8_t*)allocator->Allocator(ZPNG_HEADER_OVERHEAD_BYTES + maxOutputBytes, allocator->AllocatorData);
+    }
+    else
+    {
+        output = (uint8_t*)calloc(1, ZPNG_HEADER_OVERHEAD_BYTES + maxOutputBytes);
+    }
 
     if (!output) {
         goto ReturnResult;
@@ -463,8 +478,17 @@ ReturnResult:
     goto ReturnResult;
 }
 
+
 ZPNG_ImageData ZPNG_Decompress(
     ZPNG_Buffer buffer
+)
+{
+    return ZPNG_DecompressEx(buffer, 0);
+}
+
+ZPNG_ImageData ZPNG_DecompressEx(
+    ZPNG_Buffer buffer,
+    const ZPNG_Allocator* allocator
 )
 {
     uint8_t* packing = nullptr;
@@ -481,7 +505,7 @@ ZPNG_ImageData ZPNG_Decompress(
 
     if (!buffer.Data || buffer.Bytes < ZPNG_HEADER_OVERHEAD_BYTES) {
 ReturnResult:
-        if (imageData.Buffer.Data != output) {
+        if (imageData.Buffer.Data != output && !allocator) {
             free(output);
         }
         free(packing);
@@ -525,7 +549,14 @@ ReturnResult:
     // Stage 2: Unpack/Unfilter
 
     // Space for output
-    output = (uint8_t*)calloc(1, byteCount);
+    if (allocator)
+    {
+        output = (uint8_t*)allocator->Allocator(byteCount, allocator->AllocatorData);
+    }
+    else
+    {
+      output = (uint8_t*)calloc(1, byteCount);
+    }
 
     if (!output) {
         goto ReturnResult;

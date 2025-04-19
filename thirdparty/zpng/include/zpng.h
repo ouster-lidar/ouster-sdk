@@ -89,6 +89,14 @@ struct ZPNG_ImageData
     unsigned StrideBytes;
 };
 
+struct ZPNG_Allocator
+{
+    // optional
+    void* AllocatorData;
+    
+    void* (*Allocator)(uint64_t len, void*);
+};
+
 
 //------------------------------------------------------------------------------
 // API
@@ -107,6 +115,11 @@ ZPNG_Buffer ZPNG_Compress(
     const ZPNG_ImageData* imageData
 );
 
+ZPNG_Buffer ZPNG_CompressEx(
+    const ZPNG_ImageData* imageData,
+    const ZPNG_Allocator* allocator
+);
+
 /*
     ZPNG_Decompress()
 
@@ -119,6 +132,11 @@ ZPNG_Buffer ZPNG_Compress(
 */
 ZPNG_ImageData ZPNG_Decompress(
     ZPNG_Buffer buffer
+);
+
+ZPNG_ImageData ZPNG_DecompressEx(
+    ZPNG_Buffer buffer,
+    const ZPNG_Allocator* allocator
 );
 
 /*

@@ -12,8 +12,8 @@
 #include "ouster/osf/basics.h"
 #include "ouster/osf/crc32.h"
 #include "ouster/osf/layout_streaming.h"
-#include "ouster/osf/zpng_lidarscan_encoder.h"
 #include "ouster/osf/stream_lidar_scan.h"
+#include "ouster/osf/zpng_lidarscan_encoder.h"
 
 using namespace ouster::sensor;
 
