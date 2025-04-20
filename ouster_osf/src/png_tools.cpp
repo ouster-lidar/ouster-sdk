@@ -13,6 +13,7 @@
 
 #include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
+#include "zpng.h"
 
 using namespace ouster::sensor;
 
@@ -179,6 +180,20 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 bool fieldDecode(LidarScan& lidar_scan, const ScanData& scan_data,
                  size_t start_idx, const ouster::FieldType& field_type,
                  const std::vector<int>& px_offset) {
+    ZPNG_Buffer buffer;
+    buffer.Bytes = scan_data[start_idx].size();
+    buffer.Data = (unsigned char*)scan_data[start_idx].data();
+    auto out = ZPNG_Decompress(buffer);
+
+    if (out.Buffer.Data) {
+        // we can avoid a copy here if we want to microoptimize by changing zpng
+        // decompress
+        auto& field = lidar_scan.field(field_type.name);
+        memcpy(field.get(), out.Buffer.Data, out.Buffer.Bytes);
+        ZPNG_Free(&out.Buffer);
+        return false;
+    }
+
     switch (field_type.element_type) {
         case sensor::ChanFieldType::UINT8:
             return decode8bitImage(lidar_scan.field<uint8_t>(field_type.name),
@@ -332,6 +347,7 @@ bool decode32bitImage(Eigen::Ref<img_t<T>> img,
     if (sizeof(T) < 4) {
         print_bad_pixel_size();
     }
+
     // libpng main structs
     png_structp png_ptr;
     png_infop png_info_ptr;
@@ -736,6 +752,19 @@ void decodeField(ouster::Field& field, const ScanChannelData& buffer) {
         size_t rows = view.shape()[0];
         size_t cols = view.size() / rows;
         view = view.reshape(rows, cols);
+    }
+
+    ZPNG_Buffer zbuffer;
+    zbuffer.Bytes = buffer.size();
+    zbuffer.Data = (unsigned char*)buffer.data();
+    auto out = ZPNG_Decompress(zbuffer);
+
+    if (out.Buffer.Data) {
+        // we can avoid a copy here if we want to microoptimize by changing zpng
+        // decompress
+        memcpy(view.get(), out.Buffer.Data, out.Buffer.Bytes);
+        ZPNG_Free(&out.Buffer);
+        return;
     }
 
     bool res = true;

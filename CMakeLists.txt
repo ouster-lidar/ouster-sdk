@@ -69,6 +69,7 @@ endif()
 
 if(BUILD_OSF)
   add_subdirectory(ouster_osf)
+  add_subdirectory(thirdparty/zpng)
 endif()
 
 if(BUILD_VIZ)
