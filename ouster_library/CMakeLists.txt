@@ -5,7 +5,7 @@ function(ouster_library_common _TARGET)
   target_link_libraries(${_TARGET}
     PUBLIC
     Eigen3::Eigen)
-  target_include_directories(${_TARGET} SYSTEM 
+  target_include_directories(${_TARGET} SYSTEM
     PUBLIC
     $<INSTALL_INTERFACE:include/optional-lite>)
   get_target_property(CLIENT_INCLUDE_DIRS ouster_client INTERFACE_INCLUDE_DIRECTORIES)
@@ -51,9 +51,9 @@ if(BUILD_SHARED_LIBRARY)
   # FIGURE OUT HOW TO SKIP VIZ OSF AND PCAP HERE
   add_library(shared_library SHARED
     $<TARGET_OBJECTS:ouster_client>
-    $<TARGET_OBJECTS:ouster_pcap>
-    $<TARGET_OBJECTS:ouster_osf>
-    $<TARGET_OBJECTS:ouster_viz>)
+    $<$<TARGET_EXISTS:ouster_pcap>:$<TARGET_OBJECTS:ouster_pcap>>
+    $<$<TARGET_EXISTS:ouster_osf>:$<TARGET_OBJECTS:ouster_osf>>
+    $<$<TARGET_EXISTS:ouster_viz>:$<TARGET_OBJECTS:ouster_viz>>)
   ouster_library_common(shared_library)
   target_compile_definitions(shared_library PRIVATE BUILD_SHARED_LIBS_EXPORT)
 endif()
