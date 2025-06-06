@@ -50,10 +50,16 @@ set(OUSTER_LIBRARY_OBJECTS "")
 if(BUILD_SHARED_LIBRARY)
   # FIGURE OUT HOW TO SKIP VIZ OSF AND PCAP HERE
   add_library(shared_library SHARED
-    $<TARGET_OBJECTS:ouster_client>
-    $<$<TARGET_EXISTS:ouster_pcap>:$<TARGET_OBJECTS:ouster_pcap>>
-    $<$<TARGET_EXISTS:ouster_osf>:$<TARGET_OBJECTS:ouster_osf>>
-    $<$<TARGET_EXISTS:ouster_viz>:$<TARGET_OBJECTS:ouster_viz>>)
+    $<TARGET_OBJECTS:ouster_client>)
+  if(TARGET ouster_pcap)
+      target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_pcap>)
+  endif()
+  if(TARGET ouster_osf)
+      target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_osf>)
+  endif()
+  if(TARGET ouster_viz)
+      target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_viz>)
+  endif()
   ouster_library_common(shared_library)
   target_compile_definitions(shared_library PRIVATE BUILD_SHARED_LIBS_EXPORT)
 endif()
