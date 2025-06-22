@@ -94,6 +94,7 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/writer.cpp
                               src/async_writer.cpp
                               src/png_lidarscan_encoder.cpp
+                              src/zpng_lidarscan_encoder.cpp
 )
 set_property(TARGET ouster_osf PROPERTY POSITION_INDEPENDENT_CODE ON)
 if(BUILD_SHARED_LIBRARY)
@@ -130,6 +131,7 @@ target_link_libraries(ouster_osf
   PRIVATE
     PNG::PNG
     ZLIB::ZLIB
+    zpng
 )
 target_include_directories(ouster_osf PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
