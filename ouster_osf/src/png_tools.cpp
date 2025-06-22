@@ -11,8 +11,12 @@
 #include <iostream>
 #include <memory>
 
+#include "qoi.h"
+
 #include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
+
+#include "zpng.h"
 
 using namespace ouster::sensor;
 
@@ -179,6 +183,19 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 bool fieldDecode(LidarScan& lidar_scan, const ScanData& scan_data,
                  size_t start_idx, const ouster::FieldType& field_type,
                  const std::vector<int>& px_offset) {
+    ZPNG_Buffer buffer;
+    buffer.Bytes = scan_data[start_idx].size();
+    buffer.Data = (unsigned char*)scan_data[start_idx].data();
+    auto out = ZPNG_Decompress(buffer);
+    
+    if (out.Buffer.Data) {
+        // we can avoid a copy here if we want to microoptimize by changing zpng decompress
+        auto& field = lidar_scan.field(field_type.name);
+        memcpy(field.get(), out.Buffer.Data, out.Buffer.Bytes);
+        ZPNG_Free(&out.Buffer);
+        return false;
+    }
+    
     switch (field_type.element_type) {
         case sensor::ChanFieldType::UINT8:
             return decode8bitImage(lidar_scan.field<uint8_t>(field_type.name),

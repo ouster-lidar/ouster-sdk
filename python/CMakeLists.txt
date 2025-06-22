@@ -36,6 +36,7 @@ if(NOT SKIP_SDK_FIND)
   find_package(OusterSDK REQUIRED)
 endif()
 
+add_compile_options(-march=native)
 # when building as a top-level project
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
