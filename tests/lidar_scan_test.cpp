@@ -280,8 +280,8 @@ TEST(LidarScan, CustomEquality) {
         auto test_array3 = std::vector<ouster::FieldType>(
             dual_field_slots.begin() + 1, dual_field_slots.end());
 
-        std::random_shuffle(test_array1.begin(), test_array1.end());
-        std::random_shuffle(test_array3.begin(), test_array3.end());
+        std::shuffle(test_array1.begin(), test_array1.end());
+        std::shuffle(test_array3.begin(), test_array3.end());
 
         auto scan1 =
             ouster::LidarScan(w, h, test_array1.begin(), test_array1.end());
