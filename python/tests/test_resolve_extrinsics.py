@@ -1,6 +1,6 @@
 from os import path
 import numpy as np
-from ouster.sdk.client import SensorInfo
+from ouster.sdk.core import SensorInfo
 from ouster.sdk.util import resolve_extrinsics
 from ouster.sdk import open_source
 
@@ -21,13 +21,13 @@ EXT_PATH = path.join(PCAP_WITH_EXT_DATA_DIR, "extrinsic_parameters.json")
 sensor_names = ["122150000150", "992313000353", "992225001114"]
 
 
-def test_resolve_extrinscs_with_no_extrinscs():
+def test_resolve_extrinsics_with_no_extrinscs():
     extrinsics = resolve_extrinsics(
         data_path=PCAP_PATH_WITH_NO_EXT, sensor_names=sensor_names)
     assert len(extrinsics) == 0
 
 
-def test_resolve_extrinscs_with_sensor_names():
+def test_resolve_extrinsics_with_sensor_names():
     extrinsics = resolve_extrinsics(data_path=PCAP_PATH_WITH_EXT)
     assert len(extrinsics) == 0
 
@@ -45,7 +45,7 @@ def test_resolve_extrinscs_with_sensor_names():
         assert src == EXT_PATH
 
 
-def test_resolve_extrinscs_with_sensor_infos():
+def test_resolve_extrinsics_with_sensor_infos():
 
     sensor_infos = [SensorInfo()] * len(sensor_names)
     for si, sn in zip(sensor_infos, sensor_names):
@@ -68,7 +68,7 @@ def test_resolve_extrinscs_with_sensor_infos():
         assert src == EXT_PATH
 
 
-def test_resolve_extrinscs_using_dir():
+def test_resolve_extrinsics_using_dir():
 
     extrinsics = resolve_extrinsics(data_path=PCAP_WITH_EXT_DATA_DIR)
     assert len(extrinsics) == 0
@@ -87,25 +87,25 @@ def test_resolve_extrinscs_using_dir():
         assert src == EXT_PATH
 
 
-def test_open_source_with_file_that_has_no_valid_extrinscs():
+def test_open_source_with_file_that_has_no_valid_extrinsics():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT)
-    np.testing.assert_array_equal(ss.metadata.extrinsic, np.eye(4))
+    np.testing.assert_array_equal(ss.sensor_info[0].extrinsic, np.eye(4))
 
 
-def test_open_source_with_file_that_has_no_valid_extrinscs_but_supply_array():
+def test_open_source_with_file_that_has_no_valid_extrinsics_but_supply_array():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT,
-                     extrinsics=np.ones((4, 4)))
-    np.testing.assert_array_equal(ss.metadata.extrinsic, np.ones((4, 4)))
+                     extrinsics=[np.ones((4, 4))])
+    np.testing.assert_array_equal(ss.sensor_info[0].extrinsic, np.ones((4, 4)))
 
 
-def test_open_source_with_file_that_has_no_valid_extrinscs_but_supply_extrinscs_path():
+def test_open_source_with_file_that_has_no_valid_extrinsics_but_supply_extrinsics_path():
     ss = open_source(source_url=PCAP_PATH_WITH_NO_EXT,
-                     extrinsics=EXT_PATH)
-    array_cmp = ss.metadata.extrinsic != np.eye(4)
+                     extrinsics_file=EXT_PATH)
+    array_cmp = ss.sensor_info[0].extrinsic != np.eye(4)
     assert array_cmp.any()
 
 
-def test_open_source_with_file_that_has_valid_extrinscs_no_automatic():
+def test_open_source_with_file_that_has_valid_extrinsics_no_automatic():
     ss = open_source(source_url=PCAP_PATH_WITH_EXT)
-    array_cmp = ss.metadata.extrinsic == np.eye(4)
+    array_cmp = ss.sensor_info[0].extrinsic == np.eye(4)
     assert array_cmp.any()

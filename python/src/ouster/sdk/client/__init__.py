@@ -5,92 +5,94 @@ All rights reserved.
 Python sensor client
 """
 # flake8: noqa (unused imports)
+import warnings
 
-from ouster.sdk._bindings.client import SensorInfo
-from ouster.sdk._bindings.client import ProductInfo
-from ouster.sdk._bindings.client import DataFormat
-from ouster.sdk._bindings.client import LidarMode
-from ouster.sdk._bindings.client import TimestampMode
-from ouster.sdk._bindings.client import OperatingMode
-from ouster.sdk._bindings.client import MultipurposeIOMode
-from ouster.sdk._bindings.client import Polarity
-from ouster.sdk._bindings.client import NMEABaudRate
-from ouster.sdk._bindings.client import UDPProfileLidar
-from ouster.sdk._bindings.client import UDPProfileIMU
-from ouster.sdk._bindings.client import SensorConfig
-from ouster.sdk._bindings.client import SensorCalibration
-from ouster.sdk._bindings.client import SensorHttp
-from ouster.sdk._bindings.client import ShotLimitingStatus
-from ouster.sdk._bindings.client import ThermalShutdownStatus
-from ouster.sdk._bindings.client import FieldClass
-from ouster.sdk._bindings.client import FullScaleRange
-from ouster.sdk._bindings.client import ReturnOrder
-from ouster.sdk._bindings.client import init_logger
-from ouster.sdk._bindings.client import get_config
-from ouster.sdk._bindings.client import set_config
-from ouster.sdk._bindings.client import FieldType
-from ouster.sdk._bindings.client import LidarScan
-from ouster.sdk._bindings.client import get_field_types
-from ouster.sdk._bindings.client import Packet
-from ouster.sdk._bindings.client import LidarPacket
-from ouster.sdk._bindings.client import ImuPacket
-from ouster.sdk._bindings.client import PacketValidationFailure
-from ouster.sdk._bindings.client import PacketFormat
-from ouster.sdk._bindings.client import PacketWriter
-from ouster.sdk._bindings.client import SensorHttp
-from ouster.sdk._bindings.client import SensorClient
-from ouster.sdk._bindings.client import Sensor as _Sensor
-from ouster.sdk._bindings.client import SensorScanSource as _SensorScanSource
-from ouster.sdk._bindings.client import Version
-from ouster.sdk._bindings.client import parse_and_validate_metadata
-from ouster.sdk._bindings.client import parse_and_validate_sensor_config
-from ouster.sdk._bindings.client import ValidatorIssues
-from ouster.sdk._bindings.client import ValidatorEntry
-from ouster.sdk._bindings.client import ScanBatcher
-from ouster.sdk._bindings.client import dewarp
-from ouster.sdk._bindings.client import transform
-from ouster.sdk._bindings.client import LONG_HTTP_REQUEST_TIMEOUT_SECONDS, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS
+warnings.warn("Namespace ouster.sdk.client is deprecated: use ouster.sdk.core and ouster.sdk.sensor instead. "
+              "Namespace ouster.sdk.client will be removed in the upcoming release.",
+              DeprecationWarning, stacklevel=2)
 
-from .data import BufferT
-from .data import FieldDType
-from .data import FieldTypes
-from .data import ColHeader
-from .data import XYZLut
-from .data import destagger
-from .data import stagger
-from .data import packet_ts
-from .data import ChanField
+from ouster.sdk.core import Severity
+from ouster.sdk.core import SensorInfo
+from ouster.sdk.core import ProductInfo
+from ouster.sdk.core import DataFormat
+from ouster.sdk.core import LidarMode
+from ouster.sdk.core import TimestampMode
+from ouster.sdk.core import OperatingMode
+from ouster.sdk.core import MultipurposeIOMode
+from ouster.sdk.core import Polarity
+from ouster.sdk.core import NMEABaudRate
+from ouster.sdk.core import UDPProfileLidar
+from ouster.sdk.core import UDPProfileIMU
+from ouster.sdk.core import SensorConfig
+from ouster.sdk.core import SensorCalibration
+from ouster.sdk.core import SensorHttp
+from ouster.sdk.core import ShotLimitingStatus
+from ouster.sdk.core import ThermalShutdownStatus
+from ouster.sdk.core import FieldClass
+from ouster.sdk.core import FullScaleRange
+from ouster.sdk.core import ReturnOrder
+from ouster.sdk.core import init_logger
+from ouster.sdk.core import FieldType
+from ouster.sdk.core import LidarScan
+from ouster.sdk.core import get_field_types
+from ouster.sdk.core import Packet
+from ouster.sdk.core import LidarPacket
+from ouster.sdk.core import ImuPacket
+from ouster.sdk.core import PacketValidationFailure
+from ouster.sdk.core import PacketFormat
+from ouster.sdk.core import PacketWriter
+from ouster.sdk.core import Version
+from ouster.sdk.core import parse_and_validate_metadata
+from ouster.sdk.core import parse_and_validate_sensor_config
+from ouster.sdk.core import ValidatorIssues
+from ouster.sdk.core import ValidatorEntry
+from ouster.sdk.core import ScanBatcher
+from ouster.sdk.core import ScanSource
+from ouster.sdk.core import dewarp
+from ouster.sdk.core import transform
+from ouster.sdk.core import LONG_HTTP_REQUEST_TIMEOUT_SECONDS, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS
 
-from .sensor import Sensor
+from ouster.sdk.core.data import BufferT
+from ouster.sdk.core.data import ColHeader
+from ouster.sdk.core.data import XYZLut
+from ouster.sdk.core.data import XYZLutFloat
+from ouster.sdk.core.data import destagger
+from ouster.sdk.core.data import stagger
+from ouster.sdk.core.data import packet_ts
+from ouster.sdk.core.data import ChanField
 
-from .scan_source import ScanSource
-from .multi_scan_source import MultiScanSource
-from .scan_source_adapter import ScanSourceAdapter
-from .multi_sliced_scan_source import MultiSlicedScanSource
-from .multi_reduced_scan_source import MultiReducedScanSource
-from .multi_masked_scan_source import MultiMaskedScanSource
-from .multi_clipped_scan_source import MultiClippedScanSource
+from ouster.sdk.core.reduced_scan_source import ReducedScanSource as MultiReducedScanSource
+from ouster.sdk.core.masked_scan_source import MaskedScanSource as MultiMaskedScanSource
+from ouster.sdk.core.clipped_scan_source import ClippedScanSource as MultiClippedScanSource
 
+from ouster.sdk.core.core import PacketSource
+from ouster.sdk.core.core import Packets
+from ouster.sdk.core.core import FrameBorder
+from ouster.sdk.core.core import first_valid_column
+from ouster.sdk.core.core import last_valid_column
+from ouster.sdk.core.core import first_valid_column_ts
+from ouster.sdk.core.core import first_valid_packet_ts
+from ouster.sdk.core.core import last_valid_column_ts
+from ouster.sdk.core.core import last_valid_packet_ts
+from ouster.sdk.core.core import first_valid_column_pose
+from ouster.sdk.core.core import last_valid_column_pose
+from ouster.sdk.core.core import valid_packet_idxs
+from ouster.sdk.core.core import poses_present
 
-from .core import ClientError
-from .core import ClientTimeout
-from .core import ClientOverflow
-from .core import PacketSource
-from .core import Packets
-from .core import Scans
-from .core import FrameBorder
-from .core import first_valid_column
-from .core import last_valid_column
-from .core import first_valid_column_ts
-from .core import first_valid_packet_ts
-from .core import last_valid_column_ts
-from .core import last_valid_packet_ts
-from .core import first_valid_column_pose
-from .core import last_valid_column_pose
-from .core import valid_packet_idxs
-from .core import poses_present
+from ouster.sdk.core.multi import Scans
 
-from .multi import PacketMultiSource    # type: ignore
-from .multi import PacketMultiWrapper   # type: ignore
-from .multi import SensorPacketSource   # type: ignore
-from .multi import ScansMulti           # type: ignore
+from ouster.sdk.sensor import get_config
+from ouster.sdk.sensor import set_config
+from ouster.sdk.sensor import _Sensor
+from ouster.sdk.sensor import ClientError
+from ouster.sdk.sensor import ClientTimeout
+from ouster.sdk.sensor import ClientOverflow
+from ouster.sdk.sensor import SensorPacketSource
+from ouster.sdk.sensor import SensorScanSource
+
+from ouster.sdk.core import _utils
+from ouster.sdk.core import core
+from ouster.sdk.core import data
+from ouster.sdk.core import io_types
+from ouster.sdk.core import multi
+from ouster.sdk.core import scan_ops

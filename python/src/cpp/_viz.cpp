@@ -28,15 +28,6 @@
 #include "ouster/point_viz.h"
 #include "ouster/types.h"
 
-// TODO: de-duplicate casters
-namespace pybind11 {
-namespace detail {
-template <typename T>
-struct type_caster<nonstd::optional<T>> : optional_caster<nonstd::optional<T>> {
-};
-}  // namespace detail
-}  // namespace pybind11
-
 namespace py = pybind11;
 using namespace ouster;
 using ouster::viz::EventModifierKeys;
@@ -127,10 +118,10 @@ void init_viz(py::module& m, py::module&) {
         .export_values();
 
     py::class_<viz::PointViz>(m, "PointViz")
-        .def(py::init<const std::string&, bool, int, int>(), py::arg("name"),
-             py::arg("fix_aspect") = false, py::arg("window_width") = 800,
-             py::arg("window_height") = 600)
-
+        .def(py::init<const std::string&, bool, int, int, bool>(),
+             py::arg("name"), py::arg("fix_aspect") = false,
+             py::arg("window_width") = 800, py::arg("window_height") = 600,
+             py::arg("maximized") = false)
         .def(
             "run",
             [](viz::PointViz& self) {
@@ -191,16 +182,107 @@ void init_viz(py::module& m, py::module&) {
                std::function<bool(const std::vector<uint8_t>&, int, int)> f) {
                 // pybind11 doesn't seem to deal with the rvalue ref arg
                 // pybind11 already handles acquiring the GIL in the callback
+                PyErr_WarnEx(
+                    PyExc_DeprecationWarning,
+                    "push_frame_buffer_handler() is deprecated. For "
+                    "screenshots or screen recording, use "
+                    "get_screenshot(), save_screenshot(), or "
+                    "toggle_screen_recording(). push_frame_buffer_handler() "
+                    "will be removed in Q2 2025.",
+                    2);
                 self.push_frame_buffer_handler(std::move(f));
             },
             "Add a callback for handling every frame buffer draw (super "
             "expensive).")
-
+        .def(
+            "get_screenshot",
+            [](viz::PointViz& self, int width, int height) {
+                py::gil_scoped_release release;
+                auto pixels = self.get_screenshot(width, height);
+                // Reacquire the GIL before creating Python objects
+                {
+                    py::gil_scoped_acquire acquire;
+                    py::array_t<uint8_t> result({height, width, 3});
+                    std::memcpy(result.mutable_data(), pixels.data(),
+                                pixels.size());
+                    return result;
+                }
+            },
+            py::arg("width"), py::arg("height"),
+            "Gets a screenshot with an explicit width and height. Returns the "
+            "pixels.")
+        .def(
+            "get_screenshot",
+            [](viz::PointViz& self, double scale_factor) {
+                py::gil_scoped_release release;
+                auto pixels = self.get_screenshot(scale_factor);
+                auto size = self.get_scaled_viewport_size(scale_factor);
+                // Reacquire the GIL before creating Python objects
+                {
+                    py::gil_scoped_acquire acquire;
+                    py::array_t<uint8_t> result({static_cast<int>(size.second),
+                                                 static_cast<int>(size.first),
+                                                 3});
+                    std::memcpy(result.mutable_data(), pixels.data(),
+                                pixels.size());
+                    return result;
+                }
+            },
+            py::arg("scale_factor") = 1.0,
+            "Gets a screenshot using a scale factor, which is a multiplier "
+            "over the window width and height. Returns the "
+            "pixels.")
+        .def(
+            "save_screenshot",
+            [](viz::PointViz& self, const std::string& path,
+               double scale_factor) {
+                py::gil_scoped_release release;
+                return self.save_screenshot(path, scale_factor);
+            },
+            py::arg("path"), py::arg("scale_factor") = 1.0,
+            "Saves a screenshot using a scale factor, which is a multiplier "
+            "over the window width and height. Returns the resulting file "
+            "name.")
+        .def(
+            "save_screenshot",
+            [](viz::PointViz& self, const std::string& path, int width,
+               int height) {
+                py::gil_scoped_release release;
+                return self.save_screenshot(path, width, height);
+            },
+            py::arg("path"), py::arg("width"), py::arg("height"),
+            "Saves a screenshot with an explicit width and height. Returns the "
+            "resulting file name.")
+        .def(
+            "toggle_screen_recording",
+            [](viz::PointViz& self, double scale_factor) {
+                return self.toggle_screen_recording(scale_factor);
+            },
+            py::arg("scale_factor") = 1.0,
+            "Toggle screen recording. Returns true if started, false if "
+            "stopped")
+        .def(
+            "toggle_screen_recording",
+            [](viz::PointViz& self, int width, int height) {
+                return self.toggle_screen_recording(width, height);
+            },
+            py::arg("width"), py::arg("height"),
+            "Toggle screen recording with explicit width and height. "
+            "Returns true if started, false if stopped.")
         .def(
             "pop_frame_buffer_handler",
-            [](viz::PointViz& self) { self.pop_frame_buffer_handler(); },
+            [](viz::PointViz& self) -> void {
+                PyErr_WarnEx(
+                    PyExc_DeprecationWarning,
+                    "pop_frame_buffer_handler() is deprecated. For "
+                    "screenshots or screen recording, use "
+                    "get_screenshot(), save_screenshot(), or "
+                    "toggle_screen_recording(). pop_frame_buffer_handler() "
+                    "will be removed in Q2 2025.",
+                    2);
+                self.pop_frame_buffer_handler();
+            },
             "Remove the last added callback for handling frame buffers data.")
-
         .def(
             "push_mouse_button_handler",
             [](viz::PointViz& self,
@@ -302,6 +384,8 @@ void init_viz(py::module& m, py::module&) {
                         &viz::PointViz::add))
         .def("add", py::overload_cast<const std::shared_ptr<viz::Image>&>(
                         &viz::PointViz::add))
+        .def("add", py::overload_cast<const std::shared_ptr<viz::Lines>&>(
+                        &viz::PointViz::add))
         .def("remove",
              py::overload_cast<const std::shared_ptr<viz::Cloud>&>(
                  &viz::PointViz::remove),
@@ -320,7 +404,8 @@ void init_viz(py::module& m, py::module&) {
                            &viz::PointViz::remove))
         .def("remove", py::overload_cast<const std::shared_ptr<viz::Image>&>(
                            &viz::PointViz::remove))
-
+        .def("remove", py::overload_cast<const std::shared_ptr<viz::Lines>&>(
+                           &viz::PointViz::remove))
         .def_property_readonly(
             "fps", &viz::PointViz::fps,
             "Frames per second, updated every second in the draw() func");
@@ -521,8 +606,25 @@ void init_viz(py::module& m, py::module&) {
                     }
                 }
 
-                // TODO[pb]: Make it to accept 2 dims for unstructured point
-                // cloud case
+                // accept 2d for unstructured cloud case
+                if (key.ndim() == 2) {
+                    if (key.shape(1) == 3) {
+                        check_array(key, self.get_size() * 3);
+                        self.set_key_rgb(key.data());
+                        return;
+                    }
+
+                    if (key.shape(1) == 4) {
+                        check_array(key, self.get_size() * 4);
+                        self.set_key_rgba(key.data());
+                        return;
+                    }
+
+                    throw std::invalid_argument(
+                        "Expected array with size of 2nd dimension: 1, 3 or "
+                        "4, but got: " +
+                        std::to_string(key.shape(1)));
+                }
 
                 check_array(key, 0, 3, 'C');
 
@@ -539,7 +641,7 @@ void init_viz(py::module& m, py::module&) {
                 }
 
                 throw std::invalid_argument(
-                    "Expected array with size of 3rd dimension: 1,3 or "
+                    "Expected array with size of 3rd dimension: 1, 3 or "
                     "4, but got: " +
                     std::to_string(key.shape(2)));
             },
@@ -555,6 +657,92 @@ void init_viz(py::module& m, py::module&) {
                  Args:
                     key: array of at least as many elements as there are
                          points, preferably normalized between 0 and 1
+             )")
+        .def(
+            "set_key_rgb",
+            [](viz::Cloud& self, py::array_t<float> key) {
+                check_array(key, 0, 0, 'C');
+
+                // accept 2d for unstructured cloud case
+                if (key.ndim() == 2) {
+                    if (key.shape(1) == 3) {
+                        check_array(key, self.get_size() * 3);
+                        self.set_key_rgb(key.data());
+                        return;
+                    }
+
+                    throw std::invalid_argument(
+                        "Expected array with size of 2nd dimension: 3, "
+                        "but got: " +
+                        std::to_string(key.shape(1)));
+                }
+
+                // accept 3d for structured cloud case
+                if (key.shape(2) == 3) {
+                    check_array(key, self.get_size() * 3);
+                    self.set_key_rgb(key.data());
+                    return;
+                }
+
+                throw std::invalid_argument(
+                    "Expected array with size of 3rd dimension: 3, "
+                    "but got: " +
+                    std::to_string(key.shape(2)));
+            },
+            py::arg("key"),
+            R"(
+                 Set the key to RGB values, used for colouring.
+
+                 Size must be:
+                 - 2 dimensions with last dimension 3 for unordered pointclouds
+                 - 3 dimensions with last dimension 3 for ordered pointclouds
+
+                 Args:
+                    key: array of RGB colors as many elements as there are
+                         points
+             )")
+        .def(
+            "set_key_rgba",
+            [](viz::Cloud& self, py::array_t<float> key) {
+                check_array(key, 0, 0, 'C');
+
+                // accept 2d for unstructured cloud case
+                if (key.ndim() == 2) {
+                    if (key.shape(1) == 4) {
+                        check_array(key, self.get_size() * 4);
+                        self.set_key_rgba(key.data());
+                        return;
+                    }
+
+                    throw std::invalid_argument(
+                        "Expected array with size of 2nd dimension: 4, "
+                        "but got: " +
+                        std::to_string(key.shape(1)));
+                }
+
+                // accept 3d for structured cloud case
+                if (key.shape(2) == 4) {
+                    check_array(key, self.get_size() * 4);
+                    self.set_key_rgba(key.data());
+                    return;
+                }
+
+                throw std::invalid_argument(
+                    "Expected array with size of 3rd dimension: 4, "
+                    "but got: " +
+                    std::to_string(key.shape(2)));
+            },
+            py::arg("key"),
+            R"(
+                 Set the key to RGBA values, used for colouring.
+
+                 Size must be:
+                 - 2 dimensions with last dimension 4 for unordered pointclouds
+                 - 3 dimensions with last dimension 4 for ordered pointclouds
+
+                 Args:
+                    key: array of RGBA colors as many elements as there are
+                         points
              )")
         .def(
             "set_mask",
@@ -796,22 +984,22 @@ void init_viz(py::module& m, py::module&) {
         .def("clear_palette", &viz::Image::clear_palette,
              "Removes the image palette and use keys as grey color in MONO")
         .def(
-            "window_coordinates_to_image_pixel",
+            "viewport_coordinates_to_image_pixel",
             [](viz::Image& self, const viz::WindowCtx& ctx, double x,
                double y) -> nonstd::optional<std::pair<int, int>> {
                 // swap the coordinates for python, since that's the convention
                 // for the numpy array
-                auto p = self.window_coordinates_to_image_pixel(ctx, x, y);
+                auto p = self.viewport_coordinates_to_image_pixel(ctx, x, y);
                 return std::make_pair(p.second, p.first);
             },
             R"(Returns the image pixel as a (row, col) tuple given window coordinates,
              or None if the given window coordinate is not within the image.)")
         .def(
-            "image_pixel_to_window_coordinates",
+            "image_pixel_to_viewport_coordinates",
             [](viz::Image& self, const viz::WindowCtx& ctx,
                std::pair<int, int> pixel) -> std::pair<double, double> {
-                return self.image_pixel_to_window_coordinates(ctx, pixel.second,
-                                                              pixel.first);
+                return self.image_pixel_to_viewport_coordinates(
+                    ctx, pixel.second, pixel.first);
             },
             R"(Returns the window pixel (x, y) given an image (row, col) pixel.)")
         .def("pixel_size", &viz::Image::pixel_size,
@@ -864,6 +1052,81 @@ void init_viz(py::module& m, py::module&) {
             py::arg("rgba"),
             R"(
             Set the color of the cuboid.
+
+            Args:
+                rgba: 4 value tuple of RGBA color
+        )");
+
+    py::class_<viz::Lines, std::shared_ptr<viz::Lines>>(
+        m, "Lines", "Manages the state of a single lines.")
+        .def(py::init([](pymatrixd pose, py::tuple rgba) {
+                 check_array(pose, 16, 2, 'F');
+                 viz::mat4d posea;
+                 std::copy(pose.data(), pose.data() + 16, posea.data());
+
+                 viz::vec4f ar{0.0, 0.0, 0.0, 1.0};
+                 tuple_to_float_array(ar, rgba);
+
+                 return new viz::Lines{posea, ar};
+             }),
+             py::arg("pose"), py::arg("rgba"),
+             R"(
+                 Creates lines.
+
+                 Args:
+                    pose: 4x4 pose matrix
+                    rgba: 4 value tuple of RGBA color
+             )")
+        .def(
+            "set_points",
+            [](viz::Lines& self, py::array_t<float> points) {
+                check_array(points, 0, 0, 'C');  // check for C-CONTIGUOUS
+                if (points.ndim() == 2) {
+                    if (points.shape(1) != 3) {
+                        throw std::invalid_argument(
+                            "Expected a Nx3 or Nx1 array.");
+                    }
+                    self.set_points(points.shape(0), points.data());
+                    return;
+                }
+
+                if (points.ndim() != 1) {
+                    throw std::invalid_argument("Expected a Nx3 or Nx1 array.");
+                }
+                self.set_points(points.shape(0) / 3, points.data());
+            },
+            py::arg("points"),
+            R"(
+                 Set the line points.
+
+                 Args:
+                    points: array of floats
+             )")
+        .def(
+            "set_transform",
+            [](viz::Lines& self, pymatrixd pose) {
+                check_array(pose, 16, 2, 'F');
+                viz::mat4d posea;
+                std::copy(pose.data(), pose.data() + 16, posea.data());
+                self.set_transform(posea);
+            },
+            py::arg("pose"),
+            R"(
+                 Set the transform for the lines.
+
+                 Args:
+                    pose: 4x4 pose matrix
+             )")
+        .def(
+            "set_rgba",
+            [](viz::Lines& self, py::tuple rgba) {
+                viz::vec4f ar{0.0, 0.0, 0.0, 1.0};
+                tuple_to_float_array(ar, rgba);
+                self.set_rgba(ar);
+            },
+            py::arg("rgba"),
+            R"(
+            Set the color of the lines.
 
             Args:
                 rgba: 4 value tuple of RGBA color

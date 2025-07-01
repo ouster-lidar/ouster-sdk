@@ -154,7 +154,7 @@ command you can reduce the effective vertical resolution of the sensor to 32:
 
 .. code:: bash
 
-    $ ouster-cli source <SOURCE_URL> reduce --fields 32 viz
+    $ ouster-cli source <SOURCE_URL> reduce 32 viz
 
 
 The reduced LidarScans will applied to the rest of the chain, that means if you chain a ``save`` command

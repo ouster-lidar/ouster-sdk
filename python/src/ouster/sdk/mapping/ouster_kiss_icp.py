@@ -34,38 +34,52 @@ import numpy as np
 import logging
 
 from kiss_icp.config import KISSConfig  # type: ignore[import-untyped]
-from kiss_icp.deskew import get_motion_compensator  # type: ignore[import-untyped]
 from kiss_icp.mapping import get_voxel_hash_map  # type: ignore[import-untyped]
-from kiss_icp.preprocess import get_preprocessor  # type: ignore[import-untyped]
 from kiss_icp.registration import get_registration  # type: ignore[import-untyped]
 from kiss_icp.threshold import get_threshold_estimator  # type: ignore[import-untyped]
 from kiss_icp.voxelization import voxel_down_sample  # type: ignore[import-untyped]
 
 import ouster.sdk.util.pose_util as pu
+from ouster.sdk._bindings.mapping import _Preprocessor      # type: ignore[attr-defined]
+from ouster.sdk._bindings.mapping import _Vector3dVector    # type: ignore[attr-defined]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
 
+class Preprocessor:
+    def __init__(self, max_range, min_range, deskew, max_num_threads):
+        self._preprocessor = _Preprocessor(
+            max_range, min_range, deskew, max_num_threads
+        )
+
+    def preprocess(self, frame: np.ndarray, timestamps: np.ndarray, relative_motion: np.ndarray):
+        return np.asarray(
+            self._preprocessor._preprocess(
+                _Vector3dVector(frame),
+                timestamps.ravel(),
+                relative_motion,
+            )
+        )
+
+
 class KissICP:
 
-    def __init__(self, config: KISSConfig):
-        self.last_pose = np.eye(4)
+    def __init__(self, config: KISSConfig, initial_pose: np.ndarray = np.eye(4)):
+        self.last_pose = initial_pose if initial_pose is not None else np.eye(4)
         self.last_delta_pose = np.eye(4)
         self.config = config
-        self.compensator = get_motion_compensator(config)
         self.adaptive_threshold = get_threshold_estimator(self.config)
         self.local_map = get_voxel_hash_map(self.config)
         self.registration = get_registration(self.config)
-        self.preprocess = get_preprocessor(self.config)
+        self.preprocessor = Preprocessor(max_range=self.config.data.max_range,
+                                         min_range=self.config.data.min_range,
+                                         deskew=self.config.data.deskew,
+                                         max_num_threads=0)
 
     def register_frame(self, frame, timestamps, delta_ratio=1):
-        # drop out of ordered frame
-
-        frame = self.compensator.deskew_scan(frame, timestamps, self.last_delta_pose)
-
         # Preprocess the input cloud
-        frame = self.preprocess(frame)
+        frame = self.preprocessor.preprocess(frame, timestamps, self.last_delta_pose)
 
         # Voxelize
         source, frame_downsample = self.voxelize(frame)

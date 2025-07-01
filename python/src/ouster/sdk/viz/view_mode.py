@@ -2,8 +2,8 @@ from typing import (List, Optional, Union, Protocol, runtime_checkable)
 
 from dataclasses import dataclass
 import numpy as np
-from ouster.sdk import client
-from ouster.sdk.client import _utils, Version
+from ouster.sdk import core
+from ouster.sdk.core import _utils, Version
 
 from ouster.sdk._bindings.viz import Cloud, Image
 
@@ -17,7 +17,7 @@ class FieldViewMode(Protocol):
     of showing data in that mode, see `enabled()`.
     """
 
-    _info: Optional[client.SensorInfo]
+    _info: Optional[core.SensorInfo]
 
     @property
     def name(self) -> str:
@@ -30,12 +30,12 @@ class FieldViewMode(Protocol):
         ...
 
     def _prepare_data(self,
-                      ls: client.LidarScan,
+                      ls: core.LidarScan,
                       return_num: int = 0) -> Optional[np.ndarray]:
         """Prepares data for visualization given the scan and return number"""
         ...
 
-    def enabled(self, ls: client.LidarScan, return_num: int = 0) -> bool:
+    def enabled(self, ls: core.LidarScan, return_num: int = 0) -> bool:
         """Checks the view mode availability for a scan and return number"""
         ...
 
@@ -46,7 +46,7 @@ class ImageMode(FieldViewMode, Protocol):
 
     def set_image(self,
                   img: Image,
-                  ls: client.LidarScan,
+                  ls: core.LidarScan,
                   return_num: int = 0) -> None:
         """Prepares the key data and sets the image key to it."""
         ...
@@ -58,7 +58,7 @@ class CloudMode(FieldViewMode, Protocol):
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: client.LidarScan,
+                        ls: core.LidarScan,
                         *,
                         return_num: int = 0) -> None:
         """Prepares the key data and sets the cloud key to it."""
@@ -74,13 +74,50 @@ def _second_chan_field(field: str) -> Optional[str]:
     """Get the second return field name."""
     # yapf: disable
     second_fields = dict({
-        client.ChanField.RANGE: client.ChanField.RANGE2,
-        client.ChanField.SIGNAL: client.ChanField.SIGNAL2,
-        client.ChanField.REFLECTIVITY: client.ChanField.REFLECTIVITY2,
-        client.ChanField.FLAGS: client.ChanField.FLAGS2
+        core.ChanField.RANGE: core.ChanField.RANGE2,
+        core.ChanField.SIGNAL: core.ChanField.SIGNAL2,
+        core.ChanField.REFLECTIVITY: core.ChanField.REFLECTIVITY2,
+        core.ChanField.FLAGS: core.ChanField.FLAGS2
     })
     # yapf: enable
     return second_fields.get(field, None)
+
+
+class RingMode(CloudMode):
+    """View mode to show laser ring."""
+
+    def __init__(self, info: core.SensorInfo) -> None:
+        """
+        Args:
+            info: sensor metadata
+        """
+        self._info = info
+        key_data = np.empty((info.h, info.w), dtype=np.float32)
+        for i in range(0, info.h):
+            key_data[i, :] = i / info.h
+        self._key_data = key_data
+
+    @property
+    def name(self) -> str:
+        return "RING"
+
+    @property
+    def names(self) -> List[str]:
+        return ["RING"]
+
+    def _prepare_data(self,
+                      ls: core.LidarScan,
+                      return_num: int = 0) -> Optional[np.ndarray]:
+        return self._key_data
+
+    def set_cloud_color(self,
+                        cloud: Cloud,
+                        ls: core.LidarScan,
+                        return_num: int = 0) -> None:
+        cloud.set_key(self._key_data)
+
+    def enabled(self, ls: core.LidarScan, return_num: int = 0):
+        return True
 
 
 class SimpleMode(ImageCloudMode):
@@ -95,7 +132,7 @@ class SimpleMode(ImageCloudMode):
     def __init__(self,
                  field: str,
                  *,
-                 info: Optional[client.SensorInfo] = None,
+                 info: Optional[core.SensorInfo] = None,
                  prefix: Optional[str] = "",
                  suffix: Optional[str] = "",
                  use_ae: bool = True,
@@ -129,7 +166,7 @@ class SimpleMode(ImageCloudMode):
         return [self._wrap_name(str(f)) for f in self._fields]
 
     def _prepare_data(self,
-                      ls: client.LidarScan,
+                      ls: core.LidarScan,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if not self.enabled(ls, return_num):
             return None
@@ -153,24 +190,24 @@ class SimpleMode(ImageCloudMode):
 
     def set_image(self,
                   img: Image,
-                  ls: client.LidarScan,
+                  ls: core.LidarScan,
                   return_num: int = 0) -> None:
         if self._info is None:
             raise ValueError(
                 f"VizMode[{self.name}] requires metadata to make a 2D image")
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
-            img.set_image(client.destagger(self._info, key_data))
+            img.set_image(core.destagger(self._info, key_data))
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: client.LidarScan,
+                        ls: core.LidarScan,
                         return_num: int = 0) -> None:
         key_data = self._prepare_data(ls, return_num)
         if key_data is not None:
             cloud.set_key(key_data)
 
-    def enabled(self, ls: client.LidarScan, return_num: int = 0):
+    def enabled(self, ls: core.LidarScan, return_num: int = 0):
         return (self._fields[return_num] in ls.fields
                 if return_num < len(self._fields) else False)
 
@@ -182,7 +219,7 @@ class RGBMode(ImageCloudMode):
     def __init__(self,
                  field: str,
                  *,
-                 info: Optional[client.SensorInfo] = None) -> None:
+                 info: Optional[core.SensorInfo] = None) -> None:
         """
         Args:
             info: sensor metadata used mainly for destaggering here
@@ -200,7 +237,7 @@ class RGBMode(ImageCloudMode):
         return [self._field]
 
     def _prepare_data(self,
-                      ls: client.LidarScan,
+                      ls: core.LidarScan,
                       return_num: int = 0) -> Optional[np.ndarray]:
 
         field = ls.field(self._field)
@@ -221,24 +258,24 @@ class RGBMode(ImageCloudMode):
 
     def set_image(self,
                   img: Image,
-                  ls: client.LidarScan,
+                  ls: core.LidarScan,
                   return_num: int = 0) -> None:
         if self._info is None:
             raise ValueError(
                 f"VizMode[{self.name}] requires metadata to make a 2D image")
         key_data = self._prepare_data(ls)
         if key_data is not None:
-            img.set_image(client.destagger(self._info, key_data))
+            img.set_image(core.destagger(self._info, key_data))
 
     def set_cloud_color(self,
                         cloud: Cloud,
-                        ls: client.LidarScan,
+                        ls: core.LidarScan,
                         return_num: int = 0) -> None:
         key_data = self._prepare_data(ls)
         if key_data is not None:
             cloud.set_key(key_data)
 
-    def enabled(self, ls: client.LidarScan, return_num: int = 0):
+    def enabled(self, ls: core.LidarScan, return_num: int = 0):
         field = ls.field(self._field)
         return np.ndim(field) == 3
 
@@ -246,8 +283,8 @@ class RGBMode(ImageCloudMode):
 class ReflMode(SimpleMode, ImageCloudMode):
     """Prepares image/cloud data for REFLECTIVITY channel"""
 
-    def __init__(self, *, info: Optional[client.SensorInfo] = None) -> None:
-        super().__init__(client.ChanField.REFLECTIVITY, info=info, use_ae=True)
+    def __init__(self, *, info: Optional[core.SensorInfo] = None) -> None:
+        super().__init__(core.ChanField.REFLECTIVITY, info=info, use_ae=True)
         # used only for uncalibrated reflectivity in FW prior v2.1.0
         # TODO: should we check for calibrated reflectivity status from
         # metadata too?
@@ -260,7 +297,7 @@ class ReflMode(SimpleMode, ImageCloudMode):
             self._normalized_refl = True
 
     def _prepare_data(self,
-                      ls: client.LidarScan,
+                      ls: core.LidarScan,
                       return_num: int = 0) -> Optional[np.ndarray]:
         if not self.enabled(ls, return_num):
             return None
@@ -279,10 +316,9 @@ class ReflMode(SimpleMode, ImageCloudMode):
 
 def is_norm_reflectivity_mode(mode: FieldViewMode) -> bool:
     """Checks whether the image/cloud mode is a normalized REFLECTIVITY mode
-
-    NOTE[pb]: This is highly implementation specific and doesn't look nicely,
-    i.e. it's more like duck/duct plumbing .... but suits the need.
     """
+    # NOTE[pb]: This is highly implementation specific and doesn't look nicely,
+    # i.e. it's more like duck/duct plumbing .... but suits the need.
     return (isinstance(mode, ReflMode) and mode._normalized_refl)
 
 

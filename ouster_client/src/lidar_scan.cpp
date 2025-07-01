@@ -212,6 +212,13 @@ LidarScan::LidarScan(std::shared_ptr<sensor::sensor_info> info)
     sensor_info = info;
 }
 
+LidarScan::LidarScan(std::shared_ptr<sensor::sensor_info> info,
+                     const std::vector<FieldType>& field_types)
+    : LidarScan{info->format.columns_per_frame, info->format.pixels_per_column,
+                field_types, info->format.columns_per_packet} {
+    sensor_info = info;
+}
+
 // specify sensor:: namespace for doxygen matching
 LidarScan::LidarScan(size_t w, size_t h, LidarScanFieldTypes field_types,
                      size_t columns_per_packet)
@@ -514,14 +521,55 @@ uint64_t LidarScan::get_first_valid_packet_timestamp() const {
     return 0;
 }
 
+uint64_t LidarScan::get_last_valid_packet_timestamp() const {
+    int total_packets = packet_timestamp().size();
+    int columns_per_packet = w / total_packets;
+
+    for (int i = total_packets - 1; i >= 0; --i) {
+        if (status()
+                .middleRows(i * columns_per_packet, columns_per_packet)
+                .unaryExpr([](uint32_t s) { return s & 1; })
+                .any())
+            return packet_timestamp()[i];
+    }
+
+    return 0;
+}
+
 uint64_t LidarScan::get_first_valid_column_timestamp() const {
+    auto col = get_first_valid_column();
+    if (col < 0) {
+        return 0;
+    }
+    return timestamp()[col];
+}
+
+uint64_t LidarScan::get_last_valid_column_timestamp() const {
+    auto col = get_last_valid_column();
+    if (col < 0) {
+        return 0;
+    }
+    return timestamp()[col];
+}
+
+int LidarScan::get_first_valid_column() const {
     auto stat = status();
-    for (int i = 0; i < timestamp().size(); i++) {
+    for (int i = 0; i < stat.size(); ++i) {
         if ((stat[i] & 1) > 0) {
-            return timestamp()[i];
+            return i;
         }
     }
-    return 0;
+    return -1;
+}
+
+int LidarScan::get_last_valid_column() const {
+    auto stat = status();
+    for (int i = stat.size() - 1; i >= 0; --i) {
+        if ((stat[i] & 1) > 0) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 Eigen::Ref<LidarScan::Header<uint16_t>> LidarScan::measurement_id() {
@@ -553,13 +601,22 @@ bool LidarScan::complete(sensor::ColumnWindow window) const {
             .unaryExpr([](uint32_t s) { return s & 0x01; })
             .isConstant(0x01);
     } else {
-        return status.segment(0, end)
+        return status.segment(0, end + 1)
                    .unaryExpr([](uint32_t s) { return s & 0x01; })
                    .isConstant(0x01) &&
                status.segment(start, this->w - start)
                    .unaryExpr([](uint32_t s) { return s & 0x01; })
                    .isConstant(0x01);
     }
+}
+
+bool LidarScan::complete() const {
+    if (!sensor_info) {
+        throw std::runtime_error(
+            "LidarScan must have a valid sensor_info in order to compute "
+            "completeness");
+    }
+    return complete(sensor_info->format.column_window);
 }
 
 size_t LidarScan::packet_count() const { return packet_count_; }
@@ -782,12 +839,10 @@ LidarScan::Points cartesian(const Eigen::Ref<const img_t<uint32_t>>& range,
                             const XYZLut& lut) {
     if (range.cols() * range.rows() != lut.direction.rows())
         throw std::invalid_argument("unexpected image dimensions");
-    auto reshaped = Eigen::Map<const Eigen::Array<uint32_t, -1, 1>>(
-        range.data(), range.cols() * range.rows());
-    auto nooffset = lut.direction.colwise() * reshaped.cast<double>();
-    return (reshaped == 0)
-        .replicate<1, 3>()
-        .select(nooffset, nooffset + lut.offset);
+
+    LidarScan::Points points(range.rows() * range.cols(), 3);
+    cartesianT(points, range, lut.direction, lut.offset);
+    return points;
 }
 
 ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
@@ -808,28 +863,15 @@ ScanBatcher::ScanBatcher(size_t w, const sensor::packet_format& pf)
 ScanBatcher::ScanBatcher(const sensor::sensor_info& info)
     : ScanBatcher(info.format.columns_per_frame, sensor::get_format(info)) {
     // Calculate the number of packets required to have a complete scan
-    int max_packets = expected_packets;
-    if (info.format.column_window.second < info.format.column_window.first) {
-        // the valid azimuth window wraps through 0
-        int start_packet =
-            info.format.column_window.second / pf.columns_per_packet;
-        int end_packet =
-            info.format.column_window.first / pf.columns_per_packet;
-        expected_packets = start_packet + 1 + (max_packets - end_packet);
-        // subtract one if start and end are in the same block
-        if (start_packet == end_packet) {
-            expected_packets -= 1;
-        }
-    } else {
-        // no wrapping of azimuth the window through 0
-        int start_packet =
-            info.format.column_window.first / pf.columns_per_packet;
-        int end_packet =
-            info.format.column_window.second / pf.columns_per_packet;
-
-        expected_packets = end_packet - start_packet + 1;
-    }
+    expected_packets = info.format.packets_per_frame();
     sensor_info = std::make_shared<sensor::sensor_info>(info);
+}
+
+ScanBatcher::ScanBatcher(const std::shared_ptr<sensor::sensor_info>& info)
+    : ScanBatcher(info->format.columns_per_frame, sensor::get_format(*info)) {
+    // Calculate the number of packets required to have a complete scan
+    expected_packets = info->format.packets_per_frame();
+    sensor_info = info;
 }
 
 namespace {
@@ -1166,19 +1208,7 @@ void ScanBatcher::finalize_scan(LidarScan& ls) {
     finished_scan_id = ls.frame_id;
 }
 
-bool ScanBatcher::operator()(const uint8_t* packet_buf, LidarScan& ls) {
-    return this->operator()(packet_buf, 0, ls);
-}
-
-bool ScanBatcher::operator()(const uint8_t* packet_buf, uint64_t packet_ts,
-                             LidarScan& ls) {
-    // backwards compatibility method
-    // induces an extra copy but this is a deprecated method
-    sensor::LidarPacket packet(pf.lidar_packet_size);
-    packet.host_timestamp = packet_ts;
-    std::memcpy(packet.buf.data(), packet_buf, packet.buf.size());
-    return this->operator()(packet, ls);
-}
+void ScanBatcher::reset() { cached_packet = false; }
 
 FieldType::FieldType() {}
 
@@ -1200,56 +1230,4 @@ bool operator!=(const FieldType& a, const FieldType& b) {
            a.field_class != b.field_class || a.extra_dims != b.extra_dims;
 }
 
-namespace pose_util {
-void dewarp(Eigen::Ref<Points> dewarped, const Eigen::Ref<const Points> points,
-            const Eigen::Ref<const Poses> poses) {
-    const size_t W = poses.rows();                  // Number of pose matrices
-    const size_t H = points.rows() / poses.rows();  // Points per pose matrix
-
-#ifdef __OUSTER_UTILIZE_OPENMP__
-#pragma omp parallel for schedule(static)
-#endif
-    for (size_t w = 0; w < W; ++w) {
-        Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>
-            pose_matrix(poses.row(w).data());
-        const Eigen::Matrix3d rotation = pose_matrix.topLeftCorner<3, 3>();
-        const Eigen::Vector3d translation = pose_matrix.topRightCorner<3, 1>();
-
-        for (size_t i = 0; i < H; ++i) {
-            const Eigen::Index ix = i * W + w;
-            Eigen::Map<const Eigen::Vector3d> s(points.row(ix).data());
-            Eigen::Map<Eigen::Vector3d> p(dewarped.row(ix).data());
-            p = rotation * s + translation;
-        }
-    }
-}
-
-Points dewarp(const Eigen::Ref<const Points> points,
-              const Eigen::Ref<const Poses> poses) {
-    Points dewarped(points.rows(), points.cols());
-    dewarp(dewarped, points, poses);
-    return dewarped;
-}
-
-void transform(Eigen::Ref<pose_util::Points> transformed,
-               const Eigen::Ref<const pose_util::Points> points,
-               const Eigen::Ref<const pose_util::Pose> pose) {
-    Eigen::Matrix<double, 4, 4, Eigen::RowMajor> pose_matrix =
-        Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>(
-            pose.data());
-
-    Eigen::Matrix3d rotation = pose_matrix.topLeftCorner<3, 3>();
-    Eigen::Vector3d translation = pose_matrix.topRightCorner<3, 1>();
-
-    transformed =
-        (points * rotation.transpose()).rowwise() + translation.transpose();
-}
-
-Points transform(const Eigen::Ref<const Points> points,
-                 const Eigen::Ref<const Pose> pose) {
-    Points transformed(points.rows(), points.cols());
-    transform(transformed, points, pose);
-    return transformed;
-}
-}  // namespace pose_util
 }  // namespace ouster

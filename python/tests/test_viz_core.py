@@ -1,6 +1,6 @@
 import numpy as np
 from .conftest import MockPointViz
-from ouster.sdk.client import ChanField, LidarScan, SensorInfo, LidarMode, Version, first_valid_column_ts, FieldClass
+from ouster.sdk.core import ChanField, LidarScan, SensorInfo, LidarMode, Version, FieldClass
 from ouster.sdk.viz import WindowCtx, MouseButtonEvent, MouseButton, EventModifierKeys
 from ouster.sdk.viz.model import LidarScanVizModel, SensorModel, Palettes
 from ouster.sdk.viz.core import LidarScanViz, _Seekable
@@ -112,7 +112,7 @@ def test_amend_view_modes_1():
     sensor = SensorModel(meta)
 
     # By default it has no cloud or image modes.
-    assert sensor._cloud_modes == {}
+    assert [m for m in sensor._cloud_modes] == ['RING']
     assert sensor._image_modes == {}
 
     # Let's create a scan that originated from this sensor.
@@ -124,7 +124,7 @@ def test_amend_view_modes_1():
 
     sensor._amend_view_modes(scan)
 
-    expected_cloud_names = [ChanField.NEAR_IR,
+    expected_cloud_names = ['RING', ChanField.NEAR_IR,
         ChanField.RANGE, ChanField.REFLECTIVITY, ChanField.SIGNAL]
     expected_image_names = ['NEAR_IR', 'RANGE', 'RANGE2',
                             'REFLECTIVITY', 'REFLECTIVITY2', 'SIGNAL', 'SIGNAL2']
@@ -170,7 +170,7 @@ def test_amend_view_modes_2():
     model._amend_view_modes_all([scan, scan])
 
     expected_cloud_names = [ChanField.NEAR_IR,
-        ChanField.RANGE, ChanField.REFLECTIVITY, ChanField.SIGNAL]
+        ChanField.RANGE, ChanField.REFLECTIVITY, 'RING', ChanField.SIGNAL]
     expected_image_names = ['NEAR_IR', 'RANGE', 'RANGE2',
                             'REFLECTIVITY', 'REFLECTIVITY2', 'SIGNAL', 'SIGNAL2']
 
@@ -215,7 +215,7 @@ def test_amend_view_modes_3():
 
     # Now all view modes are present
     expected_cloud_names = [ChanField.NEAR_IR,
-        ChanField.RANGE, ChanField.REFLECTIVITY, ChanField.SIGNAL]
+        ChanField.RANGE, ChanField.REFLECTIVITY, 'RING', ChanField.SIGNAL]
     expected_image_names = [ChanField.NEAR_IR, ChanField.RANGE, ChanField.RANGE2,
         ChanField.REFLECTIVITY, ChanField.REFLECTIVITY2, ChanField.SIGNAL, ChanField.SIGNAL2]
 
@@ -248,7 +248,8 @@ def test_seekable_next():
     """
     scan = LidarScan(1, 1)
     scan.timestamp[0] = 1
-    assert first_valid_column_ts(scan) == 1
+    scan.status[0] = 1
+    assert scan.get_first_valid_column_timestamp() == 1
     scan2 = LidarScan(1, 1)
     scan2.timestamp[0] = 2
 
@@ -256,6 +257,7 @@ def test_seekable_next():
         for i in range(100):
             yield (scan,)
             yield (scan2,)
+            yield []  # signal a loop
 
     seekable = _Seekable(scan_generator(), 10)
     next(seekable)
@@ -263,7 +265,7 @@ def test_seekable_next():
     next(seekable)
     assert seekable.scan_num == 2
     next(seekable)
-    assert seekable.scan_num == 1
+    assert seekable.scan_num == 0  # wrap back around to the beginning
 
     # next_ind is affected by seek
     assert not seekable.seek(-1)
@@ -274,12 +276,14 @@ def test_seekable_next():
     assert seekable.seek(2)
     assert seekable.scan_num == 2
     next(seekable)  # there is no next scan, so we'll wrap around to the beginning
-    assert seekable.scan_num == 1
+    assert seekable.scan_num == 0
 
     # next after seek works as expected
     assert seekable.seek(0)
     assert (scan,) == next(seekable)
     assert (scan2,) == next(seekable)
+    assert [] == next(seekable)
+    assert (scan,) == next(seekable)
 
 
 def test_seekable_next_2():
@@ -482,3 +486,12 @@ def test_viz_doesnt_crash_when_image_sizes_zero():
         MouseButtonEvent.MOUSE_BUTTON_PRESSED,
         EventModifierKeys.MOD_NONE
     )
+
+
+def test_viz_doesnt_crash_when_scans_none():
+    # OSDK-108: don't crash if no scans have been received yet
+    # and some element (e.g. the OSD) is redrawn.
+    meta = SensorInfo.from_default(LidarMode.MODE_1024x10)
+    viz = LidarScanViz([meta], MockPointViz())
+    assert viz._scans == []
+    viz._draw_update_camera_pose()

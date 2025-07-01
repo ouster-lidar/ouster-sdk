@@ -5,7 +5,7 @@ find_package(libtins REQUIRED)
 include(Coverage)
 
 # ==== Libraries ====
-add_library(ouster_pcap STATIC src/pcap.cpp src/os_pcap.cpp src/indexed_pcap_reader.cpp src/ip_reassembler.cpp)
+add_library(ouster_pcap STATIC src/pcap.cpp src/os_pcap.cpp src/indexed_pcap_reader.cpp src/ip_reassembler.cpp src/pcap_packet_source.cpp src/pcap_scan_source.cpp)
 target_include_directories(ouster_pcap SYSTEM PRIVATE
   ${PCAP_INCLUDE_DIR})
 target_include_directories(ouster_pcap PUBLIC

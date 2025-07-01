@@ -46,17 +46,45 @@ struct OUSTER_API_CLASS packet_info {
  */
 class OUSTER_API_CLASS PcapReader {
    protected:
-    std::unique_ptr<pcap_impl> impl;    ///< Private implementation pointer
-    packet_info info;                   ///< Cached packet info
-    std::map<int, int> fragment_count;  ///< Map to count fragments per packet
-    uint8_t* data;                      ///< Cached packet data
+    std::unique_ptr<pcap_impl> impl_;  ///< Private implementation pointer
+    packet_info info_;                 ///< Cached packet info
+    uint8_t* data_;                    ///< Cached packet data
 
    public:
     /**
      * @param[in] file A filepath of the pcap to read
      */
+    explicit OUSTER_API_FUNCTION PcapReader(const std::string& file);
+
+    // Deleted due to the unique pointer not working with
+    // the following
     OUSTER_API_FUNCTION
-    PcapReader(const std::string& file);
+    PcapReader(const PcapReader& other) = delete;
+
+    /**
+     * Move construct from one PcapReader to a new PcapReader.
+     *
+     * @param[in] other The other PcapReader to move from.
+     */
+    OUSTER_API_FUNCTION
+    PcapReader(PcapReader&& other);
+
+    // Deleted due to the unique pointer not working with
+    // the following
+    OUSTER_API_FUNCTION
+    PcapReader& operator=(PcapReader& other) = delete;
+
+    /**
+     * Assign move resources from one PcapReader to another.
+     *
+     * @param[in] other The other PcapReader to move from.
+     */
+    OUSTER_API_FUNCTION
+    PcapReader& operator=(PcapReader&& other);
+
+    /**
+     * Destructor for cleaning up after PcapReader.
+     */
     OUSTER_API_FUNCTION
     virtual ~PcapReader();
 
@@ -155,6 +183,36 @@ class OUSTER_API_CLASS PcapWriter {
     OUSTER_API_FUNCTION
     PcapWriter(const std::string& file, PacketEncapsulation encap,
                uint16_t frag_size);
+
+    // Deleted due to the unique pointer not working with
+    // the following
+    OUSTER_API_FUNCTION
+    PcapWriter(const PcapWriter& other) = delete;
+
+    /**
+     * Move construct from one PcapWriter to a new PcapWriter.
+     *
+     * @param[in] other The other PcapWriter to move from.
+     */
+    OUSTER_API_FUNCTION
+    PcapWriter(PcapWriter&& other);
+
+    // Deleted due to the unique pointer not working with
+    // the following
+    OUSTER_API_FUNCTION
+    PcapWriter& operator=(PcapWriter& other) = delete;
+
+    /**
+     * Assign move resources from one PcapWriter to another.
+     *
+     * @param[in] other The other PcapWriter to move from.
+     */
+    OUSTER_API_FUNCTION
+    PcapWriter& operator=(PcapWriter&& other);
+
+    /**
+     * Destructor for cleaning up after PcapWriter.
+     */
     OUSTER_API_FUNCTION
     virtual ~PcapWriter();
 
@@ -204,23 +262,13 @@ class OUSTER_API_CLASS PcapWriter {
     void close();
 
    protected:
-    std::unique_ptr<pcap_writer_impl> impl;  ///< Internal data
+    std::unique_ptr<pcap_writer_impl> impl_;  ///< Internal data
 
-    uint16_t id;                ///< An incrementing id to record packets with
-    PacketEncapsulation encap;  ///< Encapsulation to record with
-    uint16_t frag_size;         ///< Fragmentation size(not currently used)
-    bool closed;
+    /// @todo figure out if some of these are still needed
+    uint16_t id_;                ///< An incrementing id to record packets with
+    PacketEncapsulation encap_;  ///< Encapsulation to record with
+    uint16_t frag_size_;         ///< Fragmentation size(not currently used)
+    bool closed_;
 };
-
-/**
- * To string method for packet info structs.
- *
- * @param[inout] stream_in The pre-existing ostream to concat with data.
- * @param[in] data The packet_info to output.
- *
- * @return The new output stream containing concatted stream_in and data.
- */
-OUSTER_API_FUNCTION
-std::ostream& operator<<(std::ostream& stream_in, const packet_info& data);
 }  // namespace sensor_utils
 }  // namespace ouster

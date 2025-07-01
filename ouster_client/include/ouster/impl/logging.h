@@ -87,6 +87,10 @@ class Logger {
 
     void log(LOG_LEVEL level, const std::string& msg);
 
+    void disable_auto_newline();
+
+    void enable_auto_newline();
+
    private:
     // Base Case
     template <typename T>
@@ -110,6 +114,7 @@ class Logger {
         const std::string& format_string);
 
     static const std::string logger_name;
+    static const std::string logger_pattern;
     std::unique_ptr<internal_logger> internal_logger_;
 };
 }  // namespace impl

@@ -1,52 +1,61 @@
-=================================
 Module :mod:`ouster.sdk.examples`
 =================================
 
-.. contents::
-   :local:
-   :depth: 4
-
-.. automodule:: ouster.sdk.examples
-
-----
-
-
-Client Examples :mod:`ouster.sdk.examples.client`
-=================================================
+Client examples
+---------------
 
 .. automodule:: ouster.sdk.examples.client
    :members:
-
+   :undoc-members:
+   :show-inheritance:
 
 ----
 
+Colormaps examples
+------------------
 
-PCAP Examples :mod:`ouster.sdk.examples.pcap`
-=============================================
+.. automodule:: ouster.sdk.examples.colormaps
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+----
+
+OSF examples
+------------
+
+.. automodule:: ouster.sdk.examples.osf
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+----
+
+PCAP examples
+-------------
 
 .. automodule:: ouster.sdk.examples.pcap
    :members:
+   :undoc-members:
+   :show-inheritance:
+
 
 ----
 
-
-Open3D Examples :mod:`ouster.sdk.examples.open3d`
-=================================================
-
-.. automodule:: ouster.sdk.examples.open3d_example
-   :members:
-
-----
-
-Examples ``PointViz`` :mod:`ouster.sdk.examples.viz`
-====================================================
+Viz examples
+------------
 
 .. automodule:: ouster.sdk.examples.viz
    :members:
+   :undoc-members:
+   :show-inheritance:
 
+----
 
-Reference Code :mod:`ouster.sdk.examples.reference`
-===================================================
+Additional references
+---------------------
 
 .. automodule:: ouster.sdk.examples.reference
    :members:
+   :undoc-members:
+   :show-inheritance:

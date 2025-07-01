@@ -57,6 +57,7 @@ GLCloud::GLCloud(const Cloud& cloud) : point_size{cloud.point_size_} {
         throw std::logic_error("GLCloud not initialized");
 
     // allocate gl object names
+    glGenVertexArrays(1, &vao);
     glGenBuffers(1, &xyz_buffer);
     glGenBuffers(1, &off_buffer);
     glGenBuffers(1, &range_buffer);
@@ -65,6 +66,8 @@ GLCloud::GLCloud(const Cloud& cloud) : point_size{cloud.point_size_} {
     glGenBuffers(1, &trans_index_buffer);
     glGenTextures(1, &transform_texture);
     glGenTextures(1, &palette_texture);
+
+    initialize_vao();
 }
 
 GLCloud::~GLCloud() {
@@ -76,6 +79,7 @@ GLCloud::~GLCloud() {
     glDeleteBuffers(1, &trans_index_buffer);
     glDeleteTextures(1, &transform_texture);
     glDeleteTextures(1, &palette_texture);
+    glDeleteVertexArrays(1, &vao);
 }
 
 /**
@@ -89,10 +93,75 @@ static inline size_t ti_key(size_t n, size_t w) {
     return w + (n << sizeof(size_t) * 8 / 2);
 }
 
+void GLCloud::initialize_vao() {
+    glBindVertexArray(vao);
+    glEnableVertexAttribArray(GLCloud::cloud_ids.mask_id);
+    glBindBuffer(GL_ARRAY_BUFFER, mask_buffer);
+    glVertexAttribPointer(GLCloud::cloud_ids.mask_id,
+                          4,         // size
+                          GL_FLOAT,  // type
+                          GL_FALSE,  // normalized?
+                          0,         // stride
+                          (void*)0   // array buffer offset
+    );
+
+    glEnableVertexAttribArray(GLCloud::cloud_ids.xyz_id);
+    glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
+    glVertexAttribPointer(GLCloud::cloud_ids.xyz_id,
+                          3,         // size
+                          GL_FLOAT,  // type
+                          GL_FALSE,  // normalized?
+                          0,         // stride
+                          (void*)0   // array buffer offset
+    );
+
+    glEnableVertexAttribArray(GLCloud::cloud_ids.off_id);
+    glBindBuffer(GL_ARRAY_BUFFER, off_buffer);
+    glVertexAttribPointer(GLCloud::cloud_ids.off_id,
+                          3,         // size
+                          GL_FLOAT,  // type
+                          GL_FALSE,  // normalized?
+                          0,         // stride
+                          (void*)0   // array buffer offset
+    );
+
+    glEnableVertexAttribArray(GLCloud::cloud_ids.trans_index_id);
+    glBindBuffer(GL_ARRAY_BUFFER, trans_index_buffer);
+    glVertexAttribPointer(GLCloud::cloud_ids.trans_index_id,
+                          1,         // size
+                          GL_FLOAT,  // type
+                          GL_FALSE,  // normalized?
+                          0,         // stride
+                          (void*)0   // array buffer offset
+    );
+
+    glEnableVertexAttribArray(GLCloud::cloud_ids.range_id);
+    glBindBuffer(GL_ARRAY_BUFFER, range_buffer);
+    glVertexAttribPointer(GLCloud::cloud_ids.range_id,
+                          1,         // size
+                          GL_FLOAT,  // type
+                          GL_FALSE,  // normalized?
+                          0,         // stride
+                          (void*)0   // array buffer offset
+    );
+
+    glEnableVertexAttribArray(GLCloud::cloud_ids.key_id);
+    glBindBuffer(GL_ARRAY_BUFFER, key_buffer);
+    glVertexAttribPointer(GLCloud::cloud_ids.key_id,
+                          4,         // size
+                          GL_FLOAT,  // type
+                          GL_FALSE,  // normalize
+                          0,         // stride
+                          (void*)0   // array buffer offset
+    );
+    glBindVertexArray(0);
+}
+
 /*
  * Render the point cloud with the point of view of the Camera
  */
 void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
+    glBindVertexArray(vao);
     // transformation indices buffers cache
     static std::unordered_map<size_t, std::vector<GLfloat>> trans_indexes;
 
@@ -196,73 +265,8 @@ void GLCloud::draw(const WindowCtx&, const CameraData& camera, Cloud& cloud) {
     // put the shader into mono or rgb mode
     glUniform1i(GLCloud::cloud_ids.mono_id, mono ? 1 : 0);
 
-    glEnableVertexAttribArray(GLCloud::cloud_ids.mask_id);
-    glBindBuffer(GL_ARRAY_BUFFER, mask_buffer);
-    glVertexAttribPointer(GLCloud::cloud_ids.mask_id,
-                          4,         // size
-                          GL_FLOAT,  // type
-                          GL_FALSE,  // normalized?
-                          0,         // stride
-                          (void*)0   // array buffer offset
-    );
-
-    glEnableVertexAttribArray(GLCloud::cloud_ids.xyz_id);
-    glBindBuffer(GL_ARRAY_BUFFER, xyz_buffer);
-    glVertexAttribPointer(GLCloud::cloud_ids.xyz_id,
-                          3,         // size
-                          GL_FLOAT,  // type
-                          GL_FALSE,  // normalized?
-                          0,         // stride
-                          (void*)0   // array buffer offset
-    );
-
-    glEnableVertexAttribArray(GLCloud::cloud_ids.off_id);
-    glBindBuffer(GL_ARRAY_BUFFER, off_buffer);
-    glVertexAttribPointer(GLCloud::cloud_ids.off_id,
-                          3,         // size
-                          GL_FLOAT,  // type
-                          GL_FALSE,  // normalized?
-                          0,         // stride
-                          (void*)0   // array buffer offset
-    );
-
-    glEnableVertexAttribArray(GLCloud::cloud_ids.trans_index_id);
-    glBindBuffer(GL_ARRAY_BUFFER, trans_index_buffer);
-    glVertexAttribPointer(GLCloud::cloud_ids.trans_index_id,
-                          1,         // size
-                          GL_FLOAT,  // type
-                          GL_FALSE,  // normalized?
-                          0,         // stride
-                          (void*)0   // array buffer offset
-    );
-
-    glEnableVertexAttribArray(GLCloud::cloud_ids.range_id);
-    glBindBuffer(GL_ARRAY_BUFFER, range_buffer);
-    glVertexAttribPointer(GLCloud::cloud_ids.range_id,
-                          1,         // size
-                          GL_FLOAT,  // type
-                          GL_FALSE,  // normalized?
-                          0,         // stride
-                          (void*)0   // array buffer offset
-    );
-
-    glEnableVertexAttribArray(GLCloud::cloud_ids.key_id);
-    glBindBuffer(GL_ARRAY_BUFFER, key_buffer);
-    glVertexAttribPointer(GLCloud::cloud_ids.key_id,
-                          4,         // size
-                          GL_FLOAT,  // type
-                          GL_FALSE,  // normalize
-                          0,         // stride
-                          (void*)0   // array buffer offset
-    );
-
     glDrawArrays(GL_POINTS, 0, cloud.n_);
-    glDisableVertexAttribArray(GLCloud::cloud_ids.mask_id);
-    glDisableVertexAttribArray(GLCloud::cloud_ids.xyz_id);
-    glDisableVertexAttribArray(GLCloud::cloud_ids.off_id);
-    glDisableVertexAttribArray(GLCloud::cloud_ids.trans_index_id);
-    glDisableVertexAttribArray(GLCloud::cloud_ids.range_id);
-    glDisableVertexAttribArray(GLCloud::cloud_ids.key_id);
+    glBindVertexArray(0);
 }
 
 void GLCloud::initialize() {

@@ -37,7 +37,8 @@ TEST_F(OsfFileTest, OpenOsfFileNominally) {
     OsfFile osf_file(
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
     EXPECT_TRUE(osf_file);
-    EXPECT_EQ(osf_file.version(), OSF_VERSION::V_2_1);
+    ouster::util::version expected_version{2, 1, 0};
+    EXPECT_EQ(osf_file.version(), expected_version);
     EXPECT_EQ(osf_file.size(), 1025780);
     EXPECT_EQ(osf_file.offset(), 0);
 
@@ -99,7 +100,8 @@ TEST_F(OsfFileTest, OpenOsfFileWithStandardRead) {
     OsfFile osf_file(
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf"));
     EXPECT_TRUE(osf_file);
-    EXPECT_EQ(osf_file.version(), OSF_VERSION::V_2_1);
+    ouster::util::version expected_version{2, 1, 0};
+    EXPECT_EQ(osf_file.version(), expected_version);
     EXPECT_EQ(osf_file.size(), 1025780);
     EXPECT_EQ(osf_file.offset(), 0);
 
@@ -118,7 +120,16 @@ TEST_F(OsfFileTest, OpenOsfFileHandleNonExistent) {
 
     EXPECT_EQ(0, osf_file.size());
     EXPECT_EQ(test_file_name, osf_file.filename());
-    EXPECT_EQ(OSF_VERSION::V_INVALID, osf_file.version());
+    EXPECT_THROW(
+        {
+            try {
+                osf_file.version();
+            } catch (const std::runtime_error& error) {
+                EXPECT_STREQ(error.what(), "Invalid file version.");
+                throw;
+            }
+        },
+        std::runtime_error);
     EXPECT_EQ(0, osf_file.offset());
 
     // Access to a bad file is an error

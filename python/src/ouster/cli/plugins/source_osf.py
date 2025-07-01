@@ -2,7 +2,7 @@ import click
 
 from typing import Any, Iterator, Dict, cast
 
-from ouster.sdk import client
+from ouster.sdk import core
 import ouster.sdk._bindings.osf as osf
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
@@ -39,33 +39,6 @@ def osf_dump(ctx: SourceCommandContext, click_ctx: click.core.Context, short: bo
         osf.init_logger("error")
 
     print(osf.dump_metadata(file, not short))
-
-
-@click.command
-@click.option('-n',
-              type=int,
-              default=0,
-              help="Index of lidar",
-              show_default=True)
-@click.pass_context
-@source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED,
-                     retrieve_click_context=True)
-def osf_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context, n: int) -> None:
-    """
-    Display sensor metadata about the SOURCE.
-    """
-    file = ctx.source_uri or ""
-
-    reader = osf.Reader(file)
-    msensors = reader.meta_store.find(osf.LidarSensor)
-    index = 0
-    for sensor_id, sensor_meta in msensors.items():
-        if index == n:
-            print(sensor_meta.info.to_json_string())
-            return
-        index = index + 1
-
-    raise click.ClickException(f"Sensor Index {n} Not Found")
 
 
 @click.command
@@ -187,6 +160,7 @@ def osf_info(ctx: SourceCommandContext, click_ctx: click.core.Context,
                         obj["fields"] = None
 
     print(f"Filename: {file}\nLayout: {orig_layout}")
+    print(f"OSF Version: {reader.version}")
     print(f"Metadata ID: '{reader.metadata_id}'")
     print(f"Size: {size/1000000} MB")
     print(f"Start: {start/1000000000.0} ({_nanos_to_string(start)})")
@@ -298,17 +272,17 @@ def osf_parse(ctx: SourceCommandContext, click_ctx: click.core.Context,
                 obj = m.decode()
                 d = "[D]" if obj else ""
                 if m.of(osf.LidarScanStream):
-                    ls = cast(client.LidarScan, obj)
+                    ls = cast(core.LidarScan, obj)
 
                     d = d + \
-                        (" [poses: YES]" if client.poses_present(ls) else "")
+                        (" [poses: YES]" if core.poses_present(ls) else "")
 
                     if verbose:
                         verbose_str += f"{ls}"
 
                     if check_raw_headers:
                         d = d + " " if d else ""
-                        if client.ChanField.RAW_HEADERS in ls.fields:
+                        if core.ChanField.RAW_HEADERS in ls.fields:
                             sinfo = scan_stream_sensor[m.id].info
 
                             # roundtrip: LidarScan -> packets -> LidarScan

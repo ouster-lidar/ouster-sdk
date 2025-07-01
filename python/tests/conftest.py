@@ -10,11 +10,11 @@ from pathlib import Path
 
 from more_itertools import partition
 import pytest
-from ouster.sdk import client, pcap
+from ouster.sdk import core, pcap
 from ouster.sdk.viz import Cloud
 
-pytest.register_assert_rewrite('ouster.sdk.client._digest')
-import ouster.sdk.client._digest as digest  # noqa
+pytest.register_assert_rewrite('ouster.sdk.core._digest')
+import ouster.sdk.core._digest as digest  # noqa
 
 _has_mapping = False
 try:
@@ -47,6 +47,7 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     """Register custom "interactive" marker."""
     config.addinivalue_line("markers", "interactive: run interactive tests")
+    config.addinivalue_line("markers", "performance: perform longer versions of performance tests")
 
 
 def pytest_collection_modifyitems(items, config) -> None:
@@ -101,52 +102,68 @@ def stream_digest(base_name: str):
 def meta(base_name: str):
     meta_path = path.join(PCAPS_DATA_DIR, f"{base_name}.json")
     with open(meta_path, 'r') as f:
-        return client.SensorInfo(f.read())
+        return core.SensorInfo(f.read())
 
 
 @pytest.fixture
 def meta_2_0():
     meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['legacy-2.0']}.json")
     with open(meta_path, 'r') as f:
-        return client.SensorInfo(f.read())
+        return core.SensorInfo(f.read())
 
 
 @pytest.fixture
-def real_pcap_path(base_name: str, meta: client.SensorInfo) -> str:
+def real_pcap_path(base_name: str, meta: core.SensorInfo) -> str:
     return path.join(PCAPS_DATA_DIR, f"{base_name}.pcap")
 
 
 @pytest.fixture
 def real_pcap(real_pcap_path: str,
-              meta: client.SensorInfo) -> Iterator[pcap.Pcap]:
-    pcap_obj = pcap.Pcap(real_pcap_path, meta)
+              meta: core.SensorInfo) -> Iterator[pcap.PcapPacketSource]:
+    pcap_obj = pcap.PcapPacketSource(real_pcap_path, sensor_info=[meta])
     yield pcap_obj
     pcap_obj.close()
 
 
 @pytest.fixture
-def packet(real_pcap_path: str, meta: client.SensorInfo) -> client.LidarPacket:
+def packet(real_pcap_path: str, meta: core.SensorInfo) -> core.LidarPacket:
     # note: don't want to depend on the pcap fixture, since this consumes the
     # iterator and it can be shared
-    with closing(pcap.Pcap(real_pcap_path, meta)) as real_pcap:
-        for p in real_pcap:
-            if isinstance(p, client.LidarPacket):
+    with closing(pcap.PcapPacketSource(real_pcap_path, sensor_info=[meta])) as real_pcap:
+        for idx, p in real_pcap:
+            if isinstance(p, core.LidarPacket):
                 return p
         raise RuntimeError("Failed to find lidar packet in test fixture")
 
 
 @pytest.fixture
 def packets(real_pcap_path: str,
-            meta: client.SensorInfo) -> client.PacketSource:
-    with closing(pcap.Pcap(real_pcap_path, meta)) as real_pcap:
+            meta: core.SensorInfo) -> core.PacketSource:
+    with closing(pcap.PcapPacketSource(real_pcap_path, sensor_info=[meta])) as real_pcap:
         ps = list(real_pcap)
-        return client.Packets(ps, meta)
+        list2 = []
+        for idx, p in ps:
+            list2.append(p)
+        return core.Packets(list2, meta)
 
 
 @pytest.fixture
-def scan(packets: client.PacketSource) -> client.LidarScan:
-    scans = client.Scans(packets)
-    return next(iter(scans))
+def scan(packets: core.PacketSource) -> core.LidarScan:
+    batcher = core.ScanBatcher(packets.sensor_info[0])
+    scan = core.LidarScan(packets.sensor_info[0])
+
+    def batch():
+        nonlocal scan
+        new_scan = True
+        for idx, p in packets:
+            new_scan = False
+            if isinstance(p, core.LidarPacket) and batcher(p, scan):
+                yield scan
+                scan = core.LidarScan(packets.metadata)
+                new_scan = True
+        if not new_scan:
+            yield scan
+    return next(iter(batch()))
 
 
 @pytest.fixture(scope="package")

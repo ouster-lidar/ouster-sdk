@@ -1,21 +1,21 @@
-#  type: ignore
 """Miscellaneous utilities."""
 
 import os
 import json
-from typing import Optional, Tuple, List
+import warnings
+from typing import Optional, Tuple, List, cast
 
-from ouster.sdk import client
+from ouster.sdk import core
 import numpy as np
 import tarfile
 import re
 
 
-def fov_vertical(info: client.SensorInfo) -> float:
+def fov_vertical(info: core.SensorInfo) -> float:
     altitude_zeros = np.count_nonzero(info.beam_altitude_angles == 0.0)
     if altitude_zeros > 1:
         altitudes = info.beam_altitude_angles[np.nonzero(
-            info.beam_altitude_angles)]
+            info.beam_altitude_angles)]  # type: ignore
     else:
         altitudes = info.beam_altitude_angles
 
@@ -27,14 +27,14 @@ def fov_vertical(info: client.SensorInfo) -> float:
     return fov_vertical
 
 
-def fov_horizontal(info: client.SensorInfo) -> float:
+def fov_horizontal(info: core.SensorInfo) -> float:
     if len(info.beam_azimuth_angles) == info.format.pixels_per_column:
         fov_horizontal = 360.0
     else:
         azimuth_zeros = np.count_nonzero(info.beam_azimuth_angles == 0.0)
         if azimuth_zeros > 1:
             azimuths = info.beam_azimuth_angles[np.nonzero(
-                info.beam_azimuth_angles)]
+                info.beam_azimuth_angles)]  # type: ignore
         else:
             azimuths = info.beam_azimuth_angles
         fov_horizontal = np.max(azimuths) - np.min(azimuths)
@@ -46,7 +46,7 @@ def fov_horizontal(info: client.SensorInfo) -> float:
     return fov_horizontal
 
 
-def img_aspect_ratio(info: client.SensorInfo) -> float:
+def img_aspect_ratio(info: core.SensorInfo) -> float:
     """Returns 2D image aspect ratio based on sensor FOV angles.
 
     Uses the order:
@@ -55,9 +55,9 @@ def img_aspect_ratio(info: client.SensorInfo) -> float:
     return fov_vertical(info) / fov_horizontal(info)
 
 
-def quatToRotMat(q: np.ndarray) -> np.ndarray:
+def quaternion_to_rotation_matrix(q: np.ndarray) -> np.ndarray:
     """Converts Quaternion [w, x, y, z] to Rotation [3x3] matrix."""
-    (q0, q1, q2, q3) = q
+    (q0, q1, q2, q3) = q / np.linalg.norm(q)
     # yapf: disable
     # autopep8: off
     return np.array([
@@ -69,10 +69,44 @@ def quatToRotMat(q: np.ndarray) -> np.ndarray:
     # yapf: enable
 
 
-def quatPoseToHomMat(qp: np.ndarray) -> np.ndarray:
+def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
+    """Converts a Rotation [3x3] matrix to Quaternion [w, x, y, z]."""
+    # yapf: disable
+    # autopep8: off
+    tr = np.trace(R)
+    if tr > 0:
+        S = 0.5 / np.sqrt(tr + 1.0)
+        w = 0.25 / S
+        x = (R[2, 1] - R[1, 2]) * S
+        y = (R[0, 2] - R[2, 0]) * S
+        z = (R[1, 0] - R[0, 1]) * S
+    elif (R[0, 0] > R[1, 1]) and (R[0, 0] > R[2, 2]):
+        S = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+        w = (R[2, 1] - R[1, 2]) / S
+        x = 0.25 * S
+        y = (R[0, 1] + R[1, 0]) / S
+        z = (R[0, 2] + R[2, 0]) / S
+    elif R[1, 1] > R[2, 2]:
+        S = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
+        w = (R[0, 2] - R[2, 0]) / S
+        x = (R[0, 1] + R[1, 0]) / S
+        y = 0.25 * S
+        z = (R[1, 2] + R[2, 1]) / S
+    else:
+        S = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+        w = (R[1, 0] - R[0, 1]) / S
+        x = (R[0, 2] + R[2, 0]) / S
+        y = (R[1, 2] + R[2, 1]) / S
+        z = 0.25 * S
+    return np.array([w, x, y, z])
+    # autopep8: on
+    # yapf: enable
+
+
+def position_quaternion_to_transform(p: np.ndarray, q: np.ndarray) -> np.ndarray:
     """Converts Quaternion + Pose [7] vector to homogeneous [4x4] matrix."""
-    rotMat = quatToRotMat(qp[:4])
-    return np.r_[np.c_[rotMat, qp[4:]], [[0, 0, 0, 1]]]
+    r = quaternion_to_rotation_matrix(q)
+    return np.r_[np.c_[r, p], [[0, 0, 0, 1]]]
 
 
 def _parse_extrinsics_file(ext_file: str,
@@ -105,12 +139,10 @@ def _parse_extrinsics_json(json_data: str,
         return []
 
     def transform_to_elem(t: dict) -> Tuple[np.ndarray, str, str]:
-        quat_pose = np.array([
-            t["q_w"], t["q_x"], t["q_y"], t["q_z"], t["p_x"], t["p_y"],
-            t["p_z"]
-        ])
-        return (quatPoseToHomMat(quat_pose), t["source_frame"],
-                t["destination_frame"])
+        position = np.array([t["p_x"], t["p_y"], t["p_z"]])
+        quat = np.array([t["q_w"], t["q_x"], t["q_y"], t["q_z"]])
+        return (position_quaternion_to_transform(position, quat),
+                t["source_frame"], t["destination_frame"])
 
     transforms = map(transform_to_elem, extrinsics_data["transforms"])
     dest_transforms = filter(lambda e: e[2] == destination_frame, transforms)
@@ -123,7 +155,7 @@ def _parse_extrinsics_json(json_data: str,
 
 def resolve_extrinsics(
     data_path: str,
-    infos: List[client.SensorInfo] = [],
+    infos: List[core.SensorInfo] = [],
     sensor_names: List[str] = []
 ) -> List[Optional[Tuple[np.ndarray, str]]]:
     """Find the extrinsics for a data_path and metadata sets.
@@ -135,10 +167,11 @@ def resolve_extrinsics(
           in the same directory as a .pcap `data_path`.
         - simulated data `extrinsics.json` in the `data_path` directory with
           the destination frame names `base_link`
-
-    TODO[pb]: Update and extend this method in future to also look for a set of
-              `extrinsics.json` files when it will be fully defined.
     """
+    warnings.warn("resolve_extrinsics is deprecated: specify the extrinsics file name explicitly "
+                  "when constructing a scan source instead. "
+                  "resolve_extrinsics will be removed in the upcoming release.",
+                  DeprecationWarning, stacklevel=2)
     snames = sensor_names or [str(info.sn) for info in infos]
     if os.path.splitext(data_path)[1] == ".pcap" or os.path.isdir(data_path):
         ext_file = os.path.join(
@@ -167,8 +200,10 @@ def resolve_extrinsics(
                     ]:
                         if fname in tar_names:
                             f = tar.extractfile(fname)
+                            if f is None:
+                                raise RuntimeError("File not found in .tar")
                             return _parse_extrinsics_json(
-                                f.read(),
+                                f.read().decode('utf-8'),
                                 sensor_names=snames,
                                 destination_frame="world",
                                 ext_source=f"tar:{fname}")
@@ -250,7 +285,7 @@ def xyzq_to_matrix(px, py, pz, qx, qy, qz, qw):
     """
     out = np.eye(4)
     out[:3, 3] = np.array([px, py, pz])
-    out[:3, :3] = quatToRotMat(np.array([qw, qx, qy, qz]))
+    out[:3, :3] = quaternion_to_rotation_matrix(np.array([qw, qx, qy, qz]))
     return out
 
 
@@ -276,20 +311,20 @@ def parse_extrinsics_from_string(extrinsics: str, degrees=True) -> np.ndarray:
     elements = extrinsics.split(sep)
     if len(elements) == 1:
         # treat as a filename if not 'identity' keyword
-        return np.eye(4) if elements[0] == "identity" else elements[0]
+        return np.eye(4) if elements[0] == "identity" else cast(np.ndarray, elements[0])
 
     try:
-        elements = [float(e) for e in elements]
+        float_elements = [float(e) for e in elements]
     except Exception:
         raise ValueError(f"extrinsics values: {elements} could not parsed as numbers")
 
-    if len(elements) == 6:
-        xyz = elements[:3]
-        rpy = [np.deg2rad(e) for e in elements[3:7]] if degrees else elements[3:7]
+    if len(float_elements) == 6:
+        xyz = float_elements[:3]
+        rpy = [np.deg2rad(e) for e in float_elements[3:7]] if degrees else float_elements[3:7]
         return xyzrpy_to_matrix(*xyz, *rpy)
-    if len(elements) == 7:
-        return xyzq_to_matrix(*elements)
-    if len(elements) == 16:
-        return np.array([*elements]).reshape((4, 4))
+    if len(float_elements) == 7:
+        return xyzq_to_matrix(*float_elements)
+    if len(float_elements) == 16:
+        return np.array([*float_elements]).reshape((4, 4))
     raise ValueError("Unsupported extrinsics format, check `ouster-cli source --help`"
                      " for proper usage")

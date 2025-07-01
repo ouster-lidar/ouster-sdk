@@ -1,72 +1,40 @@
 from typing import Optional
 from copy import copy
-from urllib import request
-import json
-import ouster.sdk.client as client
-from ouster.sdk.client import (SensorHttp, Version)
-from ouster.sdk._bindings.client import in_multicast
+import warnings
+import ouster.sdk.core as core
+from ouster.sdk.core import (SensorHttp, Version)
+from ouster.sdk._bindings.client import in_multicast, SHORT_HTTP_REQUEST_TIMEOUT_SECONDS
 
 MIN_AUTO_DEST_FW = Version.from_string("2.3.1")
-
-
-def _auto_detected_udp_dest(http_client: SensorHttp,
-                            current_config: Optional[client.SensorConfig] = None) -> Optional[str]:
-    """
-    Function which obtains the udp_dest the sensor would choose when automatically detecting
-    without changing anything else about sensor state
-
-    Args:
-        hostname: sensor hostname
-    Returns:
-        udp_dest: the udp_dest the sensor detects automatically
-    """
-    hostname = http_client.hostname()
-    orig_config = current_config or client.SensorConfig(http_client.get_config_params(True))
-
-    # escape ipv6 addresses
-    if hostname.count(':') >= 2:
-        hostname = "[" + hostname + "]"
-
-    if orig_config.udp_dest is not None and in_multicast(orig_config.udp_dest):
-        return orig_config.udp_dest
-
-    # get what the possible auto udp_dest is
-    config_endpoint = f"http://{hostname}/api/v1/sensor/config"
-    req = request.Request(config_endpoint + "?reinit=False&persist=False", method="POST")
-    req.add_header('Content-Type', 'application/json')
-    data = json.dumps({'udp_dest': '@auto'})
-    request.urlopen(req, data = data.encode()).read()
-
-    # get staged config
-    udp_auto_config = client.SensorConfig(http_client.get_config_params(False))
-
-    req = request.Request(config_endpoint + "?reinit=False&persist=False", method="POST")
-    req.add_header('Content-Type', 'application/json')
-    data = json.dumps({'udp_dest': str(orig_config.udp_dest)})
-    request.urlopen(req, data = data.encode()).read()
-
-    return udp_auto_config.udp_dest
 
 
 def build_sensor_config(http_client: SensorHttp,
                         lidar_port: Optional[int] = None,
                         imu_port: Optional[int] = None,
                         do_not_reinitialize: bool = False,
-                        no_auto_udp_dest: bool = False) -> client.SensorConfig:
+                        no_auto_udp_dest: bool = False) -> core.SensorConfig:
     """
     Depending on the args do_not_reinitialize, and no_auto_udp_dest
     determine a configuration for the sensor
     """
+    warnings.warn("build_sensor_config is deprecated: manually build the configuration or "
+                  "use the SensorScanSource instead. "
+                  "build_sensor_config will be removed in the upcoming release.",
+                  DeprecationWarning, stacklevel=2)
 
     fw_version = http_client.firmware_version()
 
     auto_config_udp_dest = None
     use_set_config_auto = False
 
-    orig_config = client.SensorConfig(http_client.get_config_params(True))
+    orig_config = core.SensorConfig(http_client.get_config_params(True))
 
-    if fw_version >= MIN_AUTO_DEST_FW:
-        auto_config_udp_dest = _auto_detected_udp_dest(http_client, orig_config)
+    if orig_config.udp_dest is None or not in_multicast(orig_config.udp_dest):
+        # don't change the destination if it is multicast
+        pass
+    elif fw_version >= MIN_AUTO_DEST_FW:
+        auto_config_udp_dest = http_client.auto_detected_udp_dest(SHORT_HTTP_REQUEST_TIMEOUT_SECONDS,
+                                                                  orig_config.udp_dest)
         if orig_config.udp_dest != auto_config_udp_dest:
             if no_auto_udp_dest or do_not_reinitialize:
                 print(f"WARNING: Your sensor's udp destination {orig_config.udp_dest} does "
@@ -82,7 +50,7 @@ def build_sensor_config(http_client: SensorHttp,
             use_set_config_auto = True
 
     if do_not_reinitialize:
-        if orig_config.operating_mode == client.OperatingMode.OPERATING_STANDBY:
+        if orig_config.operating_mode == core.OperatingMode.OPERATING_STANDBY:
             raise RuntimeError("Your sensor is in STANDBY mode but you have disallowed "
                                "reinitialization. Drop -x to allow reinitialization or "
                                "change your sensor's operating mode.")
@@ -127,7 +95,7 @@ def build_sensor_config(http_client: SensorHttp,
               "detected UDP DEST")
         new_config.udp_dest = "@auto"
 
-    new_config.operating_mode = client.OperatingMode.OPERATING_NORMAL
+    new_config.operating_mode = core.OperatingMode.OPERATING_NORMAL
     if new_config.operating_mode != orig_config.operating_mode:
         print((f"Will change sensor's operating mode from {orig_config.operating_mode}"
                f" to {new_config.operating_mode}"))

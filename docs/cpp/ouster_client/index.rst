@@ -1,12 +1,27 @@
-=================
-Ouster Client API
-=================
+ouster_client
+=============
 
 .. toctree::
-   :caption: Ouster Client API
+   :maxdepth: 1
 
-   types.h <types.rst>
-   client.h <client.rst>
-   image_processing.h <image_processing.rst>
-   lidar_scan.h <lidar_scan.rst>
-   version.h <version.rst>
+   array_view
+   client
+   cloud_io
+   defaults
+   downsample
+   error_handler
+   field
+   image_processing
+   io_type
+   lidar_scan
+   metadata
+   open_source
+   packet
+   packet_source
+   pose_conversion
+   pose_util
+   scan_source
+   scan_source_utils
+   strings
+   types
+   version

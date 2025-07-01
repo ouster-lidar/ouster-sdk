@@ -1,17 +1,17 @@
+import tempfile
 from re import escape
 import pytest
 import numpy as np
 import hashlib
 import shutil
 import os
-from typing import cast, Iterator
 
 from more_itertools import ilen
-from ouster.sdk import open_source
+from ouster.sdk import open_source, SourceURLException
 
 import ouster.sdk._bindings.osf as osf
-import ouster.sdk.client as client
-from ouster.sdk.client import ChanField, FieldType, LidarMode, LidarScan, SensorInfo
+import ouster.sdk.core as core
+from ouster.sdk.core import ChanField, FieldType, LidarMode, LidarScan, SensorInfo, Severity, init_logger
 from ouster.sdk._bindings.osf import LidarScanStream, Encoder, PngLidarScanEncoder
 
 
@@ -25,17 +25,7 @@ def input_info(test_data_dir):
     filename = test_data_dir / "pcaps" / "OS-0-128-U1_v2.3.0_1024x10.json"
     with open(filename, 'r') as f:
         data = f.read()
-    return client.SensorInfo(data)
-
-
-def test_osf_scan_source_flags(input_osf_file):
-    """TWS 20240614: previously, the flags kwarg would affect whether
-    FLAGS/FLAGS2 were added to scans read from OSF. Now it has no effect."""
-    from ouster.sdk.client import ChanField
-    scan_source = open_source(str(input_osf_file), flags=False)
-    assert ChanField.FLAGS not in scan_source.fields
-    scan_source = open_source(str(input_osf_file), flags=True)
-    assert ChanField.FLAGS not in scan_source.fields
+    return core.SensorInfo(data)
 
 
 # Test that we can save a subset of scan fields and that it errors
@@ -43,21 +33,21 @@ def test_osf_scan_source_flags(input_osf_file):
 def test_writer_quick(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
     save_fields = [
-        client.ChanField.REFLECTIVITY,
-        client.ChanField.RANGE
+        core.ChanField.REFLECTIVITY,
+        core.ChanField.RANGE
     ]
 
-    error_fields = [client.FieldType(client.ChanField.RANGE, np.uint32)]
+    error_fields = [core.FieldType(core.ChanField.RANGE, np.uint32)]
     with osf.Writer(str(file_name), input_info, save_fields) as writer:
-        scan = client.LidarScan(128, 1024)
-        scan.field(client.ChanField.REFLECTIVITY)[:] = 123
-        scan.field(client.ChanField.RANGE)[:] = 5
+        scan = core.LidarScan(128, 1024)
+        scan.field(core.ChanField.REFLECTIVITY)[:] = 123
+        scan.field(core.ChanField.RANGE)[:] = 5
 
         writer.save(0, scan)
 
         # also try saving an scan with missing fields
-        scan2 = client.LidarScan(128, 1024, error_fields)
-        scan2.field(client.ChanField.RANGE)[:] = 6
+        scan2 = core.LidarScan(128, 1024, error_fields)
+        scan2.field(core.ChanField.RANGE)[:] = 6
 
         with pytest.raises(ValueError):
             writer.save(0, scan2)
@@ -74,8 +64,8 @@ def test_writer_quick(tmp_path, input_info):
             if ls:
                 # validate that it only has the channels we added
                 fields = [field for field in ls.fields]
-                assert client.ChanField.RANGE in fields
-                assert client.ChanField.REFLECTIVITY in fields
+                assert core.ChanField.RANGE in fields
+                assert core.ChanField.REFLECTIVITY in fields
                 assert len(fields) == 2
 
     assert len(messages) == 1
@@ -86,18 +76,20 @@ def test_writer_partial_load(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
 
     with osf.Writer(str(file_name), input_info) as writer:
-        scan = client.LidarScan(128, 1024)
-        scan.field(client.ChanField.REFLECTIVITY)[:] = 123
-        scan.field(client.ChanField.RANGE)[:] = 5
-        scan.add_field("test", np.ones((128, 1024, 1)), client.FieldClass.SCAN_FIELD)
-        scan.add_field("test2", np.ones((128, 1024, 1)), client.FieldClass.SCAN_FIELD)
+        scan = core.LidarScan(128, 1024)
+        scan.field(core.ChanField.REFLECTIVITY)[:] = 123
+        scan.field(core.ChanField.RANGE)[:] = 5
+        scan.add_field("test", np.ones((128, 1024, 1)), core.FieldClass.SCAN_FIELD)
+        scan.add_field("test2", np.ones((128, 1024, 1)), core.FieldClass.SCAN_FIELD)
 
         writer.save(0, scan)
 
         writer.close()
 
     # then open it and double check that we only got the fields we needed
-    res_reader = osf.Reader(str(file_name))
+    def old_error_behavior(severity, msg):
+        raise RuntimeError(msg)
+    res_reader = osf.Reader(str(file_name), old_error_behavior)
 
     messages = [it for it in res_reader.messages()]
     for msg in messages:
@@ -108,8 +100,8 @@ def test_writer_partial_load(tmp_path, input_info):
             if ls:
                 # validate that it only has the channels we added
                 fields = [field for field in ls.fields]
-                assert client.ChanField.RANGE in fields
-                assert client.ChanField.REFLECTIVITY not in fields
+                assert core.ChanField.RANGE in fields
+                assert core.ChanField.REFLECTIVITY not in fields
                 assert "test" in fields
                 assert "test2" not in fields
                 assert len(fields) == 2
@@ -123,15 +115,15 @@ def writer_output_handler(writer, output_osf_file, info):
     assert info == writer.sensor_info(0)
     assert info == writer.sensor_info()[0]
 
-    scan1 = client.LidarScan(128, 1024)
+    scan1 = core.LidarScan(128, 1024)
     assert scan1 is not None
     scan1.status[:] = 0x1
-    scan1.field(client.ChanField.REFLECTIVITY)[:] = 100
+    scan1.field(core.ChanField.REFLECTIVITY)[:] = 100
 
-    scan2 = client.LidarScan(128, 1024)
+    scan2 = core.LidarScan(128, 1024)
     assert scan2 is not None
     scan2.status[:] = 0x1
-    scan2.field(client.ChanField.REFLECTIVITY)[:] = 200
+    scan2.field(core.ChanField.REFLECTIVITY)[:] = 200
 
     writer.save(0, scan1)
     writer.save([scan2])
@@ -276,6 +268,94 @@ def test_osf_messages(input_osf_file):
     assert reader.ts_by_message_idx(lidar_stream.id, 0) > 0
 
 
+def expect_error_with_handler(osf_file, expected_severity, expected_message):
+    err_handler_called = False
+
+    def err_handler(severity, message):
+        nonlocal err_handler_called
+        err_handler_called = True
+        assert severity == expected_severity
+        assert message.startswith(expected_message)
+        print(severity, expected_message)
+    reader = osf.Reader(str(osf_file), err_handler)
+    for m in reader.messages():
+        m.decode()
+    assert err_handler_called
+
+
+def expect_error_default(osf_file, message):
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as logfile:
+            init_logger('info', log_file_path=logfile.name)
+            # default behavior - it won't throw, but it'll log a message
+            reader = osf.Reader(str(osf_file))
+            for m in reader.messages():
+                m.decode()
+        with open(logfile.name) as out:
+            stdout = out.read()
+            print(stdout)
+            # strip off start of log message
+            assert stdout.rsplit(']')[-1].strip().startswith(message)
+    finally:
+        try:
+            os.unlink(logfile.name)
+        except OSError:
+            pass
+
+
+def test_reader_error_handler(test_data_dir):
+    expect_error_with_handler(test_data_dir / 'osfs' / 'bad_crc32.osf',
+                              Severity.OUSTER_WARNING, 'Invalid chunk at file offset')
+    expect_error_with_handler(test_data_dir / 'osfs' / 'bad_encoding.osf',
+                              Severity.OUSTER_WARNING, 'decodeField: could not decode field')
+
+
+def test_reader_default_error_handler(test_data_dir, capsys):
+    expect_error_default(test_data_dir / 'osfs' / 'bad_crc32.osf', 'Invalid chunk at file offset')
+    expect_error_default(test_data_dir / 'osfs' / 'bad_encoding.osf',
+                         'decodeField: could not decode field')
+
+
+def test_graceful_field_decode(test_data_dir):
+    osf_file = test_data_dir / 'osfs' / 'bad_16_bit_fields.osf'
+    assert os.path.exists(osf_file)
+    reader = osf.Reader(str(osf_file))
+    for m in reader.messages():
+        ls = m.decode()
+        assert np.count_nonzero(ls.field('RANGE')) > 0
+
+
+def test_zpng_decode(test_data_dir):
+    osf_file = test_data_dir / 'osfs' / 'single_scan_016.osf'
+    reader = osf.Reader(str(osf_file))
+    for m in reader.messages():
+        m.decode()
+
+
+def test_major_version_error(test_data_dir):
+    with pytest.raises(RuntimeError, match=
+        r'The OSF file was created with '
+        r'schema version 9999.0.0 but this reader supports up to major '
+        r'version (\d+). Major version differences may indicate breaking '
+        r'changes. The file will not be read to prevent possible '
+            r'misinterpretation or data corruption.'):
+        osf_file = test_data_dir / 'osfs' / 'single_scan_major_version.osf'
+        osf.Reader(str(osf_file))
+
+
+def test_minor_version_warning(test_data_dir):
+    expect_error_with_handler(
+        test_data_dir / 'osfs' / 'single_scan_minor_version.osf',
+        Severity.OUSTER_WARNING,
+        'The OSF file was created with schema version 2.9999.0, '
+        'but this reader only supports up to 2.1. Continuing to read using '
+        'best-effort compatibility mode. Some fields introduced in newer '
+        'versions may be ignored or unrecognized. For full '
+        'feature support, consider updating to the latest '
+        'version of the OusterSDK.'
+    )
+
+
 def _get_file_hash(file_name):
     result = hashlib.sha512()
     with open(file_name, "rb") as f:
@@ -285,8 +365,8 @@ def _get_file_hash(file_name):
 
 
 def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
-    new_metadata = client.SensorInfo.from_default(
-        client.LidarMode.MODE_1024x10)
+    new_metadata = core.SensorInfo.from_default(
+        core.LidarMode.MODE_1024x10)
 
     test_path = os.path.join(tmp_path, "test.osf")
     backup_path = os.path.join(tmp_path, "test.bak")
@@ -317,9 +397,9 @@ def test_osf_metadata_replacement_tools(tmp_path, input_osf_file):
 
 
 def test_full_custom_scan(tmp_path):
-    sensor_info = client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    sensor_info = core.SensorInfo.from_default(core.LidarMode.MODE_1024x10)
     w, h = sensor_info.format.columns_per_frame, sensor_info.format.pixels_per_column
-    ls = client.LidarScan(h, w, [])
+    ls = core.LidarScan(h, w, [])
     ls.add_field("floats", np.ones((h, w), np.float64))
     ls.add_field("ints", np.ones((h, w), np.uint8))
 
@@ -330,19 +410,19 @@ def test_full_custom_scan(tmp_path):
     writer.close()
 
     src = open_source(test_path)
-    assert src._stream_idx == 0
-    assert src.fields == ["floats", "ints"]
+    scan = src[0][0]
+    assert scan.fields == ["floats", "ints"]
 
 
 def test_osf_empty_field(tmp_path):
-    sensor_info = client.SensorInfo.from_default(client.LidarMode.MODE_1024x10)
-    ls = client.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
-    ls.add_field("temperature", np.array([1.2353]), client.FieldClass.SCAN_FIELD)
-    ls.add_field("q", np.ones((128, 1024, 0)), client.FieldClass.SCAN_FIELD)
+    sensor_info = core.SensorInfo.from_default(core.LidarMode.MODE_1024x10)
+    ls = core.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
+    ls.add_field("temperature", np.array([1.2353]), core.FieldClass.SCAN_FIELD)
+    ls.add_field("q", np.ones((128, 1024, 0)), core.FieldClass.SCAN_FIELD)
 
-    ls2 = client.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
-    ls2.add_field("temperature", np.array([], np.float64), client.FieldClass.SCAN_FIELD)
-    ls2.add_field("q", np.ones((128, 1024, 1)), client.FieldClass.SCAN_FIELD)
+    ls2 = core.LidarScan(64, 1024, sensor_info.format.udp_profile_lidar)
+    ls2.add_field("temperature", np.array([], np.float64), core.FieldClass.SCAN_FIELD)
+    ls2.add_field("q", np.ones((128, 1024, 1)), core.FieldClass.SCAN_FIELD)
 
     test_path = os.path.join(tmp_path, "test.osf")
     writer = osf.Writer(test_path, [sensor_info])
@@ -352,23 +432,15 @@ def test_osf_empty_field(tmp_path):
 
     src = open_source(test_path, index=True)
 
-    assert src[0].field("temperature") == [1.2353]
-    assert len(src[1].field("temperature")) == 0
+    assert src[0][0].field("temperature") == [1.2353]
+    assert len(src[1][0].field("temperature")) == 0
 
-    assert src[1].field("q").shape == (128, 1024, 1)
-    assert src[0].field("q").shape == (128, 1024, 0)
-
-
-def test_empty_osf_loop(test_data_dir):
-    source = open_source(
-        str(test_data_dir / "osfs" / "empty_osf.osf"), cycle=True)
-
-    with pytest.raises(StopIteration):
-        next(iter(source))
+    assert src[1][0].field("q").shape == (128, 1024, 1)
+    assert src[0][0].field("q").shape == (128, 1024, 0)
 
 
 def test_osf_persists_alerts_thermal_and_shot_limiting_fields(tmp_path) -> None:
-    sensor_info = SensorInfo.from_default(client.LidarMode.MODE_1024x10)
+    sensor_info = SensorInfo.from_default(core.LidarMode.MODE_1024x10)
     scan = LidarScan(sensor_info.h, sensor_info.w)
     scan.alert_flags[:] = range(len(scan.alert_flags))
     scan.frame_status = 0xabcdef0011223344
@@ -378,7 +450,8 @@ def test_osf_persists_alerts_thermal_and_shot_limiting_fields(tmp_path) -> None:
     with osf.Writer(test_path, [sensor_info]) as writer:
         writer.save(0, scan)
     src = open_source(test_path)
-    read_scan = next(cast(Iterator[LidarScan], iter(src)))
+    read_scan = next(iter(src))[0]
+    assert read_scan is not None
     assert np.array_equal(read_scan.alert_flags, scan.alert_flags)
     assert read_scan.frame_status == scan.frame_status
     assert read_scan.shutdown_countdown == scan.shutdown_countdown
@@ -397,7 +470,7 @@ def test_osf_slice_and_cast() -> None:
     assert scan.field(ChanField.RANGE).dtype == np.uint32
     scan.field(ChanField.RANGE)[:] = 0xffffff01
 
-    sliced_scan = osf.slice_and_cast(scan, [FieldType(client.ChanField.RANGE, np.uint8)])
+    sliced_scan = osf.slice_and_cast(scan, [FieldType(core.ChanField.RANGE, np.uint8)])
     assert np.array_equal(sliced_scan.alert_flags, scan.alert_flags)
     assert sliced_scan.shutdown_countdown == scan.shutdown_countdown
     assert sliced_scan.shot_limiting_countdown == scan.shot_limiting_countdown
@@ -416,7 +489,7 @@ def test_osf_slice_and_cast() -> None:
 def get_size_for_compression_amount(tmp_path, input_info, compression_amount) -> int:
     file_name = tmp_path / "test.osf"
     with osf.Writer(str(file_name), input_info, [], 0, Encoder(PngLidarScanEncoder(compression_amount))) as writer:
-        scan = client.LidarScan(128, 1024)
+        scan = core.LidarScan(128, 1024)
         writer.save(0, scan)
         writer.close()
         return os.path.getsize(file_name)
@@ -435,7 +508,7 @@ def test_async_writer_exception(tmp_path, input_info) -> None:
     file_name = tmp_path / "test.osf"
     assert len(input_info.format.pixel_shift_by_row) == 128
     with osf.AsyncWriter(str(file_name), [input_info], [], 0, Encoder(PngLidarScanEncoder(4))) as writer:
-        scan = client.LidarScan(4, 1024)  # scan size doesn't match sensor info
+        scan = core.LidarScan(4, 1024)  # scan size doesn't match sensor info
         future = writer.save(0, scan)
         with pytest.raises(ValueError, match=escape(
             "lidar scan size (1024, 4) does not match the sensor info resolution (1024, 128)")
@@ -446,8 +519,37 @@ def test_async_writer_exception(tmp_path, input_info) -> None:
 def test_writer_enforces_lidarscan_correct_size(tmp_path, input_info):
     file_name = tmp_path / "test.osf"
     with osf.Writer(str(file_name), [input_info]) as w:
-        scan = client.LidarScan(128, 128)  # scan size is wrong
+        scan = core.LidarScan(128, 128)  # scan size is wrong
         with pytest.raises(ValueError, match=escape(
             "lidar scan size (128, 128) does not match the sensor info resolution (1024, 128)")
         ):
             w.save(0, scan)
+
+
+def async_writer_destruction_helper(tmp_path):
+    file_name = tmp_path / "test.osf"
+    _ = osf.AsyncWriter(str(file_name), [SensorInfo.from_default(LidarMode.MODE_1024x10)])
+    #  should exit normally
+
+
+def test_async_writer_destruction(tmp_path):
+    import multiprocessing
+
+    p = multiprocessing.Process(
+        group=None,
+        target=async_writer_destruction_helper,
+        args=(tmp_path,)
+    )
+    p.start()
+    p.join()
+    assert p.exitcode == 0
+
+
+def test_error_handler_open_source(test_data_dir):
+    def error_handler(severity, msg):
+        # open_source will re-raise this as a SourceURLException
+        raise RuntimeError('Whoopsie!')
+
+    osf_file = test_data_dir / 'osfs' / 'single_scan_major_version.osf'
+    with pytest.raises(SourceURLException, match='Whoopsie!'):
+        open_source(str(osf_file), error_handler=error_handler)

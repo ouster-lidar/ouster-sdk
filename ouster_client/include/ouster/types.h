@@ -38,6 +38,11 @@ using img_t = Eigen::Array<T, -1, -1, Eigen::RowMajor>;
 /** Used for transformations. */
 using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
 
+template <typename T>
+using PointsT = Eigen::Array<T, -1, 3>;
+using PointsD = PointsT<double>;
+using PointsF = PointsT<float>;
+
 namespace sensor {
 
 /** Unit of range from sensor packet, in meters. */
@@ -432,6 +437,20 @@ struct OUSTER_API_CLASS sensor_config {
      * The minimum detection range of the lidar in cm.
      */
     optional<int> min_range_threshold_cm;
+
+    /**
+     * Extra config options to apply that arent in the standard set.
+     * Each value should be stringized json
+     */
+    std::map<std::string, std::string> extra_options;
+
+    /* Constructor from json */
+    OUSTER_API_FUNCTION
+    explicit sensor_config(const std::string& config_json);
+
+    /* Default constructor */
+    OUSTER_API_FUNCTION
+    sensor_config();
 };
 
 /** Stores data format information. */
@@ -446,6 +465,18 @@ struct OUSTER_API_CLASS data_format {
     UDPProfileLidar udp_profile_lidar{};  ///< profile of lidar packet
     UDPProfileIMU udp_profile_imu{};      ///< profile of imu packet
     uint16_t fps;                         ///< frames per second
+
+    /// Return the number of valid columns per complete frame of data with the
+    /// column_window applied.
+    /// @return the number of columns
+    OUSTER_API_FUNCTION
+    int valid_columns_per_frame() const;
+
+    /// Return the number of valid packets actually sent per frame of data
+    /// with the column_window applied.
+    /// @return the number of packets
+    OUSTER_API_FUNCTION
+    int packets_per_frame() const;
 };
 
 /** Stores from-sensor calibration information */
@@ -635,6 +666,14 @@ class OUSTER_API_CLASS sensor_info {
 
     OUSTER_API_FUNCTION
     bool has_fields_equal(const sensor_info& other) const;
+    
+    /**
+     * Get the number of returns output by the sensor in its current setup.
+     *
+     * @return number of returns
+     */
+    OUSTER_API_FUNCTION
+    int num_returns() const;
 
     /**
      * Retrieves the width of a frame
@@ -651,9 +690,6 @@ class OUSTER_API_CLASS sensor_info {
      */
     OUSTER_API_FUNCTION
     auto h() const -> decltype(format.pixels_per_column);  ///< returns the height of a frame (equivalent to format.pixels_per_column)
-
-   private:
-    bool was_legacy_ = false;
     // clang-format on
 };
 

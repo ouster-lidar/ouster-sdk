@@ -1,61 +1,74 @@
-========
 reader.h
 ========
 
-ChunkValidity
--------------
+.. contents::
+   :local:
+
+Enums
+-----
+
 .. doxygenenum:: ouster::osf::ChunkValidity
+   :project: cpp_api
 
-ChunkState
-----------
-.. doxygenstruct:: ouster::osf::ChunkState
-    :members:
-                  
-.. doxygenfunction:: ouster::osf::to_string(const ChunkState& chunk_state)
+Class
+-----
 
-ChunkInfoNode
--------------
-.. doxygenstruct:: ouster::osf::ChunkInfoNode
-    :members:
+.. doxygenclass:: ouster::osf::ChunkRef
+   :project: cpp_api
+   :members:
 
-.. doxygenfunction:: ouster::osf::to_string(const ChunkInfoNode& chunk_info)
-
-ChunksPile
-----------
 .. doxygenclass:: ouster::osf::ChunksPile
-    :members:
+   :project: cpp_api
+   :members:
 
-ChunksIter
-----------
-.. doxygenstruct:: ouster::osf::ChunksIter
-    :members:
-
-ChunksRange
------------
 .. doxygenclass:: ouster::osf::ChunksRange
-    :members:
+   :project: cpp_api
+   :members:
 
-Reader
-------
-.. doxygenclass:: ouster::osf::Reader
-    :members:
-
-MessageRef
-----------
 .. doxygenclass:: ouster::osf::MessageRef
-    :members:
+   :project: cpp_api
+   :members:
 
-MessagesChunkIter
------------------
-.. doxygenstruct:: ouster::osf::MessagesChunkIter
-    :members:
-
-MessagesStreamingRange
-----------------------
 .. doxygenclass:: ouster::osf::MessagesStreamingRange
-    :members:
+   :project: cpp_api
+   :members:
 
-MessagesStreamingIter
----------------------
+.. doxygenclass:: ouster::osf::Reader
+   :project: cpp_api
+   :members:
+
+Structs
+-------
+
+.. doxygenstruct:: ouster::osf::ChunkInfoNode
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::osf::ChunkState
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::osf::ChunksIter
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::osf::MessagesChunkIter
+   :project: cpp_api
+   :members:
+
 .. doxygenstruct:: ouster::osf::MessagesStreamingIter
-    :members:
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::osf::MessagesStreamingIter::greater_chunk_type
+   :project: cpp_api
+   :members:
+
+Functions
+---------
+
+.. doxygenfunction:: to_string(const ChunkState&)
+   :project: cpp_api
+
+.. doxygenfunction:: to_string(const ChunkInfoNode&)
+   :project: cpp_api

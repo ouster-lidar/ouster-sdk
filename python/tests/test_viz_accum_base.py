@@ -1,6 +1,6 @@
 from .conftest import MockPointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
-from ouster.sdk.client import SensorInfo, LidarMode, LidarScan, ChanField
+from ouster.sdk.core import SensorInfo, LidarMode, LidarScan, ChanField
 from ouster.sdk.viz.model import LidarScanVizModel
 from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
 from ouster.sdk.viz.track import MultiTrack
@@ -39,7 +39,7 @@ def test_use_default_view_modes():
     ).name == 'Cal. Ref. Ouster Colors'
 
     accum.cycle_cloud_mode()
-    assert accum.active_cloud_mode == ChanField.SIGNAL
+    assert accum.active_cloud_mode == "RING"
 
     # Only REFLECTIVITY uses Cal Ref palettes; other channels use regular palettes
     assert accum.get_palette(
@@ -48,7 +48,7 @@ def test_use_default_view_modes():
 
     # has no effect after the active cloud mode is set
     accum._use_default_view_modes()
-    assert accum.active_cloud_mode == ChanField.SIGNAL
+    assert accum.active_cloud_mode == "RING"
 
     accum.cycle_cloud_mode()
-    assert accum.active_cloud_mode == ChanField.NEAR_IR
+    assert accum.active_cloud_mode == ChanField.SIGNAL

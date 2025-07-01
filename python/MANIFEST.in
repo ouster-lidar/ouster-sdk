@@ -1,4 +1,4 @@
-include README.rst CMakeLists.txt mypy.ini tox.ini
+include README.rst CMakeLists.txt mypy.ini tox.ini requirements.txt
 graft src
 graft tests
 
@@ -10,4 +10,4 @@ prune sdk/artifacts
 prune sdk/sdk-extensions
 prune sdk/build
 recursive-exclude sdk Jenkinsfile
-recursive-exclude sdk clang-linting.sh
+recursive-exclude sdk scripts

@@ -5,8 +5,8 @@ import os
 from random import getrandbits, random
 from itertools import chain
 
-from ouster.sdk import client, pcap
-from ouster.sdk.client import PacketFormat, _digest
+from ouster.sdk import core, pcap
+from ouster.sdk.core import PacketFormat, _digest
 
 TEST_DATA_DIR = os.getenv("TEST_DATA_DIR", default="./")
 
@@ -23,7 +23,7 @@ def test_simple_packet_record(tmpdir):
     with open(sensor_info_path, 'r') as f:
         # SensorInfo accepts the string contents of the sensor info
         # metadata rather than a path
-        metadata = client.SensorInfo(f.read())
+        metadata = core.SensorInfo(f.read())
 
     # Set up our packet sizes
     pf = PacketFormat.from_info(metadata)
@@ -56,7 +56,7 @@ def test_simple_packet_record(tmpdir):
     lidar_packets = []
     for buf, timestamp in lidar_buffers:
         # Create the lidar packet
-        packet = client.LidarPacket(lidar_packet_size)
+        packet = core.LidarPacket(lidar_packet_size)
         packet.buf[:] = buf[:]
         packet.host_timestamp = int(timestamp * 1e9)
         lidar_packets.append(packet)
@@ -64,7 +64,7 @@ def test_simple_packet_record(tmpdir):
     imu_packets = []
     for buf, timestamp in imu_buffers:
         # Create the imu packet
-        packet = client.ImuPacket(imu_packet_size)
+        packet = core.ImuPacket(imu_packet_size)
         packet.buf[:] = buf[:]
         packet.host_timestamp = int(timestamp * 1e9)
         imu_packets.append(packet)
@@ -82,11 +82,11 @@ def test_simple_packet_record(tmpdir):
 
     # ========= TESTING SECTION =========
     # read the packets from our test file
-    packets_from_file = list(pcap.Pcap(file_path, metadata))
+    packets_from_file = list(pcap.PcapPacketSource(file_path, sensor_info=[metadata]))
 
     # grab the data
     bufs_in_memory = [bytes(p.buf) for p in packets_in_memory]
-    bufs_from_file = [bytes(p.buf) for p in packets_from_file]
+    bufs_from_file = [bytes(p.buf) for idx, p in packets_from_file]
 
     # test that random packets read back from pcap are identical.
     assert bufs_in_memory == bufs_from_file

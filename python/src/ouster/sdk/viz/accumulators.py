@@ -18,7 +18,7 @@ from .map_accumulator import MapAccumulator
 from .accumulators_config import LidarScanVizAccumulatorsConfig
 from .track import MultiTrack
 from .tracks_accumulator import TracksAccumulator
-from ouster.sdk.client import LidarScan
+from ouster.sdk.core import LidarScan
 
 
 class LidarScanVizAccumulators:

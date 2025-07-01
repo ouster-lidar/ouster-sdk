@@ -3,7 +3,7 @@ import logging
 from os import path
 from time import sleep
 from conftest import deepcopy_iter
-from typing import List
+from typing import List, Optional, cast
 
 from more_itertools import take, time_limited
 import numpy as np
@@ -12,8 +12,8 @@ import json
 import requests
 import pytest
 
-from ouster.sdk import client
-from ouster.sdk.client import UDPProfileLidar, TimestampMode, LidarMode, PacketFormat, ColHeader
+from ouster.sdk import core, sensor
+from ouster.sdk.core import UDPProfileLidar, TimestampMode, LidarMode, PacketFormat, ColHeader
 from ouster.sdk._bindings import client as _client
 
 logger = logging.getLogger("HIL")
@@ -92,8 +92,8 @@ def test_packets_dynamic_port(hil_configured_sensor) -> None:
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(client.Sensor(hil_configured_sensor, 0, 0)), closing(
-            client.Sensor(hil_configured_sensor, 0, 0)):
+    with closing(sensor.SensorPacketSource(hil_configured_sensor, lidar_port=0, imu_port=0)), closing(
+            sensor.SensorPacketSource(hil_configured_sensor, lidar_port=0, imu_port=0)):
         pass
 
 
@@ -103,17 +103,16 @@ def test_only_lidar_packets(hil_configured_sensor, lidar_port) -> None:
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(client.Sensor(hil_configured_sensor)) as src:
-        metadata = src.metadata
+    with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
+        metadata = src.sensor_info
 
-    metadata.config.udp_port_imu = 7505
+    metadata[0].config.udp_port_imu = 7505
     logger.debug("Capturing packets...")
-    with closing(client.Sensor(hil_configured_sensor,
-                               _flush_frames=10, timeout=2.0, metadata=metadata)) as src:
-        packets = take(640, deepcopy_iter(src))
+    with closing(sensor.SensorPacketSource(hil_configured_sensor, timeout=2.0, sensor_info=metadata)) as src:
+        packets = take(640, src)
 
     assert len(packets) == 640
-    assert all(isinstance(p, client.LidarPacket) for p in packets)
+    assert all(isinstance(p, core.LidarPacket) for idx, p in packets)
 
 
 def test_packets_timeout(hil_configured_sensor) -> None:
@@ -122,20 +121,20 @@ def test_packets_timeout(hil_configured_sensor) -> None:
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(client.Sensor(hil_configured_sensor)) as src:
-        metadata = src.metadata
+    with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
+        metadata = src.sensor_info
 
-    metadata.config.udp_port_lidar = 7505
-    metadata.config.udp_port_imu = 7505
+    metadata[0].config.udp_port_lidar = 7505
+    metadata[0].config.udp_port_imu = 7505
     logger.debug("Capturing packets...")
-    with pytest.raises(client.ClientTimeout):
-        with closing(client.Sensor(hil_configured_sensor, metadata=metadata)) as src:
+    with pytest.raises(sensor.ClientTimeout):
+        with closing(sensor.SensorPacketSource(hil_configured_sensor, sensor_info=metadata)) as src:
             next(iter(src))
 
 
 def concat_measurement_ids(packets, pf) -> np.ndarray:
     return np.concatenate([
-        pf.packet_header(ColHeader.MEASUREMENT_ID, p.buf) for p in packets if isinstance(p, client.LidarPacket)
+        pf.packet_header(ColHeader.MEASUREMENT_ID, p.buf) for idx, p in packets if isinstance(p, core.LidarPacket)
     ])
 
 
@@ -148,42 +147,16 @@ def test_packets_consecutive(hil_configured_sensor) -> None:
         pytest.fail("Test fails due to rejected configuration")
 
     logger.debug("Capturing packets for 10s...")
-    with closing(client.Sensor(hil_configured_sensor, 7502, 7503, _flush_frames=10, timeout=2.0)) as src:
-        print("Final config:", src.metadata.config, "\n\n")
-        w = src.metadata.format.columns_per_frame
-        packets = list(time_limited(10, deepcopy_iter(src)))
+    with closing(sensor.SensorPacketSource(hil_configured_sensor, timeout=2.0, buffer_time_sec=2.0)) as src:
+        print("Final config:", src.sensor_info[0].config, "\n\n")
+        w = src.sensor_info[0].format.columns_per_frame
+        take(640, src) # flush some
+        packets = list(time_limited(10, src))
     logger.debug("Done capturing")
 
-    mids = concat_measurement_ids(packets, PacketFormat(src.metadata)).astype(np.int64)
+    mids = concat_measurement_ids(packets, PacketFormat(src.sensor_info[0])).astype(np.int64)
     assert np.count_nonzero(
         np.diff(mids) % w != 1) == 0, "Got non-consecutive measurements"
-
-
-@pytest.mark.parametrize(
-    'lidar_mode, azimuth_window',
-    [pytest.param(LidarMode.MODE_2048x10, (0, 360000), id="full_2048")])
-def test_packets_read_gap(hil_configured_sensor) -> None:
-    """Test that sleeping while reading causes a single gap in measurements."""
-
-    if hil_configured_sensor is None:
-        pytest.fail("Test fails due to rejected configuration")
-
-    logger.debug("Capturing packets...")
-    with closing(client.Sensor(hil_configured_sensor, _flush_frames=10, timeout=3.0)) as src:
-        w = src.metadata.format.columns_per_frame
-        logger.debug("Pausing before reading UDP...")
-        sleep(2.0)
-        packets = take(640, deepcopy_iter(src))
-        logger.debug("Pausing during reading UDP...")
-        sleep(2.0)
-        packets += take(640, deepcopy_iter(src))
-
-        assert len(packets) == 1280
-        mids = concat_measurement_ids(packets, PacketFormat(src.metadata)).astype(np.int64)
-
-    # <= 1 because we *might* just land on the right mid
-    assert np.count_nonzero(
-        np.diff(mids) % w != 1) <= 1, "Got more than one gap"
 
 
 @pytest.mark.parametrize('lidar_port, imu_port', [(7504, 7505)])
@@ -195,47 +168,31 @@ def test_packets_nonstandard_port(hil_configured_sensor, lidar_port,
         pytest.fail("Test fails due to rejected configuration")
 
     logger.debug("Capturing packets...")
-    with closing(client.Sensor(hil_configured_sensor, lidar_port,
-                               imu_port)) as src:
-        packets = take(640, deepcopy_iter(src))
+    with closing(sensor.SensorPacketSource(hil_configured_sensor, lidar_port=lidar_port,
+                               imu_port=imu_port)) as src:
+        packets = take(640, src)
 
     assert len(packets) == 640
+
 
 def fix_float_rounding(metadata, src):
     def check_close(left, right):
         return np.isclose(left, right).all()
     # fix floating point errors
-    if check_close(metadata.beam_azimuth_angles, src.metadata.beam_azimuth_angles):
-        metadata.beam_azimuth_angles = src.metadata.beam_azimuth_angles
-    if check_close(metadata.beam_altitude_angles, src.metadata.beam_altitude_angles):
-        metadata.beam_altitude_angles = src.metadata.beam_altitude_angles
-    if check_close([metadata.lidar_origin_to_beam_origin_mm], [src.metadata.lidar_origin_to_beam_origin_mm]):
-        metadata.lidar_origin_to_beam_origin_mm = src.metadata.lidar_origin_to_beam_origin_mm
-    if check_close(metadata.beam_to_lidar_transform, src.metadata.beam_to_lidar_transform):
-        metadata.beam_to_lidar_transform = src.metadata.beam_to_lidar_transform
-    if check_close(metadata.imu_to_sensor_transform, src.metadata.imu_to_sensor_transform):
-        metadata.imu_to_sensor_transform = src.metadata.imu_to_sensor_transform
-    if check_close(metadata.lidar_to_sensor_transform, src.metadata.lidar_to_sensor_transform):
-        metadata.lidar_to_sensor_transform = src.metadata.lidar_to_sensor_transform
-    if check_close(metadata.extrinsic, src.metadata.extrinsic):
-        metadata.extrinsic = src.metadata.extrinsic
-
-def test_write_metadata(hil_configured_sensor, tmpdir) -> None:
-    """Test that write_metadata works."""
-
-    if hil_configured_sensor is None:
-        pytest.fail("Test fails due to rejected configuration")
-
-    with closing(client.Sensor(hil_configured_sensor, 7502, 7503)) as src:
-        metadata_path = path.join(tmpdir, "metadata.json")
-        src.write_metadata(metadata_path)
-
-        with open(metadata_path, 'r') as file:
-            metadata = client.SensorInfo(file.read())
-
-        fix_float_rounding(metadata, src)
-
-        assert metadata == src.metadata, "SensorConfig did not survive round-trip"
+    if check_close(metadata.beam_azimuth_angles, src.sensor_info[0].beam_azimuth_angles):
+        metadata.beam_azimuth_angles = src.sensor_info[0].beam_azimuth_angles
+    if check_close(metadata.beam_altitude_angles, src.sensor_info[0].beam_altitude_angles):
+        metadata.beam_altitude_angles = src.sensor_info[0].beam_altitude_angles
+    if check_close([metadata.lidar_origin_to_beam_origin_mm], [src.sensor_info[0].lidar_origin_to_beam_origin_mm]):
+        metadata.lidar_origin_to_beam_origin_mm = src.sensor_info[0].lidar_origin_to_beam_origin_mm
+    if check_close(metadata.beam_to_lidar_transform, src.sensor_info[0].beam_to_lidar_transform):
+        metadata.beam_to_lidar_transform = src.sensor_info[0].beam_to_lidar_transform
+    if check_close(metadata.imu_to_sensor_transform, src.sensor_info[0].imu_to_sensor_transform):
+        metadata.imu_to_sensor_transform = src.sensor_info[0].imu_to_sensor_transform
+    if check_close(metadata.lidar_to_sensor_transform, src.sensor_info[0].lidar_to_sensor_transform):
+        metadata.lidar_to_sensor_transform = src.sensor_info[0].lidar_to_sensor_transform
+    if check_close(metadata.extrinsic, src.sensor_info[0].extrinsic):
+        metadata.extrinsic = src.sensor_info[0].extrinsic
 
 
 def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firmware, lowest_metadata_endpoint_fw) -> None:
@@ -249,12 +206,12 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
     if hil_sensor_firmware < lowest_metadata_endpoint_fw:
         pytest.skip(f"Skip sensor metadata endpoint test as FW version {hil_sensor_firmware} lt {lowest_metadata_endpoint_fw} which added the metadata endpoint")
 
-    with closing(client.Sensor(hil_configured_sensor, 7502, 7503)) as src:
+    with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
         http_metadata_endpoint = "http://" + hostname + "/api/v1/sensor/metadata"
         http_userdata_endpoint = "http://" + hostname + "/api/v1/user/data"
 
         metadata_response = requests.get(http_metadata_endpoint)
-        metadata = client.SensorInfo(client.SensorInfo(metadata_response.text).to_json_string())
+        metadata = core.SensorInfo(core.SensorInfo(metadata_response.text).to_json_string())
 
         userdata_response = requests.get(http_userdata_endpoint)
         if userdata_response.status_code == 200:
@@ -262,23 +219,23 @@ def test_sensor_metadata_endpoint(hil_configured_sensor, tmpdir, hil_sensor_firm
 
         fix_float_rounding(metadata, src)
         # TWS 20230818: the decoded fields should be equal
-        assert metadata.user_data == src.metadata.user_data
-        assert metadata.has_fields_equal(src.metadata)
-        assert type(metadata) == type(src.metadata)
+        assert metadata.user_data == src.sensor_info[0].user_data
+        assert metadata.has_fields_equal(src.sensor_info[0])
+        assert type(metadata) == type(src.sensor_info[0])
 
         meta_via_requests = json.loads(metadata_response.text)
-        meta_via_curl = json.loads(src.metadata.to_json_string())
+        meta_via_curl = json.loads(src.sensor_info[0].to_json_string())
 
         assert 'ouster-sdk' not in meta_via_requests
         # ouster-sdk.client_version is added in the `collect_metadata` method!
         assert 'ouster-sdk' in meta_via_curl
 
-        assert metadata == src.metadata
+        assert metadata == src.sensor_info[0]
 
 
-def n_frame_id_gaps(ss: List[client.LidarScan]) -> int:
+def n_frame_id_gaps(ss: List[List[Optional[core.LidarScan]]]) -> int:
     """Return number of non-consecutive frame ids."""
-    return np.count_nonzero(np.diff([s.frame_id for s in ss]) % 2**16 != 1)
+    return np.count_nonzero(np.diff([cast(core.LidarScan, s).frame_id for s, in ss]) % 2**16 != 1)
 
 
 def test_scans_consecutive(hil_configured_sensor) -> None:
@@ -287,12 +244,11 @@ def test_scans_consecutive(hil_configured_sensor) -> None:
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(client.Sensor(hil_configured_sensor, 7502, 7503, _flush_frames=10)) as src:
-        col_window = src.metadata.format.column_window
-        scans = client.Scans(src, timeout=2.0)
+    with closing(sensor.SensorScanSource(hil_configured_sensor, timeout=2.0)) as scans:
+        take(10, scans) # flush
         ss = take(10, scans)
 
-    assert all(s.complete(col_window) for s in ss), "Received incomplete scans"
+    assert all(s is not None and s.complete() for s, in ss), "Received incomplete scans"
     assert n_frame_id_gaps(ss) == 0, "Gap in frame ids"
 
 
@@ -302,16 +258,15 @@ def test_scans_read_gap(hil_configured_sensor) -> None:
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(client.Sensor(hil_configured_sensor, 7502, 7503, _flush_frames=10)) as src:
-        col_window = src.metadata.format.column_window
-        scans = client.Scans(src, timeout=2.0)
+    with closing(sensor.SensorScanSource(hil_configured_sensor, timeout=2.0)) as scans:
+        take(10, scans) # flush
         ss = take(10, scans)
         logger.debug("Pausing during reading scans...")
         sleep(1.0)
         ss += take(10, scans)
 
     assert len(ss) == 20
-    assert all(s.complete(col_window) for s in ss), "Received incomplete scans"
+    assert all(s is not None and s.complete() for s, in ss), "Received incomplete scans"
     assert n_frame_id_gaps(ss) == 1, "Did not get exactly one gap in frame ids"
 
 
@@ -321,14 +276,13 @@ def test_scans_read_timeout(hil_configured_sensor) -> None:
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(client.Sensor(hil_configured_sensor)) as src:
-        metadata = src.metadata
+    with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
+        metadata = src.sensor_info
 
-    metadata.config.udp_port_imu = 7504
-    metadata.config.udp_port_lidar = 7504
-    with closing(client.Sensor(hil_configured_sensor, metadata=metadata)) as src:
-        scans = client.Scans(src, timeout=1.0)
-        with pytest.raises(client.ClientTimeout):
+    metadata[0].config.udp_port_imu = 7504
+    metadata[0].config.udp_port_lidar = 7504
+    with closing(sensor.SensorScanSource(hil_configured_sensor, sensor_info=metadata, timeout=1.0)) as scans:
+        with pytest.raises(sensor.ClientTimeout):
             next(iter(scans))
 
 
@@ -338,51 +292,14 @@ def test_scans_read_timeout_only_imu(hil_configured_sensor, imu_port) -> None:
     if hil_configured_sensor is None:
         pytest.fail("Test fails due to rejected configuration")
 
-    with closing(client.Sensor(hil_configured_sensor)) as src:
-        metadata = src.metadata
+    with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
+        metadata = src.sensor_info
 
-    metadata.config.udp_port_lidar = 7504
-    with closing(client.Sensor(hil_configured_sensor, metadata=metadata)) as src:
-        scans = client.Scans(src, timeout=1.0)
-        with pytest.raises(client.ClientTimeout):
+    metadata[0].config.udp_port_lidar = 7504
+    with closing(sensor.SensorScanSource(hil_configured_sensor, sensor_info=metadata, timeout=1.0)) as scans:
+        with pytest.raises(sensor.ClientTimeout):
             next(iter(scans))
 
-
-def test_scans_sample(hil_configured_sensor) -> None:
-    """Smoke test the sample() function."""
-
-    if hil_configured_sensor is None:
-        pytest.fail("Test fails due to rejected configuration")
-
-    sleep(2.0)
-    sample_sz = 5
-    metadata, sample = client.Scans.sample(hil_configured_sensor, n=sample_sz)
-
-    ss = next(sample)
-    assert len(ss) == sample_sz
-    assert all(s.complete(metadata.format.column_window)
-               for s in ss), "Received incomplete scans"
-
-    ss = next(sample)
-    assert len(ss) == sample_sz
-    assert all(s.complete(metadata.format.column_window)
-               for s in ss), "Received incomplete scans"
-
-
-def test_scans_stream(hil_configured_sensor) -> None:
-    """Smoke test the stream() function."""
-
-    if hil_configured_sensor is None:
-        pytest.fail("Test fails due to rejected configuration")
-
-    sleep(2.0)
-    with closing(client.Scans.stream(hil_configured_sensor)) as stream:
-        col_window = stream.metadata.format.column_window
-        ss = take(10, stream)
-
-    assert len(ss) == 10
-    assert all(s.complete(col_window)
-               for s in ss), "Received incomplete scans"
 
 def test_longform_client(hil_sensor_hostname, lidar_mode, timestamp_mode, lidar_port, imu_port) -> None:
     cli = _client.SensorConnection(hil_sensor_hostname, "", lidar_mode, timestamp_mode, lidar_port, imu_port, 60)

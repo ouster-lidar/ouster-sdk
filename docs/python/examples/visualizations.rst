@@ -204,7 +204,7 @@ produce X, Y, Z coordinates from our scan data with shape (H x W x 3):
 .. code:: python
 
     xyzlut = client.XYZLut(info)
-    xyz = xyzlut(scan)
+    xyz = xyzlut(scan[0])
 
 Now we rearrange the resulting numpy array into a shape that's suitable for plotting:
 
@@ -237,3 +237,30 @@ To learn more about manipulating lidar data, see:
 
 
 .. _GUI backend: https://matplotlib.org/stable/tutorials/introductory/usage.html#the-builtin-backends
+
+
+Set coloring mode or image mode using LidarScanViz API
+======================================================
+
+From 0.15.0, you can now set an image mode or coloring mode using visualization api.
+
+.. code:: python
+
+  from ouster.sdk import viz, open_source
+  import sys
+
+  src = open_source(sys.argv[1])
+
+  sviz = None
+  def iter():
+      global sviz
+      for scan in src:
+          sviz._scan_viz.update(scan)
+          break
+      sviz._scan_viz.select_cloud_mode("RANGE")
+      sviz._scan_viz.select_img_mode(0, "RANGE")
+      for scan in src:
+          yield scan
+          
+  sviz = viz.SimpleViz(src.sensor_info)
+  sviz.run(iter())

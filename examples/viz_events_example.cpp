@@ -25,10 +25,10 @@ float img_data[w * h];
 auto img = std::make_shared<Image>();
 
 // returns true if the provided window coordinates were within the image
-bool set_pixel_from_window_coordinates(ouster::viz::PointViz& viz,
-                                       const WindowCtx& ctx, double x,
-                                       double y) {
-    auto pixel = img->window_coordinates_to_image_pixel(ctx, x, y);
+bool set_pixel_from_viewport_coordinates(ouster::viz::PointViz& viz,
+                                         const WindowCtx& ctx, double x,
+                                         double y) {
+    auto pixel = img->viewport_coordinates_to_image_pixel(ctx, x, y);
     if (pixel.first >= 0 && pixel.first < w && pixel.second >= 0 &&
         pixel.second < h) {
         img_data[pixel.first + pixel.second * w] = 1.0;
@@ -44,8 +44,8 @@ bool mouse_button_handler(ouster::viz::PointViz& viz, const WindowCtx& ctx,
                           EventModifierKeys /*mods*/) {
     if (event == MouseButtonEvent::MOUSE_BUTTON_PRESSED &&
         button == MouseButton::MOUSE_BUTTON_LEFT) {
-        return set_pixel_from_window_coordinates(viz, ctx, ctx.mouse_x,
-                                                 ctx.mouse_y);
+        return set_pixel_from_viewport_coordinates(viz, ctx, ctx.mouse_x,
+                                                   ctx.mouse_y);
     }
     return true;
 }
@@ -53,7 +53,7 @@ bool mouse_button_handler(ouster::viz::PointViz& viz, const WindowCtx& ctx,
 bool mouse_pos_handler(ouster::viz::PointViz& viz, const WindowCtx& ctx,
                        double x, double y) {
     if (ctx.lbutton_down) {
-        return set_pixel_from_window_coordinates(viz, ctx, x, y);
+        return set_pixel_from_viewport_coordinates(viz, ctx, x, y);
     }
     return true;
 }

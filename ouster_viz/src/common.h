@@ -48,7 +48,7 @@ inline GLuint load_shaders(const std::string& vertex_shader_code,
         std::vector<char> vertex_shader_error_message(info_log_length + 1);
         glGetShaderInfoLog(vertex_shader_id, info_log_length, NULL,
                            &vertex_shader_error_message[0]);
-        printf("%s\n", &vertex_shader_error_message[0]);
+        printf("VertexShaderError:\n%s\n", &vertex_shader_error_message[0]);
     }
 
     // Compile Fragment Shader
@@ -63,7 +63,7 @@ inline GLuint load_shaders(const std::string& vertex_shader_code,
         std::vector<char> fragment_shader_error_message(info_log_length + 1);
         glGetShaderInfoLog(fragment_shader_id, info_log_length, NULL,
                            &fragment_shader_error_message[0]);
-        printf("%s\n", &fragment_shader_error_message[0]);
+        printf("FragmentShaderError:\n%s\n", &fragment_shader_error_message[0]);
     }
 
     // Link the program
@@ -79,7 +79,7 @@ inline GLuint load_shaders(const std::string& vertex_shader_code,
         std::vector<char> program_error_message(info_log_length + 1);
         glGetProgramInfoLog(program_id, info_log_length, NULL,
                             &program_error_message[0]);
-        printf("%s\n", &program_error_message[0]);
+        printf("ProgramError:\n%s\n", &program_error_message[0]);
     }
 
     glDetachShader(program_id, vertex_shader_id);
@@ -171,9 +171,17 @@ static const std::string point_vertex_shader_code =
             out vec4 key;
             out vec4 mask;
             void main() {
-                vec4 local_point = range > 0
-                                   ? model * vec4(xyz * range + offset, 1.0)
-                                   : vec4(0, 0, 0, 1.0);
+                key = vkey;
+                mask = vmask;
+
+                // Discard any points with range == 0 by putting them at inf
+                if (range <= 0) {
+                    const float inf = intBitsToFloat(int(0x7F800000u));
+                    gl_Position = vec4(inf, inf, inf, inf);
+                    return;
+                }
+
+                vec4 local_point = model * vec4(xyz * range + offset, 1.0);
                 // Here, we get the four columns of the transformation.
                 // Since this version of GLSL doesn't have texel fetch,
                 // we use texture2D instead. Numbers are chosen to index
@@ -192,8 +200,6 @@ static const std::string point_vertex_shader_code =
                 );
 
                 gl_Position = proj_view * car_pose * local_point;
-                key = vkey;
-                mask = vmask;
             })SHADER";
 static const std::string point_fragment_shader_code =
     R"SHADER(
@@ -266,6 +272,25 @@ static const std::string cuboid_vertex_shader_code =
                 rgba = cuboid_rgba;
             })SHADER";
 static const std::string cuboid_fragment_shader_code =
+    R"SHADER(
+            #version 330 core
+            in vec4 rgba;
+            out vec4 color;
+            void main() {
+                color = rgba;
+            })SHADER";
+static const std::string lines_vertex_shader_code =
+    R"SHADER(
+            #version 330 core
+            in vec3 lines_xyz;
+            uniform vec4 lines_rgba;
+            uniform mat4 proj_view;
+            out vec4 rgba;
+            void main(){
+                gl_Position = proj_view * vec4(lines_xyz, 1.0);
+                rgba = lines_rgba;
+            })SHADER";
+static const std::string lines_fragment_shader_code =
     R"SHADER(
             #version 330 core
             in vec4 rgba;

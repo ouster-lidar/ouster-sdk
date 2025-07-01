@@ -33,54 +33,8 @@ using namespace ouster::sensor;
 namespace ouster {
 namespace osf {
 
-bool PngLidarScanEncoder::fieldEncode(const LidarScan& lidar_scan,
-                                      const ouster::FieldType& field_type,
-                                      const std::vector<int>& px_offset,
-                                      ScanData& scan_data,
-                                      size_t scan_idx) const {
-    if (scan_idx >= scan_data.size()) {
-        throw std::invalid_argument(
-            "ERROR: scan_data size is not sufficient to hold idx: " +
-            std::to_string(scan_idx));
-    }
-    bool res = true;
-    switch (field_type.element_type) {
-        case sensor::ChanFieldType::UINT8:
-            res = encode8bitImage(scan_data[scan_idx],
-                                  lidar_scan.field<uint8_t>(field_type.name),
-                                  px_offset);
-            break;
-        case sensor::ChanFieldType::UINT16:
-            res = encode16bitImage(scan_data[scan_idx],
-                                   lidar_scan.field<uint16_t>(field_type.name),
-                                   px_offset);
-            break;
-        case sensor::ChanFieldType::UINT32:
-            res = encode32bitImage(scan_data[scan_idx],
-                                   lidar_scan.field<uint32_t>(field_type.name),
-                                   px_offset);
-            break;
-        case sensor::ChanFieldType::UINT64:
-            res = encode64bitImage(scan_data[scan_idx],
-                                   lidar_scan.field<uint64_t>(field_type.name),
-                                   px_offset);
-            break;
-        default:
-            logger().error(
-                "ERROR: fieldEncode: UNKNOWN:"
-                "ChanFieldType not yet "
-                "implemented");
-            break;
-    }
-    if (res) {
-        logger().error("ERROR: fieldEncode: Can't encode field {}",
-                       field_type.name);
-    }
-    return res;
-}
-
 ScanChannelData PngLidarScanEncoder::encodeField(
-    const ouster::Field& field) const {
+    const ouster::Field& field, const std::vector<int>& px_offset) const {
     ScanChannelData buffer;
 
     // do not compress, flat fields "compressed" size is greater than original
@@ -104,21 +58,40 @@ ScanChannelData PngLidarScanEncoder::encodeField(
     }
 
     bool res = true;
-    switch (view.tag()) {
-        case sensor::ChanFieldType::UINT8:
-            res = encode8bitImage<uint8_t>(buffer, view);
-            break;
-        case sensor::ChanFieldType::UINT16:
-            res = encode16bitImage<uint16_t>(buffer, view);
-            break;
-        case sensor::ChanFieldType::UINT32:
-            res = encode32bitImage<uint32_t>(buffer, view);
-            break;
-        case sensor::ChanFieldType::UINT64:
-            res = encode64bitImage<uint64_t>(buffer, view);
-            break;
-        default:
-            break;
+    if (px_offset.size()) {
+        switch (view.tag()) {
+            case sensor::ChanFieldType::UINT8:
+                res = encode8bitImage<uint8_t>(buffer, view, px_offset);
+                break;
+            case sensor::ChanFieldType::UINT16:
+                res = encode16bitImage<uint16_t>(buffer, view, px_offset);
+                break;
+            case sensor::ChanFieldType::UINT32:
+                res = encode32bitImage<uint32_t>(buffer, view, px_offset);
+                break;
+            case sensor::ChanFieldType::UINT64:
+                res = encode64bitImage<uint64_t>(buffer, view, px_offset);
+                break;
+            default:
+                break;
+        }
+    } else {
+        switch (view.tag()) {
+            case sensor::ChanFieldType::UINT8:
+                res = encode8bitImage<uint8_t>(buffer, view);
+                break;
+            case sensor::ChanFieldType::UINT16:
+                res = encode16bitImage<uint16_t>(buffer, view);
+                break;
+            case sensor::ChanFieldType::UINT32:
+                res = encode32bitImage<uint32_t>(buffer, view);
+                break;
+            case sensor::ChanFieldType::UINT64:
+                res = encode64bitImage<uint64_t>(buffer, view);
+                break;
+            default:
+                break;
+        }
     }
 
     if (res) {

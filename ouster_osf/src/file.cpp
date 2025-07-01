@@ -60,8 +60,11 @@ OsfFile::OsfFile(const std::string& filename, OpenMode mode) : OsfFile() {
         }
 
         int64_t sz = file_size(filename_);
-        if (sz <= 0) {
-            error();
+        if (sz < 0) {
+            error("unable to get file size");
+            return;
+        } else if (sz == 0) {
+            error("empty file");
             return;
         }
         // TODO[pb]: This leads to incorrect file size for 4Gb+ files on the
@@ -87,7 +90,7 @@ OsfFile::OsfFile(const std::string& filename, OpenMode mode) : OsfFile() {
             return;
         }
 #else
-        file_buf_ = mmap_open(filename_);
+        file_buf_ = mmap_open(filename_, memmap_handle_);
         if (!file_buf_) {
             error();
             return;
@@ -107,12 +110,79 @@ uint64_t OsfFile::size() const { return size_; };
 
 std::string OsfFile::filename() const { return filename_; }
 
-OSF_VERSION OsfFile::version() {
+static ouster::util::version deserialized_version(uint64_t integer_version) {
+    // this method handles converting from the integer representation
+    // which includes values in the OSF_VERSION enum (now considered "legacy"
+    // code)
+    switch (integer_version) {
+        case V_INVALID:
+            throw std::runtime_error("Invalid file version.");
+        case V_1_0:
+            return ouster::util::version{1, 0, 0};
+        case V_1_1:
+            return ouster::util::version{1, 1, 0};
+        case V_1_2:
+            return ouster::util::version{1, 2, 0};
+        case V_1_3:
+            return ouster::util::version{1, 3, 0};
+        case V_1_4:
+            return ouster::util::version{1, 4, 0};
+        case V_2_0:
+            return ouster::util::version{2, 0, 0};
+        case V_2_1:
+            return ouster::util::version{2, 1, 0};
+        default:
+            uint16_t major = (integer_version >> 48) & 0xffff;
+            uint16_t minor = (integer_version >> 32) & 0xffff;
+            uint16_t patch = (integer_version >> 16) & 0xffff;
+            auto vers = ouster::util::version{major, minor, patch};
+            if (vers < ouster::util::version{2, 1, 0}) {
+                // the version occurs before 2.1.0 but isn't defined in the
+                // legacy version enum
+                throw std::logic_error("Invalid file version.");
+            }
+            return vers;
+    }
+}
+
+const ouster::util::version OsfFile::current_version =
+    deserialized_version(V_2_1);
+
+ouster::util::version OsfFile::version() {
     if (!good()) {
-        return OSF_VERSION::V_INVALID;
+        throw std::runtime_error("Invalid file version.");
     }
     auto osf_header = get_osf_header_from_buf(get_header_chunk_ptr());
-    return static_cast<OSF_VERSION>(osf_header->version());
+    auto header_version = static_cast<OSF_VERSION>(osf_header->version());
+    return deserialized_version(header_version);
+}
+
+uint64_t OsfFile::serialized_version(ouster::util::version parsed_version) {
+    // this method handles converting a semver version back to the integer
+    // representation including values defined previously in the OSF_VERSION
+    // enum
+    if (parsed_version == ouster::util::version{1, 0, 0}) {
+        return V_1_0;
+    } else if (parsed_version == ouster::util::version{1, 1, 0}) {
+        return V_1_1;
+    } else if (parsed_version == ouster::util::version{1, 2, 0}) {
+        return V_1_2;
+    } else if (parsed_version == ouster::util::version{1, 3, 0}) {
+        return V_1_3;
+    } else if (parsed_version == ouster::util::version{1, 4, 0}) {
+        return V_1_4;
+    } else if (parsed_version == ouster::util::version{2, 0, 0}) {
+        return V_2_0;
+    } else if (parsed_version == ouster::util::version{2, 1, 0}) {
+        return V_2_1;
+    } else if (parsed_version < ouster::util::version{2, 1, 0}) {
+        // the version occurs before 2.1.0 but isn't defined in the legacy
+        // version enum
+        throw std::logic_error("Invalid file version.");
+    }
+    return ((static_cast<uint64_t>(parsed_version.major) << 48) |
+            (static_cast<uint64_t>(parsed_version.minor) << 32) |
+            (static_cast<uint64_t>(parsed_version.patch) << 16));
 }
 
 uint64_t OsfFile::metadata_offset() {
@@ -124,8 +194,8 @@ uint64_t OsfFile::metadata_offset() {
 uint64_t OsfFile::chunks_offset() {
     if (!good()) throw std::logic_error("bad osf file");
     const uint32_t header_size = get_prefixed_size(get_header_chunk_ptr());
-    if (version() < OSF_VERSION::V_2_0) {
-        throw std::logic_error("bad osf file: only version >= 20 supported");
+    if (version() < ouster::util::version{2, 0}) {
+        throw std::logic_error("bad osf file: only version >= 2.0 supported");
     }
     return FLATBUFFERS_PREFIX_LENGTH + header_size + osf::CRC_BYTES_SIZE;
 }
@@ -146,7 +216,7 @@ bool OsfFile::valid() {
 
     if (!check_prefixed_size_block_crc(get_header_chunk_ptr(),
                                        header_size + CRC_BYTES_SIZE)) {
-        print_error(filename_, "OSF header has an invalid CRC.");
+        print_error(filename_, "OSF header data is corrupt.");
         return false;
     }
 
@@ -255,10 +325,16 @@ void OsfFile::error(const std::string& msg) {
 }
 
 std::string OsfFile::to_string() {
+    std::string version_string;
+    try {
+        version_string = version().simple_version_string();
+    } catch (const std::runtime_error& e) {
+        version_string = "INVALID";
+    }
     std::stringstream ss;
     ss << "OsfFile [filename = '" << filename_ << "', "
        << "state = " << static_cast<int>(state_) << ", "
-       << "version = " << version() << ", "
+       << "version = " << version_string << ", "
        << "size = " << size_ << ", offset = " << offset_;
     if (this->good()) {
         auto osf_header = get_osf_header_from_buf(get_header_chunk_ptr());
@@ -306,7 +382,7 @@ OsfFile& OsfFile::operator=(OsfFile&& other) {
 
 void OsfFile::close() {
     if (file_buf_) {
-        if (!mmap_close(file_buf_, size_)) {
+        if (!mmap_close(file_buf_, size_, memmap_handle_)) {
             error();
             return;
         }

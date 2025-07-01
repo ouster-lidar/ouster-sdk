@@ -113,6 +113,7 @@ commands also have subcommands that further extend or specify what
         * ``slice`` - use the slice command to extract a subset of lidar frames from a source by specifing a frame index 
           interval or time duration.
         * ``clip`` - the clip command can be used to limit the range of values of scan fields.
+        * ``filter`` - the filter command can be used to suppress or replace certain field measurements based on predicate.
         * ``mask`` - use the mask command to mask certain pixel from the lidar frames.
         * ``reduce`` - use the reduce command to downsample the vertical resolution of any ouster Lidar.
         * ``slam`` - computes trajectories by determining the change in pose between lidar frames.

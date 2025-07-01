@@ -114,7 +114,8 @@ TEST_F(FileOpsTest, TestFileMapping) {
     const std::string test_file_name =
         path_concat(test_data_dir(), "osfs/OS-1-128_v2.3.0_1024x10_lb_n3.osf");
 
-    uint8_t* file_buf = mmap_open(test_file_name);
+    uintptr_t memmap_handle = 0;
+    uint8_t* file_buf = mmap_open(test_file_name, memmap_handle);
     EXPECT_TRUE(file_buf != nullptr);
 
     int64_t fsize = file_size(test_file_name);
@@ -128,7 +129,7 @@ TEST_F(FileOpsTest, TestFileMapping) {
                   << std::endl;
     }
 
-    EXPECT_TRUE(mmap_close(file_buf, fsize));
+    EXPECT_TRUE(mmap_close(file_buf, fsize, memmap_handle));
 }
 
 TEST_F(FileOpsTest, TruncateFile) {

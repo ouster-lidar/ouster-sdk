@@ -10,13 +10,13 @@ import glob
 import logging
 from copy import deepcopy
 
-from ouster.sdk import client, pcap
+from ouster.sdk import core, pcap, sensor
 
 logger = logging.getLogger(__name__)
 
 
-pytest.register_assert_rewrite('ouster.client._digest')
-from ouster.sdk.client._digest import StreamDigest  # noqa
+pytest.register_assert_rewrite('ouster.sdk.core._digest')
+from ouster.sdk.core._digest import StreamDigest  # noqa
 
 TEST_DATA_DIR = os.getenv("TEST_DATA_DIR", default="./")
 
@@ -36,7 +36,7 @@ def _read_sensor_info(meta_file):
     if os.path.exists(meta_file):
         with open(meta_file, 'r') as f:
             meta_raw = f.read()
-            meta = client.SensorInfo(meta_raw)
+            meta = core.SensorInfo(meta_raw)
     else:
         meta = None
 
@@ -61,32 +61,29 @@ def _send_receive_lidar_packets(path, dst_ip, meta):
     dst_imu_port = dst_lidar_port
 
     # Create a metadata for the dummy sensor that uses the reserved port
-    rcv_meta = client.SensorInfo(meta.to_json_string())
+    rcv_meta = core.SensorInfo(meta.to_json_string())
     rcv_meta.config.udp_port_lidar = dst_lidar_port
     rcv_meta.config.udp_port_imu = dst_imu_port
     try:
 
         packet_counter = 0
-        pcap_length = sum(1 for _ in pcap.Pcap(path, meta))
+        pcap_length = sum(1 for _ in pcap.PcapPacketSource(path, sensor_info=[meta]))
 
         with closing(
-                client.Sensor(dst_ip,
-                              None,
-                              None,
-                              metadata=rcv_meta,
-                              timeout=1.0,
-                              _flush_before_read=False)) as sensor:
+                sensor.SensorPacketSource(dst_ip,
+                              sensor_info=[rcv_meta],
+                              timeout=1.0)) as src:
             tmp_socket.close()
-            net_packets = iter(sensor)
+            net_packets = iter(src)
 
             # get a handle replay the pcap over the network
             replay2 = pcap._replay(path, meta, dst_ip, dst_lidar_port, dst_imu_port, address=(dst_ip, 0))
             while next(replay2):
-                p = deepcopy(next(net_packets))
+                idx, p = deepcopy(next(net_packets))
                 yield p
                 packet_counter = packet_counter + 1
 
-    except client.ClientError as err:
+    except sensor.ClientError as err:
         logging.info(f"_send_receive error: err = {err}, packet_counter = {packet_counter}, \
             pcap_length = {pcap_length}")
         raise RuntimeError(f"{str(err)}") from None
@@ -102,15 +99,15 @@ def run_receive_data(test_file_prefix):
 
     # outer_pyclient_test_long does not have a _meta.json
     if info is None:
-        info = client.SensorInfo.from_default(
-            client.LidarMode.MODE_1024x10)
+        info = core.SensorInfo.from_default(
+            core.LidarMode.MODE_1024x10)
 
     it = _send_receive_lidar_packets(path, dst_ip, info)
 
     with open(f"{test_file_prefix}_digest.json", 'r') as f:
         good = StreamDigest.from_json(f.read())
 
-    other = StreamDigest.from_packets(client.Packets(it, info))
+    other = StreamDigest.from_packets(core.Packets(it, info))
     logger.debug(f"File digest has {len(good.scans)} scans; Other digest has {len(other.scans)} scans")
     assert len(good.scans) > 0
 
@@ -123,7 +120,7 @@ def run_read_data(test_file_prefix):
     info_raw, info = _read_sensor_info(f"{test_file_prefix}.json")
     with open(f"{test_file_prefix}_digest.json", 'r') as f:
         good = StreamDigest.from_json(f.read())
-    other = StreamDigest.from_packets(pcap.Pcap(path, info))
+    other = StreamDigest.from_packets(pcap.PcapPacketSource(path, sensor_info=[info]))
 
     assert len(good.scans) > 0
 

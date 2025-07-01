@@ -7,6 +7,8 @@
 
 #include <cstring>
 
+#include "ouster/impl/lidar_scan_impl.h"
+
 namespace ouster {
 
 namespace impl {
@@ -235,6 +237,20 @@ FieldView uint_view(const FieldView& other) {
     }
 
     return {const_cast<void*>(other.get()), desc};
+}
+
+Field destagger(const ouster::sensor::sensor_info& info, const FieldView& field,
+                bool inverse) {
+    Field result(field.desc());
+
+    auto destagger_fn = [&](auto ref) {
+        ouster::destagger_into<decltype(ref(0))>(
+            ref, info.format.pixel_shift_by_row, inverse, result);
+    };
+
+    ouster::impl::visit_field_2d(field, destagger_fn);
+
+    return result;
 }
 
 }  // namespace ouster

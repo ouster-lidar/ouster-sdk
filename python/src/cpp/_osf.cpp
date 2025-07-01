@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "ouster/client.h"
+#include "ouster/error_handler.h"
 #include "ouster/impl/profile_extension.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/osf/async_writer.h"
@@ -19,6 +20,7 @@
 #include "ouster/osf/meta_streaming_info.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/osf/operations.h"
+#include "ouster/osf/osf_scan_source.h"
 #include "ouster/osf/png_lidarscan_encoder.h"
 #include "ouster/osf/reader.h"
 #include "ouster/osf/stream_lidar_scan.h"
@@ -30,11 +32,17 @@ class FutureWrapper {
    public:
     explicit FutureWrapper(std::future<void>&& fut) : fut_(std::move(fut)) {}
 
-    void get() { return fut_.get(); }
+    void get() {
+        py::gil_scoped_release release;
+        fut_.get();
+    }
 
     bool valid() const { return fut_.valid(); }
 
-    void wait() { fut_.wait(); }
+    void wait() {
+        py::gil_scoped_release release;
+        fut_.wait();
+    }
 
    private:
     std::future<void> fut_;
@@ -128,7 +136,9 @@ to work with OSF files.
     py::class_<osf::Reader>(m, "Reader", R"(
         Reader is a main entry point to get any info out of OSF file.
     )")
-        .def(py::init<std::string>(), py::arg("file"))
+        .def(py::init<const std::string&>(), py::arg("file"))
+        .def(py::init<const std::string&, py::function>(), py::arg("file"),
+             py::arg("error_handler") = py::none())
         .def_property_readonly("metadata_id", &osf::Reader::metadata_id, R"(
             Data id string
         )")
@@ -142,6 +152,9 @@ to work with OSF files.
             R"(
                 End timestamp (ns) - the highest message timestamp present in the file
         )")
+        .def_property_readonly(
+            "version", [](const osf::Reader& r) { return r.version(); },
+            "Version of OSF file format in the file")
         .def_property_readonly("meta_store", &osf::Reader::meta_store, R"(
                 Returns the metadata store that gives an access to all
                 *metadata entries* in the file.
@@ -267,7 +280,8 @@ to work with OSF files.
         .def(
             "decode",
             [](const osf::MessageRef& msg,
-               const std::vector<std::string>& fields) -> py::object {
+               const nonstd::optional<std::vector<std::string>>& fields)
+                -> py::object {
                 if (msg.is<osf::LidarScanStream>()) {
                     auto decoded_obj =
                         msg.decode_msg<osf::LidarScanStream>(fields);
@@ -276,7 +290,7 @@ to work with OSF files.
                 // TODO[pb]: Add dynamic check for Stream decoding functions ...
                 return py::none();
             },
-            py::arg("fields") = std::vector<std::string>(),
+            py::arg("fields") = nonstd::optional<std::vector<std::string>>(),
             py::return_value_policy::move,
             R"(
             Decodes the underlying object and returns it.
@@ -1074,7 +1088,12 @@ to work with OSF files.
         py::arg("rotating") = false, py::arg("max_size_in_bytes") = 0,
         py::arg("max_files") = 0);
 
-    // TODO[pb]: (HACK) This is copied directly from _client.cpp to enable the
-    // custom profile addition in the compiled OSF SDK native module code.
-    m.def("add_custom_profile", &ouster::sensor::add_custom_profile);
+    py::class_<ouster::osf::OsfScanSource, ouster::core::ScanSource,
+               std::shared_ptr<ouster::osf::OsfScanSource>>(m, "OsfScanSource")
+        .def(py::init([](const std::string& file, const py::kwargs& kwargs) {
+                 ouster::ScanSourceOptions opts;
+                 parse_scan_source_options(kwargs, opts);
+                 return new ouster::osf::OsfScanSource(file, opts);
+             }),
+             py::arg("file"));
 }

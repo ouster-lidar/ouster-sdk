@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.10...3.22)
+if (WIN32)
+  set(CMAKE_OBJECT_PATH_MAX 260)
+endif ()
 if(DEFINED CMAKE_CXX_COMPILER_LAUNCHER )
   message("Using CXX Launcher: ${CMAKE_CXX_COMPILER_LAUNCHER}")
   if( DEFINED ENV{CCACHE_DIR} )
@@ -13,17 +16,19 @@ include(DefaultBuildType)
 include(VcpkgEnv)
 
 # ==== Project Name ====
-project(ouster-sdk VERSION 0.14.0)
+project(ouster-sdk VERSION 0.15.0)
 
 # generate version header
-set(OusterSDK_VERSION_STRING 0.14.0)
+set(OusterSDK_VERSION_STRING 0.15.0)
 include(VersionGen)
 
 # ==== Options ====
 option(CMAKE_POSITION_INDEPENDENT_CODE "Build position independent code." ON)
+option(BUILD_SENSOR "Build Ouster Sensor library." ON)
 option(BUILD_PCAP "Build pcap utils." ON)
 option(BUILD_OSF "Build Ouster OSF library." ON)
 option(BUILD_VIZ "Build Ouster visualizer." ON)
+option(BUILD_MAPPING "Build mapping." ON)
 option(BUILD_PYTHON_MODULE "Build python module (should not use this except in special instances)." OFF)
 option(BUILD_TESTING "Build tests" OFF)
 option(BUILD_EXAMPLES "Build C++ examples" OFF)
@@ -63,6 +68,10 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND OUSTER_USE_EIGEN_MAX_ALIGN_BYTES
   target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
 endif()
 
+if(BUILD_SENSOR)
+  add_subdirectory(ouster_sensor)
+endif()
+
 if(BUILD_PCAP)
   add_subdirectory(ouster_pcap)
 endif()
@@ -74,6 +83,10 @@ endif()
 if(BUILD_VIZ)
   add_subdirectory(ouster_viz)
   add_subdirectory(thirdparty/glad)
+endif()
+
+if(BUILD_MAPPING)
+  add_subdirectory(ouster_mapping)
 endif()
 
 if(BUILD_EXAMPLES)

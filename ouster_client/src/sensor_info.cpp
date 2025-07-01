@@ -330,6 +330,16 @@ product_info sensor_info::get_product_info() const {
     return product_info::create_product_info(prod_line);
 }
 
+int sensor_info::num_returns() const {
+    if (format.udp_profile_lidar ==
+            UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL ||
+        format.udp_profile_lidar ==
+            UDPProfileLidar::PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL) {
+        return 2;
+    }
+    return 1;
+}
+
 sensor_info metadata_from_json(const std::string& json_file,
                                bool /*skip_beam_validation*/) {
     std::stringstream buf{};

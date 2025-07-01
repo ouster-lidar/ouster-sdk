@@ -477,3 +477,8 @@ subject to the following restrictions:
 
  3. This Copyright notice may not be removed or altered from any
     source or altered source distribution.
+
+Name: kiss-icp
+Description: statically linked vendored library
+Availability: https://github.com/PRBonn/kiss-icp
+License: MIT

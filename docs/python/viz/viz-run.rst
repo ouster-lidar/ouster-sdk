@@ -45,8 +45,10 @@ Keyboard Controls
     ``s``            Camera pitch up
     ``a``            Camera yaw right
     ``d``            Camera yaw left
-    ``R``            Reset camera
-    ``ctr-r``        Set camera to the birds-eye view
+    ``q``            Camera roll left
+    ``e``            Camera roll right
+    ``shift+r``      Reset camera
+    ``ctrl+r``       Set camera to the birds-eye view
     ``u``            Toggle camera mode FOLLOW/FIXED
     ``= / -``        Dolly in/out
     ``0``            Toggle orthographic camera
@@ -68,7 +70,7 @@ Keyboard Controls
     ================ ===============================================
     ``b / B``        Cycle top 2D image
     ``n / N``        Cycle bottom 2D image
-    ``e / E``        Increase/decrease size of displayed 2D images
+    ``i / shift+i``  Increase/decrease size of displayed 2D images
     ================ ===============================================
 
 **3D View**
@@ -86,7 +88,7 @@ Keyboard Controls
     ``8``            Toggle poses/trajectory view mode (TRACK)
     ``2``            Toggle second return point cloud visibility
     ``9``            Show axes
-    ``' / "``        Increase/decrease spacing in range markers
+    ``' / shift+'``  Increase/decrease spacing in range markers
     ``ctrl + '``     Increase thickness of range markers
     ``c``            Cycle current highlight mode
     ``j / J``        Increase/decrease point size of accumulated clouds or map
@@ -102,6 +104,7 @@ Keyboard Controls
     ``?``            Print keys to standard out
     ``shift+z``      Save a screenshot of the current view
     ``shift+x``      Toggle a continuous saving of screenshots
+    ``v / shift+v``  Cycle screenshot resolution factor
     ``esc``          Exit
     ================ ===============================================
 

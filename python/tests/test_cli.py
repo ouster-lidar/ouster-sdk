@@ -13,9 +13,11 @@ from click.testing import CliRunner
 from ouster.cli import core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins import source, source_osf  # noqa: F401
-from ouster.sdk.io_type import io_type_from_extension, OusterIoType
+from ouster.sdk.core import io_type_from_extension, OusterIoType
 
 from tests.conftest import PCAPS_DATA_DIR, OSFS_DATA_DIR
+import ouster.sdk._bindings.osf as osf
+import numpy as np
 
 
 class set_directory(object):
@@ -60,6 +62,33 @@ def read_commands_from_help_text(help_text: str) -> List[str]:
     from help text that Click generates for click.MultiCommand"""
     command_help_lines = help_text.split("Commands:")[1].splitlines()[1:]
     return set(line.split()[0].strip() for line in command_help_lines)
+
+
+def test_16x1_extrinsics(test_osf_file, tmp_path):
+
+    runner = CliRunner()
+    extrinsics_16x1 = (
+        "0.000001,-0.999991,0.004236,-0.080000,-0.999987,-0.000023,-0.005052,-0.200000,"
+        "0.005052,-0.004236,-0.999978,0.689000,0.000000,0.000000,0.000000,1.000000"
+    )
+
+    tmp_osf_file = str(Path(tmp_path) / "tmp_file.osf")
+
+    result = runner.invoke(core.cli, ['source', '-e', extrinsics_16x1,
+                                      test_osf_file, 'save', '--ts', 'lidar', tmp_osf_file])
+    expected_extrinsics = np.array([
+        0.000001, -0.999991, 0.004236, -0.080000,
+        -0.999987, -0.000023, -0.005052, -0.200000,
+        0.005052, -0.004236, -0.999978, 0.689000,
+        0.000000, 0.000000, 0.000000, 1.000000
+    ])
+
+    tmp_osf = osf.OsfScanSource(tmp_osf_file)
+
+    extrinsic_from_osf = np.array(tmp_osf.sensor_info[0].extrinsic).flatten()
+
+    assert np.allclose(extrinsic_from_osf, expected_extrinsics, atol=0.0001)
+    assert result.exit_code == 0
 
 
 def test_join_with_conjunction():
@@ -145,7 +174,7 @@ def test_source_help(runner) -> None:
     result = runner.invoke(core.cli, CliArgs(['source', '--help']).args)
 
     # check that a variety of SOURCE commands are in the output
-    assert "PCAP|OSF|BAG info" in result.output
+    assert "PCAP|OSF|BAG|MCAP info" in result.output
     assert "SENSOR config" in result.output
 
     # check that general message is there
@@ -249,9 +278,8 @@ def test_source_config(runner):
     assert result.exit_code == 1
 
 
-def test_source_metadata():
+def test_source_metadata(runner):
     """It should attempt to get metadata (and fail when there is no sensor)"""
-    runner = CliRunner()
     result = runner.invoke(core.cli, ['source', '127.0.0.1', 'metadata'])
     assert "Error: CurlClient::execute_request failed" in result.output
     assert result.exit_code == 1
@@ -410,6 +438,18 @@ def test_source_pcap_legacy_soft_id_failure(runner, tmp_path):
         # there are no files in the output dir
         files = os.listdir(tmp_path)
         assert len(files) == 0
+
+
+def test_source_pcap_save_raw(test_pcap_file, runner, tmp_path):
+    """It should save a pcap file with the desired name."""
+    with set_directory(tmp_path):
+        assert not os.listdir(tmp_path)  # no files in output dir
+        result = runner.invoke(core.cli, CliArgs(['source', test_pcap_file, 'save_raw', 'test.pcap']).args)
+        assert result.exit_code == 0
+        # there's a pcap in the output directory
+        files = os.listdir(tmp_path)
+        assert len(files) == 2
+        assert any(filename == 'test.pcap' for filename in files)
 
 
 def test_source_osf_info_help(test_osf_file, runner):

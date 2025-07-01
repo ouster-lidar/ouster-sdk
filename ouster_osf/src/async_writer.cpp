@@ -96,5 +96,7 @@ void AsyncWriter::close() {
     writer_.close();
 }
 
+AsyncWriter::~AsyncWriter() { close(); }
+
 }  // namespace osf
 }  // namespace ouster

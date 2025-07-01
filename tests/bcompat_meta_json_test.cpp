@@ -655,25 +655,16 @@ const std::map<std::string, std::vector<std::string>> expected_issues{
       "$.'ouster-sdk'.extrinsic.*",
       "$.user_data"}},
     {"2_1_2_os1-991913000010-64",
-     {"$.sensor_info.initialization_id",
-      "$.config_params.columns_per_packet",
-      "$.config_params.udp_dest",
-      "$.config_params.udp_ip",
-      "$.config_params.udp_profile_imu",
-      "$.config_params.udp_profile_lidar",
-      "$.config_params.gyro_fsr",
-      "$.config_params.accel_fsr",
-      "$.config_params.return_order",
-      "$.config_params.min_range_threshold_cm",
+     {"$.sensor_info.initialization_id", "$.config_params.columns_per_packet",
+      "$.config_params.udp_profile_imu", "$.config_params.udp_profile_lidar",
+      "$.config_params.gyro_fsr", "$.config_params.accel_fsr",
+      "$.config_params.return_order", "$.config_params.min_range_threshold_cm",
       "$.lidar_data_format.udp_profile_lidar",
-      "$.lidar_data_format.udp_profile_imu",
-      "$.lidar_data_format.fps",
-      "$.lidar_data_format.fps",
-      "$.calibration_status.reflectivity.timestamp",
+      "$.lidar_data_format.udp_profile_imu", "$.lidar_data_format.fps",
+      "$.lidar_data_format.fps", "$.calibration_status.reflectivity.timestamp",
       "$.beam_intrinsics.beam_to_lidar_transform.*",
       "$.beam_intrinsics.beam_to_lidar_transform.*",
-      "$.'ouster-sdk'.extrinsic.*",
-      "$.'ouster-sdk'.extrinsic.*",
+      "$.'ouster-sdk'.extrinsic.*", "$.'ouster-sdk'.extrinsic.*",
       "$.user_data"}},
     {"2_2_os-992119000444-128_legacy",
      {"$.config_params.azimuth_window.*",
@@ -929,6 +920,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.sync_pulse_out_frequency = 1;
         config.operating_mode = OperatingMode::OPERATING_NORMAL;
         config.sync_pulse_out_pulse_width = 10;
+        config.extra_options["window_rejection_enable"] = "1";
         sinfo_populator(si_1_12_os1_991913000010_64,
             "",
             991913000010,
@@ -953,7 +945,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
             calibration_status{},
             config
             );
-
+        config.extra_options.clear();
         sinfo_populator(si_1_12_os1_991937000062_16A0_legacy,
             "os1-991937000062.local",
             991937000062,
@@ -1362,6 +1354,7 @@ class MetaJsonTest : public testing::TestWithParam<const char*> {
         config.timestamp_mode = timestamp_mode::TIME_FROM_INTERNAL_OSC;
         config.udp_port_imu = 7503;
         config.udp_port_lidar = 7502; 
+        config.udp_dest = "";
         sinfo_populator(si_2_1_2_os1_991913000010_64,
             "",
             991913000010,

@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict, Optional, List, Union
-from ouster.sdk.client import LidarScan, ChanField
-from ouster.sdk.client import dewarp
+from ouster.sdk.core import LidarScan, ChanField
+from ouster.sdk.core import dewarp
 from ouster.sdk._bindings.viz import Cloud, PointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
 from ouster.sdk.viz.model import LidarScanVizModel

@@ -131,129 +131,12 @@ file to a PLY file and keep only the point within 20 to 80 meters range you can 
 
 .. code:: bash
 
-        ouster-cli source sample.osf clip RANGE,RANGE2 20:80 save clipped_output.ply
+        ouster-cli source sample.osf clip RANGE,RANGE2 20m:80m save clipped_output.ply
 
 More details about the clip command usage can be found in the :ref:`Clip Command <ouster-cli-clip>`
 
 You can use an open source software `CloudCompare`_ to import and view the generated point cloud
 data files.
-
-
-Viz Command
------------
-
-The ``viz`` command enables visualizing the accumulated point cloud generation during the
-SLAM process. By default, the viz operates in looping mode, meaning the visualization will
-continuously replay the source file.
-
-.. code:: bash
-
-        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz
-
-When combining the ``viz`` and ``save`` commands, the saving process will automatically terminate
-after the first iteration, and then the SLAM process restarts for each subsequent lidar scan iteration.
-To end the SLAM and visualization processes after the save operation completes, you can use ``ctrl + c``.
-Alternatively, you can add ``-e exit`` to the ``viz`` command to terminate the process after a
-complete iteration.
-
-.. code:: bash
-
-        ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz -e exit save sample.osf
-
-
-**Accumulation**: The viz command supports several options for creating visually-pleasing maps by accumulating data from
-lidar scans that contain pose information. The following sections describe the options and provide usage examples.
-
-Available view modes
-~~~~~~~~~~~~~~~~~~~~~
-
-There are three view modes of accumulation implemented in the default
-visualizer that may be enabled/disabled depending on its parameters and the data
-that is passed through it:
-
-   * **poses** mode, key ``8`` - all scan poses in a trajectory/path view (if poses data is present in scans.)
-   * **map accumulation** mode, key ``7`` - overall map view with select ratio of random points
-     from every scan (available for scans with or without poses.)
-   * **scan accumulation** mode, key ``6`` - accumulated *N* scans (key frames) that is picked
-     according to parameters (available for scans with or without poses.)
-
-
-Key bindings
-~~~~~~~~~~~~~
-
-The following key shortcuts apply to accumulation options while running Ouster CLI's ``viz`` command.
-
-    ==============  =============================================================
-        Key         What it does
-    ==============  =============================================================
-    ``6``           Toggle scans accumulation view mode (ACCUM)
-    ``7``           Toggle overall map view mode (MAP)
-    ``8``           Toggle poses/trajectory view mode (TRACK)
-    ``k / K``       Cycle point cloud coloring mode of accumulated clouds or map
-    ``g / G``       Cycle point cloud color palette of accumulated clouds or map
-    ``j / J``       Increase/decrease point size of accumulated clouds or map
-    ==============  =============================================================
-
-Ouster CLI ``viz`` accumulation options:
-
-  * **scan accumulation options**
-     * ``--accum-num INTEGER`` Accumulate up to this number of past scans for
-       visualization. Use <= 0 for unlimited. Defaults to 100 if ``--accum-every`` or
-       ``--accum-every-m`` is set.
-     * ``--accum-every INTEGER`` Add a new scan to the accumulator every this
-    number of scans.
-     * ``--accum-every-m FLOAT`` Add a new scan to the accumulator after this many
-       meters of travel.
-  * **map accumulation options**
-     * ``--map`` If set, add random points from every scan into an overall map for
-       visualization. Enabled if either ``--map-ratio`` or ``--map-size`` are set.
-     * ``--map-ratio FLOAT`` Fraction of random points in every scan to add to
-       overall map (0, 1]. [default: 0.01]
-     * ``--map-size INTEGER`` Maximum number of points in overall map before
-       discarding. [default: 1500000]
-
-
-Dense accumulated clouds view (with every point of a scan)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To obtain the densest view use the ``--accum-num N --accum-every 1`` parameters where ``N`` is the
-number of clouds to accumulate (``N`` up to 100 is generally small enough to avoid slowing down
-the viz interface.)
-
-The following example computes poses for each scan using the ``slam`` command and creates a dense
-map using the ``viz --accum-num 20`` to accumulate the points from 20 scans. Finally, the ``save`` command writes the
-scans with their computed trajectories to an OSF file. (Note - accumulation is a visualization feature only. The
-accumulated data is not saved to the file.)::
-
-   ouster-cli source <SENSOR_HOSTNAME> / <FILENAME> slam viz --accum-num 20 save sample.osf
-
-and the dense accumulated clouds result:
-
-.. figure:: /images/scans_accum_dense_every.png
-
-   Dense view of 20 accumulated scans during the ``slam viz`` run
-
-Overall map view (with poses)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-One of the main tasks we frequently need is a preview of the overall map. We can test this by using
-the SLAM-generated OSF file, which was created with the above command and contains the
-SLAM trajectory in ``LidarScan.pose``. If you are using a SLAM-generated OSF, you can directly use
-viz with scan accumulator feature without appending the ``slam`` option.
-::
-
-   ouster-cli source sample.osf viz --accum-num 20 \
-   --accum-every-m 10.5 --map -r 3 -e stop
-
-
-Here is a preview example of the overall map generated from the accumulated scan results.
-By utilizing the '-e stop' option, the visualizer stops once the replay process finishes,
-displaying the preview of the lidar trajectory:
-
-.. figure:: /images/scans_accum_map_all_scan.png
-
-   Data fully replayed with map and accum enabled (last current scan is displayed here in gray
-   palette)
 
 
 Localize Command
@@ -303,3 +186,18 @@ To see the full list of available options to modify the map visuals check the ``
 .. _Networking Guide: https://static.ouster.dev/sensor-docs/image_route1/image_route3/networking_guide/networking_guide.html
 
 .. _CloudCompare: https://www.cloudcompare.org/
+
+Multi sensor SLAM support and Timing synchronization
+----------------------------------------------------
+
+The accuracy of multi-sensor SLAM relies on two key prerequisites:
+
+- Precise sensor extrinsics (rigid-body calibration between sensors)
+- Tightly synchronized timestamps (via PTP or equivalent)
+
+When both are in place, the SLAM algorithm can fuse point clouds with minimal drift and maximum consistency. 
+
+In cases where sensors may not be time-synchronized or column timestamps present within scans are not guaranteed to be monotonically increasing,
+SDK applies an estimated clock offset. This might result in a degradation of map quality. 
+
+In those cases, the SDK’s software-based timing correction serves as a patch, but it cannot fully recover the precision of a properly synchronized setup.

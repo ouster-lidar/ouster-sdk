@@ -5,7 +5,7 @@ from typing import (Callable, Iterable, Iterator, TypeVar,
 
 from more_itertools import consume
 
-from ouster.sdk.client import (PacketMultiSource, LidarPacket, ImuPacket, FrameBorder)
+from ouster.sdk.core import (PacketSource, LidarPacket, ImuPacket, FrameBorder)
 from ouster.sdk.pcap.pcap import MTU_SIZE
 import ouster.sdk._bindings.pcap as _pcap
 
@@ -58,7 +58,7 @@ def ichunked_before(it: Iterable[T],
 class RecordingPacketSource:
     # TODO: deduplicate this & pcap.record
     def __init__(self,
-                source: PacketMultiSource,
+                source: PacketSource,
                 prefix_path: str,
                 *,
                 sensor_idx: int = -1,
@@ -83,7 +83,7 @@ class RecordingPacketSource:
         self.imu_port = imu_port
         self.use_sll_encapsulation = use_sll_encapsulation
         self.overwrite = overwrite
-        self._metadata = self.source.metadata
+        self._metadata = self.source.sensor_info
 
     @property  # type: ignore
     def __class__(self):

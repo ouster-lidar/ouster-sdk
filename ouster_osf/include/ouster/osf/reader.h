@@ -11,6 +11,7 @@
 #include <queue>
 #include <unordered_map>
 
+#include "ouster/error_handler.h"
 #include "ouster/osf/file.h"
 #include "ouster/osf/metadata.h"
 #include "ouster/types.h"
@@ -18,6 +19,10 @@
 
 namespace ouster {
 namespace osf {
+
+using ouster::core::default_error_handler;
+using ouster::core::error_handler_t;
+using ouster::core::Severity;
 
 /**
  * Enumerator for dealing with chunk validity.
@@ -512,17 +517,23 @@ class OUSTER_API_CLASS Reader {
      * Creates reader from %OSF file resource.
      *
      * @param[in] osf_file The OsfFile object to use to read from.
+     * @param[in] error_handler An optional callback that serves as an error
+     * handler.
      */
     OUSTER_API_FUNCTION
-    Reader(OsfFile& osf_file);
+    Reader(OsfFile& osf_file,
+           const error_handler_t& error_handler = default_error_handler);
 
     /**
      * Creates reader from %OSF file name.
      *
      * @param[in] file The OSF file path to read from.
+     * @param[in] error_handler An optional callback that serves as an error
+     * handler.
      */
     OUSTER_API_FUNCTION
-    Reader(const std::string& file);
+    Reader(const std::string& file,
+           const error_handler_t& error_handler = default_error_handler);
 
     /**
      * Reads the messages from the first OSF chunk in sequental order
@@ -652,6 +663,13 @@ class OUSTER_API_CLASS Reader {
     OUSTER_API_FUNCTION
     bool has_stream_info() const;
 
+    /**
+     * Get the OSF file format version.
+     *
+     * @return The OSF file format version of this file.
+     */
+    OUSTER_API_FUNCTION ouster::util::version version() const;
+
    private:
     /**
      * Read, parse and store all of the flatbuffer related metadata.
@@ -682,6 +700,11 @@ class OUSTER_API_CLASS Reader {
     OsfFile file_;
 
     /**
+     * File version.
+     */
+    ouster::util::version version_;
+
+    /**
      * Internal MetadataStore object to hold all of the
      * metadata entries.
      */
@@ -709,6 +732,11 @@ class OUSTER_API_CLASS Reader {
      */
     std::vector<uint8_t> metadata_buf_{};
 
+    /**
+     * A function that can serve as a user-provided error handler.
+     */
+    error_handler_t error_handler_;
+
     // NOTE: These classes need an access to private member `chunks_` ...
     friend class ChunkRef;
     friend struct ChunksIter;
@@ -731,9 +759,12 @@ class OUSTER_API_CLASS MessageRef {
      * @param[in] buf The buffer to use to make a MessageRef object.
      * @param[in] meta_provider The metadata store that is used in types
      *                          reconstruction
+     * @param[in] error_handler An optional callback that serves as an error
+     * handler.
      */
     OUSTER_API_FUNCTION
-    MessageRef(const uint8_t* buf, const MetadataStore& meta_provider);
+    MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
+               const error_handler_t& error_handler);
 
     /**
      * The only way to create the MessageRef is to point to the corresponding
@@ -743,10 +774,13 @@ class OUSTER_API_CLASS MessageRef {
      * @param[in] meta_provider The metadata store that is used in types
      *                          reconstruction
      * @param[in,out] chunk_buf The pre-existing chunk buffer to use.
+     * @param[in] error_handler An optional callback that serves as an error
+     * handler.
      */
     OUSTER_API_FUNCTION
     MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
-               std::shared_ptr<std::vector<uint8_t>> chunk_buf);
+               std::shared_ptr<std::vector<uint8_t>> chunk_buf,
+               const error_handler_t& error_handler);
 
     /**
      * Get the message stream id.
@@ -819,7 +853,12 @@ class OUSTER_API_CLASS MessageRef {
             return nullptr;
         }
 
-        return Stream::decode_msg(buffer(), *meta, meta_provider_);
+        try {
+            return Stream::decode_msg(*this, *meta, meta_provider_);
+        } catch (const std::runtime_error& error) {
+            error_handler_(Severity::OUSTER_WARNING, error.what());
+            return nullptr;
+        }
     }
 
     template <typename Stream, typename T>
@@ -831,7 +870,12 @@ class OUSTER_API_CLASS MessageRef {
             return nullptr;
         }
 
-        return Stream::decode_msg(buffer(), *meta, meta_provider_, t);
+        try {
+            return Stream::decode_msg(*this, *meta, meta_provider_, t);
+        } catch (const std::runtime_error& error) {
+            error_handler_(Severity::OUSTER_WARNING, error.what());
+            return nullptr;
+        }
     }
 
     /**
@@ -860,6 +904,14 @@ class OUSTER_API_CLASS MessageRef {
     OUSTER_API_FUNCTION
     bool operator!=(const MessageRef& other) const;
 
+    /**
+     * Get the error handler associated with this message.
+     *
+     * @return A constant reference to the error handler.
+     */
+    OUSTER_API_FUNCTION
+    const error_handler_t& error_handler() const;
+
    private:
     /**
      * The internal raw byte array.
@@ -875,6 +927,11 @@ class OUSTER_API_CLASS MessageRef {
      * The internal chunk buffer to use.
      */
     std::shared_ptr<ChunkBuffer> chunk_buf_;
+
+    /**
+     * A function can serve as a user-provided error handler.
+     */
+    error_handler_t error_handler_;
 };  // MessageRef
 
 /**

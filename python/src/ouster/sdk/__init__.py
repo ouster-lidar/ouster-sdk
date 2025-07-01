@@ -6,6 +6,7 @@ Ouster-SDK
 """
 # flake8: noqa (unused imports)
 
-from .open_source import open_source
+from .open_source import open_source, open_packet_source
 from .open_source import SourceURLException
-from .open_source import _populate_extrinsics
+
+from ._bindings.client import populate_extrinsics as _populate_extrinsics

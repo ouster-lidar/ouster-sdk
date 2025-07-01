@@ -585,10 +585,15 @@ TEST_P(ScanBatcherSnapshotTest, snapshot_test) {
     int packet_index = 0;
     while (pcap.next_packet())
         if (pcap.current_info().dst_port == 7502) {
+            LidarPacket packet;
+            packet.host_timestamp = packet_ts;
+            packet.buf.resize(pcap.current_length());
+            memcpy(packet.buf.data(), pcap.current_data(),
+                   pcap.current_length());
             if (packet_index++ == 63) {
-                EXPECT_TRUE(batcher(pcap.current_data(), packet_ts, ls));
+                EXPECT_TRUE(batcher(packet, ls));
             } else {
-                EXPECT_FALSE(batcher(pcap.current_data(), packet_ts, ls));
+                EXPECT_FALSE(batcher(packet, ls));
             }
         }
 
@@ -669,10 +674,15 @@ TEST_P(ScanBatcherSnapshotTest, extended_profile_comp_test) {
         int packet_index = 0;
         while (pcap.next_packet()) {
             if (pcap.current_info().dst_port == 7502) {
+                LidarPacket packet;
+                packet.host_timestamp = packet_ts;
+                packet.buf.resize(pcap.current_length());
+                memcpy(packet.buf.data(), pcap.current_data(),
+                       pcap.current_length());
                 if (packet_index++ == 63) {
-                    EXPECT_TRUE(batcher(pcap.current_data(), packet_ts, ls));
+                    EXPECT_TRUE(batcher(packet, ls));
                 } else {
-                    EXPECT_FALSE(batcher(pcap.current_data(), packet_ts, ls));
+                    EXPECT_FALSE(batcher(packet, ls));
                 }
             }
         }

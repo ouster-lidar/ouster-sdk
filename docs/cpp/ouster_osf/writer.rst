@@ -1,12 +1,21 @@
-========
 writer.h
 ========
 
-.. doxygenclass:: ouster::osf::ChunksWriter
-    :members:
+.. contents::
+   :local:
 
-.. doxygenclass:: ouster::osf::Writer
-    :members:
+Class
+-----
 
 .. doxygenclass:: ouster::osf::ChunkBuilder
-    :members:
+   :project: cpp_api
+   :members:
+
+.. doxygenclass:: ouster::osf::ChunksWriter
+   :project: cpp_api
+   :members:
+
+.. doxygenclass:: ouster::osf::Writer
+   :project: cpp_api
+   :members:
+

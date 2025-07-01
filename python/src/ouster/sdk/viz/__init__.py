@@ -14,6 +14,7 @@ from ouster.sdk._bindings.viz import Cloud
 from ouster.sdk._bindings.viz import Image
 from ouster.sdk._bindings.viz import Cuboid
 from ouster.sdk._bindings.viz import Label
+from ouster.sdk._bindings.viz import Lines
 from ouster.sdk._bindings.viz import WindowCtx
 from ouster.sdk._bindings.viz import Camera
 from ouster.sdk._bindings.viz import TargetDisplay
@@ -31,6 +32,7 @@ from .view_mode import ImageCloudMode
 from .core import push_point_viz_handler
 from .core import LidarScanViz
 from .core import SimpleViz
+from .core import ls_show
 from .core import CloudPaletteItem
 from .core import VizExtraMode
 

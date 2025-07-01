@@ -2,9 +2,10 @@ from contextlib import closing
 import logging
 import pytest
 import time
+from more_itertools import take
 
-from ouster.sdk import client
-from ouster.sdk.client import LidarMode, TimestampMode, UDPProfileLidar, PacketFormat, ColHeader
+from ouster.sdk import sensor
+from ouster.sdk.core import LidarMode, TimestampMode, UDPProfileLidar, PacketFormat, ColHeader
 
 logger = logging.getLogger("HIL")
 
@@ -103,13 +104,18 @@ def test_lidar_packets_delay(hil_configured_sensor, hil_sensor_config,
     maximum_avg_delay_ms = 20.0
     delays_ms = [float] * total_capture_count
     logger.debug(f"Capturing {total_capture_count} lidar packets...")
+    
+    with closing(sensor.SensorPacketSource(hil_configured_sensor)) as src:
+        metadata = src.sensor_info
+
+    metadata[0].config.udp_port_imu = 7505
 
     # Specify 7505 != imu_port() to make sure we get only lidar packets
-    with closing(client.Sensor(hil_configured_sensor, lidar_port,
-                               7505, _flush_frames = 10)) as sensor:
-        pf = PacketFormat(sensor.metadata)
-        for i, p in zip(range(total_capture_count), sensor):
+    with closing(sensor.SensorPacketSource(hil_configured_sensor, sensor_info=metadata)) as src:
+        take(640, src) # flush
+        pf = PacketFormat(src.sensor_info[0])
+        for i, p in zip(range(total_capture_count), src):
             delays_ms[i] = (time.time_ns() -
-                            (pf.packet_header(ColHeader.TIMESTAMP, p.buf)[0] - TAI_OFFSET_ns)) * 1e-6
+                            (pf.packet_header(ColHeader.TIMESTAMP, p[1].buf)[0] - TAI_OFFSET_ns)) * 1e-6
     avg = sum(delays_ms[warm_up:]) / float(sample_count)  # type: ignore
     assert minimum_avg_delay_ms < avg < maximum_avg_delay_ms

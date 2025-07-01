@@ -26,7 +26,7 @@ PointsF cartesian_f(const Eigen::Ref<const img_t<uint32_t>>& range,
     return (nooffset.array() == 0.0).select(nooffset, nooffset + offset);
 }
 
-class CartesianParametrisedTestFixture
+class CartesianParameterizedTestFixture
     : public ::testing::TestWithParam<std::pair<int, int>> {
    protected:
     int scan_width;
@@ -34,13 +34,13 @@ class CartesianParametrisedTestFixture
 };
 
 INSTANTIATE_TEST_CASE_P(CartesianParametrisedTests,
-                        CartesianParametrisedTestFixture,
+                        CartesianParameterizedTestFixture,
                         ::testing::Values(std::pair<int, int>{512, 128},
                                           std::pair<int, int>{1024, 128},
                                           std::pair<int, int>{2048, 128},
                                           std::pair<int, int>{4096, 128}));
 
-TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
+TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatch) {
     const auto WIDTH = 256;
     const auto HEIGHT = 32;
     const auto ROWS = WIDTH * HEIGHT;
@@ -50,7 +50,9 @@ TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
         0.5 * PointsD::Random(ROWS, COLS) + PointsD::Constant(ROWS, COLS, 1.0);
     PointsD offset = 0.005 * (PointsD::Random(ROWS, COLS) +
                               PointsD::Constant(ROWS, COLS, 1.0));
-    XYZLut lut{direction, offset};
+    XYZLut lut;
+    lut.direction = direction;
+    lut.offset = offset;
 
     img_t<uint32_t> range = img_t<uint32_t>::Random(WIDTH, HEIGHT);
 
@@ -62,7 +64,7 @@ TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatch) {
     EXPECT_TRUE(points.isApprox(points0));
 }
 
-TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatchF) {
+TEST(CartesianParameterizedTestFixture, CartesianFunctionsMatchF) {
     const auto WIDTH = 256;
     const auto HEIGHT = 32;
     const auto ROWS = WIDTH * HEIGHT;
@@ -72,7 +74,9 @@ TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatchF) {
         0.5 * PointsD::Random(ROWS, COLS) + PointsD::Constant(ROWS, COLS, 1.0);
     PointsD offset = 0.005 * (PointsD::Random(ROWS, COLS) +
                               PointsD::Constant(ROWS, COLS, 1.0));
-    XYZLut lut{direction, offset};
+    XYZLut lut;
+    lut.direction = direction;
+    lut.offset = offset;
 
     PointsF directionF = direction.cast<float>();
     PointsF offsetF = offset.cast<float>();
@@ -88,7 +92,7 @@ TEST(CartesianParametrisedTestFixture, CartesianFunctionsMatchF) {
     EXPECT_TRUE(pointsF.isApprox(points0F));
 }
 
-TEST_P(CartesianParametrisedTestFixture, SpeedCheck) {
+TEST_P(CartesianParameterizedTestFixture, SpeedCheck) {
     std::map<std::string, std::string> styles = term_styles();
 
     const auto test_params = GetParam();
@@ -104,7 +108,9 @@ TEST_P(CartesianParametrisedTestFixture, SpeedCheck) {
         0.5 * PointsD::Random(ROWS, COLS) + PointsD::Constant(ROWS, COLS, 1.0);
     PointsD offset = 0.005 * (PointsD::Random(ROWS, COLS) +
                               PointsD::Constant(ROWS, COLS, 1.0));
-    XYZLut lut{direction, offset};
+    XYZLut lut;
+    lut.direction = direction;
+    lut.offset = offset;
 
     PointsF directionF = direction.cast<float>();
     PointsF offsetF = offset.cast<float>();

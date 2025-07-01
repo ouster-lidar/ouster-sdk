@@ -10,10 +10,10 @@ import unittest
 
 from typing import Tuple
 
-from ouster.sdk import client, pcap
+from ouster.sdk import core, pcap
 
-from ouster.sdk.client import _utils
-import ouster.sdk.client._digest as digest
+from ouster.sdk.core import _utils
+import ouster.sdk.core._digest as digest
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "../pcaps")
@@ -101,16 +101,16 @@ def stream_digest() -> digest.StreamDigest:
 def meta():
     meta_path = os.path.join(DATA_DIR, "OS-1-32-G_v2.1.1_1024x10.json")
     with open(meta_path, 'r') as f:
-        return client.SensorInfo(f.read())
+        return core.SensorInfo(f.read())
 
 @pytest.fixture
-def scan(stream_digest: digest.StreamDigest, meta: client.SensorInfo) -> client.LidarScan:
+def scan(stream_digest: digest.StreamDigest, meta: core.SensorInfo) -> core.LidarScan:
     pcap_path = os.path.join(DATA_DIR, "OS-1-32-G_v2.1.1_1024x10.pcap")
 
-    with closing(pcap.Pcap(pcap_path, meta)) as source:
-        scans = client.Scans(source)
-        scan = next(iter(scans))
+    with closing(pcap.PcapScanSource(pcap_path, sensor_info=[meta])) as source:
+        scan = next(iter(source))[0]
 
+    assert scan is not None
     return scan
 
 
@@ -132,7 +132,7 @@ def test_map_max_min(ae_with_params, normal_data_with_outliers, straight_line,
     test_max_min(normal_data_with_outliers, auto_exposure)
     test_max_min(straight_line, auto_exposure)
     test_max_min(
-        scan.field(client.ChanField.NEAR_IR).astype(float), auto_exposure)
+        scan.field(core.ChanField.NEAR_IR).astype(float), auto_exposure)
 
 
 def test_map_zero(ae_with_params, normal_data_with_outliers, straight_line,
@@ -152,7 +152,7 @@ def test_map_zero(ae_with_params, normal_data_with_outliers, straight_line,
 
     test_zero(normal_data_with_outliers, auto_exposure)
     test_zero(straight_line, auto_exposure)
-    test_zero(scan.field(client.ChanField.RANGE).astype(float), auto_exposure)
+    test_zero(scan.field(core.ChanField.RANGE).astype(float), auto_exposure)
 
 
 def test_map_constant(ae_with_params):

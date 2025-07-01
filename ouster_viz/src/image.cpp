@@ -18,6 +18,7 @@ namespace viz {
 namespace impl {
 
 bool GLImage::initialized = false;
+GLuint GLImage::vao;
 GLuint GLImage::program_id;
 GLuint GLImage::vertex_id;
 GLuint GLImage::uv_id;
@@ -30,6 +31,8 @@ GLuint GLImage::use_palette_id;
 GLImage::GLImage() {
     if (!GLImage::initialized)
         throw std::logic_error("GLCloud not initialized");
+
+    glGenVertexArrays(1, &GLImage::vao);
     glGenBuffers(2, vertexbuffers.data());
 
     // initialize index buffer
@@ -59,9 +62,11 @@ GLImage::~GLImage() {
     glDeleteTextures(1, &image_texture_id);
     glDeleteTextures(1, &mask_texture_id);
     glDeleteTextures(1, &palette_texture_id);
+    glDeleteVertexArrays(1, &GLImage::vao);
 }
 
 void GLImage::draw(const WindowCtx& ctx, const CameraData&, Image& image) {
+    glBindVertexArray(GLImage::vao);
     // update state
     if (image.position_changed_) {
         x0 = image.position_[0];
@@ -142,8 +147,7 @@ void GLImage::draw(const WindowCtx& ctx, const CameraData&, Image& image) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, image_index_id);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, (void*)0);
-    glDisableVertexAttribArray(vertex_id);
-    glDisableVertexAttribArray(uv_id);
+    glBindVertexArray(0);
 }
 
 void GLImage::initialize() {

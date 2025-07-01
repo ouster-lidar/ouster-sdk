@@ -210,21 +210,6 @@ void visit_field(SCAN&& ls, const std::string& name, OP&& op, Args&&... args) {
                    std::forward<Args>(args)...);
 }
 
-// clang-format off
-/*
- * Call a generic operation op<T>(f, Args...) for each field of the lidar scan
- * with type parameter T having the correct field type
- */
-template <typename SCAN, typename OP, typename... Args>
-[[deprecated("Use either ls.fields() or foreach_channel_field instead")]]
-
-void foreach_field(SCAN&& ls, OP&& op, Args&&... args) {
-    for (const auto& ft : ls)
-        visit_field(std::forward<SCAN>(ls), ft.first, std::forward<OP>(op),
-                    ft.first, std::forward<Args>(args)...);
-}
-// clang-format on
-
 /*
  * Call a generic operation op<T>(f, Args...) for each parsed channel field of
  * the lidar scan with type parameter T having the correct field type
@@ -386,6 +371,32 @@ void scan_to_packets(const LidarScan& ls,
 
 }  // namespace impl
 
+// destagger into an existing array
+template <typename T>
+inline void destagger_into(const Eigen::Ref<const img_t<T>>& img,
+                           const std::vector<int>& pixel_shift_by_row,
+                           bool inverse, Eigen::Ref<img_t<T>> destaggered) {
+    const size_t h = img.rows();
+    const size_t w = img.cols();
+
+    if (pixel_shift_by_row.size() != h)
+        throw std::invalid_argument{"image height does not match shifts size"};
+
+    int sign = inverse ? -1 : +1;
+
+    const auto* const g = img.data();
+    const auto d = destaggered.data();
+
+    for (size_t u = 0; u < h; ++u) {
+        const auto g_row = g + u * w;
+        const auto d_row = d + u * w;
+        const int offset = (w + sign * pixel_shift_by_row[u] % w) % w;
+        memcpy(d_row, g_row + (w - offset), offset * sizeof(T));
+        memcpy(d_row + offset, g_row, (w - offset) * sizeof(T));
+    }
+}
+
+// destagger into a new array
 template <typename T>
 inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& img,
                           const std::vector<int>& pixel_shift_by_row,
@@ -393,19 +404,8 @@ inline img_t<T> destagger(const Eigen::Ref<const img_t<T>>& img,
     const size_t h = img.rows();
     const size_t w = img.cols();
 
-    if (pixel_shift_by_row.size() != h)
-        throw std::invalid_argument{"image height does not match shifts size"};
-
     img_t<T> destaggered{h, w};
-    for (size_t u = 0; u < h; u++) {
-        const std::ptrdiff_t offset =
-            ((inverse ? -1 : 1) * pixel_shift_by_row[u] + w) % w;
-
-        destaggered.row(u).segment(offset, w - offset) =
-            img.row(u).segment(0, w - offset);
-        destaggered.row(u).segment(0, offset) =
-            img.row(u).segment(w - offset, offset);
-    }
+    destagger_into<T>(img, pixel_shift_by_row, inverse, destaggered);
     return destaggered;
 }
 

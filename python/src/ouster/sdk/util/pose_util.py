@@ -4,7 +4,7 @@ import numpy as np
 
 import bisect
 
-from ouster.sdk import client
+from ouster.sdk import core
 
 import logging
 
@@ -418,9 +418,9 @@ class Poser(Protocol):
     """Actor that adds poses to LidarScans"""
 
     def __call__(self,
-                 scan: client.LidarScan,
+                 scan: core.LidarScan,
                  *,
-                 col_ts: Optional[np.ndarray] = None) -> client.LidarScan:
+                 col_ts: Optional[np.ndarray] = None) -> core.LidarScan:
         """Add poses to the scan, modifying in-place."""
         ...
 
@@ -602,9 +602,9 @@ class TrajectoryEvaluator(Poser):
         return bool(self._poses)
 
     def __call__(self,
-                 scan: client.LidarScan,
+                 scan: core.LidarScan,
                  *,
-                 col_ts: Optional[np.ndarray] = None) -> client.LidarScan:
+                 col_ts: Optional[np.ndarray] = None) -> core.LidarScan:
         """Add poses to the scan.
 
         Use `col_ts` if the column timestamps need to be remapped to a
@@ -687,13 +687,13 @@ def pose_scans(
 
     Args:
         source: one of:
-            - Sequence[client.LidarScan] - single scan sources
-            - Sequence[List[Optional[client.LidarScan]]] - multi scans sources
+            - Sequence[core.LidarScan] - single scan sources
+            - Sequence[List[Optional[core.LidarScan]]] - multi scans sources
     """
 
     for obj in source:
-        if isinstance(obj, client.LidarScan):
-            # Iterator[client.LidarScan]
+        if isinstance(obj, core.LidarScan):
+            # Iterator[core.LidarScan]
             yield poses(obj) if poses is not None else obj
         elif isinstance(obj, list):
             # collated scans: List[Optional[LidarScan]]
@@ -751,8 +751,8 @@ def pose_scans_from_kitti(
 
     Args:
         source: one of:
-            - Sequence[client.LidarScan] - single scan sources
-            - Sequence[List[Optional[client.LidarScan]]] - multi scans sources
+            - Sequence[core.LidarScan] - single scan sources
+            - Sequence[List[Optional[core.LidarScan]]] - multi scans sources
         kitti_poses: path to the file with in kitti poses format, i.e. every
                      line contains 12 floats of 4x4 homogeneous transformation
                      matrix (``[:3, :]`` in numpy notation, row-major serialized)
@@ -773,17 +773,17 @@ def pose_scans_from_kitti(
     start_scan_frame_id = -1
     start_scan_ts = -1
 
-    for obj in source:
-        if isinstance(obj, client.LidarScan):
-            # Iterator[client.LidarScan]
+    for obj, in source:
+        if isinstance(obj, core.LidarScan):
+            # Iterator[core.LidarScan]
             scan = obj
 
             # checking for the source looping (if frame_id and scan_ts was seen)
             if start_scan_frame_id < 0:
                 start_scan_frame_id = scan.frame_id
-                start_scan_ts = client.first_valid_column_ts(scan)
+                start_scan_ts = scan.get_first_valid_column_timestamp()
             elif (start_scan_frame_id == scan.frame_id and
-                  start_scan_ts == client.first_valid_column_ts(scan)):
+                  start_scan_ts == scan.get_first_valid_column_timestamp()):
                 # loop detected, reset scan_idx
                 scan_idx = -1
 

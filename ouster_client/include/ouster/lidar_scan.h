@@ -229,13 +229,24 @@ class OUSTER_API_CLASS LidarScan {
     LidarScan(const sensor::sensor_info& sensor_info);
 
     /**
-     * Initialize a scan with fields configured as default for the provided
+     * Initialize a scan configured as default for the provided
      * SensorInfo's configuration
      *
      * @param[in] sensor_info a shared_ptr to the sensor_info object
      */
     OUSTER_API_FUNCTION
     LidarScan(std::shared_ptr<sensor::sensor_info> sensor_info);
+
+    /**
+     * Initialize a scan for the given sensor info with either the default for
+     * the provided configuration or provided fields.
+     *
+     * @param[in] sensor_info a shared_ptr to the sensor_info object
+     * @param[in] field_types fields to use in the lidar scan
+     */
+    OUSTER_API_FUNCTION
+    LidarScan(std::shared_ptr<sensor::sensor_info> sensor_info,
+              const std::vector<FieldType>& field_types);
 
     /**
      * Initialize a scan with the default fields for a particular udp profile.
@@ -519,12 +530,44 @@ class OUSTER_API_CLASS LidarScan {
     uint64_t get_first_valid_packet_timestamp() const;
 
     /**
+     * Return the last valid packet timestamp
+     *
+     * @return the last valid packet timestamp, 0 if none available
+     */
+    OUSTER_API_FUNCTION
+    uint64_t get_last_valid_packet_timestamp() const;
+
+    /**
      * Return the first valid column timestamp
      *
      * @return the first valid column timestamp, 0 if none available
      */
     OUSTER_API_FUNCTION
     uint64_t get_first_valid_column_timestamp() const;
+
+    /**
+     * Return the last valid column timestamp
+     *
+     * @return the last valid column timestamp, 0 if none available
+     */
+    OUSTER_API_FUNCTION
+    uint64_t get_last_valid_column_timestamp() const;
+
+    /**
+     * Return the first valid column index
+     *
+     * @return the first valid column index, -1 if none available
+     */
+    OUSTER_API_FUNCTION
+    int get_first_valid_column() const;
+
+    /**
+     * Return the last valid column index
+     *
+     * @return the last valid column index, -1 if none available
+     */
+    OUSTER_API_FUNCTION
+    int get_last_valid_column() const;
 
     /**
      * Access the measurement id headers.
@@ -569,6 +612,15 @@ class OUSTER_API_CLASS LidarScan {
      */
     OUSTER_API_FUNCTION
     bool complete(sensor::ColumnWindow window) const;
+
+    /**
+     * Assess completeness of scan.
+     * @return whether all columns within the column window were valid
+     * @throw std::runtime_error if the LidarScan does not have an associated
+     * sensor_info
+     */
+    OUSTER_API_FUNCTION
+    bool complete() const;
 
     /**
      * Returns the number of lidar packets used to produce this scan.
@@ -658,11 +710,15 @@ std::string to_string(const LidarScan& ls);
 
 /** @}*/
 
-/** Lookup table of beam directions and offsets. */
-struct OUSTER_API_CLASS XYZLut {
-    LidarScan::Points direction;  ///< Lookup table of beam directions
-    LidarScan::Points offset;     ///< Lookup table of beam offsets
-};
+}  // namespace ouster
+
+#include "ouster/cartesian.h"
+
+namespace ouster {
+
+template <typename T>
+class XYZLutT;
+using XYZLut = XYZLutT<double>;
 
 /**
  * Generate a set of lookup tables useful for computing Cartesian coordinates
@@ -713,6 +769,49 @@ XYZLut make_xyz_lut(size_t w, size_t h, double range_unit,
  */
 OUSTER_API_FUNCTION
 XYZLut make_xyz_lut(const sensor::sensor_info& sensor, bool use_extrinsics);
+
+/** Lookup table of beam directions and offsets. */
+template <typename T>
+class XYZLutT {
+   public:
+    Eigen::Array<T, Eigen::Dynamic, 3> direction;
+    Eigen::Array<T, Eigen::Dynamic, 3> offset;
+
+    // Add this to make XYZLut<double> and XYZLut<float> friends to cast
+    template <typename>
+    friend class XYZLutT;
+
+    XYZLutT(const sensor::sensor_info& sensor, bool use_extrinsics) {
+        auto res = make_xyz_lut(sensor, use_extrinsics);
+        *this = res.cast<T>();
+    }
+
+    XYZLutT() = default;
+
+    LidarScan::Points operator()(
+        const Eigen::Ref<const img_t<uint32_t>>& range) const {
+        LidarScan::Points points(range.rows() * range.cols(), 3);
+        cartesianT(points, range, direction, offset);
+        return points;
+    }
+
+    LidarScan::Points operator()(const LidarScan& scan) const {
+        Eigen::Ref<const img_t<uint32_t>> range =
+            scan.field<uint32_t>(sensor::ChanField::RANGE);
+        LidarScan::Points points(range.rows() * range.cols(), 3);
+        cartesianT(points, range, direction, offset);
+        return points;
+    }
+
+   private:
+    template <typename NewT>
+    XYZLutT<NewT> cast() const {
+        XYZLutT<NewT> result;
+        result.direction = direction.template cast<NewT>();
+        result.offset = offset.template cast<NewT>();
+        return result;
+    }
+};
 
 /** \defgroup ouster_client_lidar_scan_cartesian Ouster Client lidar_scan.h
  * XYZLut related items.
@@ -799,7 +898,6 @@ class OUSTER_API_CLASS ScanBatcher {
     size_t h;
     uint16_t next_valid_m_id;
     uint16_t next_headers_m_id;
-    uint16_t next_valid_packet_id;
     sensor::LidarPacket cache;
     bool cached_packet = false;
     int64_t finished_scan_id = -1;
@@ -840,41 +938,13 @@ class OUSTER_API_CLASS ScanBatcher {
     OUSTER_API_FUNCTION
     ScanBatcher(const sensor::sensor_info& info);
 
-    // clang-format off
-
     /**
-     * Add a packet to the scan.
-     * @deprecated this method is deprecated in favor of one that accepts a
-     * reference to a LidarPacket.
+     * Create a batcher given information about the scan and packet format.
      *
-     * @param[in] packet_buf a buffer containing raw bytes from a lidar packet.
-     * @param[in] ls lidar scan to populate.
-     *
-     * @return true when the provided lidar scan is ready to use.
+     * @param[in] info sensor metadata returned from the client.
      */
-    // clang-format off
-    [[deprecated(
-        "Use ScanBatcher::operator(const LidarPacket&, LidarScan&) instead.")]]
     OUSTER_API_FUNCTION
-    bool operator()(const uint8_t* packet_buf, LidarScan& ls);
-
-    /**
-     * Add a packet to the scan.
-     *
-     * @param[in] packet_buf a buffer containing raw bytes from a lidar packet.
-     * @param[in] packet_ts timestamp of the packet (usually HOST time on
-     * receive).
-     * @param[in] ls lidar scan to populate.
-     *
-     * @return true when the provided lidar scan is ready to use.
-     */
-    [[deprecated(
-        "Use ScanBatcher::operator(const LidarPacket&, LidarScan&) instead.")]]
-    OUSTER_API_FUNCTION
-    bool operator()(const uint8_t* packet_buf, uint64_t packet_ts,
-                    LidarScan& ls);
-
-    // clang-format on
+    ScanBatcher(const std::shared_ptr<sensor::sensor_info>& info);
 
     /**
      * Add a packet to the scan.
@@ -885,82 +955,15 @@ class OUSTER_API_CLASS ScanBatcher {
      * @return true when the provided lidar scan is ready to use.
      */
     OUSTER_API_FUNCTION
-    bool operator()(const ouster::sensor::LidarPacket& packet, LidarScan& ls);
+    bool operator()(const sensor::LidarPacket& packet, LidarScan& ls);
+
+    /**
+     * Reset the batcher and clear any cached packets.
+     */
+    OUSTER_API_FUNCTION
+    void reset();
 };
 
-namespace pose_util {
-typedef Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor> Points;
-typedef Eigen::Matrix<double, Eigen::Dynamic, 16, Eigen::RowMajor> Poses;
-typedef Eigen::Matrix<double, 1, 16, Eigen::RowMajor> Pose;
-
-/**
- * This function takes in a set of 3D points and a set of 4x4 pose matrices
- *
- * @param[out] dewarped An eigen matrix of shape (N, 3) to hold the dewarped
- * 3D points, where the same number of points are transformed by each
- * corresponding pose matrix.
- * @param[in] points A Eigen matrix of shape (N, 3) representing the 3D points.
- * Each row corresponds to a point in 3D space.
- * @param[in] poses A Eigen matrix of shape (W, 16) representing W 4x4
- * transformation matrices. Each row is a flattened 4x4 pose matrix
- */
-OUSTER_API_FUNCTION
-void dewarp(Eigen::Ref<Points> dewarped, const Eigen::Ref<const Points> points,
-            const Eigen::Ref<const Poses> poses);
-
-/**
- * This function takes in a set of 3D points and a set of 4x4 pose matrices
- *
- * @param[in] points A Eigen matrix of shape (N, 3) representing the 3D points.
- * Each row corresponds to a point in 3D space.
- * @param[in] poses A Eigen matrix of shape (W, 16) representing W 4x4
- * transformation matrices. Each row is a flattened 4x4 pose matrix
- *
- * @return A matrix of shape (N, 3) containing the dewarped 3D points,
- * where the same number of points are transformed by each corresponding pose
- * matrix.
- */
-OUSTER_API_FUNCTION
-Points dewarp(const Eigen::Ref<const Points> points,
-              const Eigen::Ref<const Poses> poses);
-
-/**
- *  Applies a single 4x4 pose transformation to a set of 3D points.
- *
- * This function takes in a set of 3D points and applies a single 4x4
- * transformation matrix (Pose) to all points.
- *
- * @param[out] transformed A matrix of shape (N, 3) containing the transformed
- * 3D points, where each point is rotated and translated by the given pose.
- * @param[in] points A matrix of shape (N, 3) representing the 3D points.
- *               Each row corresponds to a point in 3D space.
- * @param[in] pose A vector of 16 elements representing a flattened 4x4
- * transformation matrix.
- */
-OUSTER_API_FUNCTION
-void transform(Eigen::Ref<Points> transformed,
-               const Eigen::Ref<const Points> points,
-               const Eigen::Ref<const Pose> pose);
-/**
- *  Applies a single 4x4 pose transformation to a set of 3D points.
- *
- * This function takes in a set of 3D points and applies a single 4x4
- * transformation matrix (Pose) to all points.
- *
- * @param[in] points A matrix of shape (N, 3) representing the 3D points.
- *               Each row corresponds to a point in 3D space.
- * @param[in] pose A vector of 16 elements representing a flattened 4x4
- * transformation matrix.
- *
- * @return A matrix of shape (N, 3) containing the transformed 3D points,
- *         where each point is rotated and translated by the given pose.
- */
-OUSTER_API_FUNCTION
-Points transform(const Eigen::Ref<const Points> points,
-                 const Eigen::Ref<const Pose> pose);
-
-}  // namespace pose_util
 }  // namespace ouster
 
-#include "ouster/impl/cartesian.h"
 #include "ouster/impl/lidar_scan_impl.h"

@@ -68,12 +68,12 @@ int64_t file_size(const std::string& path);
 // File mapping open
 /// @TODO Change up tests to not use this stuff
 OUSTER_API_FUNCTION
-uint8_t* mmap_open(const std::string& path);
+uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle);
 
 // File mapping close
 /// @TODO Change up tests to not use this stuff
 OUSTER_API_FUNCTION
-bool mmap_close(uint8_t* file_buf, uint64_t file_size);
+bool mmap_close(uint8_t* file_buf, uint64_t file_size, uintptr_t memmap_handle);
 
 /// Get the last system error and return it in a string (not wide string)
 /// @TODO Change up tests to not use this stuff

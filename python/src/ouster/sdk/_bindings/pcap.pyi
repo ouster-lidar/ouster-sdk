@@ -4,10 +4,40 @@ All rights reserved.
 
 Type annotations for pcap python bindings.
 """
+import numpy
+from typing import (Dict, overload, List, Callable, Optional)
 
-from typing import (Dict, overload, List, Callable)
+from ouster.sdk.core.data import BufferT
+from ouster.sdk.core import ScanSource, PacketSource, SensorInfo
 
-from ouster.sdk.client.data import BufferT
+class PcapDuplicatePortException(Exception):
+    ...
+
+
+class PcapPacketSource(PacketSource):
+    def __init__(self, source: str, *, sensor_info: Optional[List[SensorInfo]] = None, meta: Optional[List[str]] = None, extrinsics: List[numpy.ndarray] = [], extrinsics_file: str = "", index: bool = False, soft_id_check : bool = False) -> None:
+        ...
+
+    @property
+    def id_error_count(self) -> int:
+        ...
+
+    @property
+    def size_error_count(self) -> int:
+        ...
+
+
+class PcapScanSource(ScanSource):
+    def __init__(self, source: str, *, sensor_info: Optional[List[SensorInfo]] = None, meta: Optional[List[str]] = None, extrinsics: List[numpy.ndarray] = [], extrinsics_file: str = "", index: bool = False, soft_id_check : bool = False, field_names : List[str] = [], raw_fields : bool = False, raw_headers : bool = False,) -> None:
+        ...
+
+    @property
+    def id_error_count(self) -> int:
+        ...
+
+    @property
+    def size_error_count(self) -> int:
+        ...
 
 
 class playback_handle:

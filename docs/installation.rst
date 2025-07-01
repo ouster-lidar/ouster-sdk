@@ -29,7 +29,7 @@ Supported Platforms
 Installation
 --------------
 
-The Ouster Python SDK binary packages require Python >= 3.8 and pip >= 19.0 on most platforms.
+The Ouster Python SDK binary packages require Python ">= 3.8; < 3.13" and pip >= 19.0 on most platforms.
 
 .. note::
 
@@ -73,11 +73,11 @@ Now that your Python environment has an up-to-date pip, you can install ouster-s
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m pip install 'ouster-sdk[examples]'
+        $ python3 -m pip install 'ouster-sdk'
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m pip install 'ouster-sdk[examples]'
+        PS > py -3 -m pip install 'ouster-sdk'
 
 
 .. note::

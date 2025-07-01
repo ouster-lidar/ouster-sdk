@@ -4,7 +4,7 @@ import tempfile
 import os
 import re
 from tests.conftest import PCAPS_DATA_DIR
-from ouster.sdk.client import SensorInfo, LidarMode, UDPProfileLidar, PacketWriter, LidarScan, ScanBatcher
+from ouster.sdk.core import SensorInfo, LidarMode, UDPProfileLidar, PacketWriter, LidarScan, ScanBatcher
 from os.path import commonprefix
 from pathlib import Path
 from ouster.sdk.util import img_aspect_ratio

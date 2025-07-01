@@ -12,7 +12,7 @@
 #include "ouster/client.h"
 #include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
-#include "ouster/sensor_client.h"
+#include "ouster/sensor_packet_source.h"
 #include "ouster/types.h"
 
 using namespace ouster;
@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
         count.push_back(0);
     }
 
-    ouster::sensor::SensorClient client(sensors);
+    ouster::sensor::SensorPacketSource client(sensors);
 
     std::cerr << "Connection to sensors succeeded" << std::endl;
 
@@ -76,23 +76,23 @@ int main(int argc, char* argv[]) {
     std::vector<std::vector<LidarScan>> scans;
 
     std::vector<XYZLut> luts;
-    for (const auto& info : client.get_sensor_info()) {
-        size_t w = info.format.columns_per_frame;
-        size_t h = info.format.pixels_per_column;
+    for (const auto& info : client.sensor_info()) {
+        size_t w = info->format.columns_per_frame;
+        size_t h = info->format.pixels_per_column;
 
-        ouster::sensor::ColumnWindow column_window = info.format.column_window;
+        ouster::sensor::ColumnWindow column_window = info->format.column_window;
 
-        std::cerr << "  Firmware version:  " << info.image_rev
-                  << "\n  Serial number:     " << info.sn
-                  << "\n  Product line:      " << info.prod_line
+        std::cerr << "  Firmware version:  " << info->image_rev
+                  << "\n  Serial number:     " << info->sn
+                  << "\n  Product line:      " << info->prod_line
                   << "\n  Scan dimensions:   " << w << " x " << h
                   << "\n  Column window:     [" << column_window.first << ", "
                   << column_window.second << "]" << std::endl;
-        batch_to_scan.push_back(ScanBatcher(info));
+        batch_to_scan.push_back(ScanBatcher(*info));
         scans.push_back({N_SCANS, LidarScan{info}});
         // pre-compute a table for efficiently calculating point clouds from
         // range
-        luts.push_back(ouster::make_xyz_lut(info, true));
+        luts.push_back(ouster::make_xyz_lut(*info, true));
     }
 
     /*
@@ -116,8 +116,8 @@ int main(int argc, char* argv[]) {
                     // retry until we receive a full set of valid measurements
                     // (accounting for azimuth_window settings if any)
                     if (scans[ev.source][count[ev.source]].complete(
-                            client.get_sensor_info()[ev.source]
-                                .format.column_window)) {
+                            client.sensor_info()[ev.source]
+                                ->format.column_window)) {
                         count[ev.source]++;
                     }
                 }

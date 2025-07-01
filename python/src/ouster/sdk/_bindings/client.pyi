@@ -18,11 +18,16 @@ import numpy as np
 from numpy import ndarray
 from typing import (Any, ClassVar, Dict, Iterator, List, Optional, overload, Tuple, Union)
 
-from ouster.sdk.client.data import (BufferT, ColHeader, FieldDType, FieldTypes)
+from ouster.sdk.core.data import (BufferT, ColHeader)
 
 
 SHORT_HTTP_REQUEST_TIMEOUT_SECONDS: int
 LONG_HTTP_REQUEST_TIMEOUT_SECONDS: int
+
+
+class Severity:
+    WARNING: ClassVar[Severity]
+    ERROR: ClassVar[Severity]
 
 
 class PacketValidationFailure:
@@ -258,14 +263,14 @@ class SensorHttp:
     def get_user_data(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
         ...
 
-    def set_user_data(self, user_data: str, keep_on_config_delete: bool, timeout_sec: int =
+    def set_user_data(self, user_data: str, keep_on_config_delete: bool = True, timeout_sec: int =
     SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
     def delete_user_data(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
-    def network(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def network(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
         ...
 
     def hostname(self) -> str:
@@ -280,13 +285,17 @@ class SensorHttp:
     def delete_static_ip(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
         ...
 
-    def diagnostics_dump(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def diagnostics_dump(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> bytes:
+        ...
+
+    def auto_detected_udp_dest(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS,
+                               original_destination: Optional[str] = None) -> str:
         ...
 
     @staticmethod
     def create(hostname: str, timeout_sec: int = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> SensorHttp:
         ...
- 
+
 
 class ClientState:
     ERROR: ClassVar[ClientState]
@@ -390,10 +399,6 @@ class SensorInfo:
     def __init__(self, metadata: str) -> None:
         ...
 
-    @overload
-    def __init__(self, metadata: str, skip_beam_validation: bool) -> None:
-        ...
-
     @property
     def w(self) -> int:
         ...
@@ -412,6 +417,12 @@ class DataFormat:
     udp_profile_lidar: UDPProfileLidar
     udp_profile_imu: UDPProfileIMU
     fps: int
+
+    def valid_columns_per_frame(self) -> int:
+        ...
+
+    def packets_per_frame(self) -> int:
+        ...
 
 
 class PacketFormat:
@@ -952,6 +963,7 @@ class SensorConfig:
     gyro_fsr: Optional[FullScaleRange]
     accel_fsr: Optional[FullScaleRange]
     return_order: Optional[ReturnOrder]
+    extra_options: Dict[str, str]
 
     @overload
     def __init__(self) -> None:
@@ -1027,35 +1039,18 @@ class Sensor:
         ...
 
 
-class SensorClient:
+class SensorScanSource(ScanSource):
     @overload
-    def __init__(self, sensors: List[Sensor], config_timeout: float = ..., buffer_time: float = ...) -> None:
+    def __init__(self, uri: Union[str, List[str]], *, config_timeout : float = 45.0, do_not_reinitialize : bool = False,
+                 extrinsics : List[ndarray] = [], extrinsics_file : str = "",
+                 field_names : List[str] = [], imu_port : Optional[int] = None,
+                 lidar_port : Optional[int] = None, queue_size : int = 2,
+                 no_auto_udp_dest : bool = False, raw_fields : bool = False,
+                 raw_headers : bool = False, sensor_info : List[SensorInfo] = [],
+                 timeout : float = 1.0, soft_id_check : bool = False,
+                 sensor_config: List[SensorConfig] = []) -> None:
         ...
 
-    @overload
-    def __init__(self, sensors: List[Sensor], metadata: List[SensorInfo], config_timeout: float = ..., buffer_time: float = ...) -> None:
-        ...
-
-    def close(self) -> None:
-        ...
-
-    def flush(self) -> None:
-        ...
-
-    def buffer_size(self) -> int:
-        ...
-
-    def dropped_packets(self) -> int:
-        ...
-
-    def get_sensor_info(self) -> List[SensorInfo]:
-        ...
-
-    def get_packet(self, timeout: float = ...) -> ClientEvent:
-        ...
-
-
-class SensorScanSource:
     @overload
     def __init__(self, sensors: List[Sensor], config_timeout: float = ..., queue_size: int = ..., soft_id_check: bool = ...) -> None:
         ...
@@ -1068,7 +1063,7 @@ class SensorScanSource:
     def __init__(self, sensors: List[Sensor], infos: List[SensorInfo], fields: List[List[FieldType]], config_timeout: float = ..., queue_size: int = ..., soft_id_check: bool = ...) -> None:
         ...
 
-    def get_sensor_info(self) -> List[SensorInfo]:
+    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
         ...
 
     def get_scan(self, timeout_sec: float = ...) -> LidarScan:
@@ -1156,6 +1151,10 @@ class LidarScan:
     def __init__(self, info: SensorInfo) -> None:
         ...
 
+    @overload
+    def __init__(self, info: SensorInfo, fields: List[FieldType]) -> None:
+        ...
+
     @property
     def w(self) -> int:
         ...
@@ -1199,7 +1198,7 @@ class LidarScan:
         ...
 
     @overload
-    def add_field(self, name: str, dtype: FieldDType, shape: Tuple[int, ...], field_class: FieldClass = ...) -> ndarray:
+    def add_field(self, name: str, dtype: type, shape: Tuple[int, ...], field_class: FieldClass = ...) -> ndarray:
         ...
 
     def del_field(self, name: str) -> ndarray:
@@ -1241,8 +1240,25 @@ class LidarScan:
     def get_first_valid_packet_timestamp(self) -> int:
         ...
 
+    def get_last_valid_packet_timestamp(self) -> int:
+        ...
+
     def get_first_valid_column_timestamp(self) -> int:
         ...
+
+    def get_last_valid_column_timestamp(self) -> int:
+        ...
+
+    def get_first_valid_column(self) -> int:
+        ...
+
+    def get_last_valid_column(self) -> int:
+        ...
+
+
+def destagger_bool(field: ndarray, shifts: List[int],
+                   inverse: bool) -> ndarray:
+    ...
 
 
 def destagger_int8(field: ndarray, shifts: List[int],
@@ -1330,6 +1346,19 @@ class XYZLut:
         ...
 
 
+class XYZLutFloat:
+    def __init__(self, info: SensorInfo, use_extrinsics: bool) -> None:
+        ...
+
+    @overload
+    def __call__(self, scan: LidarScan) -> ndarray:
+        ...
+
+    @overload
+    def __call__(self, range: ndarray) -> ndarray:
+        ...
+
+
 class AutoExposure:
     @overload
     def __init__(self) -> None:
@@ -1356,10 +1385,10 @@ class BeamUniformityCorrector:
 
 class FieldInfo:
     @property
-    def ty_tag(self) -> FieldDType:
+    def ty_tag(self) -> type:
         ...
 
-    def __init__(self, ty_tag: FieldDType, offset: int, mask: int, shift: int) -> None:
+    def __init__(self, ty_tag: type, offset: int, mask: int, shift: int) -> None:
         ...
 
     offset: int
@@ -1410,6 +1439,162 @@ class ValidatorIssues:
         ...
 
 
+class ScanSource:
+    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+        ...
+
+    def single_iter(self, sensor_idx: int) -> Iterator[List[Optional[LidarScan]]]:
+        ...
+
+    @property
+    def is_live(self) -> bool:
+        ...
+
+    @property
+    def is_indexed(self) -> bool:
+        ...
+
+    @property
+    def sensor_info(self) -> List[SensorInfo]:
+        ...
+
+    @property
+    def scans_num(self) -> List[int]:
+        ...
+
+    def close(self) -> None:
+        ...
+
+    @overload
+    def __getitem__(self, index: int) -> List[LidarScan]:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> ScanSource:
+        ...
+
+    def __len__(self) -> int:
+        ...
+
+    @property
+    def full_index(self) -> np.ndarray:
+        ...
+
+    @property
+    def individual_index(self) -> List[np.ndarray]:
+        ...
+
+    def single(self, sensor_idx: int) -> ScanSource:
+        ...
+
+    def mask(self, fields: List[str], masks: List[Optional[np.ndarray]]) -> ScanSource:
+        ...
+
+    def clip(self, fields: List[str], lower: int, upper: int) -> ScanSource:
+        ...
+
+    def reduce(self, beams: List[int]) -> ScanSource:
+        ...
+
+
+class ClientError(Exception):
+    def __init__(self) -> None:
+        ...
+
+
+class ClientTimeout(ClientError):
+    def __init__(self) -> None:
+        ...
+
+
+class ClientOverflow(ClientError):
+    def __init__(self) -> None:
+        ...
+
+
+class PacketSource:
+    def __iter__(self) -> Iterator[Tuple[int, Union[LidarPacket, ImuPacket]]]:
+        ...
+
+    def close(self) -> None:
+        ...
+
+    @property
+    def sensor_info(self) -> List[SensorInfo]:
+        ...
+
+    @property
+    def is_live(self) -> bool:
+        ...
+
+
+class SensorPacketSource(PacketSource):
+    @overload
+    def __init__(self, source: Union[str, List[str]], *, sensor_info: List[SensorInfo] = [],
+                 imu_port: Optional[int] = None, lidar_port: Optional[int] = None,
+                 no_auto_udp_dest: bool = False, timeout: float = 1.0,
+                 buffer_time_sec: float = 0.0, extrinsics: List[ndarray] = [],
+                 extrinsics_file: str = "", config_timeout: float = 45.0,
+                 do_not_reinitialize: bool = False, sensor_config: List[SensorConfig] = []) -> None:
+        ...
+
+    @overload
+    def __init__(self, sensors: List[Sensor], config_timeout: float = ..., buffer_time: float = ...) -> None:
+        ...
+
+    @overload
+    def __init__(self, sensors: List[Sensor], metadata: List[SensorInfo], config_timeout: float = ..., buffer_time: float = ...) -> None:
+        ...
+
+    def close(self) -> None:
+        ...
+
+    def flush(self) -> None:
+        ...
+
+    def buffer_size(self) -> int:
+        ...
+
+    def dropped_packets(self) -> int:
+        ...
+
+    def get_packet(self, timeout: float = ...) -> ClientEvent:
+        ...
+
+
+class IoType:
+    SENSOR: ClassVar[IoType]
+    PCAP: ClassVar[IoType]
+    BAG: ClassVar[IoType]
+    OSF: ClassVar[IoType]
+    CSV: ClassVar[IoType]
+    PCD: ClassVar[IoType]
+    LAS: ClassVar[IoType]
+    PLY: ClassVar[IoType]
+    MCAP: ClassVar[IoType]
+    PNG: ClassVar[IoType]
+
+    def __init__(self, x: int) -> None:
+        ...
+
+def open_source(uri: Union[str, List[str]], **kwargs) -> ScanSource:
+    ...
+
+def open_packet_source(uri: Union[str, List[str]], **kwargs) -> PacketSource:
+    ...
+
+def resolve_field_types(metadata: List[SensorInfo], raw_headers: bool = False, raw_fields: bool = False, field_names: Optional[List[str]] = []) -> List[List[FieldType]]:
+    ...
+
+def io_type(uri: str) -> IoType:
+    ...
+
+def io_type_from_extension(extension: str) -> IoType:
+    ...
+
+def extension_from_io_type(type: IoType) -> str:
+    ...
+
 def parse_and_validate_metadata(metadata: str) -> Tuple[SensorInfo, ValidatorIssues]:
     ...
 
@@ -1423,6 +1608,43 @@ def dewarp(points: ndarray, poses: ndarray) -> ndarray:
 def transform(points: ndarray, pose: ndarray) -> ndarray:
     ...
 
-
 def in_multicast(addr: str) -> bool:
+    ...
+
+def populate_extrinsics(file: str, extrinsics, sensor_infos: List[SensorInfo]) -> None:
+    ...
+
+def collate(src: ScanSource, dt: int = 210000000) -> ScanSource:
+    ...
+
+def complete(src: ScanSource) -> ScanSource:
+    ...
+
+def cycle(src: ScanSource) -> ScanSource:
+    ...
+
+def euler_pose_to_matrix(pose: ndarray) -> ndarray: 
+    ...
+
+def quaternion_pose_to_matrix(pose: ndarray) -> ndarray:
+    ...
+
+def interp_pose(x_interp: ndarray, x_known: ndarray, poses_known: ndarray) -> ndarray:
+    ...
+
+def read_pointcloud(filename: str) -> ndarray:
+    ...
+
+def set_http_api_headers(headers: List[str]) -> None:
+    ...
+
+def set_http_api_prefix(headers: List[str]) -> None:
+    ...
+
+@overload
+def voxel_downsample(resolution: float, points: ndarray, point_attributes: ndarray, min_points_per_voxel: int = 1) -> Tuple[ndarray, ndarray]:
+    ...
+
+@overload
+def voxel_downsample(resolution: ndarray, points: ndarray, point_attributes: ndarray, min_points_per_voxel: int = 1) -> Tuple[ndarray, ndarray]:
     ...

@@ -71,17 +71,17 @@ int main(int argc, char* argv[]) {
     // Now we can print metadata about each sensor since it was collected by the
     // source already While we are at it build necessary lookup tables
     std::vector<XYZLut> luts;
-    for (const auto& info : source.get_sensor_info()) {
-        std::cerr << "Sensor " << info.sn << " Information:" << std::endl;
+    for (const auto& info : source.sensor_info()) {
+        std::cerr << "Sensor " << info->sn << " Information:" << std::endl;
 
-        size_t w = info.format.columns_per_frame;
-        size_t h = info.format.pixels_per_column;
+        size_t w = info->format.columns_per_frame;
+        size_t h = info->format.pixels_per_column;
 
-        ouster::sensor::ColumnWindow column_window = info.format.column_window;
+        ouster::sensor::ColumnWindow column_window = info->format.column_window;
 
-        std::cerr << "  Firmware version:  " << info.image_rev
-                  << "\n  Serial number:     " << info.sn
-                  << "\n  Product line:      " << info.prod_line
+        std::cerr << "  Firmware version:  " << info->image_rev
+                  << "\n  Serial number:     " << info->sn
+                  << "\n  Product line:      " << info->prod_line
                   << "\n  Scan dimensions:   " << w << " x " << h
                   << "\n  Column window:     [" << column_window.first << ", "
                   << column_window.second << "]" << std::endl;
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
         // Pre-compute a table for efficiently calculating point clouds from
         // range
         luts.push_back(ouster::make_xyz_lut(
-            info, true /* if extrinsics should be used or not */));
+            *info, true /* if extrinsics should be used or not */));
     }
 
     std::cerr << "Capturing scans... ";

@@ -13,7 +13,8 @@
 
    Developer Quick Start <python/quickstart>
    Examples <python/examples/index>
-   SLAM Quickstart <python/slam-api-example>
+   SLAM Quickstart <python/examples/slam-api-example>
+   Pose Optimizer <python/examples/pose-optimizer-api-example>
    Point Cloud Visualizer <python/viz/index>
    Developing <python/devel>
 
@@ -49,16 +50,19 @@
    Sample Sessions <cli/sample-sessions>
    Common Use Cases <cli/common-use-cases>
    Clip Sessions <cli/clip-sessions>
+   Filter Sessions <cli/filter-sessions>
    Mapping Sessions <cli/mapping-sessions>
+   Pose Optimizer Sessions <cli/pose-optimizer-sessions.rst>
 
 .. toctree::
    :caption: Migration Guides
    :hidden:
 
-    Migrating from 20220927/0.5.1 to 20230114/0.7.1 <migration/migration-20220927-20230114>
-    Migrating from 20230114/0.7.1 to 20230403/0.8.1 <migration/migration-20230114-20230403>
-    Migration from 20231031/0.10.0 to 20240423/0.11.0 <migration/migration-20231031-20240423>
-    Migration from 20241004/0.13.1 to 20250113/0.14.0 <migration/migration-20241004-20250113>
+    Migrating from 0.5.1 to 0.7.1 <migration/migration-20220927-20230114>
+    Migrating from 0.7.1 to 0.8.1 <migration/migration-20230114-20230403>
+    Migration from 0.10.0 to 0.11.0 <migration/migration-20231031-20240423>
+    Migration from 0.13.1 to 0.14.0 <migration/migration-20241004-20250113>
+    Migration from 0.14.0 to 0.15.0 <migration/migration-0.14.0-0.15.0.rst>
 ..
    FAQ <faq>
 

@@ -34,7 +34,8 @@ std::string dump_metadata(const std::string& file, bool full) {
     jsoncons::json root;
 
     root["header"]["size"] = static_cast<uint64_t>(osf_file.size());
-    root["header"]["version"] = static_cast<int>(osf_file.version());
+    root["header"]["version"] =
+        static_cast<int>(OsfFile::serialized_version(osf_file.version()));
     root["header"]["status"] = to_string(osf_header->status());
     root["header"]["metadata_offset"] =
         static_cast<uint64_t>(osf_file.metadata_offset());

@@ -426,7 +426,12 @@ TEST_P(PacketWriterDataTest, packet_writer_data_repr_test) {
     int n_packets = 0;
     while (pcap.next_packet())
         if (pcap.current_info().dst_port == 7502) {
-            ASSERT_FALSE(batcher(pcap.current_data(), 0, ls_orig));
+            LidarPacket packet;
+            packet.host_timestamp = 0;
+            packet.buf.resize(pcap.current_length());
+            memcpy(packet.buf.data(), pcap.current_data(),
+                   pcap.current_length());
+            ASSERT_FALSE(batcher(packet, ls_orig));
             ++n_packets;
         }
 
@@ -467,7 +472,12 @@ TEST_P(PacketWriterDataTest, packet_writer_raw_headers_match_test) {
     int n_packets = 0;
     while (pcap.next_packet())
         if (pcap.current_info().dst_port == 7502) {
-            ASSERT_FALSE(batcher(pcap.current_data(), 0, rh_ls_orig));
+            LidarPacket packet;
+            packet.host_timestamp = 0;
+            packet.buf.resize(pcap.current_length());
+            memcpy(packet.buf.data(), pcap.current_data(),
+                   pcap.current_length());
+            ASSERT_FALSE(batcher(packet, rh_ls_orig));
             ++n_packets;
         }
 

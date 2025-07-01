@@ -1,4 +1,4 @@
-from ouster.sdk.client import LidarScan, first_valid_column_pose, SensorInfo, LidarMode
+from ouster.sdk.core import LidarScan, first_valid_column_pose, SensorInfo, LidarMode
 from ouster.sdk.viz.model import LidarScanVizModel
 from ouster.sdk.viz.track import Track, MultiTrack, TRACK_INIT_POINTS_NUM, TRACK_MAP_GROWTH_RATE
 from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig

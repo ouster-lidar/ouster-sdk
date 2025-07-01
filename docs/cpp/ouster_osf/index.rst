@@ -1,19 +1,23 @@
-==============
-Ouster OSF API
-==============
+ouster_osf
+==========
 
 .. toctree::
-   :caption: Ouster OSF API
+   :maxdepth: 1
 
-   basics.h <basics.rst>
-   crc32.h <crc32.rst>
-   file.h <file.rst>
-   layout_streaming.h <layout_streaming.rst>
-   meta_extrinsics.h <meta_extrinsics.rst>
-   meta_lidar_sensor.h <meta_lidar_sensor.rst>
-   meta_streaming_info.h <meta_streaming_info.rst>
-   metadata.h <metadata.rst>
-   operations.h <operations.rst>
-   reader.h <reader.rst>
-   stream_lidar_scan.h <stream_lidar_scan.rst>
-   writer.h <writer.rst>
+   async_writer
+   basics
+   crc32
+   file
+   layout_streaming
+   lidarscan_encoder
+   meta_extrinsics
+   meta_lidar_sensor
+   meta_streaming_info
+   metadata
+   operations
+   osf_encoder
+   osf_scan_source
+   png_lidarscan_encoder
+   reader
+   stream_lidar_scan
+   writer

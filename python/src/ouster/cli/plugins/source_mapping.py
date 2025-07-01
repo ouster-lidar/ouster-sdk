@@ -1,30 +1,97 @@
+from typing import cast, List, Optional
 import os
 import sys
 import click
 import logging
 import laspy
 import numpy as np
-from ouster.sdk.io_type import OusterIoType
+from functools import partial
+from ouster.sdk.core import OusterIoType, ScanSource, LidarScan, voxel_downsample
 from ouster.cli.plugins.source import source  # type: ignore
 from ouster.sdk.util import default_scan_fields
 from ouster.cli.plugins.source_save import (SourceSaveCommand,
                                             determine_filename,
                                             create_directories_if_missing,
                                             _file_exists_error)
-from ouster.sdk.client import (ChanField,
-                               XYZLut,
-                               first_valid_column_ts,
-                               first_valid_column_pose,
-                               dewarp)
+from ouster.sdk.core import (ChanField,
+                             XYZLut,
+                             first_valid_column_pose,
+                             dewarp)
 from ouster.cli.plugins.source_util import (source_multicommand,
                                             SourceCommandType,
                                             SourceCommandContext)
+from ouster.sdk.util.extrinsics import rotation_matrix_to_quaternion     # type: ignore
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('mapping')
-_max_range = None
-_min_range = None
+
+
+def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field="unknown"):
+    if filename.endswith(".ply"):
+        # CloudCompare PLY color point cloud using the range 0-1
+        with open(filename, 'wb') as f:
+            # Write PLY header
+            f.write("ply\n".encode('utf-8'))
+            if ascii:
+                f.write("format ascii 1.0\n".encode('utf-8'))
+            else:
+                f.write("format binary_little_endian 1.0\n".encode('utf-8'))
+            f.write("element vertex {}\n".format(cloud.shape[0]).encode('utf-8'))
+            f.write("property float x\n".encode('utf-8'))
+            f.write("property float y\n".encode('utf-8'))
+            f.write("property float z\n".encode('utf-8'))
+            if cloud.shape[1] == 4:
+                f.write(f"property float {field}\n".encode('utf-8'))
+            f.write("end_header\n".encode('utf-8'))
+            if ascii:
+                if cloud.shape[1] == 4:
+                    for i in range(cloud.shape[0]):
+                        f.write("{} {} {} {}\n".format(
+                                    cloud[i, 0], cloud[i, 1],
+                                    cloud[i, 2], cloud[i, 3] / 255).encode('utf-8'))
+                else:
+                    for i in range(cloud.shape[0]):
+                        f.write("{} {} {}\n".format(
+                                    cloud[i, 0], cloud[i, 1],
+                                    cloud[i, 2]).encode('utf-8'))
+            else:
+                # todo scale intensity?
+                bytes = cloud.astype(np.float32).tobytes()
+                f.write(bytes)
+    elif filename.endswith(".pcd"):
+        # write as binary pcd
+        with open(filename, 'wb') as f:
+            # Write PCD header
+            if cloud.shape[1] == 4:
+                f.write(f"FIELDS x y z {field}\n".encode('utf-8'))
+                f.write("SIZE 4 4 4 4\n".encode('utf-8'))
+                f.write("TYPE F F F F\n".encode('utf-8'))
+                f.write("COUNT 1 1 1 1\n".encode('utf-8'))
+            else:
+                f.write("FIELDS x y z\n".encode('utf-8'))
+                f.write("SIZE 4 4 4\n".encode('utf-8'))
+                f.write("TYPE F F F\n".encode('utf-8'))
+                f.write("COUNT 1 1 1\n".encode('utf-8'))
+            f.write(f"WIDTH {cloud.shape[0]}\n".encode('utf-8'))
+            f.write("HEIGHT 1\n".encode('utf-8'))
+            f.write(f"POINTS {cloud.shape[0]}\n".encode('utf-8'))
+            if ascii:
+                f.write("DATA ascii\n".encode('utf-8'))
+                if cloud.shape[1] == 4:
+                    for i in range(cloud.shape[0]):
+                        f.write("{} {} {} {}\n".format(
+                                    cloud[i, 0], cloud[i, 1],
+                                    cloud[i, 2], cloud[i, 3]).encode('utf-8'))
+                else:
+                    for i in range(cloud.shape[0]):
+                        f.write("{} {} {}\n".format(
+                                    cloud[i, 0], cloud[i, 1],
+                                    cloud[i, 2]).encode('utf-8'))
+            else:
+                f.write("DATA binary\n".encode('utf-8'))
+                bytes = cloud.astype(np.float32).tobytes()
+                f.write(bytes)
 
 
 @click.command
@@ -47,69 +114,69 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
         Outdoor: 0.8 - 1.5\n
         Large indoor: 0.4 - 0.8\n
         Small indoor: 0.1 - 0.5\n
-    If voxel_size is not specifiied, the algorithm will use the first lidar scan to calculate it.\n
+    If voxel_size is not specified, the algorithm will use the first lidar scan to calculate it.\n
     Small voxel size could give more accurate results but take more memory and
     longer processing. For real-time slam, considing using a slightly larger voxel size
     and use visualizer to monitor the SLAM process.
     """
 
-    global _max_range, _min_range
-    _max_range = max_range
-    _min_range = min_range
+    # validate inputs
+    if voxel_size is not None and voxel_size <= 0:
+        raise click.UsageError("Voxel size must be greater than 0")
+
+    if min_range < 0 or max_range < 0:
+        raise click.UsageError("min_range and max_range must not be a negative number")
 
     if dump_map:
-        if not dump_map.endswith(".ply"):
-            raise click.UsageError("--dump-map must be be in .ply format")
-        try:
-            import point_cloud_utils as pcu  # type: ignore
-        except ImportError:
-            raise click.UsageError("The --dump-map option requires point-cloud-utils to be installed")
-
-    def make_kiss_slam():
-        try:
-            from ouster.sdk.mapping.slam import KissBackend
-        except ImportError as e:
-            raise click.ClickException(click.style("kiss-icp, a package required for slam, is "
-                                       f"unsupported on this platform. Error: {str(e)}", fg='red'))
-
-        return KissBackend(infos=ctx.scan_source.metadata,
-                           max_range=max_range,
-                           min_range=min_range,
-                           voxel_size=voxel_size,
-                           live_stream=ctx.scan_source.is_live)
-
+        if not dump_map.endswith(".ply") and not dump_map.endswith(".pcd"):
+            raise click.UsageError("--dump-map must be be in .ply or .pcd format")
     try:
-        slam_engine = make_kiss_slam()
-    except (ValueError, click.ClickException) as e:
-        logger.error(str(e))
-        return
+        from ouster.sdk.mapping import SlamConfig, SlamEngine
+        from ouster.sdk.mapping.util import determine_voxel_size
+    except ImportError as e:
+        raise click.ClickException(click.style("kiss-icp, a package required for slam, is "
+                                    f"unsupported on this platform. Error: {str(e)}", fg='red'))
 
-    def slam_iter(scan_source, slam_engine, dump_map):
-        scan_start_ts = None
-        for scans in scan_source:
-            # Use the first valid scan to check if the iteration restarts
+    def make_kiss_slam() -> SlamEngine:
+
+        def live_sensor_voxel_size(scans: List[Optional[LidarScan]]) -> Optional[float]:
+            """a customized version of determine_voxel_size for live sensors"""
+            voxel_size = determine_voxel_size(scans)
+            if voxel_size is not None:
+                if cast(ScanSource, ctx.scan_source).is_live:
+                    logger.info("Choosing a larger voxel size to support real-time processing of live sensors.")
+                    voxel_size *= 2.2 * voxel_size
+                logger.info(f"voxel-size arg is not set, using an estimated value of {voxel_size:.4g} m.")
+            return voxel_size
+
+        config = SlamConfig()
+        config.min_range = min_range
+        config.max_range = max_range
+        config.voxel_size = live_sensor_voxel_size if voxel_size is None else voxel_size
+        config.initial_pose = ctx.other_options["initial_pose"]
+        config.backend = "kiss"
+
+        return SlamEngine(infos=cast(ScanSource, ctx.scan_source).sensor_info,
+                          config=config)
+
+    def slam_iter(scan_source):
+        slam_engine = make_kiss_slam()
+        for scans in scan_source():
             scan = scans[0]
             if scan is None:
                 continue
 
-            scan_ts = first_valid_column_ts(scan)
-            if scan_ts == scan_start_ts:
-                logger.info("SLAM restarts as scan iteration restarts")
-                if dump_map:
-                    points = slam_engine.ouster_kiss_icp.local_map.point_cloud()
-                    pcu.save_mesh_v(dump_map, points)
-                    logger.info(f"map was dumped to {dump_map}")
-                    dump_map = False
-                slam_engine = make_kiss_slam()
-            if not scan_start_ts:
-                scan_start_ts = scan_ts
-            slam_scans = slam_engine.update(scans)
-            yield slam_scans
-        if dump_map:
-            points = slam_engine.ouster_kiss_icp.local_map.point_cloud()
-            pcu.save_mesh_v(dump_map, points)
+            yield slam_engine.update(scans)
 
-    ctx.scan_iter = slam_iter(ctx.scan_iter, slam_engine, dump_map)
+        # only dump the map once
+        nonlocal dump_map
+        if dump_map:
+            points = slam_engine._backend.ouster_kiss_icp.local_map.point_cloud()
+            save_pointcloud(dump_map, points)
+            logger.info(f"map was dumped to {dump_map}")
+            dump_map = False
+
+    ctx.scan_iter = partial(slam_iter, ctx.scan_iter)  # type: ignore
 
 
 @click.command(context_settings=dict(
@@ -139,23 +206,16 @@ def source_slam(ctx: SourceCommandContext, max_range: float, min_range: float,
               "existing files with the same name")
 @click.option('--max-z', default=None, type=float, help="max z threshold for point cloud saving")
 @click.option('--min-z', default=None, type=float, help="min z threshold for point cloud saving")
-@click.option('-f', '--pts-per-file', default=15000000, type=int,
-              help="the number of points per output file. Default is 15000000")
+@click.option('-f', '--pts-per-file', default=100000000, type=int,
+              help="the number of points per output file. Default is 100000000")
+@click.option('--ascii', is_flag=True, default=False,
+              help="Output files in ASCII rather than binary format")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                         dir: str, voxel_size: float, field: str, decimate: bool,
                         overwrite: bool, verbose: bool, max_z: float,
-                        min_z: float, pts_per_file: int, **kwargs) -> None:
-
-    pcu_installed = False
-    if decimate:
-        try:
-            import point_cloud_utils as pcu  # type: ignore
-            pcu_installed = True
-        except ImportError:
-            logger.warning("The point_cloud_utils library is not supported or installed,"
-                           "so the process will generate larger, non-downsampled files")
+                        min_z: float, pts_per_file: int, ascii: bool, **kwargs) -> None:
 
     scans_iter = ctx.scan_iter
     infos = ctx.scan_source.metadata  # type: ignore
@@ -172,6 +232,9 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
     if (os.path.isfile(output_file_path) or os.path.isfile(may_existed_file)) and not overwrite:
         print(_file_exists_error(f'{output_file_path} or {may_existed_file}'))
         exit(1)
+
+    already_saved = False
+    empty_pose = True
 
     def convert_iter():
         points_to_process = np.empty(shape=[0, 3])
@@ -228,10 +291,10 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                 points = points[z_range_filter]
                 keys = keys[z_range_filter]
 
-            if pcu_installed and decimate:
+            if decimate:
                 # can be extended for RGBA values later
-                points, keys = pcu.downsample_point_cloud_on_voxel_grid(
-                    voxel_size, points, keys)
+                points, keys = voxel_downsample(voxel_size, points, keys)
+                keys = keys.reshape((keys.shape[0],))
                 keys = keys[:, np.newaxis]
 
             pts_size_after = points.shape[0]
@@ -247,24 +310,8 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
             logger.info(f"Output file: {file_wo_ext + outfile_ext}")
             pc_status_print()
 
-            if outfile_ext == ".ply":
-                # CloudCompare PLY color point cloud using the range 0-1
-                with open(file_wo_ext + outfile_ext, 'w') as f:
-                    # Write PLY header
-                    f.write("ply\n")
-                    f.write("format ascii 1.0\n")
-                    f.write(
-                        "element vertex {}\n".format(
-                            points_keys_total.shape[0]))
-                    f.write("property float x\n")
-                    f.write("property float y\n")
-                    f.write("property float z\n")
-                    f.write(f"property float {field}\n")
-                    f.write("end_header\n")
-                    for i in range(points_keys_total.shape[0]):
-                        f.write("{} {} {} {}\n".format(
-                            points_keys_total[i, 0], points_keys_total[i, 1],
-                            points_keys_total[i, 2], points_keys_total[i, 3] / 255))
+            if outfile_ext == ".ply" or outfile_ext == ".pcd":
+                save_pointcloud(file_wo_ext + outfile_ext, points_keys_total, ascii, field)
             elif outfile_ext == ".las":
                 LAS_file = laspy.create()
                 LAS_file.x = points_keys_total[:, 0]
@@ -276,26 +323,14 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                 LAS_file.write(file_wo_ext + outfile_ext)
                 logger.info(f"LAS format only supports the Intensity field. "
                             f"Saving {field} as the Intensity field.")
-            elif outfile_ext == ".pcd":
-                with open(file_wo_ext + outfile_ext, 'w') as f:
-                    # Write PCD header
-                    f.write(f"FIELDS x y z {field}\n")
-                    f.write("SIZE 4 4 4 4\n")
-                    f.write("TYPE F F F F\n")
-                    f.write("COUNT 1 1 1 1\n")
-                    f.write("WIDTH %d\n" % (points_keys_total.shape[0]))
-                    f.write("HEIGHT 1\n")
-                    f.write("POINTS %d\n" % (points_keys_total.shape[0]))
-                    f.write("DATA ascii\n")
-                    for i in range(points_keys_total.shape[0]):
-                        f.write("{} {} {} {}\n".format(
-                            points_keys_total[i, 0], points_keys_total[i, 1],
-                            points_keys_total[i, 2], points_keys_total[i, 3]))
 
             points_keys_total = np.empty(shape=[0, 4])
 
         def pc_status_print():
             nonlocal points_sum, points_down_removed, points_saved, points_out_range
+            if points_sum == 0:
+                logger.info("No points accumulated during this period.")
+                return
             down_removed_pct = (points_down_removed / points_sum) * 100
             out_range_pct = (points_out_range / points_sum) * 100
             save_pct = (points_saved / points_sum) * 100
@@ -310,32 +345,18 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
             points_saved = 0
             points_down_removed = 0
 
-        scan_start_ts = None
-        empty_pose = True
-        finish_saving = False
-        finish_saving_action = True
         logger.info("Start processing...")
+        nonlocal already_saved, empty_pose
         try:
-            for scan_idx, scans in enumerate(scans_iter):
+            for scan_idx, scans in enumerate(scans_iter()):
+                # if we saved after a loop, just quietly yield thereafter
+                if already_saved:
+                    yield scans
+                    continue
+
                 for idx, scan in enumerate(scans):
                     if scan is None:
                         continue
-                    scan_ts = first_valid_column_ts(scan)
-                    if scan_ts == scan_start_ts:
-                        finish_saving = True
-                        logger.info("Scan iteration restarts")
-                    if finish_saving:
-                        # Save point cloud and printout when scan iteration restarts
-                        # This action only do once
-                        if finish_saving_action:
-                            process_points(points_to_process, keys_to_process)
-                            save_file(f"{file_wo_ext}-{file_numb:03}", outfile_ext)
-                            logger.info("Finished point cloud saving.")
-                            finish_saving_action = False
-                        yield scan
-                        continue
-                    if not scan_start_ts:
-                        scan_start_ts = scan_ts
 
                     # Pose attribute is per col global pose so we use identity for scan
                     # pose
@@ -395,17 +416,64 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
 
             # handle the last part of point cloud or the first part of point cloud if
             # the size is less than down_sample_steps
-            if not finish_saving:
+            if not already_saved:
                 if keys_to_process.size > 0:
                     process_points(points_to_process, keys_to_process)
 
-                save_file(f"{file_wo_ext}-{file_numb:03}", outfile_ext)
+                if points_sum > 0:
+                    save_file(f"{file_wo_ext}-{file_numb:03}", outfile_ext)
                 logger.info("Finished point cloud saving.")
+                already_saved = True
 
-    ctx.scan_iter = convert_iter()
+    ctx.scan_iter = convert_iter  # type: ignore
+
+
+@click.command
+@click.argument('filename', required=True, type=str)
+@click.option('-n', '--sensor-idx', type=int, default=0, show_default=True,
+              help="Select specific sensor based on index within the file to save")
+@click.option('--tum', is_flag=True, default=False,
+              help="Save the trajectory in TUM format. Default is False which is CSV format")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.CONSUMER)
+def save_trajectory(ctx: SourceCommandContext, filename: str, sensor_idx: int, tum: bool) -> None:
+    """
+    Save a trajectory of the movement of selected sensor to a file
+    """
+
+    def trajectory_dump(scan_source):
+        with open(filename, "wt") as f:
+            if tum:
+                # TUM format
+                f.write("#timestamp,x,y,z,qx,qy,qz,qw\n")
+            else:
+                # CSV format
+                f.write("timestamp,x,y,z,qx,qy,qz,qw\n")
+
+            for scans in scan_source():
+                scan = scans[sensor_idx]
+                if scan is None:
+                    continue
+                scan_ts = scan.get_first_valid_column_timestamp()
+                scan_pose = first_valid_column_pose(scan)
+                p = scan_pose[:3, 3]
+                r = rotation_matrix_to_quaternion(scan_pose[:3, :3])
+
+                if tum:
+                    f.write(f"{scan_ts} {p[0]} {p[1]} {p[2]} "
+                            f"{r[1]} {r[2]} {r[3]} {r[0]}\n")
+                else:
+                    f.write(f"{scan_ts},{p[0]},{p[1]},{p[2]},"
+                            f"{r[1]},{r[2]},{r[3]},{r[0]}\n")
+                yield scans
+
+    # address generator type later
+    print(f"Saving the trajectory to {filename} ...")
+    ctx.scan_iter = partial(trajectory_dump, ctx.scan_iter)  # type: ignore
 
 
 source.commands['ANY']['slam'] = source_slam
+source.commands['ANY']['save_trajectory'] = save_trajectory
 SourceSaveCommand.implementations[OusterIoType.PCD] = point_cloud_convert
 SourceSaveCommand.implementations[OusterIoType.LAS] = point_cloud_convert
 SourceSaveCommand.implementations[OusterIoType.PLY] = point_cloud_convert

@@ -83,6 +83,7 @@ enum class PacketValidationFailure {
 /// @param[in] type Optional type of packet to try and validate as. Unknown will
 ///                 try and guess the packet type
 /// @return Result of the validation
+OUSTER_API_FUNCTION
 PacketValidationFailure validate_packet(
     const sensor_info& info, const ouster::sensor::packet_format& format,
     const uint8_t* buf, uint64_t buf_size,

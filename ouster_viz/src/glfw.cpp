@@ -139,7 +139,7 @@ void handle_cursor_enter(GLFWwindow* window, int entered) {
  * Initialize GLFW window
  */
 GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
-                         int window_width, int window_height) {
+                         int window_width, int window_height, bool maximized) {
     glfwSetErrorCallback(error_callback);
 
     // avoid chdir to resources dir on macos
@@ -158,6 +158,9 @@ GLFWContext::GLFWContext(const std::string& name, bool fix_aspect,
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, 1);
     glfwWindowHint(GLFW_VISIBLE, false);
+    if (maximized) {
+        glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+    }
 
     // open a window and create its OpenGL context
     window =

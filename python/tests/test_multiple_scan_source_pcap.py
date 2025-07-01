@@ -46,8 +46,7 @@ def test_multiple_scan_source_imu_collsion(tmp_path, path):
 
     with pytest.raises(PcapDuplicatePortException):
         _ = PcapScanSource(file_path,
-                           meta=(path + ".1.json", path + ".2.json"),
-                           cycle=False)
+                           meta=[path + ".1.json", path + ".2.json"])
 
 
 def test_multiple_scan_source_pcap(tmp_path) -> None:
@@ -60,20 +59,19 @@ def test_multiple_scan_source_pcap(tmp_path) -> None:
     meta2_out_path = calc_path('same_ports.2.json')
 
     # new interface
-    from ouster.sdk.client import MultiScanSource
+    from ouster.sdk.core import ScanSource, collate
     from ouster.sdk.pcap import PcapScanSource  # type: ignore
 
-    scan_source: MultiScanSource
+    scan_source: ScanSource
     scan_source = PcapScanSource(file_path,
-                                 meta=[meta1_out_path, meta2_out_path],
-                                 cycle=False)
+                                 meta=[meta1_out_path, meta2_out_path])
 
-    test_scans = list(scan_source)[0]
+    test_scans = list(iter(collate(scan_source)))[0]
 
     if not test_scans[1] or not test_scans[0]:
         assert False
 
-    assert test_scans[0].sensor_info == scan_source.metadata[0]
+    assert test_scans[0].sensor_info == scan_source.sensor_info[0]
 
     assert test_scans[1].frame_id == 883
     assert test_scans[1].h == 64
@@ -98,15 +96,14 @@ def test_bad_id_multiple_with_legacy_and_non_legacy(tmp_path) -> None:
                                      prod_sn=5678)
 
     # new interface
-    from ouster.sdk.client import MultiScanSource
+    from ouster.sdk.core import ScanSource, collate
     from ouster.sdk.pcap import PcapScanSource  # type: ignore
 
-    scan_source: MultiScanSource
+    scan_source: ScanSource
     scan_source = PcapScanSource(file_path,
-                                 meta=[meta1_out_path, meta2_out_path],
-                                 cycle=False)
+                                 meta=[meta1_out_path, meta2_out_path])
 
-    test_scans = list(scan_source)[0]
+    test_scans = list(iter(collate(scan_source)))[0]
 
     assert test_scans[0] is None
 
@@ -131,15 +128,14 @@ def test_multiple_scan_source_pcap_both_legacy(tmp_path) -> None:
 
     with pytest.raises(PcapDuplicatePortException):
         _ = PcapScanSource(file_path,
-                           meta=[meta1_out_path, meta2_out_path],
-                           cycle=False)
+                           meta=[meta1_out_path, meta2_out_path])
 
 
 def test_multiple_scan_source_pcap_single_legacy_with_imu(tmp_path) -> None:
     file_path = calc_path('same_ports_legacy.pcap')
 
     # new interface
-    from ouster.sdk.client import MultiScanSource
+    from ouster.sdk.core import ScanSource, collate
     from ouster.sdk.pcap import PcapScanSource  # type: ignore
 
     # Remove the imu conflict for this test
@@ -151,11 +147,10 @@ def test_multiple_scan_source_pcap_single_legacy_with_imu(tmp_path) -> None:
 
     meta2_out_path = calc_path('same_ports_legacy.2.json')
 
-    scan_source: MultiScanSource
+    scan_source: ScanSource
     scan_source = PcapScanSource(file_path,
-                                 meta=[meta1_out_path, meta2_out_path],
-                                 cycle=False)
-    test_scans = list(scan_source)[0]
+                                 meta=[meta1_out_path, meta2_out_path])
+    test_scans = list(iter(collate(scan_source)))[0]
 
     if not test_scans[1]:
         assert False
@@ -168,7 +163,7 @@ def test_multiple_scan_source_pcap_both_non_legacy(tmp_path) -> None:
     file_path = calc_path('same_ports_nonlegacy.pcap')
 
     # new interface
-    from ouster.sdk.client import MultiScanSource
+    from ouster.sdk.core import ScanSource, collate
     from ouster.sdk.pcap import PcapScanSource  # type: ignore
 
     # Remove the imu conflict for this test
@@ -177,13 +172,10 @@ def test_multiple_scan_source_pcap_both_non_legacy(tmp_path) -> None:
                                      imu_port=7503)
     meta2_out_path = calc_path('same_ports_nonlegacy.2.json')
 
-    scan_source: MultiScanSource
+    scan_source: ScanSource
     scan_source = PcapScanSource(file_path,
-                                 meta=[meta1_out_path, meta2_out_path],
-                                 cycle=False)
-
-    test_scans = list(scan_source)[0]
-
+                                 meta=[meta1_out_path, meta2_out_path])
+    test_scans = list(iter(collate(scan_source)))[0]
     if not test_scans[1] or not test_scans[0]:
         assert False
 

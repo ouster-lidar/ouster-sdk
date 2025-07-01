@@ -21,7 +21,7 @@ namespace viz {
 
 struct GLFWContext {
     explicit GLFWContext(const std::string& name, bool fix_aspect,
-                         int window_width, int window_height);
+                         int window_width, int window_height, bool maximized);
 
     // manages glfw window pointer lifetime
     GLFWContext(const GLFWContext&) = delete;

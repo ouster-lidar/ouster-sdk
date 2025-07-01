@@ -14,8 +14,8 @@ from contextlib import closing
 
 import numpy as np
 
-from ouster.sdk import client, sensor
-from ouster.sdk.client import LidarMode
+from ouster.sdk import core, sensor
+from ouster.sdk.core import LidarMode
 
 
 def configure_dual_returns(hostname: str) -> None:
@@ -24,19 +24,19 @@ def configure_dual_returns(hostname: str) -> None:
     Args:
         hostname: hostname of the sensor
     """
-    config = client.get_config(hostname)
-    if (config.lidar_mode in {LidarMode.MODE_2048x10, client.LidarMode.MODE_1024x20, client.LidarMode.MODE_4096x5}):
+    config = sensor.get_config(hostname)
+    if (config.lidar_mode in {LidarMode.MODE_2048x10, core.LidarMode.MODE_1024x20, core.LidarMode.MODE_4096x5}):
         print(
             f"Changing lidar_mode from {str(config.lidar_mode)} to 1024x10 to"
             " enable to dual returns on FW < 2.5. Will not persist change.")
-        config.lidar_mode = client.LidarMode.MODE_1024x10
+        config.lidar_mode = core.LidarMode.MODE_1024x10
 
     # [doc-stag-config-udp-profile]
-    config.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    config.udp_profile_lidar = core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
     # [doc-etag-config-udp-profile]
 
     try:
-        client.set_config(hostname, config, persist=False, udp_dest_auto=False)
+        sensor.set_config(hostname, config, persist=False, udp_dest_auto=False)
     except ValueError:
         print("error: Your sensor does not support dual returns. Please"
               " check the hardware revision and firmware version vs release"
@@ -47,7 +47,7 @@ def configure_dual_returns(hostname: str) -> None:
     with closing(sensor.SensorScanSource(hostname)) as source:
         # print some useful info from
         print(
-            f"udp profile lidar: {str(source.metadata[0].format.udp_profile_lidar)}"
+            f"udp profile lidar: {str(source.sensor_info[0].format.udp_profile_lidar)}"
         )
 
 
@@ -60,20 +60,20 @@ def configure_sensor_params(hostname: str) -> None:
 
     # [doc-stag-configure]
     # create empty config
-    config = client.SensorConfig()
+    config = core.SensorConfig()
 
     # set the values that you need: see sensor documentation for param meanings
-    config.operating_mode = client.OperatingMode.OPERATING_NORMAL
-    config.lidar_mode = client.LidarMode.MODE_1024x10
+    config.operating_mode = core.OperatingMode.OPERATING_NORMAL
+    config.lidar_mode = core.LidarMode.MODE_1024x10
     config.udp_port_lidar = 7502
     config.udp_port_imu = 7503
 
     # set the config on sensor, using appropriate flags
-    client.set_config(hostname, config, persist=True, udp_dest_auto=True)
+    sensor.set_config(hostname, config, persist=True, udp_dest_auto=True)
     # [doc-etag-configure]
 
     # if you like, you can view the entire set of parameters
-    config = client.get_config(hostname)
+    config = sensor.get_config(hostname)
     print(f"sensor config of {hostname}:\n{config}")
 
 
@@ -92,7 +92,7 @@ def fetch_metadata(hostname: str) -> None:
     """
     # [doc-stag-fetch-metadata]
     with closing(sensor.SensorScanSource(hostname)) as source:
-        metadata = source.metadata[0]
+        metadata = source.sensor_info[0]
         # print some useful info from metadata
         print("Retrieved metadata:")
         print(f"  serial no:        {metadata.sn}")
@@ -134,20 +134,20 @@ def filter_3d_by_range_and_azimuth(hostname: str,
     ax.set_zlim3d([-r, r])  # type: ignore
 
     plt.title("Filtered 3D Points from {}".format(hostname))
-
-    source = sensor.SensorScanSource(hostname, lidar_port=lidar_port, complete=True)
-    metadata = source.metadata[0]
+    # [doc-stag-filter-3d]
+    source = sensor.SensorScanSource(hostname, lidar_port=lidar_port)
+    metadata = source.sensor_info[0]
     scan = next(iter(source))[0]
+    assert scan is not None
     source.close()
 
-    # [doc-stag-filter-3d]
     # obtain destaggered range
-    range_destaggered = client.destagger(metadata,
-                                         scan.field(client.ChanField.RANGE))
+    range_destaggered = core.destagger(metadata,
+                                       scan.field(core.ChanField.RANGE))
 
     # obtain destaggered xyz representation
-    xyzlut = client.XYZLut(metadata)
-    xyz_destaggered = client.destagger(metadata, xyzlut(scan))
+    xyzlut = core.XYZLut(metadata)
+    xyz_destaggered = core.destagger(metadata, xyzlut(scan))
 
     # select only points with more than min range using the range data
     xyz_filtered = xyz_destaggered * (range_destaggered[:, :, np.newaxis] >
@@ -177,15 +177,17 @@ def live_plot_reflectivity(hostname: str, lidar_port: int = 7502) -> None:
 
     # [doc-stag-live-plot-reflectivity]
     # establish sensor connection
-    with closing(sensor.SensorScanSource(hostname, lidar_port=lidar_port,
-                                         complete=False)) as stream:
+    from ouster.sdk import sensor
+    with closing(sensor.SensorScanSource(hostname, lidar_port=lidar_port)) as stream:
         show = True
         while show:
             for scan, *_ in stream:
+                if scan is None:
+                    continue
                 # uncomment if you'd like to see frame id printed
                 # print("frame id: {} ".format(scan.frame_id))
-                reflectivity = client.destagger(stream.metadata[0],
-                                          scan.field(client.ChanField.REFLECTIVITY))
+                reflectivity = core.destagger(stream.sensor_info[0],
+                                          scan.field(core.ChanField.REFLECTIVITY))
                 reflectivity = (reflectivity / np.max(reflectivity) * 255).astype(np.uint8)
                 cv2.imshow("scaled reflectivity", reflectivity)
                 key = cv2.waitKey(1) & 0xFF
@@ -209,7 +211,8 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
     # get single scan
     source = sensor.SensorScanSource(hostname, lidar_port=lidar_port)
     scan = next(iter(source))[0]
-    metadata = source.metadata[0]
+    assert scan is not None
+    metadata = source.sensor_info[0]
     source.close()
 
     # set up figure
@@ -224,8 +227,8 @@ def plot_xyz_points(hostname: str, lidar_port: int = 7502) -> None:
 
     # [doc-stag-plot-xyz-points]
     # transform data to 3d points
-    xyzlut = client.XYZLut(metadata)
-    xyz = xyzlut(scan.field(client.ChanField.RANGE))
+    xyzlut = core.XYZLut(metadata)
+    xyz = xyzlut(scan.field(core.ChanField.RANGE))
     # [doc-etag-plot-xyz-points]
 
     # graph xyz
@@ -254,30 +257,31 @@ def record_pcap(hostname: str,
         n_seconds: max seconds of time to record. (Ctrl-Z correctly closes
                    streams)
     """
+    # [doc-stag-pcap-record]
+    from ouster.sdk import sensor
     import ouster.sdk.pcap as pcap
     from datetime import datetime
-
-    # [doc-stag-pcap-record]
     from more_itertools import time_limited
     # connect to sensor and record lidar/imu packets
-    config = client.SensorConfig()
-    config.udp_port_lidar = lidar_port
-    config.udp_port_imu = imu_port
-    with closing(client.SensorPacketSource([(hostname, config)],
-                               buf_size=640).single_source(0)) as source:
+    with closing(sensor.SensorPacketSource(hostname, lidar_port=lidar_port, imu_port=imu_port,
+                               buffer_time_sec=1.0)) as source:
 
         # make a descriptive filename for metadata/pcap files
         time_part = datetime.now().strftime("%Y%m%d_%H%M%S")
-        meta = source.metadata
+        meta = source.sensor_info[0]
         fname_base = f"{meta.prod_line}_{meta.sn}_{meta.config.lidar_mode}_{time_part}"
 
         print(f"Saving sensor metadata to: {fname_base}.json")
         with open(f"{fname_base}.json", "w") as f:
-            f.write(source.metadata.to_json_string())
+            f.write(source.sensor_info[0].to_json_string())
 
         print(f"Writing to: {fname_base}.pcap (Ctrl-C to stop early)")
         source_it = time_limited(n_seconds, source)
-        n_packets = pcap.record(source_it, f"{fname_base}.pcap")
+
+        def to_packet():
+            for idx, packet in source_it:
+                yield packet
+        n_packets = pcap.record(to_packet(), f"{fname_base}.pcap")
 
         print(f"Captured {n_packets} packets")
     # [doc-etag-pcap-record]

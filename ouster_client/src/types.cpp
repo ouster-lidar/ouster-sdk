@@ -22,6 +22,7 @@
 #include "ouster/defaults.h"
 #include "ouster/impl/build.h"
 #include "ouster/impl/logging.h"
+#include "ouster/metadata.h"
 #include "ouster/version.h"
 
 namespace ouster {
@@ -182,7 +183,8 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs) {
             lhs.udp_profile_imu == rhs.udp_profile_imu &&
             lhs.gyro_fsr == rhs.gyro_fsr && lhs.accel_fsr == rhs.accel_fsr &&
             lhs.return_order == rhs.return_order &&
-            lhs.min_range_threshold_cm == rhs.min_range_threshold_cm);
+            lhs.min_range_threshold_cm == rhs.min_range_threshold_cm &&
+            lhs.extra_options == rhs.extra_options);
 }
 
 bool operator!=(const sensor_config& lhs, const sensor_config& rhs) {
@@ -665,6 +667,15 @@ jsoncons::json config_to_json(const sensor_config& config) {
         root["return_order"] = to_string(config.return_order.value());
     }
 
+    for (const auto& kv : config.extra_options) {
+        try {
+            root[kv.first] = jsoncons::json::parse(kv.second);
+        } catch (std::runtime_error& e) {
+            throw std::runtime_error("Failed to parse config extra_options['" +
+                                     kv.first + "'] as json: " + e.what());
+        }
+    }
+
     return root;
 }
 
@@ -674,6 +685,15 @@ std::string to_string(const sensor_config& config) {
     root.dump(out);
     return out;
 }
+
+sensor_config::sensor_config(const std::string& config_json) {
+    ValidatorIssues issues;
+    if (!ouster::parse_and_validate_config(config_json, *this, issues)) {
+        throw std::runtime_error(to_string(issues.critical));
+    }
+}
+
+sensor_config::sensor_config() {}
 
 product_info product_info::create_product_info(
     std::string product_info_string) {
@@ -739,6 +759,39 @@ std::string to_string(const product_info& info) {
     output << "\tBeam Count: \"" << info.beam_count << "\"" << std::endl;
     return output.str();
 }
+
+int data_format::valid_columns_per_frame() const {
+    auto start = column_window.first;
+    auto end = column_window.second;
+
+    if (start <= end) {
+        return end - start + 1;
+    } else {
+        return end + (columns_per_frame - start) + 1;
+    }
+}
+
+int data_format::packets_per_frame() const {
+    int start_packet = column_window.first / columns_per_packet;
+    int end_packet = column_window.second / columns_per_packet;
+    if (column_window.second < column_window.first) {
+        // the valid azimuth window wraps through 0
+        // Determine the number of packets for a full frame with no window
+        int max_packets = columns_per_frame / columns_per_packet +
+                          (columns_per_frame % columns_per_packet ? 1 : 0);
+        // We expect to get [start, max_packets] and [0, end] packet indexes
+        int expected_packets = (max_packets - start_packet) + 1 + end_packet;
+        // If start and end packets are the same, we have every packet
+        if (start_packet == end_packet) {
+            return max_packets;
+        }
+        return expected_packets;
+    } else {
+        // no wrapping of azimuth the window through 0
+        return end_packet - start_packet + 1;
+    }
+}
+
 }  // namespace sensor
 
 namespace util {
@@ -765,6 +818,5 @@ version version_from_string(const std::string& v) {
         return invalid_version;
     }
 }
-
 }  // namespace util
 }  // namespace ouster

@@ -2,23 +2,29 @@
 
 from typing import Any, ClassVar, List
 
-from typing import (overload, Iterator)
+from typing import (overload, Iterator, Optional, Callable)
 import numpy
 
-from ouster.sdk.client import BufferT, LidarScan, SensorInfo, FieldType
+from ouster.sdk.core import Severity
+from ouster.sdk.core import BufferT, LidarScan, SensorInfo, FieldType, ScanSource
 
 
 class LidarScanEncoder:
     ...
 
+class OsfScanSource(ScanSource):
+    def __init__(self, source: str, *, extrinsics: List[numpy.ndarray] = [], extrinsics_file: str = "", field_names: List[str] = [], index: bool = False) -> None:
+        ...
 
 class PngLidarScanEncoder(LidarScanEncoder):
     def __init__(self, compression_amount: int) -> None:
         ...
 
+
 class Encoder:
     def __init__(self, lidar_scan_encoder: LidarScanEncoder) -> None:
         ...
+
 
 class LidarScanStreamMeta:
     type_id: ClassVar[str] = ...  # read-only
@@ -61,7 +67,7 @@ class MessageRef:
     @overload
     def decode(self) -> object: ...
     @overload
-    def decode(self, fields: List[str]) -> object: ...
+    def decode(self, fields: Optional[List[str]]) -> object: ...
     def of(self, arg0: object) -> bool: ...
     @property
     def id(self) -> int: ...
@@ -98,7 +104,7 @@ class MetadataStore:
 
 
 class Reader:
-    def __init__(self, arg0: str) -> None: ...
+    def __init__(self, arg0: str, error_handler: Optional[Callable[[Severity, str], None]] = None) -> None: ...
     def chunks(self) -> Iterator: ...
     @overload
     def messages(self) -> Iterator: ...
@@ -123,6 +129,8 @@ class Reader:
     @property
     def has_timestamp_idx(self) -> bool: ...
     def ts_by_message_idx(self, stream_id: int, msg_idx: int) -> int: ...
+    @property
+    def version(self) -> int: ...
 
 
 class StreamStats:

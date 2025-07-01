@@ -87,8 +87,9 @@ int dd(float degrees) { return std::lround(degrees * 10); }
 Camera::Camera()
     : target_{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
       view_offset_{0, 0, 0},
-      yaw_{0},
+      roll_{0},
       pitch_{-45_deg},
+      yaw_{0},
       log_distance_{0},
       orthographic_{false},
       fov_{90_deg},
@@ -114,6 +115,16 @@ void Camera::birds_eye_view() {
     log_distance_ = 200.0;
     fov_ = 90_deg;
 }
+
+void Camera::roll(float degrees) {
+    roll_ = (roll_ + 360_deg + dd(degrees)) % 360_deg;
+}
+
+void Camera::set_roll(float degrees) {
+    roll_ = (360_deg + dd(degrees)) % 360_deg;
+}
+
+float Camera::get_roll() const { return roll_; }
 
 // left positive, right negative
 void Camera::yaw(float degrees) {
@@ -215,6 +226,7 @@ impl::CameraData Camera::matrices(double aspect) const {
     Eigen::Matrix4d view =
         (Translation3d{Vector3d::UnitZ() * -view_distance()} *
          Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
+         Eigen::AngleAxisd{decidegree2radian(roll_), Vector3d::UnitY()} *
          Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()} *
          Translation3d{Eigen::Map<const Eigen::Vector3d>{view_offset_.data()}})
             .matrix();

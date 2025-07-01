@@ -16,8 +16,8 @@ except ModuleNotFoundError:
           "platforms. Try running `pip3 install open3d` first.")
     exit(1)
 
-from ouster.sdk import client
-from ouster.sdk.client import _utils
+from ouster.sdk import core
+from ouster.sdk.core import _utils
 from ouster.sdk.examples.colormaps import colorize
 
 Z_NEAR = 1.0
@@ -137,14 +137,14 @@ def canvas_set_image_data(pic: o3d.geometry.TriangleMesh,
 
 
 def range_for_field(f: str) -> str:
-    if f in (client.ChanField.RANGE2, client.ChanField.SIGNAL2,
-             client.ChanField.REFLECTIVITY2):
-        return client.ChanField.RANGE2
+    if f in (core.ChanField.RANGE2, core.ChanField.SIGNAL2,
+             core.ChanField.REFLECTIVITY2):
+        return core.ChanField.RANGE2
     else:
-        return client.ChanField.RANGE
+        return core.ChanField.RANGE
 
 
-def viewer_3d(scans: client.ScanSource, paused: bool = False) -> None:
+def viewer_3d(scans: core.ScanSource, paused: bool = False) -> None:
     """Render one scan in Open3D viewer from pcap file with 2d image.
 
     Args:
@@ -155,14 +155,15 @@ def viewer_3d(scans: client.ScanSource, paused: bool = False) -> None:
 
     # visualizer state
     scans_iter = iter(scans)
-    scan = next(scans_iter)
-    metadata = scans.metadata
-    xyzlut = client.XYZLut(metadata)
+    scan = next(scans_iter)[0]
+    assert scan is not None
+    metadata = scans.sensor_info[0]
+    xyzlut = core.XYZLut(metadata)
 
     fields = list(scan.fields)
     aes = {}
     for field_ind, field in enumerate(fields):
-        if field in (client.ChanField.SIGNAL, client.ChanField.SIGNAL2):
+        if field in (core.ChanField.SIGNAL, core.ChanField.SIGNAL2):
             aes[field_ind] = _utils.AutoExposure(0.02, 0.1, 3)
         else:
             aes[field_ind] = _utils.AutoExposure()
@@ -184,9 +185,10 @@ def viewer_3d(scans: client.ScanSource, paused: bool = False) -> None:
         nonlocal scan
         if action == 1:
             print("Skipping forward 10 frames")
-            scan = nth(scans_iter, 10)
-            if scan is None:
+            new_scan = nth(scans_iter, 10)
+            if new_scan is None:
                 raise StopIteration
+            scan = new_scan
             update_data(vis)
 
     # create geometries
@@ -196,6 +198,7 @@ def viewer_3d(scans: client.ScanSource, paused: bool = False) -> None:
                           metadata.format.pixels_per_column)
 
     def update_data(vis: o3d.visualization.Visualizer):
+        assert scan is not None
         xyz = xyzlut(scan.field(range_for_field(fields[field_ind])))
         key = scan.field(fields[field_ind]).astype(float)
 
@@ -209,7 +212,7 @@ def viewer_3d(scans: client.ScanSource, paused: bool = False) -> None:
 
         # prepare canvas for 2d image
         gray_img = np.dstack([key] * 3)
-        canvas_set_image_data(image, client.destagger(metadata, gray_img))
+        canvas_set_image_data(image, core.destagger(metadata, gray_img))
 
         # signal that point cloud and needs to be re-rendered
         vis.update_geometry(cloud)
@@ -249,7 +252,8 @@ def viewer_3d(scans: client.ScanSource, paused: bool = False) -> None:
 
             # update data at scan frequency to avoid blocking the rendering thread
             if not paused and ts - last_ts >= 1 / metadata.format.fps:
-                scan = next(scans_iter)
+                scan = next(scans_iter)[0]
+                assert scan is not None
                 update_data(vis)
                 last_ts = ts
 
@@ -292,11 +296,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    scans: core.ScanSource
     if args.sensor:
-        scans = sensor.SensorScanSource(args.sensor).single_source(0)
+        scans = sensor.SensorScanSource(args.sensor)
     elif args.pcap:
         pcap_path = args.pcap
-        scans = pcap.PcapScanSource(pcap_path).single_source(0)
+        scans = pcap.PcapScanSource(pcap_path)
         consume(scans, args.start or 0)
 
     try:

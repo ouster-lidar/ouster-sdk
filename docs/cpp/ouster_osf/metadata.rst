@@ -1,32 +1,44 @@
-==========
 metadata.h
 ==========
 
-Public API
-==========
+.. contents::
+   :local:
+
+Class
+-----
 
 .. doxygenclass:: ouster::osf::MetadataEntry
+   :project: cpp_api
+   :members:
+
+.. doxygenclass:: ouster::osf::MetadataEntryHelper
+   :project: cpp_api
    :members:
 
 .. doxygenclass:: ouster::osf::MetadataEntryRef
+   :project: cpp_api
    :members:
 
-.. doxygenfunction:: ouster::osf::metadata_pointer_as
+.. doxygenclass:: ouster::osf::MetadataStore
+   :project: cpp_api
+   :members:
 
+Structs
+-------
 
-Internal API
-============
-.. doxygenclass:: ouster::osf::MetadataEntryHelper
+.. doxygenstruct:: ouster::osf::MessageStream
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::osf::MetadataTraits
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::osf::MetadataTraits< MetadataEntryRef >
+   :project: cpp_api
    :members:
 
 .. doxygenstruct:: ouster::osf::RegisterMetadata
-   :members:
-   :allow-dot-graphs:
-
-.. doxygenstruct:: ouster::osf::MetadataTraits
+   :project: cpp_api
    :members:
 
-.. doxygenstruct:: ouster::osf::MessageStream
-   :members:
-
-.. doxygenfunction:: ouster::osf::metadata_type

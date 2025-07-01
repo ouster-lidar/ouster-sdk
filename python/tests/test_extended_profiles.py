@@ -5,8 +5,8 @@ All rights reserved.
 import pytest
 import numpy as np
 
-from ouster.sdk import client
-from ouster.sdk.client import ChanField
+from ouster.sdk import core
+from ouster.sdk.core import ChanField
 from ouster.sdk._bindings.client import FieldInfo
 import ouster.sdk._bindings.client as _client
 
@@ -35,7 +35,7 @@ def test_add_custom_profile() -> None:
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
-def test_custom_copycat_profile_matches_original(packets: client.PacketSource) -> None:
+def test_custom_copycat_profile_matches_original(packets: core.PacketSource) -> None:
     """Check that custom profile parses the same as original with the same fields"""
     custom_fields = [
         (ChanField.RANGE, FieldInfo(np.uint32, 0, 0x0007ffff, 0)),
@@ -51,9 +51,11 @@ def test_custom_copycat_profile_matches_original(packets: client.PacketSource) -
 
     _client.add_custom_profile(11, "DUAL_COPYCAT", custom_fields, 16)
 
-    ls_orig = next(iter(client.Scans(packets)))
-    packets.metadata.format.udp_profile_lidar = _client.UDPProfileLidar(11)
-    ls_custom = next(iter(client.Scans(packets)))
+    ls_orig = next(iter(core.Scans(packets)))[0]
+    assert ls_orig is not None
+    packets.sensor_info[0].format.udp_profile_lidar = _client.UDPProfileLidar(11)
+    ls_custom = next(iter(core.Scans(packets)))[0]
+    assert ls_custom is not None
 
     # all fields in ls_orig should have corresponding ls_custom fields
     for f in ls_orig.fields:

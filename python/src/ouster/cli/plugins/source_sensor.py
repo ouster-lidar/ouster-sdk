@@ -1,12 +1,12 @@
-#  type: ignore
 import json
 
 import click
 
-import ouster.sdk.client as client
+import ouster.sdk.core as core
 
 from typing import Optional
 from ouster.sdk._bindings.client import Sensor as _Sensor
+from ouster.sdk import sensor
 
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
@@ -32,7 +32,7 @@ def sensor_network(ctx: SourceCommandContext, click_ctx: click.core.Context,
     if set_static_ip and clear_static_ip:
         raise click.ClickException("Cannot both set and clear sensor static ip.")
     try:
-        http = client.SensorHttp.create(ctx.source_uri)
+        http = sensor.SensorHttp.create(ctx.source_uri or "")
         if clear_static_ip:
             http.delete_static_ip()
         elif set_static_ip is not None:
@@ -53,10 +53,11 @@ def sensor_diagnostics(ctx: SourceCommandContext, click_ctx: click.core.Context,
     if len(filename) > 1:
         raise click.ClickException("Can only provide at most one filename")
     try:
-        http = client.SensorHttp.create(ctx.source_uri)
+        uri = ctx.source_uri or ""
+        http = sensor.SensorHttp.create(uri)
         click.echo("Starting download. This may take a while....")
         data = http.diagnostics_dump(100)
-        filename = filename[0] if len(filename) > 0 else ctx.source_uri + "_diagnostics.bin"
+        filename = filename[0] if len(filename) > 0 else uri + "_diagnostics.bin"
         with open(filename, 'wb') as dump_file:
             dump_file.write(data)
         click.echo(f"Saved diagnostic dump to: {filename}")
@@ -71,7 +72,7 @@ def sensor_diagnostics(ctx: SourceCommandContext, click_ctx: click.core.Context,
 def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context) -> None:
     """Display sensor metadata about the SOURCE."""  # Implements ouster-cli source <hostname> metadata
     try:
-        click.echo(_Sensor(ctx.source_uri).fetch_metadata().to_json_string())
+        click.echo(_Sensor(ctx.source_uri or "").fetch_metadata().to_json_string())
     except RuntimeError as e:
         raise click.ClickException(str(e))
 
@@ -83,9 +84,9 @@ def sensor_metadata(ctx: SourceCommandContext, click_ctx: click.core.Context) ->
                      retrieve_click_context=True)
 def sensor_userdata(ctx: SourceCommandContext, click_ctx: click.core.Context, s: str) -> None:
     """Retrieve or set userdata from the current sensor (if supported by the firmware)"""
-    from ouster.sdk.client import SensorHttp
+    from ouster.sdk.sensor import SensorHttp
     try:
-        http = SensorHttp.create(ctx.source_uri)
+        http = SensorHttp.create(ctx.source_uri or "")
         if s is None:
             click.echo(http.get_user_data())
         else:
@@ -120,7 +121,7 @@ keyval, dump, file, auto, persist, standby) -> None:
     ports, automatic UDP destination, full azimuth azimuth window, and set the
     operating mode to NORMAL.
     """
-    hostname = ctx.source_uri
+    hostname = ctx.source_uri or ""
 
     def parse(s):
         """Helper to read cli arg as json value with fallback to string."""
@@ -132,7 +133,7 @@ keyval, dump, file, auto, persist, standby) -> None:
     if dump:
         if file or keyval or auto or persist or standby is not None:
             raise click.ClickException("Cannot use other options with `-d` command")
-        cfg = client.get_config(hostname)
+        cfg = sensor.get_config(hostname)
         click.echo(cfg)
         return
     elif file:
@@ -140,29 +141,29 @@ keyval, dump, file, auto, persist, standby) -> None:
             raise click.ClickException("Cannot specify extra config keys with `-c`")
         with open(file, 'r') as f:
             click.echo(f"Setting config from file: {file}")
-            cfg = client.SensorConfig(f.read())
+            cfg = core.SensorConfig(f.read())
     elif not keyval and not auto and standby is None:
         auto = True
-        cfg = client.SensorConfig()
+        cfg = core.SensorConfig()
         cfg.udp_port_lidar = 7502
         cfg.udp_port_imu = 7503
         cfg.azimuth_window = (0, 360000)
         cfg.signal_multiplier = 1
-        cfg.operating_mode = client.OperatingMode.OPERATING_NORMAL
+        cfg.operating_mode = core.OperatingMode.OPERATING_NORMAL
         click.echo("No config specified; using defaults and auto UDP dest:")
     else:
         if len(keyval) % 2 != 0:
             raise click.ClickException(f"Unmatched key/value arg: {keyval[-1]}")
         d = dict(zip(keyval[::2], map(parse, keyval[1::2])))
-        cfg = client.SensorConfig(json.dumps(d))
+        cfg = core.SensorConfig(json.dumps(d))
         click.echo("Updating configuration:")
 
     if standby is not None:
-        cfg.operating_mode = (client.OperatingMode.OPERATING_STANDBY if standby
-                              else client.OperatingMode.OPERATING_NORMAL)
+        cfg.operating_mode = (core.OperatingMode.OPERATING_STANDBY if standby
+                              else core.OperatingMode.OPERATING_NORMAL)
 
     click.echo(f"{cfg}")
     try:
-        client.set_config(hostname, cfg, udp_dest_auto=auto, persist=persist)
+        sensor.set_config(hostname, cfg, udp_dest_auto=auto, persist=persist)
     except RuntimeError as e:
         raise click.ClickException(str(e))

@@ -13,7 +13,7 @@ if (NOT (DEFINED OUSTER_TOP_LEVEL AND OUSTER_TOP_LEVEL))
   set(LIB_TO_USE OusterSDK::shared_library)
 else()
   find_package(GTest CONFIG REQUIRED)
-  set(LIB_TO_USE OusterSDK::ouster_client OusterSDK::ouster_pcap OusterSDK::ouster_viz OusterSDK::ouster_osf)
+  set(LIB_TO_USE OusterSDK::ouster_client OusterSDK::ouster_sensor OusterSDK::ouster_pcap OusterSDK::ouster_viz OusterSDK::ouster_osf)
 endif()
 
 
@@ -88,7 +88,7 @@ message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
 if (ENABLE_PERFORMANCE_TESTS)
     set(GTEST_FILTER "")
 else ()
-    set(GTEST_FILTER "--gtest_filter=CartesianParametrisedTestFixture.SpeedCheck")
+    set(GTEST_FILTER "--gtest_filter=CartesianParameterizedTestFixture.SpeedCheck,DestaggerParameterizedTestFixture.SpeedCheck")
 endif ()
 
 message(STATUS "GTEST_FILTER: ${GTEST_FILTER}")
@@ -96,12 +96,12 @@ add_executable(cartesian_test cartesian_test.cpp util.h)
 target_link_libraries(cartesian_test PRIVATE ${LIB_TO_USE} GTest::gtest GTest::gtest_main)
 CodeCoverageFunctionality(cartesian_test)
 add_test(NAME cartesian_test COMMAND cartesian_test ${GTEST_FILTER} --gtest_output=xml:cartesian_test.xml)
-set_tests_properties(
-  cartesian_test
-        PROPERTIES
-        ENVIRONMENT
-        DATA_DIR=${CMAKE_CURRENT_LIST_DIR}/metadata/
-)
+
+add_executable(destagger_test destagger_test.cpp)
+target_link_libraries(destagger_test PRIVATE ${LIB_TO_USE} GTest::gtest GTest::gtest_main)
+CodeCoverageFunctionality(destagger_test)
+add_test(NAME destagger_test COMMAND destagger_test ${GTEST_FILTER} --gtest_output=xml:destagger_test.xml)
+
 
 add_executable(metadata_errors_test metadata_errors_test.cpp)
 
@@ -212,3 +212,9 @@ target_link_libraries(threadsafe_queue_test OusterSDK::ouster_client
     GTest::gtest GTest::gtest_main
 )
 add_test(NAME threadsafe_queue_test COMMAND threadsafe_queue_test --gtest_output=xml:point_viz_test.xml)
+
+add_executable(sensor_test sensor_test.cpp)
+target_link_libraries(sensor_test ${LIB_TO_USE}
+    GTest::gtest GTest::gtest_main
+)
+add_test(NAME sensor_test COMMAND sensor_test --gtest_output=xml:sensor_test.xml)

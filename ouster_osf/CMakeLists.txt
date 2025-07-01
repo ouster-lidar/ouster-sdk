@@ -90,6 +90,7 @@ add_library(ouster_osf STATIC src/compat_ops.cpp
                               src/file.cpp
                               src/reader.cpp
                               src/operations.cpp
+                              src/osf_scan_source.cpp
                               src/fb_utils.cpp
                               src/writer.cpp
                               src/async_writer.cpp

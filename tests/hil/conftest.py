@@ -6,8 +6,9 @@ from more_itertools import partition
 from copy import deepcopy
 import pytest
 
-from ouster.sdk import client
-from ouster.sdk.client import LidarMode, UDPProfileLidar, SensorHttp, Version
+from ouster.sdk import core, sensor
+from ouster.sdk.core import LidarMode, UDPProfileLidar, Version
+from ouster.sdk.sensor import SensorHttp
 
 import requests
 import json
@@ -96,16 +97,16 @@ def log_sensor_alerts(sensor_arg):
     alerts_endpoint = f"http://{sensor_arg}/api/v1/sensor/alerts"
     response = requests.get(alerts_endpoint)
     log = response.json().get('log', [])
+    active = response.json().get('active', [])
     # ignore UDP transmission errors...
     # they happen all the time because we're not always listening to the sensor's UDP traffic
     whitelist = ['0x01000015', '0x01000018']
     alerts = [alert for alert in log if alert['id'] not in whitelist]
-    active_alerts = [alert for alert in log if alert['active'] == True]
-    inactive_alerts = [alert for alert in log if alert['active'] == False]
+    previous_active_alerts = [alert for alert in log if alert['active'] == True]
     #not failing the tests because the sensor works as expected (no test failure)
     #even on some active alerts
-    print(f"-------\nActive alerts on sensor {sensor_arg}: {active_alerts} -------\n")
-    print(f"-------\nInactive alerts on sensor {sensor_arg}: {inactive_alerts} -------\n")
+    print(f"-------\nActive alerts on sensor {sensor_arg}: {active} -------\n")
+    print(f"-------\nPrevious active alerts on sensor {sensor_arg}: {previous_active_alerts} -------\n")
 
 
 def pytest_configure(config):
@@ -114,7 +115,7 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True, scope="module")
-def hil_initial_config(hil_sensor_hostname) -> Iterator[client.SensorConfig]:
+def hil_initial_config(hil_sensor_hostname) -> Iterator[core.SensorConfig]:
     """Initialize the sensor under test.
 
     Wake up sensor, set default ports and auto udp dest.
@@ -129,23 +130,23 @@ def hil_initial_config(hil_sensor_hostname) -> Iterator[client.SensorConfig]:
 
     try:
         # remember original configuration
-        orig_cfg = client.get_config(hil_sensor_hostname)
+        orig_cfg = sensor.get_config(hil_sensor_hostname)
 
         # wake up sensor and update udp settings
-        cfg = client.SensorConfig()
-        cfg.operating_mode = client.OperatingMode.OPERATING_NORMAL
+        cfg = core.SensorConfig()
+        cfg.operating_mode = core.OperatingMode.OPERATING_NORMAL
         cfg.udp_dest = None
         cfg.udp_port_lidar = 7502
         cfg.udp_port_imu = 7503
-        client.set_config(hil_sensor_hostname, cfg, udp_dest_auto=True)
+        sensor.set_config(hil_sensor_hostname, cfg, udp_dest_auto=True)
 
-        with closing(client.Sensor(hil_sensor_hostname,
-                                   cfg.udp_port_lidar, cfg.udp_port_imu)) as src:
-            metadata = src.metadata
+        with closing(sensor.SensorPacketSource(hil_sensor_hostname,
+                                   lidar_port=cfg.udp_port_lidar, imu_port=cfg.udp_port_imu)) as src:
+            metadata = src.sensor_info
 
         logger.debug(f"Done {metadata}")
 
-        config = client.get_config(hil_sensor_hostname)
+        config = sensor.get_config(hil_sensor_hostname)
         config.signal_multiplier = 1
         config.azimuth_window = (0, 360000)
         yield config
@@ -156,7 +157,7 @@ def hil_initial_config(hil_sensor_hostname) -> Iterator[client.SensorConfig]:
 
 
 @pytest.fixture
-def hil_sensor_config(hil_initial_config) -> client.SensorConfig:
+def hil_sensor_config(hil_initial_config) -> core.SensorConfig:
     """Default to initial config. Usually overridden in each test module."""
     logger.warning("Using initial config")
     return hil_initial_config
@@ -180,7 +181,7 @@ def hil_configured_sensor(hil_sensor_hostname, hil_sensor_config, request,
         whether this is an error.
     """
     try:
-        cfg = client.get_config(hil_sensor_hostname)
+        cfg = sensor.get_config(hil_sensor_hostname)
         if cfg == hil_sensor_config:
             logger.debug(f"Reusing current config for: {request.node.name}")
         else:
@@ -228,7 +229,7 @@ def hil_configured_sensor(hil_sensor_hostname, hil_sensor_config, request,
                 f"Dual return profile is not supported with 2048x10 or 1024x20 lidar modes on FW {str(hil_sensor_firmware)}"
             )
 
-        client.set_config(hil_sensor_hostname, hil_sensor_config)
+        sensor.set_config(hil_sensor_hostname, hil_sensor_config)
 
     except ValueError as e:
         logger.warning(f"Config rejected: {str(e)}")
@@ -249,8 +250,8 @@ def hil_sensor_firmware(hil_sensor_hostname):
 # TODO find a good place to store part numbers for these types of comparisons
 @pytest.fixture
 def gen1_sensor(hil_sensor_hostname):
-    with closing(client.Sensor(hil_sensor_hostname, 7502, 7503)) as src:
-        prod_pn = src.metadata.prod_pn
+    with closing(sensor.SensorPacketSource(hil_sensor_hostname, lidar_port=7502, imu_port=7503)) as src:
+        prod_pn = src.metadata[0].prod_pn
 
     return prod_pn in GEN1_PROD_PNS
 

@@ -1,13 +1,13 @@
-from ouster.sdk.client import dewarp, transform
+from ouster.sdk.core import dewarp, transform
 from ouster.sdk.util.parsing import scan_to_packets  # type: ignore
-from ouster.sdk import client
+from ouster.sdk import core
 import pytest
 import time
 import numpy as np
 import copy
 from click.testing import CliRunner
 
-from ouster.cli import core
+from ouster.cli import core as cli_core
 from ouster.cli.plugins import source, source_osf  # noqa: F401
 
 from tests.conftest import OSFS_DATA_DIR
@@ -59,10 +59,10 @@ def profile(request, record_property):
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_destagger(scan: client.LidarScan, meta: client.SensorInfo, profile) -> None:
+def test_perf_destagger(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
-    rng = scan.field(client.ChanField.RANGE)
+    rng = scan.field(core.ChanField.RANGE)
     rngs = []
     for i in range(num_iters):
         cpy = np.copy(rng)
@@ -71,17 +71,17 @@ def test_perf_destagger(scan: client.LidarScan, meta: client.SensorInfo, profile
     # perform the actual test
     profile.start()
     for i in range(num_iters):
-        client.destagger(meta, rngs[i])
+        core.destagger(meta, rngs[i])
     profile.end(num_iters)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_xyz(scan: client.LidarScan, meta: client.SensorInfo, profile) -> None:
+def test_perf_xyz(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
-    xyzlut = client.XYZLut(meta)
-    rng = scan.field(client.ChanField.RANGE)
+    xyzlut = core.XYZLut(meta)
+    rng = scan.field(core.ChanField.RANGE)
     rngs = []
     for i in range(num_iters):
         cpy = np.copy(rng)
@@ -96,11 +96,11 @@ def test_perf_xyz(scan: client.LidarScan, meta: client.SensorInfo, profile) -> N
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_dwarp(scan: client.LidarScan, meta: client.SensorInfo, profile) -> None:
+def test_perf_dwarp(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
-    xyzlut = client.XYZLut(meta)
-    rng = scan.field(client.ChanField.RANGE)
+    xyzlut = core.XYZLut(meta)
+    rng = scan.field(core.ChanField.RANGE)
     xyz = xyzlut(rng)
 
     # perform the actual test
@@ -112,11 +112,11 @@ def test_perf_dwarp(scan: client.LidarScan, meta: client.SensorInfo, profile) ->
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_transform(scan: client.LidarScan, meta: client.SensorInfo, profile) -> None:
+def test_perf_transform(scan: core.LidarScan, meta: core.SensorInfo, profile) -> None:
     # do setup
     num_iters = profile.iterations(8000)
-    xyzlut = client.XYZLut(meta)
-    rng = scan.field(client.ChanField.RANGE)
+    xyzlut = core.XYZLut(meta)
+    rng = scan.field(core.ChanField.RANGE)
     xyz = xyzlut(rng)
     pose = scan.pose[0]
 
@@ -130,7 +130,7 @@ def test_perf_transform(scan: client.LidarScan, meta: client.SensorInfo, profile
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize('happy_packet', [True, False])
 @pytest.mark.performance
-def test_perf_batching(scan: client.LidarScan, meta: client.SensorInfo, profile, happy_packet) -> None:
+def test_perf_batching(scan: core.LidarScan, meta: core.SensorInfo, profile, happy_packet) -> None:
     # do setup for batching num_iters scans worth of packets
     num_iters = profile.iterations(400)
     packets = []
@@ -142,8 +142,8 @@ def test_perf_batching(scan: client.LidarScan, meta: client.SensorInfo, profile,
                 scan.status[16 * i] = 0
         for packet in scan_to_packets(scan, meta):
             packets.append(packet)
-    batcher = client.ScanBatcher(meta)
-    new_scans = [client.LidarScan(meta)] * num_iters
+    batcher = core.ScanBatcher(meta)
+    new_scans = [core.LidarScan(meta)] * num_iters
 
     # perform the actual test
     num_batched = 0
@@ -158,7 +158,7 @@ def test_perf_batching(scan: client.LidarScan, meta: client.SensorInfo, profile,
 # now for each scan source type
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_osf_save(scan: client.LidarScan, meta: client.SensorInfo, profile, tmp_path) -> None:
+def test_perf_osf_save(scan: core.LidarScan, meta: core.SensorInfo, profile, tmp_path) -> None:
     # setup the test
     # save N scans to OSF and close
     from ouster.sdk.osf import Writer
@@ -184,8 +184,8 @@ def tmp_osf(tmp_path_factory, request):
     from ouster.sdk import open_source
     fn = str(tmp_path_factory.mktemp("data") / "test.osf")
     src = open_source(OSFS_DATA_DIR + "/OS-1-128_v2.3.0_1024x10_lb_n3.osf")
-    meta = src.metadata
-    scan = next(iter(src))
+    meta = src.sensor_info
+    scan = next(iter(src))[0]
     writer = Writer(fn, meta)
     count = 100 if request.config.getoption("--performance") else 2
     if request.config.getoption("--num-iterations"):
@@ -208,8 +208,8 @@ def tmp_pcap(tmp_path_factory, request):
     fn = str(directory / "test.pcap")
     fn_json = str(directory / "test.json")
     src = open_source(OSFS_DATA_DIR + "/OS-1-128_v2.3.0_1024x10_lb_n3.osf")
-    meta = src.metadata
-    scan = next(iter(src))
+    meta = src.sensor_info[0]
+    scan = next(iter(src))[0]
     count = 100 if request.config.getoption("--performance") else 2
     if request.config.getoption("--num-iterations"):
         count = int(request.config.getoption("--num-iterations"))
@@ -233,7 +233,7 @@ def tmp_pcap(tmp_path_factory, request):
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_osf_read(scan: client.LidarScan, meta: client.SensorInfo, profile, tmp_osf) -> None:
+def test_perf_osf_read(scan: core.LidarScan, meta: core.SensorInfo, profile, tmp_osf) -> None:
     # Read all scans in the OSF
     from ouster.sdk import open_source
     num_iters = 0
@@ -284,7 +284,7 @@ def test_perf_pcap_open(profile, tmp_pcap) -> None:
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.performance
-def test_perf_pcap_save(scan: client.LidarScan, meta: client.SensorInfo, profile, tmp_path) -> None:
+def test_perf_pcap_save(scan: core.LidarScan, meta: core.SensorInfo, profile, tmp_path) -> None:
     # setup the test
     # save N scans to PCAP and close
     num_iters = profile.iterations(40)
@@ -323,7 +323,7 @@ def test_perf_pcap_cli_read(profile, tmp_pcap, runner) -> None:
     num_iters = 1
 
     profile.start()
-    result = runner.invoke(core.cli, ['source', tmp_pcap, 'stats'])  # type: ignore
+    result = runner.invoke(cli_core.cli, ['source', tmp_pcap, 'stats'])  # type: ignore
     profile.end(num_iters)
     print(result.output)
     assert result.exit_code == 0
@@ -335,7 +335,7 @@ def test_perf_osf_cli_read(profile, tmp_osf, runner) -> None:
     num_iters = 1
 
     profile.start()
-    result = runner.invoke(core.cli, ['source', tmp_osf, 'stats'])  # type: ignore
+    result = runner.invoke(cli_core.cli, ['source', tmp_osf, 'stats'])  # type: ignore
     profile.end(num_iters)
     print(result.output)
     assert result.exit_code == 0
@@ -350,7 +350,7 @@ def test_perf_osf_cli_slice(profile, tmp_osf, runner) -> None:
     num_iters = 1
     slice = str(l - 1) + ":"
     profile.start()
-    result = runner.invoke(core.cli, ['source', tmp_osf, 'slice', slice, 'stats'])  # type: ignore
+    result = runner.invoke(cli_core.cli, ['source', tmp_osf, 'slice', slice, 'stats'])  # type: ignore
     profile.end(num_iters)
     print(result.output)
     assert result.exit_code == 0

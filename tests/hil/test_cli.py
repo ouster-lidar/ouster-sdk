@@ -4,11 +4,10 @@ import os
 
 from click.testing import CliRunner
 
-from ouster.sdk import client
-from ouster.sdk.client import SensorHttp
-from ouster.sdk.sensor.util import _auto_detected_udp_dest
+from ouster.sdk import core, sensor
+from ouster.sdk.core import SensorHttp
 
-from ouster.cli import core
+import ouster.cli.core as cli_core
 from ouster.cli.core.cli_args import CliArgs
 from ouster.cli.plugins import source, source_sensor  # noqa: F401
 
@@ -23,34 +22,34 @@ def runner():
 def test_udp_dest_finder_leaves_no_mark(hil_sensor_hostname, hil_configured_sensor, udp_dest):
 
         # set up with test udp value
-        cfg = client.SensorConfig()
+        cfg = core.SensorConfig()
         cfg.udp_dest = udp_dest
-        client.set_config(hil_sensor_hostname, cfg)
+        sensor.set_config(hil_sensor_hostname, cfg)
 
         # get post-set
-        check_active_cfg = client.get_config(hil_sensor_hostname, active=True)
-        check_passive_cfg = client.get_config(hil_sensor_hostname, active=False)
+        check_active_cfg = sensor.get_config(hil_sensor_hostname, active=True)
+        check_passive_cfg = sensor.get_config(hil_sensor_hostname, active=False)
 
         http = SensorHttp.create(hil_sensor_hostname)
-        _auto_detected_udp_dest(http)
+        http.auto_detected_udp_dest()
 
-        after_active_cfg = client.get_config(hil_sensor_hostname, active=True)
-        after_passive_cfg = client.get_config(hil_sensor_hostname, active=False)
+        after_active_cfg = sensor.get_config(hil_sensor_hostname, active=True)
+        after_passive_cfg = sensor.get_config(hil_sensor_hostname, active=False)
 
         assert check_active_cfg == after_active_cfg
         assert check_passive_cfg == after_passive_cfg
 
 
 def test_diagnostics(hil_sensor_hostname, tmpdir, runner) -> None:
-    """Test that we can record pcaps without dropping packets."""
+    """Test that we can pull diagnostics."""
     dump_path = os.path.join(tmpdir, "test.bin")
-    result = runner.invoke(core.cli, ['source', str(hil_sensor_hostname), 'diagnostics', str(dump_path)]) #  type: ignore
+    result = runner.invoke(cli_core.cli, ['source', str(hil_sensor_hostname), 'diagnostics', str(dump_path)]) #  type: ignore
     assert result.exit_code == 0
     assert os.path.isfile(str(dump_path))
 
 
 def test_network(hil_sensor_hostname, runner) -> None:
-    """Test that we can record pcaps without dropping packets."""
-    result = runner.invoke(core.cli, ['source', str(hil_sensor_hostname), 'network']) #  type: ignore
+    """Test that we can query sensor network info."""
+    result = runner.invoke(cli_core.cli, ['source', str(hil_sensor_hostname), 'network']) #  type: ignore
     assert result.exit_code == 0
     assert "ipv4" in result.output

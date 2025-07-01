@@ -11,7 +11,7 @@ import numpy as np
 
 import random
 
-from ouster.sdk.client import ChanField, LidarScan, SensorInfo
+from ouster.sdk.core import ChanField, LidarScan, SensorInfo
 
 # test env may not have opengl, but all test modules are imported during
 # collection. Import is still needed to typecheck

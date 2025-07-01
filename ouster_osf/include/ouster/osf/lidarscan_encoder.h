@@ -25,18 +25,12 @@ class OUSTER_API_CLASS LidarScanEncoder {
     virtual ~LidarScanEncoder() = default;
 
    private:
-    // TODO these methods do essentially the same thing and should be
-    // deduplicated. Standard fields are stored in destaggered form, but this
-    // should be a detail specific to and hidden by the encoder.
+    // This method encodes a field, if px_offset is provided it is destaggered
+    // before encoding
+    virtual ScanChannelData encodeField(
+        const ouster::Field& field,
+        const std::vector<int>& px_offset = {}) const = 0;
 
-    // This method is for standard destaggered fields.
-    virtual bool fieldEncode(const LidarScan& lidar_scan,
-                             const ouster::FieldType& field_type,
-                             const std::vector<int>& px_offset,
-                             ScanData& scan_data, size_t scan_idx) const = 0;
-
-    // This method is for custom fields.
-    virtual ScanChannelData encodeField(const ouster::Field& field) const = 0;
     friend class LidarScanStream;
 };
 

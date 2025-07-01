@@ -11,6 +11,7 @@
 #include "ouster/osf/basics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/metadata.h"
+#include "ouster/osf/reader.h"
 #include "ouster/osf/writer.h"
 #include "ouster/visibility.h"
 
@@ -164,32 +165,16 @@ class OUSTER_API_CLASS LidarScanStream
     void save(const ouster::osf::ts_t receive_ts,
               const ouster::osf::ts_t sensor_ts, const obj_type& lidar_scan);
 
-    flatbuffers::Offset<gen::Field> create_osf_field(
-        flatbuffers::FlatBufferBuilder& fbb, const std::string& name,
-        const Field& f) const;
-
     flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
         flatbuffers::FlatBufferBuilder& fbb, const LidarScan& lidar_scan,
         const ouster::sensor::sensor_info& info,
         const ouster::LidarScanFieldTypes meta_field_types) const;
 
-    void fieldEncodeMulti(const LidarScan& lidar_scan,
-                          const LidarScanFieldTypes& field_types,
-                          const std::vector<int>& px_offset,
-                          ScanData& scan_data,
-                          const std::vector<size_t>& scan_idxs) const;
-
-    ScanData scanEncodeFieldsSingleThread(
+    ScanData scanEncode(
         const LidarScan& lidar_scan, const std::vector<int>& px_offset,
-        const LidarScanFieldTypes& field_types) const;
-
-    ScanData scanEncodeFields(const LidarScan& lidar_scan,
-                              const std::vector<int>& px_offset,
-                              const LidarScanFieldTypes& field_types) const;
-
-    ScanData scanEncode(const LidarScan& lidar_scan,
-                        const std::vector<int>& px_offset,
-                        const ouster::LidarScanFieldTypes& field_types) const;
+        const ouster::LidarScanFieldTypes& field_types,
+        const std::vector<std::pair<std::string, const Field*>> custom_fields,
+        ScanData& custom_data) const;
     /**
      * Encode/serialize the object to the buffer of bytes.
      *
@@ -202,19 +187,20 @@ class OUSTER_API_CLASS LidarScanStream
      * Decode/deserialize the object from bytes buffer using the concrete
      * metadata type for the stream.
      *
-     * @param[in] buf The buffer to decode into an object.
+     * @param[in] msg The MessageRef to decode into an instance of the data type
+     * associated with this data stream.
      * @param[in] meta The concrete metadata type to use for decoding.
      * @param[in] meta_provider Used to reconstruct any references to other
      *                          metadata entries dependencies
      *                          (like sensor_meta_id)
-     * @param[in] fields List of fields to decode. All are decoded if none
-     *                   provided.
+     * @param[in] fields List of fields to decode. All are decoded if not
+     *                   provided. None are decoded with an empty array.
      * @return Pointer to the decoded object.
      */
     static std::unique_ptr<obj_type> decode_msg(
-        const std::vector<uint8_t>& buf, const meta_type& meta,
+        const MessageRef& msg, const meta_type& meta,
         const MetadataStore& meta_provider,
-        const std::vector<std::string>& fields = {});
+        const nonstd::optional<std::vector<std::string>>& fields = {});
 
    public:
     /**

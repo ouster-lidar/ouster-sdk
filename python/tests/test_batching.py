@@ -1,4 +1,3 @@
-# type: ignore
 """
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
@@ -11,48 +10,34 @@ from more_itertools import take
 import numpy as np
 import pytest
 
-from ouster.sdk import client
-from ouster.sdk.client import PacketFormat, PacketWriter, \
+from ouster.sdk import core
+from ouster.sdk.core import PacketFormat, PacketWriter, \
     FieldType, ScanBatcher, LidarScan, LidarPacket, SensorInfo
-from ouster.sdk.pcap import PcapMultiPacketReader
+from ouster.sdk.pcap import PcapPacketSource
 
 
-client.ChanField.CUSTOM0 = 'custom0'
-client.ChanField.CUSTOM8 = 'custom8'
+CUSTOM0 = 'custom0'
+CUSTOM8 = 'custom8'
 
 
-def _patch_frame_id(packet: client.LidarPacket, fid: int) -> None:
+def _patch_frame_id(packet: core.LidarPacket, fid: int) -> None:
     """Rewrite the frame id of a non-legacy format lidar packet."""
     packet.buf[2:4] = memoryview(fid.to_bytes(2, byteorder='little'))
 
 
-def _simple_scans(source: client.PacketSource) -> Iterator[client.LidarScan]:
-    """Batch packets to scans without zeroing between frames."""
-    batch = ScanBatcher(source.metadata)
-    info = source.metadata
-
-    ls = client.LidarScan(info.format.pixels_per_column,
-                          info.format.columns_per_frame,
-                          info.format.udp_profile_lidar)
-
-    for p in source:
-        if batch(p.buf, ls):
-            yield deepcopy(ls)
-
-
 @pytest.fixture
-def lidar_stream(packets: client.PacketSource) -> client.PacketSource:
+def lidar_stream(packets: core.PacketSource) -> core.PacketSource:
     """Infinite stream of lidar packets with spoofed frame ids and packets ts."""
     def gen_packets():
         frame_id = 0
         next_ts = -1
-        packets_per_frame = (packets.metadata.format.columns_per_frame //
-                             packets.metadata.format.columns_per_packet)
-        dt = 1 / (packets.metadata.format.fps * packets_per_frame)
+        packets_per_frame = (packets.sensor_info[0].format.columns_per_frame //
+                             packets.sensor_info[0].format.columns_per_packet)
+        dt = 1 / (packets.sensor_info[0].format.fps * packets_per_frame)
         while True:
             plist = deepcopy(list(packets))
-            for p in plist:
-                if isinstance(p, client.LidarPacket):
+            for idx, p in plist:
+                if isinstance(p, core.LidarPacket):
                     if next_ts < 0:
                         next_ts = p.host_timestamp
                     _patch_frame_id(p, frame_id)
@@ -61,37 +46,27 @@ def lidar_stream(packets: client.PacketSource) -> client.PacketSource:
                     next_ts += dt * 1e9
             frame_id += 1
 
-    return client.Packets(gen_packets(), packets.metadata)
+    return core.Packets(gen_packets(), packets.sensor_info[0])
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
-def test_scans_multi(lidar_stream: client.PacketSource) -> None:
-    """Test batching multiple scans."""
-    scans = take(10, client.Scans(lidar_stream))
-
-    assert list(map(lambda s: s.frame_id, scans)) == list(range(10))
-
-    # host timestmps are filled and not zeros
-    assert all(map(lambda s: np.all(s.packet_timestamp), scans))
-
-
-@pytest.mark.parametrize('test_key', ['dual-2.2'])
-def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
+def test_batch_missing_zeroed(lidar_stream: core.PacketSource) -> None:
     """Check that missing data is zeroed out when batching."""
 
-    info = lidar_stream.metadata
+    info = lidar_stream.sensor_info[0]
+    print("info was", info)
 
     packets_per_frame = (info.format.columns_per_frame //
                          info.format.columns_per_packet)
 
-    batch = ScanBatcher(lidar_stream.metadata)
+    batch = ScanBatcher(info)
 
-    ls = client.LidarScan(info.format.pixels_per_column,
-                          info.format.columns_per_frame,
-                          info.format.udp_profile_lidar)
+    ls = core.LidarScan(info.format.pixels_per_column,
+                        info.format.columns_per_frame,
+                        info.format.udp_profile_lidar)
     assert ls.packet_timestamp.shape == (packets_per_frame,)
 
-    def non_zero_scan(scan: client.LidarScan):
+    def non_zero_scan(scan: core.LidarScan):
         scan.timestamp[:] = 1
         scan.measurement_id[:] = 1
         scan.status[:] = 1
@@ -128,7 +103,8 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
     def scans():
         # reusing the same lidar scan object over and over
         nonlocal ls
-        for ind, p in enumerate(packets):
+        for ind, pb in enumerate(packets):
+            p = pb[1]
             packet_ind = ind % packets_per_frame
             if packet_ind not in drop_inds:
                 if packet_ind in drop_columns:
@@ -137,7 +113,7 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
                     for col in drop_columns[packet_ind]:
                         writer.set_col_status(p, col, 0)
 
-                if batch(p.buf, client.packet_ts(p), ls):
+                if batch(p, ls):
                     # when batch returns True it means
                     # that the outstanding and missed packets
                     # in the scan should be zeroed properly
@@ -163,7 +139,7 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
             for f in scan.fields:
                 assert (scan.field(f)[:, i * n:n] == 0).all()
 
-        valid_packets = client.valid_packet_idxs(scan)
+        valid_packets = core.valid_packet_idxs(scan)
         assert (scan.packet_timestamp[valid_packets] != 0).all()
 
         # valid packets timestamps should be non-decreasing
@@ -172,39 +148,39 @@ def test_batch_missing_zeroed(lidar_stream: client.PacketSource) -> None:
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
-def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
+def test_batch_custom_fields(lidar_stream: core.PacketSource) -> None:
     """Test batching of a LidarScan with custom fields set."""
-
-    info = lidar_stream.metadata
+    print("start")
+    info = lidar_stream.sensor_info[0]
 
     packets_per_frame = (info.format.columns_per_frame //
                          info.format.columns_per_packet)
 
-    batch = ScanBatcher(lidar_stream.metadata)
+    batch = ScanBatcher(info)
     pf = PacketFormat(info)
 
     # create LidarScan with only 2 fields
     fields = [
-        FieldType(client.ChanField.RANGE, np.uint32),
-        FieldType(client.ChanField.SIGNAL, np.uint16),
-        FieldType(client.ChanField.CUSTOM0, np.uint8),
-        FieldType(client.ChanField.CUSTOM8, np.uint16)
+        FieldType(core.ChanField.RANGE, np.uint32),
+        FieldType(core.ChanField.SIGNAL, np.uint16),
+        FieldType(CUSTOM0, np.uint8),
+        FieldType(CUSTOM8, np.uint16)
     ]
 
-    ls = client.LidarScan(info.format.pixels_per_column,
-                          info.format.columns_per_frame, fields)
+    ls = core.LidarScan(info.format.pixels_per_column,
+                        info.format.columns_per_frame, fields)
 
     # we expect zero initialized fields
     for f in ls.fields:
         assert np.count_nonzero(ls.field(f)) == 0
 
     # set non zero data into users' custom field
-    ls.field(client.ChanField.CUSTOM8)[:] = 8
+    ls.field(CUSTOM8)[:] = 8
 
     # do batching into ls with a fields subset
-    for p in take(packets_per_frame, lidar_stream):
-        batch(p.buf, ls)
-        if isinstance(p, client.LidarPacket):
+    for idx, p in take(packets_per_frame, lidar_stream):
+        if isinstance(p, core.LidarPacket):
+            batch(p, ls)
             assert pf.shot_limiting(p.buf) == ls.shot_limiting()
             assert pf.thermal_shutdown(p.buf) == ls.thermal_shutdown()
 
@@ -213,41 +189,42 @@ def test_batch_custom_fields(lidar_stream: client.PacketSource) -> None:
 
     # and the content shouldn't be zero after batching
     for f in ls.fields:
-        if f in [client.ChanField.RANGE, client.ChanField.SIGNAL]:
+        if f in [core.ChanField.RANGE, core.ChanField.SIGNAL]:
             assert np.count_nonzero(ls.field(f)) > 0
 
     # custom field data should be preserved after batching
-    assert np.all(ls.field(client.ChanField.CUSTOM0) == 0)
-    assert np.all(ls.field(client.ChanField.CUSTOM8) == 8)
+    assert np.all(ls.field(CUSTOM0) == 0)
+    assert np.all(ls.field(CUSTOM8) == 8)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
-def test_incompatible_profile(lidar_stream: client.PacketSource) -> None:
+def test_incompatible_profile(lidar_stream: core.PacketSource) -> None:
     """Test batching of a LidarScan with custom fields set."""
 
-    info = lidar_stream.metadata
-    assert info.format.udp_profile_lidar == client.UDPProfileLidar.PROFILE_LIDAR_LEGACY
+    info = lidar_stream.sensor_info[0]
+    assert info.format.udp_profile_lidar == core.UDPProfileLidar.PROFILE_LIDAR_LEGACY
 
     packets_per_frame = (info.format.columns_per_frame //
                          info.format.columns_per_packet)
 
-    batch = ScanBatcher(lidar_stream.metadata)
+    batch = ScanBatcher(info)
 
     fields = [
-        FieldType(client.ChanField.RANGE, np.uint8)
+        FieldType(core.ChanField.RANGE, np.uint8)
     ]
-    ls = client.LidarScan(info.format.pixels_per_column,
-                          info.format.columns_per_frame,
-                          fields)
+    ls = core.LidarScan(info.format.pixels_per_column,
+                        info.format.columns_per_frame,
+                        fields)
 
     # Test for decoding scans to a bad dest buffer type
     with pytest.raises(ValueError):
-        for p in take(packets_per_frame, lidar_stream):
-            batch(p.buf, ls)
+        for idx, p in take(packets_per_frame, lidar_stream):
+            if isinstance(p, core.LidarPacket):
+                batch(p, ls)
 
 
 @pytest.fixture
-def lidar_stream_with_lagging_frame_ids(packets: client.PacketSource) -> client.PacketSource:
+def lidar_stream_with_lagging_frame_ids(packets: core.PacketSource) -> core.PacketSource:
     """A stream of lidar packets with spoofed out of order frame ids in proximity
     to the sensor frame_id wrap-around values."""
     def gen_packets():
@@ -257,21 +234,30 @@ def lidar_stream_with_lagging_frame_ids(packets: client.PacketSource) -> client.
         frame_id = ids[idx]
         while True:
             plist = deepcopy(list(packets))
-            for p in plist:
-                if isinstance(p, client.LidarPacket):
+            for sensor_idx, p in plist:
+                if isinstance(p, core.LidarPacket):
                     _patch_frame_id(p, frame_id)
                     yield p
             idx += 1
             frame_id = ids[idx % len(ids)]
 
-    return client.Packets(gen_packets(), packets.metadata)
+    return core.Packets(gen_packets(), packets.sensor_info[0])
 
 
 @pytest.mark.parametrize('test_key', ['dual-2.2'])
-def test_scans_multi_wraparound(lidar_stream_with_lagging_frame_ids: client.PacketSource) -> None:
+def test_scans_multi_wraparound(lidar_stream_with_lagging_frame_ids: core.PacketSource) -> None:
     """Test ScanBatcher with some packets coming out of order (only lagging case)
     by no more than a single id."""
-    scans = take(3, client.Scans(lidar_stream_with_lagging_frame_ids))
+    def scans_method(source: core.PacketSource) -> Iterator[core.LidarScan]:
+        metadata = source.sensor_info[0]
+        ls = LidarScan(metadata)
+        b = ScanBatcher(metadata)
+        for i, s in source:
+            if isinstance(s, LidarPacket):
+                if b(s, ls):
+                    yield ls
+                    ls = LidarScan(metadata)
+    scans = take(3, scans_method(lidar_stream_with_lagging_frame_ids))
     assert list(map(lambda s: s.frame_id, scans)) == [65535, 0, 1]
 
 
@@ -280,9 +266,9 @@ def test_early_release(file: str, test_data_dir):
     """ Verify that scan batcher releases a complete scan without waiting for a packet
     from the next one"""
     path = test_data_dir / "pcaps" / file
-    source = PcapMultiPacketReader(str(path))
+    source = PcapPacketSource(str(path))
 
-    metadata = source.metadata[0]
+    metadata = source.sensor_info[0]
     ls = LidarScan(metadata)
     b = ScanBatcher(metadata)
     pf = PacketFormat(metadata)
@@ -299,7 +285,7 @@ def test_early_release(file: str, test_data_dir):
 
 def test_batching_alerts():
     """It should include alert_flags from the packet in the LidarScan."""
-    profile = client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    profile = core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
     info = SensorInfo()
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16
@@ -329,7 +315,7 @@ def test_batching_alerts():
 
 def test_batching_countdowns():
     """It should include shutdown_countdown and shot_limiting_countdown in the LidarScan."""
-    profile = client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    profile = core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
     info = SensorInfo()
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16

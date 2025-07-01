@@ -36,46 +36,6 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 // ========== Decode Functions ===================================
 
 /**
- * Decode a single field to lidar_scan
- *
- * @param[out] lidar_scan The output object that will be filled as a result of
- *                        decoding.
- * @param[in] scan_data PNG buffers to decode.
- * @param[in] scan_idx Index in `scan_data` of the beginning of field buffers.
- * @param[in] field_type The field of `lidar_scan` to fill in with the decoded
- *                       result.
- * @param[in] px_offset Pixel shift per row used to reconstruct staggered range
- *                      image form.
- * @return false (0) if operation is successful true (1) if error occured
- */
-OUSTER_API_FUNCTION
-bool fieldDecode(LidarScan& lidar_scan, const ScanData& scan_data,
-                 size_t scan_idx, const ouster::FieldType& field_type,
-                 const std::vector<int>& px_offset);
-
-/**
- * Decode multiple fields to lidar_scan
- *
- * @param[out] lidar_scan The output object that will be filled as a result of
- *                        decoding.
- * @param[in] scan_data PNG buffers to decode, sequentially in the order of
- *                  field_types
- * @param[in] scan_idxs a vector of indices in `scan_data` of the beginning of
- *                   field buffers that will be decoded. `field_types.size()`
- *                   should be equal to `scan_idxs.size()` i.e. we need to
- *                   provide the index for every field type in
- *                   field_types where it's encoded data located
- * @param[in] field_types a vector of filed_types of lidar scan to decode
- * @param[in] px_offset  pixel shift per row used to reconstruct staggered range
- *                   image form
- * @return false (0) if operation is successful true (1) if error occured
- */
-OUSTER_API_FUNCTION
-bool fieldDecodeMulti(LidarScan& lidar_scan, const ScanData& scan_data,
-                      const std::vector<size_t>& scan_idxs,
-                      const LidarScanFieldTypes& field_types,
-                      const std::vector<int>& px_offset);
-/**
  * @defgroup OSFPngDecode8 Decoding Functionality.
  * Decode single PNG buffer (channel_buf) of 8 bit Gray encoding into
  * img.
@@ -223,7 +183,8 @@ OUSTER_API_FUNCTION bool decode64bitImage(Eigen::Ref<img_t<T>> img,
  * @param[in] buffer buffer to decode
  */
 OUSTER_API_FUNCTION
-void decodeField(ouster::Field& field, const ScanChannelData& buffer);
+void decodeField(ouster::Field& field, const ScanChannelData& buffer,
+                 const std::vector<int>& px_offset = {});
 
 }  // namespace osf
 }  // namespace ouster

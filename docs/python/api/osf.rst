@@ -2,34 +2,39 @@
 Module :mod:`ouster.sdk.osf`
 ============================
 
-.. contents::
-   :local:
-   :depth: 4
+.. rubric:: ouster.sdk.osf.multi
+
+.. automodule:: ouster.sdk.osf.multi
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. warning::
+
+   **Deprecated since version 0.15.0**
+   The ``ouster.osf.multi`` has been renamed to ``ouster.osf.osf_scan_source`` under the ``ouster.osf`` package. 
+   THIS FILE WILL BE REMOVED IN NEXT RELEASE.
+
+.. rubric:: ouster.sdk.osf
 
 .. automodule:: ouster.sdk.osf
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-----
 
-Low-Level API
--------------
-
-Writing OSF files
-^^^^^^^^^^^^^^^^^
-
-``Writer`` to create OSF file
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. autoclass:: OsfScanSource
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 .. autoclass:: Writer
    :members:
    :undoc-members:
+   :show-inheritance:
 
 
-High-Level API
---------------
-
-``osf.Scans`` just read ``LidarScan`` objects from a file
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autoclass:: Scans
+.. autoclass:: AsyncWriter
    :members:
-   :special-members: __iter__
+   :undoc-members:
+   :show-inheritance:

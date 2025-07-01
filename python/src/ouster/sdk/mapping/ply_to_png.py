@@ -1,18 +1,15 @@
 import argparse
 import logging
 import os
-from typing import List
 
 import numpy as np
 from PIL import Image as PILImage
 from plyfile import PlyData  # type: ignore  # noqa
 
 import ouster.sdk.viz as viz
-from ouster.sdk.viz.util import push_point_viz_fb_handler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('PNG_Maker')
-
 
 # if beyond max points, random delete points to prevent memory overflow
 # 50000000 points is around 30 mins recording with the default PLY maker voxel
@@ -77,31 +74,15 @@ def output_ext_verify(filename):
     return filename
 
 
-def mapping_save_fb_to_png(fb_data: List, fb_width: int, fb_height: int,
-                           screenshot_path: str):
-    img_arr = np.array(fb_data,
-                       dtype=np.uint8).reshape([fb_height, fb_width, 3])
-    if screenshot_path:
-        PILImage.fromarray(np.flip(img_arr, axis=0)).convert(
-                "RGB").save(screenshot_path)
+def screenshot_and_save_png(viz, screenshot_path: str):
+    pixels = viz.get_screenshot()
+    PILImage.fromarray(pixels).convert(
+            "RGB").save(screenshot_path)
+    logger.info(f"Screenshot is saved at {screenshot_path}")
     return screenshot_path
 
 
-def mapping_screenshot(viz, screenshot_path: str) -> None:
-    def handle_fb_once(viz, fb_data: List, fb_width: int,
-                       fb_height: int):
-        saved_img_path = mapping_save_fb_to_png(fb_data,
-                                                fb_width,
-                                                fb_height,
-                                                screenshot_path)
-        if saved_img_path:
-            logger.info(f"Screenshot is saved at {saved_img_path}")
-        viz.pop_frame_buffer_handler()
-    push_point_viz_fb_handler(viz, viz, handle_fb_once)
-
-
 def convert_ply_to_png(ply_files, screenshot_path, is_plot):
-
     start_point = peak_start_point(ply_files)
 
     if not start_point:
@@ -157,14 +138,11 @@ def convert_ply_to_png(ply_files, screenshot_path, is_plot):
     cloud.set_key(np.asfortranarray(keys))
     cloud.set_palette(viz.magma_palette)
     point_viz.add(cloud)
-    mapping_screenshot(point_viz, screenshot_path)
     point_viz.camera.set_dolly(doll_dist)
     point_viz.update()
-
+    screenshot_and_save_png(point_viz, screenshot_path)
     if is_plot:
         point_viz.run()
-    else:
-        point_viz.run_once()
 
 
 if __name__ == "__main__":

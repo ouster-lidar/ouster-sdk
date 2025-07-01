@@ -9,14 +9,17 @@ function(ouster_library_common _TARGET)
     PUBLIC
     $<INSTALL_INTERFACE:include/optional-lite>)
   get_target_property(CLIENT_INCLUDE_DIRS ouster_client INTERFACE_INCLUDE_DIRECTORIES)
+  get_target_property(SENSOR_INCLUDE_DIRS ouster_sensor INTERFACE_INCLUDE_DIRECTORIES)
   target_include_directories(${_TARGET}
     PUBLIC
     $<BUILD_INTERFACE:${CLIENT_INCLUDE_DIRS}>
+    $<BUILD_INTERFACE:${SENSOR_INCLUDE_DIRS}>
 	$<INSTALL_INTERFACE:include>
 	$<INSTALL_INTERFACE:include/fb_generated>)
+
   set_property(TARGET ${_TARGET} PROPERTY POSITION_INDEPENDENT_CODE ON)
   set_target_properties(${_TARGET} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-  target_link_libraries(${_TARGET} PRIVATE ouster_client)
+  target_link_libraries(${_TARGET} PRIVATE ouster_client ouster_sensor)
   message("Building Library: ${_TARGET}: Adding ouster_client")
   if(BUILD_PCAP)
     target_link_libraries(${_TARGET} PRIVATE ouster_pcap)
@@ -59,6 +62,9 @@ if(BUILD_SHARED_LIBRARY)
   endif()
   if(TARGET ouster_viz)
       target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_viz>)
+  endif()
+  if(TARGET ouster_sensor)
+  target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_sensor>)
   endif()
   ouster_library_common(shared_library)
   target_compile_definitions(shared_library PRIVATE BUILD_SHARED_LIBS_EXPORT)

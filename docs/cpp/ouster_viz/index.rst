@@ -1,8 +1,7 @@
-==============
-Ouster Viz API
-==============
+ouster_viz
+==========
 
 .. toctree::
-   :caption: Ouster Viz API
+   :maxdepth: 1
 
-   point_viz.h <point_viz.rst>
+   point_viz

@@ -33,24 +33,14 @@ class OUSTER_API_CLASS PngLidarScanEncoder
     PngLidarScanEncoder(int compression_amount)
         : compression_amount_{compression_amount} {}
 
-    // TODO these methods do essentially the same thing and should be
-    // deduplicated. Standard fields are stored in destaggered form, but this
-    // should be a detail specific to and hidden by the encoder.
-
-    // This method is for standard destaggered fields.
+    // This method encodes a field, if px_offset is provided it is destaggered
+    // before encoding
     // FIXME[tws] method should be private, but "friend class/FRIEND_TEST" for
     // the unit test isn't working for some reason
     OUSTER_API_IGNORE
-    bool fieldEncode(const LidarScan& lidar_scan,
-                     const ouster::FieldType& field_type,
-                     const std::vector<int>& px_offset, ScanData& scan_data,
-                     size_t scan_idx) const override;
-
-    // This method is for custom fields.
-    // FIXME[tws] method should be private, but "friend class/FRIEND_TEST" for
-    // the unit test isn't working for some reason
-    OUSTER_API_IGNORE
-    ScanChannelData encodeField(const ouster::Field& field) const override;
+    ScanChannelData encodeField(
+        const ouster::Field& field,
+        const std::vector<int>& px_offset = {}) const override;
 
    private:
     int compression_amount_{DEFAULT_PNG_OSF_ZLIB_COMPRESSION_LEVEL};
