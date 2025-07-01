@@ -10,26 +10,19 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
-    #- name: install deps
-    #  uses: ./.github/actions/install_deps
-    #- name: install python
-    #  run: sudo apt install python3 python3-pip
-    #- name: install python-deps one
-    #  run: cd python && python3 setup.py egg_info && pip3 install `grep -v '^\[' src/*.egg-info/requires.txt`
-    #- name: install python-deps
-    #  run: pip3 install --force-reinstall mypy==1.14.1 flake8==7.1.2 clang-format==14.0.0
-    #- name: cpp-lint
-    #  run: ./scripts/./clang-linting.sh
-    - name: Build lint Docker image
-      run: docker build -f ${GITHUB_WORKSPACE}/python/Dockerfile -t mypy-lint .
-    - name: python-lint-install-types
-      run: |
-          docker run --rm -w /app -v ${GITHUB_WORKSPACE}:/app mypy-lint mypy --install-types --non-interactive python/src python/tests tests/hil tests/integration
+    - name: install deps
+      uses: ./.github/actions/install_deps
+    - name: install python
+      run: sudo apt install python3 python3-pip
+    - name: install python-deps one
+      run: cd python && python3 setup.py egg_info && pip3 install `grep -v '^\[' src/*.egg-info/requires.txt`
+    - name: install python-deps
+      run: pip3 install --force-reinstall mypy==1.14.1 flake8==7.1.2 clang-format==14.0.0
+    - name: cpp-lint
+      run: ./scripts/./clang-linting.sh
     - name: python-lint
-      run: |
-          docker run --rm -w /app -v ${GITHUB_WORKSPACE}:/app mypy-lint mypy python/src python/tests tests/hil tests/integration
+      run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
       continue-on-error: true
-      #run: flake8
   linux-2204-build:
     runs-on: ubuntu-22.04
     steps:
