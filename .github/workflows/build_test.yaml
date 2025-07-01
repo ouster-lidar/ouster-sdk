@@ -139,7 +139,7 @@ jobs:
     - name: install deps
       run: brew install cmake pkg-config eigen curl libtins glfw flatbuffers googletest ceres-solver robin-map
     - name: cmake configure
-      run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
+      run: cmake . -B build -DCMAKE_CXX_STANDARD=14 -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
       run: cmake --build build -j3
     - name: run tests
