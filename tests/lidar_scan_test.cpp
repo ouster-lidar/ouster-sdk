@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <map>
 #include <numeric>
+#include <random>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -24,6 +25,8 @@
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 using namespace ouster::sensor;
+std::random_device rd;
+std::mt19937 g(rd());
 
 static const std::vector<ouster::FieldType> empty_field_slots{};
 
