@@ -122,7 +122,7 @@ jobs:
         triplet: x64-windows
         token: ${{ github.token }}
         github-binarycache: true
-        revision: 2024.11.16
+        no-shallow: true
     - name: install python-deps
       run: pip3 install pytest pytest-xdist
     - name: build python
