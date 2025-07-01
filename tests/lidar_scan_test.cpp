@@ -26,7 +26,7 @@ template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 using namespace ouster::sensor;
 std::random_device rd;
-std::mt19937 g(rd());
+std::mt19937 random_generator(rd());
 
 static const std::vector<ouster::FieldType> empty_field_slots{};
 
@@ -283,8 +283,8 @@ TEST(LidarScan, CustomEquality) {
         auto test_array3 = std::vector<ouster::FieldType>(
             dual_field_slots.begin() + 1, dual_field_slots.end());
 
-        std::shuffle(test_array1.begin(), test_array1.end(), g);
-        std::shuffle(test_array3.begin(), test_array3.end(), g);
+        std::shuffle(test_array1.begin(), test_array1.end(), random_generator);
+        std::shuffle(test_array3.begin(), test_array3.end(), random_generator);
 
         auto scan1 =
             ouster::LidarScan(w, h, test_array1.begin(), test_array1.end());
