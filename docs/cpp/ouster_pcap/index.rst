@@ -1,8 +1,11 @@
-===============
-Ouster PCAP API
-===============
+ouster_pcap
+===========
 
 .. toctree::
-   :caption: Ouster PCAP API
+   :maxdepth: 1
 
-   os_pcap.h <os_pcap.rst>
+   indexed_pcap_reader
+   os_pcap
+   pcap
+   pcap_packet_source
+   pcap_scan_source

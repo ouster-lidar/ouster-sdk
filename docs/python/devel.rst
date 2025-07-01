@@ -18,30 +18,51 @@ Building the Python SDK from source requires several dependencies:
 - `libpng <http://www.libpng.org>`_ >= 1.6
 - `flatbuffers <https://flatbuffers.dev/>`_ >= 1.1
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
-- `python <https://www.python.org/>`_ >= 3.8 (with headers and development libraries)
+- `python <https://www.python.org/>`_ >= 3.8; < 3.13 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
 The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster-sdk>`_. You should clone the whole project.
 
+
 Linux and macOS
 ---------------
 
-On supported Debian-based Linux systems, you can install all build dependencies by running:
+It is now recommended to use ``vcpkg`` to install dependencies across all platforms. 
+The list of required dependencies is defined in the ``vcpkg.json`` file located at the root of the repository. 
+vcpkg manifest mode is used to manage ouster-sdk dependencies in a consistent and reproducible way.
+
+To install ``vcpkg``, please follow the instructions in the `vcpkg documentation`_.
+
+.. _vcpkg documentation: https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash
+
+The ``setup.py`` sets the following environment variables to point to the vcpkg installation,
+please make sure to update them if want to update location of ``vcpkg.json`` file:
+
+.. code:: console
+
+   $ export VCPKG_MANIFEST_DIR=<PATH TO OUSTER_SDK REPO>
+   $ export VCPKG_MANIFEST_MODE=ON
+
+As an alternative, you can install the dependencies manually using following instructions:
+
+On supported Debian-based Linux systems,
 
 .. code:: console
 
    $ sudo apt install build-essential cmake \
                       libeigen3-dev libtins-dev libpcap-dev \
                       python3-dev python3-pip libcurl4-openssl-dev \
-                      libglfw3-dev libpng-dev libflatbuffers-dev libssl-dev
+                      libglfw3-dev libpng-dev libflatbuffers-dev libssl-dev \
+                      libceres-dev libtbb-dev \
+                      robin-map-dev
 
 On macOS >= 11, using Homebrew, you should be able to run:
 
 .. code:: console
 
-  $ brew install cmake eigen curl libtins python3 glfw libpng flatbuffers
+  $ brew install cmake eigen curl libtins python3 glfw libpng flatbuffers ceres-solver robin-map
 
-After you have the system dependencies, you can build the SDK with:
+You can build the SDK with:
 
 .. code:: console
 
@@ -71,14 +92,17 @@ After you have the system dependencies, you can build the SDK with:
 Windows 10
 ----------
 
-On Windows 10, you'll have to install the Visual Studio 2017 Build Tools, Python and the `vcpkg`_
-package manager and run:
+As mentioned, ``vcpkg`` is the recommended package manager for ```ouster-sdk``.
 
-.. code:: powershell
+Please follow the instructions in the `_vcpkg documentation powershell` to install vcpkg.
 
-   PS > vcpkg install --triplet=x64-windows curl eigen3 libtins glfw3 glad[gl-api-33] libpng flatbuffers
+Additionally, ensure that the following are installed on your system:
 
-The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer powershell prompt:
+- Visual Studio 2017 Build Tools
+
+- Python
+
+After that, using a developer powershell prompt:
 
 .. code:: powershell
 
@@ -90,14 +114,26 @@ The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer 
 
    # set the correct vcpkg triplet
    PS > $env:VCPKG_TARGET_TRIPLET="x64-windows"
-   
+
    # set build options related to the compiler
    PS > $env:CMAKE_GENERATOR_PLATFORM="x64"
    PS > $env:CMAKE_GENERATOR="Visual Studio 15 2017"
 
    # install pybind11
    PS > py -m pip install pybind11 ninja
+
+Optionally, if you want to update the default settings of directory for the manifest file or disable manifest mode, 
+update the environment variables below: 
+
+.. code:: powershell
    
+   PS > $env:VCPKG_MANIFEST_DIR=<PATH TO OUSTER_SDK REPO>
+   PS > $env:VCPKG_MANIFEST_MODE=ON
+
+Then, you can build the SDK with:
+
+.. code:: powershell
+
    # then, build an installable "wheel" package
    PS > py -m pip wheel --no-deps "$env:OUSTER_SDK_PATH\python"
 
@@ -107,7 +143,7 @@ The currently tested vcpkg tag is ``2024.04.26``. After that, using a developer 
 See the top-level README in the `Ouster SDK repository`_ for more details on setting up a
 development environment on Windows.
 
-.. _vcpkg: https://github.com/microsoft/vcpkg/blob/master/README.md
+.. _vcpkg documentation powershell: https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell
 .. _Ouster SDK repository: https://github.com/ouster-lidar/ouster-sdk
 
 
@@ -124,7 +160,7 @@ The Ouster SDK package includes configuration for ``flake8`` and ``mypy``. To ru
 
    # install pybind11
    $ python3 -m pip install pybind11
-   
+
    # install and run flake8 linter
    $ python3 -m pip install flake8
    $ cd ${OUSTER_SDK_PATH}/python

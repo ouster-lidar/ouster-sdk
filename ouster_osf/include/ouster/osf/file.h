@@ -12,6 +12,7 @@
 #include <string>
 
 #include "ouster/osf/basics.h"
+#include "ouster/version.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
@@ -91,7 +92,20 @@ class OUSTER_API_CLASS OsfFile {
      * @return The version of the OSF file.
      */
     OUSTER_API_FUNCTION
-    OSF_VERSION version();
+    ouster::util::version version();
+
+    /// The most recent public version of the OSF schema.
+    static const ouster::util::version current_version;
+
+    /**
+     * Convert the parsed version to its integer representation.
+     *
+     * @param[in] parsed_version the version to encode.
+     * @return The integer value that should be written to the header given this
+     * parsed version.
+     */
+    OUSTER_API_FUNCTION
+    static uint64_t serialized_version(ouster::util::version parsed_version);
 
     /**
      * Returns the offset in the OSF file where the
@@ -320,6 +334,13 @@ class OUSTER_API_CLASS OsfFile {
      * Mmaped memory address pointed to the beginning of the file (byte 0)
      */
     uint8_t* file_buf_;
+
+    /**
+     * Mmaped view handle to keep while the memmap is open on Windows
+     * This is not used on Linux, where the mmap is done with a file descriptor
+     * and the file descriptor is closed after the mmap is done.`
+     */
+    uintptr_t memmap_handle_{0};
 
     /**
      * File stream for reading.

@@ -1,4 +1,3 @@
-#  type: ignore
 """
 Copyright (c) 2021, Ouster, Inc.
 All rights reserved.
@@ -16,22 +15,22 @@ import pytest
 import time
 import numpy as np
 
-from ouster.sdk import client, pcap, open_source
+from ouster.sdk import core, pcap
 import ouster.sdk._bindings.pcap as _pcap
-from ouster.sdk.client import PacketValidationFailure
+from ouster.sdk.core import PacketValidationFailure
 import ouster.sdk._bindings.client as _client
 from tests.conftest import PCAPS_DATA_DIR, TESTS
-from tests.test_batching import _patch_frame_id
+from tests.test_batching import _patch_frame_id  # type: ignore
 
 SLL_PROTO = 113
 ETH_PROTO = 1
 UDP_PROTO = 17
 
 
-def fake_packets(metadata: client.SensorInfo,
+def fake_packets(metadata: core.SensorInfo,
                  n_lidar: int = 0,
                  n_imu: int = 0,
-                 timestamped: bool = False) -> Iterator[client.Packet]:
+                 timestamped: bool = False) -> Iterator[core.Packet]:
     pf = _client.PacketFormat.from_info(metadata)
     current_ts = time.time()
 
@@ -40,23 +39,23 @@ def fake_packets(metadata: client.SensorInfo,
 
     for is_lidar in choices:
         current_ts += random()
-        packet_ts = current_ts if timestamped else None
+        packet_ts = current_ts
 
         if is_lidar:
             buf = bytearray(
                 getrandbits(8) for _ in range(pf.lidar_packet_size))
-            packet = client.LidarPacket(len(buf))
-            packet.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
+            lpacket = core.LidarPacket(len(buf))
+            lpacket.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
             if timestamped:
-                packet.host_timestamp = int(packet_ts * 1e9)
-            yield packet
+                lpacket.host_timestamp = int(packet_ts * 1e9)
+            yield lpacket
         else:
             buf = bytearray(getrandbits(8) for _ in range(pf.imu_packet_size))
-            packet = client.ImuPacket(len(buf))
-            packet.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
+            ipacket = core.ImuPacket(len(buf))
+            ipacket.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
             if timestamped:
-                packet.host_timestamp = int(packet_ts * 1e9)
-            yield packet
+                ipacket.host_timestamp = int(packet_ts * 1e9)
+            yield ipacket
 
 
 def set_init_id(data: bytearray, init_id: int) -> None:
@@ -69,11 +68,11 @@ def set_prod_sn(data: bytearray, prod_sn: int) -> None:
     data[7:12] = memoryview(prod_sn.to_bytes(5, byteorder='little'))
 
 
-def fake_packet_stream_with_frame_id(metadata: client.SensorInfo,
+def fake_packet_stream_with_frame_id(metadata: core.SensorInfo,
                 n_frames: int,
                 n_lidar_packets_per_frame: int,
                 n_imu_packets_per_frame: int,
-                frame_id_fn: Callable[[int], int]) -> Iterator[client.Packet]:
+                frame_id_fn: Callable[[int], int]) -> Iterator[core.Packet]:
     """Generate non-legacy lidar packets with frame_id set.
     Include some IMU packets to make sure indices are
     computed correctly with IMU data present."""
@@ -88,17 +87,17 @@ def fake_packet_stream_with_frame_id(metadata: client.SensorInfo,
                     getrandbits(8) for _ in range(pf.lidar_packet_size))
                 set_init_id(buf, metadata.init_id)
                 set_prod_sn(buf, int(metadata.sn))
-                packet = client.LidarPacket(len(buf))
+                packet = core.LidarPacket(len(buf))
                 packet.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
                 assert packet.validate(metadata, pf) == PacketValidationFailure.NONE
                 _patch_frame_id(packet, frame_id_fn(frame))
                 yield packet
             else:
                 buf = bytearray(getrandbits(8) for _ in range(pf.imu_packet_size))
-                packet = client.ImuPacket(len(buf))
-                packet.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
-                assert packet.validate(metadata, pf) == PacketValidationFailure.NONE
-                yield packet
+                ipacket = core.ImuPacket(len(buf))
+                ipacket.buf[:] = np.frombuffer(buf, dtype=np.uint8, count=len(buf))
+                assert ipacket.validate(metadata, pf) == PacketValidationFailure.NONE
+                yield ipacket
 
 
 @pytest.fixture
@@ -117,13 +116,13 @@ def use_sll() -> int:
 
 
 @pytest.fixture
-def fake_meta(meta_2_0: client.SensorInfo) -> client.SensorInfo:
+def fake_meta(meta_2_0: core.SensorInfo) -> core.SensorInfo:
     """Use fw 2.0 metadata for randomly generated packets."""
     return meta_2_0
 
 
 @pytest.fixture
-def fake_pcap_path(lidar_imu_frac: float, fake_meta: client.SensorInfo,
+def fake_pcap_path(lidar_imu_frac: float, fake_meta: core.SensorInfo,
                    n_packets: int, use_sll: bool, tmpdir: str) -> str:
     file_path = path.join(tmpdir, "pcap_test.pcap")
     n_lidar = int(lidar_imu_frac * n_packets)
@@ -135,8 +134,8 @@ def fake_pcap_path(lidar_imu_frac: float, fake_meta: client.SensorInfo,
 
 
 @pytest.fixture
-def fake_pcap(fake_meta, fake_pcap_path) -> Iterable[pcap.Pcap]:
-    pc = pcap.Pcap(fake_pcap_path, fake_meta)
+def fake_pcap(fake_meta, fake_pcap_path) -> Iterable[pcap.PcapPacketSource]:
+    pc = pcap.PcapPacketSource(fake_pcap_path, sensor_info=[fake_meta])
     yield pc
     pc.close()
 
@@ -147,8 +146,9 @@ def test_pcap_read_empty(fake_meta, fake_pcap_path) -> None:
     fake_meta = copy(fake_meta)
     fake_meta.config.udp_port_lidar = 7505
     fake_meta.config.udp_port_imu = 7506
-    fake_pcap = pcap.Pcap(fake_pcap_path, fake_meta)
-    assert fake_pcap.ports == (7505, 7506)
+    fake_pcap = pcap.PcapPacketSource(fake_pcap_path, sensor_info=[fake_meta])
+    assert fake_pcap.sensor_info[0].config.udp_port_lidar == 7505
+    assert fake_pcap.sensor_info[0].config.udp_port_imu == 7506
     assert list(fake_pcap) == []
 
 
@@ -158,9 +158,9 @@ def test_pcap_read_wrong_ports(fake_meta, fake_pcap_path) -> None:
     fake_meta = copy(fake_meta)
     fake_meta.config.udp_port_lidar = 7505
     fake_meta.config.udp_port_imu = 7506
-    fake_pcap = pcap.Pcap(fake_pcap_path,
-                          fake_meta)
-    assert fake_pcap.ports == (7505, 7506)
+    fake_pcap = pcap.PcapPacketSource(fake_pcap_path, sensor_info=[fake_meta])
+    assert fake_pcap.sensor_info[0].config.udp_port_lidar == 7505
+    assert fake_pcap.sensor_info[0].config.udp_port_imu == 7506
     assert list(fake_pcap) == []
 
 
@@ -172,10 +172,11 @@ def test_pcap_guess_one_port_invalid(fake_meta, fake_pcap_path) -> None:
     """
     fake_meta = copy(fake_meta)
     fake_meta.config.udp_port_lidar = 7505
-    fake_meta.config.udp_port_imu = 0
-    fake_pcap = pcap.Pcap(fake_pcap_path,
-                          fake_meta)
-    assert fake_pcap.ports == (7505, 0)
+    fake_meta.config.udp_port_imu = None
+    fake_pcap = pcap.PcapPacketSource(fake_pcap_path,
+                          sensor_info=[fake_meta])
+    assert fake_pcap.sensor_info[0].config.udp_port_lidar == 7505
+    assert fake_pcap.sensor_info[0].config.udp_port_imu is None
     assert list(fake_pcap) == []
 
 
@@ -187,18 +188,20 @@ def test_pcap_guess_one_port_valid(fake_meta, fake_pcap_path) -> None:
     Capture contains just lidar data on 7502, and user expects imu on 7503.
     """
     fake_meta = copy(fake_meta)
-    fake_meta.config.udp_port_lidar = 0
+    fake_meta.config.udp_port_lidar = None
     fake_meta.config.udp_port_imu = 7503
-    fake_pcap = pcap.Pcap(fake_pcap_path,
-                          fake_meta)
-    assert fake_pcap.ports == (7502, 7503)
+    fake_pcap = pcap.PcapPacketSource(fake_pcap_path,
+                          sensor_info=[fake_meta])
+    assert fake_pcap.sensor_info[0].config.udp_port_lidar == 7502
+    assert fake_pcap.sensor_info[0].config.udp_port_imu == 7503
     assert len(list(fake_pcap)) == 10
 
 
 @pytest.mark.parametrize('n_packets', [10])
 def test_pcap_read_10(fake_pcap) -> None:
-    """Check that reading a test pcap produces the right number of packets."""
-    assert fake_pcap.ports == (7502, 7503)
+    """Check that reading a test pcap produces the right number of packets and guesses both ports."""
+    assert fake_pcap.sensor_info[0].config.udp_port_lidar == 7502
+    assert fake_pcap.sensor_info[0].config.udp_port_imu == 7503
     assert len(list(fake_pcap)) == 10
 
 
@@ -206,11 +209,12 @@ def test_pcap_read_10(fake_pcap) -> None:
 def test_pcap_infer_one_port(fake_meta, fake_pcap_path) -> None:
     """Check that a matching port is inferred when one is specified. """
     fake_meta = copy(fake_meta)
-    fake_meta.config.udp_port_lidar = 0
+    fake_meta.config.udp_port_lidar = None
     fake_meta.config.udp_port_imu = 7503
-    fake_pcap = pcap.Pcap(fake_pcap_path,
-                          fake_meta)
-    assert fake_pcap.ports == (7502, 7503)
+    fake_pcap = pcap.PcapPacketSource(fake_pcap_path,
+                          sensor_info=[fake_meta])
+    assert fake_pcap.sensor_info[0].config.udp_port_lidar == 7502
+    assert fake_pcap.sensor_info[0].config.udp_port_imu == 7503
     assert len(list(fake_pcap)) == 10
 
 
@@ -249,18 +253,17 @@ def test_pcap_info_encap_proto(fake_pcap_path, use_sll) -> None:
 def test_pcap_reset(fake_pcap) -> None:
     """Test that resetting a pcap after reading works."""
     packets1 = list(fake_pcap)
-    fake_pcap.reset()
     packets2 = list(fake_pcap)
 
-    bufs1 = [bytes(p.buf) for p in packets1]
-    bufs2 = [bytes(p.buf) for p in packets2]
+    bufs1 = [bytes(p.buf) for idx, p in packets1]
+    bufs2 = [bytes(p.buf) for idx, p in packets2]
     assert bufs1 == bufs2
 
 
-def test_pcap_read_closed(fake_pcap: pcap.Pcap) -> None:
+def test_pcap_read_closed(fake_pcap: pcap.PcapPacketSource) -> None:
     """Check that reading from a closed pcap raises an error."""
     fake_pcap.close()
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         next(iter(fake_pcap))
 
 
@@ -278,8 +281,8 @@ def test_read_write_lidar_imu(n_lidar, n_imu, fake_meta, tmpdir) -> None:
     file_path = path.join(tmpdir, "pcap_test.pcap")
 
     pcap.record(in_packets, file_path)
-    out_packets = list(pcap.Pcap(file_path, fake_meta))
-    out_bufs = [bytes(p.buf) for p in out_packets]
+    out_packets = list(pcap.PcapPacketSource(file_path, sensor_info=[fake_meta]))
+    out_bufs = [bytes(p.buf) for idx, p in out_packets]
     in_bufs = [bytes(p.buf) for p in in_packets]
 
     assert in_bufs == out_bufs
@@ -292,8 +295,8 @@ def test_timestamp_read_write(fake_meta, tmpdir) -> None:
     file_path = path.join(tmpdir, "pcap_test.pcap")
 
     pcap.record(in_packets, file_path)
-    out_packets = list(pcap.Pcap(file_path, fake_meta))
-    out_timestamps = [p.host_timestamp for p in out_packets]
+    out_packets = list(pcap.PcapPacketSource(file_path, sensor_info=[fake_meta]))
+    out_timestamps = [p.host_timestamp for idx, p in out_packets]
     in_timestamps = [p.host_timestamp for p in in_packets]
 
     assert len(in_timestamps) == len(out_timestamps)
@@ -308,8 +311,8 @@ def test_no_timestamp_read_write(fake_meta, tmpdir) -> None:
 
     current_timestamp = time.time()
     pcap.record(in_packets, file_path)
-    out_packets = list(pcap.Pcap(file_path, fake_meta))
-    out_timestamps = [p.host_timestamp for p in out_packets]
+    out_packets = list(pcap.PcapPacketSource(file_path, sensor_info=[fake_meta]))
+    out_timestamps = [p.host_timestamp for idx, p in out_packets]
     in_timestamps = [p.host_timestamp for p in in_packets]
 
     assert len(in_timestamps) == len(out_timestamps)
@@ -346,7 +349,7 @@ def test_mixed_timestamp_write(n_lidar_timestamp, n_lidar_no_timestamp,
     imu_no_ts_packets = fake_packets(fake_meta,
                                      n_imu=n_imu_no_timestamp,
                                      timestamped=False)
-    in_packets: List[client.Packet] = list(
+    in_packets: List[core.Packet] = list(
         chain(lidar_ts_packets, lidar_no_ts_packets, imu_ts_packets,
               imu_no_ts_packets))
     shuffle(in_packets)
@@ -389,8 +392,9 @@ def test_lidar_guess_ambiguous(fake_meta, tmpdir) -> None:
     finally:
         _pcap.record_uninitialize(handle)
 
-    source = pcap.Pcap(file_path, fake_meta)
-    assert source.ports == (7503, 0)  # arbitrary but deterministic
+    source = pcap.PcapPacketSource(file_path, sensor_info=[fake_meta])
+    assert source.sensor_info[0].config.udp_port_lidar == 7503
+    assert source.sensor_info[0].config.udp_port_imu == 0  # arbitrary but deterministic
     assert len(list(source)) == 1
 
 
@@ -409,8 +413,9 @@ def test_imu_guess_ambiguous(fake_meta, tmpdir) -> None:
     finally:
         _pcap.record_uninitialize(handle)
 
-    source = pcap.Pcap(file_path, fake_meta)
-    assert source.ports == (0, 7503)  # arbitrary but deterministic
+    source = pcap.PcapPacketSource(file_path, sensor_info=[fake_meta])
+    assert source.sensor_info[0].config.udp_port_lidar == 0
+    assert source.sensor_info[0].config.udp_port_imu == 7503  # arbitrary but deterministic
     assert len(list(source)) == 1
 
 
@@ -434,37 +439,38 @@ def test_lidar_imu_guess_ambiguous(fake_meta, tmpdir) -> None:
     finally:
         _pcap.record_uninitialize(handle)
 
-    source = pcap.Pcap(file_path, fake_meta)
-    assert source.ports == (7503, 7505)  # arbitrary but deterministic
+    source = pcap.PcapPacketSource(file_path, sensor_info=[fake_meta])
+    assert source.sensor_info[0].config.udp_port_lidar == 7503
+    assert source.sensor_info[0].config.udp_port_imu == 7505  # arbitrary but deterministic
     assert len(list(source)) == 2
 
 
-def test_pcap_read_real(real_pcap: pcap.Pcap) -> None:
+def test_pcap_read_real(real_pcap: pcap.PcapPacketSource) -> None:
     """Sanity check reading pcaps with real data."""
 
     # lidar data should be on 7502
-    assert real_pcap.ports[0] == 7502
+    assert real_pcap.sensor_info[0].config.udp_port_lidar == 7502
 
     packets = list(real_pcap)
-    lidar_packets = [p for p in packets if isinstance(p, client.LidarPacket)]
+    lidar_packets = [p for idx, p in packets if isinstance(p, core.LidarPacket)]
 
     # TODO - update test to expect based on mode
     # test data should contain one frame of 1024-mode data
     assert len(lidar_packets) == 64
 
     # and should have timestamps
-    assert all(p.host_timestamp != 0 for p in packets)
+    assert all(p.host_timestamp != 0 for idx, p in packets)
 
 
-def test_pcap_guess_real(meta: client.SensorInfo, real_pcap_path: str) -> None:
+def test_pcap_guess_real(meta: core.SensorInfo, real_pcap_path: str) -> None:
     """Check that lidar port for real data can inferred."""
 
     meta_no_ports = copy(meta)
-    meta_no_ports.config.udp_port_lidar = 0
-    meta_no_ports.config.udp_port_imu = 0
+    meta_no_ports.config.udp_port_lidar = None
+    meta_no_ports.config.udp_port_imu = None
 
-    real_pcap = pcap.Pcap(real_pcap_path, meta_no_ports)
-    assert real_pcap.ports[0] == 7502
+    real_pcap = pcap.PcapPacketSource(real_pcap_path, sensor_info=[meta_no_ports])
+    assert real_pcap.sensor_info[0].config.udp_port_lidar == 7502
 
 
 def test_record_packet_info(fake_meta, tmpdir) -> None:
@@ -513,7 +519,7 @@ def test_indexed_pcap_reader(tmpdir):
     """It should correctly locate the start of frames in a PCAP file"""
     meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    sensor_info = client.SensorInfo(open(meta_path).read())
+    sensor_info = core.SensorInfo(open(meta_path).read())
     num_frames = 10
     in_packets = list(fake_packet_stream_with_frame_id(sensor_info, num_frames, 3, 3, lambda frame_num: frame_num))
     assert len(in_packets) > 0
@@ -545,7 +551,7 @@ def test_indexed_pcap_reader_seek(tmpdir):
     """After seeking to the start of a frame, next_packet should return the first packet of that frame"""
     meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    sensor_info = client.SensorInfo(open(meta_path).read())
+    sensor_info = core.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
     num_frames = 10
     packets_per_frame = 3
@@ -571,7 +577,7 @@ def test_out_of_order_frames(tmpdir):
     """Frames that are out of order are skipped"""
     meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    sensor_info = client.SensorInfo(open(meta_path).read())
+    sensor_info = core.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
     num_frames = 10
     packets_per_frame = 3
@@ -604,7 +610,7 @@ def test_current_data(fake_meta, tmpdir):
     """It should provide access to current packet data as a memory view"""
     meta_path = path.join(PCAPS_DATA_DIR, f"{TESTS['dual-2.2']}.json")
 
-    sensor_info = client.SensorInfo(open(meta_path).read())
+    sensor_info = core.SensorInfo(open(meta_path).read())
     packet_format = _client.PacketFormat.from_info(sensor_info)
     num_frames = 10
     packets_per_frame = 1
@@ -635,18 +641,18 @@ def test_validation():
     """The Pcap class should accumlate errors detected"""
     meta_file_path = path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.json')
     pcap_file_path = path.join(PCAPS_DATA_DIR, 'OS-0-128-U1_v2.3.0_1024x10.pcap')
-    metadata = client.SensorInfo(open(meta_file_path).read())
+    metadata = core.SensorInfo(open(meta_file_path).read())
     metadata.init_id = 123
-    metadata.format.udp_profile_lidar = client.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
-    reader = pcap.Pcap(pcap_file_path, metadata)
+    metadata.format.udp_profile_lidar = core.UDPProfileLidar.PROFILE_LIDAR_FIVE_WORD_PIXEL
+    reader = pcap.PcapPacketSource(pcap_file_path, sensor_info=[metadata])
     consume(reader)
     # size error takes precedent
     assert reader.size_error_count == 64
     assert reader.id_error_count == 0
 
-    metadata = client.SensorInfo(open(meta_file_path).read())
+    metadata = core.SensorInfo(open(meta_file_path).read())
     metadata.init_id = 123
-    reader = pcap.Pcap(pcap_file_path, metadata)
+    reader = pcap.PcapPacketSource(pcap_file_path, sensor_info=[metadata])
     consume(reader)
     assert reader.size_error_count == 0
     assert reader.id_error_count == 64
@@ -656,9 +662,9 @@ def test_legacy_reduced_json_data():
     """PCAP data with the legacy reduced metadata json should work."""
     meta_file_path = path.join(PCAPS_DATA_DIR, 'OS-1-64_sensor_config_reduced.json')
     pcap_file_path = path.join(PCAPS_DATA_DIR, 'OS-1-64_1024x10_fw20.pcap')
-    metadata = client.SensorInfo(open(meta_file_path).read())
-    packet_source = pcap.Pcap(pcap_file_path, metadata)
-    scans = client.Scans(packet_source)
+    metadata = core.SensorInfo(open(meta_file_path).read())
+    packet_source = pcap.PcapPacketSource(pcap_file_path, sensor_info=[metadata])
+    scans = core.Scans(packet_source)
     assert 1 == sum(1 for _ in scans)
 
 
@@ -666,20 +672,11 @@ def test_packet_reassembly():
     # make sure we get 1 valid packet/scan out of this file, ignoring the first fragment
     meta_file_path = path.join(PCAPS_DATA_DIR, 'duplicate_id.json')
     pcap_file_path = path.join(PCAPS_DATA_DIR, 'duplicate_id.pcap')
-    metadata = client.SensorInfo(open(meta_file_path).read())
-    packet_source = pcap.Pcap(pcap_file_path, metadata)
-    scans = client.Scans(packet_source)
+    metadata = core.SensorInfo(open(meta_file_path).read())
+    packet_source = pcap.PcapPacketSource(pcap_file_path, sensor_info=[metadata])
+    scans = core.Scans(packet_source)
     count = 0
-    for s in scans:
+    for s, in scans:
         count = count + 1
         assert s.frame_id == 1778
     assert count == 1
-
-
-def test_empty_pcap_loop():
-    pcap_file_path = path.join(PCAPS_DATA_DIR, 'empty_pcap.pcap')
-
-    source = open_source(pcap_file_path, cycle=True)
-
-    with pytest.raises(StopIteration):
-        next(iter(source))

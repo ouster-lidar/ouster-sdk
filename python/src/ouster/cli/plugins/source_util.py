@@ -1,10 +1,11 @@
 from enum import IntEnum
 from functools import wraps
-from ouster.sdk.client import LidarScan, MultiScanSource
-from typing import (Callable, List, Any, Union,
-                    Dict, Optional, Iterator)
+from ouster.sdk.core import LidarScan, ScanSource
+from typing import (Callable, List, Any, Union, Tuple,
+                    Dict, Optional, Iterator, Iterable)
 from threading import Event
 from dataclasses import dataclass
+from ouster.sdk.sensor import ClientTimeout
 import queue
 import click
 
@@ -22,11 +23,11 @@ class SourceCommandType(IntEnum):
 class SourceCommandContext:
     source_uri: Optional[str]
     source_options: Dict[str, Any]
-    scan_source: Optional[Union[MultiScanSource, Any]]
-    scan_iter: Optional[Iterator[List[Optional[LidarScan]]]]
+    other_options: Dict[str, Any]
+    scan_source: Optional[Union[ScanSource, Any]]
+    scan_iter: Optional[Iterable[List[Optional[LidarScan]]]]
     terminate_evt: Optional[Event]
     main_thread_fn: Optional[Callable[[None], None]]
-    thread_fns: List[Callable[[None], None]]
     invoked_command_names: List[str]
     misc: Dict[Any, Any]
     terminate_exception: Optional[Exception]
@@ -37,11 +38,11 @@ class SourceCommandContext:
         self.scan_iter = None
         self.terminate_evt = None
         self.main_thread_fn = None
-        self.thread_fns = []
         self.invoked_command_names = []
         self.misc = {}
         self.terminate_exception = None
         self.source_options = {}
+        self.other_options = {}
 
     # [kk] NOTE: get and __getitem__ are defined to support
     # older code that still treats ctx.obj as a dict
@@ -56,20 +57,25 @@ class SourceCommandContext:
 @dataclass
 class SourceCommandCallback:
     callback_fn: Callable[[SourceCommandContext], None]
+    prerun_fn: Callable[[SourceCommandContext], None]
     type: SourceCommandType
 
 
 def source_multicommand(type: SourceCommandType = SourceCommandType.MULTICOMMAND_UNSUPPORTED,
-                        retrieve_click_context: bool = False):
+                        retrieve_click_context: bool = False,
+                        prerun: Optional[Callable[[SourceCommandContext], None]] = None):
     def source_multicommand_wrapper(fn):
         @wraps(fn)
         def callback_wrapped(click_ctx: click.core.Context, *args, **kwargs):
+            prefn = None
+            if prerun is not None:
+                prefn = lambda ctx: prerun(ctx, *args, **kwargs)
             # Extract ctx.obj: SourceCommandContext from click context
             if not retrieve_click_context:
-                return SourceCommandCallback(lambda ctx: fn(ctx, *args, **kwargs), type)  # type: ignore
+                return SourceCommandCallback(lambda ctx: fn(ctx, *args, **kwargs), prefn, type)  # type: ignore
             else:
                 return SourceCommandCallback(
-                        lambda ctx: fn(ctx, click_ctx, *args, **kwargs), type)  # type: ignore
+                        lambda ctx: fn(ctx, click_ctx, *args, **kwargs), prefn, type)  # type: ignore
         return callback_wrapped
     return source_multicommand_wrapper
 
@@ -81,7 +87,8 @@ class CoupledTee:
     def __init__(self, iter: Iterator, n: int = 2,
                  terminate: Optional[Event] = None,
                  copy_fn: Optional[Callable] = None,
-                 poll_wait_sec: float = 0.25) -> None:
+                 poll_wait_sec: float = 0.25,
+                 loop: bool = False) -> None:
         self._iter = iter
         self._n = n
         self._queues = [queue.Queue() for _ in range(n - 1)]
@@ -90,10 +97,12 @@ class CoupledTee:
         self._copy_fn = (copy_fn if copy_fn is not None else
             lambda x: x)
         self._poll_wait_sec = poll_wait_sec
+        self._loop = loop
 
     def main_tee(self) -> Iterator:
         try:
-            for val in self._iter:
+            # type ignored because generators are tricky to mypy
+            for val in self._iter():  # type: ignore
                 for q in self._queues:
                     q.put(val)
                 yield val
@@ -120,6 +129,11 @@ class CoupledTee:
                 if isinstance(val, Exception):
                     # python doesnt allow you to throw a stop iteration here
                     if isinstance(val, StopIteration):
+                        if self._loop:
+                            yield []
+                            continue
+                        return
+                    if isinstance(val, ClientTimeout):
                         return
                     raise val
                 yield val
@@ -128,13 +142,13 @@ class CoupledTee:
                     return
 
     @staticmethod
-    def tee(iter: Iterator, n: int = 2, **kwargs) -> List[Iterator]:
+    def tee(iter: Iterator, n: int = 2, **kwargs) -> Tuple[Iterable, List[Iterator]]:
         ct = CoupledTee(iter, **kwargs)
         tees = []
-        tees.append(ct.main_tee())
         for i in range(n - 1):
             tees.append(ct.sub_tee(i))
-        return tees
+        # type ignored because generators are tricky to mypy
+        return ct.main_tee, tees  # type: ignore
 
 
 def _join_with_conjunction(things_to_join: List[str], separator: str = ', ', conjunction: str = 'or') -> str:

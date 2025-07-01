@@ -761,6 +761,22 @@ class OUSTER_API_CLASS Field : public FieldView {
 };
 
 /**
+ * Destagger or restagger a field according to the provided sensor info.
+ *
+ * @throw std::invalid_argument if the pixel_shift_by_row height does not match
+ * the field
+ *
+ * @param[in] info sensor info to use to stagger/destagger
+ * @param[in] field field to stagger/destagger
+ * @param[in] inverse if true, stagger the data rather than destagger
+ *
+ * @return the staggered/destaggered field
+ */
+OUSTER_API_FUNCTION
+Field destagger(const ouster::sensor::sensor_info& info, const FieldView& field,
+                bool inverse = false);
+
+/**
  * Acquire a uintXX_t reinterpreted view of the matching type size.
  * Useful for memory related operations like parsing and compression.
  *

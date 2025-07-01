@@ -36,14 +36,14 @@ def update_window_size_label(position: Tuple[float, float], text: str):
 def draw_pixels(ctx: WindowCtx, x: float, y: float):
     global hello_pixel
     if ctx.lbutton_down:
-        hello_pixel = img.window_coordinates_to_image_pixel(ctx, x, y)
+        hello_pixel = img.viewport_coordinates_to_image_pixel(ctx, x, y)
         # if the pixel location is a valid location in the image data
         if hello_pixel[0] >= 0 and hello_pixel[0] < img_size[0] and \
             hello_pixel[1] >= 0 and hello_pixel[1] < img_size[1]:
 
             img_data[hello_pixel] = 1.0
             img.set_image(img_data)
-            pixel_center = img.image_pixel_to_window_coordinates(ctx, hello_pixel)
+            pixel_center = img.image_pixel_to_viewport_coordinates(ctx, hello_pixel)
             label.set_position(
                 pixel_center[0] / ctx.viewport_width,
                 pixel_center[1] / ctx.viewport_height
@@ -79,7 +79,7 @@ def resize_handler(ctx: WindowCtx) -> bool:
 
     # update "hello"
     if hello_pixel:
-        pixel_center = img.image_pixel_to_window_coordinates(ctx, hello_pixel)
+        pixel_center = img.image_pixel_to_viewport_coordinates(ctx, hello_pixel)
         label.set_position(
             pixel_center[0] / ctx.viewport_width,
             pixel_center[1] / ctx.viewport_height

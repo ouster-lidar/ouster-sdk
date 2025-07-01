@@ -17,11 +17,16 @@ out/
 # vim
 *.swp
 
+# emacs
+.dir.locals.el
+.ccls-cache
+
 # CMake, Ninja
 .ninja_deps
 .ninja_log
 CMakeFiles
 CTestTestfile.cmake
+compile_commands.json
 
 # Built artifacts
 generated

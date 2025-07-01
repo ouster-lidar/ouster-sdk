@@ -1,10 +1,19 @@
-=================
 meta_extrinsics.h
 =================
 
-.. doxygenclass:: ouster::osf::Extrinsics
-    :members:
+.. contents::
+   :local:
 
-.. doxygengroup:: OSFTraitsExtrinsics
-    :members:
-    :content-only:
+Class
+-----
+
+.. doxygenclass:: ouster::osf::Extrinsics
+   :project: cpp_api
+   :members:
+
+Structs
+-------
+
+.. doxygenstruct:: ouster::osf::MetadataTraits<ouster::osf::Extrinsics>
+   :project: cpp_api
+   :members:

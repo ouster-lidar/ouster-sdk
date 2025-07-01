@@ -176,32 +176,6 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 
 // ========== Decode Functions ===================================
 
-bool fieldDecode(LidarScan& lidar_scan, const ScanData& scan_data,
-                 size_t start_idx, const ouster::FieldType& field_type,
-                 const std::vector<int>& px_offset) {
-    switch (field_type.element_type) {
-        case sensor::ChanFieldType::UINT8:
-            return decode8bitImage(lidar_scan.field<uint8_t>(field_type.name),
-                                   scan_data[start_idx], px_offset);
-        case sensor::ChanFieldType::UINT16:
-            return decode16bitImage(lidar_scan.field<uint16_t>(field_type.name),
-                                    scan_data[start_idx], px_offset);
-        case sensor::ChanFieldType::UINT32:
-            return decode32bitImage(lidar_scan.field<uint32_t>(field_type.name),
-                                    scan_data[start_idx], px_offset);
-        case sensor::ChanFieldType::UINT64:
-            return decode64bitImage(lidar_scan.field<uint64_t>(field_type.name),
-                                    scan_data[start_idx], px_offset);
-        default:
-            logger().error(
-                "ERROR: fieldDecode: UNKNOWN:"
-                "ChanFieldType not yet "
-                "implemented");
-            return true;
-    }
-    return true;  // ERROR
-}
-
 template <typename T>
 bool decode24bitImage(Eigen::Ref<img_t<T>> img,
                       const ScanChannelData& channel_buf,
@@ -718,7 +692,8 @@ template bool decode8bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
 template bool decode8bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
                                         const ScanChannelData&);
 
-void decodeField(ouster::Field& field, const ScanChannelData& buffer) {
+void decodeField(ouster::Field& field, const ScanChannelData& buffer,
+                 const std::vector<int>& px_offset) {
     // 1d case, uncompressed
     if (field.shape().size() == 1) {
         std::memcpy(field, buffer.data(), buffer.size());
@@ -739,21 +714,40 @@ void decodeField(ouster::Field& field, const ScanChannelData& buffer) {
     }
 
     bool res = true;
-    switch (view.tag()) {
-        case sensor::ChanFieldType::UINT8:
-            res = decode8bitImage<uint8_t>(view, buffer);
-            break;
-        case sensor::ChanFieldType::UINT16:
-            res = decode16bitImage<uint16_t>(view, buffer);
-            break;
-        case sensor::ChanFieldType::UINT32:
-            res = decode32bitImage<uint32_t>(view, buffer);
-            break;
-        case sensor::ChanFieldType::UINT64:
-            res = decode64bitImage<uint64_t>(view, buffer);
-            break;
-        default:
-            break;
+    if (px_offset.size()) {
+        switch (view.tag()) {
+            case sensor::ChanFieldType::UINT8:
+                res = decode8bitImage<uint8_t>(view, buffer, px_offset);
+                break;
+            case sensor::ChanFieldType::UINT16:
+                res = decode16bitImage<uint16_t>(view, buffer, px_offset);
+                break;
+            case sensor::ChanFieldType::UINT32:
+                res = decode32bitImage<uint32_t>(view, buffer, px_offset);
+                break;
+            case sensor::ChanFieldType::UINT64:
+                res = decode64bitImage<uint64_t>(view, buffer, px_offset);
+                break;
+            default:
+                break;
+        }
+    } else {
+        switch (view.tag()) {
+            case sensor::ChanFieldType::UINT8:
+                res = decode8bitImage<uint8_t>(view, buffer);
+                break;
+            case sensor::ChanFieldType::UINT16:
+                res = decode16bitImage<uint16_t>(view, buffer);
+                break;
+            case sensor::ChanFieldType::UINT32:
+                res = decode32bitImage<uint32_t>(view, buffer);
+                break;
+            case sensor::ChanFieldType::UINT64:
+                res = decode64bitImage<uint64_t>(view, buffer);
+                break;
+            default:
+                break;
+        }
     }
 
     if (res) {

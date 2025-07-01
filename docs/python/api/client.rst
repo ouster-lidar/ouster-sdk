@@ -1,14 +1,19 @@
-
 ===============================
 Module :mod:`ouster.sdk.client`
 ===============================
+
+.. warning::
+
+   **Deprecated since version 0.15.0**
+   Namespace ouster.sdk.client is deprecated. 
+   Use ouster.sdk.core and ouster.sdk.sensor instead. 
+   Namespace ouster.sdk.client will be removed in the upcoming release.
 
 .. contents::
    :local:
    :depth: 4
 
 .. automodule:: ouster.sdk.client
-
 
 ----
 
@@ -18,6 +23,12 @@ Core
 .. autoexception:: ClientError
 .. autoexception:: ClientTimeout
 .. autoexception:: ClientOverflow
+
+.. warning::
+
+   **Deprecated since version 0.15.0**
+   Above exceptions have been be moved to ``ouster.sdk.sensor``.
+   They will be removed from ``ouster.sdk.client`` in a future release.
 
 .. autoclass:: PacketSource()
    :show-inheritance:
@@ -31,6 +42,13 @@ Core
 .. autoclass:: Sensor
    :members:
    :special-members: __iter__
+
+.. warning::
+
+   **Deprecated since version 0.15.0**
+   ``Sensor`` has been be moved to ``ouster.sdk.sensor``.
+   It will be removed from ``ouster.sdk.client`` in a future release.
+
 
 .. autoclass:: Scans
    :members:
@@ -55,7 +73,20 @@ Metadata
 
 .. autofunction:: get_config
 
+.. warning::
+
+   **Deprecated since version 0.15.0**
+   ``get_config`` has been be moved to ``ouster.sdk.sensor``.
+   It will be removed from ``ouster.sdk.client`` in a future release.
+
 .. autofunction:: set_config
+
+
+.. warning::
+
+   **Deprecated since version 0.15.0**
+   ``get_config`` has been be moved to ``ouster.sdk.sensor``.
+   It will be removed from ``ouster.sdk.client`` in a future release.
 
 .. autoclass:: LidarMode
    :members:

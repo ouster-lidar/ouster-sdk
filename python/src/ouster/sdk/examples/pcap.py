@@ -12,7 +12,7 @@ import os
 import argparse
 import numpy as np
 
-from ouster.sdk import client, pcap
+from ouster.sdk import core, pcap
 from ouster.sdk.examples.colormaps import normalize
 
 
@@ -33,20 +33,23 @@ def pcap_3d_one_scan(source_file: str,
         exit(1)
 
     # open source
-    source = pcap.PcapScanSource(source_file).single_source(0)
-    metadata = source.metadata
+    source = pcap.PcapScanSource(source_file)
+    metadata = source.sensor_info[0]
 
     from more_itertools import nth
     # get single scan by index
-    scan = nth(source, num)
+    scans = nth(source, num)
 
-    if not scan:
+    if not scans:
         print(f"ERROR: Scan # {num} in not present in pcap file")
         exit(1)
 
+    scan = scans[0]
+    assert scan is not None
+
     # [doc-stag-open3d-one-scan]
-    # compute point cloud using client.SensorInfo and client.LidarScan
-    xyz = client.XYZLut(metadata)(scan)
+    # compute point cloud using core.SensorInfo and core.LidarScan
+    xyz = core.XYZLut(metadata)(scan)
 
     # create point cloud and coordinate axes geometries
     cloud = o3d.geometry.PointCloud(
@@ -84,15 +87,18 @@ def pcap_display_xyz_points(source_file: str,
     import matplotlib.pyplot as plt  # type: ignore
 
     # open the source
-    source = pcap.PcapScanSource(source_file).single_source(0)
-    metadata = source.metadata
+    source = pcap.PcapScanSource(source_file)
+    metadata = source.sensor_info[0]
 
     # [doc-stag-pcap-plot-xyz-points]
     from more_itertools import nth
-    scan = nth(source, num)
-    if not scan:
+    scans = nth(source, num)
+    if not scans:
         print(f"ERROR: Scan # {num} in not present in pcap file")
         exit(1)
+
+    scan = scans[0]
+    assert scan is not None
 
     # set up figure
     plt.figure()
@@ -105,10 +111,10 @@ def pcap_display_xyz_points(source_file: str,
     plt.title("3D Points XYZ for scan")
 
     # transform data to 3d points and graph
-    xyzlut = client.XYZLut(metadata)
-    xyz = xyzlut(scan.field(client.ChanField.RANGE))
+    xyzlut = core.XYZLut(metadata)
+    xyz = xyzlut(scan.field(core.ChanField.RANGE))
 
-    key = scan.field(client.ChanField.REFLECTIVITY)
+    key = scan.field(core.ChanField.REFLECTIVITY)
 
     [x, y, z] = [c.flatten() for c in np.dsplit(xyz, 3)]
     ax.scatter(x, y, z, c=normalize(key.flatten()), s=0.2)  # type: ignore
@@ -127,37 +133,39 @@ def pcap_to_las(source_file: str,
     import laspy  # type: ignore
 
     # open source
-    source = pcap.PcapScanSource(source_file).single_source(0)
-    metadata = source.metadata
+    source = pcap.PcapScanSource(source_file)
+    metadata = source.sensor_info[0]
 
     if (metadata.format.udp_profile_lidar ==
-            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
+            core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
         print("Note: You've selected to convert a dual returns pcap to LAS. "
               "Second returns are ignored in this conversion by this example "
               "for clarity reasons.  You can modify the code as needed by "
               "accessing it through Github or the SDK documentation.")
 
     # precompute xyzlut to save computation in a loop
-    xyzlut = client.XYZLut(metadata)
+    xyzlut = core.XYZLut(metadata)
 
     # create an iterator of LidarScans from pcap and bound it if num is specified
     scans = iter(source)
     if num:
         scans = islice(scans, num)
 
-    for idx, scan in enumerate(scans):
+    for idx, scanl in enumerate(scans):
+        for scan in scanl:
+            if scan is None:
+                continue
+            xyz = xyzlut(scan.field(core.ChanField.RANGE))
 
-        xyz = xyzlut(scan.field(client.ChanField.RANGE))
+            las = laspy.create()
+            las.x = xyz[:, :, 0].flatten()
+            las.y = xyz[:, :, 1].flatten()
+            las.z = xyz[:, :, 2].flatten()
 
-        las = laspy.create()
-        las.x = xyz[:, :, 0].flatten()
-        las.y = xyz[:, :, 1].flatten()
-        las.z = xyz[:, :, 2].flatten()
+            las_path = os.path.join(las_dir, f'{las_base}_{idx:06d}.{las_ext}')
+            print(f'write frame #{idx} to file: {las_path}')
 
-        las_path = os.path.join(las_dir, f'{las_base}_{idx:06d}.{las_ext}')
-        print(f'write frame #{idx} to file: {las_path}')
-
-        las.write(las_path)
+            las.write(las_path)
 
 
 def pcap_to_pcd(source_file: str,
@@ -167,11 +175,11 @@ def pcap_to_pcd(source_file: str,
                 pcd_ext: str = "pcd") -> None:
     "Write scans from a pcap to pcd files (one per lidar scan)."
     # open source
-    source = pcap.PcapScanSource(source_file).single_source(0)
-    metadata = source.metadata
+    source = pcap.PcapScanSource(source_file)
+    metadata = source.sensor_info[0]
 
     if (metadata.format.udp_profile_lidar ==
-            client.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
+            core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL):
         print("Note: You've selected to convert a dual returns pcap. Second "
               "returns are ignored in this conversion by this example "
               "for clarity reasons.  You can modify the code as needed by "
@@ -190,26 +198,28 @@ def pcap_to_pcd(source_file: str,
         os.makedirs(pcd_dir)
 
     # precompute xyzlut to save computation in a loop
-    xyzlut = client.XYZLut(metadata)
+    xyzlut = core.XYZLut(metadata)
 
     # create an iterator of LidarScans from pcap and bound it if num is specified
     scans = iter(source)
     if num:
         scans = islice(scans, num)
 
-    for idx, scan in enumerate(scans):
+    for idx, scanl in enumerate(scans):
+        for scan in scanl:
+            if scan is None:
+                continue
+            xyz = xyzlut(scan.field(core.ChanField.RANGE))
 
-        xyz = xyzlut(scan.field(client.ChanField.RANGE))
+            pcd = o3d.geometry.PointCloud()  # type: ignore
 
-        pcd = o3d.geometry.PointCloud()  # type: ignore
+            pcd.points = o3d.utility.Vector3dVector(xyz.reshape(-1,
+                                                                3))  # type: ignore
 
-        pcd.points = o3d.utility.Vector3dVector(xyz.reshape(-1,
-                                                            3))  # type: ignore
+            pcd_path = os.path.join(pcd_dir, f'{pcd_base}_{idx:06d}.{pcd_ext}')
+            print(f'write frame #{idx} to file: {pcd_path}')
 
-        pcd_path = os.path.join(pcd_dir, f'{pcd_base}_{idx:06d}.{pcd_ext}')
-        print(f'write frame #{idx} to file: {pcd_path}')
-
-        o3d.io.write_point_cloud(pcd_path, pcd)  # type: ignore
+            o3d.io.write_point_cloud(pcd_path, pcd)  # type: ignore
 
 
 def pcap_to_ply(source_file: str,
@@ -239,14 +249,17 @@ def pcap_query_scan(source_file: str,
         num: scan number in a given pcap file (satrs from *0*)
     """
     # open source
-    source = pcap.PcapScanSource(source_file).single_source(0)
+    source = pcap.PcapScanSource(source_file)
     scans = iter(source)
 
     # [doc-stag-pcap-query-scan]
-    scan = next(scans)
+    scanl = next(scans)
     print("Available fields and corresponding dtype in LidarScan")
-    for field in scan.fields:
-        print('{0:15} {1}'.format(str(field), scan.field(field).dtype))
+    for scan in scanl:
+        if scan is None:
+            continue
+        for field in scan.fields:
+            print('{0:15} {1}'.format(str(field), scan.field(field).dtype))
     # [doc-etag-pcap-query-scan]
 
 
@@ -255,24 +268,23 @@ def pcap_read_packets(
         num: int = 0  # not used in this example
 ) -> None:
     """Basic read packets example from pcap file. """
-    # open source
-    source = pcap.PcapMultiPacketReader(source_file).single_source(0)
-    metadata = source.metadata
-
     # [doc-stag-pcap-read-packets]
-    packet_format = client.PacketFormat(metadata)
-    for packet in source:
-        if isinstance(packet, client.LidarPacket):
+    # open source
+    source = pcap.PcapPacketSource(source_file)
+    metadata = source.sensor_info[0]
+    packet_format = core.PacketFormat(metadata)
+    for idx, packet in source:
+        if isinstance(packet, core.LidarPacket):
             # Now we can process the LidarPacket. In this case, we access
             # the measurement ids, timestamps, and ranges
-            measurement_ids = packet_format.packet_header(client.ColHeader.MEASUREMENT_ID, packet.buf)
-            timestamps = packet_format.packet_header(client.ColHeader.TIMESTAMP, packet.buf)
-            ranges = packet_format.packet_field(client.ChanField.RANGE, packet.buf)
+            measurement_ids = packet_format.packet_header(core.ColHeader.MEASUREMENT_ID, packet.buf)
+            timestamps = packet_format.packet_header(core.ColHeader.TIMESTAMP, packet.buf)
+            ranges = packet_format.packet_field(core.ChanField.RANGE, packet.buf)
             print(f'  encoder counts = {measurement_ids.shape}')
             print(f'  timestamps = {timestamps.shape}')
             print(f'  ranges = {ranges.shape}')
 
-        elif isinstance(packet, client.ImuPacket):
+        elif isinstance(packet, core.ImuPacket):
             # and access ImuPacket content
             ax = packet_format.imu_la_x(packet.buf)
             ay = packet_format.imu_la_y(packet.buf)

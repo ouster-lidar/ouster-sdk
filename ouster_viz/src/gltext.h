@@ -55,7 +55,7 @@ extern "C" {
 
 #include <stdint.h> /* uint8_t, uint16_t, uint32_t, uint64_t */
 #include <stdlib.h> /* malloc(), calloc(), free() */
-#include <string.h> /* memset(), memcpy(), strlen() */
+#include <string.h> /* memset(), memcpy(), strlen() */  // NOLINT(misc-include-cleaner)
 
 #if (defined(_DEBUG) || defined(DEBUG)) && !defined(GLT_DEBUG)
 #define GLT_DEBUG 1

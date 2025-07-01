@@ -2,8 +2,8 @@ from typing import List, Optional
 from ouster.sdk.viz import Cloud, PointViz
 from ouster.sdk.viz.model import LidarScanVizModel
 from ouster.sdk.viz.track import Track
-import ouster.sdk.client as client
-from ouster.sdk.client import ChanField
+import ouster.sdk.core as core
+from ouster.sdk.core import ChanField
 from .view_mode import (CloudMode, CloudPaletteItem, is_norm_reflectivity_mode)
 
 
@@ -31,7 +31,7 @@ class AccumulatorBase:
         self._cloud_track: Optional[Cloud] = None
 
     @property
-    def metadata(self) -> List[client.SensorInfo]:
+    def metadata(self) -> List[core.SensorInfo]:
         """Metadatas for the displayed sensors."""
         return self._metas
 
@@ -84,7 +84,7 @@ class AccumulatorBase:
             return
 
         sorted_cloud_mode_names = self._model.sorted_cloud_mode_names()
-        if not sorted_cloud_mode_names:
+        if sorted_cloud_mode_names == ["RING"]:
             return
 
         try:
@@ -101,11 +101,11 @@ class AccumulatorBase:
         self._update_cloud_palette()
 
     def update(self,
-               scan: List[Optional[client.LidarScan]],
+               scan: List[Optional[core.LidarScan]],
                scan_num: Optional[int] = None) -> None:
         """Register the new scan and update the states of TRACK, ACCUM and MAP"""
-        self._scan: List[Optional[client.LidarScan]] = [scan] if isinstance(
-            scan, client.LidarScan) else scan
+        self._scan: List[Optional[core.LidarScan]] = [scan] if isinstance(
+            scan, core.LidarScan) else scan
         if scan_num is not None:
             self._scan_num = scan_num
         else:

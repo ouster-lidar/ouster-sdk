@@ -18,11 +18,11 @@ To run the sample code which queries fields from a scan, use the :py:func:`.pcap
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH query-scan
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH query-scan
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH query-scan
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH query-scan
 
 You can run the above on pcaps containing packets of any type of :py:class:`.UDPProfileLidar`.
 
@@ -65,11 +65,11 @@ To generate staggered and destaggered images yourself, you can try the following
 
     # iterate `scans` and get the 84th LidarScan (it can be different with your data)
     scan = nth(scans, 84)
-    ranges = scan.field(client.ChanField.RANGE)
+    ranges = scan[0].field(client.ChanField.RANGE)
 
     # destagger ranges, notice `metadata` use, that is needed to get
     # sensor intrinsics and correctly data transforms
-    ranges_destaggered = client.destagger(source.metadata, ranges)
+    ranges_destaggered = core.destagger(metadata, ranges)
 
     plt.imshow(ranges_destaggered, cmap='gray', resample=False)
 
@@ -110,11 +110,11 @@ If you don’t have a sensor, you can run the same code with our
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH plot-xyz-points --scan-num 84
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH plot-xyz-points --scan-num 84
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH plot-xyz-points --scan-num 84
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH plot-xyz-points --scan-num 84
 
 For visualizers which will stream consecutive frames from sensors or pcaps,
 check out our utilities in :doc:`visualizations`.

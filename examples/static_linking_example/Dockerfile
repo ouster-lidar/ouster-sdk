@@ -12,7 +12,10 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     libglfw3-dev \
     libpng-dev \
-    libflatbuffers-dev
+    libflatbuffers-dev \
+    libtbb-dev \
+    robin-map-dev \
+    libceres-dev
 
 ENV WORKSPACE=/root
 ENV INSTALL_DIR="/usr/local"

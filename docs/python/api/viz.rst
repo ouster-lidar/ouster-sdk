@@ -1,87 +1,79 @@
-============================
 Module :mod:`ouster.sdk.viz`
 ============================
 
-.. contents::
-   :local:
-   :depth: 4
+.. rubric:: ouster.sdk.viz.accum_base
 
-.. py:currentmodule:: ouster.sdk.viz
-
-Ouster sensor data visualization tools. Implemented in C++ OpenGL and wrapped with Python bindings.
-
-For additional information please refer to :doc:`/python/viz/viz-api-tutorial`.
-
-----
-
-Core
-====
-
-.. autoclass:: PointViz
+.. automodule:: ouster.sdk.viz.accum_base
    :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. autofunction:: add_default_controls
+.. rubric:: ouster.sdk.viz.accumulators
 
-.. autoclass:: LidarScanViz
+.. automodule:: ouster.sdk.viz.accumulators
    :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. autoclass:: SimpleViz
+.. rubric:: ouster.sdk.viz.accumulators_config
+
+.. automodule:: ouster.sdk.viz.accumulators_config
    :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. autoattribute:: ouster.sdk.viz.spezia_palette
-   :annotation: = spezia colors
+.. rubric:: ouster.sdk.viz.core
 
-.. autoattribute:: ouster.sdk.viz.calref_palette
-   :annotation: = calref colors
-
-
-Visual Primitives
-=================
-
-``Cloud`` for 3D Point Cloud
-----------------------------
-
-.. autoclass:: Cloud
+.. automodule:: ouster.sdk.viz.core
    :members:
+   :undoc-members:
+   :show-inheritance:
 
-``Image`` for 2D image
------------------------
+.. rubric:: ouster.sdk.viz.map_accumulator
 
-.. autoclass:: Image
+.. automodule:: ouster.sdk.viz.map_accumulator
    :members:
+   :undoc-members:
+   :show-inheritance:
 
-``Cuboid`` for 3D enclosure
-----------------------------
+.. rubric:: ouster.sdk.viz.model
 
-.. autoclass:: Cuboid
+.. automodule:: ouster.sdk.viz.model
    :members:
+   :undoc-members:
+   :show-inheritance:
 
-``Label`` for 2D and 3D text
-----------------------------
+.. rubric:: ouster.sdk.viz.scans_accumulator
 
-.. autoclass:: Label
+.. automodule:: ouster.sdk.viz.scans_accumulator
    :members:
+   :undoc-members:
+   :show-inheritance:
 
+.. rubric:: ouster.sdk.viz.track
 
-``Camera`` and ``TargetDisplay``
-=================================
-
-.. autoclass:: Camera
+.. automodule:: ouster.sdk.viz.track
    :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. autoclass:: TargetDisplay
+.. rubric:: ouster.sdk.viz.tracks_accumulator
+
+.. automodule:: ouster.sdk.viz.tracks_accumulator
    :members:
+   :undoc-members:
+   :show-inheritance:
 
+.. rubric:: ouster.sdk.viz.util
 
-Events ``WindowCtx``
-====================
-
-.. autoclass:: WindowCtx
+.. automodule:: ouster.sdk.viz.util
    :members:
+   :undoc-members:
+   :show-inheritance:
 
+.. rubric:: ouster.sdk.viz.view_mode
 
-Viz Utils
-=========
-
-.. autoclass:: AxisWithLabel
+.. automodule:: ouster.sdk.viz.view_mode
    :members:
+   :undoc-members:
+   :show-inheritance:

@@ -6,20 +6,13 @@ import time
 from datetime import datetime
 from pathlib import Path
 import numpy as np
-from typing import (cast, Dict, Union, Tuple, List, Iterator, Optional)
+from typing import (cast, Dict, Union, Tuple, List, Iterator, Iterable, Optional)
 from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
-from ouster.sdk.client import (first_valid_packet_ts, SensorPacketSource,
-                               first_valid_column_ts,
-                               UDPProfileLidar, LidarScan, ChanField, XYZLut,
-                               destagger, SensorInfo,
-                               LidarPacket, ImuPacket,
-                               SensorHttp, PacketMultiSource)
-from ouster.sdk import osf, _populate_extrinsics
-from ouster.sdk.io_type import (io_type_from_extension, io_type,
-                                OusterIoType)
-from ouster.sdk.pcap import PcapMultiPacketReader
-from ouster.sdk.bag import BagPacketSource
-from ouster.sdk.sensor.util import build_sensor_config
+from ouster.sdk.core import (UDPProfileLidar, LidarScan, ChanField, XYZLut,
+                             destagger, SensorInfo, LidarPacket, ImuPacket,
+                             PacketSource)
+from ouster.sdk import osf, open_packet_source
+from ouster.sdk.core.io_types import (io_type_from_extension, OusterIoType)
 from ouster.sdk.util import scan_to_packets  # type: ignore
 from ouster.sdk.pcap.pcap import MTU_SIZE
 import ouster.sdk._bindings.pcap as _pcap
@@ -53,7 +46,6 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     uri = ctx.source_uri
     if uri is None:
         raise RuntimeError("Unexpected condition")
-    src_opts = ctx.source_options
     extension = ""
     split = os.path.splitext(filename)
     if split[0][0] == '.' and split[1] == "":
@@ -65,44 +57,18 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
     else:
         extension = split[1].replace(".", "")
 
-    uris = (uri or "").split(",")
-    uri_type = io_type(uris[0])
-
     if extension != "pcap" and extension != "bag":
         raise click.exceptions.BadParameter(f"Cannot save raw file of type {extension}")
 
-    resolved_extrinsics = src_opts["resolved_extrinsics"]
-
     # Finally open the appropriate packet source
-    packets: SensorPacketSource
-    if uri_type == OusterIoType.SENSOR:
-        sensors = []
-        for uri in uris:
-            sensor_http = SensorHttp.create(uri, 10)
-            config = build_sensor_config(sensor_http,
-                                         src_opts["lidar_port"],
-                                         src_opts["imu_port"],
-                                         do_not_reinitialize=src_opts["do_not_reinitialize"],
-                                         no_auto_udp_dest=src_opts["no_auto_udp_dest"])
-            sensors.append((uri, config))
-        packets = SensorPacketSource(sensors, timeout=src_opts["timeout"],
-                              soft_id_check=src_opts["soft_id_check"])  # type: ignore
-    elif uri_type == OusterIoType.PCAP:
-        packets = PcapMultiPacketReader(uri, soft_id_check=src_opts["soft_id_check"],
-                                        metadata_paths=src_opts["meta"])  # type: ignore
-    elif uri_type == OusterIoType.BAG:
-        packets = BagPacketSource(uri, soft_id_check=src_opts["soft_id_check"],
-                                  meta=src_opts["meta"])  # type: ignore
-    else:
-        raise click.exceptions.BadParameter("Can only save raw packets from PCAP, BAG or Sensor sources.")
-
-    _populate_extrinsics(packets, resolved_extrinsics)  # type: ignore
+    packets: PacketSource
+    packets = open_packet_source(uri, **ctx.source_options)  # type: ignore
 
     if extension == "pcap":
         save_pcap_impl(packets, filename, prefix, dir, raw=True, overwrite=overwrite,
-                       metadata=packets.metadata, duration=duration)
+                       metadata=packets.sensor_info, duration=duration)
     elif extension == "bag":
-        _source_to_bag_iter(packets, raw=True, metadata=packets.metadata,
+        _source_to_bag_iter(packets, raw=True, metadata=packets.sensor_info,
                            prefix=prefix, dir=dir, filename=filename,
                            overwrite=overwrite, duration=duration, ros2=ros2)
 
@@ -123,7 +89,7 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
     if ctx.scan_iter is None or ctx.scan_source is None:
         raise RuntimeError("unexpected condition")
 
-    ctx.scan_iter = save_pcap_impl(ctx.scan_iter, filename, prefix, dir, False, overwrite, ctx.scan_source.metadata)()
+    ctx.scan_iter = save_pcap_impl(ctx.scan_iter, filename, prefix, dir, False, overwrite, ctx.scan_source.sensor_info)
 
 
 @click.command(context_settings=dict(
@@ -145,7 +111,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                     overwrite: bool, ts: str, continue_anyways: bool, compression_level: int, **kwargs) -> None:
     """Save source as an OSF"""
     scans = ctx.scan_iter
-    info = ctx.scan_source.metadata  # type: ignore
+    info = ctx.scan_source.sensor_info  # type: ignore
 
     # Automatic file naming
     filename = determine_filename(filename=filename, info=info[0], extension=".osf", prefix=prefix, dir=dir)
@@ -163,14 +129,14 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 
     wrote_scans = False
     dropped_scans = 0
-    ts_method = first_valid_packet_ts if ts == "packet" else first_valid_column_ts
     last_ts = [0] * len(info)
 
     # returns false if we should stop recording
     def write_osf(scan: LidarScan, index: int):
         nonlocal wrote_scans, last_ts, dropped_scans
         # Set OSF timestamp to the timestamp of the first valid column
-        scan_ts = ts_method(scan)
+        scan_ts = scan.get_first_valid_packet_timestamp() if ts == "packet" \
+            else scan.get_first_valid_column_timestamp()
         if scan_ts:
             if scan_ts < last_ts[index]:
                 if continue_anyways:
@@ -196,11 +162,20 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
             dropped_scans = dropped_scans + 1
         return True
 
+    saved = False
+
     def save_iter():
         try:
+            # only save the first loop
+            nonlocal saved
+            if saved:
+                for s in scans():
+                    yield s
+                return
+
             with closing(osf_writer):
                 stop = False
-                for s in scans:
+                for s in scans():
                     for index, scan in enumerate(s):
                         if scan is None:
                             continue
@@ -213,8 +188,10 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
             pass
         except (ValueError):
             ctx.terminate_evt.set()
+        finally:
+            saved = True
 
-    ctx.scan_iter = save_iter()
+    ctx.scan_iter = save_iter  # type: ignore
 
     def handle_termination():
         osf_writer.close()
@@ -242,7 +219,7 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 def source_save_csv(ctx: SourceCommandContext, prefix: str,
                     dir: str, filename: str, overwrite: bool, **kwargs) -> None:
     """Save source as one CSV file per LidarScan."""
-    ctx.scan_iter = source_to_csv_iter(ctx.scan_iter, ctx.scan_source.metadata,  # type: ignore
+    ctx.scan_iter = source_to_csv_iter(ctx.scan_iter, ctx.scan_source.sensor_info,  # type: ignore
                                        prefix=prefix, dir=dir, filename=filename,
                                        overwrite=overwrite)
 
@@ -250,7 +227,7 @@ def source_save_csv(ctx: SourceCommandContext, prefix: str,
 # [doc-stag-pcap-to-csv]
 def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: List[SensorInfo],
                        prefix: str = "", dir: str = "", overwrite: bool = True,
-                       filename: str = "") -> Iterator[List[Optional[LidarScan]]]:
+                       filename: str = "") -> Iterable[List[Optional[LidarScan]]]:
     """Create a CSV saving iterator from a LidarScan iterator
 
     The number of saved lines per csv file is always H x W, which corresponds to
@@ -328,10 +305,16 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
         column_layer_staggered.append(destagger(info, column_layer,
                 inverse=True))
 
+    saved = False
+
     def save_iter():
-        nonlocal field_names, field_fmts
+        nonlocal field_names, field_fmts, saved
         try:
-            for idx, scans in enumerate(scan_iter):
+            if saved:
+                for scan in scan_iter():
+                    yield scan
+                return
+            for idx, scans in enumerate(scan_iter()):
                 for lidar_idx, scan in enumerate(scans):
                     if scan is None:
                         continue
@@ -390,9 +373,68 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
                 yield scan
         except (KeyboardInterrupt, StopIteration):
             pass
+        finally:
+            saved = True
 
-    return save_iter()
+    # type ignored because generators are tricky to mypy
+    return save_iter  # type: ignore
 # [doc-etag-pcap-to-csv]
+
+
+@click.command(context_settings=dict(
+    allow_extra_args=True,
+))
+@click.argument("filename", required=True)
+@click.option('-p', '--prefix', default="", help="Output prefix.")
+@click.option('-d', '--dir', default="", help="Output directory.")
+@click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
+@click.pass_context
+@source_multicommand(type=SourceCommandType.CONSUMER)
+def source_save_png(ctx: SourceCommandContext, prefix: str, dir: str,
+                    filename: str, overwrite: bool, **kwargs) -> None:
+    """Save scan source as a series of png files per LidarScan per field (represented as 8-bit)."""
+    from PIL import Image
+    from ouster.sdk.core.data import destagger
+    scan_iter = ctx.scan_iter
+    filename_no_ext = os.path.splitext(filename)[0]
+
+    def normalize(image):
+        min_val = np.min(image)
+        max_val = np.max(image)
+        if max_val == min_val:
+            return np.zeros_like(image)
+        return (image - min_val) / (max_val - min_val)
+
+    def compose_path(scan: LidarScan, dir: str, prefix: str, field_name: str) -> str:
+        output_path = f"{scan.sensor_info.sn}_{scan.frame_id}_{field_name}.png"
+        if filename_no_ext:
+            output_path = f"{filename_no_ext}_{output_path}"
+        if prefix:
+            output_path = f"{prefix}_{output_path}"
+        if dir:
+            output_path = os.path.join(dir, output_path)
+        return output_path
+
+    def save_field(scan: LidarScan, f: str):
+        field_data = scan.field(f)
+        img = destagger(scan.sensor_info, field_data)
+        img = (normalize(img) * (2**8 - 1)).astype(np.uint8)
+        pil_img = Image.fromarray(img)
+        output_path = output_path = compose_path(scan, dir, prefix, f)
+        if os.path.isfile(output_path) and not overwrite:
+            print(_file_exists_error(output_path))
+            exit(1)
+        pil_img.save(output_path)
+
+    def png_save_iter():
+        for scans in scan_iter():
+            for scan in scans:
+                if scan:
+                    for f in scan.fields:
+                        save_field(scan, f)
+            yield scans
+
+    ctx.scan_iter = png_save_iter    # type: ignore
 
 
 # Determines the filename to use
@@ -439,7 +481,7 @@ def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 
     ctx.scan_iter = _source_to_bag_iter(ctx.scan_iter, raw=False,
                                         prefix=prefix, dir=dir, filename=filename,
-                                        overwrite=overwrite, metadata=ctx.scan_source.metadata, ros2=ros2)
+                                        overwrite=overwrite, metadata=ctx.scan_source.sensor_info, ros2=ros2)
 
 
 def bag_save_metadata(outbag, infos):
@@ -447,10 +489,10 @@ def bag_save_metadata(outbag, infos):
     for idx, metadata in enumerate(infos):
         s = String()
         s.data = metadata.to_json_string()
-        outbag.write(f"/os_node{idx}/metadata", s)
+        outbag.write(f"/ouster{idx}/metadata", s)
 
 
-def save_pcap_impl(source: Union[Iterator[List[Optional[LidarScan]]], PacketMultiSource],
+def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSource],
                    filename, prefix, dir, raw, overwrite, metadata, duration = None):
     # Automatic file naming
     filename = determine_filename(filename=filename, info=metadata[0], extension=".pcap", prefix=prefix, dir=dir)
@@ -491,7 +533,7 @@ def save_pcap_impl(source: Union[Iterator[List[Optional[LidarScan]]], PacketMult
     if raw:
         end_time = None
         try:
-            source = cast(PacketMultiSource, source)
+            source = cast(PacketSource, source)
             for idx, packet in source:
                 if isinstance(packet, LidarPacket):
                     save_packet(idx, packet, metadata[idx].config.udp_port_lidar)
@@ -513,7 +555,13 @@ def save_pcap_impl(source: Union[Iterator[List[Optional[LidarScan]]], PacketMult
 
         def save_iter():
             try:
-                for c in source:
+                # only save the first loop
+                nonlocal pcap_record_handle
+                if pcap_record_handle is None:
+                    for c in source():
+                        yield c
+                    return
+                for c in source():
                     for idx, scan in enumerate(c):
                         if scan is not None:
                             packets = scan_to_packets(scan, metadata[idx])
@@ -524,7 +572,9 @@ def save_pcap_impl(source: Union[Iterator[List[Optional[LidarScan]]], PacketMult
                 pass
             finally:
                 # Finish pcap_recording when this generator is garbage collected
-                _pcap.record_uninitialize(pcap_record_handle)
+                if pcap_record_handle is not None:
+                    _pcap.record_uninitialize(pcap_record_handle)
+                    pcap_record_handle = None
 
         return save_iter
 
@@ -537,8 +587,9 @@ class SourceSaveCommand(click.Command):
     implementations = {
         OusterIoType.OSF: source_save_osf,
         OusterIoType.PCAP: source_save_pcap,
-        OusterIoType.CSV: source_save_csv,
         OusterIoType.BAG: source_save_bag,
+        OusterIoType.CSV: source_save_csv,
+        OusterIoType.PNG: source_save_png
     }
 
     def __init__(self, *args, **kwargs):

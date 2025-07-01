@@ -1,15 +1,17 @@
-==================
 image_processing.h
 ==================
 
 .. contents::
-    :local:
+   :local:
 
-Classes
-=======
+Class
+  -----
 
 .. doxygenclass:: ouster::viz::AutoExposure
-    :members:
+   :project: cpp_api
+   :members:
 
 .. doxygenclass:: ouster::viz::BeamUniformityCorrector
-    :members:
+   :project: cpp_api
+   :members:
+

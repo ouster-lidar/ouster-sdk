@@ -527,7 +527,7 @@ class OUSTER_API_CLASS MetadataEntryRef : public MetadataEntry {
  * possible metadata type
  */
 template <>
-struct MetadataTraits<MetadataEntryRef> {
+struct OUSTER_API_CLASS MetadataTraits<MetadataEntryRef> {
     /**
      * Implementation detail for MetadataEntryRef to distinguish it from
      * any possible metadata type.

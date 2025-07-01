@@ -5,8 +5,9 @@ import logging
 from more_itertools import take
 import pytest
 
-from ouster.sdk import client
-from ouster.sdk.client import SensorHttp, Version
+from ouster.sdk import core, sensor
+from ouster.sdk.sensor import SensorHttp
+from ouster.sdk.core import Version
 
 import requests
 import time
@@ -26,17 +27,17 @@ def test_config_noop(hil_sensor_hostname, hil_sensor_firmware) -> None:
     """Test that setting the empty config does not change sensor params."""
 
     logger.debug("Grabbing initial config and metadata")
-    cfg0 = client.get_config(hil_sensor_hostname)
-    with closing(client.Sensor(hil_sensor_hostname, 7502, 7503)) as src:
-        metadata0 = src.metadata
+    cfg0 = sensor.get_config(hil_sensor_hostname)
+    with closing(sensor.SensorPacketSource(hil_sensor_hostname)) as src:
+        metadata0 = src.sensor_info[0]
 
     logger.debug("Noop set_config")
-    client.set_config(hil_sensor_hostname, client.SensorConfig(), force_reinit=True)
+    sensor.set_config(hil_sensor_hostname, core.SensorConfig(), force_reinit=True)
 
     logger.debug("Grabbing new config and metadata")
-    cfg1 = client.get_config(hil_sensor_hostname)
-    with closing(client.Sensor(hil_sensor_hostname, 7502, 7503)) as src:
-        metadata1 = src.metadata
+    cfg1 = sensor.get_config(hil_sensor_hostname)
+    with closing(sensor.SensorPacketSource(hil_sensor_hostname)) as src:
+        metadata1 = src.sensor_info[0]
 
     logger.debug("Checking for changes")
 
@@ -56,13 +57,13 @@ def test_config_noop(hil_sensor_hostname, hil_sensor_firmware) -> None:
 def test_config_basic(hil_sensor_hostname) -> None:
     """Test configuration of 'basic' values which have 1 stable representation in config since FW 2.0"""
 
-    cfg0 = client.get_config(hil_sensor_hostname)
-    cfg0.timestamp_mode = client.TimestampMode.TIME_FROM_PTP_1588
+    cfg0 = sensor.get_config(hil_sensor_hostname)
+    cfg0.timestamp_mode = core.TimestampMode.TIME_FROM_PTP_1588
     cfg0.nmea_leap_seconds = 20
 
-    client.set_config(hil_sensor_hostname, cfg0)
+    sensor.set_config(hil_sensor_hostname, cfg0)
 
-    cfg1 = client.get_config(hil_sensor_hostname)
+    cfg1 = sensor.get_config(hil_sensor_hostname)
 
     assert cfg1 == cfg0
 
@@ -71,14 +72,14 @@ def test_config_operating_mode(hil_sensor_hostname, hil_initial_config) -> None:
     """Test that operating mode specifically gets set since it has duplicated fields in the config settings which complicate its story."""
 
     # initial config sets it to OPERATING_NORMAL
-    client.set_config(hil_sensor_hostname, hil_initial_config)
+    sensor.set_config(hil_sensor_hostname, hil_initial_config)
 
-    cfg0 = client.SensorConfig()
-    cfg0.operating_mode = client.OperatingMode.OPERATING_STANDBY
-    client.set_config(hil_sensor_hostname, cfg0)
+    cfg0 = core.SensorConfig()
+    cfg0.operating_mode = core.OperatingMode.OPERATING_STANDBY
+    sensor.set_config(hil_sensor_hostname, cfg0)
 
-    cfg1 = client.get_config(hil_sensor_hostname)
-    assert cfg1.operating_mode == client.OperatingMode.OPERATING_STANDBY
+    cfg1 = sensor.get_config(hil_sensor_hostname)
+    assert cfg1.operating_mode == core.OperatingMode.OPERATING_STANDBY
 
 
 def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
@@ -87,32 +88,37 @@ def test_config_udp_auto(hil_sensor_hostname, hil_initial_config) -> None:
     logger.debug("Turning off UDP output")
     no_udp_cfg = copy(hil_initial_config)
     no_udp_cfg.udp_dest = ""
-    client.set_config(hil_sensor_hostname, no_udp_cfg)
-    no_udp_cfg = client.get_config(hil_sensor_hostname)
+    sensor.set_config(hil_sensor_hostname, no_udp_cfg)
+    no_udp_cfg = sensor.get_config(hil_sensor_hostname)
 
     logger.debug(f"Sleeping for {reinit_time} seconds after reinit..")
     time.sleep(reinit_time)
     logger.debug("Checking for no incoming data")
-    with pytest.raises(client.ClientTimeout):
-        with closing(client.Sensor(hil_sensor_hostname, 7502, 7503)) as packets:
+    with pytest.raises(sensor.ClientTimeout):
+        with closing(sensor.SensorPacketSource(hil_sensor_hostname, no_auto_udp_dest=True)) as packets:
             take(10, packets)
 
     logger.debug("Setting UDP dest to auto")
-    client.set_config(hil_sensor_hostname,
-                      client.SensorConfig(),
+    sensor.set_config(hil_sensor_hostname,
+                      core.SensorConfig(),
                       udp_dest_auto=True)
 
     logger.debug(f"Sleeping for {reinit_time} seconds after reinit..")
     time.sleep(reinit_time)
     logger.debug("Attempting to read scans")
-    with closing(client.Scans.stream(hil_sensor_hostname,
-                                     complete=False)) as scans:
+    with closing(sensor.SensorScanSource(hil_sensor_hostname, no_auto_udp_dest=True)) as scans:
         take(10, scans)
 
-    cfg1 = client.get_config(hil_sensor_hostname)
+    cfg1 = sensor.get_config(hil_sensor_hostname)
     logger.debug(f"Sanity check new config (New UDP dest: {cfg1.udp_dest})")
     assert no_udp_cfg.udp_dest != cfg1.udp_dest
-    cfg1.udp_dest = None
+    cfg1.udp_dest = ""
+
+    # clear out extra options so we dont compare them unnecessarily
+    # this is likely to break the test on new/odd FW
+    no_udp_cfg.extra_options = {}
+    cfg1.extra_options = {}
+
     assert no_udp_cfg == cfg1
 
 
@@ -133,22 +139,22 @@ def test_config_persist(hil_sensor_hostname, hil_initial_config) -> None:
         time.sleep(reboot_time)  # Sleep to avoid issues - see comment on reboot_time
 
     # First let's make sure the saved config param is as we expect
-    client.set_config(hil_sensor_hostname, hil_initial_config, persist=True)
+    sensor.set_config(hil_sensor_hostname, hil_initial_config, persist=True)
 
     # Set one parameter differently
-    cfg0 = client.SensorConfig()
+    cfg0 = core.SensorConfig()
     cfg0.azimuth_window = (583, 39402)
-    client.set_config(hil_sensor_hostname, cfg0)
+    sensor.set_config(hil_sensor_hostname, cfg0)
 
     # Test that it doesn't persist
     reboot_sensor()
-    cfg1 = client.get_config(hil_sensor_hostname)
+    cfg1 = sensor.get_config(hil_sensor_hostname)
     assert cfg1.azimuth_window == hil_initial_config.azimuth_window
 
     # And then that it does
-    client.set_config(hil_sensor_hostname, cfg0, persist=True)
+    sensor.set_config(hil_sensor_hostname, cfg0, persist=True)
     reboot_sensor()
-    cfg2 = client.get_config(hil_sensor_hostname)
+    cfg2 = sensor.get_config(hil_sensor_hostname)
     assert cfg2.azimuth_window == cfg0.azimuth_window
 
 
@@ -180,35 +186,35 @@ def test_good_signal_multiplier_values(hil_sensor_hostname,
                                   signal_multiplier, gen1_sensor) -> None:
     """Test that all valid values of signal multiplier can be get and set using SDK for FW 3.0+"""
 
-    cfg0 = client.SensorConfig()
+    cfg0 = core.SensorConfig()
     # make sure azimuth window is small enough for everything
     cfg0.azimuth_window = (0, 10000)
     # make sure lidar mode is not "full res" in case it is a Rev 6 or under sensor
-    cfg0.lidar_mode = client.LidarMode.MODE_1024x10
+    cfg0.lidar_mode = core.LidarMode.MODE_1024x10
     cfg0.signal_multiplier = signal_multiplier
 
     if gen1_sensor and signal_multiplier != 1:
         with pytest.raises(RuntimeError):
             # expect RuntimeError because of Invalid Configuration Value
-            client.set_config(hil_sensor_hostname, cfg0)
+            sensor.set_config(hil_sensor_hostname, cfg0)
         # Return since the rest of the test is for non gen1
         return
 
-    client.set_config(hil_sensor_hostname, cfg0)
+    sensor.set_config(hil_sensor_hostname, cfg0)
 
-    cfg1 = client.get_config(hil_sensor_hostname)
+    cfg1 = sensor.get_config(hil_sensor_hostname)
     assert cfg0.signal_multiplier == cfg1.signal_multiplier
 
 @pytest.mark.parametrize('signal_multiplier', [0.3, 1.2, 5, 5.5]) # sig mult value < 1 that isn't .25 or .5, double sig mult between 1 and 3, int sig mult > 3, double sig int > 3
 def test_bad_signal_multiplier_values(hil_sensor_hostname, signal_multiplier) -> None:
-    cfg0 = client.SensorConfig()
+    cfg0 = core.SensorConfig()
     # even though these aren't valid signal multipliers, set lidar_mode and azimuth_window so they don't cause other errors
     # make sure azimuth window is small enough for everything
     cfg0.azimuth_window = (0, 10000)
     # make sure lidar mode is not "full res" in case it is a Rev 6 or under sensor
-    cfg0.lidar_mode = client.LidarMode.MODE_1024x10
+    cfg0.lidar_mode = core.LidarMode.MODE_1024x10
 
     cfg0.signal_multiplier = signal_multiplier
 
     with pytest.raises(RuntimeError):
-        client.set_config(hil_sensor_hostname, cfg0)
+        sensor.set_config(hil_sensor_hostname, cfg0)

@@ -26,8 +26,8 @@ def scan_source_path(request):
 
 @pytest.fixture
 def sliceable_fixture(scan_source_path):
-    scan_source = open_source(scan_source_path, index=True, cycle=False)
-    ref_ids = [s.frame_id for s in scan_source]  # register ref ids
+    scan_source = open_source(scan_source_path, index=True)
+    ref_ids = [s[0].frame_id for s in scan_source]  # register ref ids
     return scan_source, ref_ids
 
 
@@ -60,9 +60,11 @@ def sliceable_fixture(scan_source_path):
 def test_slicing_level_1(sliceable_fixture, start, stop, step) -> None:
     scan_source, ref_ids = sliceable_fixture
     s = slice(start, stop, step)
+    print(s)
     ss_slice = scan_source[s]
+    print(ss_slice)
     assert len(ss_slice) == len(ref_ids[s])
-    sliced_ids = [s.frame_id for s in ss_slice]
+    sliced_ids = [s[0].frame_id for s in ss_slice]
     assert sliced_ids == ref_ids[s]
 
 
@@ -82,7 +84,7 @@ def test_slicing_level_2_from_full(sliceable_fixture, start, stop, step) -> None
     s2 = slice(start, stop, step)
     ss_l2 = ss_l1[s2]
     assert len(ss_l2) == len(ref_ids[s1][s2])
-    sliced_ids = [s.frame_id for s in ss_l2]
+    sliced_ids = [s[0].frame_id for s in ss_l2]
     assert sliced_ids == ref_ids[s1][s2]
 
 
@@ -102,7 +104,7 @@ def test_slicing_level_2_from_subset(sliceable_fixture, start, stop, step) -> No
     s2 = slice(start, stop, step)
     ss_l2 = ss_l1[s2]
     assert len(ss_l2) == len(ref_ids[s1][s2])
-    sliced_ids = [s.frame_id for s in ss_l2]
+    sliced_ids = [s[0].frame_id for s in ss_l2]
     assert sliced_ids == ref_ids[s1][s2]
 
 
@@ -114,9 +116,9 @@ def test_slicing_level_2_from_subset(sliceable_fixture, start, stop, step) -> No
 def test_slicing_negative_step_throws(sliceable_fixture, start, stop, step) -> None:
     scan_source, _ = sliceable_fixture
     s = slice(start, stop, step)
-    with pytest.raises(TypeError) as ex:
+    with pytest.raises(ValueError) as ex:
         _ = scan_source.slice(s)
-    assert str(ex.value) == "slice() can't work with negative step"
+    assert str(ex.value) == "Step size must be > 0 for slice."
 
 
 @pytest.mark.parametrize("start, stop, step", [
@@ -139,15 +141,15 @@ def test_slicing_dual_slice(sliceable_fixture) -> None:
     s1 = slice(0, 2)
     ss_slice1 = scan_source.slice(s1)
     assert len(ss_slice1) == len(ref_ids[s1])
-    sliced_ids = [s.frame_id for s in ss_slice1]
+    sliced_ids = [s[0].frame_id for s in ss_slice1]
     assert sliced_ids == ref_ids[s1]
     s2 = slice(1, 3)
     ss_slice2 = scan_source.slice(s2)
     assert len(ss_slice2) == len(ref_ids[s2])
-    sliced_ids = [s.frame_id for s in ss_slice2]
+    sliced_ids = [s[0].frame_id for s in ss_slice2]
     assert sliced_ids == ref_ids[s2]
     # revisit the first slice
-    sliced_ids = [s.frame_id for s in ss_slice1]
+    sliced_ids = [s[0].frame_id for s in ss_slice1]
     assert sliced_ids == ref_ids[s1]
 
 
@@ -165,7 +167,8 @@ def test_slicing_dual_slice(sliceable_fixture) -> None:
 def test_index_from_level_1_slice(sliceable_fixture, start, stop, step, idx) -> None:
     scan_source, ref_ids = sliceable_fixture
     s = slice(start, stop, step)
-    assert scan_source[s][idx].frame_id == ref_ids[s][idx]
+    print(scan_source[s][idx])
+    assert scan_source[s][idx][0].frame_id == ref_ids[s][idx]
 
 
 @pytest.mark.parametrize("start, stop, step, idx", [
@@ -186,7 +189,7 @@ def test_index_from_level_2_slice(sliceable_fixture, start, stop, step, idx) -> 
     assert len(ss_l1) == L
     s2 = slice(start, stop, step)
     ss_l2 = ss_l1[s2]
-    assert ss_l2[idx].frame_id == ref_ids[s1][s2][idx]
+    assert ss_l2[idx][0].frame_id == ref_ids[s1][s2][idx]
 
 
 @pytest.mark.parametrize("start, stop, step, idx", [
@@ -202,4 +205,4 @@ def test_index_slicing_out_of_range_throws(sliceable_fixture, start, stop, step,
     s = slice(start, stop, step)
     with pytest.raises(IndexError) as ex:
         _ = scan_source[s][idx]
-    assert str(ex.value) == "index is out of range"
+    assert str(ex.value) == "Indexed past the end of the scan source."

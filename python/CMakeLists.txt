@@ -23,9 +23,11 @@ else()
   add_compile_options(-Wall -Wextra -Wno-error=deprecated-declarations)
 endif()
 
+option(BUILD_SENSOR "Enabled for Python build" ON)
 option(BUILD_VIZ "Enabled for Python build" ON)
 option(BUILD_OSF "Build OSF library." ON)
 option(BUILD_PCAP "Enabled for Python build" ON)
+option(BUILD_MAPPING "Enabled for Python build" ON)
 option(SKIP_SDK_FIND "Skip finding the sdk" OFF)
 
 # ==== Requirements ====
@@ -34,12 +36,6 @@ find_package(Eigen3 REQUIRED)
 find_package(Flatbuffers NAMES Flatbuffers FlatBuffers)
 if(NOT SKIP_SDK_FIND)
   find_package(OusterSDK REQUIRED)
-endif()
-
-# when building as a top-level project
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-  message(STATUS "Ouster SDK client: Using EIGEN_MAX_ALIGN_BYTES = 32")
-  target_compile_definitions(ouster_client PUBLIC EIGEN_MAX_ALIGN_BYTES=32)
 endif()
 
 # CMAKE_LIBRARY_OUTPUT_DIRECTORY is set in setup.py to the root of the `ouster`
@@ -51,18 +47,20 @@ set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/sdk)
 # appends build-configuration suffix to *_OUTPUT_DIRECTORY properties *unless*
 # they contain a generator expression, so we use a noop: $<0:>
 # https://cmake.org/cmake/help/latest/prop_tgt/LIBRARY_OUTPUT_DIRECTORY.html
-pybind11_add_module(_bindings src/cpp/main.cpp src/cpp/_client.cpp src/cpp/_viz.cpp src/cpp/_pcap.cpp src/cpp/_osf.cpp)
+pybind11_add_module(_bindings src/cpp/main.cpp src/cpp/_client.cpp src/cpp/_viz.cpp src/cpp/_pcap.cpp src/cpp/_osf.cpp src/cpp/_mapping.cpp)
 target_link_libraries(_bindings
   PRIVATE
     ouster_client
+    ouster_sensor
     ouster_build
     ouster_pcap
     ouster_osf
     ouster_viz
+    ouster_mapping
     flatbuffers::flatbuffers
   )
 CodeCoverageFunctionality(_bindings)
-  
+
 target_include_directories(_bindings SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 set_target_properties(_bindings PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE

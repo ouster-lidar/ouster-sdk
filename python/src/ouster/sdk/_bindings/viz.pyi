@@ -9,7 +9,7 @@ from typing import Callable, overload, Tuple, List, ClassVar, Optional
 
 import numpy as np
 
-from ouster.sdk.client import SensorInfo
+from ouster.sdk.core import SensorInfo
 
 calref_palette: np.ndarray
 spezia_palette: np.ndarray
@@ -183,7 +183,13 @@ class Cloud:
         ...
 
     def set_key(self, key: np.ndarray) -> None:
-     ...
+        ...
+
+    def set_key_rgb(self, key: np.ndarray) -> None:
+        ...
+
+    def set_key_rgba(self, key: np.ndarray) -> None:
+        ...
 
     def set_mask(self, mask: np.ndarray) -> None:
         ...
@@ -235,10 +241,10 @@ class Image:
     def clear_palette(self) -> None:
         ...
 
-    def window_coordinates_to_image_pixel(self, ctx: WindowCtx, x: float, y: float) -> Tuple[int, int]:
+    def viewport_coordinates_to_image_pixel(self, ctx: WindowCtx, x: float, y: float) -> Tuple[int, int]:
         ...
 
-    def image_pixel_to_window_coordinates(self, ctx: WindowCtx, pixel: Tuple[int, int]) -> Tuple[float, float]:
+    def image_pixel_to_viewport_coordinates(self, ctx: WindowCtx, pixel: Tuple[int, int]) -> Tuple[float, float]:
         ...
 
 
@@ -248,6 +254,20 @@ class Cuboid:
         ...
 
     def set_transform(self, pose: np.ndarray) -> None:
+        ...
+
+    def set_rgba(self, rgba: Tuple[float, ...]) -> None:
+        ...
+
+
+class Lines:
+    def __init__(self, pose: np.ndarray, rgba: Tuple[float, ...]) -> None:
+        ...
+
+    def set_transform(self, pose: np.ndarray) -> None:
+        ...
+
+    def set_points(self, points: np.ndarray) -> None:
         ...
 
     def set_rgba(self, rgba: Tuple[float, ...]) -> None:
@@ -297,7 +317,8 @@ class PointViz:
                  name: str,
                  fix_aspect: bool = ...,
                  window_width: int = ...,
-                 window_height: int = ...) -> None:
+                 window_height: int = ...,
+                 maximized: bool = ...) -> None:
         ...
 
     def run(self) -> None:
@@ -361,6 +382,30 @@ class PointViz:
     def pop_frame_buffer_resize_handler(self) -> None:
         ...
 
+    @overload
+    def get_screenshot(self, scale_factor: float = ...) -> np.ndarray:
+        ...
+
+    @overload
+    def get_screenshot(self, width: int, height: int) -> np.ndarray:
+        ...
+
+    @overload
+    def save_screenshot(self, path: str, scale_factor: float = ...) -> str:
+        ...
+
+    @overload
+    def save_screenshot(self, path: str, width: int, height: int) -> str:
+        ...
+
+    @overload
+    def toggle_screen_recording(self, scale_factor: float = ...) -> bool:
+        ...
+
+    @overload
+    def toggle_screen_recording(self, width: int, height: int) -> bool:
+        ...
+
     @property
     def camera(self) -> Camera:
         ...
@@ -402,6 +447,10 @@ class PointViz:
         ...
 
     @overload
+    def add(self, lines: Lines) -> None:
+        ...
+
+    @overload
     def remove(self, cloud: Cloud) -> bool:
         ...
 
@@ -415,6 +464,10 @@ class PointViz:
 
     @overload
     def remove(self, label: Label) -> bool:
+        ...
+
+    @overload
+    def remove(self, lines: Lines) -> bool:
         ...
 
     @property

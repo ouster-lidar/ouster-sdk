@@ -1,9 +1,18 @@
-==================
 layout_streaming.h
 ==================
 
-.. doxygengroup:: OSFStreamingDefaultSize
-    :content-only:
+.. contents::
+   :local:
+
+Variables
+---------
+
+.. doxygenvariable:: ouster::osf::STREAMING_DEFAULT_CHUNK_SIZE
+   :project: cpp_api
+
+Classes
+-------
 
 .. doxygenclass:: ouster::osf::StreamingLayoutCW
-    :members:
+   :project: cpp_api
+   :members:

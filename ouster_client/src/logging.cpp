@@ -14,27 +14,41 @@
 using namespace ouster::sensor::impl;
 
 const std::string Logger::logger_name{"ouster::sensor"};
+const std::string Logger::logger_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] %v");
 
 struct Logger::internal_logger {
-    std::unique_ptr<spdlog::logger> logger_;
+    friend Logger;
 
-    internal_logger(const std::string& logger_name)
+    internal_logger(const std::string& logger_name, const std::string& pattern)
         : logger_(std::make_unique<spdlog::logger>(
-              logger_name, std::make_shared<spdlog::sinks::stdout_sink_st>())) {
-    }
+              logger_name, std::make_shared<spdlog::sinks::stdout_sink_st>())),
+          pattern_(pattern) {}
 
     void configure_generic_sink(spdlog::sink_ptr sink,
                                 const std::string& log_level) {
         // replace the logger sink with the new sink
         logger_->sinks() = {sink};
-
+        logger_->set_pattern(pattern_);
         auto ll = spdlog::level::from_str(log_level);
-
         logger_->set_level(ll);
         logger_->flush_on(ll);
     }
 
+    void disable_auto_newline() {
+        // TODO: consider using an multi-threaded sinks
+        // and add lock guards around the logger usage.
+        auto f = std::make_unique<spdlog::pattern_formatter>(
+            "%v", spdlog::pattern_time_type::local, std::string(""));
+        logger_->set_formatter(std::move(f));
+    }
+
+    void enable_auto_newline() { logger_->set_pattern(pattern_); }
+
     ~internal_logger() {}
+
+   private:
+    std::unique_ptr<spdlog::logger> logger_;
+    std::string pattern_;
 };
 
 Logger& Logger::instance() {
@@ -43,7 +57,8 @@ Logger& Logger::instance() {
 }
 
 Logger::Logger()
-    : internal_logger_(std::make_unique<Logger::internal_logger>(logger_name)) {
+    : internal_logger_(std::make_unique<Logger::internal_logger>(
+          logger_name, logger_pattern)) {
     internal_logger_->logger_->set_level(spdlog::level::info);
     internal_logger_->logger_->flush_on(spdlog::level::info);
 }
@@ -132,6 +147,12 @@ void Logger::log(LOG_LEVEL level, const std::string& msg) {
 
     internal_logger_->logger_->log(level_out, msg);
 }
+
+void Logger::disable_auto_newline() {
+    internal_logger_->disable_auto_newline();
+}
+
+void Logger::enable_auto_newline() { internal_logger_->enable_auto_newline(); }
 
 #define LOGGER_PROCESS_ARG(SINGLE_LOGGER_PROCESS_ARG_type) \
     template void Logger::process_arg(                     \

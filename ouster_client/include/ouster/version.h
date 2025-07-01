@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <sstream>
 #include <string>
 
 #include "ouster/visibility.h"
@@ -16,14 +17,33 @@ namespace ouster {
 namespace util {
 
 struct OUSTER_API_CLASS version {
-    uint16_t major;  ///< Major version number
-    uint16_t minor;  ///< Minor version number
-    uint16_t patch;  ///< Patch(or revision) version number
+    uint16_t major{};  ///< Major version number
+    uint16_t minor{};  ///< Minor version number
+    uint16_t patch{};  ///< Patch(or revision) version number
 
-    std::string stage;       ///< Release stage name, if present.
-    std::string machine;     ///< Machine name, if present.
-    std::string prerelease;  ///< Prerelease name (e.g. rc1), if present.
-    std::string build;       ///< Build info, if present. Often a date string.
+    std::string stage{};       ///< Release stage name, if present.
+    std::string machine{};     ///< Machine name, if present.
+    std::string prerelease{};  ///< Prerelease name (e.g. rc1), if present.
+    std::string build{};       ///< Build info, if present. Often a date string.
+
+    /**
+     * Return the version as a string formatted as
+     * [major].[minor].[patch]
+     * or
+     * [major].[minor].[patch]-[prerelease]
+     * depending on whether there is a prerelease value.
+     *
+     * @return the version formatted as a string.
+     */
+    OUSTER_API_FUNCTION
+    std::string simple_version_string() const {
+        std::stringstream sstream;
+        sstream << major << "." << minor << "." << patch;
+        if (!prerelease.empty()) {
+            sstream << "-" << prerelease;
+        }
+        return sstream.str();
+    }
 };
 
 const version invalid_version = {0, 0, 0, "", "", "", ""};

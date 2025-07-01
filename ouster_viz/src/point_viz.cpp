@@ -8,22 +8,28 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <condition_variable>
 #include <iostream>
 #include <list>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "camera.h"
 #include "cloud.h"
 #include "colormaps.h"
+#include "framebuffer.h"
 #include "glfw.h"
 #include "image.h"
 #include "misc.h"
+#include "screenshot_utils.h"
 
 static_assert(std::is_same<GLfloat, float>::value,
               "Platform has unexpected definition of GLfloat");
@@ -44,26 +50,26 @@ class Indexed {
     };
     using Back = std::shared_ptr<T>;
 
-    std::vector<Front> front;
-    std::vector<Back> back;
+    std::vector<Front> front_{};
+    std::vector<Back> back_{};
 
    public:
-    Indexed() : front{}, back{} {}
+    Indexed() = default;
 
-    void add(const std::shared_ptr<T>& t) {
+    void add(const std::shared_ptr<T>& obj) {
         // find and use first empty slot, or grow
-        auto res = std::find_if(back.begin(), back.end(),
-                                [](const Back& b) { return !b; });
-        if (res == back.end()) {
-            back.push_back(t);
+        auto res = std::find_if(back_.begin(), back_.end(),
+                                [](const Back& back) { return !back; });
+        if (res == back_.end()) {
+            back_.push_back(obj);
         } else {
-            *res = t;
+            *res = obj;
         }
     }
 
-    bool remove(const std::shared_ptr<T>& t) {
-        auto res = std::find(back.begin(), back.end(), t);
-        if (res == back.end()) {
+    bool remove(const std::shared_ptr<T>& obj) {
+        auto res = std::find(back_.begin(), back_.end(), obj);
+        if (res == back_.end()) {
             return false;
         } else {
             res->reset();
@@ -72,36 +78,66 @@ class Indexed {
     }
 
     void draw(const WindowCtx& ctx, const impl::CameraData& camera) {
-        for (auto& f : front) {
-            if (!f.state) {
+        for (auto& obj : front_) {
+            if (!obj.state) {
                 continue;  // skip deleted
             }
-            if (!f.gl) {
-                f.gl = std::make_unique<GL>(*f.state);  // init GL for added
+            if (!obj.gl) {
+                obj.gl = std::make_unique<GL>(*obj.state);  // init GL for added
             }
-            f.gl->draw(ctx, camera, *f.state);
+            obj.gl->draw(ctx, camera, *obj.state);
         }
     }
 
     void swap() {
-        assert(front.size() <= back.size());
+        assert(front_.size() <= back_.size());
 
         // in case back grew
-        if (front.size() < back.size()) front.resize(back.size());
+        if (front_.size() < back_.size()) {
+            front_.resize(back_.size());
+        }
 
         // send updated, added or deleted state to the front
-        for (size_t i = 0; i < front.size(); i++) {
-            if (back[i] && front[i].state) {
-                front[i].state->update_from(*back[i]);
-                back[i]->clear();
-            } else if (back[i] && !front[i].state) {
-                front[i].state = std::make_unique<T>(*back[i]);
-                back[i]->clear();
-            } else if (!back[i] && front[i].state) {
-                front[i].state.reset();
+        for (size_t i = 0; i < front_.size(); i++) {
+            if (back_[i] && front_[i].state) {
+                front_[i].state->update_from(*back_[i]);
+                back_[i]->clear();
+            } else if (back_[i] && !front_[i].state) {
+                front_[i].state = std::make_unique<T>(*back_[i]);
+                back_[i]->clear();
+            } else if (!back_[i] && front_[i].state) {
+                front_[i].state.reset();
             }
         }
     }
+};
+
+/***
+ * @brief holds the state of a screenshot request when get_screenshot
+ * is called from a thread different than the render thread. It is meant
+ * for the pimpl object that holds the viz state and the data access is
+ * protected by a mutex. In short, this class holds the data being passed from
+ * thread to thread back and forth.
+ */
+class ScreenshotRequest {
+   public:
+    ScreenshotRequest(uint32_t width, uint32_t height)
+        : width_(width), height_(height), pixels_(width * height * 3) {}
+
+    uint32_t width() const { return width_; }
+    uint32_t height() const { return height_; };
+    bool is_complete() const { return complete_; }
+    void set_pixels(const std::vector<uint8_t>& pixels) {
+        pixels_ = pixels;
+        complete_ = true;
+    }
+    std::vector<uint8_t> release_pixels() { return std::move(pixels_); }
+
+   private:
+    uint32_t width_;
+    uint32_t height_;
+    bool complete_{false};
+    std::vector<uint8_t> pixels_;
 };
 
 }  // namespace
@@ -117,6 +153,17 @@ struct PointViz::Impl {
     std::mutex update_mx;
     bool front_changed{false};
 
+    // state of the screen recording framebuffer
+    std::mutex screen_recording_fb_mutex;
+    std::unique_ptr<impl::Framebuffer> screen_recording_fb{nullptr};
+
+    // state for screenshots
+    std::mutex screenshot_request_mutex;
+    std::unique_ptr<impl::Framebuffer> screenshot_fb{nullptr};
+    std::unique_ptr<ScreenshotRequest> screenshot_request{nullptr};
+    std::condition_variable screenshot_condition_variable;
+    std::thread::id rendering_thread_id;
+
     Camera camera_back, camera_front;
 
     TargetDisplay target;
@@ -126,6 +173,7 @@ struct PointViz::Impl {
     Indexed<impl::GLCuboid, Cuboid> cuboids;
     Indexed<impl::GLLabel, Label> labels;
     Indexed<impl::GLImage, Image> images;
+    Indexed<impl::GLLines, Lines> lines;
 
     template <typename T>
     using Handlers = std::list<std::function<T>>;
@@ -145,13 +193,14 @@ struct PointViz::Impl {
     Handlers<bool(const WindowCtx&)> window_resize_handlers;
 
     // temp storage for frame_buffer_handlers
-    std::vector<uint8_t> frame_buffer_data_{};
+    std::vector<uint8_t> frame_buffer_data{};
 
-    double fps_last_time_{0};
-    uint64_t fps_frame_counter_{0};
-    double fps_{0};
+    double fps_last_time{0};
+    uint64_t fps_frame_counter{0};
+    double fps{0};
 
-    Impl(std::unique_ptr<GLFWContext>&& glfw) : glfw{std::move(glfw)} {}
+    explicit Impl(std::unique_ptr<GLFWContext>&& glfw)
+        : glfw{std::move(glfw)} {}
 };
 
 /*
@@ -159,144 +208,173 @@ struct PointViz::Impl {
  */
 
 PointViz::PointViz(const std::string& name, bool fix_aspect, int window_width,
-                   int window_height) {
+                   int window_height, bool maximized) {
     auto glfw = std::make_unique<GLFWContext>(name, fix_aspect, window_width,
-                                              window_height);
+                                              window_height, maximized);
 
     // set context for GL initialization
     glfwMakeContextCurrent(glfw->window);
 
     pimpl = std::make_unique<Impl>(std::move(glfw));
 
-    // top-level gl state for point viz
-    glGenVertexArrays(1, &pimpl->vao);
-    glBindVertexArray(pimpl->vao);
-
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
+
+    // These two lines are confugurations necessary for every
+    // glReadPixels call. If any of these settings is changed somewhere else
+    // in the program, special attention needs to be put on the screenshot
+    // functionality
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadBuffer(GL_BACK);
 
     // TODO: need to check if these were already called?
     impl::GLCloud::initialize();
     impl::GLImage::initialize();
     impl::GLRings::initialize();
     impl::GLCuboid::initialize();
+    impl::GLLines::initialize();
 
     // release context in case subsequent calls are done from another thread
     glfwMakeContextCurrent(nullptr);
 
     // add user-setable input handlers
     pimpl->glfw->key_handler = [this](const WindowCtx& ctx, int key, int mods) {
-        for (auto& f : pimpl->key_handlers)
-            if (!f(ctx, key, mods)) {
+        for (auto& handler : pimpl->key_handlers) {
+            if (!handler(ctx, key, mods)) {
                 break;
             }
+        }
     };
     pimpl->glfw->mouse_button_handler = [this](const WindowCtx& ctx, int button,
                                                int action, int mods) {
-        for (auto& f : pimpl->mouse_button_handlers)
-            if (!f(ctx, ouster::viz::MouseButton(button),
-                   ouster::viz::MouseButtonEvent(action),
-                   ouster::viz::EventModifierKeys(mods))) {
+        for (auto& handler : pimpl->mouse_button_handlers) {
+            if (!handler(ctx, ouster::viz::MouseButton(button),
+                         ouster::viz::MouseButtonEvent(action),
+                         ouster::viz::EventModifierKeys(mods))) {
                 break;
             }
+        }
     };
     pimpl->glfw->scroll_handler = [this](const WindowCtx& ctx, double x,
                                          double y) {
-        for (auto& f : pimpl->scroll_handlers)
-            if (!f(ctx, x, y)) {
+        for (auto& handler : pimpl->scroll_handlers) {
+            if (!handler(ctx, x, y)) {
                 break;
             }
+        }
     };
     pimpl->glfw->mouse_pos_handler = [this](const WindowCtx& ctx, double x,
                                             double y) {
-        for (auto& f : pimpl->mouse_pos_handlers)
-            if (!f(ctx, x, y)) {
+        for (auto& handler : pimpl->mouse_pos_handlers) {
+            if (!handler(ctx, x, y)) {
                 break;
             }
+        }
     };
 
     // glfwPollEvents blocks during resize on macos. Keep rendering to avoid
     // artifacts during resize
     pimpl->glfw->resize_handler = [this](const WindowCtx& ctx) {
-        for (auto& f : pimpl->window_resize_handlers) {
-            if (!f(ctx)) {
+        for (auto& handler : pimpl->window_resize_handlers) {
+            if (!handler(ctx)) {
                 break;
             }
         }
 #ifdef __APPLE__
-        draw();
+        process_frame();
 #endif
     };
 }
 
-PointViz::~PointViz() { glDeleteVertexArrays(1, &pimpl->vao); }
+PointViz::~PointViz() {}
 
 void PointViz::add_default_controls(std::mutex* mx) {
     bool orthographic = false;
 
-    this->push_key_handler(
-        [this, mx, orthographic](const WindowCtx&, int key, int mods) mutable {
-            auto lock = mx ? std::unique_lock<std::mutex>{*mx}
-                           : std::unique_lock<std::mutex>{};
-            if (mods == 0) {
-                switch (key) {
-                    case GLFW_KEY_W:
-                        this->camera().pitch(5);
-                        this->current_camera().pitch(5);
-                        break;
-                    case GLFW_KEY_S:
-                        this->camera().pitch(-5);
-                        this->current_camera().pitch(-5);
-                        break;
-                    case GLFW_KEY_A:
-                        this->camera().yaw(5);
-                        this->current_camera().yaw(5);
-                        break;
-                    case GLFW_KEY_D:
-                        this->camera().yaw(-5);
-                        this->current_camera().yaw(-5);
-                        break;
-                    case GLFW_KEY_EQUAL:
-                        this->camera().dolly(5);
-                        this->current_camera().dolly(5);
-                        break;
-                    case GLFW_KEY_MINUS:
-                        this->camera().dolly(-5);
-                        this->current_camera().dolly(-5);
-                        break;
-                    case GLFW_KEY_0:
-                        orthographic = !orthographic;
-                        this->camera().set_orthographic(orthographic);
-                        this->current_camera().set_orthographic(orthographic);
-                        break;
-                    case GLFW_KEY_ESCAPE:
-                        this->running(false);
-                        break;
-                    default:
-                        break;
-                }
-            } else if (mods == GLFW_MOD_SHIFT) {
-                switch (key) {
-                    case GLFW_KEY_R:
-                        this->camera().reset();
-                        this->current_camera().reset();
-                        break;
-                    default:
-                        break;
-                }
-            } else if (mods == GLFW_MOD_CONTROL) {
-                switch (key) {
-                    case GLFW_KEY_R:
-                        this->camera().birds_eye_view();
-                        this->current_camera().birds_eye_view();
-                        break;
-                    default:
-                        break;
-                }
+    auto move_camera = [this](int key, float amount) {
+        switch (key) {
+            case GLFW_KEY_A:
+                this->camera().yaw(amount);
+                this->current_camera().yaw(amount);
+                return true;
+            case GLFW_KEY_D:
+                this->camera().yaw(-amount);
+                this->current_camera().yaw(-amount);
+                return true;
+            case GLFW_KEY_W:
+                this->camera().pitch(amount);
+                this->current_camera().pitch(amount);
+                return true;
+            case GLFW_KEY_S:
+                this->camera().pitch(-amount);
+                this->current_camera().pitch(-amount);
+                return true;
+            case GLFW_KEY_EQUAL:
+                this->camera().dolly(amount);
+                this->current_camera().dolly(amount);
+                return true;
+            case GLFW_KEY_MINUS:
+                this->camera().dolly(-amount);
+                this->current_camera().dolly(-amount);
+                return true;
+            case GLFW_KEY_Q:
+                this->camera().roll(amount);
+                this->current_camera().roll(amount);
+                return true;
+            case GLFW_KEY_E:
+                this->camera().roll(-amount);
+                this->current_camera().roll(-amount);
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    this->push_key_handler([this, mx, orthographic, move_camera](
+                               const WindowCtx&, int key, int mods) mutable {
+        auto lock = mx ? std::unique_lock<std::mutex>{*mx}
+                       : std::unique_lock<std::mutex>{};
+        if (mods == 0) {
+            if (move_camera(key, 5)) {
+                return true;
             }
-            return true;
-        });
+            switch (key) {
+                case GLFW_KEY_0:
+                    orthographic = !orthographic;
+                    this->camera().set_orthographic(orthographic);
+                    this->current_camera().set_orthographic(orthographic);
+                    break;
+                case GLFW_KEY_ESCAPE:
+                    this->running(false);
+                    break;
+                default:
+                    break;
+            }
+        } else if (mods == GLFW_MOD_SHIFT) {
+            if (move_camera(key, 0.3)) {
+                return true;
+            }
+            switch (key) {
+                case GLFW_KEY_R:
+                    this->camera().reset();
+                    this->current_camera().reset();
+                    break;
+                default:
+                    break;
+            }
+        } else if (mods == GLFW_MOD_CONTROL) {
+            switch (key) {
+                case GLFW_KEY_R:
+                    this->camera().birds_eye_view();
+                    this->current_camera().birds_eye_view();
+                    break;
+                default:
+                    break;
+            }
+        }
+        return true;
+    });
 
     this->push_scroll_handler(
         [this, mx](const WindowCtx&, double, double yoff) {
@@ -338,14 +416,17 @@ void PointViz::add_default_controls(std::mutex* mx) {
 void PointViz::run() {
     pimpl->glfw->running(true);
     pimpl->glfw->visible(true);
-    while (running()) run_once();
+    while (running()) {
+        run_once();
+    }
     pimpl->glfw->visible(false);
 }
 
 void PointViz::run_once() {
-    if (glfwGetCurrentContext() != pimpl->glfw->window)
+    if (glfwGetCurrentContext() != pimpl->glfw->window) {
         glfwMakeContextCurrent(pimpl->glfw->window);
-    draw();
+    }
+    process_frame();
     glfwPollEvents();
 }
 
@@ -374,6 +455,7 @@ void PointViz::update() {
     pimpl->cuboids.swap();
     pimpl->labels.swap();
     pimpl->images.swap();
+    pimpl->lines.swap();
     pimpl->rings.update(pimpl->target);
 
     pimpl->front_changed = true;
@@ -395,78 +477,170 @@ int PointViz::window_height() const {
     return pimpl->glfw->window_context.window_height;
 }
 
+void PointViz::count_fps() {
+    // fps counting
+    ++pimpl->fps_frame_counter;
+    double now_t = glfwGetTime();
+    if (pimpl->fps_last_time == 0 || now_t - pimpl->fps_last_time >= 1.0) {
+        pimpl->fps = pimpl->fps_frame_counter / (now_t - pimpl->fps_last_time);
+        pimpl->fps_last_time = now_t;
+        pimpl->fps_frame_counter = 0;
+    }
+}
+
 void PointViz::draw() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glBindVertexArray(pimpl->vao);
+    const auto& ctx = pimpl->glfw->window_context;
 
-    // fps counting
-    ++pimpl->fps_frame_counter_;
-    double now_t = glfwGetTime();
-    if (pimpl->fps_last_time_ == 0 || now_t - pimpl->fps_last_time_ >= 1.0) {
-        pimpl->fps_ =
-            pimpl->fps_frame_counter_ / (now_t - pimpl->fps_last_time_);
-        pimpl->fps_last_time_ = now_t;
-        pimpl->fps_frame_counter_ = 0;
+    // calculate camera matrices
+    auto camera_data = pimpl->camera_front.matrices(impl::window_aspect(ctx));
+
+    // draw rings
+    pimpl->rings.draw(ctx, camera_data);
+
+    // draw clouds
+    impl::GLCloud::beginDraw();
+    pimpl->clouds.draw(ctx, camera_data);
+    impl::GLCloud::endDraw();
+
+    // draw cuboids
+    impl::GLCuboid::beginDraw();
+    pimpl->cuboids.draw(ctx, camera_data);
+    impl::GLCuboid::endDraw();
+
+    // draw lines
+    impl::GLLines::beginDraw();
+    pimpl->lines.draw(ctx, camera_data);
+    impl::GLLines::endDraw();
+
+    // draw labels and images on top of everything
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    // draw image
+    impl::GLImage::beginDraw();
+    pimpl->images.draw(ctx, camera_data);
+    impl::GLImage::endDraw();
+
+    // draw labels
+    impl::GLLabel::beginDraw();
+    pimpl->labels.draw(ctx, camera_data);
+    impl::GLLabel::endDraw();
+}
+
+std::vector<uint8_t> PointViz::capture_framebuffer_pixels(
+    impl::Framebuffer& framebuffer) {
+    int current_fb_width{0};
+    int current_fb_height{0};
+    glfwGetFramebufferSize(pimpl->glfw->window, &current_fb_width,
+                           &current_fb_height);
+
+    if (framebuffer.width() == current_fb_width &&
+        framebuffer.height() == current_fb_height) {
+        // Desired size is equal to window framebuffer size, just read
+        // from the default framebuffer and return.
+        // Note: on a Mac it is likely that this framebuffer size will be equal
+        // to 2 times the window logical width and height
+        std::vector<uint8_t> result(static_cast<std::size_t>(
+            framebuffer.width() * framebuffer.height() * 3));
+
+        glReadPixels(0, 0, static_cast<GLsizei>(framebuffer.width()),
+                     static_cast<GLsizei>(framebuffer.height()), GL_RGB,
+                     GL_UNSIGNED_BYTE, result.data());
+
+        return result;
     }
 
-    // draw images
+    std::vector<uint8_t> result(static_cast<std::size_t>(
+        framebuffer.width() * framebuffer.height() * 3));
+
+    // Resolution is different to window size
+    framebuffer.bind();
+    if (framebuffer.is_complete()) {
+        glViewport(0, 0, framebuffer.width(), framebuffer.height());
+
+        draw();
+        framebuffer.read_pixels_into(result);
+
+        // Restore the viewport to the window size
+        glViewport(0, 0, static_cast<GLsizei>(current_fb_width),
+                   static_cast<GLsizei>(current_fb_height));
+    }
+    framebuffer.unbind();
+
+    return result;
+}
+
+void PointViz::process_frame() {
+    // Store this thread id to later identify the rendering thread
+    // for methods that could be run from any thread, like get_screenshot()
+    pimpl->rendering_thread_id = std::this_thread::get_id();
+
+    count_fps();
+    // Draw
     {
         std::lock_guard<std::mutex> guard{pimpl->update_mx};
-        const auto& ctx = pimpl->glfw->window_context;
-
-        // calculate camera matrices
-        auto camera_data =
-            pimpl->camera_front.matrices(impl::window_aspect(ctx));
-
-        // draw clouds
-        impl::GLCloud::beginDraw();
-        pimpl->clouds.draw(ctx, camera_data);
-        impl::GLCloud::endDraw();
-
-        // draw rings
-        pimpl->rings.draw(ctx, camera_data);
-
-        // draw cuboids
-        impl::GLCuboid::beginDraw();
-        pimpl->cuboids.draw(ctx, camera_data);
-        impl::GLCuboid::endDraw();
-
-        // draw labels and images on top of everything
-        glClear(GL_DEPTH_BUFFER_BIT);
-
-        // draw image
-        impl::GLImage::beginDraw();
-        pimpl->images.draw(ctx, camera_data);
-        impl::GLImage::endDraw();
-
-        // draw labels
-        impl::GLLabel::beginDraw();
-        pimpl->labels.draw(ctx, camera_data);
-        impl::GLLabel::endDraw();
-
-        // switch back to point viz vao
-        glBindVertexArray(pimpl->vao);
-
+        draw();
         // mark front buffers no longer dirty
         pimpl->front_changed = false;
     }
-
-    if (!pimpl->frame_buffer_handlers.empty()) {
-        int width = viewport_width();
-        int height = viewport_height();
-        pimpl->frame_buffer_data_.resize(width * height * 3);
-        glPixelStorei(GL_PACK_ALIGNMENT, 1);
-        glReadBuffer(GL_BACK);
-        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE,
-                     pimpl->frame_buffer_data_.data());
-        for (auto& f : pimpl->frame_buffer_handlers)
-            if (!f(pimpl->frame_buffer_data_, width, height)) break;
-    }
-
+    handle_screenshot_request();
+    handle_recording();
+    call_framebuffer_handlers();
     glfwSwapBuffers(pimpl->glfw->window);
 }
 
-double PointViz::fps() const { return pimpl->fps_; }
+void PointViz::handle_screenshot_request() {
+    std::unique_lock<std::mutex>(pimpl->screenshot_request_mutex);
+    if (pimpl->screenshot_request) {
+        // Create the screenshot framebuffer with its desired texture size
+        pimpl->screenshot_fb = std::make_unique<impl::Framebuffer>(
+            pimpl->screenshot_request->width(),
+            pimpl->screenshot_request->height());
+
+        auto pixels = capture_framebuffer_pixels(*pimpl->screenshot_fb);
+
+        // Dispose the screenshot framebuffer and its data
+        pimpl->screenshot_fb = nullptr;
+
+        pimpl->screenshot_request->set_pixels(pixels);
+        pimpl->screenshot_condition_variable.notify_one();
+    }
+}
+
+void PointViz::handle_recording() {
+    std::lock_guard<std::mutex> guard(pimpl->screen_recording_fb_mutex);
+
+    // Save screenshots from the recording framebuffer if recording
+    if (pimpl->screen_recording_fb) {
+        // Save the screenshot
+        auto pixels = capture_framebuffer_pixels(*pimpl->screen_recording_fb);
+        impl::screenshot_utils::flip_pixels(
+            pixels, pimpl->screen_recording_fb->width(),
+            pimpl->screen_recording_fb->height());
+        impl::screenshot_utils::write_png("", pixels,
+                                          pimpl->screen_recording_fb->width(),
+                                          pimpl->screen_recording_fb->height());
+    }
+}
+
+void PointViz::call_framebuffer_handlers() {
+    if (!pimpl->frame_buffer_handlers.empty()) {
+        int width = viewport_width();
+        int height = viewport_height();
+        pimpl->frame_buffer_data.resize(width * height * 3);
+
+        glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE,
+                     pimpl->frame_buffer_data.data());
+
+        for (auto& handler : pimpl->frame_buffer_handlers) {
+            if (!handler(pimpl->frame_buffer_data, width, height)) {
+                break;
+            }
+        }
+    }
+}
+
+double PointViz::fps() const { return pimpl->fps; }
 
 /*
  * Input handling
@@ -550,6 +724,10 @@ void PointViz::add(const std::shared_ptr<Image>& image) {
     pimpl->images.add(image);
 }
 
+void PointViz::add(const std::shared_ptr<Lines>& lines) {
+    pimpl->lines.add(lines);
+}
+
 bool PointViz::remove(const std::shared_ptr<Cloud>& cloud) {
     return pimpl->clouds.remove(cloud);
 }
@@ -564,6 +742,134 @@ bool PointViz::remove(const std::shared_ptr<Label>& label) {
 
 bool PointViz::remove(const std::shared_ptr<Image>& image) {
     return pimpl->images.remove(image);
+}
+
+bool PointViz::remove(const std::shared_ptr<Lines>& lines) {
+    return pimpl->lines.remove(lines);
+}
+
+std::pair<uint32_t, uint32_t> PointViz::get_scaled_viewport_size(
+    double scale_factor) {
+    if (scale_factor <= 0.0) {
+        throw std::runtime_error("Invalid scale factor");
+    }
+
+    auto width =
+        static_cast<uint32_t>(std::lround(viewport_width() * scale_factor));
+    auto height =
+        static_cast<uint32_t>(std::lround(viewport_height() * scale_factor));
+    return std::make_pair(width, height);
+}
+
+std::vector<uint8_t> PointViz::get_screenshot(uint32_t width, uint32_t height) {
+    std::vector<uint8_t> pixels;
+
+    // determine if we have processed any frame yet by checking
+    // if the rendering_thread_id value is not the default
+    bool has_rendered_before =
+        !(pimpl->rendering_thread_id == std::thread::id());
+
+    if (std::this_thread::get_id() == pimpl->rendering_thread_id ||
+        !has_rendered_before) {
+        // This is the either the rendering thread or we have not yet rendered
+        // anything, get the screenshot synchronously
+
+        // If we have not yet rendered anything, we want to do a first render
+        // before the screenshot happens
+        if (!has_rendered_before) {
+            if (glfwGetCurrentContext() != pimpl->glfw->window) {
+                glfwMakeContextCurrent(pimpl->glfw->window);
+            }
+            draw();
+        }
+
+        // Create the screenshot framebuffer with its desired texture size
+        pimpl->screenshot_fb =
+            std::make_unique<impl::Framebuffer>(width, height);
+
+        pixels = capture_framebuffer_pixels(*pimpl->screenshot_fb);
+
+        // Dispose the screenshot framebuffer and its data
+        pimpl->screenshot_fb = nullptr;
+    } else {
+        // get_screenshot is being called from a different thread than the main
+        // thread. Request the screenshot asynchrounously.
+
+        // Submit screenshot request
+        {
+            std::unique_lock<std::mutex>(pimpl->screenshot_request_mutex);
+            if (!pimpl->screenshot_request) {
+                pimpl->screenshot_request =
+                    std::make_unique<ScreenshotRequest>(width, height);
+            } else {
+                throw std::runtime_error(
+                    "A screenshot request is already in progress. Only one "
+                    "screenshot request can be processed at a time.");
+            }
+        }
+
+        // Block until the screenshot is complete
+        {
+            std::unique_lock<std::mutex> lock(pimpl->screenshot_request_mutex);
+            pimpl->screenshot_condition_variable.wait(lock, [this]() {
+                if (!pimpl->screenshot_request) {
+                    return false;
+                }
+
+                return pimpl->screenshot_request->is_complete();
+            });
+            pixels = pimpl->screenshot_request->release_pixels();
+
+            // Delete the screenshot request to signal no pending requests
+            // exist.
+            pimpl->screenshot_request = nullptr;
+        }
+    }
+
+    impl::screenshot_utils::flip_pixels(pixels, width, height);
+    return pixels;
+}
+
+std::vector<uint8_t> PointViz::get_screenshot(double scale_factor) {
+    auto size = get_scaled_viewport_size(scale_factor);
+    return get_screenshot(size.first, size.second);
+}
+
+std::string PointViz::save_screenshot(const std::string& path, uint32_t width,
+                                      uint32_t height) {
+    auto pixels = get_screenshot(width, height);
+    return impl::screenshot_utils::write_png(path, pixels, width, height);
+}
+
+std::string PointViz::save_screenshot(const std::string& path,
+                                      double scale_factor) {
+    auto size = get_scaled_viewport_size(scale_factor);
+    return save_screenshot(path, size.first, size.second);
+}
+
+bool PointViz::toggle_screen_recording(uint32_t width, uint32_t height) {
+    if (glfwGetCurrentContext() != pimpl->glfw->window) {
+        glfwMakeContextCurrent(pimpl->glfw->window);
+    }
+
+    std::lock_guard<std::mutex> guard(pimpl->screen_recording_fb_mutex);
+
+    // If we were already recording, destroy the screen_recording_fb
+    // and therefore stop recording
+    if (pimpl->screen_recording_fb) {
+        pimpl->screen_recording_fb = nullptr;
+        return false;
+    }
+
+    // Create the recording framebuffer
+    pimpl->screen_recording_fb =
+        std::make_unique<impl::Framebuffer>(width, height);
+    return true;
+}
+
+bool PointViz::toggle_screen_recording(double scale_factor) {
+    auto size = get_scaled_viewport_size(scale_factor);
+    return toggle_screen_recording(size.first, size.second);
 }
 
 Cloud::Cloud(size_t w, size_t h, const mat4d& extrinsic)
@@ -941,15 +1247,15 @@ std::pair<double, double> WindowCtx::normalized_coordinates(double x,
     return std::pair<double, double>(world_x, world_y);
 }
 
-std::pair<double, double> WindowCtx::window_coordinates(
+std::pair<double, double> WindowCtx::viewport_coordinates(
     double normalized_x, double normalized_y) const {
     check_invariants();
-    double window_x = (normalized_x + aspect_ratio()) * window_height / 2.0;
-    double window_y = window_height * (1 - normalized_y) / 2.0;
+    double window_x = (normalized_x + aspect_ratio()) * viewport_height / 2.0;
+    double window_y = viewport_height * (1 - normalized_y) / 2.0;
     return std::pair<double, double>(window_x, window_y);
 }
 
-std::pair<int, int> Image::window_coordinates_to_image_pixel(
+std::pair<int, int> Image::viewport_coordinates_to_image_pixel(
     const WindowCtx& ctx, double x, double y) const {
     ctx.check_invariants();
     if (image_width_ == 0 || image_height_ == 0) {
@@ -976,7 +1282,7 @@ std::pair<int, int> Image::window_coordinates_to_image_pixel(
     return std::make_pair(px, py);
 }
 
-std::pair<double, double> Image::image_pixel_to_window_coordinates(
+std::pair<double, double> Image::image_pixel_to_viewport_coordinates(
     const WindowCtx& ctx, int px, int py) const {
     ctx.check_invariants();
     double img_rel_x = static_cast<double>(px) / image_width_;
@@ -988,17 +1294,17 @@ std::pair<double, double> Image::image_pixel_to_window_coordinates(
     double my = position_[2] - img_rel_y * (position_[2] - position_[3]);
     double wx = mx + hshift_ * ctx.aspect_ratio();
     auto psize = pixel_size(ctx);
-    auto wcoords = ctx.window_coordinates(wx, my);
+    auto vcoords = ctx.viewport_coordinates(wx, my);
 
     // return the window pixel in the center of the image pixel
-    return std::pair<double, double>(wcoords.first + psize.first / 2,
-                                     wcoords.second + psize.second / 2);
+    return std::pair<double, double>(vcoords.first + psize.first / 2,
+                                     vcoords.second + psize.second / 2);
 }
 
 std::pair<double, double> Image::pixel_size(const WindowCtx& ctx) const {
     ctx.check_invariants();
-    auto lower_left = ctx.window_coordinates(position_[0], position_[3]);
-    auto upper_right = ctx.window_coordinates(position_[1], position_[2]);
+    auto lower_left = ctx.viewport_coordinates(position_[0], position_[3]);
+    auto upper_right = ctx.viewport_coordinates(position_[1], position_[2]);
     return std::pair<double, double>(
         fabs(upper_right.first - lower_left.first) / image_width_,
         fabs(upper_right.second - lower_left.second) / image_height_);
@@ -1030,6 +1336,43 @@ void Cuboid::set_transform(const mat4d& pose) {
 void Cuboid::set_rgba(const std::array<float, 4>& rgba) {
     rgba_ = rgba;
     rgba_changed_ = true;
+}
+
+Lines::Lines(const mat4d& pose, const std::array<float, 4>& rgba) {
+    set_transform(pose);
+    set_rgba(rgba);
+}
+
+void Lines::update_from(const Lines& other) {
+    bool transform_changed = other.transform_changed_ || transform_changed_;
+    bool rgba_changed = other.rgba_changed_ || rgba_changed_;
+    bool points_changed = other.points_changed_ || points_changed_;
+    *this = other;
+    this->transform_changed_ = transform_changed;
+    this->rgba_changed_ = rgba_changed;
+    this->points_changed_ = points_changed;
+}
+
+void Lines::clear() {
+    transform_changed_ = false;
+    rgba_changed_ = false;
+    points_changed_ = false;
+}
+
+void Lines::set_transform(const mat4d& pose) {
+    transform_ = pose;
+    transform_changed_ = true;
+}
+
+void Lines::set_rgba(const std::array<float, 4>& rgba) {
+    rgba_ = rgba;
+    rgba_changed_ = true;
+}
+
+void Lines::set_points(size_t num_points, const float* points) {
+    point_data_.resize(num_points * 3);
+    memcpy(point_data_.data(), points, sizeof(float) * 3 * num_points);
+    points_changed_ = true;
 }
 
 Label::Label(const std::string& text, const vec3d& position) {
@@ -1100,7 +1443,7 @@ void Label::set_rgba(const std::array<float, 4>& rgba) {
 
 void TargetDisplay::enable_rings(bool state) { rings_enabled_ = state; }
 
-void TargetDisplay::set_ring_size(int n) { ring_size_ = n; }
+void TargetDisplay::set_ring_size(int ring_size) { ring_size_ = ring_size; }
 void TargetDisplay::set_ring_line_width(int line_width) {
     ring_line_width_ = line_width;
 }

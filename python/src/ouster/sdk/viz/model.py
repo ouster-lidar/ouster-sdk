@@ -11,14 +11,14 @@ import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .view_mode import (ImageMode, CloudMode, LidarScanVizMode,
-                        SimpleMode, ReflMode, RGBMode,
+                        SimpleMode, ReflMode, RGBMode, RingMode,
                         is_norm_reflectivity_mode, CloudPaletteItem)
 from ouster.sdk._bindings.viz import (Cloud, Image, Label,
                    calref_palette, spezia_palette, spezia_cal_ref_palette, grey_palette,
                    grey_cal_ref_palette, viridis_palette, viridis_cal_ref_palette,
                    magma_palette, magma_cal_ref_palette, MouseButton, MouseButtonEvent, EventModifierKeys, WindowCtx)
-import ouster.sdk.client as client
-from ouster.sdk.client import (ChanField, ShotLimitingStatus, ThermalShutdownStatus)
+import ouster.sdk.core as core
+from ouster.sdk.core import (ChanField, ShotLimitingStatus, ThermalShutdownStatus)
 from ouster.sdk.util import img_aspect_ratio
 
 
@@ -44,7 +44,7 @@ class VizExtraMode:
     func: Callable[[], LidarScanVizMode]
 
     def create(self,
-               info: Optional[client.SensorInfo] = None) -> LidarScanVizMode:
+               info: Optional[core.SensorInfo] = None) -> LidarScanVizMode:
         extra_mode = self.func()
         if info and hasattr(extra_mode, "_info") and extra_mode._info is None:
             extra_mode._info = info
@@ -60,6 +60,38 @@ _viz_extra_palettes: List[CloudPaletteItem]
 _viz_extra_palettes = []
 
 
+def _hsv_to_rgb(H, S, V):
+    ''' Converts an integer HSV tuple (value range from 0 to 255) to an RGB tuple '''
+    # Check if the color is Grayscale
+    if S == 0:
+        return (V, V, V)
+
+    # Make hue 0-5
+    region = H // 43
+
+    # Find remainder part, make it from 0-255
+    remainder = (H - (region * 43)) * 6
+
+    # Calculate temp vars, doing integer multiplication
+    P = (V * (255 - S)) >> 8
+    Q = (V * (255 - ((S * remainder) >> 8))) >> 8
+    T = (V * (255 - ((S * (255 - remainder)) >> 8))) >> 8
+
+    # Assign temp vars based on color cone region
+    if region == 0:
+        return (V, T, P)
+    elif region == 1:
+        return (Q, V, P)
+    elif region == 2:
+        return (P, V, T)
+    elif region == 3:
+        return (P, Q, V)
+    elif region == 4:
+        return (T, P, V)
+    else:
+        return (V, P, Q)
+
+
 class Palettes:
     """Represents the color palettes used within an instance of LidarScanViz.
     Also keeps track of the palette currently in use."""
@@ -67,6 +99,14 @@ class Palettes:
     def __init__(self, _ext_palettes: List[CloudPaletteItem]):
         """Initialize a Palettes object, which populates two lists
         of palettes - one for normal view modes and one for ReflMode."""
+
+        # Generate a rainbow palette
+        rainbow_palette = np.zeros((256, 3))
+        for i in range(0, 256):
+            res = _hsv_to_rgb(int(i * 230 / 255), 255, 255)
+            rainbow_palette[i, 0] = res[0] / 255
+            rainbow_palette[i, 1] = res[1] / 255
+            rainbow_palette[i, 2] = res[2] / 255
 
         # Note these 2 palette arrays must always be the same length
         self._cloud_palettes: List[CloudPaletteItem]
@@ -76,6 +116,7 @@ class Palettes:
             CloudPaletteItem("Greyscale", grey_palette),
             CloudPaletteItem("Viridis", viridis_palette),
             CloudPaletteItem("Magma", magma_palette),
+            CloudPaletteItem("Rainbow", rainbow_palette)
         ]
 
         self._refl_cloud_palettes: List[CloudPaletteItem]
@@ -86,6 +127,7 @@ class Palettes:
             CloudPaletteItem("Cal. Ref. Greyscale", grey_cal_ref_palette),
             CloudPaletteItem("Cal. Ref. Viridis", viridis_cal_ref_palette),
             CloudPaletteItem("Cal. Ref. Magma", magma_cal_ref_palette),
+            CloudPaletteItem("Rainbow", rainbow_palette)
         ]
 
         # Add extra color palettes, usually inserted through plugins
@@ -135,8 +177,7 @@ class Selection2d:
         self._sensor = sensor
         self._image_index = image_index
         self._image = image
-        meta = self._sensor._meta
-        self._aoi_mask = np.zeros((meta.h, meta.w), np.float32)
+        self._update_mask()
         self._finalized = False
 
     @property
@@ -153,6 +194,32 @@ class Selection2d:
     def __str__(self):
         return f'2d selection {self._p1} - {self._p2}'
 
+    @property
+    def p1(self):
+        return self._p1
+
+    @p1.setter
+    def p1(self, p1):
+        self._p1 = p1
+        self._update_mask()
+
+    @property
+    def p2(self):
+        return self._p2
+
+    @p2.setter
+    def p2(self, p2):
+        self._p2 = p2
+        self._update_mask()
+
+    def _update_mask(self):
+        min_x = min(self.p1[0], self.p2[0])
+        max_x = max(self.p1[0], self.p2[0])
+        min_y = min(self.p1[1], self.p2[1])
+        max_y = max(self.p1[1], self.p2[1])
+        self._aoi_mask = np.zeros((self._sensor._meta.h, self._sensor._meta.w), np.float32)
+        self._aoi_mask[min_x:max_x, min_y:max_y] = 1
+
 
 class SensorModel:
     """
@@ -162,7 +229,7 @@ class SensorModel:
     def __init__(self, meta, *, _img_aspect_ratio: float = 0):
         self._enabled = True
         self._meta = meta
-        self._xyzlut = client.XYZLut(meta, use_extrinsics=True)
+        self._xyzlut = core.XYZLut(meta, use_extrinsics=True)
 
         self._num_clouds = 2
         self._clouds: List[Cloud] = []
@@ -190,6 +257,7 @@ class SensorModel:
 
         # Add extra viz mode, usually inserted through plugins
         self._modes.extend([vm.create(meta) for vm in _viz_extra_modes])
+        self._modes.append(RingMode(meta))
 
         # TODO[tws] decide whether it's necessary to provide extra modes via the constructor
         # self._modes.extend(_ext_modes or [])
@@ -210,7 +278,7 @@ class SensorModel:
             m for m in self._modes if isinstance(m, CloudMode)}
 
     @staticmethod
-    def _get_field_class_for_field_name(field_name, scan) -> Optional[client.FieldType]:
+    def _get_field_class_for_field_name(field_name, scan) -> Optional[core.FieldType]:
         for field_type in scan.field_types:
             if field_type.name == field_name:
                 return field_type.field_class
@@ -223,7 +291,7 @@ class SensorModel:
             return None
 
         if field_name in scan.fields:
-            if SensorModel._get_field_class_for_field_name(field_name, scan) != client.FieldClass.PIXEL_FIELD:
+            if SensorModel._get_field_class_for_field_name(field_name, scan) != core.FieldClass.PIXEL_FIELD:
                 return None
 
             field = scan.field(field_name)
@@ -267,7 +335,7 @@ class SensorModel:
                 cloud.set_palette(palette.palette)
 
     def update_cloud(self, cloud, cloud_mode, range_field: str, return_num: int,
-                     scan: Optional[client.LidarScan]) -> None:
+                     scan: Optional[core.LidarScan]) -> None:
         """Updates the given Cloud with the given CloudMode."""
         if scan is None:
             # make the scan invisible if it isnt present
@@ -290,7 +358,7 @@ class SensorModel:
         else:
             cloud_mode.set_cloud_color(cloud, scan, return_num=0)
 
-    def update_clouds(self, cloud_mode_name: str, scan: Optional[client.LidarScan]) -> None:
+    def update_clouds(self, cloud_mode_name: str, scan: Optional[core.LidarScan]) -> None:
         """Update range and mode for each cloud given a mode name and a scan."""
 
         cloud_mode = self._cloud_modes.get(cloud_mode_name, None)
@@ -298,7 +366,7 @@ class SensorModel:
             if return_num < len(self._clouds):
                 self.update_cloud(self._clouds[return_num], cloud_mode, range_field, return_num, scan)
 
-    def update_image(self, image, image_mode_item: ImgModeItem, scan: Optional[client.LidarScan]) -> None:
+    def update_image(self, image, image_mode_item: ImgModeItem, scan: Optional[core.LidarScan]) -> None:
         """Update the view mode of the given image."""
         # TODO[tws] optimize, move to image model(?)
 
@@ -321,7 +389,7 @@ class SensorModel:
             # TODO[tws]: deduplicate, e.g. by making this a method in an image model class
             image.set_image(np.zeros((self._meta.h, self._meta.w), dtype=np.float32))
 
-    def update_images(self, image_mode_names: List[str], scan: Optional[client.LidarScan]) -> None:
+    def update_images(self, image_mode_names: List[str], scan: Optional[core.LidarScan]) -> None:
         """Update image values and mode given mode names and a scan."""
         assert len(image_mode_names) == len(self._images)
         for i in range(len(self._images)):
@@ -334,7 +402,7 @@ class SensorModel:
 
 
 class LidarScanVizModel:
-    def __init__(self, metas: List[client.SensorInfo], *, _img_aspect_ratio: float):
+    def __init__(self, metas: List[core.SensorInfo], *, _img_aspect_ratio: float):
         self._cloud_pt_size: float = 2.0
         self._metas = metas
         assert len(metas) > 0, "ERROR: Expecting at least one sensor"
@@ -363,6 +431,8 @@ class LidarScanVizModel:
         self._ctx: Optional[WindowCtx] = None
         self._img_size_fraction = 4
 
+        self._flip_images = False
+
     def _set_cloud_pt_size(self, point_size):
         for sensor in self._sensors:
             for cloud in sensor._clouds:
@@ -370,11 +440,11 @@ class LidarScanVizModel:
 
     # TODO[tws] likely remove
     @property
-    def metadata(self) -> List[client.SensorInfo]:
+    def metadata(self) -> List[core.SensorInfo]:
         """Metadatas for the displayed sensors."""
         return self._metas
 
-    def _amend_view_modes_all(self, scans: List[Optional[client.LidarScan]]) -> None:
+    def _amend_view_modes_all(self, scans: List[Optional[core.LidarScan]]) -> None:
         """Add new image and cloud view modes to each sensor for each any new fields in the received scans."""
 
         assert len(scans) == len(self._sensors)
@@ -426,12 +496,37 @@ class LidarScanVizModel:
             key = lambda key: key.lower()
         )
 
+    def select_cloud_mode(self, name: str) -> bool:
+        """Updates the currently selected cloud mode from the list of all available cloud modes.
+           Returns false if the requested mode is not available.
+        """
+        all_cloud_mode_names = self.sorted_cloud_mode_names()
+        if name not in all_cloud_mode_names:
+            return False
+
+        self._cloud_mode_ind = all_cloud_mode_names.index(name)
+        self._cloud_mode_name = name
+        self.update_cloud_palettes()
+        return True
+
     def cycle_cloud_mode(self, direction: int):
         """Updates the currently selected cloud mode from the list of all available cloud modes."""
         all_cloud_mode_names = self.sorted_cloud_mode_names()
         self._cloud_mode_ind = (self._cloud_mode_ind + direction) % len(all_cloud_mode_names)
         self._cloud_mode_name = all_cloud_mode_names[self._cloud_mode_ind]
         self.update_cloud_palettes()
+
+    def select_image_mode(self, i: int, name: str) -> bool:
+        """Updates the currently selected image mode from the list of all available cloud modes.
+           Returns false if the requested mode is not available.
+        """
+        all_image_mode_names = self.sorted_image_mode_names()
+        if name not in all_image_mode_names:
+            return False
+
+        self._image_mode_ind[i] = all_image_mode_names.index(name)
+        self._image_mode_names[i] = name
+        return True
 
     def cycle_image_mode(self, i: int, direction: int):
         """Updates the currently selected image mode from the list of all available cloud modes."""
@@ -474,7 +569,7 @@ class LidarScanVizModel:
         self._image_mode_names[1] = sorted_image_mode_names[self._image_mode_ind[1]]
         self.update_cloud_palettes()
 
-    def update(self, scans: List[Optional[client.LidarScan]]) -> None:
+    def update(self, scans: List[Optional[core.LidarScan]]) -> None:
         """Update the LidarScanViz state with the provided scans."""
         assert len(scans) == len(self._sensors)
 
@@ -490,7 +585,7 @@ class LidarScanVizModel:
                     if scan.has_field('RANGE2'):
                         self._cloud_enabled.append(True)
                 # print warnings
-                first_ts_s = client.first_valid_column_ts(scan) / 1e9
+                first_ts_s = scan.get_first_valid_column_timestamp() / 1e9
                 if scan.shot_limiting() != ShotLimitingStatus.SHOT_LIMITING_NORMAL:
                     print(f"WARNING: Shot limiting status: {scan.shot_limiting()} "
                         f"(sensor ts: {first_ts_s:.3f})")
@@ -511,13 +606,13 @@ class LidarScanVizModel:
         [aoi_label.set_text("") for aoi_label in self._aoi_labels]
         self.clear_masks()
 
-    def image_and_pixel_for_window_coordinate(self, ctx, x, y):
+    def image_and_pixel_for_viewport_coordinate(self, ctx, x, y):
         pixel = None
         for sensor_index, sensor in enumerate(self._sensors):
             if not sensor._enabled:
                 continue
             for image_idx, image in enumerate(sensor._images):
-                pixel = image.window_coordinates_to_image_pixel(ctx, x, y)
+                pixel = image.viewport_coordinates_to_image_pixel(ctx, x, y)
                 # TODO[tws] add accessors for image width, height to PointViz
                 if pixel[0] >= 0 and pixel[0] < sensor._meta.h and pixel[1] >= 0 and pixel[1] < sensor._meta.w:
                     return sensor_index, image_idx, image, pixel
@@ -529,7 +624,7 @@ class LidarScanVizModel:
         ret = True
         if button == MouseButton.MOUSE_BUTTON_RIGHT and event == MouseButtonEvent.MOUSE_BUTTON_PRESSED \
             and self._img_size_fraction > 0:
-            sensor_index, image_idx, image, pixel = self.image_and_pixel_for_window_coordinate(
+            sensor_index, image_idx, image, pixel = self.image_and_pixel_for_viewport_coordinate(
                 ctx, ctx.mouse_x, ctx.mouse_y
             )
             if image:
@@ -537,7 +632,7 @@ class LidarScanVizModel:
                 sensor = self._sensors[sensor_index]
                 self._mouse_down_image = image_idx
                 self._current_selection = [
-                    Selection2d(pixel, pixel, sensor_index, sensor, image_idx, image)
+                    Selection2d(pixel, (pixel[0] + 1, pixel[1] + 1), sensor_index, sensor, image_idx, image)
                     for image_idx, image in enumerate(sensor._images)
                 ]
                 ret = False
@@ -547,7 +642,7 @@ class LidarScanVizModel:
             event == MouseButtonEvent.MOUSE_BUTTON_RELEASED:
 
             # discard trivial selections
-            if any([selection._p1 == selection._p2 for selection in self._current_selection]):
+            if any([selection.p1 == selection.p2 for selection in self._current_selection]):
                 self.clear_aoi()
             else:
                 [selection.finalize() for selection in self._current_selection]
@@ -570,8 +665,8 @@ class LidarScanVizModel:
             sensor = selection._sensor
             image = sensor._images[image_idx]
             meta = sensor._meta
-            p1 = selection._p1
-            p2 = selection._p2
+            p1 = selection.p1
+            p2 = selection.p2
 
             # compute the image mask given the selection area
             mask = np.zeros((meta.h, meta.w, 4), dtype=np.float32)
@@ -585,8 +680,7 @@ class LidarScanVizModel:
             # compute the cloud mask
             cloud_mask = np.zeros((meta.h, meta.w, 4), dtype=np.float32)
             cloud_mask[min_x:max_x, min_y:max_y, :] = (1, 0, 0, 0.8)
-            selection._aoi_mask[min_x:max_x, min_y:max_y] = 1
-            cloud_mask = client.destagger(meta, cloud_mask, inverse=True)
+            cloud_mask = core.destagger(meta, cloud_mask, inverse=True)
 
             # mask the first return cloud unless the AOI is on a 2nd return field
             key = self._image_mode_names[selection._image_index]
@@ -597,12 +691,12 @@ class LidarScanVizModel:
 
             # set the location of the text
             assert self._ctx
-            mask_upper_right_window_coordinates = image.image_pixel_to_window_coordinates(
+            mask_upper_right_viewport_coordinates = image.image_pixel_to_viewport_coordinates(
                 self._ctx, (max_x, max_y)
             )
 
-            aoi_label_x = (mask_upper_right_window_coordinates[0] + 12) / self._ctx.viewport_width
-            aoi_label_y = mask_upper_right_window_coordinates[1] / self._ctx.viewport_height
+            aoi_label_x = (mask_upper_right_viewport_coordinates[0] + 12) / self._ctx.viewport_width
+            aoi_label_y = mask_upper_right_viewport_coordinates[1] / self._ctx.viewport_height
             if self._img_size_fraction == 0:
                 # move offscreen (yes, it'd be better to hide it but we don't have an API method for that)
                 self._aoi_labels[image_idx].set_position(-10, -10, False, True)
@@ -618,7 +712,7 @@ class LidarScanVizModel:
             # TODO[tws] add accessors for image width, height to PointViz
             image_width = selection._sensor._meta.w
             image_height = selection._sensor._meta.h
-            pixel = selection._image.window_coordinates_to_image_pixel(ctx, x, y)
+            pixel = selection._image.viewport_coordinates_to_image_pixel(ctx, x, y)
 
             # clamp pixel to a valid location in the image
             pixel = (
@@ -627,7 +721,7 @@ class LidarScanVizModel:
             )
             # update top and bottom image selections regardless of which one we're drawing the AOI
             for selection in self._current_selection:
-                selection._p2 = pixel
+                selection.p2 = pixel
 
             # providing the window context here is a necessary evil to compute window coordinates
             # of the image
@@ -635,7 +729,7 @@ class LidarScanVizModel:
             return False
         return True
 
-    def update_aoi_label(self, scans: List[Optional[client.LidarScan]]):
+    def update_aoi_label(self, scans: List[Optional[core.LidarScan]]):
         if not self._current_selection:
             [label.set_text("") for label in self._aoi_labels]  # type: ignore
             return
@@ -648,7 +742,7 @@ class LidarScanVizModel:
 
             # get filters for valid returns (range) that are within the AOI
             meta = selection._sensor._meta
-            valid_aoi = client.destagger(
+            valid_aoi = core.destagger(
                 meta, (selection._aoi_mask > 0).astype(dtype=np.uint8), inverse=True
             )
 
@@ -664,12 +758,29 @@ class LidarScanVizModel:
             data = data if data.size > 0 else np.zeros((1,))
             label_str = f"{str(key).replace('_', '-')}\n"
 
+            p1 = selection.p1
+            p2 = selection.p2
+            # subtract one from the max values
+            # so that we show the inclusive range rather than the slice into the numpy array
+            min_x = min(p1[0], p2[0])
+            max_x = max(p1[0], p2[0]) - 1
+            min_y = min(p1[1], p2[1])
+            max_y = max(p1[1], p2[1]) - 1
+
             # add some basic AOI data stats
             label_str += (
                 f"min/max:   {np.min(data):8.1f}{np.max(data):8.1f}\n"
                 f"mean/std:{np.mean(data):8.1f}{np.std(data):8.1f}\n"
+                f"[{min_y}:{max_y} {min_x}:{max_x}]\n"
             )
             self._aoi_labels[selection._image_index].set_text(label_str)
+
+    def flip_images(self, flip: bool) -> None:
+        self._flip_images = flip
+        self.update_image_size(0)
+
+    def toggle_flip_images(self) -> None:
+        self.flip_images(not self._flip_images)
 
     def update_image_size(self, amount: int) -> None:
         """Change the size of the 2D image and position image labels."""
@@ -693,9 +804,14 @@ class LidarScanVizModel:
             image_w = image_h / sensor._img_aspect_ratio
             image_left = last_image_right
             image_right = last_image_right + image_w
+
             last_image_right = image_right
+            if self._flip_images:
+                image_right, image_left = image_left, image_right
             for image_idx, image in enumerate(sensor._images):
                 image_top = 1.0 - image_h * image_idx
                 image_bottom = 1.0 - image_h * (image_idx + 1)
+                if self._flip_images:
+                    image_top, image_bottom = image_bottom, image_top
                 image.set_position(image_left + center_x, image_right + center_x, image_bottom, image_top)
         self.update_aoi()

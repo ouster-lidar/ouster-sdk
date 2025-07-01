@@ -1,12 +1,12 @@
-#  type: ignore
 import click
-from ouster.cli.core import cli
+from ouster.cli.core import cli  # type: ignore
 import time
 from typing import IO
 from os import path
 
-import ouster.sdk.client as client
-import ouster.sdk.client._digest as digest
+import ouster.sdk.core as core
+import ouster.sdk.sensor as sensor
+import ouster.sdk.core._digest as digest
 from ouster.sdk.util import resolve_metadata
 
 _click_ro_file = click.Path(exists=True, dir_okay=False, readable=True)
@@ -35,16 +35,13 @@ def testing_time(pcap_file: str, json: IO) -> None:
     except ImportError:
         raise click.ClickException("Please verify that libpcap is installed")
 
-    info = client.SensorInfo(json.read())
+    info = core.SensorInfo(json.read())
 
     click.echo("Initializing replay and client...")
     replay = pcap._replay(pcap_file, info, "127.0.1.1", 7502, 7503)
-    sensor = client.Sensor("test-sensor",
-                           7502,
-                           7503,
-                           metadata=info,
-                           _flush_before_read=False)
-    net_packets = iter(sensor)
+    src = sensor.SensorPacketSource("test-sensor",
+                        sensor_info=[info])
+    net_packets = iter(src)
     click.echo("Timing reading data from a socket...")
     start = time.time()
     # keeping one packet "in flight" improves performance quite a bit
@@ -73,19 +70,22 @@ def testing_time(pcap_file: str, json: IO) -> None:
 def compute_digest(file: str, meta: str, check: str, save: bool) -> None:
     """Write out a digest file for the specified lidar data."""
 
-    meta = resolve_metadata(file, meta)
-    with open(meta, 'r') as json:
-        info = client.SensorInfo(json.read())
+    resolved_meta = resolve_metadata(file, meta)
+    if resolved_meta is None:
+        raise click.ClickException("Failed to resolve metadata.")
 
-    packets: client.PacketSource
+    with open(resolved_meta, 'r') as json:
+        info = core.SensorInfo(json.read())
+
+    packets: core.PacketSource
     if path.splitext(file)[1] == ".pcap":
         try:
             from ouster.sdk import pcap
         except ImportError:
             raise click.ClickException(
                 "Please verify that libpcap is installed")
-        packets = pcap.Pcap(file,
-                            info)
+        packets = pcap.PcapPacketSource(file,
+                            sensor_info=[info])
     else:
         raise click.ClickException(f"File {file} is not supported")
 

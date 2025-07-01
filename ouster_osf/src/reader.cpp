@@ -405,7 +405,8 @@ ChunksRange Reader::chunks() {
     return ChunksRange(0, file_.metadata_offset(), this);
 }
 
-Reader::Reader(const std::string& file) : file_{file} {
+Reader::Reader(const std::string& file, const error_handler_t& error_handler)
+    : file_{file}, error_handler_{error_handler} {
     if (!file_.valid()) {
         logger().error(
             "ERROR: While openning OSF file. "
@@ -415,6 +416,36 @@ Reader::Reader(const std::string& file) : file_{file} {
         throw std::logic_error("provided OSF file is not a valid OSF file.");
     }
 
+    version_ = file_.version();
+
+    if (version_.major > OsfFile::current_version.major) {
+        std::stringstream stream;
+        stream << "The OSF file was created with schema version "
+               << version_.simple_version_string()
+               << " but this reader supports up to major version "
+               << OsfFile::current_version.major << ". "
+               << "Major version differences may indicate breaking changes. "
+               << "The file will not be read to prevent possible "
+               << "misinterpretation or data corruption.";
+        // fatal error, since a major revision indicates structural or other
+        // changes that would prevent us from reading any data
+        error_handler_(ouster::core::Severity::OUSTER_ERROR, stream.str());
+    } else if (version_.major == OsfFile::current_version.major &&
+               version_.minor > OsfFile::current_version.minor) {
+        std::stringstream stream;
+        stream << "The OSF file was created with schema version "
+               << version_.simple_version_string()
+               << ", but this reader only supports up to "
+               << OsfFile::current_version.major << "."
+               << OsfFile::current_version.minor << ". "
+               << "Continuing to read using best-effort compatibility mode. "
+               << "Some fields introduced in newer versions may be ignored or "
+                  "unrecognized. "
+               << "For full feature support, consider updating to the latest "
+                  "version of the OusterSDK.";
+        error_handler_(ouster::core::Severity::OUSTER_WARNING, stream.str());
+    }
+
     chunks_base_offset_ = file_.chunks_offset();
 
     read_metadata();
@@ -422,7 +453,8 @@ Reader::Reader(const std::string& file) : file_{file} {
     read_chunks_info();
 }
 
-Reader::Reader(OsfFile& osf_file) : Reader(osf_file.filename()) {}
+Reader::Reader(OsfFile& osf_file, const error_handler_t& error_handler)
+    : Reader(osf_file.filename(), error_handler) {}
 
 void Reader::read_metadata() {
     metadata_buf_.resize(FLATBUFFERS_PREFIX_LENGTH);
@@ -443,7 +475,8 @@ void Reader::read_metadata() {
                meta_size + CRC_BYTES_SIZE);
 
     if (!check_prefixed_size_block_crc(metadata_buf_.data(), full_meta_size)) {
-        throw std::logic_error("ERROR: Invalid metadata block in OSF file.");
+        error_handler_(ouster::core::Severity::OUSTER_ERROR,
+                       "OSF metadata is corrupt.");
     }
 
     auto metadata =
@@ -548,24 +581,46 @@ bool Reader::verify_chunk(uint64_t chunk_offset) {
     auto cs = chunks_.get(chunk_offset);
     if (!cs) return false;
     if (cs->status == ChunkValidity::UNKNOWN) {
-        auto chunk_buf = file_.read_chunk(chunks_base_offset_ + chunk_offset);
-        cs->status =
-            osf::check_osf_chunk_buf(chunk_buf->data(), chunk_buf->size())
-                ? ChunkValidity::VALID
-                : ChunkValidity::INVALID;
+        try {
+            auto chunk_buf =
+                file_.read_chunk(chunks_base_offset_ + chunk_offset);
+            cs->status =
+                osf::check_osf_chunk_buf(chunk_buf->data(), chunk_buf->size())
+                    ? ChunkValidity::VALID
+                    : ChunkValidity::INVALID;
+            if (cs->status != ChunkValidity::VALID) {
+                error_handler_(
+                    Severity::OUSTER_WARNING,
+                    "Invalid chunk at file offset " +
+                        std::to_string(chunks_base_offset_ + chunk_offset));
+            }
+        } catch (const std::runtime_error& e) {
+            error_handler_(Severity::OUSTER_WARNING, e.what());
+            cs->status = ChunkValidity::INVALID;
+        }
     }
     return (cs->status == ChunkValidity::VALID);
 }
 
+ouster::util::version Reader::version() const { return version_; }
+
 // =========================================================
 // ========= MessageRef ====================================
 // =========================================================
-MessageRef::MessageRef(const uint8_t* buf, const MetadataStore& meta_provider)
-    : buf_(buf), meta_provider_(meta_provider), chunk_buf_{nullptr} {}
+MessageRef::MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
+                       const error_handler_t& error_handler)
+    : buf_(buf),
+      meta_provider_(meta_provider),
+      chunk_buf_{nullptr},
+      error_handler_{error_handler} {}
 
 MessageRef::MessageRef(const uint8_t* buf, const MetadataStore& meta_provider,
-                       std::shared_ptr<std::vector<uint8_t>> chunk_buf)
-    : buf_(buf), meta_provider_(meta_provider), chunk_buf_{chunk_buf} {}
+                       std::shared_ptr<std::vector<uint8_t>> chunk_buf,
+                       const error_handler_t& error_handler)
+    : buf_(buf),
+      meta_provider_(meta_provider),
+      chunk_buf_{chunk_buf},
+      error_handler_{error_handler} {}
 
 uint32_t MessageRef::id() const {
     const ouster::osf::v2::StampedMessage* sm =
@@ -614,6 +669,10 @@ std::vector<uint8_t> MessageRef::buffer() const {
     }
 
     return {sm->buffer()->data(), sm->buffer()->data() + sm->buffer()->size()};
+}
+
+const error_handler_t& MessageRef::error_handler() const {
+    return error_handler_;
 }
 
 // =======================================================
@@ -668,20 +727,28 @@ bool ChunkRef::valid() const {
 }
 
 std::unique_ptr<const MessageRef> ChunkRef::messages(size_t msg_idx) const {
-    if (!valid()) return nullptr;
-    const ouster::osf::v2::Chunk* chunk = get_chunk_from_buf(get_chunk_ptr());
-    if (!chunk->messages() || msg_idx >= chunk->messages()->size())
+    try {
+        if (!valid()) return nullptr;
+        const ouster::osf::v2::Chunk* chunk =
+            get_chunk_from_buf(get_chunk_ptr());
+        if (!chunk->messages() || msg_idx >= chunk->messages()->size())
+            return nullptr;
+        const ouster::osf::v2::StampedMessage* m =
+            chunk->messages()->Get(msg_idx);
+        return std::make_unique<const MessageRef>(
+            reinterpret_cast<const uint8_t*>(m), reader_->meta_store_,
+            chunk_buf_, reader_->error_handler_);
+    } catch (const std::runtime_error& e) {
+        reader_->error_handler_(Severity::OUSTER_WARNING, e.what());
         return nullptr;
-    const ouster::osf::v2::StampedMessage* m = chunk->messages()->Get(msg_idx);
-    return std::make_unique<const MessageRef>(
-        reinterpret_cast<const uint8_t*>(m), reader_->meta_store_, chunk_buf_);
+    }
 }
 
 const MessageRef ChunkRef::operator[](size_t msg_idx) const {
     const ouster::osf::v2::Chunk* chunk = get_chunk_from_buf(get_chunk_ptr());
     const ouster::osf::v2::StampedMessage* m = chunk->messages()->Get(msg_idx);
     return MessageRef(reinterpret_cast<const uint8_t*>(m), reader_->meta_store_,
-                      chunk_buf_);
+                      chunk_buf_, reader_->error_handler_);
 }
 
 MessagesChunkIter ChunkRef::begin() const {

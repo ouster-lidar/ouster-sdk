@@ -9,7 +9,6 @@
  * @todo improve error reporting
  */
 
-#define _FILE_OFFSET_BITS 64
 #include "ouster/pcap.h"
 
 #if defined _WIN32
@@ -33,10 +32,10 @@
 #include <pcap/dlt.h>
 #endif
 #include <pcap/pcap.h>
-#include <stdio.h>
 #include <tins/tins.h>
 
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
@@ -71,32 +70,36 @@ struct pcap_writer_impl {
         pcap_file_writer;  ///< Object that holds the pcap writer
 };
 
-PcapReader::PcapReader(const std::string& file) : impl(new pcap_impl) {
+PcapReader::PcapReader(const std::string& file) : impl_(new pcap_impl) {
     std::ifstream fileSizeStream(file, std::ios::binary);
     if (fileSizeStream) {
         fileSizeStream.seekg(0, std::ios::end);
         file_size_ = fileSizeStream.tellg();
     }
-    impl->pcap_reader = std::make_unique<Tins::FileSniffer>(file);
-    impl->encap_proto = impl->pcap_reader->link_type();
-    impl->pcap_reader_internals =
-        pcap_file(impl->pcap_reader->get_pcap_handle());
-    file_start_ = FTELL(impl->pcap_reader_internals);
+    impl_->pcap_reader = std::make_unique<Tins::FileSniffer>(file);
+    impl_->encap_proto = impl_->pcap_reader->link_type();
+    impl_->pcap_reader_internals =
+        pcap_file(impl_->pcap_reader->get_pcap_handle());
+    file_start_ = FTELL(impl_->pcap_reader_internals);
 }
 
-PcapReader::~PcapReader() {}
+PcapReader::PcapReader(PcapReader&& other) = default;
 
-const uint8_t* PcapReader::current_data() const { return data; }
+PcapReader& PcapReader::operator=(PcapReader&& other) = default;
 
-size_t PcapReader::current_length() const { return info.payload_size; }
+PcapReader::~PcapReader() = default;
 
-const packet_info& PcapReader::current_info() const { return info; }
+const uint8_t* PcapReader::current_data() const { return data_; }
+
+size_t PcapReader::current_length() const { return info_.payload_size; }
+
+const packet_info& PcapReader::current_info() const { return info_; }
 
 void PcapReader::seek(uint64_t offset) {
     if (offset < sizeof(struct pcap_file_header)) {
         offset = sizeof(struct pcap_file_header);
     }
-    if (FSEEK(impl->pcap_reader_internals, offset, SEEK_SET)) {
+    if (FSEEK(impl_->pcap_reader_internals, offset, SEEK_SET)) {
         throw std::runtime_error("pcap seek failed");
     }
 }
@@ -104,10 +107,10 @@ void PcapReader::seek(uint64_t offset) {
 int64_t PcapReader::file_size() const { return file_size_; }
 
 int64_t PcapReader::current_offset() const {
-    int64_t ret = FTELL(impl->pcap_reader_internals);
+    int64_t ret = FTELL(impl_->pcap_reader_internals);
 
     if (ret == -1L) {
-        fclose(impl->pcap_reader_internals);
+        fclose(impl_->pcap_reader_internals);
         throw std::runtime_error("ftell error: errno " + std::to_string(errno));
     }
     return ret;
@@ -122,35 +125,35 @@ size_t PcapReader::next_packet() {
     int reassm_packets = 0;
     while (!reassm) {
         reassm_packets++;
-        info.file_offset = current_offset();
-        impl->packet_cache = impl->pcap_reader->next_packet();
-        if (impl->packet_cache) {
-            auto pdu = impl->packet_cache.pdu();
+        info_.file_offset = current_offset();
+        impl_->packet_cache = impl_->pcap_reader->next_packet();
+        if (impl_->packet_cache) {
+            auto pdu = impl_->packet_cache.pdu();
             if (pdu) {
-                info.packet_size = pdu->size();
+                info_.packet_size = pdu->size();
                 IP* ip = pdu->find_pdu<IP>();
                 IPv6* ipv6 = pdu->find_pdu<IPv6>();
                 // Using short circuiting here
                 if ((ip && ip->protocol() == PROTOCOL_UDP) ||
                     (ipv6 && ipv6->next_header() == PROTOCOL_UDP)) {
                     // reassm is also used in the while loop
-                    reassm = (impl->reassembler.process(
-                                  impl->packet_cache.timestamp(), *pdu) !=
+                    reassm = (impl_->reassembler.process(
+                                  impl_->packet_cache.timestamp(), *pdu) !=
                               IPv4Reassembler2::FRAGMENTED);
                     if (reassm) {
-                        info.fragments_in_packet = reassm_packets;
-                        info.encapsulation_protocol = impl->encap_proto;
+                        info_.fragments_in_packet = reassm_packets;
+                        info_.encapsulation_protocol = impl_->encap_proto;
 
                         if (ip) {
-                            info.dst_ip = ip->dst_addr().to_string();
-                            info.src_ip = ip->src_addr().to_string();
-                            info.ip_version = 4;
-                            info.network_protocol = ip->protocol();
+                            info_.dst_ip = ip->dst_addr().to_string();
+                            info_.src_ip = ip->src_addr().to_string();
+                            info_.ip_version = 4;
+                            info_.network_protocol = ip->protocol();
                         } else if (ipv6) {
-                            info.dst_ip = ipv6->dst_addr().to_string();
-                            info.src_ip = ipv6->src_addr().to_string();
-                            info.ip_version = 6;
-                            info.network_protocol = ipv6->next_header();
+                            info_.dst_ip = ipv6->dst_addr().to_string();
+                            info_.src_ip = ipv6->src_addr().to_string();
+                            info_.ip_version = 6;
+                            info_.network_protocol = ipv6->next_header();
                         }
 
                         // find_pdu<UDP> will only return NULL when the ipv4
@@ -159,13 +162,13 @@ size_t PcapReader::next_packet() {
                         UDP* udp = pdu->find_pdu<UDP>();
                         if (udp != nullptr) {
                             auto raw = pdu->find_pdu<RawPDU>();
-                            info.dst_port = udp->dport();
-                            info.src_port = udp->sport();
-                            info.payload_size = raw->payload_size();
-                            result = info.payload_size;
-                            data = (uint8_t*)&(raw->payload()[0]);
-                            info.timestamp = impl->packet_cache.timestamp();
-                            impl->have_new_packet = true;
+                            info_.dst_port = udp->dport();
+                            info_.src_port = udp->sport();
+                            info_.payload_size = raw->payload_size();
+                            result = info_.payload_size;
+                            data_ = raw->payload().data();
+                            info_.timestamp = impl_->packet_cache.timestamp();
+                            impl_->have_new_packet = true;
                         } else {
                             throw std::runtime_error(
                                 "Malformed Packet: No UDP Detected");
@@ -185,16 +188,16 @@ PcapWriter::PcapWriter(
     const std::string& file,
     PcapWriter::PacketEncapsulation encap = PcapWriter::ETHERNET,
     uint16_t frag_size = 1500)
-    : impl(new pcap_writer_impl),
-      id{0},
-      encap(encap),
-      frag_size(frag_size),
-      closed(false) {
-    if (encap != PcapWriter::ETHERNET) {
-        impl->pcap_file_writer.reset(
+    : impl_(new pcap_writer_impl),
+      id_{0},
+      encap_(encap),
+      frag_size_(frag_size),
+      closed_(false) {
+    if (encap_ != PcapWriter::ETHERNET) {
+        impl_->pcap_file_writer.reset(
             new Tins::PacketWriter((file), Tins::DataLinkType<Tins::SLL>()));
     } else {
-        impl->pcap_file_writer.reset(new Tins::PacketWriter(
+        impl_->pcap_file_writer.reset(new Tins::PacketWriter(
             (file), Tins::DataLinkType<Tins::EthernetII>()));
     }
 }
@@ -203,8 +206,12 @@ void PcapWriter::flush() {}
 
 void PcapWriter::close() {
     flush();
-    closed = true;
+    closed_ = true;
 }
+
+PcapWriter::PcapWriter(PcapWriter&& other) = default;
+
+PcapWriter& PcapWriter::operator=(PcapWriter&& other) = default;
 
 PcapWriter::~PcapWriter() { close(); }
 
@@ -271,7 +278,7 @@ std::vector<IP> buffer_to_frag_packets(size_t frag_size,
             }
 
             // Pack what we can minus the udp header size into the payload
-            pkt /= udp / RawPDU((uint8_t*)(buf + i), size);
+            pkt /= udp / RawPDU(buf + i, size);
 
             // Manually set the ipv4 protocol to UDP
             pkt.protocol(PROTOCOL_UDP);
@@ -288,7 +295,7 @@ std::vector<IP> buffer_to_frag_packets(size_t frag_size,
             pkt.protocol(PROTOCOL_UDP);
 
             // Pack what we can into the payload
-            pkt /= RawPDU((uint8_t*)(buf + i), size);
+            pkt /= RawPDU(buf + i, size);
         }
 
         // Here is where we correctly set the packet id
@@ -323,11 +330,11 @@ void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
             "be empty.");
     }
     // For each of the packets write it to the pcap file
-    for (auto item : buffer_to_frag_packets(frag_size, src_ip, dst_ip, src_port,
-                                            dst_port, buf, buf_size)) {
+    for (auto item : buffer_to_frag_packets(
+             frag_size_, src_ip, dst_ip, src_port, dst_port, buf, buf_size)) {
         Packet packet;
         PDU* pdu;
-        switch (encap) {
+        switch (encap_) {
             case PcapWriter::PacketEncapsulation::ETHERNET:
                 pdu = new Tins::EthernetII();
                 break;
@@ -344,19 +351,24 @@ void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
                     "PcapWriter: packet encapsulation not supported");
         }
         *pdu /= item;
+
+        /// @todo look into cleaning up the serialize call.
+        /// Need to figure out if we can just ignore the
+        /// return variable or not
         // Nasty libtins bug that causes write to fail
-        // https://www.gitmemory.com/issue/mfontanini/libtins/348/488141933
-        auto _ = pdu->serialize();
+        // https://github.com/mfontanini/libtins/issues/348
+        auto ignore_output = pdu->serialize();
         /*
          * The next block is due to the fact that the previous serialize does
          * not treat the udp packet as if it were decodable. Manually tell
          * libtins to go in and serialize the udp packet as well
          */
         if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
-            _ = pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
+            ignore_output =
+                pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
         }
         packet = Packet(*pdu, timestamp);
-        impl->pcap_file_writer->write(packet);
+        impl_->pcap_file_writer->write(packet);
         delete pdu;
     }
 }

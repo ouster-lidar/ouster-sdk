@@ -11,13 +11,13 @@ from typing import List
 
 import numpy as np
 
-from ouster.sdk import client
+from ouster.sdk import core
 
 # TODO: replace link when new FW 2.5/3.0 manual is up
 
 
-def xyz_proj_beam_to_sensor_transform(metadata: client.SensorInfo,
-             scan: client.LidarScan) -> np.ndarray:
+def xyz_proj_beam_to_sensor_transform(metadata: core.SensorInfo,
+             scan: core.LidarScan) -> np.ndarray:
     """Computes a point cloud from a scan as numpy array.
 
     This is a reference implementation that follows the calculations from
@@ -41,7 +41,7 @@ def xyz_proj_beam_to_sensor_transform(metadata: client.SensorInfo,
     # iterate over each measurement channel/row and measurement block/column
     for u, v in product(range(scan.h), range(scan.w)):
 
-        r = scan.field(client.ChanField.RANGE)[u, v]
+        r = scan.field(core.ChanField.RANGE)[u, v]
         n = sqrt(metadata.beam_to_lidar_transform[0, 3]**2 + metadata.beam_to_lidar_transform[2, 3]**2)
 
         # scans are always a full frame, so the measurement id is also the index
@@ -70,8 +70,8 @@ def xyz_proj_beam_to_sensor_transform(metadata: client.SensorInfo,
     return xyz_sensor[:, :3].reshape(scan.h, scan.w, 3) * 0.001
 
 
-def xyz_proj_origin_to_origin_mm(metadata: client.SensorInfo,
-             scan: client.LidarScan) -> np.ndarray:
+def xyz_proj_origin_to_origin_mm(metadata: core.SensorInfo,
+             scan: core.LidarScan) -> np.ndarray:
     """Computes a point cloud from a scan as numpy array
 
     This is the old reference implementation that follows the calculations from
@@ -99,7 +99,7 @@ def xyz_proj_origin_to_origin_mm(metadata: client.SensorInfo,
     # iterate over each measurement channel/row and measurement block/column
     for u, v in product(range(scan.h), range(scan.w)):
 
-        r = scan.field(client.ChanField.RANGE)[u, v]
+        r = scan.field(core.ChanField.RANGE)[u, v]
         n = metadata.lidar_origin_to_beam_origin_mm
 
         # scans are always a full frame, so the measurement id is also the index

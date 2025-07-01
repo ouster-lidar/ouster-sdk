@@ -6,7 +6,7 @@ All rights reserved.
 import numpy as np
 import pytest
 
-from ouster.sdk import client
+from ouster.sdk import core
 from ouster.sdk.examples import reference
 
 
@@ -19,16 +19,16 @@ def test_destagger_type_good(meta, dtype) -> None:
     h = meta.format.pixels_per_column
     w = meta.format.columns_per_frame
 
-    assert client.destagger(meta, np.zeros((h, w), dtype)).dtype == dtype
-    assert client.destagger(meta, np.zeros((h, w, 2), dtype)).dtype == dtype
+    assert core.destagger(meta, np.zeros((h, w), dtype)).dtype == dtype
+    assert core.destagger(meta, np.zeros((h, w, 2), dtype)).dtype == dtype
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 @pytest.mark.parametrize("shape", [(32, 1024), (32, 1024, 1), (32, 1024, 10)])
-def test_destagger_shape_good(meta: client.SensorInfo, shape) -> None:
+def test_destagger_shape_good(meta: core.SensorInfo, shape) -> None:
     """Check that (de)staggering preserves shape."""
-    assert client.destagger(meta, np.zeros(shape)).shape == shape
-    assert client.destagger(meta, np.zeros(shape), inverse=True).shape == shape
+    assert core.destagger(meta, np.zeros(shape)).shape == shape
+    assert core.destagger(meta, np.zeros(shape), inverse=True).shape == shape
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
@@ -38,18 +38,18 @@ def test_destagger_shape_bad(meta) -> None:
     w = meta.format.columns_per_frame
 
     with pytest.raises(ValueError):
-        client.destagger(meta, np.zeros((0, w)))
+        core.destagger(meta, np.zeros((0, w)))
     with pytest.raises(ValueError):
-        client.destagger(meta, np.zeros((h, 0, 2)))
+        core.destagger(meta, np.zeros((h, 0, 2)))
 
     with pytest.raises(ValueError):
-        client.destagger(meta, np.zeros((h, w + 1)))
+        core.destagger(meta, np.zeros((h, w + 1)))
     with pytest.raises(ValueError):
-        client.destagger(meta, np.zeros((h - 1, w)))
+        core.destagger(meta, np.zeros((h - 1, w)))
     with pytest.raises(ValueError):
-        client.destagger(meta, np.zeros((h, w - 1, 1)))
+        core.destagger(meta, np.zeros((h, w - 1, 1)))
     with pytest.raises(ValueError):
-        client.destagger(meta, np.zeros((h + 1, w, 2)))
+        core.destagger(meta, np.zeros((h + 1, w, 2)))
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
@@ -59,13 +59,13 @@ def test_destagger_inverse(meta) -> None:
     w = meta.format.columns_per_frame
     a = np.arange(h * w).reshape((h, w))
 
-    b = client.destagger(meta, a, inverse=True)
-    c = client.destagger(meta, b)
+    b = core.destagger(meta, a, inverse=True)
+    c = core.destagger(meta, b)
     assert np.array_equal(a, c)
 
-    d = client.destagger(meta, a)
-    e = client.destagger(meta, d, inverse=True)
-    f = client.stagger(meta, d)  # also test the stagger version
+    d = core.destagger(meta, a)
+    e = core.destagger(meta, d, inverse=True)
+    f = core.stagger(meta, d)  # also test the stagger version
     assert np.array_equal(a, e)
     assert np.array_equal(a, f)
 
@@ -75,38 +75,38 @@ def test_destagger_xyz(meta, scan) -> None:
     """Check that we can destagger the output of xyz projection."""
     h = meta.format.pixels_per_column
     w = meta.format.columns_per_frame
-    xyz = client.XYZLut(meta)(scan)
+    xyz = core.XYZLut(meta)(scan)
 
-    destaggered = client.destagger(meta, xyz)
+    destaggered = core.destagger(meta, xyz)
     assert destaggered.shape == (h, w, 3)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_destagger_correct(meta, scan) -> None:
-    """Compare client destagger function to reference implementation."""
+    """Compare core destagger function to reference implementation."""
 
     # get destaggered range field using reference implementation
     destagger_ref = reference.destagger(meta.format.pixel_shift_by_row,
-                                        scan.field(client.ChanField.RANGE))
+                                        scan.field(core.ChanField.RANGE))
 
-    # obtain destaggered range field using client implemenation
-    destagger_client = client.destagger(meta,
-                                        scan.field(client.ChanField.RANGE))
+    # obtain destaggered range field using core implemenation
+    destagger_client = core.destagger(meta,
+                                      scan.field(core.ChanField.RANGE))
 
     assert np.array_equal(destagger_ref, destagger_client)
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
 def test_destagger_correct_multi(meta, scan) -> None:
-    """Compare client destagger function to reference on stacked fields."""
+    """Compare core destagger function to reference on stacked fields."""
 
-    near_ir = scan.field(client.ChanField.NEAR_IR)
+    near_ir = scan.field(core.ChanField.NEAR_IR)
     near_ir_stacked = np.repeat(near_ir[..., None], 5, axis=2)
 
     ref = reference.destagger(meta.format.pixel_shift_by_row, near_ir)
     ref_stacked = np.repeat(ref[..., None], 5, axis=2)
 
-    destaggered_stacked = client.destagger(meta, near_ir_stacked)
+    destaggered_stacked = core.destagger(meta, near_ir_stacked)
 
     assert near_ir_stacked.dtype == np.uint16
     assert destaggered_stacked.dtype == np.uint16

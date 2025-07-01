@@ -13,7 +13,49 @@ Checks: '*,
          -bugprone-easily-swappable-parameters,
          -google-readability-todo,
          -abseil-*,
-         -android-cloexec-open'
+         -android-cloexec-open,
+         -cppcoreguidelines-non-private-member-variables-in-classes,
+         -misc-non-private-member-variables-in-classes,
+         -cert-err58-cpp,
+         -hicpp-signed-bitwise,
+         -hicpp-avoid-c-arrays,
+         -modernize-avoid-c-arrays,
+         -hicpp-use-nullptr,
+         -hicpp-vararg,
+         -performance-avoid-endl,
+         -bugprone-narrowing-conversions,
+         -hicpp-braces-around-statements,
+         -google-readability-braces-around-statements,
+         -hicpp-braces-around-statements,
+         -llvm-qualified-auto,
+         -readability-qualified-auto,
+         -hicpp-no-array-decay,
+         -hicpp-named-parameter,
+         -hicpp-use-equals-default,
+         -hicpp-use-emplace,
+         -hicpp-noexcept-move,
+         -hicpp-no-malloc,
+         -cert-oop11-cpp,
+         -cert-dcl37-c,
+         -cert-dcl51-cpp,
+         -hicpp-member-init,
+         -hicpp-use-auto,
+         -hicpp-explicit-conversions,
+         -hicpp-special-member-functions,
+         -hicpp-use-override,
+         -modernize-use-override,
+         -hicpp-invalid-access-moved,
+         -hicpp-deprecated-headers,
+         -boost-*,
+         -cppcoreguidelines-pro-type-reinterpret-cast,
+         -performance-noexcept-swap,
+         -performance-noexcept-move-constructor,
+         -cert-msc54-cpp,
+         -cert-sig30-c,
+         -modernize-return-braced-init-list,
+         -modernize-avoid-bind,
+         -readability-redundant-member-init,
+         -modernize-use-auto'
 CheckOptions:
   - key: readability-identifier-naming.ClassCase
     value: CamelCase
@@ -22,11 +64,11 @@ CheckOptions:
   - key: readability-identifier-naming.VariableCase
     value: lower_case
   - key: readability-identifier-length.IgnoredVariableNames
-    value: 'i|j|k|w|h|x|y|z|it'
+    value: 'i|j|k|w|h|x|y|z|it|ip'
   - key: readability-identifier-length.IgnoredLoopCounterNames
-    value: 'i|j|k|w|h|x|y|z|it'
+    value: 'i|j|k|w|h|x|y|z|it|ip'
   - key: readability-identifier-length.IgnoredParameterNames
-    value: 'w|h|x|y|z'
+    value: 'w|h|x|y|z|ip'
   - key: performance-unnecessary-value-param.AllowedTypes
     value: 'Eigen::Ref|sync_ptr'
   - key: readability-identifier-naming.ClassCase
@@ -57,3 +99,7 @@ CheckOptions:
     value: UPPER_CASE
   - key: readability-identifier-naming.FunctionCase
     value: lower_case
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 28
+  - key: misc-include-cleaner.IgnoreHeaders
+    value: Eigen/.*;.*socket.h;jsoncons/.*;spdlog/.*;netdb.h;netinet/.*;arpa/.*;sys/.*;bits/.*;tins/.*;pcap/.*;GL/.*;glad.h;glfw.h;GLFW/.*;pybind11/.*

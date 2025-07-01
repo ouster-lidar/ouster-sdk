@@ -122,10 +122,9 @@ bool check_prefixed_size_block_crc(const uint8_t* buf,
     uint32_t prefixed_size = get_prefixed_size(buf);
     if (buf_length < prefixed_size + FLATBUFFERS_PREFIX_LENGTH +
                          ouster::osf::CRC_BYTES_SIZE) {
-        logger().error(
-            "ERROR: CRC32 validation failed!"
+        throw std::runtime_error(
+            "CRC32 validation failed!"
             " (out of buffer legth)");
-        return false;
     }
 
     const uint32_t crc_stored =
@@ -133,19 +132,7 @@ bool check_prefixed_size_block_crc(const uint8_t* buf,
     const uint32_t crc_calculated =
         osf::crc32(buf, prefixed_size + FLATBUFFERS_PREFIX_LENGTH);
 
-    const bool res = (crc_stored == crc_calculated);
-
-    if (!res) {
-        std::stringstream error_string_stream{};
-        error_string_stream << "ERROR: CRC32 validation failed!" << std::endl;
-        error_string_stream << std::hex << "  CRC -     stored: " << crc_stored
-                            << std::dec << std::endl;
-        error_string_stream
-            << std::hex << "  CRC - calculated: " << crc_calculated << std::dec
-            << std::endl;
-        logger().error(error_string_stream.str());
-    }
-    return res;
+    return (crc_stored == crc_calculated);
 }
 
 }  // namespace osf

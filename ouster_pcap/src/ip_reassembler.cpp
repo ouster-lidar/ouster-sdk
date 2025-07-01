@@ -169,10 +169,9 @@ uint16_t IPv4Stream2::extract_offset(const IP* ip) {
 
 }  // namespace Internals
 
-IPv4Reassembler2::IPv4Reassembler2() : technique_(NONE) {}
+IPv4Reassembler2::IPv4Reassembler2() = default;
 
-IPv4Reassembler2::IPv4Reassembler2(OverlappingTechnique technique)
-    : technique_(technique) {}
+IPv4Reassembler2::IPv4Reassembler2(OverlappingTechnique /*technique*/) {}
 
 IPv4Reassembler2::PacketStatus IPv4Reassembler2::process(
     const std::chrono::microseconds& timestamp, PDU& pdu) {

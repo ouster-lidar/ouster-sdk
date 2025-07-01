@@ -71,8 +71,4 @@ So how did we do that?
    :linenos:
    :dedent:
 
-Notice that instead of taking a ``sample``, we used :py:meth:`.Scans.stream`, which allows for a
-continuous live data stream.  We close the ``stream`` when we are finished, hence the use of
-:py:func:`.closing` in the highlighted line.
-
 To exit the visualization, you can use ``ESC``.

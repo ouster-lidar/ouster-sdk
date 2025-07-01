@@ -1,22 +1,21 @@
-#  type: ignore
 """R/W implementation of packet parsing.
 
 Doesn't rely on custom C++ extensions (just numpy). Provides writable
 view of packet data for testing and development.
 """
-from typing import (Dict, Union, List, Optional)
+from typing import (List, Optional, Any, cast)
 
 import numpy as np
 
-import ouster.sdk.client as client
-from ouster.sdk.client import (ChanField, FieldDType, UDPProfileLidar, LidarPacket)
+import ouster.sdk.core as core
+from ouster.sdk.core import (ChanField, UDPProfileLidar, LidarPacket)
 from ouster.sdk._bindings.client import PacketWriter, get_field_types, FieldType
 from ouster.sdk._bindings.client import scan_to_packets as _scan_to_packets
 
 
 def default_scan_fields(
         profile: UDPProfileLidar,
-        raw_headers: bool = False) -> Optional[client.FieldTypes]:
+        raw_headers: bool = False) -> List[core.FieldType]:
     """Get the default fields populated on scans for a profile.
 
     Convenient helper function if you want to tweak which fields are parsed
@@ -40,82 +39,13 @@ def default_scan_fields(
         # Alternatively you can use `osf.resolve_field_types()` that chooses
         # the more optimal dtype for RAW_HEADERS field
         fields.append(FieldType(ChanField.RAW_HEADERS, np.uint32))
-    fields.sort()
+
+    # type ignored because mypy insists you cant sort with no arguments
+    fields.sort()  # type: ignore
     return fields.copy()
 
 
-def resolve_field_types(
-    metadata: Union[client.SensorInfo, List[client.SensorInfo]],
-    raw_headers: bool = False,
-    raw_fields: bool = False
-) -> Union[client.FieldTypes, List[client.FieldTypes]]:
-    """Resolving optimal field types for OSF LidarScanStream encoder
-
-    Shrinks the sizes of the LEGACY UDPLidarProfile fields and extends with
-    FLAGS/FLAGS2 if `flags=True`.
-
-    Args:
-        metadata: single SensorInfo or a list of SensorInfo used resolve
-                  UDPLidarProfile
-        raw_headers: True if RAW_HEADERS field should be included (i.e. all
-                     lidar packet headers and footers will be added during
-                     batching)
-        raw_fields: True if RAW32_WORDx fields should be included
-
-    Returns:
-        field types of a typical LidarScan with a requested optional fields.
-    """
-
-    single_result = False
-    if not isinstance(metadata, list):
-        metadata = [metadata]
-        single_result = True
-
-    field_types = []
-
-    for m in metadata:
-        ftypes = client.get_field_types(m)
-        profile = m.format.udp_profile_lidar
-
-        dual = False
-        if profile in [
-                UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL,
-                UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL
-        ]:
-            dual = True
-
-        if raw_fields:
-            ftypes.append(FieldType(client.ChanField.RAW32_WORD1, np.uint32))
-            if profile != client.UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8:
-                # not Low Bandwidth
-                ftypes.append(
-                    FieldType(client.ChanField.RAW32_WORD2, np.uint32))
-                ftypes.append(
-                    FieldType(client.ChanField.RAW32_WORD3, np.uint32))
-            if dual:
-                ftypes.append(
-                    FieldType(client.ChanField.RAW32_WORD4, np.uint32))
-
-        if raw_headers:
-            # getting the optimal field type for RAW_HEADERS
-            pf = client.PacketFormat.from_info(m)
-            h = pf.pixels_per_column
-            raw_headers_space = (pf.packet_header_size +
-                                 pf.packet_footer_size + pf.col_header_size +
-                                 pf.col_footer_size)
-            dtype = [
-                np.uint8,
-                np.uint16,
-                np.uint32
-            ][int(raw_headers_space / h)]
-            ftypes.append(FieldType(client.ChanField.RAW_HEADERS, dtype))  # type: ignore
-        ftypes.sort()
-        field_types.append(ftypes)
-
-    return field_types[0] if single_result else field_types
-
-
-def tohex(data: client.BufferT) -> str:
+def tohex(data: core.BufferT) -> str:
     """Makes a hex string for debug print outs of buffers.
 
     Selects the biggest devisor of np.uint32, np.uint16 or np.uint8 for making
@@ -126,7 +56,7 @@ def tohex(data: client.BufferT) -> str:
         if isinstance(data, np.ndarray) and not data.flags['C_CONTIGUOUS']:
             data_cont = np.ascontiguousarray(data)
         else:
-            data_cont = data
+            data_cont = cast(np.ndarray[Any, Any], data)
         # selecting the biggest dtype that devides num bytes exactly, because
         # vectorized hex can't work with data if it's not a multiple of element
         # type
@@ -142,8 +72,8 @@ def tohex(data: client.BufferT) -> str:
         return "[]"
 
 
-def scan_to_packets(ls: client.LidarScan,
-                    info: client.SensorInfo) -> List[LidarPacket]:
+def scan_to_packets(ls: core.LidarScan,
+                    info: core.SensorInfo) -> List[LidarPacket]:
     """Converts LidarScan to a lidar_packet buffers
 
     Args:
@@ -158,7 +88,7 @@ def scan_to_packets(ls: client.LidarScan,
     return _scan_to_packets(ls, PacketWriter.from_info(info), info.init_id, int(info.sn))
 
 
-def terminator_packet(info: client.SensorInfo,
+def terminator_packet(info: core.SensorInfo,
                       last_packet: LidarPacket) -> LidarPacket:
     """Makes a next after the last lidar packet buffer that finishes LidarScan.
 
@@ -182,8 +112,8 @@ def terminator_packet(info: client.SensorInfo,
 
     """
 
-    # get frame_id using client.PacketFormat
-    pf = client.PacketFormat.from_info(info)
+    # get frame_id using core.PacketFormat
+    pf = core.PacketFormat.from_info(info)
     curr_fid = pf.frame_id(last_packet.buf)
 
     pw = PacketWriter.from_info(info)
@@ -191,8 +121,8 @@ def terminator_packet(info: client.SensorInfo,
                                   dtype=np.uint8,
                                   count=pf.lidar_packet_size)
 
-    # get frame_id using parsing.py PacketFormat and compare with client result
-    assert pw.frame_id(last_buf_view) == curr_fid, "client.PacketFormat " \
+    # get frame_id using parsing.py PacketFormat and compare with core result
+    assert pw.frame_id(last_buf_view) == curr_fid, "core.PacketFormat " \
         "and parsing.py PacketFormat should get the same frame_id value from buffer"
 
     # making a dummy data for the terminal lidar_packet
@@ -207,9 +137,9 @@ def terminator_packet(info: client.SensorInfo,
 
 def packets_to_scan(
         lidar_packets: List[LidarPacket],
-        info: client.SensorInfo,
+        info: core.SensorInfo,
         *,
-        fields: Optional[Dict[ChanField, FieldDType]] = None) -> client.LidarScan:
+        fields: Optional[List[core.FieldType]] = None) -> core.LidarScan:
     """Batch buffers that belongs to a single scan into a LidarScan object.
 
     Errors if lidar_packets buffers do not belong to a single LidarScan. Typically
@@ -220,9 +150,9 @@ def packets_to_scan(
     h = info.format.pixels_per_column
     _fields = fields if fields is not None else default_scan_fields(
         info.format.udp_profile_lidar)
-    ls = client.LidarScan(h, w, _fields)
-    pf = client.PacketFormat.from_info(info)
-    batch = client.ScanBatcher(w, pf)
+    ls = core.LidarScan(h, w, _fields)
+    pf = core.PacketFormat.from_info(info)
+    batch = core.ScanBatcher(w, pf)
     for idx, packet in enumerate(lidar_packets):
         assert not batch(packet, ls), "lidar_packets buffers should belong to a " \
             f"single LidarScan, but {idx} of {len(lidar_packets)} buffers already " \
@@ -237,17 +167,17 @@ def packets_to_scan(
     return ls
 
 
-def cut_raw32_words(ls: client.LidarScan) -> client.LidarScan:
+def cut_raw32_words(ls: core.LidarScan) -> core.LidarScan:
     cut_chans = [
-        client.ChanField.RAW32_WORD1,
-        client.ChanField.RAW32_WORD2,
-        client.ChanField.RAW32_WORD3,
-        client.ChanField.RAW32_WORD4,
-        client.ChanField.RAW32_WORD5,
-        client.ChanField.RAW32_WORD6,
-        client.ChanField.RAW32_WORD7,
-        client.ChanField.RAW32_WORD8,
-        client.ChanField.RAW32_WORD9
+        core.ChanField.RAW32_WORD1,
+        core.ChanField.RAW32_WORD2,
+        core.ChanField.RAW32_WORD3,
+        core.ChanField.RAW32_WORD4,
+        core.ChanField.RAW32_WORD5,
+        core.ChanField.RAW32_WORD6,
+        core.ChanField.RAW32_WORD7,
+        core.ChanField.RAW32_WORD8,
+        core.ChanField.RAW32_WORD9
     ]
 
     import ouster.sdk.osf as osf

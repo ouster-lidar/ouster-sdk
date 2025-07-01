@@ -4,7 +4,7 @@ All rights reserved.
 """
 
 from typing import List, Optional
-import ouster.sdk.client as client
+import ouster.sdk.core as core
 from ouster.sdk._bindings.viz import Cloud, PointViz
 from ouster.sdk.viz.accum_base import AccumulatorBase
 from ouster.sdk.viz.model import LidarScanVizModel, SensorModel
@@ -39,7 +39,7 @@ class SensorClouds:
 
             # set cloud range data and pose
             self._clouds_accum[i].set_range(sr.scan.field(
-                client.ChanField.RANGE))
+                core.ChanField.RANGE))
             self._clouds_accum[i].set_column_poses(sr.scan.pose)
 
             if accum_visible:
@@ -129,7 +129,7 @@ class ScansAccumulator(AccumulatorBase):
             sensor_clouds.update_point_size(self._cloud_pt_size)
 
     def update(self,
-               scan: List[Optional[client.LidarScan]],
+               scan: List[Optional[core.LidarScan]],
                scan_num: Optional[int] = None, force_update: bool = False) -> None:
         super().update(scan, scan_num)
         for sensor_clouds in self._sensor_clouds:

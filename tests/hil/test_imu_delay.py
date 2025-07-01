@@ -3,8 +3,8 @@ import logging
 import pytest
 import time
 
-from ouster.sdk import client
-from ouster.sdk.client import LidarMode, TimestampMode, UDPProfileLidar, PacketFormat
+from ouster.sdk import core, sensor
+from ouster.sdk.core import LidarMode, TimestampMode, UDPProfileLidar, PacketFormat
 
 logger = logging.getLogger("HIL")
 
@@ -59,8 +59,7 @@ def hil_sensor_config(hil_initial_config, lidar_port, imu_port, lidar_mode,
     return hil_initial_config
 
 
-def test_imu_packets_delay(hil_configured_sensor, lidar_port,
-                           imu_port) -> None:
+def test_imu_packets_delay(hil_configured_sensor) -> None:
     """Check that the average imu packets delay does not exceed a certain threshold."""
 
     if hil_configured_sensor is None:
@@ -73,14 +72,14 @@ def test_imu_packets_delay(hil_configured_sensor, lidar_port,
     maximum_avg_delay_ms = 5.0
     delays_ms = [0.0] * total_capture_count
     logger.debug(F"Capturing {total_capture_count} imu packets...")
-    with closing(client.Sensor(hil_configured_sensor, lidar_port, imu_port)) as \
-            sensor:
-        pf = PacketFormat(sensor.metadata)
+    with closing(sensor.SensorPacketSource(hil_configured_sensor)) as \
+            src:
+        pf = PacketFormat(src.sensor_info[0])
         i = 0
-        it = iter(sensor)
+        it = iter(src)
         while i < total_capture_count:
-            p = next(it)
-            if isinstance(p, client.ImuPacket):
+            idx, p = next(it)
+            if isinstance(p, core.ImuPacket):
                 delays_ms[i] = (time.time_ns() -
                                 (pf.imu_gyro_ts(p.buf) - TAI_OFFSET_ns)) * 1e-6
                 i += 1

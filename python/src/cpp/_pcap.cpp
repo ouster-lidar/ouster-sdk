@@ -21,6 +21,8 @@
 #include "ouster/indexed_pcap_reader.h"
 #include "ouster/os_pcap.h"
 #include "ouster/pcap.h"
+#include "ouster/pcap_packet_source.h"
+#include "ouster/pcap_scan_source.h"
 
 using namespace ouster::sensor_utils;
 namespace py = pybind11;
@@ -220,12 +222,37 @@ This module is generated from the C++ code and not meant to be used directly.
                       buf_info.size);
     });
 
-    py::class_<PcapReader>(m, "PcapReader");  // TODO add more complete bindings
+    py::register_exception<ouster::sensor_utils::PcapDuplicatePortException>(
+        m, "PcapDuplicatePortException");
 
-    py::class_<PcapIndex>(m, "PcapIndex")
+    py::class_<PcapReader>(m, "PcapReader",
+                           R"(
+                        PcapReader is a class with utilities for  reading packets from a PCAP file.
+                        Additional bindings may be added in the future.
+                        )");  // TODO add more complete bindings
+
+    py::class_<PcapIndex>(m, "PcapIndex",
+                          R"(
+                        PcapIndex is a class for managing indices of frames in a PCAP file.
+
+                        This class allows users to access frame indices, seek to specific frames,
+                        and retrieve metadata about frames in a PCAP file.
+                        )")
         .def(py::init<int>())
-        .def("frame_count", &PcapIndex::frame_count)
-        .def("seek_to_frame", &PcapIndex::seek_to_frame)
+        .def("frame_count", &PcapIndex::frame_count,
+             R"(
+            Get the total number of frames in the PCAP file.
+
+            Returns:
+                int: The total number of frames.
+            )")
+        .def("seek_to_frame", &PcapIndex::seek_to_frame,
+             R"(
+            Seek to a specific frame in the PCAP file.
+
+            Args:
+                frame_index (int): The index of the frame to seek to.
+            )")
         .def_property_readonly(
             "frame_indices",
             [](PcapIndex& self) {
@@ -235,12 +262,28 @@ This module is generated from the C++ code and not meant to be used directly.
                                           i.data(), py::cast(self)));
                 }
                 return l;
-            })
+            },
+            R"(
+            Get the indices of frames in the PCAP file.
+            )")
         .def_readonly("frame_timestamp_indices",
                       &PcapIndex::frame_timestamp_indices_)
         .def_readonly("frame_id_indices", &PcapIndex::frame_id_indices_);
 
-    py::class_<IndexedPcapReader, PcapReader>(m, "IndexedPcapReader")
+    py::class_<IndexedPcapReader, PcapReader>(m, "IndexedPcapReader",
+                                              R"(
+        IndexedPcapReader is a PCAP reader that allows seeking to the start of lidar frames.
+
+        This class extends PcapReader with the ability to seek directly to specific
+        frames using a precomputed index. The index must be built by iterating
+        through all packets in the file and calling `update_index_for_current_packet()`
+        for each one.
+
+        Args:
+        pcap_filename (str): Path to the PCAP file to read.
+        metadata_filenames (List[str]): List of sensor metadata file paths.
+        
+        )")
         .def(py::init<const std::string&, const std::vector<std::string>&>())
         .def(py::init<const std::string&,
                       const std::vector<ouster::sensor::sensor_info>&>())
@@ -267,4 +310,55 @@ This module is generated from the C++ code and not meant to be used directly.
             return py::array(py::dtype::of<uint8_t>(), data_size, data,
                              py::cast(reader));
         });
+
+    py::class_<ouster::pcap::PcapPacketSource, ouster::core::PacketSource,
+               std::shared_ptr<ouster::pcap::PcapPacketSource>>(
+        m, "PcapPacketSource",
+        R"(
+        PcapPacketSource produces packets from a given PCAP file.
+
+        Args:
+            file (str): The path to the PCAP file.
+            kwargs (dict): Additional options for configuring the packet source.
+    
+        Attributes:
+            id_error_count (int): The number of packets with ID errors.
+            size_error_count (int): The number of packets with size errors.
+        )")
+        .def(py::init([](const std::string& file, const py::kwargs& kwargs) {
+                 ouster::PacketSourceOptions opts;
+                 parse_packet_source_options(kwargs, opts);
+                 return new ouster::pcap::PcapPacketSource(file, opts);
+             }),
+             py::arg("file"))
+        .def_property_readonly("id_error_count",
+                               &ouster::pcap::PcapPacketSource::id_error_count)
+        .def_property_readonly(
+            "size_error_count",
+            &ouster::pcap::PcapPacketSource::size_error_count);
+
+    py::class_<ouster::pcap::PcapScanSource, ouster::core::ScanSource,
+               std::shared_ptr<ouster::pcap::PcapScanSource>>(m,
+                                                              "PcapScanSource",
+                                                              R"(
+        PcapScanSource is a class for producing LidarScans from a given PCAP file.
+        )")
+        .def(py::init([](const std::string& file, const py::kwargs& kwargs) {
+                 ouster::ScanSourceOptions opts;
+                 parse_scan_source_options(kwargs, opts);
+                 return new ouster::pcap::PcapScanSource(file, opts);
+             }),
+             py::arg("file"))
+        .def_property_readonly("id_error_count",
+                               &ouster::pcap::PcapScanSource::id_error_count)
+        .def_property_readonly("size_error_count",
+                               &ouster::pcap::PcapScanSource::size_error_count)
+        .def(
+            "__iter__",
+            [](const ouster::pcap::PcapScanSource& s) {
+                return py::make_iterator(s.begin(), s.end());
+            },
+            py::keep_alive<
+                0,
+                1>() /* Essential: keep object alive while iterator exists */);
 }

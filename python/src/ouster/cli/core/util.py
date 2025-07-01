@@ -1,4 +1,3 @@
-#  type: ignore
 """Miscellaneous utilities.
 
 TODO:
@@ -21,19 +20,17 @@ import json
 import os
 import re
 import time
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, cast
 import tempfile
 import zipfile
 import numpy as np
 
 from copy import deepcopy
 
-from ouster.sdk import client
-from ouster.sdk.util import resolve_metadata
+from ouster.sdk import core, sensor
 
-from ouster.sdk.sensor.util import build_sensor_config
-from ouster.sdk.client import ScansMulti, PacketMultiSource, SensorHttp, PacketFormat, parse_and_validate_metadata
-from ouster.sdk.client.data import ColHeader
+from ouster.sdk.core import PacketFormat, parse_and_validate_metadata, Scans, LidarScan, FieldType
+from ouster.sdk.core.data import ColHeader
 
 DEFAULT_SAMPLE_URL = 'https://data.ouster.io/sdk-samples/OS2/OS2_128_bridge_sample.zip'
 
@@ -120,7 +117,8 @@ def download_sample_data(url: str,
 
             n_chunks = int(res.headers['Content-Length']) // chunk_size
             chunks = res.iter_content(chunk_size)
-            with click.progressbar(chunks, length=n_chunks) as progress:
+            # ignored since an annotation is missing in click
+            with click.progressbar(chunks, length=n_chunks) as progress:  # type: ignore
                 for chunk in progress:
                     tmpfile.write(chunk)
 
@@ -145,45 +143,6 @@ def md5file(path: str) -> str:
         for n in iter(lambda: f.readinto(buf), 0):
             md5.update(buf[:n])
     return md5.hexdigest()
-
-
-ROS_MODULES_ERROR_MSG = """
-Error: {err_msg}
-
-Please verify that ROS Python modules are available.
-
-The best option is to try to install unofficial rospy packages that work
-with Python 3.8 on Ubuntu 20.04 and Debian 10 without ROS:
-
-    pip install --extra-index-url https://rospypi.github.io/simple/ rospy rosbag tf2_ros
-
-NOTE: If during the attempt to run the above command you get an error:
-
-    EnvironmentError: 404 Client Error: Not Found for url: https://pypi.org/simple/rospy/
-
-Please check installed `pip` version (20.0+ works well with extra indexes), and
-if needed upgrade `pip` with (in a sourced venv):
-
-    pip install pip -U
-
-Some users have even more packages missing so they may need to install additionally:
-
-    pip install PyYAML pycryptodome pycryptodomex
-
-"""
-
-
-def import_rosbag_modules(raise_on_fail: bool = False):
-    try:
-        import rosbag  # noqa: F401
-        import rospy   # noqa: F401
-        import genpy   # noqa: F401
-    except ImportError as err:
-        if raise_on_fail:
-            raise ModuleNotFoundError(
-                ROS_MODULES_ERROR_MSG.format(err_msg=str(err)))
-        return False
-    return True
 
 
 @util_group.command()
@@ -250,14 +209,8 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     elif url is not None:
         raise click.ClickException("Cannot specify both a pcap and URL")
 
-    meta = resolve_metadata(file, meta)
-    if not os.path.exists(file) or not os.path.exists(meta):
+    if not os.path.exists(file):
         raise click.ClickException("pcap file doesn't exist")
-
-    with open(meta) as f:
-        raw_metadata = f.read()
-        info = client.SensorInfo(raw_metadata)
-    packets_per_frame = info.format.columns_per_frame / info.format.columns_per_packet
 
     report: dict = {'pcap': {}, 'sys_info': {}, 'times': {}}
 
@@ -272,6 +225,15 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
 
     report['sys_info'] = sys_info
 
+    report['pcap']['filename'] = os.path.basename(file)
+
+    click.echo(f'{"Timing reading packets...":<32}', nl=False)
+    start = time.time()
+    meta_list: List[str] = []
+    if meta is not None:
+        meta_list.append(meta)
+    source = pcap.PcapPacketSource(file, meta=meta_list)
+    info = source.sensor_info[0]
     click.echo("Gathering pcap info...")
     hash = md5file(file)
     click.echo(f"  filename: {os.path.basename(file)}")
@@ -281,13 +243,12 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     click.echo(f"  prod line: {info.prod_line}")
     click.echo(f"  col window: {info.format.column_window}")
 
-    report['pcap']['filename'] = os.path.basename(file)
-    report['pcap']['metadata'] = json.loads(raw_metadata)
+    report['pcap']['metadata'] = json.loads(info.to_json_string())
     report['pcap']['md5'] = hash
 
-    click.echo(f'{"Timing reading packets...":<32}', nl=False)
-    start = time.time()
-    packets = list(pcap.Pcap(file, info))
+    packets_per_frame = info.format.columns_per_frame / info.format.columns_per_packet
+
+    packets = list(source)
     dur = time.time() - start
 
     # report both total and per-frame times
@@ -307,7 +268,11 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     click.echo(f'{"Timing writing packets...":<32}', nl=False)
     start = time.time()
     test_file = 'write-test.pcap'
-    pcap.record(packets, test_file)
+
+    def to_packets(packets):
+        for i, p in packets:
+            yield p
+    pcap.record(to_packets(packets), test_file)
     dur = time.time() - start
     os.remove(test_file)
 
@@ -315,7 +280,7 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
 
     click.echo(f'{"Timing batching scans...":<32}', nl=False)
     start = time.time()
-    scans = list(client.Scans(client.Packets(packets, info)))
+    scans = list(core.Scans(core.Packets(to_packets(packets), info)))
     dur = time.time() - start
     del packets
 
@@ -323,9 +288,9 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
 
     click.echo(f'{"Timing destaggering...":<32}', nl=False)
     start = time.time()
-    fields = scans[0].fields
+    fields = cast(LidarScan, scans[0][0]).fields
     consume(
-        client.destagger(info, s.field(field))
+        core.destagger(info, cast(LidarScan, s[0]).field(field))
         for field, s in product(fields, scans))
     dur = time.time() - start
 
@@ -333,9 +298,9 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
     report['times']['destagger'] = dur
 
     click.echo(f'{"Timing cartesian conversion...":<32}', nl=False)
-    xyzlut = client.XYZLut(info)
+    xyzlut = core.XYZLut(info)
     start = time.time()
-    consume(xyzlut(s) for s in scans)
+    consume(xyzlut(cast(LidarScan, s)) for s, in scans)
     dur = time.time() - start
 
     report_dur('cartesian', dur)
@@ -365,8 +330,8 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
               '--n-seconds',
               default=20.0,
               help="Max time process, default 20.s")
-@click.option('-b', '--buf-size', default=20.0, help="Max time to buffer packets")
-@click.option('-t', '--timeout', default=2.0, help="Seconds to wait for data")
+@click.option('-b', '--buf-size', default=20.0, type=float, help="Max time to buffer packets")
+@click.option('-t', '--timeout', default=2.0, type=float, help="Seconds to wait for data")
 @click.option('-x',
               '--do-not-reinitialize',
               is_flag=True,
@@ -410,14 +375,14 @@ def benchmark(file: str, meta: Optional[str], url: Optional[str]) -> None:
               is_flag=True,
               help="Don't show scan statuses")
 def benchmark_sensor(hostname: str, lidar_port: Optional[int],
-                     n_frames: Optional[int], n_seconds: float, buf_size: int,
+                     n_frames: Optional[int], n_seconds: float, buf_size: float,
                      do_not_reinitialize: bool, no_auto_udp_dest: bool,
                      timeout: float, short: bool,
                      only_range_refl: bool, copy_data: bool, scan_batch: bool,
                      xyz: bool, xyz_mean: bool, no_viz: bool) -> None:
     """Reads from the sensor and measure packet drops, cpu load etc."""
-
-    import psutil as psu
+    # no types exist for psutil
+    import psutil as psu  # type: ignore
 
     hostnames: List[str] = [x.strip() for x in hostname.split(",") if x.strip()]
 
@@ -425,20 +390,10 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     click.echo(f"Starting sensor source for: {hostnames} ...")
 
-    packet_source: PacketMultiSource
+    packet_source = sensor.SensorPacketSource(hostnames, buffer_time_sec=buf_size,
+                                              timeout=timeout if timeout > 0 else 1.0)
 
-    slist = []
-    for hostname in hostnames:
-        sensor_http = SensorHttp.create(hostname, 10)
-        config = build_sensor_config(sensor_http,
-                                     lidar_port,
-                                     None,
-                                     do_not_reinitialize=do_not_reinitialize,
-                                     no_auto_udp_dest=no_auto_udp_dest)
-        slist.append((hostname, config))
-    packet_source = client.SensorPacketSource(slist, buf_size=buf_size, timeout=timeout if timeout > 0 else None)
-
-    for idx, meta in enumerate(packet_source.metadata):
+    for idx, meta in enumerate(packet_source.sensor_info):
         click.echo(f"sensor [{idx}] = ")
         click.echo(f"  {'Model':<20}: {meta.prod_line} {meta.fw_rev} {meta.config.lidar_mode}")
         click.echo(f"  {'SN':<20}: {meta.sn}")
@@ -450,32 +405,34 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
     packets_per_frame = [
         (m.format.columns_per_frame / m.format.columns_per_packet)
-        for m in packet_source.metadata
+        for m in packet_source.sensor_info
     ]
     max_packets_per_frame = max(packets_per_frame)
     columns_per_packet = [
-        m.format.columns_per_packet for m in packet_source.metadata
+        m.format.columns_per_packet for m in packet_source.sensor_info
     ]
     pf = [
-        PacketFormat(m) for m in packet_source.metadata
+        PacketFormat(m) for m in packet_source.sensor_info
     ]
 
-    xyzlut = [client.XYZLut(info) for info in packet_source.metadata]
+    xyzlut = [core.XYZLut(info) for info in packet_source.sensor_info]
 
-    fields = None
+    fields = []
     scan_batch_flag = "S"
     if only_range_refl:
         # only minimal fields to use in LidarScan and parse in ScanBatch
-        fields = [{
-            client.ChanField.RANGE: np.uint32,
-            client.ChanField.REFLECTIVITY: np.uint16
-        } for _ in packet_source.metadata]
+        fields = [[
+            FieldType(core.ChanField.RANGE, np.uint32),
+            FieldType(core.ChanField.REFLECTIVITY, np.uint16)
+        ] for _ in packet_source.sensor_info]
         scan_batch_flag = "SRR"
 
     flags = "N" if not copy_data else "C"
 
     if scan_batch or xyz or xyz_mean:
-        data_source = ScansMulti(packet_source, fields=fields)
+        scan_src = Scans(packet_source, fields=fields)
+        # type ignored because type is overloaded
+        data_source = scan_src  # type: ignore
         is_scan_source = True
         flags = f"{scan_batch_flag}" if not copy_data else f"C {scan_batch_flag}"
         if xyz_mean:
@@ -483,13 +440,14 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
         elif xyz:
             flags += " XYZ"
     else:
-        data_source = packet_source
+        # type ignored because type is overloaded
+        data_source = packet_source  # type: ignore
         is_scan_source = False
 
-    frame_bound = [client.FrameBorder(m) for m in data_source.metadata]
+    frame_bound = [core.FrameBorder(m) for m in data_source.sensor_info]
 
     now = time.monotonic()
-    last_scan_ts = [now for _ in data_source.metadata]
+    last_scan_ts = [now for _ in data_source.sensor_info]
     start_ts = last_scan_ts.copy()
 
     class PacketStatus(Enum):
@@ -509,14 +467,15 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     def status_str(sl: List[PacketStatus]) -> str:
         return "".join([str(ps) for ps in sl])
 
-    status_line = [[] for _ in data_source.metadata]
-    status_line_init = [[] for _ in data_source.metadata]
+    # type ignored to save time
+    status_line = [[] for _ in data_source.sensor_info]  # type: ignore
+    status_line_init: List[List[PacketStatus]] = [[] for _ in data_source.sensor_info]
 
-    frames_cnt = [0] * len(data_source.metadata)
-    total_packets = [0] * len(data_source.metadata)
+    frames_cnt = [0] * len(data_source.sensor_info)
+    total_packets = [0] * len(data_source.sensor_info)
     total_packets_in_buf = 0
-    missed_packets = [0] * len(data_source.metadata)
-    ooo_packets = [0] * len(data_source.metadata)  # out-of-order packets
+    missed_packets = [0] * len(data_source.sensor_info)
+    ooo_packets = [0] * len(data_source.sensor_info)  # out-of-order packets
 
     total_avg_cpu = 0
     total_max_cpu = 0
@@ -524,7 +483,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     cpu_percent = 0
     max_cpu_percent = 0
 
-    for idx, info in enumerate(data_source.metadata):
+    for idx, info in enumerate(data_source.sensor_info):
         click.echo(
             f"Receiving data [{idx}]: {info.prod_line}, {info.config.lidar_mode}, "
             f"{info.format.udp_profile_lidar}, {info.format.column_window}, "
@@ -533,20 +492,27 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     # first point from which to measure CPU usage
     psu.cpu_percent()
 
+    def to_scans(src):
+        for l in src:
+            for idx, scan in enumerate(l):
+                if scan is not None:
+                    yield idx, scan
+
     try:
         # this is a bit hacky, but benchmark logic works well with Tuple[int, LidarScan] iterator
         # TODO: rework with proper iterator instead
-        it = data_source._scans_iter() if is_scan_source else iter(data_source)
+        it = to_scans(data_source) if is_scan_source else iter(data_source)
 
         while True:
-            idx, obj = next(it)
+            # type ignored because overloaded
+            idx, obj = next(it)  # type: ignore
 
             # imu_packets are not accounted
-            if not (isinstance(obj, client.LidarPacket)
-                    or isinstance(obj, client.LidarScan)):
+            if not (isinstance(obj, core.LidarPacket)
+                    or isinstance(obj, core.LidarScan)):
                 continue
 
-            if isinstance(obj, client.LidarPacket):
+            if isinstance(obj, core.LidarPacket):
                 # no scan batching branch
                 packet = obj if not copy_data else deepcopy(obj)
                 packet_num = int(pf[idx].packet_header(ColHeader.MEASUREMENT_ID, packet.buf)[0]
@@ -583,12 +549,12 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                             f"{int(packets_per_frame[idx])} but got at least "
                             f"{len(status_line[idx])}")
 
-            elif isinstance(obj, client.LidarScan):
+            elif isinstance(obj, core.LidarScan):
                 # scan batching + xyz + mean branch
                 scan = obj if not copy_data else deepcopy(obj)
 
                 status = scan.status & 0x1
-                status_split = np.array(np.split(status, packets_per_frame[idx]))
+                status_split = np.array(np.split(status, packets_per_frame[idx]))  # type: ignore
                 # any valid column from a packet means that we received the packet
                 status_per_packet = np.any(status_split, axis=1)
 
@@ -616,14 +582,14 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                 total_avg_cpu += cpu_percent
                 total_max_cpu += max_cpu_percent
 
-            total_packets_in_buf += packet_source.buf_use
+            total_packets_in_buf += packet_source.buffer_size()
 
             if not no_viz and not short:
                 sline = f"|{status_str(status_line[idx])}|"
                 sline += " " * int(max_packets_per_frame + 2 - len(sline))
                 click.echo(
                     f"{idx:<2}: {sline} [{flags}] "
-                    f"{packet_source.buf_use:04d} "
+                    f"{packet_source.buffer_size():04d} "
                     f"cpu:{cpu_percent:02.0f} ({max_cpu_percent:03.0f}) "
                     f"t:{scan_t:.04f}s")
 
@@ -638,20 +604,20 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
     except KeyboardInterrupt:
         click.echo("\nInterrupted")
     finally:
-        missed_packets_percent = [0] * len(data_source.metadata)
-        ooo_packets_percent = [0] * len(data_source.metadata)
+        missed_packets_percent = [0.0] * len(data_source.sensor_info)
+        ooo_packets_percent = [0.0] * len(data_source.sensor_info)
         all_packets_cnt = sum(total_packets) + sum(missed_packets)
-        all_missed_packets_percent = 0
-        all_ooo_packets_percent = 0
+        all_missed_packets_percent = 0.0
+        all_ooo_packets_percent = 0.0
 
         if all_packets_cnt:
             all_missed_packets_percent = 100 * sum(missed_packets) / all_packets_cnt
             missed_packets_percent = [
-                (100 * mp / (tp + mp)) if tp + mp > 0 else 0
+                (100 * mp / (tp + mp)) if tp + mp > 0 else 0.0
                 for mp, tp in zip(missed_packets, total_packets)
             ]
             ooo_packets_percent = [
-                (100 * oop / tp) if tp > 0 else 0
+                (100 * oop / tp) if tp > 0 else 0.0
                 for oop, tp in zip(ooo_packets, total_packets)
             ]
 
@@ -660,12 +626,12 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
 
         total_packets_str = ""
         frames_cnt_str = ""
-        if len(data_source.metadata) > 1:
+        if len(data_source.sensor_info) > 1:
             total_packets_str = f", {total_packets}"
             frames_cnt_str = f", {frames_cnt}"
 
         missed_packets_str = ""
-        if sum(missed_packets) and len(data_source.metadata) > 1:
+        if sum(missed_packets) and len(data_source.sensor_info) > 1:
             missed_packets_str = ", ".join([
                 f"{mp} ({mpp:.02f}%)"
                 for mp, mpp in zip(missed_packets, missed_packets_percent)
@@ -673,16 +639,16 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
             missed_packets_str = f", [{missed_packets_str}]"
 
         ooo_packets_str = ""
-        if sum(ooo_packets) and len(data_source.metadata) > 1:
+        if sum(ooo_packets) and len(data_source.sensor_info) > 1:
             ooo_packets_str = ", ".join([
                 f"{op} ({opp:.02f}%)"
                 for op, opp in zip(ooo_packets, ooo_packets_percent)
             ])
             ooo_packets_str = f", [{ooo_packets_str}]"
 
-        avg_cpu_load = 0
-        avg_max_cpu_load = 0
-        avg_packets_in_buf = 0
+        avg_cpu_load = 0.0
+        avg_max_cpu_load = 0.0
+        avg_packets_in_buf = 0.0
         total_frames_cnt = sum(frames_cnt)
         if all(frames_cnt):
             avg_cpu_load = total_avg_cpu / frames_cnt[0]
@@ -692,7 +658,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
         if not short:
             click.echo(f"Summary [{flags}]:")
             click.echo("  sensors:")
-            for idx, info in enumerate(data_source.metadata):
+            for idx, info in enumerate(data_source.sensor_info):
                 click.echo(
                     f"      {idx:<5}: {info.prod_line}, {info.config.lidar_mode}, "
                     f"{info.format.udp_profile_lidar}, {info.format.column_window}"
@@ -714,7 +680,7 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
             if hasattr(packet_source, "id_error_count"):
                 if isinstance(packet_source.id_error_count, list):
                     error_cnt_str = f"{sum(packet_source.id_error_count)}"
-                    if sum(packet_source.id_error_count) and len(packet_source.metadata) > 1:
+                    if sum(packet_source.id_error_count) and len(packet_source.sensor_info) > 1:
                         error_cnt_str += f", {packet_source.id_error_count}"
                 else:
                     error_cnt_str = f"{packet_source.id_error_count}"
@@ -726,8 +692,8 @@ def benchmark_sensor(hostname: str, lidar_port: Optional[int],
                        f"({avg_max_cpu_load:.02f}%)")
 
         # one line summary for spreadsheets use (only for single sensor)
-        if len(data_source.metadata) == 1:
-            info = data_source.metadata[0]
+        if len(data_source.sensor_info) == 1:
+            info = data_source.sensor_info[0]
             click.echo(f"-,{info.prod_line},{info.config.lidar_mode},"
                        f"{info.format.udp_profile_lidar},"
                        f"{flags},"

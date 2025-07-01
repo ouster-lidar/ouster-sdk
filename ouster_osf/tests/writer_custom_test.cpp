@@ -87,10 +87,11 @@ class YoStream : public MessageStream<YoStreamMeta, yo> {
     std::vector<uint8_t> make_msg(const obj_type& yo_obj) { return {yo_obj.a}; }
 
     // UnPack yo message from buffer
-    static std::unique_ptr<obj_type> decode_msg(const std::vector<uint8_t>& buf,
+    static std::unique_ptr<obj_type> decode_msg(const MessageRef& msg,
                                                 const meta_type&,
                                                 const MetadataStore&) {
         auto y = std::make_unique<yo>();
+        const auto& buf = msg.buffer();
         y->a = buf[0];
         return y;
     }

@@ -6,8 +6,8 @@ from more_itertools import flatten, take
 import numpy as np
 import pytest
 
-from ouster.sdk import client
-from ouster.sdk.client import LidarMode
+from ouster.sdk import core, sensor
+from ouster.sdk.core import LidarMode
 
 pytestmark = pytest.mark.usefixtures("hil_initial_config")
 
@@ -73,7 +73,7 @@ def azimuth_params(hil_initial_config, request):
 
 @pytest.fixture
 def hil_sensor_config(hil_initial_config,
-                      azimuth_params) -> client.SensorConfig:
+                      azimuth_params) -> core.SensorConfig:
     mode, window, _ = azimuth_params
 
     newcfg = copy(hil_initial_config)
@@ -100,11 +100,10 @@ def test_azimuth_setting(hil_configured_sensor, hil_sensor_config,
     else:
         assert not expect_fail, "Configuration succeeded unexpectedly"
 
-    with closing(client.Scans.stream(hil_configured_sensor,
-                                     complete=False)) as scans:
-        w = scans.metadata.format.columns_per_frame
+    with closing(sensor.SensorScanSource(hil_configured_sensor)) as scans:
+        w = scans.metadata[0].format.columns_per_frame
 
-        col_window = scans.metadata.format.column_window
+        col_window = scans.metadata[0].format.column_window
         logger.debug(f"Reported col_window: {col_window}")
 
         window_len = (col_window[1] - col_window[0] + w) % w + 1
@@ -112,7 +111,7 @@ def test_azimuth_setting(hil_configured_sensor, hil_sensor_config,
 
         ss = take(10, scans)
 
-    for s in ss:
+    for s, in ss:
         if not s.complete(col_window):
             logger.warning(f"Received incomplete frame {s.frame_id}: "
                            f"expected {window_len} valid cols but got "
@@ -120,7 +119,7 @@ def test_azimuth_setting(hil_configured_sensor, hil_sensor_config,
 
     assert any(
         window_len == np.count_nonzero(s.status & 0x1)
-        for s in ss), "Number of valid columns doesn't match window length"
+        for s, in ss), "Number of valid columns doesn't match window length"
 
     assert any(s.complete(col_window)
-               for s in ss), "Received no complete frames"
+               for s, in ss), "Received no complete frames"

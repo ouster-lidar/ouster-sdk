@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <limits>
 #include <list>
+#include <numeric>  // NOLINT(misc-include-cleaner)
 #include <unordered_map>
 #include <vector>
 

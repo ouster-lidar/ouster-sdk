@@ -1,17 +1,12 @@
-{
-    "scipy":
+[
     {
+        "name": "scipy",
         "version": ">=1.7, <2",
         "marker": "platform_system != \"Darwin\" or platform_machine != \"arm64\""
     },
-    "point-cloud-utils":
     {
-        "version": ">=0.30.4, <1.0.0",
-        "marker": "python_version <= \"3.13\" and platform_machine != \"aarch64\" and (platform_system != \"Darwin\" or platform_machine != \"arm64\")"
-    },
-    "kiss-icp":
-    {
-        "version": "==1.1.0",
-        "marker": "(platform_machine != \"x86_64\" or platform_system != \"Darwin\") and (platform_machine != \"aarch64\" or platform_system != \"Linux\")"
+        "name": "kiss-icp",
+        "version": "==1.2.2",
+        "marker": "(platform_system == \"Windows\" and platform_machine == \"AMD64\") or (platform_system == \"Linux\" and platform_machine == \"x86_64\") or (platform_system == \"Darwin\" and platform_machine == \"arm64\")"
     }
-}
+]

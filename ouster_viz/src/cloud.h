@@ -31,7 +31,11 @@ class GLCloud {
     static CloudIds cloud_ids;
 
    private:
+    /// @brief For initializing the VAO during construction
+    void initialize_vao();
+
     // per-object gl state
+    GLuint vao;
     GLuint xyz_buffer;
     GLuint off_buffer;
     GLuint range_buffer;

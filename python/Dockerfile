@@ -23,6 +23,7 @@ RUN set -xe \
  libglfw3-dev \
  libpng-dev \
  libflatbuffers-dev \
+ gfortran \
 # Python deps
  python3-dev \
  python3-pip \
@@ -48,7 +49,7 @@ ENV PATH="${PATH}:${BUILD_HOME}/.local/bin" \
 WORKDIR ${BUILD_HOME}
 
 # Populate source dir
-COPY python/docker_install_reqs.sh python/setup.py ${OUSTER_SDK_PATH}/python/
+COPY python/docker_install_reqs.sh python/setup.py python/requirements.txt ${OUSTER_SDK_PATH}/python/
 COPY python/src/ouster/sdk/mapping/requirements.json ${OUSTER_SDK_PATH}/python/src/ouster/sdk/mapping/
 
 RUN ${OUSTER_SDK_PATH}/python/docker_install_reqs.sh

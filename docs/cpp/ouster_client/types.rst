@@ -1,173 +1,243 @@
-=======
 types.h
 =======
 
 .. contents::
-    :local:
-
-Type-defs
-=========
-
-.. doxygentypedef:: ouster::img_t
-
-.. doxygentypedef:: ouster::mat4d
-
-.. doxygentypedef:: ouster::sensor::AzimuthWindow
-
-.. doxygentypedef:: ouster::sensor::ColumnWindow
-
-Helper Data
-===========
-
-Lidar Mode
-----------
-.. doxygenenum:: ouster::sensor::lidar_mode
-
-.. doxygenfunction:: ouster::sensor::n_cols_of_lidar_mode
-
-.. doxygenfunction:: ouster::sensor::frequency_of_lidar_mode
-
-.. doxygenfunction:: ouster::sensor::to_string(lidar_mode mode)
-
-.. doxygenfunction:: ouster::sensor::lidar_mode_of_string
-
-Timestamp Mode
---------------
-
-.. doxygenenum:: ouster::sensor::timestamp_mode
-
-.. doxygenfunction:: ouster::sensor::to_string(timestamp_mode mode)
-
-.. doxygenfunction:: ouster::sensor::timestamp_mode_of_string
-
-Operating Mode
---------------
-
-.. doxygenenum:: ouster::sensor::OperatingMode
-
-.. doxygenfunction:: ouster::sensor::to_string(OperatingMode mode)
-
-.. doxygenfunction:: ouster::sensor::operating_mode_of_string
-
-Multipurpose IO Mode
---------------------
-
-.. doxygenenum:: ouster::sensor::MultipurposeIOMode
-
-.. doxygenfunction:: ouster::sensor::to_string(MultipurposeIOMode mode)
-
-.. doxygenfunction:: ouster::sensor::multipurpose_io_mode_of_string
+   :local:
 
 
-Polarity
---------
+Enums
+-----
 
-.. doxygenenum:: ouster::sensor::Polarity
+.. doxygenenum:: lidar_mode
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::to_string(Polarity mode)
+.. doxygenenum:: timestamp_mode
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::polarity_of_string
+.. doxygenenum:: timestamp_mode
+   :project: cpp_api
 
+.. doxygenenum:: OperatingMode
+   :project: cpp_api
 
-NMEA Baud Rate
---------------
+.. doxygenenum:: MultipurposeIOMode
+   :project: cpp_api
 
-.. doxygenenum:: ouster::sensor::NMEABaudRate
+.. doxygenenum:: Polarity
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::to_string(NMEABaudRate mode)
-
-.. doxygenfunction:: ouster::sensor::nmea_baud_rate_of_string
-
-
-UDP Profile Lidar
------------------
+.. doxygenenum:: NMEABaudRate
+   :project: cpp_api
 
 .. doxygenenum:: ouster::sensor::UDPProfileLidar
-
-.. doxygenfunction:: ouster::sensor::to_string(UDPProfileLidar mode)
-
-.. doxygenfunction:: ouster::sensor::udp_profile_lidar_of_string
-
-
-UDP Profile IMU
----------------
+   :project: cpp_api
 
 .. doxygenenum:: ouster::sensor::UDPProfileIMU
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::to_string(UDPProfileIMU mode)
+.. doxygenenum:: ouster::sensor::FullScaleRange
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::udp_profile_imu_of_string
+.. doxygenenum:: ouster::sensor::ReturnOrder
+   :project: cpp_api
 
-Chan Field
-----------
+.. doxygenenum:: ouster::sensor::ThermalShutdownStatus
+   :project: cpp_api
+
+.. doxygenenum:: ouster::sensor::ShotLimitingStatus
+   :project: cpp_api
+
 .. doxygenenum:: ouster::sensor::ChanFieldType
+   :project: cpp_api
 
-.. doxygennamespace:: ouster::sensor::ChanField
+Variables
+---------
 
-.. doxygenfunction:: ouster::sensor::to_string(ChanFieldType ft)
+.. doxygenvariable:: range_unit
+   :project: cpp_api
 
-Product Info
-------------
-.. doxygenclass:: ouster::sensor::product_info
+.. doxygenvariable:: gen1_altitude_angles
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::operator==(const product_info& lhs, const product_info& rhs)
+.. doxygenvariable:: gen1_azimuth_angles
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::operator!=(const product_info& lhs, const product_info& rhs)
+.. doxygenvariable:: default_imu_to_sensor_transform
+   :project: cpp_api
 
-.. doxygenfunction:: ouster::sensor::to_string(const sensor_info& info)
+.. doxygenvariable:: default_lidar_to_sensor_transform
+   :project: cpp_api
 
-Sensor Info
-===========
-
-.. doxygenstruct:: ouster::sensor::sensor_info
-    :members:
-
-.. doxygenfunction:: ouster::sensor::default_sensor_info
-
-.. doxygenfunction:: ouster::sensor::metadata_from_json
-
-.. doxygenfunction:: ouster::sensor::operator==(const sensor_info& lhs, const sensor_info& rhs)
-
-.. doxygenfunction:: ouster::sensor::operator!=(const sensor_info& lhs, const sensor_info& rhs)
-
-.. doxygenfunction:: ouster::sensor::to_string(const sensor_info& info)
-
-Sensor Config
-=============
-
-.. doxygenstruct:: ouster::sensor::sensor_config
-    :members:
-
-.. doxygenfunction:: ouster::sensor::parse_config(const std::string& config)
-
-.. doxygenfunction:: ouster::sensor::operator==(const sensor_config& lhs, const sensor_config& rhs)
-
-.. doxygenfunction:: ouster::sensor::operator!=(const sensor_config& lhs, const sensor_config& rhs)
-
-.. doxygenfunction:: ouster::sensor::to_string(const sensor_config& config)
-
-Data Format
-===========
-
-.. doxygenstruct:: ouster::sensor::data_format
-    :members:
-
-.. doxygenfunction:: ouster::sensor::operator==(const data_format& lhs, const data_format& rhs)
-
-.. doxygenfunction:: ouster::sensor::operator!=(const data_format& lhs, const data_format& rhs)
-
-Packet Format
-=============
+Class
+-----
 
 .. doxygenclass:: ouster::sensor::packet_format
-    :members:
+   :project: cpp_api
+   :members:
 
-.. doxygengroup:: OusterClientTypeGetFormat
-    :content-only:
+.. doxygenclass:: ouster::sensor::product_info
+   :project: cpp_api
+   :members:
 
-MISC
-====
+.. doxygenclass:: ouster::sensor::sensor_info
+   :project: cpp_api
+   :members:
+
+Structs
+-------
+
+.. doxygenstruct:: ouster::sensor::calibration_status
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::sensor::data_format
+   :project: cpp_api
+   :members:
+
+.. doxygenstruct:: ouster::sensor::sensor_config
+   :project: cpp_api
+   :members:
+
+Namespaces
+----------
+
+.. doxygennamespace:: ChanField
+   :project: cpp_api
+   :members:
+
+.. doxygennamespace:: ouster::sensor::ChanField
+   :project: cpp_api
+   :members:
+
+Typedefs
+--------
+
+.. doxygentypedef:: ouster::img_t
+   :project: cpp_api
+
+.. doxygentypedef:: ouster::mat4d
+   :project: cpp_api
+
+.. doxygentypedef:: ouster::PointsD
+   :project: cpp_api
+
+.. doxygentypedef:: ouster::PointsF
+   :project: cpp_api
+
+
+Functions
+---------
+
+.. doxygenfunction:: ouster::sensor::to_string(const ouster::sensor::product_info&)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(lidar_mode)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::lidar_mode_of_string
+   :project: cpp_api
+   
+.. doxygenfunction:: ouster::sensor::n_cols_of_lidar_mode
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::frequency_of_lidar_mode
+   :project: cpp_api
+   
+.. doxygenfunction:: ouster::sensor::to_string(timestamp_mode)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::timestamp_mode_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(OperatingMode)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::operating_mode_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(MultipurposeIOMode)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::multipurpose_io_mode_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(Polarity)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::polarity_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(NMEABaudRate)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::nmea_baud_rate_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(AzimuthWindow)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(UDPProfileLidar)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::udp_profile_lidar_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(UDPProfileIMU)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::udp_profile_imu_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(FullScaleRange)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::full_scale_range_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::return_order_of_string
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(ReturnOrder)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(ShotLimitingStatus)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(ThermalShutdownStatus)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::check_signal_multiplier
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::metadata_from_json
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::parse_config
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(const ouster::sensor::sensor_config&)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(const ouster::sensor::calibration_status&)
+   :project: cpp_api
 
 .. doxygenfunction:: ouster::sensor::client_version
+   :project: cpp_api
 
-.. doxygenvariable:: ouster::sensor::range_unit
+.. doxygenfunction:: ouster::sensor::firmware_version_from_metadata
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::field_type_size
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::field_type_mask
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::to_string(ChanFieldType)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::get_format(const ouster::sensor::sensor_info&)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::sensor::get_format(UDPProfileLidar, size_t, size_t)
+   :project: cpp_api

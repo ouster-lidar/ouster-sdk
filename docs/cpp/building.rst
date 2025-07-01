@@ -14,13 +14,30 @@ The C++ example code is available `on the Ouster Github
 Building on Linux / macOS
 =========================
 
+Recommended method with vcpkg
+-----------------------------
+
+It is now recommended to use ``vcpkg`` to install dependencies across all platforms. 
+The list of required dependencies is defined in the ``vcpkg.json`` file located at the root of the repository. 
+vcpkg manifest mode is used to manage ouster-sdk dependencies in a consistent and reproducible way.
+
+To install ``vcpkg``, please follow the instructions in the `vcpkg documentation`_.
+
+.. _vcpkg documentation: https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash
+
+As an alternative, you can install the dependencies manually using following instructions:
+
+Installation with apt or brew
+-----------------------------
+
 To install build dependencies on Ubuntu:20.04+, run:
 
 .. code:: console
 
    $ sudo apt install build-essential cmake libeigen3-dev libcurl4-openssl-dev \
                       libtins-dev libpcap-dev libglfw3-dev libpng-dev \
-                      libflatbuffers-dev
+                      libflatbuffers-dev libceres-dev libtbb-dev \
+                      robin-map-dev
 
 You may also install curl with a different ssl backend, for example libcurl4-gnutls-dev or
 libcurl4-nss-dev.
@@ -29,7 +46,7 @@ On macOS, install XCode and `homebrew <https://brew.sh>`_ and run:
 
 .. code:: console
 
-   $ brew install cmake pkg-config eigen curl libtins glfw libpng flatbuffers
+   $ brew install cmake pkg-config eigen curl libtins glfw libpng flatbuffers libomp ceres-solver robin-map
 
 To build on macOS and Ubuntu:20.04+ run the following commands:
 
@@ -65,24 +82,30 @@ for dependencies. Follow the official documentation to set up your build environ
   <https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019>`_
 * `Visual Studio CPP Support
   <https://docs.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=vs-2019>`_
-* `Vcpkg, at tag "2024.04.26" installed and integrated with Visual Studio
+* `Vcpkg is installed and integrated with Visual Studio
   <https://docs.microsoft.com/en-us/cpp/build/vcpkg?view=msvc-160#installation>`_
 
-**Note** You'll need to run ``git checkout 2024.04.26`` in the vcpkg directory before bootstrapping
-to use the correct versions of the dependencies. Building may fail unexpectedly if you skip this
-step.
+Since, ``VCPKG_MANIFEST_MODE`` is set to ``ON``, the dependencies will be installed the build if the 
+``CMAKE_TOOLCHAIN_FILE`` is set correctly. 
+
+.. code:: powershell
+
+   PS > $env:CMAKE_TOOLCHAIN_FILE="<PATH TO VCPKG REPO>\scripts\buildsystems\vcpkg.cmake"
+
+Remember to run,
+
+.. code:: powershell
+
+   PS > .\vcpkg.exe integrate install
+
+**Note:** The commit sha in ``vcpkg.json`` ensures that the correct version of vcpkg
+and dependencies are installed. Currently, we are using the release commit on ``2025.02.14``.
 
 Don't forget to integrate vcpkg with Visual Studio after bootstrapping:
 
 .. code:: powershell
 
    PS > .\vcpkg.exe integrate install
-
-You should be able to install dependencies with
-
-.. code:: powershell
-
-   PS > .\vcpkg.exe install --triplet x64-windows eigen3 curl libtins glfw3 libpng flatbuffers
 
 After these steps are complete, you should be able to open, build and run the ``ouster-sdk``
 project using Visual Studio:
@@ -136,3 +159,10 @@ example folders building against the sdk library. To run each use the example.ba
 2. static_linking_example - Use installed static libs of ouster_sdk under a larger codebase.
 3. shared_linking_example - Use installed shared libs of ouster_sdk under a larger codebase.
 
+Common build issues
+===================
+
+You may encounter errors if ``vcpkg`` on your system is using an outdated version while building in manifest mode.
+A common error in this case is ``Baseline not found``.
+
+To resolve this, update ``vcpkg`` to the latest commit on the master branch.

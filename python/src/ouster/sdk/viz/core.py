@@ -10,7 +10,6 @@ Visualize lidar data using OpenGL.
 from collections import deque
 from functools import partial
 from enum import Enum, auto
-import os
 import threading
 import queue
 import time
@@ -20,13 +19,14 @@ from typing import (Callable, ClassVar, cast, Deque, Dict, Iterable, Iterator, L
 import logging
 
 import numpy as np
-from PIL import Image as PILImage
 
-from ouster.sdk import client
-from ouster.sdk.client import (first_valid_packet_ts, LidarScan, ChanField)
+from ouster.sdk import core
+from ouster.sdk.core import LidarScan, ChanField
+from ouster.sdk.core import SensorInfo
 from ouster.sdk._bindings.viz import (PointViz, Cloud, Image, Cuboid, Label, WindowCtx, Camera,
                    TargetDisplay, add_default_controls, MouseButton, MouseButtonEvent, EventModifierKeys)
-from .util import push_point_viz_handler, push_point_viz_fb_handler, BoundMethod
+from ouster.sdk._bindings.client import Slicer  # type: ignore[attr-defined]
+from .util import push_point_viz_handler, BoundMethod
 from .model import VizExtraMode, LidarScanVizModel
 from . import util as vizu
 from .view_mode import (ImageMode, CloudMode, LidarScanVizMode, CloudPaletteItem)
@@ -62,9 +62,14 @@ class LidarScanViz:
         HORIZONTAL = 0
         VERTICAL = 1
 
+    class CameraMode(Enum):
+        FOLLOW = 0
+        FOLLOW_ROTATION_LOCKED = 1
+        FIXED = 2
+
     def __init__(
             self,
-            metas: List[client.SensorInfo],
+            metas: List[SensorInfo],
             point_viz: Optional[PointViz] = None,
             accumulators_config: Optional[LidarScanVizAccumulatorsConfig] = None,
             *,
@@ -158,11 +163,11 @@ class LidarScanViz:
                                                   thickness=5,
                                                   label_scale=0.4)
 
-        self._camera_follow_enabled = True
+        self._camera_mode = LidarScanViz.CameraMode.FOLLOW
         # TODO[UN]: assign a key to select a sensor to be tracked
         # also what to do in case tracked sensor is hidden?
         self._tracked_sensor = 0
-        self._scan_pose = np.eye(4)
+        self._camera_pose = np.eye(4)
 
         self._scans: List[Optional[LidarScan]] = []
         self._scan_num = -1
@@ -181,6 +186,7 @@ class LidarScanViz:
                 self._flags_mode = LidarScanViz.FlagsMode.NONE
                 self._update_multi_viz_osd()
                 self._viz.update()
+                self._model.update_aoi_label(self._scans)
             return ret
 
     def mouse_pos_handler(self, ctx: WindowCtx, x: float, y: float) -> bool:
@@ -199,7 +205,7 @@ class LidarScanViz:
 
     # TODO[tws] likely remove
     @property
-    def metadata(self) -> List[client.SensorInfo]:
+    def metadata(self) -> List[SensorInfo]:
         """Metadatas for the displayed sensors."""
         return self._model._metas
 
@@ -211,8 +217,9 @@ class LidarScanViz:
     def _setup_controls(self) -> None:
         # key bindings. will be called from rendering thread, must be synchronized
         key_bindings: Dict[Tuple[int, int], Callable[[LidarScanViz], None]] = {
-            (ord('E'), 0): partial(LidarScanViz.update_image_size, amount=+1),
-            (ord('E'), 1): partial(LidarScanViz.update_image_size, amount=-1),
+            (ord('I'), 0): partial(LidarScanViz.update_image_size, amount=+1),
+            (ord('I'), 1): partial(LidarScanViz.update_image_size, amount=-1),
+            (ord('I'), 2): LidarScanViz.toggle_flip_images,
             (ord('P'), 0): partial(LidarScanViz.update_point_size, amount=+1),
             (ord('P'), 1): partial(LidarScanViz.update_point_size, amount=-1),
             (ord('1'), 0): partial(LidarScanViz.toggle_cloud, i=0),
@@ -229,7 +236,8 @@ class LidarScanViz:
             (ord("'"), 1): partial(LidarScanViz.update_ring_size, amount=-1),
             (ord("'"), 2): LidarScanViz.cicle_ring_line_width,
             (ord("O"), 0): LidarScanViz.toggle_osd,
-            (ord('U'), 0): LidarScanViz.toggle_camera_follow,
+            (ord('U'), 0): partial(LidarScanViz.cycle_camera_mode, direction=+1),
+            (ord('U'), 1): partial(LidarScanViz.cycle_camera_mode, direction=-1),
             # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
             (ord('C'), 0): LidarScanViz.update_flags_mode,
             (ord('9'), 0): LidarScanViz.toggle_axis_markers,
@@ -241,7 +249,9 @@ class LidarScanViz:
             's': "Camera pitch up",
             'a': "Camera yaw right",
             'd': "Camera yaw left",
-            "e / SHIFT+e": "Increase/decrease size of displayed 2D images",
+            'q': "Camera roll left",
+            'e': "Camera roll right",
+            "i / SHIFT+i": "Increase/decrease size of displayed 2D images",
             "p / SHIFT+p": "Increase/decrease point size",
             "SHIFT+r": "Reset camera orientation",
             "CTRL+r": "Camera bird-eye view",
@@ -259,6 +269,7 @@ class LidarScanViz:
             "= / -": "Dolly in and out",
             "\" / SHIFT+\"": "Increase/decrease spacing in range markers",
             "CTRL+\"": "Cycle through thickness of range markers or hide",
+            "CTRL+i": "Flip 2D images",
             'SHIFT': "Camera Translation with mouse drag",
             'ESC': "Exit the application",
         }
@@ -292,6 +303,18 @@ class LidarScanViz:
                 partial(LidarScanViz.toggle_sensor, sensor_index=sensor_index)
             self._key_definitions[f"CTRL+{str(sensor_index + 1)}"] = f"Toggle sensor {sensor_index + 1} point cloud(s)"
 
+    def select_img_mode(self, i: int, mode: str) -> bool:
+        """Change the displayed field of the i'th image."""
+        with self._lock:
+            res = self._model.select_image_mode(i, mode)
+            self._model.update_aoi()
+            self._model.update_aoi_label(self._scans)
+
+            # Note, updating the image mode needs the current scan
+            # because ImageMode.enabled requires it.
+            self._model.update(self._scans)
+            return res
+
     def cycle_img_mode(self, i: int, *, direction: int = 1) -> None:
         """Change the displayed field of the i'th image."""
         with self._lock:
@@ -302,6 +325,16 @@ class LidarScanViz:
             # Note, updating the image mode needs the current scan
             # because ImageMode.enabled requires it.
             self._model.update(self._scans)
+
+    def select_cloud_mode(self, mode: str) -> bool:
+        """Change the coloring mode of the 3D point cloud."""
+        with self._lock:
+            res = self._model.select_cloud_mode(mode)
+
+            # Note, updating the cloud mode needs the current scan
+            # because CloudMode.enabled requires it.
+            self._model.update(self._scans)
+            return res
 
     def cycle_cloud_mode(self, direction: int = 1) -> None:
         """Change the coloring mode of the 3D point cloud."""
@@ -378,6 +411,11 @@ class LidarScanViz:
         with self._lock:
             self._model.update_image_size(amount)
 
+    def toggle_flip_images(self) -> None:
+        """Toggle if 2D images should be flipped or not."""
+        with self._lock:
+            self._model.toggle_flip_images()
+
     def update_ring_size(self, amount: int) -> None:
         """Change distance ring size."""
         with self._lock:
@@ -399,10 +437,13 @@ class LidarScanViz:
             else:
                 self._osd_state = LidarScanViz.OsdState.NONE
 
-    def toggle_camera_follow(self) -> None:
+    def cycle_camera_mode(self, direction: int = 1) -> None:
         """Toggle the camera follow mode."""
         with self._lock:
-            self._camera_follow_enabled = not self._camera_follow_enabled
+            modes = list(LidarScanViz.CameraMode)
+            current_index = modes.index(self._camera_mode)
+            next_index = (current_index + direction) % len(modes)
+            self._camera_mode = modes[next_index]
 
     # TODO[pb]: Extract FlagsMode to custom processor (TBD the whole thing)
     def update_flags_mode(self,
@@ -542,12 +583,12 @@ class LidarScanViz:
     # i/o and processing, called from client thread
     # usually need to synchronize with key handlers, which run in render thread
     def _draw(self) -> None:
-        self._draw_update_scan_poses()
+        self._draw_update_camera_pose()
         self._draw_update_flags_mode()
         self._update_multi_viz_osd()
 
     @staticmethod
-    def _format_version(version: client.Version) -> str:
+    def _format_version(version: core.Version) -> str:
         result = f'v{version.major}.{version.minor}.{version.patch}'
         if version.prerelease:
             result += f'-{version.prerelease}'
@@ -600,22 +641,26 @@ class LidarScanViz:
         if osd_str_extra:
             osd_str_extra += "\n"
 
-        frame_ts = min([first_valid_packet_ts(s) for s in self._scans if s]) * 1e-9
+        first_frame_ts = min([s.get_first_valid_packet_timestamp() for s in self._scans if s]) * 1e-9
         if self._first_frame_ts is None:
-            self._first_frame_ts = frame_ts
-        frame_ts -= self._first_frame_ts    # show relative time
+            self._first_frame_ts = first_frame_ts
+        frame_ts = first_frame_ts - self._first_frame_ts    # show relative time
         osd_str += f"{osd_str_extra}" \
             f"axes [9]: {'ON' if self._scan_axis_enabled else 'OFF'}\n" \
-            f"camera mode [U]: {'FOLLOW' if self._camera_follow_enabled else 'FIXED'}\n" \
+            f"camera mode [U]: {self._camera_mode.name.replace('_', ' ')}\n" \
+            f"time: {datetime.utcfromtimestamp(first_frame_ts)} UTC\n" \
             f"frame # : {self._scan_num}, frame ts: {frame_ts:0.3f} s"
         self._osd.set_text(osd_str)
 
     def _get_pose_with_min_ts(self) -> np.ndarray:
-        first_scan = min([s for s in self._scans if s], key=lambda s: first_valid_packet_ts(s))
-        return client.last_valid_column_pose(first_scan)
+        first_scan = min([s for s in self._scans if s], key=lambda s: s.get_first_valid_packet_timestamp())
+        return core.last_valid_column_pose(first_scan)
 
-    def _draw_update_scan_poses(self) -> None:
+    def _draw_update_camera_pose(self) -> None:
         """Apply poses from the Scans to the scene"""
+        if not self._scans:
+            return
+
         # handle Axis and Camera poses
         # scan with the minimal timestamp determines the
         # center of the system (by it's scan pose)
@@ -625,11 +670,21 @@ class LidarScanViz:
         for axis, sensor in zip(self._scan_axis, self._model._sensors):
             axis.pose = pose @ sensor._meta.extrinsic
 
-        if self._camera_follow_enabled:
+        if self._camera_mode == LidarScanViz.CameraMode.FOLLOW:
             scan = self._scans[self._tracked_sensor]
-            if scan:    # if picked scan is None don't update camera
-                self._scan_pose = client.last_valid_column_pose(scan)
-        self._viz.camera.set_target(np.linalg.inv(self._scan_pose))
+            if scan is None:
+                return
+            self._camera_pose = core.last_valid_column_pose(scan)
+        elif self._camera_mode == LidarScanViz.CameraMode.FOLLOW_ROTATION_LOCKED:
+            scan = self._scans[self._tracked_sensor]
+            if scan is None:
+                return
+            # only change the position and keep the rotation part
+            self._camera_pose[:3, 3] = core.last_valid_column_pose(scan)[:3, 3]
+        elif self._camera_mode == LidarScanViz.CameraMode.FIXED:
+            pass
+
+        self._viz.camera.set_target(np.linalg.inv(self._camera_pose))
 
     def print_key_bindings(self) -> None:
         print(">---------------- Key Bindings --------------<")
@@ -645,13 +700,6 @@ class LidarScanViz:
                 self.print_key_bindings()
             else:
                 self._osd_state = self._previous_osd_state
-
-
-def _first_scan_ts(scans: Union[List[Optional[LidarScan]], LidarScan]):
-    scans = [scans] if isinstance(scans, client.LidarScan) else scans  # TODO[tws] fix these banes of our existence
-    for scan in scans:
-        if scan:
-            return client.first_valid_column_ts(scan)
 
 
 class _Seekable:
@@ -672,9 +720,7 @@ class _Seekable:
         self._iterable = it
         self._it: Union[Iterator[List[Optional[LidarScan]]], Iterator[LidarScan]] = \
             cast(Union[Iterator[List[Optional[LidarScan]]], Iterator[LidarScan]], iter(it))
-        self._maxlen = maxlen
         self._cache: Deque[Union[List[Optional[LidarScan]], LidarScan]] = deque([], maxlen)
-        self._first_scan_ts = None
 
     def __iter__(self):
         return self
@@ -689,23 +735,14 @@ class _Seekable:
         # next value comes from iterator
         elif self._next_ind == self._read_ind + 1:
             t = cast(Union[List[Optional[LidarScan]], LidarScan], next(self._it))
+            if isinstance(t, list) and len(t) == 0:
+                self._next_ind = 0
+                self._read_ind = -1
+                return []
             self._cache.appendleft(t)
-            if len(self._cache) > self._maxlen:
-                self._cache.pop()
-
             self._next_ind += 1
             self._read_ind += 1
 
-            # TODO[tws] improve loop handling.
-            # This is a massive kludge to handle looping the source with a _Seekable, which was supposed to be a
-            # generic. A better solution will probably rely on a better conceptulization of ScanSource/MultiScanSource
-            # as Iterables, where the user (SimpleViz, in this case,) waits for StopIteration and resets the source.
-            if self._first_scan_ts:
-                if self._first_scan_ts == _first_scan_ts(t):
-                    self._next_ind = 1
-                    self._read_ind = 0
-            else:
-                self._first_scan_ts = _first_scan_ts(t)
             return t
         else:
             raise AssertionError("Violated: next_ind <= read_ind + 1")
@@ -750,21 +787,6 @@ class _Seekable:
         """Close the underlying iterable, if supported."""
         if hasattr(self._iterable, 'close'):
             self._iterable.close()
-
-
-def _save_fb_to_png(fb_data: List,
-                    fb_width: int,
-                    fb_height: int,
-                    action_name: Optional[str] = "screenshot",
-                    file_path: Optional[str] = None):
-    img_arr = np.array(fb_data,
-                       dtype=np.uint8).reshape([fb_height, fb_width, 3])
-    img_fname = datetime.now().strftime(
-        f"viz_{action_name}_%Y%m%d_%H%M%S.%f")[:-3] + ".png"
-    if file_path:
-        img_fname = os.path.join(file_path, img_fname)
-    PILImage.fromarray(np.flip(img_arr, axis=0)).convert("RGB").save(img_fname)
-    return img_fname
 
 
 class LiveConsumer:
@@ -825,7 +847,7 @@ class SimpleViz:
     _playback_rates = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 0.0)
 
     def __init__(self,
-                 metadata: Union[List[client.SensorInfo], client.SensorInfo],
+                 metadata: Union[List[SensorInfo], SensorInfo],
                  *,
                  rate: Optional[float] = None,
                  pause_at: int = -1,
@@ -837,6 +859,8 @@ class SimpleViz:
                  map_select_ratio: float = MAP_SELECT_RATIO,
                  map_max_points: int = MAP_MAX_POINTS_NUM,
                  title: str = "Ouster Viz",
+                 maximized: bool = False,
+                 screenshot_resolution: Optional[Union[Tuple[int, int], float]] = None,
                  _override_pointviz: Optional[PointViz] = None,
                  _override_lidarscanviz: Optional[LidarScanViz] = None,
                  _buflen: int = 50) -> None:
@@ -848,12 +872,17 @@ class SimpleViz:
                   None for "live" playback (the default).
             pause_at: scan number to pause at, default (-1) - no auto pause, to
                       stop after the very first scan use 0
+            on_eof: What to do when the source ends. One of 'exit', 'stop' or 'loop'
 
         Raises:
             ValueError: if the specified rate isn't one of the options
         """
-        self._metadata = [metadata] if isinstance(metadata, client.SensorInfo) else metadata
-        self._viz = _override_pointviz if _override_pointviz else PointViz(title)
+        valid = ["exit", "stop", "loop"]
+        if on_eof not in valid:
+            raise ValueError(f"on_eof must be one of {valid}, was '{on_eof}'")
+
+        self._metadata = [metadata] if isinstance(metadata, SensorInfo) else metadata
+        self._viz = _override_pointviz if _override_pointviz else PointViz(title, maximized=maximized)
         accum_config = LidarScanVizAccumulatorsConfig(
             accum_max_num=accum_max_num,
             accum_min_dist_meters=accum_min_dist_meters,
@@ -882,12 +911,14 @@ class SimpleViz:
         # playback status display
         # TODO[tws] probably move playback osd to LidarScanViz...
         # We've had to define extra key handlers here to support it for no good reason.
-        self._playback_osd = Label("", 1, 1, align_right=True)
-        self._viz.add(self._playback_osd)
-        self._update_playback_osd()
+        self._right_osd = Label("", 1, 1, align_right=True)
+        self._viz.add(self._right_osd)
 
         # continuous screenshots recording
         self._viz_img_recording = False
+        self._screenshot_resolution = screenshot_resolution
+
+        self._update_right_osd()
 
         key_bindings: Dict[Tuple[int, int], Callable[[SimpleViz], None]] = {
             (ord(','), 0): partial(SimpleViz.seek_relative, n_frames=-1),
@@ -899,12 +930,15 @@ class SimpleViz:
             (ord('/'), 1): SimpleViz.toggle_help,
             (ord('X'), 1): SimpleViz.toggle_img_recording,
             (ord('Z'), 1): SimpleViz.screenshot,
+            (ord('V'), 0): partial(SimpleViz.cycle_screenshot_res_factor, direction=1),
+            (ord('V'), 1): partial(SimpleViz.cycle_screenshot_res_factor, direction=-1)
         }
 
         key_definitions: Dict[str, str] = {
             'o': "Toggle information overlay",
             'SHIFT+x': "Toggle a continuous saving of screenshots",
-            'SHIFT+z': "Take a screenshot!",
+            'SHIFT+z': "Take a screenshot",
+            'v / SHIFT+v': "Cycle screenshot resolution factor",
             ". / ,": "Step forward one frame",
             "> / <": "Increase/decrease playback rate (during replay)",
             'SPACE': "Pause and unpause",
@@ -933,13 +967,27 @@ class SimpleViz:
 
     def toggle_help(self) -> None:
         self._scan_viz.toggle_help()
-        self._update_playback_osd()
+        self._update_right_osd()
         self._scan_viz.draw()
 
-    def _update_playback_osd(self) -> None:
+    def _update_right_osd(self) -> None:
         if self._scan_viz.osd_state != LidarScanViz.OsdState.DEFAULT:
-            self._playback_osd.set_text("")
+            self._right_osd.set_text("")
             return
+
+        screenshot_str: str = ""
+        if self._screenshot_resolution:
+            if isinstance(self._screenshot_resolution, float):
+                # screenshot resolution is a scale factor
+                res_str = (
+                    str(int(self._screenshot_resolution))
+                    if self._screenshot_resolution.is_integer()
+                    else str(self._screenshot_resolution)
+                )
+                screenshot_str = f"screenshot res: {res_str}x\n"
+            elif isinstance(self._screenshot_resolution, tuple):
+                # screenshot resolution is a size
+                screenshot_str = f"screenshot res: {self._screenshot_resolution[0]}x{self._screenshot_resolution[1]}\n"
 
         if self._paused:
             playback_str = "playback: paused"
@@ -952,13 +1000,13 @@ class SimpleViz:
         fps_rates = f"sps: {self.scans_per_sec:.1f}   fps: {self._viz.fps:.1f}"
         playback_str = f"{fps_rates}   {playback_str}"
 
-        self._playback_osd.set_text(f"{playback_str}")
+        self._right_osd.set_text(f"{screenshot_str}{playback_str}")
 
     def toggle_pause(self) -> None:
         """Pause or unpause the visualization."""
         with self._cv:
             self._paused = not self._paused
-            self._update_playback_osd()
+            self._update_right_osd()
             if not self._paused:
                 self._cv.notify()
 
@@ -967,7 +1015,7 @@ class SimpleViz:
         with self._cv:
             self._paused = True
             self._step = n_frames
-            self._update_playback_osd()
+            self._update_right_osd()
             self._cv.notify()
 
     def modify_rate(self, amount: int) -> None:
@@ -975,44 +1023,59 @@ class SimpleViz:
         n_rates = len(SimpleViz._playback_rates)
         with self._cv:
             self._rate_ind = max(0, min(n_rates - 1, self._rate_ind + amount))
-            self._update_playback_osd()
+            self._update_right_osd()
 
     def toggle_osd(self, state: Optional[bool] = None) -> None:
         """Show or hide the on-screen display."""
         with self._cv:
             self._scan_viz.toggle_osd()
-            self._update_playback_osd()
+            self._update_right_osd()
             self._scan_viz.draw()
 
     def toggle_img_recording(self) -> None:
         if self._viz_img_recording:
             self._viz_img_recording = False
-            self._viz.pop_frame_buffer_handler()
             print("Key SHIFT-X: Img Recording STOPPED")
         else:
             self._viz_img_recording = True
-
-            def record_fb_imgs(fb_data: List, fb_width: int, fb_height: int):
-                saved_img_path = _save_fb_to_png(fb_data,
-                                                 fb_width,
-                                                 fb_height,
-                                                 action_name="recording")
-                print(f"Saving recordings to: {saved_img_path}")
-                # continue to other fb_handlers
-                return True
-            self._viz.push_frame_buffer_handler(record_fb_imgs)
             print("Key SHIFT-X: Img Recording STARTED")
 
     def screenshot(self, file_path: Optional[str] = None) -> None:
-        def handle_fb_once(viz: PointViz, fb_data: List, fb_width: int,
-                           fb_height: int):
-            saved_img_path = _save_fb_to_png(fb_data,
-                                             fb_width,
-                                             fb_height,
-                                             file_path=file_path)
-            viz.pop_frame_buffer_handler()
-            print(f"Saved screenshot to: {saved_img_path}")
-        push_point_viz_fb_handler(self._viz, self._viz, handle_fb_once)
+        file_name: str
+        if self._screenshot_resolution is None:
+            # Handle the 'None' case (default)
+            file_name = self._viz.save_screenshot(file_path or "")
+        elif isinstance(self._screenshot_resolution, float):
+            # Handle the scale factor case
+            scale_factor = self._screenshot_resolution
+            file_name = self._viz.save_screenshot(file_path or "", scale_factor)
+        else:
+            # Handle the tuple case (width, height)
+            width, height = self._screenshot_resolution
+            file_name = self._viz.save_screenshot(file_path or "", width, height)
+        if file_name:
+            print(f"Saved screenshot to: {file_name}")
+
+    def cycle_screenshot_res_factor(self, direction: int):
+        with self._lock:
+            if not self._screenshot_resolution:
+                self._screenshot_resolution = 2.0 if direction >= 0 else 10.0
+            elif isinstance(self._screenshot_resolution, tuple):
+                # Handle the tuple case
+                self._screenshot_resolution = 1.0
+            else:
+                # _screenshot_resolution is already a float
+                if direction > 0:
+                    # Next integer above
+                    next_up = np.floor(self._screenshot_resolution) + 1
+                    self._screenshot_resolution = 1.0 if next_up > 10 else float(next_up)
+                elif direction < 0:
+                    # Next integer below
+                    next_down = np.ceil(self._screenshot_resolution) - 1
+                    self._screenshot_resolution = 10.0 if next_down < 1 else float(next_down)
+                # If direction == 0, do nothing
+            self._update_right_osd()
+            self._scan_viz.draw()
 
     def _lidar_frame_period(self) -> float:
         if isinstance(self._scan_viz, LidarScanViz):
@@ -1024,7 +1087,7 @@ class SimpleViz:
             return 1.0 / 10.0
 
     def _get_timestamp(self, scan: List[Optional[LidarScan]]):
-        return min([first_valid_packet_ts(s) for s in scan if s])
+        return min([s.get_first_valid_packet_timestamp() for s in scan if s])
 
     def _process(self, seekable: _Seekable) -> None:
         scan_idx = -1
@@ -1042,6 +1105,9 @@ class SimpleViz:
 
         # monotonic time of last scan display, used to show scan display rate
         last_play_time = None
+
+        # flag that a loop was signaled
+        looped = False
 
         try:
             while True:
@@ -1069,7 +1135,12 @@ class SimpleViz:
 
                     scan = next(seekable)
                     scan_idx = seekable.scan_num
-                    scan = [scan] if isinstance(scan, client.LidarScan) else scan
+                    scan = [scan] if isinstance(scan, core.LidarScan) else scan
+                    # an empty array indicates that a loop occurred
+                    if len(scan) == 0:
+                        looped = True
+                        self._step = 1  # skip to next frame, frame 0
+                        continue
                     scan_ts = self._get_timestamp(scan) / 1e9
 
                     # fallback if we have no valid ts in the scan
@@ -1079,13 +1150,14 @@ class SimpleViz:
                         else:
                             scan_ts = last_scan_time + self._lidar_frame_period()
 
-                    # detect loops
-                    if last_scan_time is not None and last_scan_time > scan_ts:
+                    # reset playback on loop
+                    if looped:
                         last_time_update = time.monotonic()
                         last_sim_time = scan_ts - self._lidar_frame_period()
+                        looped = False
                     last_scan_time = scan_ts
 
-                    if last_sim_time is None:
+                    if last_sim_time is None or last_time_update is None:
                         last_sim_time = scan_ts
                         last_time_update = time.monotonic()
 
@@ -1096,7 +1168,7 @@ class SimpleViz:
                     if self._pause_at == scan_idx - 1:
                         self._paused = True
 
-                    self._update_playback_osd()
+                    self._update_right_osd()
 
                     # Sleep until time to "play" this scan if necessary
                     sim_time = (time.monotonic() - last_time_update) * rate + last_sim_time
@@ -1118,7 +1190,8 @@ class SimpleViz:
                     last_play_time = now_ts
                     self._last_draw_period = dt
                     self._viz.update()
-
+                    if (self._viz_img_recording):
+                        self.screenshot("")
                 except StopIteration:
                     if not self._paused and not self._on_eof == "stop":
                         break
@@ -1126,7 +1199,7 @@ class SimpleViz:
                     # Pause after we get a StopIteration in eof "stop"
                     if self._on_eof == "stop":
                         self._paused = True
-                        self._update_playback_osd()
+                        self._update_right_osd()
                         self._viz.update()
 
         finally:
@@ -1145,7 +1218,7 @@ class SimpleViz:
         else:
             return 0.0
 
-    def run(self, scans: Iterable[client.LidarScan]) -> None:
+    def run(self, scans: Iterable[core.LidarScan]) -> None:
         """Start reading scans and visualizing the stream.
 
         Must be called from the main thread on macOS. Will close the provided
@@ -1157,7 +1230,14 @@ class SimpleViz:
         Returns:
             When the stream is consumed or the visualizer window is closed.
         """
-
+        # loop the source if we want loop
+        if self._on_eof == "loop":
+            def looper(scans):
+                while True:
+                    for scan in scans:
+                        yield scan
+                    yield []  # signal a loop occurred
+            scans = looper(scans)
         if self._live:
             # If live, create a "LiveConsumer" to drop frames if the viz is too slow
             # to keep up with the source. The lambda indicates whether a dropped frame should be counted.
@@ -1197,9 +1277,52 @@ class SimpleViz:
             proc_thread.join()
 
 
+def ls_show(scans: Union[Slicer, LidarScan, List[LidarScan], List[List[LidarScan]]],
+            *,
+            title: Optional[str] = None) -> None:
+    """[BETA] Display a set of LidarScans in an interactive window.
+
+    Args:
+        scans: A set of LidarScans to visualize.
+
+    Optional Args:
+        title: Title of the visualization window. If not provided,
+               it will be composed from the sensor serial numbers.
+
+    Note:
+        This is a beta feature and its API may change in future releases.
+    """
+
+    def compose_title(sensor_infos: List[SensorInfo]) -> str:
+        return ",".join([str(si.sn) for si in sensor_infos])
+
+    def get_sensor_infos(scans: List[List[LidarScan]]) -> List[SensorInfo]:
+        return [s.sensor_info for s in scans[0] if s is not None]
+
+    def normalize(scans: Union[LidarScan, List[LidarScan], List[List[LidarScan]]]
+                  ) -> List[List[LidarScan]]:
+        if isinstance(scans, LidarScan):
+            return cast(List[List[LidarScan]], [[scans]])
+        elif isinstance(scans, list) and len(scans) > 0 and isinstance(scans[0], LidarScan):
+            return cast(List[List[LidarScan]], [scans])
+        elif isinstance(scans, list) and len(scans) > 0 and isinstance(scans[0], list) and \
+                len(scans[0]) > 0 and isinstance(scans[0][0], LidarScan):
+            return cast(List[List[LidarScan]], scans)
+        else:
+            raise ValueError("scans must be a LidarScan, a list of LidarScans or a list of "
+                             "lists of LidarScans and should not be empty")
+
+    scans_it: Union[Slicer, List[List[Optional[LidarScan]]]]
+    scans_it = scans if isinstance(scans, Slicer) else normalize(scans)
+    sensors_infos = get_sensor_infos(scans_it)
+    title = title or f"Ouster Viz: {compose_title(sensors_infos)}"
+    SimpleViz(sensors_infos, title=title, pause_at=0,
+              on_eof='loop', rate=1.0).run(cast(Iterable[LidarScan], scans_it))
+
+
 __all__ = [
     'PointViz', 'Cloud', 'Image', 'Cuboid', 'Label', 'WindowCtx', 'Camera',
     'TargetDisplay', 'add_default_controls', 'ImageMode',
     'CloudMode', 'CloudPaletteItem', 'VizExtraMode', 'LidarScanViz',
-    'push_point_viz_handler',
+    'push_point_viz_handler', 'ls_show'
 ]

@@ -23,13 +23,14 @@ namespace impl {
  */
 class GLRings {
     static bool initialized;
+    static GLuint ring_vao;
     static GLuint ring_program_id;
     static GLuint ring_xyz_id;
     static GLuint ring_proj_view_id;
     static GLuint ring_range_id;
     static GLuint ring_thickness_id;
+    static GLuint xyz_buffer;
 
-    GLuint xyz_buffer;
     int ring_size;
     int ring_line_width;
     bool rings_enabled;
@@ -62,6 +63,7 @@ class GLRings {
  */
 class GLCuboid {
     static bool initialized;
+    static GLuint cuboid_vao;
     static GLuint cuboid_program_id;
     static GLuint cuboid_xyz_id;
     static GLuint cuboid_proj_view_id;
@@ -93,6 +95,50 @@ class GLCuboid {
      * Draws the cuboids from the point of view of the camera
      */
     void draw(const WindowCtx& ctx, const CameraData& camera, Cuboid& cuboid);
+
+    /*
+     * Initializes shader program and handles
+     */
+    static void initialize();
+
+    static void uninitialize();
+
+    static void beginDraw();
+
+    static void endDraw();
+};
+
+/*
+ * Manages opengl state for drawing lines
+ */
+class GLLines {
+    static bool initialized;
+    static GLuint lines_vao;
+    static GLuint lines_program_id;
+    static GLuint lines_xyz_id;
+    static GLuint lines_proj_view_id;
+    static GLuint lines_rgba_id;
+
+    GLuint xyz_buffer{0};
+    Eigen::Matrix4d transform;
+    std::array<float, 4> rgba;
+
+   public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    GLLines();
+
+    /*
+     * For Indexed<T, U>, arg ignored
+     */
+    GLLines(const Lines&);
+
+    ~GLLines();
+
+    /*
+     * Draws the cuboids from the point of view of the camera
+     */
+    void draw(const WindowCtx& ctx, const CameraData& camera, Lines& lines);
 
     /*
      * Initializes shader program and handles

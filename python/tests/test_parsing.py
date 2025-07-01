@@ -1,12 +1,9 @@
-# type: ignore
 import os
 import numpy as np
 import ouster.sdk._bindings.pcap as _pcap
-from ouster.sdk.client import LidarMode, SensorInfo, UDPProfileLidar, ChanField, PacketFormat, LidarPacket
-import ouster.sdk.client as client
+from ouster.sdk.core import LidarMode, SensorInfo, UDPProfileLidar, ChanField, PacketFormat, LidarPacket
 import ouster.sdk.pcap as pcap
-from ouster.sdk.util import (default_scan_fields,
-                             resolve_metadata)
+from ouster.sdk.util import (resolve_metadata)
 from tests.conftest import PCAPS_DATA_DIR
 
 
@@ -31,7 +28,7 @@ def test_fusa_fields():
     # Note - because `def_enum` adds a prefix to all symbols in an enum, the
     # profile symbol name doesn't match its C++ equivalent :-/
     assert si.format.udp_profile_lidar == UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL
-    assert si.mode == LidarMode.MODE_1024x10
+    assert si.config.lidar_mode == LidarMode.MODE_1024x10
 
     buf = bytearray(2**16)
     packet_info = _pcap.packet_info()
@@ -80,9 +77,9 @@ def test_packet_crc():
     meta = open(info_name).read()
     si = SensorInfo(meta)
     pf = PacketFormat(si)
-    source = pcap.Pcap(pcap_name, si)
+    source = pcap.PcapPacketSource(pcap_name, sensor_info=[si])
     count = 0
-    for p in source:
+    for idx, p in source:
         if isinstance(p, LidarPacket):
             assert hex(pf.crc(p.buf)) == hex(pf.calculate_crc(p.buf))
             count += 1
@@ -95,11 +92,10 @@ def test_fusa_reading_pcap():
     pcap_name = os.path.join(PCAPS_DATA_DIR, f'{dataset_name}.pcap')
     meta = open(resolve_metadata(pcap_name)).read()
     si = SensorInfo(meta)
-    source = pcap.Pcap(pcap_name, si)
-    field_types = default_scan_fields(source.metadata.format.udp_profile_lidar)
-    scans = list(client.Scans(source, fields=field_types))
+    source = pcap.PcapScanSource(pcap_name, sensor_info=[si])
+    scans = list(iter(source))
     assert len(scans) == 1
 
-    ls = scans[0]
+    ls = scans[0][0]
     assert np.count_nonzero(ls.field(ChanField.FLAGS)) == 8
     assert np.count_nonzero(ls.field(ChanField.FLAGS2)) == 0

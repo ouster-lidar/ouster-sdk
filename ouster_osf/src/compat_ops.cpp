@@ -251,32 +251,33 @@ int64_t file_size(const std::string& path) {
 }
 
 /// File mapping open (read-only operations)
-uint8_t* mmap_open(const std::string& path) {
+uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
 #ifdef _WIN32
-    HANDLE hFile;
-    uint8_t* pBuf;
-    hFile = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL,
-                        OPEN_EXISTING,
-                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
-    if (hFile == INVALID_HANDLE_VALUE) {
-        return NULL;
+    HANDLE file = CreateFileA(
+        path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        return nullptr;
     }
-    HANDLE hFileMap;
-    hFileMap = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
-    if (hFileMap == NULL) {
-        CloseHandle(hFile);
-        return NULL;
+    HANDLE file_map =
+        CreateFileMappingA(file, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    memmap_handle = reinterpret_cast<uintptr_t>(file_map);
+    if (file_map == nullptr) {
+        CloseHandle(file);
+        return nullptr;
     }
 
-    pBuf =
-        static_cast<uint8_t*>(MapViewOfFile(hFileMap, FILE_MAP_READ, 0, 0, 0));
+    uint8_t* buffer_pointer =
+        static_cast<uint8_t*>(MapViewOfFile(file_map, FILE_MAP_READ, 0, 0, 0));
 
     // TODO: check errors?
-    CloseHandle(hFileMap);
-    CloseHandle(hFile);
+    CloseHandle(file);
 
-    return pBuf;
+    return buffer_pointer;
 #else
+    // Silence unused variable warning
+    (void)memmap_handle;
+
     struct stat st;
     if (stat(path.c_str(), &st) < 0) {
         return nullptr;
@@ -294,8 +295,10 @@ uint8_t* mmap_open(const std::string& path) {
     }
 
     void* map_osf_file = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+
+    // Closing the file descriptor does not invalidate the memory map.
+    ::close(fd);
     if (map_osf_file == MAP_FAILED) {
-        ::close(fd);
         return nullptr;
     }
     return static_cast<uint8_t*>(map_osf_file);
@@ -303,11 +306,19 @@ uint8_t* mmap_open(const std::string& path) {
 }
 
 /// File mapping close
-bool mmap_close(uint8_t* file_buf, const uint64_t file_size) {
+bool mmap_close(uint8_t* file_buf, const uint64_t file_size,
+                uintptr_t memmap_handle) {
     if (file_buf == nullptr || file_size == 0) return false;
 #ifdef _WIN32
-    return (UnmapViewOfFile(file_buf) != 0);
+    bool result = (UnmapViewOfFile(file_buf) != 0);
+    if (memmap_handle != 0) {
+        HANDLE map_file = reinterpret_cast<HANDLE>(memmap_handle);
+        CloseHandle(map_file);
+    }
+    return result;
 #else
+    // Silence unused variable warning
+    (void)memmap_handle;
     return (munmap(static_cast<void*>(file_buf), file_size) >= 0);
 #endif
 }

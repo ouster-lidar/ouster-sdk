@@ -60,7 +60,7 @@ def main():
 
     # Getting data sources
     source = open_source(data_path)
-    meta = source.metadata
+    meta = source.sensor_info[0]
     scans = iter(source)
 
     # ==============================
@@ -142,7 +142,7 @@ def main():
     print("Ex 1.2:\tImages and Labels: Lidar Scan Fields as Images")
 
     # [doc-stag-scan-fields-images]
-    scan = next(scans)
+    scan = next(scans)[0]
 
     img_aspect = (meta.beam_altitude_angles[0] -
                   meta.beam_altitude_angles[-1]) / 360.0

@@ -44,7 +44,28 @@ struct OUSTER_API_CLASS ValidatorIssues {
          * @param[in] other The other validator entry to copy from.
          */
         OUSTER_API_FUNCTION
-        ValidatorEntry(const ValidatorEntry& other);
+        ValidatorEntry(const ValidatorEntry& other) = default;
+
+        // Move assignment constructor not available due to const members.
+        ValidatorEntry& operator=(const ValidatorEntry& other) = delete;
+
+        /**
+         * Move constructor to move from another validator
+         * issue entry.
+         *
+         * @param[in] other The other validator entry to move from.
+         */
+        OUSTER_API_FUNCTION
+        ValidatorEntry(ValidatorEntry&& other) = default;
+
+        // Move assignment constructor not available due to const members.
+        ValidatorEntry& operator=(ValidatorEntry&& other) = delete;
+
+        /**
+         * Destructor.
+         */
+        OUSTER_API_FUNCTION
+        ~ValidatorEntry() = default;
 
         /**
          * Return the string representation of the validation issue.
@@ -71,8 +92,8 @@ struct OUSTER_API_CLASS ValidatorIssues {
         const std::string& get_msg() const;
 
        protected:
-        const std::string path;  ///< The json path for the issue
-        const std::string msg;   ///< The specific issue
+        const std::string path_;  ///< The json path for the issue
+        const std::string msg_;   ///< The specific issue
     };
 
     /**

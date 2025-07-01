@@ -15,12 +15,22 @@
 namespace ouster {
 namespace sensor_utils {
 
+struct OUSTER_API_CLASS GlobalIndex {
+    uint64_t file_offset;
+    uint64_t sensor_index;
+    uint64_t timestamp;
+};
+
 class OUSTER_API_CLASS PcapIndex {
    public:
     using frame_index =
         std::vector<uint64_t>;  ///< Maps a frame number to a file offset
 
     std::vector<frame_index> frame_indices_;  ///< frame index for each sensor
+
+    std::vector<GlobalIndex>
+        global_frame_indices_;  ///< frame index for all sensors, contains the
+                                ///< offset followed by the index of each sensor
 
     using timestamp_index = std::unordered_map<uint64_t, uint64_t>;
 
@@ -77,6 +87,14 @@ class OUSTER_API_CLASS PcapIndex {
                        unsigned int frame_number);
 };
 
+enum class IdxErrorType { None, Size, Id };
+
+class OUSTER_API_CLASS PcapDuplicatePortException : public std::runtime_error {
+   public:
+    OUSTER_API_FUNCTION
+    PcapDuplicatePortException(const std::string& msg) : runtime_error(msg) {}
+};
+
 /**
  * A PcapReader that allows seeking to the start of a lidar frame.
  *
@@ -127,10 +145,25 @@ class OUSTER_API_CLASS IndexedPcapReader : public PcapReader {
      * Attempts to match the current packet to one of the sensor info objects
      * and returns the appropriate packet format if there is one
      *
+     * @param[in] soft_id_check if id mismatches should be ignored
+     *
+     * @return An optional sensor index for the current packet
+     */
+    OUSTER_API_FUNCTION
+    nonstd::optional<size_t> sensor_idx_for_current_packet(
+        bool soft_id_check = false) const;
+
+    /**
+     * Attempts to match the current packet to one of the sensor info objects
+     * and returns the appropriate packet format if there is one
+     *
+     * @param[in] soft_id_check if id mismatches should be ignored
+     *
      * @return An optional packet format for the current packet
      */
     OUSTER_API_FUNCTION
-    nonstd::optional<size_t> sensor_idx_for_current_packet() const;
+    std::pair<IdxErrorType, nonstd::optional<size_t>>
+    check_sensor_idx_for_current_packet(bool soft_id_check) const;
 
     /**
      * @return the current packet's frame_id
@@ -165,6 +198,13 @@ class OUSTER_API_CLASS IndexedPcapReader : public PcapReader {
     OUSTER_API_FUNCTION
     static bool frame_id_rolled_over(uint16_t previous, uint16_t current);
 
+    /**
+     * Get the sensor_info for each sensor in this pcap.
+     * @return the sensor_info for each sensor in this pcap
+     */
+    OUSTER_API_FUNCTION
+    const std::vector<ouster::sensor::sensor_info>& sensor_info() const;
+
    protected:
     void init_();
     std::vector<ouster::sensor::sensor_info>
@@ -177,6 +217,8 @@ class OUSTER_API_CLASS IndexedPcapReader : public PcapReader {
     std::vector<nonstd::optional<uint16_t>>
         previous_frame_ids_;  ///< previous frame id for each sensor
     std::unordered_map<uint16_t, std::map<std::string, uint64_t>> port_map_;
+
+    std::string filename_;
 };
 
 }  // namespace sensor_utils

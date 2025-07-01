@@ -1,4 +1,3 @@
-#  type: ignore
 """
 ouster-cli discover plugin
 Tom Slankard <tom.slankard@ouster.io>
@@ -8,13 +7,13 @@ This is adapted from zeroconf's async_browser.py example.
 
 import json
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any, Dict
 import time
 from socket import AddressFamily
 import asyncio
 import click
-from ouster.cli.core import cli
-from ouster.sdk.client import SensorHttp
+from ouster.cli.core import cli  # type: ignore
+from ouster.sdk.sensor import SensorHttp
 from zeroconf import IPVersion, ServiceStateChange, Zeroconf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import zeroconf
@@ -23,7 +22,7 @@ from zeroconf.asyncio import (
     AsyncServiceInfo,
     AsyncZeroconf,
 )
-from psutil import net_if_addrs
+from psutil import net_if_addrs  # type: ignore
 from sys import version_info
 import importlib.metadata
 import packaging.version
@@ -60,9 +59,9 @@ class AsyncServiceDiscovery:
         self.aiozc: Optional[AsyncZeroconf] = None
         self.start_time = time.time()
         self._executor = ThreadPoolExecutor(max_workers=pool_size)
-        self._futures = []
-        self._futures_shadow = []
-        self._processed_hostnames = []
+        self._futures = []  # type: ignore
+        self._futures_shadow = []  # type: ignore
+        self._processed_hostnames = []  # type: ignore
         self._lock = asyncio.Lock()
         # Note - longer than the default of 3s, but it doesn't affect the overall duration.
         self.async_request_timeout_ms = 10000
@@ -237,7 +236,7 @@ def get_output_for_sensor(sensor):
     return out, color
 
 
-def get_all_sensor_info(info, socket_timeout, show_user_data) -> str:
+def get_all_sensor_info(info, socket_timeout, show_user_data) -> Dict[str, Any]:
     addresses = info.parsed_scoped_addresses(IPVersion.All)
     sensor_info = None
     config = None
@@ -248,13 +247,13 @@ def get_all_sensor_info(info, socket_timeout, show_user_data) -> str:
         try:
             sensor_http = SensorHttp.create(address, socket_timeout)
             if not sensor_info:
-                sensor_info = json.loads(sensor_http.sensor_info())
+                sensor_info = json.loads(sensor_http.sensor_info())  # type: ignore
             if not config:
-                config = json.loads(sensor_http.active_config_params())
+                config = json.loads(sensor_http.active_config_params())  # type: ignore
             if not network:
                 network = json.loads(sensor_http.network(socket_timeout))
             if show_user_data and not user_data:
-                user_data = sensor_http.user_data(socket_timeout)
+                user_data = sensor_http.get_user_data(socket_timeout)
         except (RuntimeError, OSError) as e:
             warning_prefix = f"Could not connect to {info.server} via {address}"
             warnings.append(

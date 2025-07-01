@@ -35,7 +35,7 @@ def test_osf_slice(test_osf_file) -> None:
     num_scans_in_src = 3
     # check precondition
     src = open_source(test_osf_file)
-    assert src.scans_num == num_scans_in_src
+    assert src.scans_num == [num_scans_in_src]
     src.close()
 
     try:
@@ -54,7 +54,7 @@ def test_osf_slice(test_osf_file) -> None:
             assert result.exit_code == 0  # FIXME?
             assert os.path.isfile(result_osf.name)
 
-            result_src = open_source(result_osf.name, -1)
+            result_src = open_source(result_osf.name)
             assert result_src.scans_num == [0]
             result_src.close()
     finally:
@@ -70,7 +70,7 @@ def test_osf_slice_2(test_osf_file) -> None:
     # check precondition
     src = open_source(test_osf_file)
     scans = [scan for scan in src]
-    assert src.scans_num == expected_num_scans
+    assert src.scans_num == [expected_num_scans]
     src.close()
 
     try:
@@ -88,11 +88,11 @@ def test_osf_slice_2(test_osf_file) -> None:
             assert result.exit_code == 0  # FIXME?
             assert os.path.isfile(result_osf.name)
 
-            result_src = open_source(result_osf.name, -1)
+            result_src = open_source(result_osf.name)
             result_scans = [scan for scan in result_src]
             assert result_src.scans_num == [slice_end - slice_start]
-            assert result_scans[0] == [scans[1]]
-            assert result_scans[1] == [scans[2]]
+            assert result_scans[0] == scans[1]
+            assert result_scans[1] == scans[2]
             result_src.close()
     finally:
         os.unlink(result_osf.name)
@@ -104,7 +104,7 @@ def test_osf_slice_time(test_osf_file_new) -> None:
     expected_num_scans = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == expected_num_scans
+    assert src.scans_num == [expected_num_scans]
     src.close()
 
     try:
@@ -122,7 +122,7 @@ def test_osf_slice_time(test_osf_file_new) -> None:
             print(result.output)
             assert os.path.isfile(result_osf.name)
 
-            result_src = open_source(result_osf.name, -1)
+            result_src = open_source(result_osf.name)
             assert result_src.scans_num == [0]
             # TODO[tws] figure out how to capture "WARNING: No scans saved."
             result_src.close()
@@ -139,7 +139,7 @@ def test_osf_slice_time_2(test_osf_file) -> None:
     expected_num_scans = 3
     # check precondition
     src = open_source(test_osf_file)
-    assert src.scans_num == expected_num_scans
+    assert src.scans_num == [expected_num_scans]
     src.close()
 
     try:
@@ -159,7 +159,7 @@ def test_osf_slice_time_2(test_osf_file) -> None:
             print(result.output)
             assert os.path.isfile(result_osf.name)
 
-            result_src = open_source(result_osf.name, -1)
+            result_src = open_source(result_osf.name)
             assert result_src.scans_num == [3]
             # TODO[tws] figure out how to capture "WARNING: No scans saved."
             result_src.close()
@@ -174,7 +174,7 @@ def test_osf_slice_time_3(test_osf_file_new) -> None:
     expected_num_scans = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == expected_num_scans
+    assert src.scans_num == [expected_num_scans]
     src.close()
 
     try:
@@ -201,7 +201,7 @@ def test_osf_slice_time_4(test_osf_file_new) -> None:
     expected_num_scans = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == expected_num_scans
+    assert src.scans_num == [expected_num_scans]
     src.close()
 
     try:
@@ -227,7 +227,7 @@ def test_osf_slice_time_5(test_osf_file_new) -> None:
     scans_in_src = 3
     # check precondition
     src = open_source(test_osf_file_new)
-    assert src.scans_num == scans_in_src
+    assert src.scans_num == [scans_in_src]
     src.close()
 
     try:
@@ -245,7 +245,7 @@ def test_osf_slice_time_5(test_osf_file_new) -> None:
             print(result.output)
             assert os.path.isfile(result_osf.name)
 
-            result_src = open_source(result_osf.name, -1)
+            result_src = open_source(result_osf.name)
             assert result_src.scans_num == [1]
             result_src.close()
     finally:

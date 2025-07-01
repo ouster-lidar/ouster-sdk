@@ -16,6 +16,8 @@
 #include "ouster/visibility.h"
 
 // OSF basic types for LidarSensor and LidarScan/Imu Streams
+#include <chrono>
+
 #include "os_sensor/common_generated.h"
 #include "os_sensor/lidar_scan_stream_generated.h"
 #include "os_sensor/lidar_sensor_generated.h"
@@ -36,7 +38,7 @@ using namespace v2;
  * Enumerator for the OSF Version. This will change whenever the underlying
  * flatbuffer structures change.
  */
-enum OSF_VERSION {
+enum OSF_VERSION : uint64_t {
     V_INVALID = 0,  ///< Invalid OSF Version
     V_1_0,          ///< Original version of the OSF (2019/9/16)
     V_1_1,          ///< Add gps/imu/car trajectory to the OSF (2019/11/14)

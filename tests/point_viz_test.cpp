@@ -4,7 +4,7 @@
 
 using namespace ouster::viz;
 
-TEST(PointViz, window_coordinates_to_world_coordinates) {
+TEST(PointViz, viewport_coordinates_to_world_coordinates) {
     WindowCtx ctx;
     ctx.window_width = ctx.viewport_width = 600;
     ctx.window_height = ctx.viewport_height = 400;
@@ -18,7 +18,7 @@ TEST(PointViz, window_coordinates_to_world_coordinates) {
     EXPECT_DOUBLE_EQ(world2.second, 0);
 }
 
-TEST(PointViz, window_coordinates_to_image_pixel) {
+TEST(PointViz, viewport_coordinates_to_image_pixel) {
     WindowCtx ctx;
     ctx.window_width = ctx.viewport_width = 400;
     ctx.window_height = ctx.viewport_height = 300;
@@ -26,7 +26,7 @@ TEST(PointViz, window_coordinates_to_image_pixel) {
     EXPECT_THROW(
         {
             try {
-                img.window_coordinates_to_image_pixel(ctx, 0, 0);
+                img.viewport_coordinates_to_image_pixel(ctx, 0, 0);
             } catch (std::runtime_error& e) {
                 EXPECT_STREQ(e.what(), "image data has zero width or height");
                 throw;
@@ -40,25 +40,26 @@ TEST(PointViz, window_coordinates_to_image_pixel) {
     img.set_image(w, h, img_data);
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
     auto pixel =
-        img.window_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
+        img.viewport_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
     EXPECT_EQ(pixel.first, 0);
     EXPECT_EQ(pixel.second, 2);
 
-    pixel = img.window_coordinates_to_image_pixel(ctx, 0, 0);
+    pixel = img.viewport_coordinates_to_image_pixel(ctx, 0, 0);
     EXPECT_EQ(pixel.first, 0);
     EXPECT_EQ(pixel.second, 0);
 
-    pixel = img.window_coordinates_to_image_pixel(ctx, ctx.window_width - 1, 0);
+    pixel =
+        img.viewport_coordinates_to_image_pixel(ctx, ctx.window_width - 1, 0);
     EXPECT_EQ(pixel.first, 3);
     EXPECT_EQ(pixel.second, 0);
 
-    pixel = img.window_coordinates_to_image_pixel(ctx, ctx.window_width - 1,
-                                                  ctx.window_height - 1);
+    pixel = img.viewport_coordinates_to_image_pixel(ctx, ctx.window_width - 1,
+                                                    ctx.window_height - 1);
     EXPECT_EQ(pixel.first, 3);
     EXPECT_EQ(pixel.second, 2);
 }
 
-TEST(PointViz, image_pixel_to_window_coordinates) {
+TEST(PointViz, image_pixel_to_viewport_coordinates) {
     WindowCtx ctx;
     ctx.window_width = ctx.viewport_width = 400;
     ctx.window_height = ctx.viewport_height = 300;
@@ -70,7 +71,7 @@ TEST(PointViz, image_pixel_to_window_coordinates) {
     img.set_image(w, h, img_data);
     img.set_position(-1.3333333333, 1.3333333333, -1, 1);
     auto pixel =
-        img.window_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
+        img.viewport_coordinates_to_image_pixel(ctx, 0, ctx.window_height - 1);
     EXPECT_EQ(pixel.first, 0);
     EXPECT_EQ(pixel.second, 2);
 
@@ -79,7 +80,7 @@ TEST(PointViz, image_pixel_to_window_coordinates) {
     EXPECT_FLOAT_EQ(pixel_size.second, 100);
 
     auto window_pixel =
-        img.image_pixel_to_window_coordinates(ctx, pixel.first, pixel.second);
+        img.image_pixel_to_viewport_coordinates(ctx, pixel.first, pixel.second);
     EXPECT_FLOAT_EQ(window_pixel.first, 50);
     EXPECT_FLOAT_EQ(window_pixel.second, 250);
 }

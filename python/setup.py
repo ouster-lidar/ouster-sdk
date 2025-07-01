@@ -69,7 +69,21 @@ class CMakeBuild(build_ext):
         cmake_args += ['-DCMAKE_BUILD_TYPE=' + build_type]
 
         env = os.environ.copy()
+
+        if "VCPKG_MANIFEST_DIR" in env:
+            cmake_args += [f"-DVCPKG_MANIFEST_DIR={env['VCPKG_MANIFEST_DIR']}"]
+        else:
+            cmake_args += [f"-DVCPKG_MANIFEST_DIR={OUSTER_SDK_PATH}"]
+        if "VCPKG_MANIFEST_MODE" in env:
+            cmake_args += [f"-DVCPKG_MANIFEST_MODE={env['VCPKG_MANIFEST_MODE']}"]
+        else:
+            cmake_args += ["-DVCPKG_MANIFEST_MODE=ON"]
+
         jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', os.cpu_count())
+        if "VCPKG_MAX_CONCURRENCY" in env:
+            cmake_args += [f"-DVCPKG_MAX_CONCURRENCY={env['VCPKG_MAX_CONCURRENCY']}"]
+        else:
+            cmake_args += [f"-DVCPKG_MAX_CONCURRENCY={jobs}"]
 
         # pass OUSTER_SDK_PATH to cmake
         cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
@@ -147,22 +161,10 @@ class sdk_bdist_wheel(bdist_wheel):
 
 
 def install_requires():
-    install_requires = [
-        'psutil >=5.9.5, <6',
-        'zeroconf >=0.131.0',
-        'click >=8.1.3, <9',
-        'importlib_metadata ==6.6.0',
-        'prettytable >= 2.1.0',
-        'requests >=2.0, <3',
-        'more-itertools >=8.6',
-        'numpy >=1.19, <2, !=1.19.4',
-        'laspy >=2.5.0, <3',
-        'threadpoolctl >=3.5.0',
-        'Pillow >=9.2',
-        'packaging',
-        'rosbags == 0.9.23',
-        'setuptools; python_version >= "3.12"'
-    ]
+    install_requires = []
+    with open(os.path.join(SRC_PATH, "requirements.txt")) as f:
+        for line in f:
+            install_requires.append(line)
 
     # PUT ALL MAPPING REQUIREMENTS INSIDE OF THE requirements.json file
     with open(os.path.join(SRC_PATH,
@@ -173,14 +175,14 @@ def install_requires():
                            "requirements.json")) as f:
         mapping_reqs = json.loads(f.read())
     for item in mapping_reqs:
-        temp = f"{item} {mapping_reqs[item]['version']}; {mapping_reqs[item]['marker']}"
+        temp = f"{item['name']} {item['version']}; {item['marker']}"
         install_requires.append(temp)
     return install_requires
 
 
 if __name__ == "__main__":
     setup(
-        name='ouster-sdk',
+        name='ouster_sdk',
         url='https://github.com/ouster-lidar/ouster-sdk',
         # read from top-level sdk CMakeLists.txt
         version=parse_version(),
@@ -191,7 +193,7 @@ if __name__ == "__main__":
             'ouster.sdk.pcap': ['py.typed', '_pcap.pyi'],
             'ouster.sdk.osf': ['py.typed', '_osf.pyi'],
             'ouster.sdk.viz': ['py.typed', '_viz.pyi'],
-            'ouster.sdk.mapping': ['py.typed', 'requirements.json'],
+            'ouster.sdk.mapping': ['py.typed', '_mapping.pyi', 'requirements.json'],
             'ouster.sdk.bag': ['py.typed']
         },
         author='Ouster Sensor SDK Developers',

@@ -1,5 +1,5 @@
 from .conftest import MockPointViz
-from ouster.sdk.client import SensorInfo, LidarMode, LidarScan
+from ouster.sdk.core import SensorInfo, LidarMode, LidarScan
 from ouster.sdk.viz.model import LidarScanVizModel
 from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
 from ouster.sdk.viz.track import Track, TRACK_INIT_POINTS_NUM

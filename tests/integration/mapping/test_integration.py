@@ -8,6 +8,8 @@ import subprocess
 import sys
 import re
 import ouster.sdk.mapping
+from ouster.sdk.core import read_pointcloud
+from ouster.sdk import open_source
 from pathlib import Path
 
 import pytest
@@ -55,7 +57,7 @@ def slam_conversion_path(pcap_full_path, tmp_path):
     return slam_out_osf
 
 try:
-    from ouster.sdk.mapping import KissBackend
+    from ouster.sdk.mapping import SlamEngine
     kiss_icp_available = True
 except ImportError:
     kiss_icp_available = False
@@ -116,16 +118,26 @@ def convert(input_file, output_file):
 
 @pytest.mark.skipif(not kiss_icp_available or is_mac_arm, reason="No Platform Support or on mac arm")
 @pytest.mark.parametrize("output_file,min_size", [
-    ("test_output.osf", 1000),
-    ("test_output.ply", 1000),
-    ("test_output.las", 1000),
-    ("test_output.pcd", 500)])
+    ("test_output.osf", 1),
+    ("test_output.ply", 50000),
+    ("test_output.las", 50000),
+    ("test_output.pcd", 50000)])
 def test_slam_command_output(output_file, min_size,
                              slam_conversion_path,
                              tmp_path):
     output_file = os.path.join(tmp_path, output_file)
     output_file = convert(slam_conversion_path, output_file)
 
+    # validate the files
     assert os.path.exists(output_file)
-    file_size = os.path.getsize(output_file) // (1024)
-    assert file_size >= min_size
+    if output_file.endswith("osf"):
+        num_pts = len(open_source(output_file))
+    else:
+        if output_file.endswith("las"):
+            import laspy
+            with laspy.open(output_file) as input_las:
+                num_pts = input_las.header.point_count
+        else:
+            num_pts = read_pointcloud(output_file).shape[0]
+
+    assert num_pts >= min_size

@@ -46,6 +46,12 @@ class OUSTER_API_CLASS AsyncWriter {
                 std::shared_ptr<Encoder> encoder = nullptr);
 
     /**
+     * Closes the writer and finalizes any pending writes.
+     */
+    OUSTER_API_FUNCTION
+    ~AsyncWriter();
+
+    /**
      * Save a single scan to the specified stream_index in an OSF
      * file.
      *

@@ -12,12 +12,12 @@ import numpy as np
 import math
 import threading
 
-from ouster.sdk import client
+from ouster.sdk import core
 import ouster.sdk.pcap as pcap
 from ouster.sdk.util import resolve_metadata
 import ouster.sdk.util.pose_util as pu
 from ouster.sdk.viz.model import LidarScanVizModel
-from ouster.sdk.client import dewarp
+from ouster.sdk.core import dewarp
 
 from ouster.sdk.viz.accumulators import LidarScanVizAccumulators
 from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
@@ -341,32 +341,34 @@ def test_viz_util_traj_eval_scans_poses(test_data_dir,
     traj_poses = pu.make_kiss_traj_poses(poses)
     traj_eval = pu.TrajectoryEvaluator(traj_poses, time_bounds=1.0)
 
-    meta = client.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
-    packets = pcap.Pcap(pcap_file, meta)
-    scans = client.Scans(packets)
+    meta = core.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
+    scans = pcap.PcapScanSource(pcap_file, sensor_info=[meta])
 
     # used for use_dewarp option
-    xyzlut = client.XYZLut(meta)
+    xyzlut = core.XYZLut(meta)
 
-    for idx, scan in enumerate(scans):
-        # make scan indexed column timestamps
-        idx_ts = idx + np.linspace(0, 1.0, scan.w, endpoint=False)
-        traj_eval(scan, col_ts=idx_ts)
-        key = scan.field(client.ChanField.REFLECTIVITY)
-        key = key / np.amax(key)
-        if use_dewarp:
-            cloud_scan = viz.Cloud(scan.h * scan.w)
-            xyz = xyzlut(scan.field(client.ChanField.RANGE))
-            # TODO hao: remove the input_row_major
-            xyz = dewarp(xyz, scan.pose)
-            cloud_scan.set_xyz(xyz)
-            cloud_scan.set_key(key)
-        else:
-            cloud_scan = viz.Cloud(meta)
-            cloud_scan.set_range(scan.field(client.ChanField.RANGE))
-            cloud_scan.set_column_poses(scan.pose)
-            cloud_scan.set_key(key)
-        point_viz.add(cloud_scan)
+    for idx, scanl in enumerate(scans):
+        for scan in scanl:
+            if scan is None:
+                continue
+            # make scan indexed column timestamps
+            idx_ts = idx + np.linspace(0, 1.0, scan.w, endpoint=False)
+            traj_eval(scan, col_ts=idx_ts)
+            key = scan.field(core.ChanField.REFLECTIVITY)
+            key = key / np.amax(key)
+            if use_dewarp:
+                cloud_scan = viz.Cloud(scan.h * scan.w)
+                xyz = xyzlut(scan.field(core.ChanField.RANGE))
+                # TODO hao: remove the input_row_major
+                xyz = dewarp(xyz, scan.pose)
+                cloud_scan.set_xyz(xyz)
+                cloud_scan.set_key(key)
+            else:
+                cloud_scan = viz.Cloud(meta)
+                cloud_scan.set_range(scan.field(core.ChanField.RANGE))
+                cloud_scan.set_column_poses(scan.pose)
+                cloud_scan.set_key(key)
+            point_viz.add(cloud_scan)
 
     point_viz.update()
 
@@ -422,9 +424,8 @@ def test_viz_util_scans_accum_poses(test_data_dir,
     poses_file = str(test_data_dir / "pcaps" /
                      "OS-1-128_v2.3.0_1024x10_lb_n3_poses_kitti.txt")
 
-    meta = client.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
-    packets = pcap.Pcap(pcap_file, meta)
-    scans = client.Scans(packets)
+    meta = core.SensorInfo(open(resolve_metadata(pcap_file) or '').read())
+    scans = pcap.PcapScanSource(pcap_file, sensor_info=[meta])
     scans_w_poses = pu.pose_scans_from_kitti(scans, poses_file)
     model = LidarScanVizModel([meta], _img_aspect_ratio=0)
 
@@ -478,3 +479,31 @@ def test_viz_util_scans_accum_poses(test_data_dir,
          period=period_t,
          total=total_t,
          title="LidarScanVizAccumulators as scan viz.")
+
+
+def test_ls_show(test_data_dir) -> None:
+    """Verify ls_show method work as expected."""
+    from ouster.sdk import open_source
+    from ouster.sdk.viz import ls_show
+    pcap_file = str(test_data_dir / "pcaps" /
+                    "OS-1-128_v2.3.0_1024x10_lb_n3.pcap")
+    h = open_source(pcap_file, index=True)
+    # test single lidarscan
+    a = h[0][0]     # type: ignore
+    ls_show(a)
+
+    # test a list of lidarscan
+    b = h[0]        # type: ignore
+    ls_show(b)
+
+    # test a list of lidarscan
+    c = [h[0][0], h[1][0]]  # type: ignore
+    ls_show(c)
+
+    # test list of lists of lidarscans
+    d = [[h[0][0], h[1][0]], [h[1][0], h[2][0]]]    # type: ignore
+    ls_show(d)
+
+    # test a slice
+    e = h[0:3]      # type: ignore
+    ls_show(e)

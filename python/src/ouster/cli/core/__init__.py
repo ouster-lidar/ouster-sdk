@@ -14,7 +14,8 @@ import inspect
 
 from typing import Optional, List, Mapping
 
-from ouster.sdk.client import ClientError, init_logger
+from ouster.sdk.core import init_logger
+from ouster.sdk.sensor import ClientError
 
 from .util import util_group
 

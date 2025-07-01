@@ -3,7 +3,7 @@
 import os.path
 from pathlib import Path
 from typing import Optional, List
-from ouster.sdk.client import SensorInfo
+from ouster.sdk.core import SensorInfo
 
 
 data_must_be_a_file_err = "The source parameter must be a path to a file."

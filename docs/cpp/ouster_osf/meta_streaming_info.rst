@@ -1,11 +1,36 @@
-=====================
 meta_streaming_info.h
 =====================
 
-ChunkInfo
----------
+.. contents::
+   :local:
+
+Class
+-----
+
+.. doxygenclass:: ouster::osf::StreamingInfo
+   :project: cpp_api
+   :members:
+
+Structs
+-------
+
 .. doxygenstruct:: ouster::osf::ChunkInfo
-    :members:
+   :project: cpp_api
+   :members:
 
-.. doxygenfunction:: ouster::osf::to_string(const ChunkInfo& chunk_info)
+.. doxygenstruct:: ouster::osf::MetadataTraits<ouster::osf::StreamingInfo>
+   :project: cpp_api
+   :members:
 
+.. doxygenstruct:: ouster::osf::StreamStats
+   :project: cpp_api
+   :members:
+
+Functions
+---------
+
+.. doxygenfunction:: ouster::osf::to_string(const ChunkInfo&)
+   :project: cpp_api
+
+.. doxygenfunction:: ouster::osf::to_string(const StreamStats&)
+   :project: cpp_api

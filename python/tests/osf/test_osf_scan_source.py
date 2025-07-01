@@ -2,7 +2,7 @@
 import pytest
 import tempfile
 import ouster.sdk.osf as osf
-import ouster.sdk.client as client
+import ouster.sdk.core as core
 import os
 import sys
 import numpy as np
@@ -13,7 +13,7 @@ def input_info(test_data_dir):
     filename = test_data_dir / "pcaps" / "OS-0-128-U1_v2.3.0_1024x10.json"
     with open(filename, 'r') as f:
         data = f.read()
-    return client.SensorInfo(data)
+    return core.SensorInfo(data)
 
 
 @pytest.fixture
@@ -34,9 +34,9 @@ def test_scans_num(input_info):
     try:
         with tempfile.NamedTemporaryFile(delete=False) as f:
             with osf.Writer(f.name, [input_info, input_info]) as w:
-                scan1 = client.LidarScan(128, 1024)
+                scan1 = core.LidarScan(128, 1024)
                 scan1.status[:] = 0x1
-                scan1.field(client.ChanField.REFLECTIVITY)[:] = 100
+                scan1.field(core.ChanField.REFLECTIVITY)[:] = 100
                 w.save(0, scan1)
                 w.save(1, scan1)
                 scan1.packet_timestamp[:] = 1
@@ -44,7 +44,7 @@ def test_scans_num(input_info):
                 w.save(1, scan1)
         src = osf.OsfScanSource(f.name)
         assert src.scans_num == [2, 2]
-        assert len(src) == 2
+        assert len(src) == 4
     finally:
         if src:
             src.close()
@@ -57,7 +57,7 @@ def test_osf_open(input_osf_file):
     got_scan = False
     for scan in source:
         got_scan = True
-        assert scan[0].sensor_info == source.metadata[0]
+        assert scan[0].sensor_info == source.sensor_info[0]
     assert got_scan
 
 
@@ -76,7 +76,7 @@ def test_missing_streams(input_osf_file):
             w.save(2, scan)
             w.close()
 
-        result = osf.OsfScanSource(f.name)
+        result = core.collate(osf.OsfScanSource(f.name))
         scan = next(iter(result))[0]
 
         data = None
@@ -86,10 +86,6 @@ def test_missing_streams(input_osf_file):
         assert data[0] is not None
         assert data[2] is not None
         assert result.scans_num == [1, 0, 1]
-        assert result.field_types[1] == []
-        assert result.field_types[2] != []
-        assert result.fields[1] == []
-        assert result.fields[2] != []
     finally:
         if result:
             result.close()
@@ -105,11 +101,11 @@ def test_osf_info_modification_bug(input_osf_file):
             return scan[0]
 
     scan_before = get_first_scan()
-    field_before = scan_before.field(client.ChanField.REFLECTIVITY).astype(np.uint8)
+    field_before = scan_before.field(core.ChanField.REFLECTIVITY).astype(np.uint8)
 
-    source.metadata[0].format.pixel_shift_by_row = np.zeros((128), np.int32)
+    source.sensor_info[0].format.pixel_shift_by_row = np.zeros((128), np.int32)
 
     scan_after = get_first_scan()
-    field_after = scan_after.field(client.ChanField.REFLECTIVITY).astype(np.uint8)
+    field_after = scan_after.field(core.ChanField.REFLECTIVITY).astype(np.uint8)
 
     assert np.array_equal(field_before, field_after)

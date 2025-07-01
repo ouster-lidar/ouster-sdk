@@ -67,5 +67,5 @@ def test_osf_read_old_extrinsics(tmp_path, sensor_metadata):
     writer.close()
 
     # get an OsfScanSource from open_source
-    src = open_source(str(output_osf_file), sensor_idx=-1)
-    assert (ext_mat == src.metadata[0].extrinsic).all()
+    src = open_source(str(output_osf_file))
+    assert (ext_mat == src.sensor_info[0].extrinsic).all()

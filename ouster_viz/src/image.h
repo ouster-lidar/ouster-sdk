@@ -26,6 +26,7 @@ class GLImage {
 
     // global gl state
     static bool initialized;
+    static GLuint vao;
     static GLuint program_id;
     static GLuint vertex_id;
     static GLuint uv_id;

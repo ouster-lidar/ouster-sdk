@@ -38,12 +38,14 @@ using vec2d = std::array<double, 2>;
 
 // TODO: messes up lidar_scan_viz
 namespace impl {
+struct CameraData;
+class Framebuffer;
 class GLCloud;
 class GLImage;
 class GLCuboid;
 class GLLabel;
 class GLRings;
-struct CameraData;
+class GLLines;
 }  // namespace impl
 
 /**
@@ -89,13 +91,14 @@ enum class EventModifierKeys : int {
     MOD_NUM_LOCK = 0x0020,
 };
 
-struct WindowCtx;
 class Camera;
 class Cloud;
-class Image;
 class Cuboid;
+class Image;
 class Label;
+class Lines;
 class TargetDisplay;
+struct WindowCtx;
 
 /**
  * Sets the default_window_width to 800
@@ -151,11 +154,14 @@ class OUSTER_API_CLASS PointViz {
      *            else uses the default_window_width
      * @param[in] window_height Window height to set,
      *            else uses the default_window_height
+     * @param[in] maximized If true, the window will be maximized to fit the
+     * screen.
      */
     OUSTER_API_FUNCTION
     explicit PointViz(const std::string& name, bool fix_aspect = false,
                       int window_width = default_window_width,
-                      int window_height = default_window_height);
+                      int window_height = default_window_height,
+                      bool maximized = false);
 
     // Because PointViz uses the PIMPL pattern
     // and the Impl owns the window context,
@@ -295,9 +301,14 @@ class OUSTER_API_CLASS PointViz {
      * fb_height) The callback's return value determines whether the remaining
      * frame buffer callbacks should be called.
      */
-    OUSTER_API_FUNCTION
-    void push_frame_buffer_handler(
-        std::function<bool(const std::vector<uint8_t>&, int, int)>&& callback);
+    // clang-format off
+    [[deprecated(
+        "For screenshots or screen recording, use get_screenshot(), "
+        "save_screenshot() or toggle_screen_recording(). "
+        "push_frame_buffer_handler() is planned to be removed in Q2 2025.")]]
+    OUSTER_API_FUNCTION void push_frame_buffer_handler(
+    std::function<bool(const std::vector<uint8_t>&, int, int)>&& callback);
+    // clang-format on
 
     /**
      * Remove the last added callback for handling keyboard events
@@ -326,8 +337,14 @@ class OUSTER_API_CLASS PointViz {
     /**
      * Remove the last added callback for handling frame buffer events
      */
-    OUSTER_API_FUNCTION
+    // clang-format off
+    [[deprecated(
+        "For screenshots or screen recording, use get_screenshot(), "
+        "save_screenshot() or toggle_screen_recording(). "
+        "pop_frame_buffer_handler() is planned to be removed in Q2 2025.")]]
+    OUSTER_API_FUNCTION 
     void pop_frame_buffer_handler();
+    // clang-format on
 
     /**
      * Add a callback for handling frame buffer resize events.
@@ -389,6 +406,14 @@ class OUSTER_API_CLASS PointViz {
     /**
      * Add an object to the scene
      *
+     * @param[in] lines Adds a lines to the scene
+     */
+    OUSTER_API_FUNCTION
+    void add(const std::shared_ptr<Lines>& lines);
+
+    /**
+     * Add an object to the scene
+     *
      * @param[in] label Adds a label to the scene
      */
     OUSTER_API_FUNCTION
@@ -423,6 +448,16 @@ class OUSTER_API_CLASS PointViz {
      */
     OUSTER_API_FUNCTION
     bool remove(const std::shared_ptr<Cuboid>& cuboid);
+
+    /**
+     * Remove an object from the scene
+     *
+     * @param[in] lines Remove a lines from the scene
+     *
+     * @return true if successfully removed else false
+     */
+    OUSTER_API_FUNCTION
+    bool remove(const std::shared_ptr<Lines>& lines);
 
     /**
      * Remove an object from the scene
@@ -482,9 +517,123 @@ class OUSTER_API_CLASS PointViz {
     OUSTER_API_FUNCTION
     double fps() const;
 
+    /**
+     * @brief Gets a screenshot with the specified size
+     * @param[in] width Screenshot width in pixels.
+     * @param[in] height Screenshot height in pixels.
+     * @return A vector of bytes containing the screenshot's pixel data in RGB
+     * format. Each pixel is represented by three consecutive bytes (RGB),
+     * stored in row-major order.
+     */
+    OUSTER_API_FUNCTION
+    std::vector<uint8_t> get_screenshot(uint32_t width, uint32_t height);
+
+    /**
+     * @brief Gets a screenshot with the specified size
+     * @param[in] scale_factor A multiplier to the current window width and
+     * height for determining screenshot size.
+     * @return A vector of bytes containing the screenshot's pixel data in RGB
+     * format. Each pixel is represented by three consecutive bytes (RGB),
+     * stored in row-major order.
+     */
+    OUSTER_API_FUNCTION
+    std::vector<uint8_t> get_screenshot(double scale_factor = 1.0);
+
+    /**
+     * @brief Saves a screenshot with the specified size to the specified path
+     * @param[in] path The path where the screenshot should be saved, the
+     * filename is auto generated. An empty string means current path.
+     * @param[in] width Screenshot width in pixels.
+     * @param[in] height Screenshot height in pixels.
+     * @return The resulting path and filename.
+     */
+    OUSTER_API_FUNCTION
+    std::string save_screenshot(const std::string& path, uint32_t width,
+                                uint32_t height);
+
+    /**
+     * @brief Saves a screenshot to the specified path
+     * @param[in] path The path where the screenshot should be saved, the
+     * filename is auto generated. An empty string means current path.
+     * @param[in] scale_factor A multiplier to the window viewport width and
+     * height for determining screenshot size.
+     * @return the resulting path and filename, empty string if error.
+     */
+    OUSTER_API_FUNCTION
+    std::string save_screenshot(const std::string& path,
+                                double scale_factor = 1.0);
+
+    /**
+     * @brief Starts or stops saving screenshots continuously
+     * @param[in] width screenshot width in pixels.
+     * @param[in] height screenshot height in pixels.
+     * @return true if recording started, false otherwise,
+     */
+    OUSTER_API_FUNCTION
+    bool toggle_screen_recording(uint32_t width, uint32_t height);
+
+    /**
+     * @brief Starts or stops saving screenshots continuously
+     * @param[in] scale_factor a multiplier to the window viewport width and
+     * height for determining screenshot size, at the time of recording start.
+     * @return true if recording started, false otherwise,
+     */
+    OUSTER_API_FUNCTION
+    bool toggle_screen_recording(double scale_factor = 1.0);
+
+    /**
+     * @brief Computes the width and height that result from muliplying the
+     * current window viewport width and height for a scale_factor.
+     * @param[in] scale_factor A multiplier to the current window viewport
+     * width and height
+     * @return A pair that has width fist and height second
+     */
+    OUSTER_API_FUNCTION
+    std::pair<uint32_t, uint32_t> get_scaled_viewport_size(double scale_factor);
+
    private:
     std::unique_ptr<Impl> pimpl;
+
+    /**
+     * @brief Counts the fps while on the rendering loop.
+     */
+    void count_fps();
+
+    /**
+     * @brief Calls all registered framebuffer handlers if any.
+     */
+    void call_framebuffer_handlers();
+
+    /**
+     * @brief Draws to the currently bound framebuffer.
+     */
     void draw();
+
+    /**
+     * @brief Does all of the per-frame logic in one call. count_fps, draw to
+     * framebuffers, call event handlers, etc.
+     */
+    void process_frame();
+
+    /**
+     * @brief Captures the pixels from the input framebuffer. If the framebuffer
+     * size is the same as the window, the pixels are obtained from the default
+     * framebuffer.
+     * @param[in] framebuffer The framebuffer object from which the pixels will
+     * be read.
+     */
+    std::vector<uint8_t> capture_framebuffer_pixels(
+        impl::Framebuffer& framebuffer);
+
+    /***
+     * @brief Handles the screenshot requests, if any, in the rendering thread.
+     */
+    void handle_screenshot_request();
+
+    /***
+     * @brief Handles recording in the rendering thread(
+     */
+    void handle_recording();
 };
 
 /**
@@ -522,14 +671,14 @@ struct OUSTER_API_CLASS WindowCtx {
 
     /**
      * @brief return 2d coordinates normalized to (-1, 1) in the y-axis, given
-     * window coordinates.
+     * viewport coordinates.
      *
      * PointViz renders 2d images and labels in this coordinate system, and as
-     * such this method can be used to determine if a pixel in window
+     * such this method can be used to determine if a pixel in viewport
      * coordinates falls within a 2d image.
      *
-     * @param[in] x X axis value of 2D window coordinate
-     * @param[in] y Y axis value of 2D window coordinate
+     * @param[in] x X axis value of 2D viewport coordinate
+     * @param[in] y Y axis value of 2D viewport coordinate
      *
      * @return 2d coordinates normalized to (-1, 1) in the y-axis
      */
@@ -539,16 +688,16 @@ struct OUSTER_API_CLASS WindowCtx {
     /**
      * @brief the inverse of "normalized_coordinates".
      *
-     * Given 2d coordinates normalized to (-1, 1) in the y-axis, return window
+     * Given 2d coordinates normalized to (-1, 1) in the y-axis, return viewport
      * coordinates.
      * @param[in] normalized_x X axis value of 2D normalized coordinate
      * @param[in] normalized_y Y axis value of 2D normalized coordinate
      *
-     * @return 2d coordinates in window pixel space.
+     * @return 2d coordinates in viewport pixel space.
      */
     OUSTER_API_FUNCTION
-    std::pair<double, double> window_coordinates(double normalized_x,
-                                                 double normalized_y) const;
+    std::pair<double, double> viewport_coordinates(double normalized_x,
+                                                   double normalized_y) const;
 
     /**
      * @brief raises std::logic_error if this WindowCtx doesn't satisfy class
@@ -565,8 +714,9 @@ class OUSTER_API_CLASS Camera {
     /* view parameters */
     mat4d target_;
     vec3d view_offset_;
-    int yaw_;  // decidegrees
+    int roll_;
     int pitch_;
+    int yaw_;              // decidegrees
     double log_distance_;  // 0 means 50m
 
     /* projection parameters */
@@ -604,6 +754,30 @@ class OUSTER_API_CLASS Camera {
      */
     OUSTER_API_FUNCTION
     void birds_eye_view();
+
+    /**
+     * Roll the camera with respect to its current roll angle.
+     *
+     * @param[in] degrees offset to the current roll angle
+     */
+    OUSTER_API_FUNCTION
+    void roll(float degrees);
+
+    /**
+     * Set roll in degrees.
+     *
+     * @param[in] degrees roll angle
+     */
+    OUSTER_API_FUNCTION
+    void set_roll(float degrees);
+
+    /**
+     * Get the roll in degrees.
+     *
+     * @return roll in degrees
+     */
+    OUSTER_API_FUNCTION
+    float get_roll() const;
 
     /**
      * Orbit the camera left or right about the camera target.
@@ -1197,26 +1371,26 @@ class OUSTER_API_CLASS Image {
     void clear_palette();
 
     /**
-     * Returns the image pixel corresponding to the provided window coordinates.
+     * Returns the image pixel corresponding to the provided viewport
+     * coordinates.
      *
      * @param[in] ctx the WindowCtx.
-     * @param[in] x X coordinate for the window
-     * @param[in] y Y coordinate for the window
+     * @param[in] x X coordinate for the viewport
+     * @param[in] y Y coordinate for the viewport
      *
      * @throw std::runtime_error if the image data has not been set,
      * or if the image size (set by set_position) is zero in either dimension.
      *
-     * @return Image pixel corresponding to the provided window coordinates.
+     * @return Image pixel corresponding to the provided viewport coordinates.
      * IMPORTANT: the pixel is outside the image if either the (x, y) are less
      * than zero or greater than the image (width, height).
      */
     OUSTER_API_FUNCTION
-    std::pair<int, int> window_coordinates_to_image_pixel(const WindowCtx& ctx,
-                                                          double x,
-                                                          double y) const;
+    std::pair<int, int> viewport_coordinates_to_image_pixel(
+        const WindowCtx& ctx, double x, double y) const;
 
     /**
-     * @brief Returns the inverse of "window_coordinates_to_image_pixel"
+     * @brief Returns the inverse of "viewport_coordinates_to_image_pixel"
      * This is useful for computing positions relative to an image pixel.
      *
      * @param[in] ctx the WindowCtx.
@@ -1226,7 +1400,7 @@ class OUSTER_API_CLASS Image {
      * @return a coordinate normalized to -1, 1 in the window's Y axis
      */
     OUSTER_API_FUNCTION
-    std::pair<double, double> image_pixel_to_window_coordinates(
+    std::pair<double, double> image_pixel_to_viewport_coordinates(
         const WindowCtx& ctx, int px, int py) const;
 
     /**
@@ -1259,7 +1433,7 @@ class OUSTER_API_CLASS Cuboid {
      *
      * @param[in] transform 4x4 matrix representing a transform
      *            defining the cuboid
-     * @param[in] rgba 4x4 float matrix representing cuboid color in RGBA format
+     * @param[in] rgba 4x1 float matrix representing cuboid color in RGBA format
      *
      */
     OUSTER_API_FUNCTION
@@ -1301,6 +1475,76 @@ class OUSTER_API_CLASS Cuboid {
     void set_rgba(const vec4f& rgba);
 
     friend class impl::GLCuboid;
+};
+
+/**
+ * @brief Manages the state of a single set of lines.
+ */
+class OUSTER_API_CLASS Lines {
+    bool transform_changed_{false};
+    bool rgba_changed_{false};
+    bool points_changed_{false};
+
+    mat4d transform_{};
+    vec4f rgba_{};
+    std::vector<float> point_data_;
+
+   public:
+    /**
+     * Constructor to initialize a set of lines
+     *
+     * @param[in] transform 4x4 matrix representing a transform for the points
+     * @param[in] rgba 4x1 float matrix representing lines color in RGBA format
+     *
+     */
+    OUSTER_API_FUNCTION
+    Lines(const mat4d& transform, const vec4f& rgba);
+
+    /**
+     * Updates this objects's state with the state of other,
+     * accounting for prior changes to this objects's state.
+     *
+     * @param[in] other the object to update the state from.
+     */
+    OUSTER_API_FUNCTION
+    void update_from(const Lines& other);
+
+    /**
+     * Clear dirty flags.
+     *
+     * Resets any changes since the last call to PointViz::update()
+     */
+    OUSTER_API_FUNCTION
+    void clear();
+
+    /**
+     * Set the 3D points defining the lines. Each line is defined by 2 points, a
+     * start and an end.
+     *
+     * @param[in] num_points number of points
+     * @param[in] points num_points*3 array of doubles representing the xyz of
+     *                   each point
+     */
+    OUSTER_API_FUNCTION
+    void set_points(size_t num_points, const float* points);
+
+    /**
+     * Set the transform for the lines.
+     *
+     * @param[in] pose new pose for the lines
+     */
+    OUSTER_API_FUNCTION
+    void set_transform(const mat4d& pose);
+
+    /**
+     * Set the color of the lines.
+     *
+     * @param[in] rgba color
+     */
+    OUSTER_API_FUNCTION
+    void set_rgba(const vec4f& rgba);
+
+    friend class impl::GLLines;
 };
 
 /**

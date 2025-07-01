@@ -1,41 +1,22 @@
-from typing import Iterator, List, Tuple, Optional
-from ouster.sdk.client import PacketMultiSource, Packet, SensorInfo
+from typing import List, Optional, Union
+from ouster.sdk.core import PacketSource
+import numpy as np
 
-class BagPacketSource(PacketMultiSource):
+class BagPacketSource(PacketSource):
     def __init__(self,
-                 bag_path: str,
+                 bag_path: Union[str, List[str]],
                  *,
+                 extrinsics_file: Optional[str] = None,
+                 raw_headers: bool = False,
+                 raw_fields: bool = False,
+                 soft_id_check: bool = False,
                  meta: Optional[List[str]] = None,
-                 soft_id_check: bool = False):
-        ...
-
-    def __iter__(self) -> Iterator[Tuple[int, Packet]]:
+                 field_names: Optional[List[str]] = None,
+                 extrinsics: List[np.ndarray] = []):
         ...
 
     @property
     def closed(self) -> bool:
-        ...
-
-    def close(self) -> None:
-        ...
-
-    @property
-    def is_live(self) -> bool:
-        ...
-
-    @property
-    def is_seekable(self) -> bool:
-        ...
-
-    @property
-    def is_indexed(self) -> bool:
-        ...
-    
-    @property
-    def metadata(self) -> List[SensorInfo]:
-        ...
-
-    def restart(self) -> None:
         ...
 
     @property

@@ -65,11 +65,11 @@ To convert to the first ``5`` scans of our sample data from a pcap file to ``LAS
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-las --scan-num 5
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH pcap-to-las --scan-num 5
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-las --scan-num 5
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH pcap-to-las --scan-num 5
 
 Checkout the :func:`.examples.pcap.pcap_to_las` documentation for the example source code.
 
@@ -82,11 +82,11 @@ To convert to the first ``5`` scans of our sample data from a pcap file to ``PCD
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-pcd --scan-num 5
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH pcap-to-pcd --scan-num 5
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-pcd --scan-num 5
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH pcap-to-pcd --scan-num 5
 
 Checkout the :func:`.examples.pcap.pcap_to_pcd` documentation for the example source code.
 
@@ -102,11 +102,11 @@ To convert to the first ``5`` scans of our sample data from a pcap file to ``PLY
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-ply --scan-num 5
+        $ python3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH pcap-to-ply --scan-num 5
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH $SAMPLE_DATA_JSON_PATH pcap-to-ply --scan-num 5
+        PS > py -3 -m ouster.sdk.examples.pcap $SAMPLE_DATA_PCAP_PATH pcap-to-ply --scan-num 5
 
 Checkout the :func:`.examples.pcap.pcap_to_ply` documentation for the example source code.
 

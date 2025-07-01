@@ -13,7 +13,7 @@ import os
 import pytest
 
 from ouster.sdk import open_source
-from ouster.sdk.client import LidarPacket, ImuPacket
+from ouster.sdk.core import LidarPacket, ImuPacket
 from tests.conftest import BAGS_DATA_DIR
 
 from ouster.sdk.bag import BagPacketSource, BagScanSource
@@ -56,8 +56,8 @@ def test_bag_convert(tmp_path, test_bag_file):
         src = BagScanSource("test.bag")
 
         c = 0
-        for s in src:
-            assert len(s[0].fields) == 4
+        for s, in src:
+            assert len(s.fields) == 4
             c += 1
         assert c == 1
 
@@ -89,8 +89,8 @@ def test_bag_save(test_bag_file, tmp_path):
         src = BagScanSource("test.bag")
 
         c = 0
-        for s in src:
-            assert len(s[0].fields) == 4
+        for s, in src:
+            assert len(s.fields) == 4
             c += 1
         assert c == 1
 
@@ -113,7 +113,7 @@ def test_bag_open(test_bag_file):
     src = open_source(test_bag_file)
 
     c = 0
-    for s in src:
+    for s, in src:
         assert len(s.fields) == 4
         c += 1
     assert c == 1
@@ -123,9 +123,9 @@ def test_bag_open(test_bag_file):
     src = BagScanSource(test_bag_file)
 
     c = 0
-    for s in src:
-        assert len(s[0].fields) == 4
-        assert s[0].sensor_info == src.metadata[0]
+    for s, in src:
+        assert len(s.fields) == 4
+        assert s.sensor_info == src.sensor_info[0]
         c += 1
     assert c == 1
 
