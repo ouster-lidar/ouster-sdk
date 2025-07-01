@@ -19,7 +19,7 @@ jobs:
     - name: install python-deps
       run: pip3 install mypy==1.13.0 flake8 clang-format==14.0.0
     - name: cpp-lint
-      run: ./clang-linting.sh
+      run: ./scripts/./clang-linting.sh
     - name: python-lint
       run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
   linux-2204-build:
