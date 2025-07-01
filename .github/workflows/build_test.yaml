@@ -22,6 +22,9 @@ jobs:
     #  run: ./scripts/./clang-linting.sh
     - name: Build lint Docker image
       run: docker build -f ${GITHUB_WORKSPACE}/python/Dockerfile -t mypy-lint .
+    - name: python-lint-install-types
+      run: |
+          docker run --rm -w /app -v ${GITHUB_WORKSPACE}:/app mypy --install-types --non-interactive
     - name: python-lint
       run: |
           docker run --rm -w /app -v ${GITHUB_WORKSPACE}:/app mypy-lint mypy python/src python/tests tests/hil tests/integration
