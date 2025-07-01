@@ -24,7 +24,7 @@ jobs:
       run: docker build -f ${GITHUB_WORKSPACE}/python/Dockerfile -t mypy-lint .
     - name: python-lint
       run: |
-          docker run --rm -v ${GITHUB_WORKSPACE}:/app mypy-lint mypy ./python/src ./python/tests ./tests/hil ./tests/integration
+          docker run --rm -v ${GITHUB_WORKSPACE}:/app mypy-lint mypy ./app/python/src ./app/python/tests ./app/tests/hil ./app/tests/integration
       continue-on-error: true
       #run: flake8
   linux-2204-build:
