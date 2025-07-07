@@ -1,0 +1,27 @@
+name: Install Deps
+description: "Install ouster-sdk dependencies"
+runs:
+  using: "composite"
+  steps:
+    - run: |
+        sudo apt update
+        sudo add-apt-repository universe
+        sudo apt update
+        sudo apt install -y \
+          software-properties-common \
+          build-essential \
+          cmake \
+          libunwind-dev \
+          libeigen3-dev \
+          libcurl4-openssl-dev \
+          libtins-dev \
+          libpcap-dev \
+          libpng-dev \
+          libglfw3-dev \
+          libflatbuffers-dev \
+          libgtest-dev \
+          libceres-dev \
+          libtbb-dev \
+          libssl-dev \
+          robin-map-dev 
+      shell: bash
