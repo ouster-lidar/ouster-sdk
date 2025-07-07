@@ -1,5 +1,5 @@
 name: Install Deps
-description: "Install SDK dependencies"
+description: "Install ouster-sdk dependencies"
 runs:
   using: "composite"
   steps:
