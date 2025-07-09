@@ -63,7 +63,7 @@ void voxel_downsample(
         voxel_index << int(floor(ref_coord(0))), int(floor(ref_coord(1))),
             int(floor(ref_coord(2)));
         if (has_attribute) {
-            ref_attrib = attribs.row(i).eval();
+            ref_attrib = attribs.row(i);
         }
         voxel_grid[voxel_index].add_point(ref_point, ref_attrib);
     }
@@ -87,10 +87,8 @@ void voxel_downsample(
         }
 
         if (has_attribute) {
-            auto point_attrib = point.second.average_attrib();
-            for (int i = 0; i < point_attrib.cols(); i++) {
-                out_attribs(count, i) = point_attrib[i];
-            }
+            // Assign the entire attribute row at once
+            out_attribs.row(count) = point.second.average_attrib();
         }
         count += 1;
     }

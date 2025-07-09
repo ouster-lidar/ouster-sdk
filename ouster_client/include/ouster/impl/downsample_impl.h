@@ -26,6 +26,7 @@ class AccumulatedPoint {
         if (attrib.cols() > 0) {
             if (attrib_.cols() == 0) {
                 attrib_.resize(1, attrib.cols());
+                attrib_.setZero();
             }
             attrib_ += attrib;
         }

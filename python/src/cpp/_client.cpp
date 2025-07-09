@@ -152,11 +152,13 @@ downsample_point_cloud(const py::array_t<double>& voxel_size,
     auto attr_buf = attr_ptr->request();
 
     Eigen::Map<Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>>
-        points_mat(static_cast<double*>(pts_buf.ptr), pts.shape()[0], 3);
+        points_mat(static_cast<double*>(pts_buf.ptr), pts_buf.shape[0],
+                   pts_buf.shape[1]);
+
     Eigen::Map<
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
-        attr_mat(static_cast<double*>(pts_buf.ptr), attributes.shape()[0],
-                 attributes.shape()[1]);
+        attr_mat(static_cast<double*>(attr_buf.ptr), attr_buf.shape[0],
+                 attr_buf.shape[1]);
 
     Eigen::Matrix<double, Eigen::Dynamic, 3> eigen_out_pts;
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> eigen_out_attr;
