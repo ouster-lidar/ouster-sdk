@@ -48,17 +48,20 @@ def save_pointcloud(filename: str, cloud: np.ndarray, ascii: bool = False, field
                 if cloud.shape[1] == 4:
                     for i in range(cloud.shape[0]):
                         f.write("{} {} {} {}\n".format(
-                                    cloud[i, 0], cloud[i, 1],
-                                    cloud[i, 2], cloud[i, 3] / 255).encode('utf-8'))
+                            cloud[i, 0], cloud[i, 1],
+                            cloud[i, 2], cloud[i, 3] / 255.0).encode('utf-8'))
                 else:
                     for i in range(cloud.shape[0]):
                         f.write("{} {} {}\n".format(
-                                    cloud[i, 0], cloud[i, 1],
-                                    cloud[i, 2]).encode('utf-8'))
+                            cloud[i, 0], cloud[i, 1],
+                            cloud[i, 2]).encode('utf-8'))
             else:
-                # todo scale intensity?
-                bytes = cloud.astype(np.float32).tobytes()
-                f.write(bytes)
+                if cloud.shape[1] == 4:
+                    cloud_bin = cloud.copy().astype(np.float32)
+                    cloud_bin[:, 3] /= 255.0
+                else:
+                    cloud_bin = cloud.astype(np.float32)
+                f.write(cloud_bin.tobytes())
     elif filename.endswith(".pcd"):
         # write as binary pcd
         with open(filename, 'wb') as f:
@@ -237,9 +240,9 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
     empty_pose = True
 
     def convert_iter():
-        points_to_process = np.empty(shape=[0, 3])
-        keys_to_process = np.empty(shape=[0, 1])
-        points_keys_total = np.empty(shape=[0, 4])
+        points_to_process = np.zeros((0, 3), dtype=float)
+        keys_to_process = np.zeros((0, 1), dtype=float)
+        points_keys_total = np.zeros((0, 4), dtype=float)
 
         # hard-coded parameters and counters #
         # affect the running time. smaller value mean longer running time. Too large
@@ -324,7 +327,7 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                 logger.info(f"LAS format only supports the Intensity field. "
                             f"Saving {field} as the Intensity field.")
 
-            points_keys_total = np.empty(shape=[0, 4])
+            points_keys_total = np.zeros((0, 4), dtype=float)
 
         def pc_status_print():
             nonlocal points_sum, points_down_removed, points_saved, points_out_range
@@ -392,8 +395,8 @@ def point_cloud_convert(ctx: SourceCommandContext, filename: str, prefix: str,
                     # downsample the accumulated point clouds #
                     if scan_idx % down_sample_steps == 0:
                         process_points(points_to_process, keys_to_process)
-                        points_to_process = np.empty(shape=[0, 3])
-                        keys_to_process = np.empty(shape=[0, 1])
+                        points_to_process = np.zeros((0, 3), dtype=float)
+                        keys_to_process = np.zeros((0, 1), dtype=float)
                         if verbose:
                             pc_status_print()
 

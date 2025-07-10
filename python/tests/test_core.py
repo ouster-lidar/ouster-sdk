@@ -395,6 +395,7 @@ def test_downsample():
 
     # make a simple 4 point test
     in_pts = np.array([[0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 2.0, 0.0], [0.0, 2.0, 0.0]])
+    in_attrs = np.array([[10.0, 100.0], [12.0, 102.0], [20.0, 200.0], [22.0, 202.0]])
 
     tests = []
     tests.append((0.1, [[0.0, 2.0, 0.0], [0.0, 1.0, 0.0]]))
@@ -402,12 +403,18 @@ def test_downsample():
     tests.append(([4.0, 0.1, 0.1], [[0.0, 2.0, 0.0], [0.0, 1.0, 0.0]]))
     tests.append(([4.0, 4.0, 0.1], [[0.0, 1.5, 0.0]]))
 
-    # Test each with each ordering
     for voxel, expected_pts in tests:
-        out_pts, attrs = voxel_downsample(voxel, np.asarray(in_pts, order='F'), [])
-        assert len(attrs) == 0
-        assert array_equal_order_independent(out_pts, expected_pts)
+        if len(expected_pts) == 2:
+            expected_attrs = [[21.0, 201.0], [11.0, 101.0]]
+        else:
+            expected_attrs = [[16.0, 151.0]]
 
-        out_pts, attrs = voxel_downsample(voxel, np.asarray(in_pts, order='C'), [])
-        assert len(attrs) == 0
-        assert array_equal_order_independent(out_pts, expected_pts)
+        # Test each with each ordering
+        for order in ['F', 'C']:
+            out_pts, out_attrs = voxel_downsample(
+                voxel,
+                np.asarray(in_pts, order=order),
+                np.asarray(in_attrs, order=order)
+            )
+            assert array_equal_order_independent(out_pts, expected_pts)
+            assert array_equal_order_independent(out_attrs, expected_attrs)

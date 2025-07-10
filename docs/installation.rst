@@ -29,7 +29,7 @@ Supported Platforms
 Installation
 --------------
 
-The Ouster Python SDK binary packages require Python ">= 3.8; < 3.13" and pip >= 19.0 on most platforms.
+The Ouster Python SDK binary packages require Python ">= 3.8; <= 3.13" and pip >= 19.0 on most platforms.
 
 .. note::
 

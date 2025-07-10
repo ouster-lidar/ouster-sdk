@@ -18,7 +18,7 @@ Building the Python SDK from source requires several dependencies:
 - `libpng <http://www.libpng.org>`_ >= 1.6
 - `flatbuffers <https://flatbuffers.dev/>`_ >= 1.1
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
-- `python <https://www.python.org/>`_ >= 3.8; < 3.13 (with headers and development libraries)
+- `python <https://www.python.org/>`_ >= 3.8; <= 3.13 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
 The Python SDK source is available `on the Ouster Github <https://github.com/ouster-lidar/ouster-sdk>`_. You should clone the whole project.
@@ -94,7 +94,7 @@ Windows 10
 
 As mentioned, ``vcpkg`` is the recommended package manager for ```ouster-sdk``.
 
-Please follow the instructions in the `_vcpkg documentation powershell` to install vcpkg.
+Please follow the instructions in the `vcpkg documentation powershell`_ to install vcpkg.
 
 Additionally, ensure that the following are installed on your system:
 
