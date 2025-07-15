@@ -8,6 +8,7 @@
 #include <Eigen/Core>
 #include <cstdint>
 #include <stdexcept>
+#include <cassert>
 
 #include "ouster/field.h"
 #include "ouster/impl/packet_writer.h"
