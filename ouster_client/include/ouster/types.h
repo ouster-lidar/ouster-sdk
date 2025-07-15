@@ -19,7 +19,7 @@
 #include <utility>
 #include <vector>
 
-#include "nonstd/optional.hpp"
+#include "optional-lite/nonstd/optional.hpp"
 #include "ouster/visibility.h"
 #include "version.h"
 
