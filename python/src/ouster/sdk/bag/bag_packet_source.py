@@ -105,7 +105,7 @@ def bag2_monkey(self, paths, default_typestore=None):
     for id, c in f.channels.items():
         con = Connection(id = id, topic=c.topic, msgtype=c.schema,
                          msgdef=schemas[c.schema][1],
-                         msgcount = counts[id],
+                         msgcount = counts.get(id, 0),
                          ext = ConnectionExtRosbag2(serialization_format='cdr',
                                                     offered_qos_profiles=qos.get(c.schema, '')),
                          owner = self, digest = None)
