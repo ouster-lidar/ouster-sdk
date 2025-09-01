@@ -49,15 +49,14 @@ namespace sensor {
 constexpr double range_unit = 0.001;
 
 /** Design values for altitude and azimuth offset angles for gen1 sensors. */
-extern const std::vector<double> gen1_altitude_angles;
-/** Design values for altitude and azimuth offset angles for gen1 sensors. */
-extern const std::vector<double> gen1_azimuth_angles;
+const std::vector<double>& get_gen1_altitude_angles();
+ /** Design values for altitude and azimuth offset angles for gen1 sensors. */
+const std::vector<double>& get_gen1_azimuth_angles();
 
 /** Design values for imu and lidar to sensor-frame transforms. */
-extern const mat4d default_imu_to_sensor_transform;
-
+const mat4d& get_default_imu_to_sensor_transform();
 /** Design values for imu and lidar to sensor-frame transforms. */
-extern const mat4d default_lidar_to_sensor_transform;
+const mat4d& get_default_lidar_to_sensor_transform();
 
 /**
  * Constants used for configuration. Refer to the sensor documentation for the
