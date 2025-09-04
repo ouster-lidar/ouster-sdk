@@ -50,7 +50,7 @@ constexpr double range_unit = 0.001;
 
 /** Design values for altitude and azimuth offset angles for gen1 sensors. */
 const std::vector<double>& get_gen1_altitude_angles();
- /** Design values for altitude and azimuth offset angles for gen1 sensors. */
+/** Design values for altitude and azimuth offset angles for gen1 sensors. */
 const std::vector<double>& get_gen1_azimuth_angles();
 
 /** Design values for imu and lidar to sensor-frame transforms. */
