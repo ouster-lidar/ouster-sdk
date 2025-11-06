@@ -6,6 +6,7 @@
 #pragma once
 
 #include <vector>
+#include <stdexcept>
 
 #include "nonstd/optional.hpp"
 #include "ouster/io_type.h"

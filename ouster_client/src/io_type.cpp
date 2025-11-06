@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <string>
+#include <stdexcept>
 
 namespace ouster {
 namespace core {
