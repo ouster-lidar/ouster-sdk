@@ -99,14 +99,14 @@ sensor_info default_sensor_info(lidar_mode mode) {
     info.prod_line = "OS-1-64";
 
     info.format = default_data_format(mode);
-    info.beam_azimuth_angles = gen1_azimuth_angles;
-    info.beam_altitude_angles = gen1_altitude_angles;
+    info.beam_azimuth_angles = get_gen1_azimuth_angles();
+    info.beam_altitude_angles = get_gen1_altitude_angles();
     info.lidar_origin_to_beam_origin_mm =
         default_lidar_origin_to_beam_origin(info.prod_line);
     info.beam_to_lidar_transform =
         default_beam_to_lidar_transform(info.prod_line);
-    info.imu_to_sensor_transform = default_imu_to_sensor_transform;
-    info.lidar_to_sensor_transform = default_lidar_to_sensor_transform;
+    info.imu_to_sensor_transform = get_default_imu_to_sensor_transform();
+    info.lidar_to_sensor_transform = get_default_lidar_to_sensor_transform();
     info.extrinsic = mat4d::Identity();
     info.init_id = 0;
     info.build_date = "";
@@ -124,7 +124,7 @@ sensor_info default_sensor_info(lidar_mode mode) {
 }
 
 // clang-format off
-extern const std::vector<double> gen1_altitude_angles = {
+static const std::vector<double> gen1_altitude_angles = {
     16.611, 16.084, 15.557, 15.029, 14.502, 13.975, 13.447, 12.920,
     12.393, 11.865, 11.338, 10.811, 10.283, 9.756, 9.229, 8.701, 
     8.174, 7.646, 7.119, 6.592, 6.064, 5.537, 5.010, 4.482, 
@@ -134,8 +134,11 @@ extern const std::vector<double> gen1_altitude_angles = {
     -8.701, -9.229, -9.756, -10.283, -10.811, -11.338, -11.865, -12.393,
     -12.920, -13.447, -13.975, -14.502, -15.029, -15.557, -16.084, -16.611,
 };
+const std::vector<double>& get_gen1_altitude_angles() {
+    return gen1_altitude_angles;
+}
 
-extern const std::vector<double> gen1_azimuth_angles = {
+static const std::vector<double> gen1_azimuth_angles = {
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055, -3.164,
@@ -146,15 +149,25 @@ extern const std::vector<double> gen1_azimuth_angles = {
     3.164, 1.055, -1.055, -3.164, 3.164, 1.055, -1.055,
     -3.164,
 };
+const std::vector<double>& get_gen1_azimuth_angles() {
+    return gen1_azimuth_angles;
+}
 // clang-format on
 
-extern const mat4d default_imu_to_sensor_transform =
+static const mat4d default_imu_to_sensor_transform =
     (mat4d() << 1, 0, 0, 6.253, 0, 1, 0, -11.775, 0, 0, 1, 7.645, 0, 0, 0, 1)
         .finished();
+const mat4d& get_default_imu_to_sensor_transform() {
+    return default_imu_to_sensor_transform;
+}
 
-extern const mat4d default_lidar_to_sensor_transform =
+static const mat4d default_lidar_to_sensor_transform =
     (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
         .finished();
+
+const mat4d& get_default_lidar_to_sensor_transform() {
+    return default_lidar_to_sensor_transform;
+}
 
 /* String conversion */
 
