@@ -130,7 +130,7 @@ void AutoExposure::update(Eigen::Ref<img_t<T>> image, bool update_state) {
     }
 
     // clamp
-    key_eigen = key_eigen.max(0.0).min(1.0);
+    key_eigen = key_eigen.cwiseMax(0.0).cwiseMin(1.0);
 
     if (update_state) {
         counter = (counter + 1) % ae_update_every;
