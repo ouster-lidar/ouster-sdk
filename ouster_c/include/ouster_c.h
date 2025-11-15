@@ -78,6 +78,7 @@ int ouster_client_get_imu_port(const ouster_client_t* client);
 
 typedef struct ouster_scan_source ouster_scan_source_t;
 typedef struct ouster_lidar_scan ouster_lidar_scan_t;
+typedef struct ouster_xyz_lut ouster_xyz_lut_t;
 
 /* Create a scan source for a single sensor hostname (auto UDP dest). Returns 0
  * on success. */
@@ -107,6 +108,11 @@ ouster_lidar_scan_t* ouster_scan_source_next_scan(ouster_scan_source_t* source,
 /* Destroy a scan handle returned by ouster_scan_source_next_scan */
 void ouster_lidar_scan_destroy(ouster_lidar_scan_t* scan);
 
+/* Get scan dimensions (width = columns_per_frame, height = pixels_per_column).
+ */
+void ouster_lidar_scan_get_dimensions(const ouster_lidar_scan_t* scan,
+                                      int* width, int* height);
+
 /* Extract a channel field as uint32_t array.
  * out_buf capacity (in elements) must be >= number of pixels (w*h).
  * Writes count to out_count. Returns 0 on success, -1 unknown field, -2
@@ -130,10 +136,20 @@ int ouster_lidar_scan_get_field_u16(const ouster_lidar_scan_t* scan,
  * Returns 0 on success, -2 insufficient capacity (when not filtering), -3 bad
  * args.
  */
-int ouster_lidar_scan_get_xyz(const ouster_scan_source_t* source,
-                              const ouster_lidar_scan_t* scan, float* xyz_out,
+int ouster_lidar_scan_get_xyz(const ouster_lidar_scan_t* scan,
+                              const ouster_xyz_lut_t* xyz_lut, float* xyz_out,
                               size_t capacity_points, size_t* out_points,
                               int filter_invalid);
+
+/* ================= Explicit XYZLut Management ================= */
+
+/* Create an XYZ lookup table from a scan source. use_extrinsics != 0 to
+ * include extrinsics in the LUT calculation. Returns NULL on error. */
+ouster_xyz_lut_t* ouster_scan_source_create_xyz_lut(const ouster_scan_source_t* source, int use_extrinsics);
+
+/* Destroy an XYZLut handle */
+void ouster_xyz_lut_destroy(ouster_xyz_lut_t* lut);
+
 
 #ifdef __cplusplus
 } /* extern "C" */

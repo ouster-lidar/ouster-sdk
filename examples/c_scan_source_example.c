@@ -37,6 +37,15 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    ouster_xyz_lut_t* lut =
+        ouster_scan_source_create_xyz_lut(src, /*use_extrinsics=*/1);
+    if (!lut) {
+        fprintf(stderr, "Failed to create XYZ LUT\n");
+        free(xyz);
+        ouster_scan_source_destroy(src);
+        return EXIT_FAILURE;
+    }
+
     int scans_needed = 5;
     int scans_got = 0;
     while (scans_got < scans_needed) {
@@ -48,7 +57,7 @@ int main(int argc, char** argv) {
 
         // Convert to XYZ
         size_t n_points = 0;
-        if (ouster_lidar_scan_get_xyz(src, scan, xyz, max_points, &n_points,
+        if (ouster_lidar_scan_get_xyz(scan, lut, xyz, max_points, &n_points,
                                       /*filter_invalid=*/0) != 0) {
             fprintf(stderr, "Failed to convert scan to XYZ\n");
             ouster_lidar_scan_destroy(scan);
@@ -86,6 +95,7 @@ int main(int argc, char** argv) {
     }
 
     free(xyz);
+    ouster_xyz_lut_destroy(lut);
     ouster_scan_source_destroy(src);
     printf("Done.\n");
     return EXIT_SUCCESS;

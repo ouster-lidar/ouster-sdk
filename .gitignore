@@ -34,3 +34,7 @@ rules.ninja
 *.a
 **/_build
 clang-tidy-output.{txt,json}
+
+# CSharp build artifacts
+c_sharp/bin/
+c_sharp/obj/
