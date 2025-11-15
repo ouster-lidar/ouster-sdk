@@ -35,6 +35,7 @@ option(BUILD_EXAMPLES "Build C++ examples" OFF)
 option(OUSTER_USE_EIGEN_MAX_ALIGN_BYTES_32 "Eigen max aligned bytes." OFF)
 option(BUILD_SHARED_LIBRARY "Build shared Library." OFF)
 option(BUILD_DEBIAN_FOR_GITHUB "Build debian for github ci" OFF)
+option(BUILD_C_WRAPPER "Build C wrapper library." ON)
 
 # when building as a top-level project
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
@@ -87,6 +88,11 @@ endif()
 
 if(BUILD_MAPPING)
   add_subdirectory(ouster_mapping)
+endif()
+
+if(BUILD_C_WRAPPER)
+  # Place before examples so examples can link to ouster_c
+  add_subdirectory(ouster_c)
 endif()
 
 if(BUILD_EXAMPLES)

@@ -48,3 +48,14 @@ endif()
 
 add_executable(scan_source_example scan_source_example.cpp)
 target_link_libraries(scan_source_example PRIVATE OusterSDK::ouster_osf OusterSDK::ouster_sensor)
+
+# C wrapper examples (pure C)
+if(TARGET ouster_c)
+  add_executable(c_client_example c_client_example.c)
+  target_link_libraries(c_client_example PRIVATE ouster_c)
+
+  add_executable(c_scan_source_example c_scan_source_example.c)
+  target_link_libraries(c_scan_source_example PRIVATE ouster_c)
+else()
+  message(STATUS "C wrapper library not built; skipping C examples")
+endif()
