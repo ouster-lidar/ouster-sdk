@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
         uint32_t* range = (uint32_t*)malloc(max_points * sizeof(uint32_t));
         size_t range_count = 0;
         if (range && ouster_lidar_scan_get_field_u32(
-                         scan, "RANGE", range, max_points, &range_count) == 0) {
+                         scan, "RANGE", 0, range, max_points, &range_count) == 0) {
             printf("First RANGE values: ");
             for (size_t i = 0; i < (range_count < 8 ? range_count : 8); ++i)
                 printf("%u ", range[i]);

@@ -114,27 +114,55 @@ void ouster_lidar_scan_get_dimensions(const ouster_lidar_scan_t* scan,
 }
 
 int ouster_lidar_scan_get_field_u32(const ouster_lidar_scan_t* scan,
-                                    const char* field_name, uint32_t* out_buf,
-                                    size_t capacity, size_t* out_count) {
+                                    const char* field_name, int destagger,
+                                    uint32_t* out_buf, size_t capacity,
+                                    size_t* out_count) {
     if (!scan || !scan->ls || !field_name || !out_buf) return -3;
     if (!scan->ls->has_field(field_name)) return -1;
-    auto arr = scan->ls->field<uint32_t>(field_name);
-    size_t n = (size_t)arr.size();
+    Eigen::Ref<ouster::img_t<uint32_t>> img = scan->ls->field<uint32_t>(field_name);
+    if (destagger) {
+        img = ouster::destagger<uint32_t>(
+            img, scan->ls->sensor_info->format.pixel_shift_by_row, false);
+    }
+    size_t n = (size_t)img.size();
     if (capacity < n) return -2;
-    std::memcpy(out_buf, arr.data(), n * sizeof(uint32_t));
+    std::memcpy(out_buf, img.data(), n * sizeof(uint32_t));
     if (out_count) *out_count = n;
     return 0;
 }
 
 int ouster_lidar_scan_get_field_u16(const ouster_lidar_scan_t* scan,
-                                    const char* field_name, uint16_t* out_buf,
-                                    size_t capacity, size_t* out_count) {
+                                    const char* field_name, int destagger,
+                                    uint16_t* out_buf, size_t capacity,
+                                    size_t* out_count) {
     if (!scan || !scan->ls || !field_name || !out_buf) return -3;
     if (!scan->ls->has_field(field_name)) return -1;
-    auto arr = scan->ls->field<uint16_t>(field_name);
-    size_t n = (size_t)arr.size();
+    Eigen::Ref<ouster::img_t<uint16_t>> img = scan->ls->field<uint16_t>(field_name);
+    if (destagger) {
+        img = ouster::destagger<uint16_t>(
+            img, scan->ls->sensor_info->format.pixel_shift_by_row, false);
+    }
+    size_t n = (size_t)img.size();
     if (capacity < n) return -2;
-    std::memcpy(out_buf, arr.data(), n * sizeof(uint16_t));
+    std::memcpy(out_buf, img.data(), n * sizeof(uint16_t));
+    if (out_count) *out_count = n;
+    return 0;
+}
+
+int ouster_lidar_scan_get_field_u8(const ouster_lidar_scan_t* scan,
+                                   const char* field_name, int destagger,
+                                   uint8_t* out_buf, size_t capacity,
+                                   size_t* out_count) {
+    if (!scan || !scan->ls || !field_name || !out_buf) return -3;
+    if (!scan->ls->has_field(field_name)) return -1;
+    Eigen::Ref<ouster::img_t<uint8_t>> img = scan->ls->field<uint8_t>(field_name);
+    if (destagger) {
+        img = ouster::destagger<uint8_t>(
+            img, scan->ls->sensor_info->format.pixel_shift_by_row, false);
+    }
+    size_t n = (size_t)img.size();
+    if (capacity < n) return -2;
+    std::memcpy(out_buf, img.data(), n * sizeof(uint8_t));
     if (out_count) *out_count = n;
     return 0;
 }

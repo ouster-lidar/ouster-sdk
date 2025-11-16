@@ -32,9 +32,9 @@ public sealed class OusterLidarScan : IDisposable
 
     public float[] GetXYZ(bool filterInvalid)
     {
-        ulong maxPoints = (ulong)Width * (ulong)Height;
+        int maxPoints = Width * Height;
         var xyz = new float[maxPoints * 3];
-        var ptr = Marshal.AllocHGlobal(sizeof(float) * (int)(maxPoints * 3));
+        var ptr = Marshal.AllocHGlobal(sizeof(float) * maxPoints * 3);
         try
         {
             int rc = NativeMethods.ouster_lidar_scan_get_xyz(
@@ -54,35 +54,51 @@ public sealed class OusterLidarScan : IDisposable
         }
     }
 
-    public uint[] GetRange()
+    public T[,] GetField<T>(string fieldName, bool destagger = false) where T : unmanaged
     {
-        ulong count = (ulong)Width * (ulong)Height;
-        var managed = new int[count];
-        var ptr = Marshal.AllocHGlobal(sizeof(uint) * (int)count);
-        try
-        {
-            int rc = NativeMethods.ouster_lidar_scan_get_field_u32(
-                Handle, "RANGE", ptr, (UIntPtr)count, out var outCount);
-            if (rc != 0) return Array.Empty<uint>();
-            Marshal.Copy(ptr, managed, 0, (int)outCount);
-            return Array.ConvertAll(managed, item => (uint)item);
-        }
-        finally { Marshal.FreeHGlobal(ptr); }
-    }
+        int count = Width * Height;
+        var ptr = Marshal.AllocHGlobal(Marshal.SizeOf<T>() * count);
+        var image = new T[Height, Width];
+        int rc = 0;
+        nuint outCount;
 
-    public ushort[] GetReflectivity(OusterLidarScan scan)
-    {
-        ulong count = (ulong)Width * (ulong)Height;
-        var managed = new short[count];
-        var ptr = Marshal.AllocHGlobal(sizeof(ushort) * (int)count);
         try
         {
-            int rc = NativeMethods.ouster_lidar_scan_get_field_u16(scan.Handle, "REFLECTIVITY", ptr, (UIntPtr)count, out var outCount);
-            if (rc != 0) return Array.Empty<ushort>();
-            Marshal.Copy(ptr, managed, 0, (int)outCount);
-            return Array.ConvertAll(managed, item => (ushort)item);
+            switch (Type.GetTypeCode(typeof(T)))
+            {
+                case TypeCode.UInt32:
+                    rc = NativeMethods.ouster_lidar_scan_get_field_u32(
+                    Handle, fieldName, destagger ? 1 : 0, ptr, (UIntPtr)count, out outCount);
+                    break;
+                case TypeCode.UInt16:
+                    rc = NativeMethods.ouster_lidar_scan_get_field_u16(
+                    Handle, fieldName, destagger ? 1 : 0, ptr, (UIntPtr)count, out outCount);
+                    break;
+                case TypeCode.Byte:
+                    rc = NativeMethods.ouster_lidar_scan_get_field_u8(
+                    Handle, fieldName, destagger ? 1 : 0, ptr, (UIntPtr)count, out outCount);
+                    break;
+                default:
+                    throw new NotSupportedException($"Type {typeof(T)} is not supported.");
+            }
+
+            if (rc != 0) return image;
+
+
+            for (int i = 0; i < Height; i++)
+            {
+                for (int j = 0; j < Width; j++)
+                {
+                    unsafe { image[i, j] = ((T*)ptr)[i * Width + j]; }
+                }
+            }
+
+            return image;
         }
-        finally { Marshal.FreeHGlobal(ptr); }
+        finally
+        {
+            Marshal.FreeHGlobal(ptr);
+        }
     }
 }
 

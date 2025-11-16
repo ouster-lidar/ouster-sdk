@@ -36,9 +36,9 @@ internal static class Program
                 continue;
             }
             var xyz = scan.GetXYZ(filterInvalid: true);
-            var range = scan.GetRange();
+            var range = scan.GetFieldU32("RANGE");
             Console.WriteLine(
-                $"Scan {scansGot}: points={xyz.Length / 3}, rangeSample=[{string.Join(' ', range.Take(8))} ...]");
+                $"Scan {scansGot}: points={xyz.Length / 3}, rangeSample=[{string.Join(' ', range.Cast<uint>().Take(8))} ...]");
 
             var fname = $"cs_cloud_{scansGot}.csv";
             using var sw = new StreamWriter(fname);

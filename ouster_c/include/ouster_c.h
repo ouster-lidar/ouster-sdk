@@ -119,15 +119,25 @@ void ouster_lidar_scan_get_dimensions(const ouster_lidar_scan_t* scan,
  * capacity insufficient, -3 invalid args.
  */
 int ouster_lidar_scan_get_field_u32(const ouster_lidar_scan_t* scan,
-                                    const char* field_name, uint32_t* out_buf,
-                                    size_t capacity, size_t* out_count);
+                                    const char* field_name, int destagger,
+                                    uint32_t* out_buf, size_t capacity,
+                                    size_t* out_count);
 
 /* Extract a channel field as uint16_t array.
  * Same return conventions as above.
  */
 int ouster_lidar_scan_get_field_u16(const ouster_lidar_scan_t* scan,
-                                    const char* field_name, uint16_t* out_buf,
-                                    size_t capacity, size_t* out_count);
+                                    const char* field_name, int destagger,
+                                    uint16_t* out_buf, size_t capacity,
+                                    size_t* out_count);
+
+/* Extract a channel field as uint8_t array.
+ * Same return conventions as above.
+ */
+int ouster_lidar_scan_get_field_u8(const ouster_lidar_scan_t* scan,
+                                   const char* field_name, int destagger,
+                                   uint8_t* out_buf, size_t capacity,
+                                   size_t* out_count);
 
 /* Convert scan to XYZ using scan source's lookup table.
  * xyz_out: float array length >= capacity_points * 3.
@@ -145,7 +155,8 @@ int ouster_lidar_scan_get_xyz(const ouster_lidar_scan_t* scan,
 
 /* Create an XYZ lookup table from a scan source. use_extrinsics != 0 to
  * include extrinsics in the LUT calculation. Returns NULL on error. */
-ouster_xyz_lut_t* ouster_scan_source_create_xyz_lut(const ouster_scan_source_t* source, int use_extrinsics);
+ouster_xyz_lut_t* ouster_scan_source_create_xyz_lut(const ouster_scan_source_t* source,
+                                                    int use_extrinsics);
 
 /* Destroy an XYZLut handle */
 void ouster_xyz_lut_destroy(ouster_xyz_lut_t* lut);

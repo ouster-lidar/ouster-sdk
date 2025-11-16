@@ -83,10 +83,13 @@ internal static class NativeMethods
     internal static extern void ouster_lidar_scan_get_dimensions(IntPtr scan, out int width, out int height);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int ouster_lidar_scan_get_field_u32(IntPtr scan, string field_name, IntPtr out_buf, UIntPtr capacity, out UIntPtr out_count);
+    internal static extern int ouster_lidar_scan_get_field_u32(IntPtr scan, string field_name, int destagger, IntPtr out_buf, UIntPtr capacity, out UIntPtr out_count);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    internal static extern int ouster_lidar_scan_get_field_u16(IntPtr scan, string field_name, IntPtr out_buf, UIntPtr capacity, out UIntPtr out_count);
+    internal static extern int ouster_lidar_scan_get_field_u16(IntPtr scan, string field_name, int destagger, IntPtr out_buf, UIntPtr capacity, out UIntPtr out_count);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int ouster_lidar_scan_get_field_u8(IntPtr scan, string field_name, int destagger, IntPtr out_buf, UIntPtr capacity, out UIntPtr out_count);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     internal static extern int ouster_lidar_scan_get_xyz(IntPtr scan, IntPtr lut, IntPtr xyz_out, UIntPtr capacity_points, out UIntPtr out_points, int filter_invalid);
