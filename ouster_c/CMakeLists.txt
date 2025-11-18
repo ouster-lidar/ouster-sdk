@@ -7,6 +7,8 @@ add_library(ouster_c SHARED
     src/ouster_scan_source_c.cpp
 )
 
+target_compile_definitions(ouster_c PRIVATE OUSTER_C_BUILD)
+
 target_include_directories(ouster_c
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

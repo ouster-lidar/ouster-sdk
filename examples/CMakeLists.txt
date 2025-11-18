@@ -52,7 +52,7 @@ target_link_libraries(scan_source_example PRIVATE OusterSDK::ouster_osf OusterSD
 # C wrapper examples (pure C)
 if(TARGET ouster_c)
   add_executable(c_client_example c_client_example.c)
-  target_link_libraries(c_client_example PRIVATE ouster_c)
+  target_link_libraries(c_client_example PRIVATE OusterSDK::ouster_client ouster_c)
 
   add_executable(c_scan_source_example c_scan_source_example.c)
   target_link_libraries(c_scan_source_example PRIVATE ouster_c)
