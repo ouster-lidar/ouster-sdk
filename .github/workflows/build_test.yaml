@@ -20,6 +20,8 @@ jobs:
       run: pip3 install --force-reinstall mypy==1.14.1 flake8==7.1.2 clang-format==14.0.0
     - name: cpp-lint
       run: python3 ./scripts/dev.py lint clang-format
+    - name: install stubs
+      run: mypy --install-types
     - name: python-lint
       run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
       continue-on-error: true
@@ -139,7 +141,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install python-deps
-      run: python3.12 -m pip install venv --break-system-packages
+      run: python3.12 -m pip install virtualenv --break-system-packages
     - name: setup venv
       run: python3 -m venv venv
     - name: Activate virtual environment
@@ -160,7 +162,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install python-deps
-      run: python3.12 -m pip install pytest pytest-xdist venv --break-system-packages
+      run: python3.12 -m pip install pytest pytest-xdist virtualenv --break-system-packages
     - name: setup venv
       run: python3 -m venv venv
     - name: Activate virtual environment
