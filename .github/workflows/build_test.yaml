@@ -20,10 +20,8 @@ jobs:
       run: pip3 install --force-reinstall mypy==1.14.1 flake8==7.1.2 clang-format==14.0.0
     - name: cpp-lint
       run: python3 ./scripts/dev.py lint clang-format
-    - name: install stubs
-      run: mypy --install-types
     - name: python-lint
-      run: cd python && mypy ./src ./tests ../tests/hil ../tests/integration && flake8
+      run: cd python && mypy --install-types ./src ./tests ../tests/hil ../tests/integration && flake8
       continue-on-error: true
   linux-2204-build:
     runs-on: ubuntu-22.04
