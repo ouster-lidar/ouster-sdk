@@ -1,23 +1,31 @@
 #include "ouster/impl/utils.h"
 
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
+#include <string>
 
 #include "kiss_icp/core/Registration.hpp"
 #include "kiss_icp/core/VoxelHashMap.hpp"
 #include "ouster/impl/logging.h"
 #include "ouster/impl/transformation.h"
 
+using ouster::sdk::core::logger;
+using ouster::sdk::core::impl::PoseH;
+using ouster::sdk::core::impl::PoseV;
+
 namespace ouster {
+namespace sdk {
 namespace mapping {
 
-using ouster::sensor::logger;
-
-double pose_dist(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2) {
-    return (p1 - p2).norm();
+double pose_dist(const Eigen::Vector3d& point1, const Eigen::Vector3d& point2) {
+    return (point1 - point2).norm();
 }
 
 std::vector<Eigen::Vector3d> convert_array_to_vector(
-    const Eigen::Array<double, Eigen::Dynamic, 3>& arr) {
+    Eigen::Ref<const Eigen::ArrayX3d> arr) {
     std::vector<Eigen::Vector3d> result;
     result.reserve(arr.rows());  // Reserve space
     for (Eigen::Index i = 0; i < arr.rows(); ++i) {
@@ -26,47 +34,34 @@ std::vector<Eigen::Vector3d> convert_array_to_vector(
     return result;
 }
 
-Eigen::Array<double, Eigen::Dynamic, 3> convert_vector_to_array(
+Eigen::ArrayX3d convert_vector_to_array(
     const std::vector<Eigen::Vector3d>& vec) {
-    Eigen::Array<double, Eigen::Dynamic, 3> arr(vec.size(), 3);
+    Eigen::ArrayX3d arr(vec.size(), 3);
     for (size_t i = 0; i < vec.size(); ++i) {
         arr.row(i) << vec[i].x(), vec[i].y(), vec[i].z();
     }
     return arr;
 }
 
-Eigen::Array<double, Eigen::Dynamic, 3> run_KISS_ICP_downsample(
-    const Eigen::Array<double, Eigen::Dynamic, 3>& source_points,
-    double voxel_size) {
+Eigen::ArrayX3d run_kiss_icp_downsample(
+    Eigen::Ref<const Eigen::ArrayX3d> source_points, double voxel_size) {
     std::vector<Eigen::Vector3d> points_vector =
         convert_array_to_vector(source_points);
     std::vector<Eigen::Vector3d> pts_downsample_vector =
         kiss_icp::VoxelDownsample(points_vector, voxel_size);
-    Eigen::Array<double, Eigen::Dynamic, 3> pts_downsample_array =
+    Eigen::ArrayX3d pts_downsample_array =
         convert_vector_to_array(pts_downsample_vector);
 
     return pts_downsample_array;
 }
 
-Points transform_points(const Points& points, const ouster::impl::PoseH& pose) {
-    Eigen::Matrix3d rotation = pose.block<3, 3>(0, 0);
-    Eigen::Vector3d translation = pose.block<3, 1>(0, 3);
-
-    Eigen::MatrixXd points_matrix = points.matrix();
-    Eigen::MatrixXd transformed_points_matrix =
-        (points_matrix * rotation.transpose()).rowwise() +
-        translation.transpose();
-
-    Points transformed_points = transformed_points_matrix.array();
-    return transformed_points;
-}
-
-Eigen::Matrix4d run_KISS_ICP_matching(
-    const Eigen::Array<double, Eigen::Dynamic, 3>& source_points,
-    const Eigen::Array<double, Eigen::Dynamic, 3>& target_points) {
+Eigen::Matrix4d run_kiss_icp_matching(
+    Eigen::Ref<const Eigen::ArrayX3d> source_points,
+    Eigen::Ref<const Eigen::ArrayX3d> target_points,
+    const PoseH& initial_guess_pose) {
     Sophus::SE3d identity_matrix;
     // max_num_iterations, convergence_criterion, max_num_threads
-    kiss_icp::Registration registration(500, 0.0001, 0);
+    kiss_icp::Registration registration(1000, 0.0001, 0);
     // Voxel_size, max_range, max_points_per_voxel
     kiss_icp::VoxelHashMap local_map(1.0, 200, 20);
 
@@ -78,60 +73,60 @@ Eigen::Matrix4d run_KISS_ICP_matching(
 
     local_map.Update(target_array_down, identity_matrix);
 
-    const auto new_pose =
-        registration.AlignPointsToMap(source_array_down,  // frame
-                                      local_map,          // voxel_map
-                                      identity_matrix,    // initial_guess
-                                      6,  // max_correspondence_dist
-                                      2);
+    const auto new_pose = registration.AlignPointsToMap(
+        source_array_down,                 // frame
+        local_map,                         // voxel_map
+        Sophus::SE3d(initial_guess_pose),  // initial_guess
+        10,                                // max_correspondence_dist
+        2);
     return new_pose.matrix();
 }
 
-void save_to_PLY(const Eigen::Array<double, Eigen::Dynamic, 3>& points,
+void save_to_ply(Eigen::Ref<const ouster::sdk::core::MatrixX3dR> points,
                  const std::string& filename) {
-    std::ofstream plyFile(filename);
+    std::ofstream ply_file(filename);
 
-    if (!plyFile.is_open()) {
+    if (!ply_file.is_open()) {
         logger().error("Could not open the file {}", filename);
         return;
     }
 
-    plyFile << "ply\n";
-    plyFile << "format ascii 1.0\n";
-    plyFile << "element vertex " << points.rows() << "\n";
-    plyFile << "property float x\n";
-    plyFile << "property float y\n";
-    plyFile << "property float z\n";
-    plyFile << "end_header\n";
+    ply_file << "ply\n";
+    ply_file << "format ascii 1.0\n";
+    ply_file << "element vertex " << points.rows() << "\n";
+    ply_file << "property float x\n";
+    ply_file << "property float y\n";
+    ply_file << "property float z\n";
+    ply_file << "end_header\n";
 
     for (int i = 0; i < points.rows(); ++i) {
-        plyFile << points(i, 0) << " " << points(i, 1) << " " << points(i, 2)
-                << "\n";
+        ply_file << points(i, 0) << " " << points(i, 1) << " " << points(i, 2)
+                 << "\n";
     }
 
-    plyFile.close();
+    ply_file.close();
     logger().info("File saved as {}", filename);
 }
 
-void save_pts_and_color(const Eigen::Array<double, Eigen::Dynamic, 3>& points,
+void save_pts_and_color(Eigen::Ref<const ouster::sdk::core::MatrixX3dR> points,
                         const std::string& filename, int index) {
-    std::ofstream plyFile(filename);
+    std::ofstream ply_file(filename);
 
-    if (!plyFile.is_open()) {
+    if (!ply_file.is_open()) {
         logger().error("Could not open the file {}", filename);
         return;
     }
 
-    plyFile << "ply\n";
-    plyFile << "format ascii 1.0\n";
-    plyFile << "element vertex " << points.rows() << "\n";
-    plyFile << "property float x\n";
-    plyFile << "property float y\n";
-    plyFile << "property float z\n";
-    plyFile << "property uchar red\n";
-    plyFile << "property uchar green\n";
-    plyFile << "property uchar blue\n";
-    plyFile << "end_header\n";
+    ply_file << "ply\n";
+    ply_file << "format ascii 1.0\n";
+    ply_file << "element vertex " << points.rows() << "\n";
+    ply_file << "property float x\n";
+    ply_file << "property float y\n";
+    ply_file << "property float z\n";
+    ply_file << "property uchar red\n";
+    ply_file << "property uchar green\n";
+    ply_file << "property uchar blue\n";
+    ply_file << "end_header\n";
 
     for (int i = 0; i < points.rows(); ++i) {
         // Set color to red for the specified index point, and black for others
@@ -139,114 +134,129 @@ void save_pts_and_color(const Eigen::Array<double, Eigen::Dynamic, 3>& points,
         int green = (i == index) ? 0 : 20;
         int blue = (i == index) ? 0 : 20;
 
-        plyFile << points(i, 0) << " " << points(i, 1) << " " << points(i, 2)
-                << " " << red << " " << green << " " << blue << "\n";
+        ply_file << points(i, 0) << " " << points(i, 1) << " " << points(i, 2)
+                 << " " << red << " " << green << " " << blue << "\n";
     }
 
-    plyFile.close();
+    ply_file.close();
     logger().info("File saved as {}", filename);
 }
 
-int first_valid_col(const ouster::LidarScan& ls) {
-    auto status = ls.status();
-    for (size_t i = 0; i < ls.w; ++i) {
-        if (status[i] & 0x01) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-int last_valid_col(const ouster::LidarScan& ls) {
-    auto status = ls.status();
-    for (int i = ls.w - 1; i >= 0; --i) {
-        if (status[i] & 0x01) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-std::vector<ouster::impl::PoseH> deform_trajectory_relative_poses(
-    const std::vector<ouster::impl::PoseH>& original_poses,
-    const std::vector<uint64_t>& timestamps,
-    const ouster::impl::PoseH& new_start_pose,
-    const ouster::impl::PoseH& new_end_pose) {
-    const size_t n = original_poses.size();
-    if (n <= 1 || timestamps.size() != n) {
+std::vector<PoseH> deform_trajectory_relative_poses(
+    const std::vector<PoseH>& original_poses,
+    const std::vector<uint64_t>& timestamps, const PoseH& new_start_pose,
+    const PoseH& new_end_pose) {
+    const size_t num_poses = original_poses.size();
+    if (num_poses <= 1 || timestamps.size() != num_poses) {
         logger().error(
             "Invalid input: need at least 2 poses and matching timestamps (got "
             "{} poses, {} timestamps)",
-            n, timestamps.size());
+            num_poses, timestamps.size());
         return {};
     }
 
     // extract the original relative pose and sum them
-    std::vector<ouster::impl::PoseV> original_posevs;
-    original_posevs.reserve(n - 1);
-    ouster::impl::PoseV sum_orig(Eigen::Vector6d::Zero());
-    for (size_t i = 0; i + 1 < n; ++i) {
-        ouster::impl::PoseH delta_h =
-            ouster::impl::PoseH(original_poses[i].inverse()) *
-            original_poses[i + 1];
-        ouster::impl::PoseV pv = delta_h.log();
-        original_posevs.push_back(pv);
-        sum_orig = sum_orig + pv;
+    std::vector<PoseV> original_posevs;
+    original_posevs.reserve(num_poses - 1);
+    PoseV sum_orig(Eigen::Vector6d::Zero());
+    for (size_t i = 0; i + 1 < num_poses; ++i) {
+        PoseH delta_h =
+            PoseH(original_poses[i].inverse()) * original_poses[i + 1];
+        PoseV pose_vector = delta_h.log();
+        original_posevs.push_back(pose_vector);
+        sum_orig = sum_orig + pose_vector;
     }
 
     // compute the total desired posev
-    ouster::impl::PoseH total_delta = new_start_pose.inverse() * new_end_pose;
-    ouster::impl::PoseV desired_posev = total_delta.log();
+    PoseH total_delta = new_start_pose.inverse() * new_end_pose;
+    PoseV desired_posev = total_delta.log();
 
     // distribute the correction across steps based on time deltas
-    ouster::impl::PoseV full_correction = desired_posev - sum_orig;
-    const uint64_t t0 = timestamps.front();
-    const uint64_t tn = timestamps.back();
-    const double total_dt = static_cast<double>(tn - t0);
+    PoseV full_correction = desired_posev - sum_orig;
+    const uint64_t start_time = timestamps.front();
+    const uint64_t end_time = timestamps.back();
+    const double total_dt = static_cast<double>(end_time - start_time);
 
     // build per‐interval corrections
-    std::vector<ouster::impl::PoseV> per_step_corrections;
-    per_step_corrections.reserve(n - 1);
-    for (size_t i = 0; i + 1 < n; ++i) {
+    std::vector<PoseV> per_step_corrections;
+    per_step_corrections.reserve(num_poses - 1);
+    for (size_t i = 0; i + 1 < num_poses; ++i) {
         double alpha =
             (total_dt > 0.0)
                 ? (static_cast<double>(timestamps[i + 1] - timestamps[i]) /
                    total_dt)
-                : (1.0 / static_cast<double>(n - 1));
+                : (1.0 / static_cast<double>(num_poses - 1));
         per_step_corrections.push_back(full_correction * alpha);
     }
 
     // re‐integrate the corrected pose to build a first-pass new_poses[]
-    std::vector<ouster::impl::PoseH> new_poses(n);
+    std::vector<PoseH> new_poses(num_poses);
     new_poses[0] = new_start_pose;
-    ouster::impl::PoseH curr = new_start_pose;
-    for (size_t i = 0; i + 1 < n; ++i) {
-        ouster::impl::PoseV mod_posev =
-            original_posevs[i] + per_step_corrections[i];
-        ouster::impl::PoseH delta_mod = mod_posev.exp();
+    PoseH curr = new_start_pose;
+    for (size_t i = 0; i + 1 < num_poses; ++i) {
+        PoseV mod_posev = original_posevs[i] + per_step_corrections[i];
+        PoseH delta_mod = mod_posev.exp();
         curr = curr * delta_mod;
         new_poses[i + 1] = curr;
     }
-
     // compute any remaining end‐error
-    ouster::impl::PoseH end_error_h =
-        new_end_pose * ouster::impl::PoseH(new_poses.back().inverse());
-    ouster::impl::PoseV end_error_v = end_error_h.log();
+    PoseH end_error_h = new_end_pose * PoseH(new_poses.back().inverse());
+    PoseV end_error_v = end_error_h.log();
 
-    for (size_t i = 0; i < n; ++i) {
-        double alpha;
+    for (size_t i = 0; i < num_poses; ++i) {
+        double alpha{};
         if (total_dt > 0.0) {
-            alpha = (static_cast<double>(timestamps[i] - t0)) / total_dt;
+            alpha =
+                (static_cast<double>(timestamps[i] - start_time)) / total_dt;
         } else {
-            alpha = static_cast<double>(i) / static_cast<double>(n - 1);
+            alpha = static_cast<double>(i) / static_cast<double>(num_poses - 1);
         }
-        ouster::impl::PoseH corr_h =
-            (ouster::impl::PoseV(alpha * end_error_v)).exp();
+        PoseH corr_h = PoseV(alpha * end_error_v).exp();
         new_poses[i] = corr_h * new_poses[i];
     }
 
     return new_poses;
 }
 
+std::string expand_home_path(const std::string& path) {
+    // If the path is empty or doesn't start with '~', return it as is.
+    if (path.empty() || path[0] != '~') {
+        return path;
+    }
+
+    std::string home_path_str;
+
+#ifdef _WIN32
+    // On Windows, USERPROFILE is the most reliable environment variable.
+    const char* home_env = std::getenv("USERPROFILE");
+
+    // As a fallback, try to construct the path from HOMEDRIVE and HOMEPATH.
+    if (home_env == nullptr) {
+        const char* home_drive = std::getenv("HOMEDRIVE");
+        const char* home_path = std::getenv("HOMEPATH");
+        if (home_drive && home_path) {
+            home_path_str = std::string(home_drive) + std::string(home_path);
+        }
+    } else {
+        home_path_str = home_env;
+    }
+#else
+    // On Linux, macOS, and other POSIX-compliant systems, HOME is standard.
+    const char* home_env = std::getenv("HOME");
+    if (home_env) {
+        home_path_str = home_env;
+    }
+#endif
+
+    // If a home directory was found, construct and return the final path.
+    if (!home_path_str.empty()) {
+        // Append the rest of the original path, skipping the '~' character.
+        return home_path_str + path.substr(1);
+    }
+
+    return path;
+}
+
 }  // namespace mapping
+}  // namespace sdk
 }  // namespace ouster

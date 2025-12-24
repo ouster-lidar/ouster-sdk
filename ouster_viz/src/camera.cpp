@@ -8,9 +8,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <algorithm>
-#include <chrono>
 #include <cmath>
-#include <cstdint>
 
 #include "ouster/point_viz.h"
 
@@ -19,6 +17,7 @@
 #endif
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 
 using Eigen::Vector3d;
@@ -27,11 +26,11 @@ using Translation3d = Eigen::Translation<double, 3>;
 namespace {
 
 /* initial distance 50 m */
-constexpr double log_distance_0 = 50.0;
+constexpr double LOG_DISTANCE_0 = 50.0;
 
 /* distance min/max bounds */
-constexpr double log_distance_min = -500.0;
-constexpr double log_distance_max = 500.0;
+constexpr double LOG_DISTANCE_MIN = -500.0;
+constexpr double LOG_DISTANCE_MAX = 500.0;
 
 /*
  * Note that most rotations are done in terms of integral decidegrees
@@ -97,7 +96,7 @@ Camera::Camera()
       proj_offset_y_{0} {}
 
 double Camera::view_distance() const {
-    return log_distance_0 * std::exp(log_distance_ * 0.01);
+    return LOG_DISTANCE_0 * std::exp(log_distance_ * 0.01);
 }
 
 void Camera::reset() {
@@ -151,28 +150,29 @@ float Camera::get_pitch() const { return static_cast<float>(pitch_) / 10.0; }
 // in is positive, out is negative
 void Camera::dolly(double amount) {
     log_distance_ = std::max(
-        log_distance_min, std::min(log_distance_max, log_distance_ - amount));
+        LOG_DISTANCE_MIN, std::min(LOG_DISTANCE_MAX, log_distance_ - amount));
 }
 
 void Camera::set_dolly(double log_distance) {
     log_distance_ =
-        std::max(log_distance_min, std::min(log_distance_max, log_distance));
+        std::max(LOG_DISTANCE_MIN, std::min(LOG_DISTANCE_MAX, log_distance));
 }
 
 double Camera::get_dolly() const { return log_distance_; }
 
 void Camera::dolly_xy(double x, double y) {
     // OpenGL y goes from top to bottom
-    Vector3d v{x, -y, 0};
+    Vector3d dolly_vector{x, -y, 0};
     // convert from window coordinates to actual size
     double scale = std::tan(M_PI / 3600.0 * fov_);
-    v *= view_distance() * scale;
+    dolly_vector *= view_distance() * scale;
     // apply 3d offset in the direction of the camera view
     auto rot =
         (Eigen::AngleAxisd{decidegree2radian(pitch_), Vector3d::UnitX()} *
          Eigen::AngleAxisd{decidegree2radian(yaw_), Vector3d::UnitZ()})
             .matrix();
-    Eigen::Map<Eigen::Vector3d>{view_offset_.data()} += rot.transpose() * v;
+    Eigen::Map<Eigen::Vector3d>{view_offset_.data()} +=
+        rot.transpose() * dolly_vector;
 }
 
 void Camera::set_view_offset(const vec3d& view_offset) {
@@ -238,9 +238,9 @@ impl::CameraData Camera::matrices(double aspect) const {
     const double near_dist = 0.1;
 
     // for diagonal fov, use ratio of each dimension to diagonal
-    double a = std::atan(aspect);
-    double aspect_w = std::sin(a);
-    double aspect_h = std::cos(a);
+    double aspect_angle = std::atan(aspect);
+    double aspect_w = std::sin(aspect_angle);
+    double aspect_h = std::cos(aspect_angle);
 
     Eigen::Matrix4d proj = Eigen::Matrix4d::Zero();
     if (orthographic_) {
@@ -265,4 +265,5 @@ impl::CameraData Camera::matrices(double aspect) const {
 }
 
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

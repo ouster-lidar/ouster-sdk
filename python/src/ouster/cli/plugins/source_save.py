@@ -6,11 +6,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 import numpy as np
-from typing import (cast, Dict, Union, Tuple, List, Iterator, Iterable, Optional)
+from typing import (cast, Dict, Union, Tuple, List, Iterator, Iterable, Optional, Set)
 from ouster.cli.core import SourceArgsException  # type: ignore[attr-defined]
 from ouster.sdk.core import (UDPProfileLidar, LidarScan, ChanField, XYZLut,
                              destagger, SensorInfo, LidarPacket, ImuPacket,
-                             PacketSource)
+                             PacketSource, ZonePacket, UDPProfileIMU)
 from ouster.sdk import osf, open_packet_source
 from ouster.sdk.core.io_types import (io_type_from_extension, OusterIoType)
 from ouster.sdk.util import scan_to_packets  # type: ignore
@@ -20,7 +20,6 @@ from .source_util import (SourceCommandContext,
                           SourceCommandType,
                           source_multicommand,
                           _join_with_conjunction)
-from contextlib import closing
 from .source_bag import _source_to_bag_iter  # type: ignore[attr-defined]
 
 
@@ -38,24 +37,27 @@ _file_exists_error = lambda filename: (f"Error: File '{filename}' already exists
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option('--duration', '-D', default=None, type=float, help="Duration to record")
 @click.option('--ros2', is_flag=True, default=False, help="If true, save this as a ROS2 bag file.")
+@click.option("--split", default=None, type=int,
+              help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.MULTICOMMAND_UNSUPPORTED)
 def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
-                    overwrite: bool, duration: Optional[float], ros2: bool, **kwargs) -> None:
+                    overwrite: bool, duration: Optional[float], ros2: bool,
+                    split: Optional[int], **kwargs) -> None:
     """ Save raw packets from the source. Does not support chaining. Supports Bag and PCAP formats."""
     uri = ctx.source_uri
     if uri is None:
         raise RuntimeError("Unexpected condition")
     extension = ""
-    split = os.path.splitext(filename)
-    if split[0][0] == '.' and split[1] == "":
-        extension = split[0].replace(".", "")
+    splitfn = os.path.splitext(filename)
+    if splitfn[0][0] == '.' and splitfn[1] == "":
+        extension = splitfn[0].replace(".", "")
         filename = ""
-    elif split[1] == "":
+    elif splitfn[1] == "":
         click.echo("Error: Must provide a filename with an extension.")
         exit(2)
     else:
-        extension = split[1].replace(".", "")
+        extension = splitfn[1].replace(".", "")
 
     if extension != "pcap" and extension != "bag":
         raise click.exceptions.BadParameter(f"Cannot save raw file of type {extension}")
@@ -66,11 +68,11 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 
     if extension == "pcap":
         save_pcap_impl(packets, filename, prefix, dir, raw=True, overwrite=overwrite,
-                       metadata=packets.sensor_info, duration=duration)
+                       metadata=packets.sensor_info, duration=duration, split=split)
     elif extension == "bag":
         _source_to_bag_iter(packets, raw=True, metadata=packets.sensor_info,
                            prefix=prefix, dir=dir, filename=filename,
-                           overwrite=overwrite, duration=duration, ros2=ros2)
+                           overwrite=overwrite, duration=duration, ros2=ros2, split=split)
 
 
 @click.command(context_settings=dict(
@@ -81,15 +83,18 @@ def source_save_raw(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
 @click.option('-p', '--prefix', default="", help="Output prefix.")
 @click.option('-d', '--dir', default="", help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
+@click.option("--split", default=None, type=int,
+              help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
-                     overwrite: bool, **kwargs) -> None:
+                     overwrite: bool, split: Optional[int], **kwargs) -> None:
     """Save source as a PCAP"""
     if ctx.scan_iter is None or ctx.scan_source is None:
         raise RuntimeError("unexpected condition")
 
-    ctx.scan_iter = save_pcap_impl(ctx.scan_iter, filename, prefix, dir, False, overwrite, ctx.scan_source.sensor_info)
+    ctx.scan_iter = save_pcap_impl(ctx.scan_iter, filename, prefix, dir, False,
+                                   overwrite, ctx.scan_source.sensor_info, split=split)
 
 
 @click.command(context_settings=dict(
@@ -105,17 +110,22 @@ def source_save_pcap(ctx: SourceCommandContext, prefix: str, dir: str, filename:
 @click.option("--ts", default='packet', help="Timestamp to use for indexing.", type=click.Choice(['packet', 'lidar']))
 @click.option("--compression-level", default=1, help="Specifies the level of compression for OSF files. Higher values "
     "are slower but more space-efficient; lower values are faster but less space-efficient.", type=click.IntRange(0, 9))
+@click.option("--png", is_flag=True, default=False, help="If true, save in legacy PNG compressed OSF format. "
+              "Useful for backwards compatibility.")
+@click.option("--split", default=None, type=int,
+              help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
-                    overwrite: bool, ts: str, continue_anyways: bool, compression_level: int, **kwargs) -> None:
+                    overwrite: bool, ts: str, continue_anyways: bool, compression_level: int,
+                    png: bool, split: Optional[int], **kwargs) -> None:
     """Save source as an OSF"""
     scans = ctx.scan_iter
     info = ctx.scan_source.sensor_info  # type: ignore
 
     # Automatic file naming
     filename = determine_filename(filename=filename, info=info[0], extension=".osf", prefix=prefix, dir=dir)
-
+    originalfilename = filename
     create_directories_if_missing(filename)
 
     click.echo(f"Saving OSF file at {filename}")
@@ -125,18 +135,44 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
         exit(1)
 
     # Initialize osf writer
-    osf_writer = osf.AsyncWriter(filename, info, [], 0, osf.Encoder(osf.PngLidarScanEncoder(compression_level)))
+    if png:
+        encoder = osf.Encoder(osf.PngLidarScanEncoder(compression_level))
+    else:
+        encoder = osf.Encoder(osf.ZPngLidarScanEncoder(compression_level))
+
+    osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
 
     wrote_scans = False
     dropped_scans = 0
     last_ts = [0] * len(info)
+    file_number = 1
+    dropped_string_fields: Set[str] = set()
 
     # returns false if we should stop recording
+    need_split = False
+
     def write_osf(scan: LidarScan, index: int):
-        nonlocal wrote_scans, last_ts, dropped_scans
+        nonlocal wrote_scans, last_ts, dropped_scans, osf_writer, filename, file_number, need_split
+        scan_to_save = scan
+        if png:
+            # `save --png` exists primarily for backwards compatibility. Older SDK/CLI
+            # versions may not support string-typed ChanFields (e.g. POSITION_STRING),
+            # so strip any fields with numpy dtype kind 'S'/'U' from the scan.
+            for ft in scan_to_save.field_types:
+                try:
+                    if np.dtype(ft.element_type).kind not in ("S", "U"):
+                        continue
+                except (TypeError, ValueError):
+                    continue
+
+                name = ft.name
+                if scan_to_save.has_field(name):
+                    scan_to_save.del_field(name)
+                    dropped_string_fields.add(name)
+
         # Set OSF timestamp to the timestamp of the first valid column
-        scan_ts = scan.get_first_valid_packet_timestamp() if ts == "packet" \
-            else scan.get_first_valid_column_timestamp()
+        scan_ts = scan_to_save.get_first_valid_packet_timestamp() if ts == "packet" \
+            else scan_to_save.get_first_valid_column_timestamp()
         if scan_ts:
             if scan_ts < last_ts[index]:
                 if continue_anyways:
@@ -149,8 +185,25 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                     osf_writer.close()
                     return False
             wrote_scans = True
-            osf_writer.save(index, scan, scan_ts)
+
+            if need_split:
+                need_split = False
+                osf_writer.close()
+                filename = originalfilename.replace(".osf", "") + f"-{file_number}.osf"
+                print(f"Splitting into {filename}")
+
+                if os.path.isfile(filename) and not overwrite:
+                    click.echo(_file_exists_error(filename))
+                    exit(1)
+                file_number += 1
+                osf_writer = osf.AsyncWriter(filename, info, [], 0, encoder)
+
+            osf_writer.save(index, scan_to_save, scan_ts)
             last_ts[index] = scan_ts
+
+            if split is not None:
+                if os.path.getsize(filename) / 1000000 > split:
+                    need_split = True
         else:
             # by default fail out
             if not continue_anyways:
@@ -172,24 +225,28 @@ def source_save_osf(ctx: SourceCommandContext, prefix: str, dir: str, filename: 
                 for s in scans():
                     yield s
                 return
-
-            with closing(osf_writer):
-                stop = False
-                for s in scans():
-                    for index, scan in enumerate(s):
-                        if scan is None:
-                            continue
-                        # Drop invalid lidarscans
-                        if not stop and np.any(scan.status):
-                            if not write_osf(scan, index):
-                                stop = True
-                    yield s
+            stop = False
+            for s in scans():
+                for index, scan in enumerate(s):
+                    if scan is None:
+                        continue
+                    # Drop invalid lidarscans
+                    if not stop and np.any(scan.status):
+                        if not write_osf(scan, index):
+                            stop = True
+                yield s
         except (KeyboardInterrupt):
             pass
         except (ValueError):
             ctx.terminate_evt.set()
         finally:
             saved = True
+            osf_writer.close()
+            if png and dropped_string_fields:
+                click.echo(
+                    "NOTE: Dropping string ChanFields for backwards compatibility "
+                    f"(--png): fields={sorted(dropped_string_fields)}"
+                )
 
     ctx.scan_iter = save_iter  # type: ignore
 
@@ -241,8 +298,8 @@ def source_to_csv_iter(scan_iter: Iterator[List[Optional[LidarScan]]], infos: Li
             MEASUREMENT_ID, ROW, COLUMN
     """
 
-    dual_formats = [UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL,
-                    UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL]
+    dual_formats = [UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL,
+                    UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL]
     for info in infos:
         if info.format.udp_profile_lidar in dual_formats:
             print("Note: You've selected to convert a dual returns pcap to CSV. Each row "
@@ -471,38 +528,35 @@ def create_directories_if_missing(filename: str):
 @click.option('-d', '--dir', default="", help="Output directory.")
 @click.option('--overwrite', is_flag=True, default=False, help="If true, overwrite existing files with the same name.")
 @click.option('--ros2', is_flag=True, default=False, help="If true, save this as a ROS2 bag file.")
+@click.option("--split", default=None, type=int,
+              help="Split recordings when they approximately surpass this size in megabytes.")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.CONSUMER)
 def source_save_bag(ctx: SourceCommandContext, prefix: str, dir: str, filename: str,
-                    overwrite: bool, ros2: bool, **kwargs) -> None:
+                    overwrite: bool, ros2: bool, split: Optional[int], **kwargs) -> None:
     """Save source as a packet rosbag."""
     if ctx.scan_iter is None or ctx.scan_source is None:
         raise RuntimeError("unexpected condition")
 
-    ctx.scan_iter = _source_to_bag_iter(ctx.scan_iter, raw=False,
+    ctx.scan_iter = _source_to_bag_iter(ctx.scan_iter, raw=False, split=split,
                                         prefix=prefix, dir=dir, filename=filename,
-                                        overwrite=overwrite, metadata=ctx.scan_source.sensor_info, ros2=ros2)
-
-
-def bag_save_metadata(outbag, infos):
-    from std_msgs.msg import String  # type: ignore
-    for idx, metadata in enumerate(infos):
-        s = String()
-        s.data = metadata.to_json_string()
-        outbag.write(f"/ouster{idx}/metadata", s)
+                                        overwrite=overwrite, metadata=ctx.scan_source.sensor_info,
+                                        ros2=ros2)
 
 
 def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSource],
-                   filename, prefix, dir, raw, overwrite, metadata, duration = None):
+                   filename, prefix, dir, raw, overwrite, metadata, duration = None, split = None):
     # Automatic file naming
     filename = determine_filename(filename=filename, info=metadata[0], extension=".pcap", prefix=prefix, dir=dir)
 
     create_directories_if_missing(filename)
 
     filename = filename[0:-5]  # remove extension
+    file_number = 1
 
     # check for existing files
     pcap_filename = f"{filename}.pcap"
+    original_filename = pcap_filename
     if os.path.isfile(pcap_filename) and not overwrite:
         click.echo(_file_exists_error(pcap_filename))
         exit(1)
@@ -530,15 +584,43 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
         _pcap.record_packet(pcap_record_handle, "127.0.0.1",
                             "127.0.0.1", port, port, packet.buf, ts)
 
+    def check_split():
+        nonlocal pcap_filename
+        if split is not None:
+            if os.path.getsize(pcap_filename) / 1000000 > split:
+                return True
+        return False
+
+    def do_split():
+        nonlocal pcap_record_handle, pcap_filename, file_number
+        pcap_filename = original_filename.replace(".pcap", "") + f"-{file_number}.pcap"
+        file_number += 1
+        print(f"Splitting into {pcap_filename}")
+
+        if os.path.isfile(pcap_filename) and not overwrite:
+            click.echo(_file_exists_error(pcap_filename))
+            exit(1)
+
+        _pcap.record_uninitialize(pcap_record_handle)
+        pcap_record_handle = _pcap.record_initialize(pcap_filename, MTU_SIZE, False)
+
     if raw:
         end_time = None
         try:
             source = cast(PacketSource, source)
+            last_frame_id = -1
             for idx, packet in source:
                 if isinstance(packet, LidarPacket):
+                    pfid = packet.frame_id()
+                    if pfid != last_frame_id and last_frame_id != -1:
+                        if check_split():
+                            do_split()
+                    last_frame_id = pfid
                     save_packet(idx, packet, metadata[idx].config.udp_port_lidar)
                 elif isinstance(packet, ImuPacket):
                     save_packet(idx, packet, metadata[idx].config.udp_port_imu)
+                elif isinstance(packet, ZonePacket):
+                    save_packet(idx, packet, metadata[idx].config.zm.port)
 
                 if duration is not None:
                     if end_time is None:
@@ -551,7 +633,10 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
             # Finish pcap_recording when this generator is garbage collected
             _pcap.record_uninitialize(pcap_record_handle)
     else:
-        click.echo("Warning: Saving pcap without save_raw will not save LEGACY IMU packets.")
+        for meta in metadata:
+            if meta.config.udp_profile_imu == UDPProfileIMU.LEGACY:
+                click.echo("Warning: Saving pcap without save_raw will not save LEGACY IMU packets.")
+                break
 
         def save_iter():
             try:
@@ -561,12 +646,26 @@ def save_pcap_impl(source: Union[Iterable[List[Optional[LidarScan]]], PacketSour
                     for c in source():
                         yield c
                     return
+                should_split = False
                 for c in source():
                     for idx, scan in enumerate(c):
                         if scan is not None:
+                            if should_split:
+                                do_split()
+                                should_split = False
+
                             packets = scan_to_packets(scan, metadata[idx])
                             for packet in packets:
-                                save_packet(idx, packet, metadata[idx].config.udp_port_lidar)
+                                if isinstance(packet, LidarPacket):
+                                    save_packet(idx, packet, metadata[idx].config.udp_port_lidar)
+                                elif isinstance(packet, ImuPacket):
+                                    save_packet(idx, packet, metadata[idx].config.udp_port_imu)
+                                elif isinstance(packet, ZonePacket):
+                                    save_packet(idx, packet, metadata[idx].config.zm.port)
+
+                            # only split after saving a whole scan to prevent a scan
+                            # ending up between two files
+                            should_split = check_split()
                     yield c
             except (KeyboardInterrupt, StopIteration):
                 pass

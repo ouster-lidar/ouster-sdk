@@ -8,10 +8,15 @@
 #include <Eigen/Core>
 #include <Eigen/LU>
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <vector>
 
+#include "ouster/deprecation.h"
+
 namespace ouster {
-namespace viz {
+namespace sdk {
+namespace core {
 
 namespace {
 
@@ -21,57 +26,56 @@ namespace {
  * 1.0 --> slowest, smoothest
  * 0.0 --> fastest, prone to flickering
  */
-const double ae_damping = 0.90;
-
+const double AE_DAMPING = 0.90;
 /*
  * for performance reasons, we may not want to update every frame but rather
  * every few frames
  */
-const int ae_default_update_every = 3;
+const int AE_DEFAULT_UPDATE_EVERY = 3;
 
 /* for performance reasons, only consider a subset of points */
-const size_t ae_stride = 4;
+const size_t AE_STRIDE = 4;
 
 /* if there are too few points, do nothing */
-const size_t ae_min_nonzero_points = 100;
+const size_t AE_MIN_NONZERO_POINTS = 100;
 
 /* default percentile for scaling in autoexposure */
-const double ae_default_percentile = 0.1;
+const double AE_DEFAULT_PERCENTILE = 0.1;
 
 }  // namespace
 
 AutoExposure::AutoExposure()
-    : lo_percentile(ae_default_percentile),
-      hi_percentile(ae_default_percentile),
-      ae_update_every(ae_default_update_every) {}
+    : lo_percentile_(AE_DEFAULT_PERCENTILE),
+      hi_percentile_(AE_DEFAULT_PERCENTILE),
+      ae_update_every_(AE_DEFAULT_UPDATE_EVERY) {}
 
 AutoExposure::AutoExposure(int update_every)
-    : lo_percentile(ae_default_percentile),
-      hi_percentile(ae_default_percentile),
-      ae_update_every(update_every) {}
+    : lo_percentile_(AE_DEFAULT_PERCENTILE),
+      hi_percentile_(AE_DEFAULT_PERCENTILE),
+      ae_update_every_(update_every) {}
 
 AutoExposure::AutoExposure(double lo_percentile, double hi_percentile,
                            int update_every)
-    : lo_percentile(lo_percentile),
-      hi_percentile(hi_percentile),
-      ae_update_every(update_every) {}
+    : lo_percentile_(lo_percentile),
+      hi_percentile_(hi_percentile),
+      ae_update_every_(update_every) {}
 
 template <typename T>
 void AutoExposure::update(Eigen::Ref<img_t<T>> image, bool update_state) {
     Eigen::Map<Eigen::Array<T, -1, 1>> key_eigen(image.data(), image.size());
 
     // int a;
-    if (counter == 0 && update_state) {
-        const size_t n = key_eigen.rows();
+    if (counter_ == 0 && update_state) {
+        const size_t num_elements = key_eigen.rows();
         std::vector<size_t> indices;
-        indices.reserve(n);
-        for (size_t i = 0; i < n; i += ae_stride) {
+        indices.reserve(num_elements);
+        for (size_t i = 0; i < num_elements; i += AE_STRIDE) {
             // ignore 0 values, which are often due to dropped packets etc
             if (key_eigen[i] > 0) {
                 indices.push_back(i);
             }
         }
-        if (indices.size() < ae_min_nonzero_points) {
+        if (indices.size() < AE_MIN_NONZERO_POINTS) {
             // too few nonzero values, nothing to do
             return;
         }
@@ -80,60 +84,60 @@ void AutoExposure::update(Eigen::Ref<img_t<T>> image, bool update_state) {
         };
 
         const size_t lo_kth_extreme =
-            static_cast<size_t>(indices.size() * lo_percentile);
+            static_cast<size_t>(indices.size() * lo_percentile_);
         std::nth_element(indices.begin(), indices.begin() + lo_kth_extreme,
                          indices.end(), cmp);
-        lo = key_eigen[*(indices.begin() + lo_kth_extreme)];
+        lo_ = key_eigen[*(indices.begin() + lo_kth_extreme)];
 
         const size_t hi_kth_extreme =
-            static_cast<size_t>(indices.size() * hi_percentile);
+            static_cast<size_t>(indices.size() * hi_percentile_);
         std::nth_element(indices.begin() + lo_kth_extreme,
                          indices.end() - hi_kth_extreme - 1, indices.end(),
                          cmp);
-        hi = key_eigen[*(indices.end() - hi_kth_extreme - 1)];
+        hi_ = key_eigen[*(indices.end() - hi_kth_extreme - 1)];
 
-        if (!initialized) {
-            initialized = true;
-            lo_state = lo;
-            hi_state = hi;
+        if (!initialized_) {
+            initialized_ = true;
+            lo_state_ = lo_;
+            hi_state_ = hi_;
         }
     }
-    if (!initialized) {
+    if (!initialized_) {
         return;
     }
 
     // we use the simplest form of exponential smoothing
     if (update_state) {
-        lo_state = ae_damping * lo_state + (1.0 - ae_damping) * lo;
-        hi_state = ae_damping * hi_state + (1.0 - ae_damping) * hi;
+        lo_state_ = AE_DAMPING * lo_state_ + (1.0 - AE_DAMPING) * lo_;
+        hi_state_ = AE_DAMPING * hi_state_ + (1.0 - AE_DAMPING) * hi_;
     }
 
     // Apply affine transformation mapping lo_state to lo_percentile and
     // hi_state to 1 - hi_percentile. If it would map 0 to positive number,
     // instead map using only hi_state
     double lo_hi_scale =
-        (1.0 - (lo_percentile + hi_percentile)) / (hi_state - lo_state);
+        (1.0 - (lo_percentile_ + hi_percentile_)) / (hi_state_ - lo_state_);
 
     if (std::isinf(lo_hi_scale) || std::isnan(lo_hi_scale)) {
         // map everything relative to hi_state being 0.5 due to small spread or
         // nan
-        key_eigen *= 0.5 / hi_state;
-    } else if (lo_hi_scale * (0.0 - lo_state) + lo_percentile <= 0.00) {
+        key_eigen *= 0.5 / hi_state_;
+    } else if (lo_hi_scale * (0.0 - lo_state_) + lo_percentile_ <= 0.00) {
         // apply affine transformation
-        key_eigen -= lo_state;
+        key_eigen -= lo_state_;
         key_eigen *= lo_hi_scale;
-        key_eigen += lo_percentile;
+        key_eigen += lo_percentile_;
     } else {
         // lo_hi_state transformation would map 0 to positive number
         // instead, map using only hi_state
-        key_eigen *= (1.0 - hi_percentile) / (hi_state);
+        key_eigen *= (1.0 - hi_percentile_) / (hi_state_);
     }
 
     // clamp
-    key_eigen = key_eigen.max(0.0).min(1.0);
+    key_eigen = key_eigen.max(static_cast<T>(0)).min(static_cast<T>(1));
 
     if (update_state) {
-        counter = (counter + 1) % ae_update_every;
+        counter_ = (counter_ + 1) % ae_update_every_;
     }
 }
 
@@ -156,13 +160,13 @@ namespace {
  * 1.0 --> slowest, smoothest
  * 0.0 --> fastest, prone to flickering
  */
-const double buc_damping = 0.92;
+const double BUC_DAMPING = 0.92;
 
 /*
  * for performance reasons, we may not want to update every frame
  * but rather every 8 or so frames.
  */
-const int buc_update_every = 8;
+const int BUC_UPDATE_EVERY = 8;
 
 }  // namespace
 
@@ -203,19 +207,20 @@ static Eigen::Array<T, -1, 1> compute_dark_count(
     // compute the median of differences between rows
     for (size_t i = 1; i < image_h; i++) {
         tmp = row_diffs_nonzero.row(i - 1);
-        std::nth_element(tmp.data(), tmp.data() + n_cols / 2,
+        std::nth_element(tmp.data(), tmp.data() + (n_cols / 2),
                          tmp.data() + n_cols);
         new_dark_count[i] = new_dark_count[i - 1] + tmp[n_cols / 2];
     }
 
     // remove gradients in the entire height of image by doing linear fit
-    Eigen::Matrix<T, -1, 2> A(image_h, 2);
+    Eigen::Matrix<T, -1, 2> image_array(image_h, 2);
     for (size_t i = 0; i < image_h; i++) {
-        A(i, 0) = 1;
-        A(i, 1) = static_cast<T>(i);
+        image_array(i, 0) = 1;
+        image_array(i, 1) = static_cast<T>(i);
     }
-    Eigen::Matrix<T, 2, 1> x = A.fullPivLu().solve(new_dark_count.matrix());
-    new_dark_count -= (A * x).array();
+    Eigen::Matrix<T, 2, 1> x =
+        image_array.fullPivLu().solve(new_dark_count.matrix());
+    new_dark_count -= (image_array * x).array();
 
     // subtract minimum value
     new_dark_count -= new_dark_count.minCoeff();
@@ -228,22 +233,22 @@ void BeamUniformityCorrector::update(Eigen::Ref<img_t<T>> image,
     const auto image_h = image.rows();
 
     // compute dark counts, if necessary
-    if (dark_count.size() != image_h) {
-        dark_count = compute_dark_count(image).template cast<double>();
-    } else if (update_state && counter == 0) {
+    if (dark_count_.size() != image_h) {
+        dark_count_ = compute_dark_count(image).template cast<double>();
+    } else if (update_state && counter_ == 0) {
         // if previous state exists, update using exponential smoothing:
         Eigen::ArrayXd new_dark_count =
             compute_dark_count(image).template cast<double>();
-        dark_count *= buc_damping;
-        dark_count += new_dark_count * (1.0 - buc_damping);
+        dark_count_ *= BUC_DAMPING;
+        dark_count_ += new_dark_count * (1.0 - BUC_DAMPING);
     }
-    counter = (counter + 1) % buc_update_every;
+    counter_ = (counter_ + 1) % BUC_UPDATE_EVERY;
 
     // apply the dark count correction
-    image.colwise() -= dark_count.cast<T>();
+    image.colwise() -= dark_count_.cast<T>();
 
     // clamp any negative values
-    image = image.cwiseMax(0.0);
+    image = image.cwiseMax(static_cast<T>(0));
 }
 
 void BeamUniformityCorrector::operator()(Eigen::Ref<img_t<float>> image,
@@ -256,5 +261,6 @@ void BeamUniformityCorrector::operator()(Eigen::Ref<img_t<double>> image,
     update(image, update_state);
 }
 
-}  // namespace viz
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

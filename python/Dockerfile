@@ -30,6 +30,7 @@ RUN set -xe \
  python3-venv \
  ccache \
  libxml2-utils \
+ curl \
 # Install any additional available cpython versions for testing
  'python3.(8|9|10)-dev' \
  wget \
@@ -41,15 +42,19 @@ ARG BUILD_GID=${BUILD_UID}
 
 RUN set -xe \
 && groupadd -g ${BUILD_GID} build \
-&& useradd -u ${BUILD_UID} -d ${BUILD_HOME} -rm -s /bin/bash -g build build
+&& useradd -u ${BUILD_UID} -d ${BUILD_HOME} -rm -s /bin/bash -g build build \
+# hack: allow the build user to install into /usr/local to avoid using venv for uv
+&& chown -R ${BUILD_UID}:${BUILD_GID} /usr/local
 
 USER build:build
 ENV PATH="${PATH}:${BUILD_HOME}/.local/bin" \
     OUSTER_SDK_PATH="/opt/ouster-sdk"
 WORKDIR ${BUILD_HOME}
 
+# Install uv
+RUN curl --proto '=https' --tlsv1.2 -LsSf https://github.com/astral-sh/uv/releases/download/0.8.19/uv-installer.sh | sh
+
 # Populate source dir
 COPY python/docker_install_reqs.sh python/setup.py python/requirements.txt ${OUSTER_SDK_PATH}/python/
-COPY python/src/ouster/sdk/mapping/requirements.json ${OUSTER_SDK_PATH}/python/src/ouster/sdk/mapping/
 
 RUN ${OUSTER_SDK_PATH}/python/docker_install_reqs.sh

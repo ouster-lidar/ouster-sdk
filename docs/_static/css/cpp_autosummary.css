@@ -1,0 +1,208 @@
+/* Transform C++ namespace lists into autosummary-style tables */
+.rst-content section[id*="class"] ul,
+.rst-content section[id*="function"] ul,
+.rst-content section[id*="enum"] ul,
+.rst-content section[id*="typedef"] ul,
+.rst-content section[id*="variable"] ul,
+.rst-content section#classes ul,
+.rst-content section#functions ul,
+.rst-content section#enums ul,
+.rst-content section#typedefs ul,
+.rst-content section#variables ul {
+    display: block;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    border: 1px solid #e1e4e5;
+    background-color: #fff;
+    margin-bottom: 20px;
+}
+
+/* Style list items to match Python autosummary table rows */
+.rst-content section[id*="class"] ul li,
+.rst-content section[id*="function"] ul li,
+.rst-content section[id*="enum"] ul li,
+.rst-content section[id*="typedef"] ul li,
+.rst-content section[id*="variable"] ul li,
+.rst-content section#classes ul li,
+.rst-content section#functions ul li,
+.rst-content section#enums ul li,
+.rst-content section#typedefs ul li,
+.rst-content section#variables ul li {
+    display: block;
+    border-bottom: 1px solid #f1f1f1;
+    margin: 0;
+    padding: 0;
+}
+
+.rst-content section[id*="class"] ul li:last-child,
+.rst-content section[id*="function"] ul li:last-child,
+.rst-content section[id*="enum"] ul li:last-child,
+.rst-content section[id*="typedef"] ul li:last-child,
+.rst-content section[id*="variable"] ul li:last-child,
+.rst-content section#classes ul li:last-child,
+.rst-content section#functions ul li:last-child,
+.rst-content section#enums ul li:last-child,
+.rst-content section#typedefs ul li:last-child,
+.rst-content section#variables ul li:last-child {
+    border-bottom: none;
+}
+
+.rst-content section[id*="class"] ul li:nth-child(even),
+.rst-content section[id*="function"] ul li:nth-child(even),
+.rst-content section[id*="enum"] ul li:nth-child(even),
+.rst-content section[id*="typedef"] ul li:nth-child(even),
+.rst-content section[id*="variable"] ul li:nth-child(even),
+.rst-content section#classes ul li:nth-child(even),
+.rst-content section#functions ul li:nth-child(even),
+.rst-content section#enums ul li:nth-child(even),
+.rst-content section#typedefs ul li:nth-child(even),
+.rst-content section#variables ul li:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+/* Style C++ links to match Python autosummary code elements exactly */
+.rst-content section[id*="class"] ul li a,
+.rst-content section[id*="function"] ul li a,
+.rst-content section[id*="enum"] ul li a,
+.rst-content section[id*="typedef"] ul li a,
+.rst-content section[id*="variable"] ul li a,
+.rst-content section#classes ul li a,
+.rst-content section#functions ul li a,
+.rst-content section#enums ul li a,
+.rst-content section#typedefs ul li a,
+.rst-content section#variables ul li a {
+    display: block;
+    padding: 8px 12px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    /* Reset all styling - we'll apply it to the nested elements */
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+.rst-content section[id*="class"] ul li a:hover,
+.rst-content section[id*="function"] ul li a:hover,
+.rst-content section[id*="enum"] ul li a:hover,
+.rst-content section[id*="typedef"] ul li a:hover,
+.rst-content section[id*="variable"] ul li a:hover,
+.rst-content section#classes ul li a:hover,
+.rst-content section#functions ul li a:hover,
+.rst-content section#enums ul li a:hover,
+.rst-content section#typedefs ul li a:hover,
+.rst-content section#variables ul li a:hover {
+    background-color: #e3f2fd;
+    text-decoration: none;
+}
+
+/* Transform C++ reference links to match Python autosummary styling exactly */
+.rst-content section ul li a .std-ref {
+    /* Match the exact Python autosummary styling */
+    background-color: transparent !important;
+    border: 1px solid #e1e4e5 !important;
+    border-radius: 3px !important;
+    color: #2980b9 !important;
+    font-size: 14px !important;
+    font-weight: normal !important;
+    padding: 1px 6px !important;
+    white-space: normal !important;
+    text-decoration: none !important;
+    display: inline !important;
+}
+
+.rst-content section ul li a:hover .std-ref {
+    background-color: #f1f8ff !important;
+    border-color: #2980b9 !important;
+    color: #1565c0 !important;
+}
+
+/* Alternative approach: Create code-style wrapper around C++ links */
+.rst-content section ul li a .std-ref::before {
+    /* Add the same CSS classes that Python autosummary uses */
+    content: "";
+}
+
+/* Make C++ links look exactly like Python autosummary code elements */
+.rst-content section ul li a .std-ref {
+    /* Apply the exact same styles as Python's code elements */
+    background: #f8f9fa !important;
+    border: 1px solid #e9ecef !important;
+    border-radius: 0.25rem !important;
+    color: #2c3e50 !important;
+    font-size: 87.5% !important;
+    padding: 0.2em 0.4em !important;
+    word-wrap: break-word !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+}
+
+/* Override to match the exact Python autosummary appearance */
+.rst-content section ul li a {
+    position: relative;
+}
+
+.rst-content section ul li a .std-ref {
+    /* Match Python's autosummary table code styling exactly */
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    color: #2980b9;
+    font-size: 13px;
+    font-weight: normal;
+    padding: 2px 4px;
+    text-decoration: none;
+    white-space: normal;
+    display: inline;
+}
+
+.rst-content section ul li a:hover .std-ref {
+    background-color: #e3f2fd;
+    border-color: #2980b9;
+    color: #1565c0;
+}
+
+/* Clean up section headers with appropriate icons */
+.rst-content h2[id*="class"],
+.rst-content h2[id*="function"],
+.rst-content h2[id*="enum"],
+.rst-content h2[id*="typedef"],
+.rst-content h2[id*="variable"],
+.rst-content h2#classes,
+.rst-content h2#functions,
+.rst-content h2#enums,
+.rst-content h2#typedefs,
+.rst-content h2#variables {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #404040;
+    border-bottom: 1px solid #e1e4e5;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    padding-bottom: 6px;
+}
+
+/* Ensure C++ code elements match Python autosummary exactly */
+.rst-content section ul li a .std-ref,
+.rst-content section ul li code.xref {
+    /* Apply Python autosummary exact styling */
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 3px;
+    color: #2980b9;
+    font-size: 13px;
+    font-weight: normal;
+    padding: 2px 4px;
+    text-decoration: none;
+    white-space: normal;
+    word-wrap: break-word;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+}
+
+.rst-content section ul li a:hover .std-ref,
+.rst-content section ul li a:hover code.xref {
+    background-color: #e3f2fd;
+    border-color: #2980b9;
+    color: #1565c0;
+}

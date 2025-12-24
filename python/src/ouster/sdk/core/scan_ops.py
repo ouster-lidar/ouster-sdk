@@ -1,7 +1,7 @@
 from typing import List, Union, Callable, Optional
 import copy
 import numpy as np
-from ouster.sdk.core import LidarScan, SensorInfo
+from ouster.sdk.core import LidarScan, SensorInfo, FieldClass
 from ouster.sdk.core.data import destagger
 
 
@@ -145,6 +145,15 @@ def mask(scan: LidarScan, fields: List[str], mask: np.ndarray) -> None:
             scan.field(f)[masked_indices] = 0
 
 
+def _reduce_factor_to_slice(factor: int, height: int) -> slice:
+    """
+    Generate the slice to use for reducing. Handles special cases like single laser.
+    """
+    if factor == height:
+        return slice(height // 2, height // 2 + 1, None)
+    return slice(None, None, factor)
+
+
 def reduce_by_factor_metadata(metadata: SensorInfo, factor: int) -> SensorInfo:
     out = copy.deepcopy(metadata)
     v_res = metadata.format.pixels_per_column // factor
@@ -153,9 +162,19 @@ def reduce_by_factor_metadata(metadata: SensorInfo, factor: int) -> SensorInfo:
         F"{pi.form_factor[:-1]}-{pi.form_factor[-1]}"
     out.prod_line = F"{form_factor}-{v_res}"
     out.format.pixels_per_column = v_res
-    out.format.pixel_shift_by_row = metadata.format.pixel_shift_by_row[::factor]
-    out.beam_azimuth_angles = metadata.beam_azimuth_angles[::factor]
-    out.beam_altitude_angles = metadata.beam_altitude_angles[::factor]
+    factor_slice = _reduce_factor_to_slice(factor, metadata.h)
+    out.format.pixel_shift_by_row = metadata.format.pixel_shift_by_row[factor_slice]
+    out.beam_azimuth_angles = metadata.beam_azimuth_angles[factor_slice]
+    out.beam_altitude_angles = metadata.beam_altitude_angles[factor_slice]
+    # downsample zones
+    if out.zone_set:
+        for id in out.zone_set.zones:
+            zone = out.zone_set.zones[id]
+            if not zone.zrb:
+                continue
+            zrb = zone.zrb
+            zrb.far_range_mm = zrb.far_range_mm[factor_slice]
+            zrb.near_range_mm = zrb.near_range_mm[factor_slice]
     return out
 
 
@@ -175,18 +194,17 @@ def reduce_by_factor(scan: LidarScan, factor: int,
     # copy std properties
     result.frame_id = scan.frame_id
     result.frame_status = scan.frame_status
-    for i in range(len(scan.timestamp)):
-        result.timestamp[i] = scan.timestamp[i]
-    for i in range(len(scan.packet_timestamp)):
-        result.packet_timestamp[i] = scan.packet_timestamp[i]
-    for i in range(len(scan.measurement_id)):
-        result.measurement_id[i] = scan.measurement_id[i]
-    for i in range(len(scan.status)):
-        result.status[i] = scan.status[i]
-    for i in range(len(scan.pose)):
-        result.pose[i] = scan.pose[i]
-    for f in scan.fields:
-        result.field(f)[:] = scan.field(f)[::factor]
+    result.timestamp[:] = scan.timestamp
+    result.packet_timestamp[:] = scan.packet_timestamp
+    result.measurement_id[:] = scan.measurement_id
+    result.status[:] = scan.status
+    result.pose[:] = scan.pose
+    factor_slice = _reduce_factor_to_slice(factor, scan.h)
+    for f in scan.field_types:
+        if f.field_class != FieldClass.PIXEL_FIELD:
+            result.field(f.name)[:] = scan.field(f.name)
+        else:
+            result.field(f.name)[:] = scan.field(f.name)[factor_slice]
     if update_metadata:
         result.sensor_info = reduce_by_factor_metadata(scan.sensor_info, factor)
     return result

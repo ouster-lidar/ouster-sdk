@@ -8,6 +8,12 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <memory>
+#include <nonstd/optional.hpp>
+#include <string>
+#include <vector>
+
 #include "ouster/osf/basics.h"
 #include "ouster/osf/meta_lidar_sensor.h"
 #include "ouster/osf/metadata.h"
@@ -16,6 +22,7 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 /**
@@ -30,8 +37,9 @@ namespace osf {
  * @return a copy of `ls_src` with transformed fields.
  */
 OUSTER_API_FUNCTION
-LidarScan slice_with_cast(const LidarScan& ls_src,
-                          const ouster::LidarScanFieldTypes& field_types);
+ouster::sdk::core::LidarScan slice_with_cast(
+    const ouster::sdk::core::LidarScan& ls_src,
+    const ouster::sdk::core::LidarScanFieldTypes& field_types);
 
 /**
  * Metadata entry for LidarScanStream to store reference to a sensor and
@@ -52,8 +60,9 @@ class OUSTER_API_CLASS LidarScanStreamMeta
      * @param[in] field_types LidarScan fields specs, this argument is optional.
      */
     OUSTER_API_FUNCTION
-    LidarScanStreamMeta(const uint32_t sensor_meta_id,
-                        const ouster::LidarScanFieldTypes field_types = {});
+    LidarScanStreamMeta(
+        const uint32_t sensor_meta_id,
+        const ouster::sdk::core::LidarScanFieldTypes field_types = {});
 
     /**
      * Return the sensor meta id.
@@ -80,8 +89,7 @@ class OUSTER_API_CLASS LidarScanStreamMeta
      * @return The new LidarScanStreamMeta cast as a MetadataEntry
      */
     OUSTER_API_FUNCTION
-    static std::unique_ptr<MetadataEntry> from_buffer(
-        const std::vector<uint8_t>& buf);
+    static std::unique_ptr<MetadataEntry> from_buffer(const OsfBuffer buf);
 
     /**
      * Get the string representation for the LidarScanStreamMeta object.
@@ -108,7 +116,7 @@ class OUSTER_API_CLASS LidarScanStreamMeta
      * Flat Buffer Reference:
      *   fb/os_sensor/lidar_scan_stream.fbs :: LidarScanStream :: field_types
      */
-    ouster::LidarScanFieldTypes field_types_;
+    ouster::sdk::core::LidarScanFieldTypes field_types_;
 };
 
 /** @defgroup OSFTraitsLidarScanStreamMeta Templated struct for traits.*/
@@ -134,14 +142,14 @@ struct OUSTER_API_CLASS MetadataTraits<LidarScanStreamMeta> {
 /**
  * LidarScanStream that encodes LidarScan objects into the messages.
  *
- * Object type: ouster::sensor::LidarScan
+ * Object type: ouster::sdk::core::LidarScan
  * Meta type: LidarScanStreamMeta (sensor_meta_id, field_types)
  *
  * Flatbuffer definition file:
  *   fb/os_sensor/lidar_scan_stream.fbs
  */
 class OUSTER_API_CLASS LidarScanStream
-    : public MessageStream<LidarScanStreamMeta, LidarScan> {
+    : public MessageStream<LidarScanStreamMeta, ouster::sdk::core::LidarScan> {
    protected:
     friend class Writer;
     friend class MessageRef;
@@ -150,7 +158,7 @@ class OUSTER_API_CLASS LidarScanStream
     struct Token {};
 
     /**
-     * Saves the object to the writer applying the coding/serizlization
+     * Saves the object to the writer applying the coding/serialization
      * algorithm defined in make_msg() function. The function is the same for
      * all streams types ...
      *
@@ -161,27 +169,23 @@ class OUSTER_API_CLASS LidarScanStream
      * @param[in] receive_ts The receive timestamp to use for the lidar scan.
      * @param[in] sensor_ts The sensor timestamp to use for the lidar scan.
      * @param[in] lidar_scan The lidar scan to write.
+     * @param[in] field_types Field types of the lidar scan to write.
      */
-    void save(const ouster::osf::ts_t receive_ts,
-              const ouster::osf::ts_t sensor_ts, const obj_type& lidar_scan);
+    void save(const ouster::sdk::osf::ts_t receive_ts,
+              const ouster::sdk::osf::ts_t sensor_ts,
+              const obj_type& lidar_scan,
+              const ouster::sdk::core::LidarScanFieldTypes& field_types);
 
-    flatbuffers::Offset<gen::LidarScanMsg> create_lidar_scan_msg(
-        flatbuffers::FlatBufferBuilder& fbb, const LidarScan& lidar_scan,
-        const ouster::sensor::sensor_info& info,
-        const ouster::LidarScanFieldTypes meta_field_types) const;
-
-    ScanData scanEncode(
-        const LidarScan& lidar_scan, const std::vector<int>& px_offset,
-        const ouster::LidarScanFieldTypes& field_types,
-        const std::vector<std::pair<std::string, const Field*>> custom_fields,
-        ScanData& custom_data) const;
     /**
      * Encode/serialize the object to the buffer of bytes.
      *
      * @param[in] lidar_scan The lidar scan to turn into a vector of bytes.
+     * @param[in] field_types Field types of the lidar scan to write.
      * @return The byte vector representation of lidar_scan.
      */
-    std::vector<uint8_t> make_msg(const obj_type& lidar_scan);
+    std::vector<uint8_t> make_msg(
+        const obj_type& lidar_scan,
+        const ouster::sdk::core::LidarScanFieldTypes& field_types);
 
     /**
      * Decode/deserialize the object from bytes buffer using the concrete
@@ -211,8 +215,9 @@ class OUSTER_API_CLASS LidarScanStream
      * @param[in] field_types LidarScan fields specs, this argument is optional.
      */
     OUSTER_API_FUNCTION
-    LidarScanStream(Token key, Writer& writer, const uint32_t sensor_meta_id,
-                    const ouster::LidarScanFieldTypes& field_types = {});
+    LidarScanStream(
+        Token key, Writer& writer, const uint32_t sensor_meta_id,
+        const ouster::sdk::core::LidarScanFieldTypes& field_types = {});
 
     /**
      * Return the concrete metadata type.
@@ -221,7 +226,7 @@ class OUSTER_API_CLASS LidarScanStream
      * @return The concrete metadata type.
      */
     OUSTER_API_FUNCTION
-    const meta_type& meta() const { return meta_; };
+    const meta_type& meta() const { return meta_; }
 
    private:
     /**
@@ -235,25 +240,21 @@ class OUSTER_API_CLASS LidarScanStream
     meta_type meta_;
 
     /**
-     * The internal flatbuffer id for the stream.
-     */
-    uint32_t stream_meta_id_{0};
-
-    /**
      * The internal flatbuffer id for the metadata.
      */
     uint32_t sensor_meta_id_{0};
 
     /**
-     * The internal sensor_info data.
+     * The internal SensorInfo data.
      */
-    sensor::sensor_info sensor_info_;
+    ouster::sdk::core::SensorInfo sensor_info_;
 
     /**
      * The internal field_types data.
      */
-    ouster::LidarScanFieldTypes field_types_;
+    ouster::sdk::core::LidarScanFieldTypes field_types_;
 };
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

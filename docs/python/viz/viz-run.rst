@@ -49,6 +49,9 @@ Keyboard Controls
     ``e``            Camera roll right
     ``shift+r``      Reset camera
     ``ctrl+r``       Set camera to the birds-eye view
+    ``shift+1``      Top down view
+    ``shift+2``      Front facing view
+    ``shift+3``      Left facing view
     ``u``            Toggle camera mode FOLLOW/FIXED
     ``= / -``        Dolly in/out
     ``0``            Toggle orthographic camera
@@ -115,7 +118,7 @@ The visualizer also includes an option to control the orientation of the point c
 loaded. If you possess, say, an OS-DOME mounted an upside down, you can start the visualizer with
 the option ``--extrinsics``::
 
-    $ ouster-cli source --extrinsics -1 0 0 0 0 1 0 0 0 0 -1 0 0 0 0 1 10.0.0.13 viz
+    $ ouster-cli source --extrinsics "-1 0 0 0 0 1 0 0 0 0 -1 0 0 0 0 1" 10.0.0.13 viz
 
 The input is a row-major homogeneous matrix.
 

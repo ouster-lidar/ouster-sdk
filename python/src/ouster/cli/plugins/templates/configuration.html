@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #333;
+            margin: 0;
+            font-size: 28px;
+            font-weight: 500;
+        }
+        .reset-button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .reset-button:hover {
+            background-color: #5a6268;
+        }
+
+        .config-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .config-section h2 {
+            margin-top: 0;
+            color: #555;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .config-table td {
+            padding: 8px 4px;
+            font-size: 14px;
+            vertical-align: middle;
+            text-align: left;
+        }
+        /* Column widths */
+        .config-table td:first-child {
+            width: 30%; /* Label */
+            color: #555;
+            padding-left: 0;
+        }
+        .config-table td:nth-child(2) {
+            width: 30%; /* Active */
+        }
+        .config-table td:nth-child(3) {
+            width: 30%; /* Staged */
+        }
+        .config-table td:nth-child(4) {
+            width: 10%; /* Button (if present) */
+            text-align: right;
+            padding-right: 0;
+        }
+
+        .col-headers {
+            display: flex;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+        .col-headers span.label-spacer {
+            width: 30%; /* Match label column */
+        }
+        .col-headers span.header-active {
+            width: 30%; /* Match Active column */
+        }
+        .col-headers span.header-staged {
+            width: 30%; /* Match Staged column */
+        }
+        /* The remaining 10% is empty space */
+
+        .config-table input[type="text"],
+        .config-table select {
+            width: 100%;
+            padding: 7px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            background-color: white;
+        }
+
+        .config-table select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-6.5%200-12.3%203.2-16.1%208.1-3.8%204.9-4.7%2011.6-2.5%2017.7l139.7%20182c4.1%205.8%2011%209.2%2018.6%209.2s14.5-3.4%2018.6-9.2l139.7-182c2.2-6.1%201.3-12.8-2.5-17.7z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 10px;
+            padding-right: 30px;
+        }
+
+        .config-table input[readonly],
+        .config-table select[disabled] {
+            background-color: #eee;
+            cursor: not-allowed;
+            color: #555;
+        }
+        .config-table select[disabled] {
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23999999%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-6.5%200-12.3%203.2-16.1%208.1-3.8%204.9-4.7%2011.6-2.5%2017.7l139.7%20182c4.1%205.8%2011%209.2%2018.6%209.2s14.5-3.4%2018.6-9.2l139.7-182c2.2-6.1%201.3-12.8-2.5-17.7z%22%2F%3E%3C%2Fsvg%3E');
+        }
+        .config-table input[type="checkbox"][disabled] {
+            cursor: not-allowed;
+        }
+
+        .config-table .input-group {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        .config-table .input-group input[type="text"] {
+            flex-grow: 1;
+        }
+        .config-table .input-group button {
+            margin-left: 5px;
+            flex-shrink: 0;
+        }
+
+        table button {
+            border: none;
+            outline: none;
+            padding: 0;
+            font: inherit;
+            cursor: pointer;
+            padding: 7px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .config-table .input-group .reset-btn {
+            background-color: #e9e9e9;
+            border: none;
+            outline: none;
+            box-shadow: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            padding: 7px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #43b719;
+            white-space: nowrap;
+        }
+        .config-table .input-group .setlocal-btn {
+            background-color: #e9e9e9;
+            border: 1px solid #ccc;
+            padding: 7px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #333;
+            white-space: nowrap;
+        }
+        .config-table .input-group .reset-btn:hover,
+        .config-table .input-group .setlocal-btn:hover {
+            background-color: #dcdcdc;
+        }
+
+        /* For Azimuth Window (range) */
+        .config-table .input-group.range input[type="text"] {
+            width: 50%;
+        }
+        .config-table .input-group.range input[type="text"]:first-child {
+            margin-right: 5px;
+        }
+
+        .config-table input[type="checkbox"] {
+            margin-right: 5px;
+            transform: scale(1.2);
+        }
+        .config-table .checkbox-label {
+            display: flex;
+            align-items: center;
+            height: 34px;
+        }
+
+        .footer-banner {
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+            box-sizing: border-box;
+        }
+        .footer-banner .button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .footer-banner .button.primary {
+            background-color: #007bff;
+        }
+        .footer-banner .button:hover {
+            background-color: #5a6268;
+        }
+        .footer-banner .button.primary:hover {
+            background-color: #0056b3;
+        }
+    </style>
+    <script>
+        /* JavaScript to add tooltips to unimplemented buttons */
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('button').forEach(function(btn) {
+                if (!btn.hasAttribute('title')) {
+                    btn.setAttribute('title', 'Not implemented yet');
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+    <div class="top-banner" id="topBanner" style="display:flex;justify-content:center;align-items:center;gap:12px;position:relative;">
+        <a href="/disclaimer" style="color:#fff;text-decoration:underline;flex:1;text-align:center;">Important Disclaimer: Read this before developing applications using this emulator!</a>
+        <button type="button" id="dismissBanner" aria-label="Dismiss" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:4px 8px;line-height:1;">×</button>
+    </div>
+    <script>
+        (function() {
+            var btn = document.getElementById('dismissBanner');
+            var banner = document.getElementById('topBanner');
+            if (btn && banner) {
+                btn.addEventListener('click', function() {
+                    banner.style.display = 'none';
+                });
+            }
+        })();
+    </script>
+    <div class="navbar">
+        <div class="logo">OUSTER</div>
+        <a href="/">Dashboard</a>
+        <a href="/diag">Diagnostics</a>
+        <a href="/config">Configuration</a>
+        <a href="#">Documentation</a>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Sensor Configuration</h1>
+            <button class="reset-button">Reset Configuration</button>
+        </div>
+
+        <div class="config-section">
+            <h2>Network</h2>
+            <div class="col-headers">
+                <span class="label-spacer"></span>
+                <span class="header-active">Active</span>
+                <span class="header-staged">Staged</span>
+            </div>
+            <table class="config-table">
+                {% for item in config.network %}
+                <tr>
+                    <td>{{ item.label }}</td>
+                    <td>
+                        <input type="text" value="{{ item.active }}" readonly>
+                    </td>
+                    <td>
+                        <div class="input-group">
+                            <input form="apply-config-form" name="{{ item.name }}" type="text" value="{{ item.staged }}">
+                            <td>
+                                <button class="setlocal-btn">{{ item.button }}</button>
+                            </td>
+                        </div>
+                    </td>
+                    <td></td> 
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="config-section">
+            <h2>Mode</h2>
+            <div class="col-headers">
+                <span class="label-spacer"></span>
+                <span class="header-active">Active</span>
+                <span class="header-staged">Staged</span>
+            </div>
+            <table class="config-table">
+                {% for item in config.mode %}
+                <tr>
+                    <td>{{ item.label }}</td>
+                    
+                    {% if item.type == 'dropdown' %}
+                    <td>
+                        <select disabled>
+                            {% for option in item.options %}
+                            <option value="{{ option }}" {% if option == item.active %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select form="apply-config-form" name="{{ item.name }}" {% if item.immutable %}disabled{% endif %}>
+                            {% for option in item.options %}
+                            <option value="{{ option }}" {% if option == item.staged %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td><button class="reset-btn">Reset to default</button></td>
+
+                    {% elif item.type == 'range' %}
+                    <td>
+                        <div class="input-group range">
+                            <input type="text" value="{{ item.active_start }}" readonly>
+                            <input type="text" value="{{ item.active_end }}" readonly>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="input-group range">
+                            <input type="text" value="{{ item.staged_start }}" {% if item.immutable %}readonly{% endif %}>
+                            <input type="text" value="{{ item.staged_end }}" {% if item.immutable %}readonly{% endif %}>
+                        </div>
+                    </td>
+                    <td><button class="reset-btn">Reset to default</button></td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <div class="config-section">
+            <h2>Timing</h2>
+            <div class="col-headers">
+                <span class="label-spacer"></span>
+                <span class="header-active">Active</span>
+                <span class="header-staged">Staged</span>
+            </div>
+            <table class="config-table">
+                {% for item in config.timing %}
+                <tr>
+                    <td>{{ item.label }}</td>
+                    
+                    {% if item.type == 'dropdown' %}
+                    <td>
+                        <select disabled>
+                            {% for option in item.options %}
+                            <option value="{{ option }}" {% if option == item.active %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select {% if item.immutable %}disabled{% endif %}>
+                            {% for option in item.options %}
+                            <option value="{{ option }}" {% if option == item.staged %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+
+                    {% elif item.type == 'text' %}
+                    <td>
+                        <input type="text" value="{{ item.active }}" readonly>
+                    </td>
+                    <td>
+                        <input type="text" value="{{ item.staged }}" {% if item.immutable %}readonly{% endif %}>
+                    </td>
+
+                    {% elif item.type == 'checkbox' %}
+                    <td>
+                        <div class="checkbox-label">
+                            <input type="checkbox" {% if item.active %}checked{% endif %} disabled>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="checkbox-label">
+                            <input type="checkbox" {% if item.staged %}checked{% endif %} {% if item.immutable %}disabled{% endif %}>
+                        </div>
+                    </td>
+                    {% endif %}
+
+                    <td></td> 
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="footer-banner">
+        <button class="button">Revert Active Config</button>
+        <form action="/apply_config" method="POST" id="apply-config-form">
+            <button type="submit" class="button primary">Apply Config</button>
+        </form>
+    </div>
+</body>
+</html>

@@ -1,12 +1,14 @@
-from typing import cast, List, Optional
+from typing import cast
+import numpy as np
 import click
 import logging
 from functools import partial
 from ouster.cli.plugins.source import source  # type: ignore
-from ouster.sdk.core import LidarScan, ScanSource
+from ouster.sdk.core import ScanSource
 from ouster.cli.plugins.source_util import (source_multicommand,
                                             SourceCommandType,
                                             SourceCommandContext)
+from ouster.sdk.mapping import LocalizationConfig, LocalizationEngine
 
 
 logging.basicConfig(level=logging.INFO)
@@ -14,51 +16,38 @@ logger = logging.getLogger('localization')
 
 
 @click.command
-@click.argument('map_filename', required=True, type=str)
+@click.argument('map_path', required=True, type=str)
 @click.option('--max-range', required=False, show_default=True,
               default=150.0, help="Upper limit of range measurments used during localization (meters)")
 @click.option('--min-range', required=False, show_default=True,
               default=0.0, help="Lower limit of range measurments used during localization (meters)")
 @click.option('-v', '--voxel-size', type=float, help="Map voxel size (meters)")
+@click.option('--deskew-method', type=click.Choice(['auto', 'none', 'constant_velocity', 'imu_deskew']),
+              default='auto', show_default=True,
+              help="Method used for motion compensation (deskewing) of point clouds")
 @click.pass_context
 @source_multicommand(type=SourceCommandType.PROCESSOR_UNREPEATABLE)
-def source_localize(ctx: SourceCommandContext, map_filename: str, max_range: float, min_range: float,
-                    voxel_size: float) -> None:
+def source_localize(ctx: SourceCommandContext, map_path: str, max_range: float, min_range: float,
+                    voxel_size: float, deskew_method: str) -> None:
     """
     Run localization based on the mapping output ply map
     """
 
-    try:
-        from ouster.sdk.mapping import LocalizationConfig, LocalizationEngine
-        from ouster.sdk.mapping.util import determine_voxel_size
-    except ImportError as e:
-        raise click.ClickException(click.style("kiss-icp, a package required for slam, is "
-                                    f"unsupported on this platform. Error: {str(e)}", fg='red'))
-
     def make_kiss_localization() -> LocalizationEngine:
 
-        def live_sensor_voxel_size(scans: List[Optional[LidarScan]]) -> Optional[float]:
-            """a customized version of determine_voxel_size for live sensors"""
-            voxel_size = determine_voxel_size(scans)
-            if voxel_size is not None:
-                if cast(ScanSource, ctx.scan_source).is_live:
-                    logger.info("Choosing a larger voxel size to support real-time processing of live sensors.")
-                    voxel_size *= 2.2 * voxel_size
-                logger.info(f"voxel-size arg is not set, using an estimated value of {voxel_size:.4g} m.")
-            return voxel_size
-
         config = LocalizationConfig()
+        config.backend = "kiss"
+        config.deskew_method = deskew_method
         config.min_range = min_range
         config.max_range = max_range
-        config.voxel_size = voxel_size if voxel_size is not None else live_sensor_voxel_size
-        config.initial_pose = ctx.other_options["initial_pose"]
-        config.backend = "kiss"
+        config.voxel_size = voxel_size if voxel_size is not None else 0.0
+        config.initial_pose = ctx.other_options.get("initial_pose", np.eye(4))
 
-        ctx.misc["localization.map"] = map_filename
+        ctx.misc["localization.map"] = map_path
         return LocalizationEngine(
                 infos=cast(ScanSource, ctx.scan_source).sensor_info,
                 config=config,
-                map=map_filename)
+                map=map_path)
 
     def localization_iter(scan_source):
         localization_engine = make_kiss_localization()

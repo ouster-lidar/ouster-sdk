@@ -12,6 +12,8 @@ from ouster.sdk._bindings.viz import EventModifierKeys
 from ouster.sdk._bindings.viz import PointViz
 from ouster.sdk._bindings.viz import Cloud
 from ouster.sdk._bindings.viz import Image
+from ouster.sdk._bindings.viz import Vertex, Vec3f
+from ouster.sdk._bindings.viz import Mesh
 from ouster.sdk._bindings.viz import Cuboid
 from ouster.sdk._bindings.viz import Label
 from ouster.sdk._bindings.viz import Lines
@@ -33,6 +35,7 @@ from .core import push_point_viz_handler
 from .core import LidarScanViz
 from .core import SimpleViz
 from .core import ls_show
+from .core import ImuVisualizationConfig
 from .core import CloudPaletteItem
 from .core import VizExtraMode
 

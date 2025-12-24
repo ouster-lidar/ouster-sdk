@@ -14,10 +14,10 @@ Working with an Ouster sensor
 
 Configuring Your Sensor
 ========================
-To work with your sensor, you should configure the ports, the :py:class:`.OperatingMode`, and the
-:py:class:`.LidarMode`:
+To work with your sensor, you should configure the ports, the :py:class:`.core.OperatingMode`, and the
+:py:class:`.core.LidarMode`:
 
-.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/core.py
     :start-after: [doc-stag-configure]
     :end-before: [doc-etag-configure]
     :dedent:
@@ -25,51 +25,51 @@ To work with your sensor, you should configure the ports, the :py:class:`.Operat
 Each config parameter corresponds directly to the sensor configuration parameters available on the
 sensor.
 
-You can run the above code, captured in the :py:func:`~.client.configure_sensor_params` example, as
+You can run the above code, captured in the :py:func:`~.examples.core.configure_sensor_params` example, as
 follows:
 
 .. tabs::
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-sensor
+        $ python3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME configure-sensor
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-sensor
+        PS > py -3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME configure-sensor
 
 Once you've configured your sensor, you shouldn't have to configure it again until it shuts down or
 restarts.  You can explore the ``persist`` flag to persist ``port`` and ``udp_dest`` settings over
 sensor restarts.
 
 If you have a Rev6 or later sensor and are running FW 2.2+, you should be able to configure your
-sensor to use dual returns by setting the config parameter :py:class:`.UDPProfileLidar`:
+sensor to use dual returns by setting the config parameter :py:class:`.core.UDPProfileLidar`:
 
-.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/core.py
     :start-after: [doc-stag-config-udp-profile]
     :end-before: [doc-etag-config-udp-profile]
     :dedent:
 
 
-Try the :py:func:`~.client.configure_dual_returns` configuration example on your Rev6 or later
+Try the :py:func:`~.examples.configure_dual_returns` configuration example on your Rev6 or later
 sensor:
 
 .. tabs::
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-dual-returns
+        $ python3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME configure-dual-returns
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME configure-dual-returns
+        PS > py -3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME configure-dual-returns
 
 
 Obtaining Sensor Metadata
 ==========================
 
 Ouster sensors require metadata to interpret the readings of the sensor. Represented by the object
-:py:class:`.SensorInfo`, metadata fields include configuration parameters such as ``lidar_mode`` and
+:py:class:`.core.SensorInfo`, metadata fields include configuration parameters such as ``lidar_mode`` and
 sensor intrinsics like ``beam_azimuth_angles``.
 
 When you work with a sensor, the client will automatically fetch the metadata. Recorded
@@ -83,16 +83,16 @@ Try running the following example:
 
     .. code-tab:: console Linux/macOS
 
-        $ python3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
+        $ python3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME fetch-metadata
 
     .. code-tab:: powershell Windows x64
 
-        PS > py -3 -m ouster.sdk.examples.client $SENSOR_HOSTNAME fetch-metadata
+        PS > py -3 -m ouster.sdk.examples.core $SENSOR_HOSTNAME fetch-metadata
 
 
-And now let's look inside the :py:func:`~.client.fetch_metadata` we just ran:
+And now let's look inside the :py:func:`~.examples.core.fetch_metadata` we just ran:
 
-.. literalinclude:: /../python/src/ouster/sdk/examples/client.py
+.. literalinclude:: /../python/src/ouster/sdk/examples/core.py
     :start-after: [doc-stag-fetch-metadata]
     :end-before: [doc-etag-fetch-metadata]
     :dedent:

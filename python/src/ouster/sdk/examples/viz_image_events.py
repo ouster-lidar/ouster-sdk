@@ -88,10 +88,11 @@ def resize_handler(ctx: WindowCtx) -> bool:
     return True
 
 
-viz.add(img)
-add_default_controls(viz)
-viz.push_mouse_button_handler(mouse_button_handler)
-viz.push_mouse_pos_handler(mouse_pos_handler)
-viz.push_frame_buffer_resize_handler(resize_handler)
-viz.update()
-viz.run()
+if __name__ == '__main__':
+    viz.add(img)
+    add_default_controls(viz)
+    viz.push_mouse_button_handler(mouse_button_handler)
+    viz.push_mouse_pos_handler(mouse_pos_handler)
+    viz.push_frame_buffer_resize_handler(resize_handler)
+    viz.update()
+    viz.run()

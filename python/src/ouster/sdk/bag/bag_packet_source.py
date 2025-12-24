@@ -1,10 +1,12 @@
 # type: ignore
 from typing import Iterator, List, Tuple, Union, Optional
 import numpy as np
+import math
 
 from threading import Lock
 import logging
-from ouster.sdk.core import SensorInfo, PacketFormat, PacketValidationFailure, LidarPacket, ImuPacket, Packet
+from ouster.sdk.core import (SensorInfo, PacketFormat, PacketValidationFailure,
+                             LidarPacket, ImuPacket, Packet, ZonePacket)
 from ouster.sdk.util import resolve_metadata_multi
 
 from pathlib import Path
@@ -185,6 +187,7 @@ class BagPacketSource(_PacketSource):
         pkt_connections = [x for x in connections if x.msgtype in pkt_msg_types]
         imu_connections = [x for x in pkt_connections if "imu_packets" in x.topic]
         lidar_connections = [x for x in pkt_connections if "lidar_packets" in x.topic]
+        zone_connections = [x for x in pkt_connections if "zone_packets" in x.topic]
         metadata_connections = [x for x in connections if x.msgtype == 'std_msgs/msg/String' and "metadata" in x.topic]
 
         metadata_paths = None
@@ -201,6 +204,11 @@ class BagPacketSource(_PacketSource):
             for conn2 in imu_connections:
                 if namespace in conn2.topic:
                     self._id_map[conn2.topic] = (idx, 1)
+                    self._msg_connections.append(conn2)
+                    break
+            for conn2 in zone_connections:
+                if namespace in conn2.topic:
+                    self._id_map[conn2.topic] = (idx, 3)
                     self._msg_connections.append(conn2)
                     break
             if meta is None:
@@ -232,6 +240,12 @@ class BagPacketSource(_PacketSource):
                 with open(m, 'r') as file:
                     self._metadata[idx] = SensorInfo(file.read())
 
+        # estimate the scan count from packet count
+        self._scan_count = 0
+        for con in lidar_connections:
+            ppf = self._metadata[self._id_map[con.topic][0]].format.lidar_packets_per_frame()
+            self._scan_count += math.ceil(con.msgcount / ppf)
+
         self._pf = []
         for m in self._metadata:
             pf = PacketFormat(m)
@@ -239,6 +253,9 @@ class BagPacketSource(_PacketSource):
 
         # populate extrinsics
         populate_extrinsics(extrinsics_file or "", extrinsics or [], self._metadata)
+
+    def __length_hint__(self):
+        return self._scan_count
 
     def __iter__(self) -> Iterator[Tuple[int, Packet]]:
         with self._lock:
@@ -255,7 +272,7 @@ class BagPacketSource(_PacketSource):
                 idx = self._id_map[connection.topic][0]
                 msg_type = self._id_map[connection.topic][1]
                 msg_len = len(msg.buf)
-                packet: Union[LidarPacket, ImuPacket]
+                packet: Union[LidarPacket, ImuPacket, ZonePacket]
                 if msg_type == 0:
                     msg_len = len(msg.buf)
                     if msg_len != self._pf[idx].lidar_packet_size:
@@ -265,30 +282,40 @@ class BagPacketSource(_PacketSource):
                         else:
                             print(f"got an unexpected lidar packet size {msg_len} != "
                                   f"{self._pf[idx].lidar_packet_size} for sensor {idx}")
+                            self._size_error_count += 1
                             continue
-                    packet = LidarPacket(msg_len)  # type: ignore
-                    packet.buf[:] = msg.buf[:msg_len]  # type: ignore
+                    packet = LidarPacket(msg_len)
+                    packet.buf[:] = msg.buf[:msg_len]
                 elif msg_type == 1:
                     if msg_len != self._pf[idx].imu_packet_size:
                         # are we off by one? (older ouster-ros bags are off by 1)
                         if msg_len == self._pf[idx].imu_packet_size + 1:
                             msg_len -= 1
                         else:
-                            print(f"got an unexpected lidar packet size {msg_len} != "
+                            print(f"got an unexpected imu packet size {msg_len} != "
                                   f"{self._pf[idx].imu_packet_size} for sensor {idx}")
+                            self._size_error_count += 1
                             continue
-                    packet = ImuPacket(msg_len)  # type: ignore
-                    packet.buf[:] = msg.buf[:msg_len]  # type: ignore
+                    packet = ImuPacket(msg_len)
+                    packet.buf[:] = msg.buf[:msg_len]
+                elif msg_type == 3:
+                    # this packet is new so does not have the off by one issue
+                    if msg_len != self._pf[idx].zone_packet_size:
+                        print(f"got an unexpected zone packet size {msg_len} != "
+                              f"{self._pf[idx].zone_packet_size} for sensor {idx}")
+                        self._size_error_count += 1
+                        continue
+                    packet = ZonePacket(msg_len)
+                    packet.buf[:] = msg.buf[:msg_len]
                 else:
                     continue
                 packet.host_timestamp = timestamp
                 packet.format = self._pf[idx]
 
-                res = packet.validate(self._metadata[idx], self._pf[idx])
+                res = packet.validate(self._metadata[idx])
                 if res == PacketValidationFailure.NONE:
                     yield (idx, packet)
-                elif res == PacketValidationFailure.PACKET_SIZE:
-                    self._size_error_count += 1
+                # don't need to check for size since we validate that above
                 elif res == PacketValidationFailure.ID:
                     self._id_error_count += 1
                     if self._soft_id_check:

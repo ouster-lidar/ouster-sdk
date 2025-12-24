@@ -14,6 +14,7 @@ from ouster.sdk import core
 from ouster.sdk.core import PacketFormat, PacketWriter, \
     FieldType, ScanBatcher, LidarScan, LidarPacket, SensorInfo
 from ouster.sdk.pcap import PcapPacketSource
+from ouster.sdk.core import ShotLimitingStatus, ThermalShutdownStatus
 
 
 CUSTOM0 = 'custom0'
@@ -102,7 +103,6 @@ def test_batch_missing_zeroed(lidar_stream: core.PacketSource) -> None:
     # parse the packets into a scan
     def scans():
         # reusing the same lidar scan object over and over
-        nonlocal ls
         for ind, pb in enumerate(packets):
             p = pb[1]
             packet_ind = ind % packets_per_frame
@@ -181,8 +181,8 @@ def test_batch_custom_fields(lidar_stream: core.PacketSource) -> None:
     for idx, p in take(packets_per_frame, lidar_stream):
         if isinstance(p, core.LidarPacket):
             batch(p, ls)
-            assert pf.shot_limiting(p.buf) == ls.shot_limiting()
-            assert pf.thermal_shutdown(p.buf) == ls.thermal_shutdown()
+            assert ShotLimitingStatus(pf.shot_limiting(p.buf)) == ls.shot_limiting()
+            assert ThermalShutdownStatus(pf.thermal_shutdown(p.buf)) == ls.thermal_shutdown()
 
     # it should contain the same num fields as we've added
     assert len(list(ls.fields)) == len(fields)
@@ -202,7 +202,7 @@ def test_incompatible_profile(lidar_stream: core.PacketSource) -> None:
     """Test batching of a LidarScan with custom fields set."""
 
     info = lidar_stream.sensor_info[0]
-    assert info.format.udp_profile_lidar == core.UDPProfileLidar.PROFILE_LIDAR_LEGACY
+    assert info.format.udp_profile_lidar == core.UDPProfileLidar.LEGACY
 
     packets_per_frame = (info.format.columns_per_frame //
                          info.format.columns_per_packet)
@@ -285,13 +285,15 @@ def test_early_release(file: str, test_data_dir):
 
 def test_batching_alerts():
     """It should include alert_flags from the packet in the LidarScan."""
-    profile = core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
     info = SensorInfo()
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16
     info.format.pixels_per_column = 128
     info.format.udp_profile_lidar = profile
-    writer = PacketWriter.from_profile(profile, info.format.pixels_per_column, info.format.columns_per_packet)
+    info.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
+    info.format.header_type = core.HeaderType.STANDARD
+    writer = PacketWriter.from_info(info)
     batcher = ScanBatcher(info)
     scan = LidarScan(info)
     scan.frame_id = 0
@@ -313,15 +315,49 @@ def test_batching_alerts():
     assert np.array_equal(scan.alert_flags, np.array(range(num_packets)))
 
 
+def test_batching_bad_column_id():
+    """It should include alert_flags from the packet in the LidarScan."""
+    profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
+    info = SensorInfo()
+    info.format.column_window = [0, 1023]
+    info.format.columns_per_frame = 1024
+    info.format.columns_per_packet = 16
+    info.format.pixels_per_column = 128
+    info.format.udp_profile_lidar = profile
+    info.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
+    info.format.header_type = core.HeaderType.STANDARD
+    writer = PacketWriter.from_info(info)
+    batcher = ScanBatcher(info)
+    scan = LidarScan(info)
+    scan.frame_id = 0
+
+    # create a packet that has valid columns, but ones too close
+    # to block parsing boundaries to make sure we dont crash
+    # it should fail over to column parsing instead
+    packet = LidarPacket()
+    packet.host_timestamp = 1
+    for i in range(info.format.columns_per_packet):
+        writer.set_col_status(packet, i, 1)
+        writer.set_col_measurement_id(packet, i, 1020)
+
+    batcher(packet, scan)
+
+    # it should still parse the column, without crashing
+    assert scan.status[1020] == 1
+    assert scan.status[1021] == 0
+
+
 def test_batching_countdowns():
     """It should include shutdown_countdown and shot_limiting_countdown in the LidarScan."""
-    profile = core.UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL
+    profile = core.UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL
     info = SensorInfo()
     info.format.columns_per_frame = 1024
     info.format.columns_per_packet = 16
     info.format.pixels_per_column = 128
     info.format.udp_profile_lidar = profile
-    writer = PacketWriter.from_profile(profile, info.format.pixels_per_column, info.format.columns_per_packet)
+    info.format.udp_profile_imu = core.UDPProfileIMU.LEGACY
+    info.format.header_type = core.HeaderType.STANDARD
+    writer = PacketWriter.from_info(info)
     batcher = ScanBatcher(info)
     scan = LidarScan(info)
     scan.frame_id = -1

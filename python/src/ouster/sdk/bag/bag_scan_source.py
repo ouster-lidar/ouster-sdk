@@ -1,8 +1,8 @@
 from typing import Iterator, List, Optional, Union
 import numpy as np
 
-from ouster.sdk.core import LidarScan
-from ouster.sdk.core import SensorInfo, ScanBatcher, LidarPacket
+from ouster.sdk.core import LidarScan, LidarScanSet
+from ouster.sdk.core import SensorInfo, ScanBatcher
 from ouster.sdk.util import resolve_field_types  # type: ignore
 from .bag_packet_source import BagPacketSource
 
@@ -72,26 +72,32 @@ class BagScanSource(ScanSource):
     def size_error_count(self) -> int:
         return self._source.size_error_count  # type: ignore
 
-    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+    def __length_hint__(self):
+        return self._source.__length_hint__()
+
+    def __iter__(self) -> Iterator[LidarScanSet]:
         batchers = []
         scans: List[Optional[LidarScan]] = []
         for m in self.sensor_info:
             batchers.append(ScanBatcher(m))
             scans.append(None)
         for idx, packet in self._source:
-            if isinstance(packet, LidarPacket):
-                scan = scans[idx]
-                if not scan:
-                    scan = LidarScan(self._source.sensor_info[idx], self._field_types[idx])
-                    scans[idx] = scan
-                if batchers[idx](packet, scan):
-                    yield [scan]
-                    scans[idx] = None
+            scan = scans[idx]
+            if not scan:
+                scan = LidarScan(self._source.sensor_info[idx], self._field_types[idx])
+                scans[idx] = scan
+            if batchers[idx](packet, scan):
+                yield LidarScanSet([scan])
+                scans[idx] = None
         # yield any remaining scans
         # todo maybe do this in time order
         for idx, scan in enumerate(scans):
             if scan is not None:
-                yield [scan]
+                # dont output scans that got no packets
+                if batchers[idx].batched_packets() == 0:
+                    scans[idx] = None
+                    continue
+                yield LidarScanSet([scan])
                 scans[idx] = None
 
     def close(self):

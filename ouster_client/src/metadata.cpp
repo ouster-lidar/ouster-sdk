@@ -13,47 +13,37 @@
 
 #include "ouster/metadata.h"
 
+#include <zip.h>
+
 #include <algorithm>
-#include <exception>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <ctime>
 #include <functional>
 #include <jsoncons/json.hpp>
 #include <jsoncons/json_type.hpp>
 #include <jsoncons_ext/jsonpath/json_query.hpp>
+#include <map>
+#include <nonstd/optional.hpp>
+#include <ostream>
+#include <set>
+#include <sstream>
+#include <stdexcept>
 #include <string>
-#include <type_traits>
+#include <utility>
+#include <vector>
 
+#include "ouster/impl/json_tools.h"
 #include "ouster/impl/logging.h"
-
-#ifdef __GNUG__
-#include <cxxabi.h>
-/**
- * Function for unmangling cpp types.
- *
- * @param[in] name The mangled cpp type string.
- * @return The unmangled cpp type string.
- */
-std::string fix_typename(const char* name) {
-    std::size_t length = 0;
-    int status = 0;
-    std::unique_ptr<char, decltype(&std::free)> pointer(
-        __cxxabiv1::__cxa_demangle(name, nullptr, &length, &status),
-        &std::free);
-    return pointer.get();
-}
-#else
-/**
- * Function for unmangling cpp types.
- *
- * @param[in] name The mangled cpp type string.
- * @return The unmangled cpp type string.
- */
-std::string fix_typename(const char* name) { return name; }
-#endif
+#include "ouster/json_tools.h"
+#include "ouster/zone_monitor.h"
 
 namespace ouster {
-
-namespace sensor {
-extern data_format default_data_format(lidar_mode mode);
+namespace sdk {
+namespace core {
+extern DataFormat default_data_format(LidarMode mode);
 extern double default_lidar_origin_to_beam_origin(std::string prod_line);
 extern mat4d default_beam_to_lidar_transform(std::string prod_line);
 const mat4d DEFAULT_IMU_TO_SENSOR =
@@ -63,69 +53,37 @@ const mat4d DEFAULT_IMU_TO_SENSOR =
 const mat4d DEFAULT_LIDAR_TO_SENSOR =
     (mat4d() << -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 36.18, 0, 0, 0, 1)
         .finished();
-};  // namespace sensor
 
-// NOLINTBEGIN(modernize-pass-by-value)
-ValidatorIssues::ValidatorEntry::ValidatorEntry(const std::string& path,
-                                                const std::string& msg)
-    : path_(path), msg_(msg) {}
-// NOLINTEND(modernize-pass-by-value)
-
-std::string ValidatorIssues::ValidatorEntry::to_string() const {
-    std::stringstream error_message;
-    error_message << path_ << ": ";
-    error_message << msg_;
-
-    return error_message.str();
-}
-
-const std::string& ValidatorIssues::ValidatorEntry::get_path() const {
-    return path_;
-}
-
-const std::string& ValidatorIssues::ValidatorEntry::get_msg() const {
-    return msg_;
-}
-
-std::string to_string(const ValidatorIssues::EntryList& list) {
-    std::stringstream output_string;
-    for (auto const& it : list) {
-        output_string << it.to_string() << std::endl;
+class SensorInfoImpl : public impl::JsonTools {
+   public:
+    SensorInfoImpl(const jsoncons::json& root, SensorInfo& sensor_info,
+                   ValidatorIssues& issues)
+        : JsonTools(root, issues) {
+        parse_and_validate_sensor_info(sensor_info);
+        parse_and_validate_config_params(sensor_info.config);
+        // parse_and_validate_sensor_info must be run before
+        // parse_and_validate_data_format
+        //  due to requirements on prod_line
+        // parse_and_validate_config_params must be run before
+        // parse_and_validate_data_format
+        //  due to requirements on lidar_mode
+        parse_and_validate_data_format(sensor_info);
+        parse_and_validate_calibration_status(sensor_info);
+        // parse_and_validate_sensor_info must be run before
+        // parse_and_validate_data_format
+        //  due to requirements on prod_line
+        //  parse_and_validate_config_params must be run before
+        //  parse_and_validate_data_format due to requirements on lidar_mode
+        //  parse_and_validate_data_format must be run before
+        //  parse_and_validate_intrinsics due to requirements on
+        //  pixels_per_column
+        parse_and_validate_intrinsics(sensor_info);
+        parse_and_validate_misc(sensor_info);
     }
-    return output_string.str();
-}
 
-std::string ValidatorIssues::to_string() const {
-    std::stringstream output_string;
-    if (!critical.empty()) {
-        output_string << "Critical Issues:" << std::endl;
-        output_string << ouster::to_string(critical);
-    }
-    if (!warning.empty()) {
-        output_string << "Warning Issues:" << std::endl;
-        output_string << ouster::to_string(warning);
-    }
-    if (!information.empty()) {
-        output_string << "Information Issues:" << std::endl;
-        output_string << ouster::to_string(information);
-    }
-    return output_string.str();
-}
-
-class MetadataImpl {
    protected:
-    /**
-     * Internal class for parsing and validating metadata.
-     *
-     * @param[in] root The root of the json object to parse and validate.
-     * @param[out] result The resulting metadata parsed and validated.
-     */
-    MetadataImpl(const jsoncons::json& root, ValidatorIssues& issues)
-        : root_(root), issues_(issues) {}
-
-    // Data
-    const jsoncons::json& root_;  ///< The json root
-    ValidatorIssues& issues_;     ///< The validation output
+    SensorInfoImpl(const jsoncons::json& root, ValidatorIssues& issues)
+        : JsonTools(root, issues) {}
 
     /**
      * Variable to keep track of the status of the prodline.
@@ -173,597 +131,8 @@ class MetadataImpl {
     const std::string columns_per_frame_string_{
         "$.lidar_data_format.columns_per_frame"};
 
-    // Utilities
-    /**
-     * Utility function to emit a validation issue due to missing
-     * prerequisite parse.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] item_skipped The item that was unable to be run due
-     *                         to missing prerequisite.
-     * @param[in] cause_item The prerequisite that caused the skip.
-     * @param[in] explanation Additional information around the issue.
-     */
-    static void skipped_due_to_item(ValidatorIssues::EntryList& severity,
-                                    const std::string& item_skipped,
-                                    const std::string& cause_item,
-                                    const std::string& explanation = "") {
-        std::stringstream error_message;
-        error_message << "Validation step for path: \"" << item_skipped
-                      << "\" skipped"
-                      << " due to failures validating path: \"" << cause_item
-                      << "\"." << explanation;
-
-        auto entry =
-            ValidatorIssues::ValidatorEntry(item_skipped, error_message.str());
-        severity.push_back(entry);
-    }
-
-    /**
-     * Utility function to test if a json path exists in the json data.
-     *
-     * @param[in] path The path to test.
-     *
-     * @return If the json path exists in the json data.
-     */
-    bool path_exists(const std::string& path) {
-        return (jsoncons::jsonpath::json_query(root_, path).size() > 0);
-    }
-
-    /**
-     * Utility function to extract a mat4d dataset from a single
-     * dimensional vector.
-     *
-     * @param[out] output The mat4d output to extract to.
-     * @param[in] data The single dimensional vector to extract from.
-     */
-    static void decode_transform_array(mat4d& output,
-                                       const std::vector<double>& data) {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                output(i, j) = data[i * 4 + j];
-            }
-        }
-    }
-
-    /**
-     * Utility function to emit a validation issue on using a default value.
-     *
-     * @param[in] path The path to use for emitting the validation issue.
-     */
-    void default_message(const std::string& path) {
-        auto entry = ValidatorIssues::ValidatorEntry(
-            path, "Metadata entry not found (" + path + "), using defaults");
-        issues_.information.push_back(entry);
-    }
-
-    // Validators
-    /**
-     * Post parsing validator to validate that there are at least
-     * some non-zero entries. Path is only used for the validation event,
-     * the data is coming in via the data parameter.
-     *
-     * @tparam T The type of data to verify, should be something
-     *           that can be turned into a number.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for emitting the validation issue.
-     * @param[in] data The data to validate.
-     *
-     * @return There are at least some non-zero entries in the data.
-     */
-    template <typename T,
-              typename = std::enable_if<std::is_arithmetic<T>::value, T>>
-    static bool verify_all_not_zero(ValidatorIssues::EntryList& severity,
-                                    const std::string& path, T& data) {
-        uint64_t zeros = 0;
-        for (auto it : data) {
-            if (it == 0) {
-                zeros++;
-            }
-        }
-
-        if (zeros == data.size()) {
-            std::stringstream error_message;
-            error_message
-                << "Expected at least some non-zero values in metadata array";
-
-            auto entry =
-                ValidatorIssues::ValidatorEntry(path, error_message.str());
-            severity.push_back(entry);
-        } else {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Callback validator to use in a parse_and_validate_item call to verify
-     * that a single resulting string is not empty.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for emitting the validation issue.
-     * @param[in] data The data to validate.
-     *
-     * @return The string in data is not empty.
-     */
-    static bool verify_string_not_empty(ValidatorIssues::EntryList& severity,
-                                        const std::string& path,
-                                        const std::string& data) {
-        if (data.length() > 0) {
-            return true;
-        } else {
-            std::stringstream error_message;
-            error_message << "String that was expected to contain data"
-                          << " was empty";
-
-            auto entry =
-                ValidatorIssues::ValidatorEntry(path, error_message.str());
-            severity.push_back(entry);
-        }
-        return false;
-    }
-
-    /**
-     * Method used to create a Callback validator to use
-     * in a parse_and_validate_item call to verify
-     * that a single resulting numeric value is inbetween
-     * the lower and upper bounds. This specifically returns a
-     * callback rather than being the callback due to the need
-     * to specificy the bounds at the time of calling.
-     *
-     * @tparam T The type of data to verify, should be something
-     *           that can be turned into a number.
-     *
-     * @param[in] lower The lower bound to validate against.
-     * @param[in] upper The upper bound to validate against.
-     *
-     * @return A callback to use in a parse_and_validate_item call.
-     */
-    template <typename T,
-              typename = std::enable_if<std::is_arithmetic<T>::value, T>>
-    static std::function<bool(ValidatorIssues::EntryList&, const std::string&,
-                              T)>
-    make_verify_in_bounds(T lower, T upper) {
-        return [lower, upper](ValidatorIssues::EntryList& severity,
-                              const std::string& path, T data) {
-            bool result = true;
-            if (data < lower) {
-                std::stringstream error_message;
-                error_message << "Item value " << data
-                              << " is lower than the lower bound " << lower;
-
-                auto entry =
-                    ValidatorIssues::ValidatorEntry(path, error_message.str());
-                severity.push_back(entry);
-                result = false;
-            }
-
-            if (data > upper) {
-                std::stringstream error_message;
-                error_message << "Item value " << data
-                              << " is greater than the upper bound " << upper;
-
-                auto entry =
-                    ValidatorIssues::ValidatorEntry(path, error_message.str());
-                severity.push_back(entry);
-                result = false;
-            }
-
-            return result;
-        };
-    }
-
-    // Processors
-    /**
-     * The main method for parsing and validating a single item in
-     * a json dataset.
-     *
-     * @tparam T The type of data to validate
-     * @tparam F Function type for the single item validation callback.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The variable to store the parsed results in.
-     * @param[in] verification_callback The callback to call on each singular
-     *     item to validate them.
-     * @param[in] relaxed_number_verification For numeric types, setting this to
-     *     true will accept any numeric value as the type specified.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T, typename F,
-              typename = std::enable_if<std::is_function<F>::value, F>>
-    bool parse_and_validate_item(ValidatorIssues::EntryList& severity,
-                                 const std::string& path, T& output,
-                                 F verification_callback,
-                                 bool relaxed_number_verification = false) {
-        jsoncons::json value_array =
-            jsoncons::jsonpath::json_query(root_, path);
-        if (value_array.size() == 1) {
-            jsoncons::json value = value_array[0];
-            if (value.is<T>() ||
-                (relaxed_number_verification && value.is_number() &&
-                 std::is_arithmetic<T>::value)) {
-                // Warning: ran into a really weird argument swapping issue here
-                // we think it was related to ABI issues.
-                output = value.as<T>();
-                bool temp_result =
-                    verification_callback(severity, path, value.as<T>());
-                return temp_result;
-            } else {
-                try {
-                    output = value.as<T>();
-                } catch (...) {
-                }
-                std::stringstream error_message;
-                error_message
-                    << "Type Expected: \"" << fix_typename(typeid(T).name())
-                    << "\" Actual Type: " << value.type() << "\" Value: \""
-                    << value << "\"";
-                auto entry =
-                    ValidatorIssues::ValidatorEntry(path, error_message.str());
-                severity.push_back(entry);
-            }
-        } else {
-            std::stringstream error_message;
-            error_message << "Expected One Item In Data, "
-                          << "Number Of Items: " << value_array.size()
-                          << " Values: \"" << value_array << "\"";
-            auto entry =
-                ValidatorIssues::ValidatorEntry(path, error_message.str());
-            severity.push_back(entry);
-        }
-        return false;
-    }
-
-    /**
-     * Method for parsing and validating a single item in a json dataset.
-     *
-     * @tparam T The type of data to validate
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The variable to store the parsed results in.
-     * @param[in] relaxed_number_verification For numeric types, setting this to
-     *     true will accept any numeric value as the type specified.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T>
-    bool parse_and_validate_item(ValidatorIssues::EntryList& severity,
-                                 const std::string& path, T& output,
-                                 bool relaxed_number_verification = false) {
-        return parse_and_validate_item<T>(
-            severity, path, output,
-            [&](ValidatorIssues::EntryList& /*severity*/,
-                const std::string& /*path*/, T /*data*/) { return true; },
-            relaxed_number_verification);
-    }
-
-    /**
-     * Method for parsing and validating a single optional item in a
-     * json dataset.
-     *
-     * @tparam T The type of data to validate
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The variable to store the optional parsed results in.
-     * @param[in] relaxed_number_verification For numeric types, setting this to
-     *     true will accept any numeric value as the type specified.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T>
-    bool parse_and_validate_item(ValidatorIssues::EntryList& severity,
-                                 const std::string& path,
-                                 nonstd::optional<T>& output,
-                                 bool relaxed_number_verification = false) {
-        T data;
-        if (parse_and_validate_item<T>(severity, path, data,
-                                       relaxed_number_verification)) {
-            output = data;
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Method for parsing and validating a single optional item in a
-     * json dataset while providing a validation callback.
-     *
-     * @tparam T The type of data to validate
-     * @tparam F Function type for the single optional item validation callback.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The variable to store the parsed results in.
-     * @param[in] verification_callback The callback to call on each singular
-     *     optional item to validate them.
-     * @param[in] relaxed_number_verification For numeric types, setting this to
-     *     true will accept any numeric value as the type specified.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T, typename F,
-              typename = std::enable_if<std::is_function<F>::value, F>>
-    bool parse_and_validate_item(ValidatorIssues::EntryList& severity,
-                                 const std::string& path,
-                                 nonstd::optional<T>& output,
-                                 F verification_callback,
-                                 bool relaxed_number_verification = false) {
-        T data;
-        bool temp_result = parse_and_validate_item<T, F>(
-            severity, path, data, verification_callback,
-            relaxed_number_verification);
-        if (temp_result) {
-            output = data;
-        }
-
-        return temp_result;
-    }
-
-    /**
-     * Method for parsing and validating an array of items in a
-     * json dataset.
-     *
-     * @tparam T The type of data to validate
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The vector variable to store the parsed results in.
-     * @param[in] verify_count The size of the array that is expected.
-     * @param[in] relaxed_number_verification For numeric types, setting this to
-     *     true will accept any numeric value as the type specified.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T>
-    bool parse_and_validate_item(ValidatorIssues::EntryList& severity,
-                                 const std::string& path,
-                                 std::vector<T>& output, size_t verify_count,
-                                 bool relaxed_number_verification = false) {
-        size_t index = 0;
-        size_t matches = 0;
-        std::vector<T> shadow_output;
-        auto parse_callback = [&](const std::string& path,
-                                  const jsoncons::json& /*val*/) {
-            T data;
-            if (parse_and_validate_item<T>(severity, path, data,
-                                           relaxed_number_verification)) {
-                matches++;
-            }
-            shadow_output.push_back(data);
-            index++;
-        };
-        jsoncons::jsonpath::json_query(root_, path, parse_callback);
-        bool result = (index == matches && matches > 0);
-        if (verify_count > 0 && matches != verify_count) {
-            std::stringstream error_message;
-            error_message << "Invalid metadata array, got " << index
-                          << " items, " << matches << " matching items,"
-                          << " was expecting " << verify_count
-                          << " matching items";
-            severity.push_back(
-                ValidatorIssues::ValidatorEntry(path, error_message.str()));
-            result = false;
-        }
-
-        if (!shadow_output.empty()) {
-            output = shadow_output;
-        }
-
-        return result;
-    }
-
-    /**
-     * Method for parsing and validating an array of items in a
-     * json dataset  while providing a validation callback.
-     *
-     * @tparam T The type of data to validate
-     * @tparam F Function type for the single item validation callback.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The vector variable to store the parsed results in.
-     * @param[in] verify_count The size of the array that is expected.
-     * @param[in] verification_callback The callback to call on each singular
-     *     optional item to validate them.
-     * @param[in] relaxed_number_verification For numeric types, setting this to
-     *     true will accept any numeric value as the type specified.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T, typename F,
-              typename = std::enable_if<std::is_function<F>::value, F>>
-    bool parse_and_validate_item(ValidatorIssues::EntryList& severity,
-                                 const std::string& path,
-                                 std::vector<T>& output, size_t verify_count,
-                                 F verification_callback,
-                                 bool relaxed_number_verification = false) {
-        size_t index = 0;
-        size_t matches = 0;
-        std::vector<T> shadow_output;
-        auto parse_callback = [&](const std::string& path,
-                                  const jsoncons::json& /*val*/) {
-            T data;
-            if (parse_and_validate_item<T, F>(severity, path, data,
-                                              verification_callback,
-                                              relaxed_number_verification)) {
-                matches++;
-            }
-            shadow_output.push_back(data);
-            index++;
-        };
-        jsoncons::jsonpath::json_query(root_, path, parse_callback);
-        bool result = (index == matches && matches > 0);
-        if (verify_count > 0 && matches != verify_count) {
-            std::stringstream error_message;
-            error_message << "Invalid metadata array, got " << index
-                          << " items, " << matches << " matching items,"
-                          << " was expecting " << verify_count
-                          << " matching items";
-            severity.push_back(
-                ValidatorIssues::ValidatorEntry(path, error_message.str()));
-            result = false;
-        }
-
-        if (!shadow_output.empty()) {
-            output = shadow_output;
-        }
-
-        return result;
-    }
-
-    /**
-     * Method for parsing and validating an optional enum value.
-     *
-     * @tparam T The type of data the enum is stored in the json dataset.
-     * @tparam U The type that the enum should be stored in.
-     * @tparam F Function type to turn the json data into the cpp enum.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The variable to store the optional parsed results in.
-     * @param[in] func Function to turn the json data into the cpp enum.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T, typename U, typename F,
-              typename = std::enable_if<std::is_function<F>::value, F>>
-    bool parse_and_validate_enum(ValidatorIssues::EntryList& severity,
-                                 const std::string& path,
-                                 nonstd::optional<U>& output, F func) {
-        T data;
-        if (parse_and_validate_item<T>(severity, path, data)) {
-            try {
-                output = func(data);
-            } catch (std::exception& e) {
-                std::stringstream error_message;
-                error_message << "Failed To Parse Enum: " << data
-                              << " Error Message: \"" << e.what() << "\"";
-                severity.push_back(
-                    ValidatorIssues::ValidatorEntry(path, error_message.str()));
-                return false;
-            }
-            if (output.has_value()) {
-                return true;
-            } else {
-                std::stringstream error_message;
-                error_message << "Invalid Entry: " << data;
-                severity.push_back(
-                    ValidatorIssues::ValidatorEntry(path, error_message.str()));
-                output.reset();
-                return false;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Method for parsing and validating an enum value.
-     *
-     * @tparam T The type of data the enum is stored in the json dataset.
-     * @tparam U The type that the enum should be stored in.
-     * @tparam F Function type to turn the json data into the cpp enum.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[out] output The variable to store the parsed results in.
-     * @param[in] func Function to turn the json data into the cpp enum.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T, typename U, typename F,
-              typename = std::enable_if<std::is_function<F>::value, F>>
-    bool parse_and_validate_enum(ValidatorIssues::EntryList& severity,
-                                 const std::string& path, U& output, F func) {
-        nonstd::optional<U> temp_output;
-        bool result =
-            parse_and_validate_enum<T, U, F>(severity, path, temp_output, func);
-        if (result) {
-            output = *temp_output;
-        }
-        return result;
-    }
-
-    /**
-     * Method for parsing and validating an optional datetime.
-     *
-     * @tparam T The type of data the datetime should be stored in.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[in] date_format The get_time format to try and decode using.
-     * @param[out] output The variable to store the optional parsed results in.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T>
-    bool parse_and_validate_datetime(ValidatorIssues::EntryList& severity,
-                                     const std::string& path,
-                                     const std::string& date_format,
-                                     nonstd::optional<T>& output) {
-        T data;
-        if (parse_and_validate_item(severity, path, data,
-                                    verify_string_not_empty)) {
-            std::istringstream date_data(data);
-            std::tm time = {};
-            date_data.imbue(std::locale("C"));
-            date_data >> std::get_time(&time, date_format.c_str());
-            if (date_data.fail()) {
-                std::stringstream error_message;
-                error_message
-                    << "Build date not a properly formatted DateTime: \"";
-                error_message << data << "\"";
-
-                auto entry =
-                    ValidatorIssues::ValidatorEntry(path, error_message.str());
-                severity.push_back(entry);
-
-                return false;
-            } else {
-                output = data;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Method for parsing and validating a datetime.
-     *
-     * @tparam T The type of data the datetime should be stored in.
-     *
-     * @param[out] severity The severity list to log the issue under.
-     * @param[in] path The path to use for parsing and verification.
-     * @param[in] date_format The get_time format to try and decode using.
-     * @param[out] output The variable to store the parsed results in.
-     *
-     * @return If the data was successfully validated.
-     */
-    template <typename T>
-    bool parse_and_validate_datetime(ValidatorIssues::EntryList& severity,
-                                     const std::string& path,
-                                     const std::string& date_format,
-                                     T& output) {
-        nonstd::optional<T> data;
-        auto result =
-            parse_and_validate_datetime(severity, path, date_format, data);
-        if (data.has_value()) {
-            output = *data;
-        }
-
-        return result;
-    }
-
     // Sections
-    void parse_and_validate_sensor_info(
-        ouster::sensor::sensor_info& sensor_info) {
+    void parse_and_validate_sensor_info(SensorInfo& sensor_info) {
         parse_and_validate_datetime(issues_.information,
                                     "$.sensor_info.build_date", "%Y-%m-%dT%TZ",
                                     sensor_info.build_date);
@@ -813,8 +182,7 @@ class MetadataImpl {
                                 sensor_info.status, verify_string_not_empty);
     }
 
-    void parse_and_validate_config_params(
-        ouster::sensor::sensor_config& config) {
+    void parse_and_validate_config_params(SensorConfig& config) {
         std::vector<uint64_t> azimuth_window_data;
         if (parse_and_validate_item(
                 issues_.information, "$.config_params.azimuth_window.*",
@@ -825,23 +193,27 @@ class MetadataImpl {
         }
 
         parse_and_validate_item(issues_.information,
+                                "$.config_params.lidar_frame_azimuth_offset",
+                                config.lidar_frame_azimuth_offset,
+                                make_verify_in_bounds<uint64_t>(0, 360000));
+
+        parse_and_validate_item(issues_.information,
                                 "$.config_params.columns_per_packet",
                                 config.columns_per_packet);
 
         if (parse_and_validate_enum<std::string>(
                 issues_.information, lidar_mode_string_, config.lidar_mode,
-                sensor::lidar_mode_of_string)) {
+                lidar_mode_of_string)) {
             have_lidar_mode_ = true;
         }
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.multipurpose_io_mode",
-            config.multipurpose_io_mode,
-            ouster::sensor::multipurpose_io_mode_of_string);
+            config.multipurpose_io_mode, multipurpose_io_mode_of_string);
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.nmea_baud_rate",
-            config.nmea_baud_rate, ouster::sensor::nmea_baud_rate_of_string);
+            config.nmea_baud_rate, nmea_baud_rate_of_string);
 
         uint64_t nmea_ignore_valid_char = 0;
         if (parse_and_validate_item(issues_.information,
@@ -852,7 +224,7 @@ class MetadataImpl {
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.nmea_in_polarity",
-            config.nmea_in_polarity, ouster::sensor::polarity_of_string);
+            config.nmea_in_polarity, polarity_of_string);
 
         parse_and_validate_item(issues_.information,
                                 "$.config_params.nmea_leap_seconds",
@@ -862,8 +234,7 @@ class MetadataImpl {
             "$.config_params.operating_mode";
         if (!parse_and_validate_enum<std::string>(
                 issues_.information, operating_mode_string,
-                config.operating_mode,
-                ouster::sensor::operating_mode_of_string)) {
+                config.operating_mode, operating_mode_of_string)) {
             const std::string auto_start_flag_string =
                 "$.config_params.auto_start_flag";
             bool auto_start_flag = false;
@@ -880,8 +251,8 @@ class MetadataImpl {
                     auto_start_flag_string, auto_start_flag_deprecation);
                 issues_.information.push_back(entry);
                 config.operating_mode = auto_start_flag
-                                            ? sensor::OPERATING_NORMAL
-                                            : sensor::OPERATING_STANDBY;
+                                            ? OperatingMode::NORMAL
+                                            : OperatingMode::STANDBY;
             } else if (parse_and_validate_item<int>(issues_.information,
                                                     auto_start_flag_string,
                                                     auto_start_int, true)) {
@@ -890,8 +261,8 @@ class MetadataImpl {
                 issues_.information.push_back(entry);
                 auto_start_flag = (auto_start_int != 0);
                 config.operating_mode = auto_start_flag
-                                            ? sensor::OPERATING_NORMAL
-                                            : sensor::OPERATING_STANDBY;
+                                            ? OperatingMode::NORMAL
+                                            : OperatingMode::STANDBY;
 
             } else {
                 default_message(operating_mode_string);
@@ -912,8 +283,7 @@ class MetadataImpl {
                                     signal_multiplier_string,
                                     config.signal_multiplier, true)) {
             try {
-                ouster::sensor::check_signal_multiplier(
-                    *config.signal_multiplier);
+                check_signal_multiplier(*config.signal_multiplier);
             } catch (std::runtime_error& e) {
                 auto entry = ValidatorIssues::ValidatorEntry(
                     signal_multiplier_string, e.what());
@@ -923,7 +293,7 @@ class MetadataImpl {
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.sync_pulse_in_polarity",
-            config.sync_pulse_in_polarity, ouster::sensor::polarity_of_string);
+            config.sync_pulse_in_polarity, polarity_of_string);
 
         parse_and_validate_item(issues_.information,
                                 "$.config_params.sync_pulse_out_angle",
@@ -936,7 +306,7 @@ class MetadataImpl {
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.sync_pulse_out_polarity",
-            config.sync_pulse_out_polarity, ouster::sensor::polarity_of_string);
+            config.sync_pulse_out_polarity, polarity_of_string);
 
         parse_and_validate_item(issues_.information,
                                 "$.config_params.sync_pulse_out_pulse_width",
@@ -944,7 +314,7 @@ class MetadataImpl {
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.timestamp_mode",
-            config.timestamp_mode, ouster::sensor::timestamp_mode_of_string);
+            config.timestamp_mode, timestamp_mode_of_string);
 
         if (!parse_and_validate_item(issues_.information,
                                      "$.config_params.udp_dest",
@@ -952,6 +322,10 @@ class MetadataImpl {
             parse_and_validate_item(issues_.information,
                                     "$.config_params.udp_ip", config.udp_dest);
         }
+
+        parse_and_validate_item(issues_.information,
+                                "$.config_params.udp_dest_zm",
+                                config.udp_dest_zm);
 
         parse_and_validate_item(
             issues_.information, "$.config_params.udp_port_imu",
@@ -961,30 +335,54 @@ class MetadataImpl {
             issues_.information, "$.config_params.udp_port_lidar",
             config.udp_port_lidar, make_verify_in_bounds<uint16_t>(0, 65535));
 
+        parse_and_validate_item(
+            issues_.information, "$.config_params.udp_port_zm",
+            config.udp_port_zm, make_verify_in_bounds<uint16_t>(0, 65535));
+
+        parse_and_validate_item(issues_.information,
+                                "$.config_params.udp_multicast_ttl",
+                                config.udp_multicast_ttl);
+
+        parse_and_validate_item(issues_.information,
+                                "$.config_params.udp_multicast_ttl_zm",
+                                config.udp_multicast_ttl_zm);
+
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.udp_profile_imu",
-            config.udp_profile_imu, ouster::sensor::udp_profile_imu_of_string);
+            config.udp_profile_imu, udp_profile_imu_of_string);
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.udp_profile_lidar",
-            config.udp_profile_lidar,
-            ouster::sensor::udp_profile_lidar_of_string);
+            config.udp_profile_lidar, udp_profile_lidar_of_string);
+
+        parse_and_validate_enum<std::string>(
+            issues_.information, "$.config_params.header_type",
+            config.header_type, udp_profile_type_of_string);
+
+        parse_and_validate_enum<std::string>(
+            issues_.information, "$.config_params.bloom_reduction_optimization",
+            config.bloom_reduction_optimization,
+            bloom_reduction_optimization_of_string);
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.gyro_fsr", config.gyro_fsr,
-            ouster::sensor::full_scale_range_of_string);
+            full_scale_range_of_string);
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.accel_fsr", config.accel_fsr,
-            ouster::sensor::full_scale_range_of_string);
+            full_scale_range_of_string);
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.config_params.return_order",
-            config.return_order, ouster::sensor::return_order_of_string);
+            config.return_order, return_order_of_string);
 
         parse_and_validate_item(issues_.information,
                                 "$.config_params.min_range_threshold_cm",
                                 config.min_range_threshold_cm);
+
+        parse_and_validate_item(issues_.information,
+                                "$.config_params.imu_packets_per_frame",
+                                config.imu_packets_per_frame);
 
         // parse all remaining items
         static const std::set<std::string> standard_set = {
@@ -996,7 +394,11 @@ class MetadataImpl {
             "udp_profile_lidar",
             "udp_port_imu",
             "udp_port_lidar",
+            "udp_port_zm",
+            "udp_multicast_ttl",
+            "udp_multicast_ttl_zm",
             "udp_dest",
+            "udp_dest_zm",
             "udp_ip",
             "lidar_mode",
             "timestamp_mode",
@@ -1016,7 +418,11 @@ class MetadataImpl {
             "nmea_baud_rate",
             "multipurpose_io_mode",
             "columns_per_packet",
-            "azimuth_window"};
+            "imu_packets_per_frame",
+            "azimuth_window",
+            "lidar_frame_azimuth_offset",
+            "header_type",
+            "bloom_reduction_optimization"};
         if (root_.contains("config_params")) {
             for (auto& item : root_["config_params"].object_range()) {
                 if (standard_set.count(item.key()) > 0) {
@@ -1033,7 +439,7 @@ class MetadataImpl {
     // internal_parse_and_validate_columns_per_frame due to requirements on
     // lidar_mode
     bool internal_parse_and_validate_columns_per_frame(
-        ouster::sensor::sensor_info& sensor_info) {
+        SensorInfo& sensor_info) {
         bool columns_per_frame_success = false;
         if (parse_and_validate_item<uint32_t>(
                 issues_.information, columns_per_frame_string_,
@@ -1082,7 +488,7 @@ class MetadataImpl {
     // internal_parse_and_validate_pixels_per_column due to requirements on
     // prod_line
     void internal_parse_and_validate_pixels_per_column(
-        ouster::sensor::sensor_info& sensor_info) {
+        SensorInfo& sensor_info) {
         if (parse_and_validate_item(issues_.information,
                                     pixels_per_column_string_,
                                     sensor_info.format.pixels_per_column)) {
@@ -1130,12 +536,11 @@ class MetadataImpl {
     // parse_and_validate_data_format due to requirements on prod_line
     // parse_and_validate_config_params must be run before
     // parse_and_validate_data_format due to requirements on lidar_mode
-    void parse_and_validate_data_format(
-        ouster::sensor::sensor_info& sensor_info) {
+    void parse_and_validate_data_format(SensorInfo& sensor_info) {
         if (have_lidar_mode_) {
             // lidar mode is present, create default data format
-            sensor_info.format = ouster::sensor::default_data_format(
-                *sensor_info.config.lidar_mode);
+            sensor_info.format =
+                default_data_format(*sensor_info.config.lidar_mode);
         }
 
         bool columns_per_frame_success =
@@ -1200,13 +605,31 @@ class MetadataImpl {
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.lidar_data_format.udp_profile_lidar",
-            sensor_info.format.udp_profile_lidar,
-            ouster::sensor::udp_profile_lidar_of_string);
+            sensor_info.format.udp_profile_lidar, udp_profile_lidar_of_string);
 
         parse_and_validate_enum<std::string>(
             issues_.information, "$.lidar_data_format.udp_profile_imu",
-            sensor_info.format.udp_profile_imu,
-            ouster::sensor::udp_profile_imu_of_string);
+            sensor_info.format.udp_profile_imu, udp_profile_imu_of_string);
+
+        // header_type introduced in 3.2 firmware
+        if (!parse_and_validate_enum<std::string>(
+                issues_.information, "$.lidar_data_format.header_type",
+                sensor_info.format.header_type, udp_profile_type_of_string)) {
+            // default_data_format defaults to HeaderType::STANDARD,
+            // check if we need to switch it to FUSA
+            if (sensor_info.format.udp_profile_lidar ==
+                UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL) {
+                sensor_info.format.header_type = HeaderType::FUSA;
+            }
+        }
+
+        parse_and_validate_item(issues_.information,
+                                "$.imu_data_format.imu_packets_per_frame",
+                                sensor_info.format.imu_packets_per_frame);
+
+        parse_and_validate_item(issues_.information,
+                                "$.imu_data_format.imu_measurements_per_packet",
+                                sensor_info.format.imu_measurements_per_packet);
 
         const std::string fps_string = "$.lidar_data_format.fps";
         if (!parse_and_validate_item(issues_.information, fps_string,
@@ -1221,10 +644,20 @@ class MetadataImpl {
                     "Lidar mode not found, can't verify FPS value");
             }
         }
+
+        /**
+         * zone monitoring is enabled if there's an address and port for ZM
+         */
+        if (sensor_info.config.udp_dest_zm) {
+            std::string zm_dest = sensor_info.config.udp_dest_zm.value_or("");
+            if (!zm_dest.empty() &&
+                sensor_info.config.udp_port_zm.value_or(0) != 0) {
+                sensor_info.format.zone_monitoring_enabled = true;
+            }
+        }
     }
 
-    void parse_and_validate_calibration_status(
-        ouster::sensor::sensor_info& sensor_info) {
+    void parse_and_validate_calibration_status(SensorInfo& sensor_info) {
         parse_and_validate_datetime(
             issues_.information, "$.calibration_status.reflectivity.timestamp",
             "%Y-%m-%dT%T", sensor_info.cal.reflectivity_timestamp);
@@ -1262,7 +695,7 @@ class MetadataImpl {
         jsoncons::json value_array =
             jsoncons::jsonpath::json_query(root_, path);
         jsoncons::json angles;
-        if (value_array.size() == 0) {
+        if (value_array.empty()) {
             auto entry = ValidatorIssues::ValidatorEntry(
                 path, "Missing intrinsics field.");
             issues_.critical.push_back(entry);
@@ -1349,8 +782,7 @@ class MetadataImpl {
     // parse_and_validate_data_format due to requirements on lidar_mode
     // parse_and_validate_data_format must be run before
     // parse_and_validate_intrinsics due to requirements on pixels_per_column
-    void parse_and_validate_intrinsics(
-        ouster::sensor::sensor_info& sensor_info) {
+    void parse_and_validate_intrinsics(SensorInfo& sensor_info) {
         std::vector<double> imu_intrinsics_data;
         const std::string imu_intrinsics_string =
             "$.imu_intrinsics.imu_to_sensor_transform.*";
@@ -1361,8 +793,7 @@ class MetadataImpl {
                                    imu_intrinsics_data);
         } else {
             default_message(imu_intrinsics_string);
-            sensor_info.imu_to_sensor_transform =
-                ouster::sensor::DEFAULT_IMU_TO_SENSOR;
+            sensor_info.imu_to_sensor_transform = DEFAULT_IMU_TO_SENSOR;
         }
 
         std::vector<double> lidar_intrinsics_data;
@@ -1376,8 +807,7 @@ class MetadataImpl {
                                    lidar_intrinsics_data);
         } else {
             default_message(lidar_intrinsics_string);
-            sensor_info.lidar_to_sensor_transform =
-                ouster::sensor::DEFAULT_LIDAR_TO_SENSOR;
+            sensor_info.lidar_to_sensor_transform = DEFAULT_LIDAR_TO_SENSOR;
         }
 
         // parse beam angles
@@ -1396,8 +826,7 @@ class MetadataImpl {
                 issues_.information, lidar_origin_string,
                 sensor_info.lidar_origin_to_beam_origin_mm)) {
             sensor_info.lidar_origin_to_beam_origin_mm =
-                ouster::sensor::default_lidar_origin_to_beam_origin(
-                    sensor_info.prod_line);
+                default_lidar_origin_to_beam_origin(sensor_info.prod_line);
             default_message(lidar_origin_string);
         }
 
@@ -1417,7 +846,7 @@ class MetadataImpl {
         }
     }
 
-    void parse_and_validate_misc(ouster::sensor::sensor_info& sensor_info) {
+    void parse_and_validate_misc(SensorInfo& sensor_info) {
         std::vector<double> extrinsic_data;
         const std::string extrinsic_string = "$.'ouster-sdk'.extrinsic.*";
         if (parse_and_validate_item<double>(issues_.information,
@@ -1431,43 +860,21 @@ class MetadataImpl {
 
         parse_and_validate_item(issues_.information, "$.user_data",
                                 sensor_info.user_data);
+
+        if (root_.contains("zone_set")) {
+            std::vector<uint8_t> blob;
+            auto base64 = root_["zone_set"].as<jsoncons::string_view>();
+            jsoncons::decode_base64(base64.begin(), base64.end(), blob);
+            sensor_info.zone_set = ZoneSet(blob);
+        }
     }
 };
 
-class SensorInfoImpl : public MetadataImpl {
+class ConfigImpl : public SensorInfoImpl {
    public:
-    SensorInfoImpl(const jsoncons::json& root,
-                   ouster::sensor::sensor_info& sensor_info,
-                   ValidatorIssues& issues)
-        : MetadataImpl(root, issues) {
-        parse_and_validate_sensor_info(sensor_info);
-        parse_and_validate_config_params(sensor_info.config);
-        // parse_and_validate_sensor_info must be run before
-        // parse_and_validate_data_format
-        //  due to requirements on prod_line
-        // parse_and_validate_config_params must be run before
-        // parse_and_validate_data_format
-        //  due to requirements on lidar_mode
-        parse_and_validate_data_format(sensor_info);
-        parse_and_validate_calibration_status(sensor_info);
-        // parse_and_validate_sensor_info must be run before
-        // parse_and_validate_data_format
-        //  due to requirements on prod_line
-        //  parse_and_validate_config_params must be run before
-        //  parse_and_validate_data_format due to requirements on lidar_mode
-        //  parse_and_validate_data_format must be run before
-        //  parse_and_validate_intrinsics due to requirements on
-        //  pixels_per_column
-        parse_and_validate_intrinsics(sensor_info);
-        parse_and_validate_misc(sensor_info);
-    }
-};
-
-class ConfigImpl : public MetadataImpl {
-   public:
-    ConfigImpl(const jsoncons::json& root,
-               ouster::sensor::sensor_config& config, ValidatorIssues& issues)
-        : MetadataImpl(root, issues) {
+    ConfigImpl(const jsoncons::json& root, SensorConfig& config,
+               ValidatorIssues& issues)
+        : SensorInfoImpl(root, issues) {
         parse_and_validate_config_params(config);
     }
 };
@@ -1570,7 +977,7 @@ jsoncons::json convert_legacy_to_nonlegacy(const jsoncons::json& root) {
 }
 
 bool parse_and_validate_metadata(const jsoncons::json& root,
-                                 ouster::sensor::sensor_info& sensor_info,
+                                 SensorInfo& sensor_info,
                                  ValidatorIssues& issues) {
     size_t nonlegacy_fields_present = 0;
     std::vector<ValidatorIssues::ValidatorEntry> missing_fields;
@@ -1602,26 +1009,25 @@ bool parse_and_validate_metadata(const jsoncons::json& root,
     // debug log each issue
     if ((!issues.information.empty()) || (!issues.warning.empty()) ||
         (!issues.critical.empty())) {
-        sensor::logger().debug("Issues encountered during metadata parsing:");
+        logger().debug("Issues encountered during metadata parsing:");
     } else {
-        sensor::logger().debug(
-            "No issues encountered during metadata parsing.");
+        logger().debug("No issues encountered during metadata parsing.");
     }
     for (auto& i : issues.information) {
-        sensor::logger().debug("{}", i.to_string());
+        logger().debug("{}", i.to_string());
     }
     for (auto& i : issues.warning) {
-        sensor::logger().debug("{}", i.to_string());
+        logger().debug("{}", i.to_string());
     }
     for (auto& i : issues.critical) {
-        sensor::logger().debug("{}", i.to_string());
+        logger().debug("{}", i.to_string());
     }
 
     return issues.critical.empty();
 }
 
 bool parse_and_validate_metadata(const std::string& json_data,
-                                 ouster::sensor::sensor_info& sensor_info,
+                                 SensorInfo& sensor_info,
                                  ValidatorIssues& issues) {
     jsoncons::json data = jsoncons::json::parse(json_data);
     return parse_and_validate_metadata(data, sensor_info, issues);
@@ -1629,20 +1035,18 @@ bool parse_and_validate_metadata(const std::string& json_data,
 
 bool parse_and_validate_metadata(const std::string& json_data,
                                  ValidatorIssues& issues) {
-    nonstd::optional<ouster::sensor::sensor_info> sensor_info;
+    nonstd::optional<SensorInfo> sensor_info;
     return parse_and_validate_metadata(json_data, sensor_info, issues);
 }
 
-bool parse_and_validate_metadata(
-    const std::string& json_data,
-    nonstd::optional<ouster::sensor::sensor_info>& sensor_info,
-    ValidatorIssues& issues) {
+bool parse_and_validate_metadata(const std::string& json_data,
+                                 nonstd::optional<SensorInfo>& sensor_info,
+                                 ValidatorIssues& issues) {
     sensor_info = nonstd::nullopt;
-    ouster::sensor::sensor_info temp_info;
+    SensorInfo temp_info;
     bool result = parse_and_validate_metadata(json_data, temp_info, issues);
     if (result) {
-        sensor_info =
-            nonstd::make_optional<ouster::sensor::sensor_info>(temp_info);
+        sensor_info = nonstd::make_optional<SensorInfo>(temp_info);
     } else {
         sensor_info.reset();
     }
@@ -1651,7 +1055,7 @@ bool parse_and_validate_metadata(
 }
 
 bool parse_and_validate_config(const std::string& json_data,
-                               ouster::sensor::sensor_config& config_out,
+                               SensorConfig& config_out,
                                ValidatorIssues& issues) {
     jsoncons::json root;
     root["config_params"] = jsoncons::json::parse(json_data);
@@ -1662,18 +1066,18 @@ bool parse_and_validate_config(const std::string& json_data,
 }
 
 bool parse_and_validate_config(const std::string& json_data,
-                               ouster::sensor::sensor_config& sensor_config) {
+                               SensorConfig& sensor_config) {
     ValidatorIssues issues;
     return parse_and_validate_config(json_data, sensor_config, issues);
 }
 
-namespace sensor {
-sensor_config parse_config(const std::string& config) {
-    ouster::sensor::sensor_config sensor_config;
+SensorConfig parse_config(const std::string& config) {
+    SensorConfig sensor_config;
     parse_and_validate_config(config, sensor_config);
 
     return sensor_config;
 }
-}  // namespace sensor
 
-};  // namespace ouster
+}  // namespace core
+}  // namespace sdk
+}  // namespace ouster

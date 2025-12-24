@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import (cast, Union, List, Iterable, Optional)
 from ouster.sdk.core import (LidarScan,
                              SensorInfo,
-                             LidarPacket, ImuPacket,
-                             PacketSource)
+                             LidarPacket, ImuPacket, ZonePacket,
+                             PacketSource, UDPProfileIMU)
 from ouster.sdk.util import scan_to_packets  # type: ignore
 from .source_util import (SourceCommandContext,
                           SourceCommandType,
@@ -53,7 +53,8 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
                        prefix: str = "", raw: bool = False,
                        dir: str = "", filename: str = "", overwrite: bool = False,
                        metadata: List[SensorInfo] = [],
-                       duration = None, ros2 = False) -> Iterable[List[Optional[LidarScan]]]:
+                       duration = None, ros2 = False,
+                       split: Optional[int] = None) -> Iterable[List[Optional[LidarScan]]]:
     """Create a ROSBAG saving iterator from a LidarScan iterator
 
     Requires a packet source otherwise, each LidarScan in scans is deparsed into UDP packets and saved.
@@ -63,6 +64,8 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
 
     # Build filename
     filename = determine_filename(filename=filename, info=metadata[0], extension=".bag", prefix=prefix, dir=dir)
+    original_filename = filename
+    file_number = 1
 
     if os.path.isfile(filename) and not overwrite:
         print(_file_exists_error(filename))
@@ -119,10 +122,12 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
         l = []
         for i, m in enumerate(metadata):
             imu_topic = f"/ouster{i}/imu_packets" if len(metadata) > 1 else "/ouster/imu_packets"
+            zone_topic = f"/ouster{i}/zone_packets" if len(metadata) > 1 else "/ouster/zone_packets"
             lidar_topic = f"/ouster{i}/lidar_packets" if len(metadata) > 1 else "/ouster/lidar_packets"
             imu_conn = writer.add_connection(imu_topic, packet_type, typestore=my_typestore)
             lidar_conn = writer.add_connection(lidar_topic, packet_type, typestore=my_typestore)
-            l.append((lidar_conn, imu_conn))
+            zone_conn = writer.add_connection(zone_topic, packet_type, typestore=my_typestore)
+            l.append((lidar_conn, imu_conn, zone_conn))
         return l
 
     def bag_save_packet(writer, conns, packet):
@@ -132,49 +137,117 @@ def _source_to_bag_iter(source: Union[Iterable[List[Optional[LidarScan]]], Packe
             writer.write(conns[0], packet.host_timestamp, data)
         elif isinstance(packet, ImuPacket):
             writer.write(conns[1], packet.host_timestamp, data)
+        elif isinstance(packet, ZonePacket):
+            writer.write(conns[2], packet.host_timestamp, data)
+
+    def check_split():
+        nonlocal filename
+        if split is not None:
+            if os.path.getsize(filename) / 1000000 > split:
+                return True
+        return False
+
+    def do_split(writer, conns):
+        nonlocal filename, file_number
+        writer.close()
+        filename = original_filename.replace(".bag", "") + f"-{file_number}.bag"
+        file_number += 1
+        print(f"Splitting into {filename}")
+
+        if os.path.isfile(filename) and not overwrite:
+            click.echo(_file_exists_error(filename))
+            exit(1)
+        elif overwrite:
+            shutil.rmtree(filename, ignore_errors=True)
+            try:
+                os.remove(filename)
+            except (FileNotFoundError, IsADirectoryError):
+                pass
+        writer = MyWriter(filename, **writer_params)
+        writer.open()
+        conns = create_connections(writer, metadata)
+        return writer, conns
 
     if not raw:
-        click.echo("Warning: Saving bag without using save_raw will not save LEGACY IMU packets.")
+        for meta in metadata:
+            if meta.config.udp_profile_imu == UDPProfileIMU.LEGACY:
+                click.echo("Warning: Saving bag without save_raw will not save LEGACY IMU packets.")
+                break
+
+        first_save = True
 
         def save_iter():
+            nonlocal first_save
+            # only save the first loop
+            if not first_save:
+                for scan in source():
+                    yield scan
+                return
+            first_save = False
+
             try:
                 first = True
-                with MyWriter(filename, **writer_params) as writer:
-                    conns = create_connections(writer, metadata)
-                    for l in source():
-                        for idx, scan in enumerate(l):
-                            if scan:
-                                packets = scan_to_packets(scan, metadata[idx])
-                                for packet in packets:
-                                    bag_save_packet(writer, conns[idx], packet)
+                writer = MyWriter(filename, **writer_params)
+                writer.open()
+                conns = create_connections(writer, metadata)
+                should_split = False
+                for l in source():
+                    for idx, scan in enumerate(l):
+                        if scan:
+                            packets = scan_to_packets(scan, metadata[idx])
+                            for packet in packets:
+                                if should_split:
+                                    should_split = False
+                                    writer, conns = do_split(writer, conns)
+                                    bag_save_metadata(writer, metadata, packet.host_timestamp)
 
-                                    if first:
-                                        first = False
-                                        bag_save_metadata(writer, metadata, packet.host_timestamp)
-                        yield l
+                                bag_save_packet(writer, conns[idx], packet)
+
+                                if first:
+                                    first = False
+                                    bag_save_metadata(writer, metadata, packet.host_timestamp)
+
+                            # check for splits after a whole scan is saved to make sure
+                            # scans dont get split between files
+                            should_split = check_split()
+                    yield l
             except (KeyboardInterrupt, StopIteration):
+                pass
+            finally:
                 writer.close()
-
         # type ignored because generators are tricky to mypy
         return save_iter  # type: ignore
     else:
         end_time = None
         try:
             first = True
-            with MyWriter(filename, **writer_params) as writer:  # type: ignore
-                conns = create_connections(writer, metadata)
-                source = cast(PacketSource, source)
-                for idx, packet in source:
-                    bag_save_packet(writer, conns[idx], packet)
-                    if first:
-                        first = False
-                        bag_save_metadata(writer, metadata, packet.host_timestamp)
+            writer = MyWriter(filename, **writer_params)
+            writer.open()
+            conns = create_connections(writer, metadata)
+            source = cast(PacketSource, source)
+            last_frame_id = -1
+            for idx, packet in source:
+                # only split if the frame_id changes after the first packet
+                if isinstance(packet, LidarPacket):
+                    pfid = packet.frame_id()
+                    if last_frame_id != pfid and last_frame_id != -1:
+                        if check_split():
+                            writer, conns = do_split(writer, conns)
+                            bag_save_metadata(writer, metadata, packet.host_timestamp)
+                    last_frame_id = pfid
 
-                    if duration is not None:
-                        if end_time is None:
-                            end_time = packet.host_timestamp + duration * 1e9
-                        if packet.host_timestamp > end_time:
-                            break
+                bag_save_packet(writer, conns[idx], packet)
+                if first:
+                    first = False
+                    bag_save_metadata(writer, metadata, packet.host_timestamp)
+
+                if duration is not None:
+                    if end_time is None:
+                        end_time = packet.host_timestamp + duration * 1e9
+                    if packet.host_timestamp > end_time:
+                        break
         except (KeyboardInterrupt, StopIteration):
+            pass
+        finally:
             writer.close()
         return None  # type: ignore

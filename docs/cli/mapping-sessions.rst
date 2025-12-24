@@ -66,7 +66,7 @@ Connect to a sensor or use a PCAP/OSF file :ref:`Download Sample PCAP File <samp
         Connecting to an Ouster sensor is covered in the `Networking Guide`_ section of the Ouster
         Sensor Documentation.
 
-Then execute the following command:
+Then execute the following command.
 
 .. code:: bash
 
@@ -77,6 +77,11 @@ Then execute the following command:
         Please replace <HOSTNAME> with the corresponding hostname or IP of your sensor, and replace
         <FILENAME> with the actual file path and name of the PCAP/OSF file. Similarly, make the
         necessary substitutions in the subsequent commands.
+
+
+.. note::
+        
+        Saving scans will fail if they are missing packet timestamps. Try adding the `--ts lidar` option to the `save` command invocation in such cases, or use the `-c` flag to continue attempting to save data after encountering a save error.
 
 
 Save Command

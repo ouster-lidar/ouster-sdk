@@ -1,34 +1,10 @@
-Checks: 'readability-braces-around-statements,
-        readability-implicit-bool-conversion,
-        modernize-use-nullptr,
-        readability-container-size-empty,
-        google-readability-casting,
-        modernize-use-emplace,
-        modernize-deprecated-headers,
-        modernize-redundant-void-arg,
-        modernize-make-unique,
-        modernize-use-equals-default,
-        modernize-use-using,
-        google-build-explicit-make-pair,
-        cppcoreguidelines-explicit-virtual-functions,
-        readability-isolate-declaration,
-        modernize-raw-string-literal,
-        readability-redundant-string-init,
-        readability-container-data-pointer,
-        performance-inefficient-vector-operation,
-        misc-unused-alias-decls,
-        readability-duplicate-include,
-        readability-simplify-boolean-expr,
-        readability-named-parameter,
-        llvm-namespace-comment,
-        performance-for-range-copy,
-        readability-math-missing-parentheses,
-        llvm-include-order,
-        misc-include-cleaner,
-        cppcoreguidelines-init-variables,
-        modernize-use-default-member-init,
-        cppcoreguidelines-pro-type-member-init,
-        modernize-type-traits'
+Checks: 'readability-identifier-length'
 CheckOptions:
-  - key: misc-include-cleaner.IgnoreHeaders
-    value: Eigen/.*;.*socket.h;jsoncons/.*;spdlog/.*;netdb.h;netinet/.*;arpa/.*;sys/.*;bits/.*;tins/.*;pcap/.*;GL/.*;ouster/.*;glad.h;glfw.h;GLFW/.*;os_sensor/.*;.*generated.h;flatbuffers/.*;pybind11/.*;features.h
+  - key: readability-braces-around-statements.ShortStatementLines
+    value: '1'
+  - key: readability-identifier-length.IgnoredVariableNames
+    value: 'i|j|k|w|h|x|y|z|it|ip'
+  - key: readability-identifier-length.IgnoredLoopCounterNames
+    value: 'i|j|k|w|h|x|y|z|it|ip|u|v'
+  - key: readability-identifier-length.IgnoredParameterNames
+    value: 'a|b|w|h|x|y|z|ip'

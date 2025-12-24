@@ -7,22 +7,35 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <string>
 
+#include "ouster/deprecation.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
-namespace sensor_utils {
+namespace sdk {
+namespace pcap {
 
 struct pcap_impl;
 struct pcap_writer_impl;
 
 static constexpr int IANA_UDP = 17;
 
-struct OUSTER_API_CLASS packet_info {
+/**
+ * @brief Metadata describing a packet read from or written to a PCAP file.
+ *
+ * This structure contains information about a single UDP packet, including
+ * source and destination addresses, ports, payload and packet sizes,
+ * timestamps, encapsulation, and positioning within a PCAP file.
+ *
+ * It is used both by `PcapReader` when extracting packet metadata and by
+ * `PcapWriter` when writing packets to disk.
+ */
+struct OUSTER_API_CLASS PacketInfo {
+    /** Type alias for timestamp, in microseconds */
     using ts = std::chrono::microseconds;
 
     // TODO: use numerical IPs for efficient filtering
@@ -41,13 +54,15 @@ struct OUSTER_API_CLASS packet_info {
     int network_protocol;  ///< IANA protocol number. Always 17 (UDP)
 };
 
+OUSTER_DEPRECATED_TYPE(packet_info, PacketInfo,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
 /**
  * Class for dealing with reading pcap files
  */
 class OUSTER_API_CLASS PcapReader {
    protected:
     std::unique_ptr<pcap_impl> impl_;  ///< Private implementation pointer
-    packet_info info_;                 ///< Cached packet info
+    PacketInfo info_;                  ///< Cached packet info
     uint8_t* data_;                    ///< Cached packet data
 
    public:
@@ -124,7 +139,7 @@ class OUSTER_API_CLASS PcapReader {
      * @return A packet_info object on the current packet
      */
     OUSTER_API_FUNCTION
-    const packet_info& current_info() const;
+    const PacketInfo& current_info() const;
 
     /**
      * @return The size of the PCAP file in bytes
@@ -153,6 +168,10 @@ class OUSTER_API_CLASS PcapReader {
     OUSTER_API_FUNCTION
     void seek(uint64_t offset);
 
+    /**
+     * @return The current read position (in bytes) within the PCAP file stream.
+     * @throws std::runtime_error if `ftell()` or `fclose()` fails.
+     */
     OUSTER_API_FUNCTION
     int64_t current_offset() const;
 
@@ -233,7 +252,7 @@ class OUSTER_API_CLASS PcapWriter {
     void write_packet(const uint8_t* buf, size_t buf_size,
                       const std::string& src_ip, const std::string& dst_ip,
                       uint16_t src_port, uint16_t dst_port,
-                      packet_info::ts timestamp);
+                      PacketInfo::ts timestamp);
 
     /**
      * Write a packet using a buffer to the pcap
@@ -247,7 +266,7 @@ class OUSTER_API_CLASS PcapWriter {
      */
     OUSTER_API_FUNCTION
     void write_packet(const uint8_t* buf, size_t buf_size,
-                      const packet_info& info);
+                      const PacketInfo& info);
 
     /**
      * Write all pending data to the pcap file
@@ -270,5 +289,6 @@ class OUSTER_API_CLASS PcapWriter {
     uint16_t frag_size_;         ///< Fragmentation size(not currently used)
     bool closed_;
 };
-}  // namespace sensor_utils
+}  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

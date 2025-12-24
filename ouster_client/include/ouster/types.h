@@ -10,79 +10,104 @@
 
 #include <Eigen/Core>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "nonstd/optional.hpp"
+#include "ouster/chanfield.h"
+#include "ouster/deprecation.h"
+#include "ouster/typedefs.h"
 #include "ouster/visibility.h"
+#include "ouster/zone_monitor.h"
 #include "version.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 
 using nonstd::optional;
 
-/**
- * For image operations.
- *
- * @tparam T The data type for the array.
- */
-template <typename T>
-using img_t = Eigen::Array<T, -1, -1, Eigen::RowMajor>;
-
-/** Used for transformations. */
-using mat4d = Eigen::Matrix<double, 4, 4, Eigen::DontAlign>;
-
-template <typename T>
-using PointsT = Eigen::Array<T, -1, 3>;
-using PointsD = PointsT<double>;
-using PointsF = PointsT<float>;
-
-namespace sensor {
+/** Forward declaration for Field */
+class Field;
 
 /** Unit of range from sensor packet, in meters. */
-constexpr double range_unit = 0.001;
+constexpr double RANGE_UNIT = 0.001;
+/**
+ * @deprecated Use RANGE_UNIT
+ */
+OUSTER_DEPRECATED_CONSTEXP(range_unit, RANGE_UNIT,
+                           OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /** Design values for altitude and azimuth offset angles for gen1 sensors. */
-extern const std::vector<double> gen1_altitude_angles;
+extern const std::vector<double> GEN1_ALTITUDE_ANGLES;
 /** Design values for altitude and azimuth offset angles for gen1 sensors. */
-extern const std::vector<double> gen1_azimuth_angles;
+extern const std::vector<double> GEN1_AZIMUTH_ANGLES;
 
 /** Design values for imu and lidar to sensor-frame transforms. */
-extern const mat4d default_imu_to_sensor_transform;
+extern const mat4d DEFAULT_IMU_TO_SENSOR_TRANSFORM;
 
 /** Design values for imu and lidar to sensor-frame transforms. */
-extern const mat4d default_lidar_to_sensor_transform;
+extern const mat4d DEFAULT_LIDAR_TO_SENSOR_TRANSFORM;
 
 /**
  * Constants used for configuration. Refer to the sensor documentation for the
  * meaning of each option.
  */
-enum lidar_mode {
-    MODE_UNSPEC = 0,  ///< lidar mode: unspecified
-    MODE_512x10,      ///< lidar mode: 10 scans of 512 columns per second
-    MODE_512x20,      ///< lidar mode: 20 scans of 512 columns per second
-    MODE_1024x10,     ///< lidar mode: 10 scans of 1024 columns per second
-    MODE_1024x20,     ///< lidar mode: 20 scans of 1024 columns per second
-    MODE_2048x10,     ///< lidar mode: 10 scans of 2048 columns per second
-    MODE_4096x5       ///< lidar mode: 5 scans of 4096 columns per second. Only
-                      ///< available on select sensors
+enum class LidarMode {
+    UNSPECIFIED = 0,  ///< lidar mode: unspecified
+    _512x10,          ///< lidar mode: 10 scans of 512 columns per second
+    _512x20,          ///< lidar mode: 20 scans of 512 columns per second
+    _1024x10,         ///< lidar mode: 10 scans of 1024 columns per second
+    _1024x20,         ///< lidar mode: 20 scans of 1024 columns per second
+    _2048x10,         ///< lidar mode: 10 scans of 2048 columns per second
+    _4096x5,          ///< lidar mode: 5 scans of 4096 columns per second.
+                      ///< Only available on select sensors
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::LidarMode::UNSPECIFIED instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_UNSPEC, UNSPECIFIED,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::LidarMode::_512x10 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_512x10, _512x10,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::LidarMode::_512x20 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_512x20, _512x20,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::LidarMode::_1024x10 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_1024x10, _1024x10,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::LidarMode::_1024x20 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_1024x20, _1024x20,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::LidarMode::_2048x10 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_2048x10, _2048x10,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::LidarMode::_4096x5 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MODE_4096x5, _4096x5,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
+
+/**
+ * @deprecated Use ouster::sdk::core::LidarMode instead.
+ */
+OUSTER_DEPRECATED_TYPE(lidar_mode, LidarMode,                   // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /**
  * Mode controlling timestamp method. Refer to the sensor documentation for the
  * meaning of each option.
  */
-enum timestamp_mode {
+enum class TimestampMode {
     /**
      * Timestamp mode unspecified.
      */
-    TIME_FROM_UNSPEC = 0,
+    UNSPECIFIED = 0,
 
     /**
      * Use the internal clock.
@@ -97,65 +122,132 @@ enum timestamp_mode {
     TIME_FROM_SYNC_PULSE_IN,
 
     /** Synchronize with an external PTP master. */
-    TIME_FROM_PTP_1588
+    TIME_FROM_PTP_1588,
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::TimestampMode::UNSPECIFIED instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(TIME_FROM_UNSPEC, UNSPECIFIED,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
+
+/**
+ * @deprecated Use ouster::sdk::core::TimestampMode instead.
+ */
+OUSTER_DEPRECATED_TYPE(timestamp_mode, TimestampMode,           // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /**
  * Mode controlling sensor operation. Refer to the sensor documentation for the
  * meaning of each option.
  */
-enum OperatingMode {
-    OPERATING_UNSPEC = 0,  ///< Unspecified sensor operation
-    OPERATING_NORMAL,      ///< Normal sensor operation
-    OPERATING_STANDBY      ///< Standby
+enum class OperatingMode {
+    UNSPECIFIED = 0,  ///< Unspecified sensor operation
+    NORMAL,           ///< Normal sensor operation
+    STANDBY,          ///< Standby
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::OperatingMode::UNSPECIFIED instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(OPERATING_UNSPEC, UNSPECIFIED,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::OperatingMode::NORMAL instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(OPERATING_NORMAL, NORMAL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::OperatingMode::STANDBY instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(OPERATING_STANDBY, STANDBY,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 /**
  * Mode controlling ways to input timesync information. Refer to the sensor
  * documentation for the meaning of each option.
  */
-enum MultipurposeIOMode {
+enum class MultipurposeIOMode {
 
-    MULTIPURPOSE_OFF = 1,  ///< Multipurpose IO is turned off (default)
+    OFF = 1,  ///< Multipurpose IO is turned off (default)
 
     /**
      * Used in conjunction with timestamp_mode::TIME_FROM_SYNC_PULSE_IN
      * to enable time pulses in on the multipurpose io input.
      */
-    MULTIPURPOSE_INPUT_NMEA_UART,
+    INPUT_NMEA_UART,
 
     /**
      * Output a SYNC_PULSE_OUT signal synchronized with
      * the internal clock.
      */
-    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC,
+    OUTPUT_FROM_INTERNAL_OSC,
 
     /**
      * Output a SYNC_PULSE_OUT signal synchronized with
      * a SYNC_PULSE_IN provided to the unit.
      */
-    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN,
+    OUTPUT_FROM_SYNC_PULSE_IN,
 
     /**
      * Output a SYNC_PULSE_OUT signal synchronized with
      * an external PTP IEEE 1588 master.
      */
-    MULTIPURPOSE_OUTPUT_FROM_PTP_1588,
+    OUTPUT_FROM_PTP_1588,
 
     /**
      * Output a SYNC_PULSE_OUT signal with a user defined
      * rate in an integer number of degrees.
      */
-    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE
+    OUTPUT_FROM_ENCODER_ANGLE,
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::MultipurposeIOMode::OFF instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MULTIPURPOSE_OFF, OFF,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::MultipurposeIOMode::INPUT_NMEA_UART
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MULTIPURPOSE_INPUT_NMEA_UART,
+                                       INPUT_NMEA_UART,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::MultipurposeIOMode::OUTPUT_FROM_INTERNAL_OSC
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC,
+                                       OUTPUT_FROM_INTERNAL_OSC,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::MultipurposeIOMode::OUTPUT_FROM_SYNC_PULSE_IN
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN,
+                                       OUTPUT_FROM_SYNC_PULSE_IN,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::MultipurposeIOMode::OUTPUT_FROM_PTP_1588 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MULTIPURPOSE_OUTPUT_FROM_PTP_1588,
+                                       OUTPUT_FROM_PTP_1588,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::MultipurposeIOMode::OUTPUT_FROM_ENCODER_ANGLE
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE,
+                                       OUTPUT_FROM_ENCODER_ANGLE,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 /**
  * Polarity represents polarity of NMEA UART and SYNC_PULSE inputs and outputs.
  * See sensor docs for more details.
  */
-enum Polarity {
-    POLARITY_ACTIVE_LOW = 1,  ///< ACTIVE_LOW
-    POLARITY_ACTIVE_HIGH      ///< ACTIVE_HIGH
+enum class Polarity {
+    ACTIVE_LOW = 1,  ///< ACTIVE_LOW
+    ACTIVE_HIGH,     ///< ACTIVE_HIGH
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::Polarity::ACTIVE_LOW instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(POLARITY_ACTIVE_LOW, ACTIVE_LOW,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::Polarity::ACTIVE_HIGH instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(POLARITY_ACTIVE_HIGH, ACTIVE_HIGH,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 #if defined(_WIN32)
@@ -178,50 +270,161 @@ enum Polarity {
 #undef BAUD_115200
 #endif
 #endif
+
 /**
  * Baud rate the sensor attempts for NMEA UART input $GPRMC messages
  * See sensor docs for more details.
  */
-enum NMEABaudRate {
+enum class NMEABaudRate {
     BAUD_9600 = 1,  ///< 9600 bits per second UART baud rate
-    BAUD_115200     ///< 115200 bits per second UART baud rate
+    BAUD_115200,    ///< 115200 bits per second UART baud rate
 };
 
 /** Profile indicating packet format of lidar data. */
-enum UDPProfileLidar {
-    PROFILE_LIDAR_UNKNOWN = 0,
+enum class UDPProfileLidar {
+    /** Unknown lidar profile, typically used as a fallback. */
+    UNKNOWN = 0,
 
     /** Legacy lidar data */
-    PROFILE_LIDAR_LEGACY,
+    LEGACY,
 
     /** Dual Returns data */
-    PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
+    RNG19_RFL8_SIG16_NIR16_DUAL,
 
     /** Single Returns data */
-    PROFILE_RNG19_RFL8_SIG16_NIR16,
+    RNG19_RFL8_SIG16_NIR16,
 
     /** Single Returns Low Data Rate */
-    PROFILE_RNG15_RFL8_NIR8,
+    RNG15_RFL8_NIR8,
 
     /** Five Word Profile */
-    PROFILE_FIVE_WORD_PIXEL,
+    FIVE_WORD_PIXEL,
 
-    /** FuSa two-word pixel */
-    PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
+    /** Legacy Dual Returns low data profile */
+    FUSA_RNG15_RFL8_NIR8_DUAL,
+
+    /** Dual Returns low data profile */
+    RNG15_RFL8_NIR8_DUAL,
+
+    /** Single Return Low Data Rate Zone Monitoring */
+    RNG15_RFL8_NIR8_ZONE16,
+
+    /** Single Return Zone Monitoring */
+    RNG19_RFL8_SIG16_NIR16_ZONE16,
+
+    /** disabled */
+    OFF = 100,
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::UDPProfileLidar::UNKNOWN instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_LIDAR_UNKNOWN, UNKNOWN,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::UDPProfileLidar::LEGACY instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_LIDAR_LEGACY, LEGACY,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_DUAL
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL,
+                                       RNG19_RFL8_SIG16_NIR16_DUAL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::UDPProfileLidar::RNG19_RFL8_SIG16_NIR16 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_RNG19_RFL8_SIG16_NIR16,
+                                       RNG19_RFL8_SIG16_NIR16,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::UDPProfileLidar::RNG15_RFL8_NIR8
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_RNG15_RFL8_NIR8, RNG15_RFL8_NIR8,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::UDPProfileLidar::FIVE_WORD_PIXEL
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_FIVE_WORD_PIXEL, FIVE_WORD_PIXEL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::UDPProfileLidar::FUSA_RNG15_RFL8_NIR8_DUAL instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_FUSA_RNG15_RFL8_NIR8_DUAL,
+                                       FUSA_RNG15_RFL8_NIR8_DUAL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::UDPProfileLidar::RNG15_RFL8_NIR8_DUAL instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_RNG15_RFL8_NIR8_DUAL,
+                                       RNG15_RFL8_NIR8_DUAL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::UDPProfileLidar::RNG15_RFL8_NIR8_ZONE16 instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_RNG15_RFL8_NIR8_ZONE16,
+                                       RNG15_RFL8_NIR8_ZONE16,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::UDPProfileLidar::RNG19_RFL8_SIG16_NIR16_ZONE16
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_RNG19_RFL8_SIG16_NIR16_ZONE16,
+                                       RNG19_RFL8_SIG16_NIR16_ZONE16,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::UDPProfileLidar::OFF instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_LIDAR_OFF, OFF,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 /** Profile indicating packet format of IMU data. */
-enum UDPProfileIMU {
-    PROFILE_IMU_LEGACY = 1,  ///< Legacy IMU data
+enum class UDPProfileIMU {
+    /** NOTE[UN]: Why no UNKNOWN? Should we add one? */
+
+    /** Legacy IMU data */
+    LEGACY = 1,
+
+    /** Accelerometer and gyroscope data with NMEA sentences. */
+    ACCEL32_GYRO32_NMEA = 2,
+
+    /** disabled */
+    OFF = 100,
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::UDPProfileIMU::LEGACY instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_IMU_LEGACY, LEGACY,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::UDPProfileIMU::ACCEL32_GYRO32_NMEA
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_ACCEL32_GYRO32_NMEA,
+                                       ACCEL32_GYRO32_NMEA,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::UDPProfileIMU::OFF instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(PROFILE_IMU_OFF, OFF,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
+};
+
+/**
+ * Profile indicating packet header layout of Lidar and IMU packets.
+ *
+ * LEGACY profiles of Lidar or IMU packets ignore this setting.
+ */
+enum class HeaderType {
+    /** Standard eUDP headers */
+    STANDARD = 1,
+
+    /** FUSA headers */
+    FUSA = 2,
 };
 
 /** Full scale range for IMU data. */
-enum FullScaleRange {
+enum class FullScaleRange {
     /** Higher precision lower range measurement mode */
-    FSR_NORMAL = 0,
+    NORMAL = 0,
 
     /** Lower precision higher range measurement mode */
-    FSR_EXTENDED
+    EXTENDED,
+
+    // Deprecated entries
+    /// @deprecated Use ouster::sdk::core::FullScaleRange::NORMAL instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(FSR_NORMAL, NORMAL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    /// @deprecated Use ouster::sdk::core::FullScaleRange::EXTENDED instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(FSR_EXTENDED, EXTENDED,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 /** Priority of returns for the lidar to output.
@@ -229,54 +432,146 @@ enum FullScaleRange {
  *   This indicates to the lidar which ones it should output.
  *   See sensor docs for more details.
  */
-enum ReturnOrder {
+enum class ReturnOrder {
     /** Lidar returns the strongest returns first */
-    ORDER_STRONGEST_TO_WEAKEST = 0,
+    STRONGEST_TO_WEAKEST = 0,
 
     /** Lidar returns the furthest returns first */
-    ORDER_FARTHEST_TO_NEAREST,
+    FARTHEST_TO_NEAREST,
 
     /** Lidar returns the nearest returns first */
-    ORDER_NEAREST_TO_FARTHEST,
+    NEAREST_TO_FARTHEST,
 
     /** DEPRECATED: Only Present In Old Test Firmware */
-    ORDER_DEPRECATED_STRONGEST_RETURN_FIRST,
-    ORDER_DEPRECATED_LAST_RETURN_FIRST
+    DEPRECATED_STRONGEST_RETURN_FIRST,
+
+    /** DEPRECATED: Only Present In Old Test Firmware */
+    DEPRECATED_LAST_RETURN_FIRST,
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::ReturnOrder::STRONGEST_TO_WEAKEST
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(ORDER_STRONGEST_TO_WEAKEST,
+                                       STRONGEST_TO_WEAKEST,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ReturnOrder::FARTHEST_TO_NEAREST
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(ORDER_FARTHEST_TO_NEAREST,
+                                       FARTHEST_TO_NEAREST,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ReturnOrder::NEAREST_TO_FARTHEST
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(ORDER_NEAREST_TO_FARTHEST,
+                                       NEAREST_TO_FARTHEST,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::ReturnOrder::DEPRECATED_STRONGEST_RETURN_FIRST
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(ORDER_DEPRECATED_STRONGEST_RETURN_FIRST,
+                                       DEPRECATED_STRONGEST_RETURN_FIRST,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use
+    ///< ouster::sdk::core::ReturnOrder::DEPRECATED_LAST_RETURN_FIRST instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(ORDER_DEPRECATED_LAST_RETURN_FIRST,
+                                       DEPRECATED_LAST_RETURN_FIRST,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 /** Thermal Shutdown status. */
-enum ThermalShutdownStatus {
-    THERMAL_SHUTDOWN_NORMAL = 0x00,    ///< Normal operation
-    THERMAL_SHUTDOWN_IMMINENT = 0x01,  ///< Thermal Shutdown imminent
+enum class ThermalShutdownStatus : uint8_t {
+    NORMAL = 0x00,    ///< Normal operation
+    IMMINENT = 0x01,  ///< Thermal Shutdown imminent
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::ThermalShutdownStatus::NORMAL
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(THERMAL_SHUTDOWN_NORMAL, NORMAL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ThermalShutdownStatus::IMMINENT
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(THERMAL_SHUTDOWN_IMMINENT, IMMINENT,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 /** Shot Limiting status. */
-enum ShotLimitingStatus {
-    SHOT_LIMITING_NORMAL = 0x00,    ///< Normal operation
-    SHOT_LIMITING_IMMINENT = 0x01,  ///< Shot limiting imminent
-    SHOT_LIMITING_REDUCTION_0_10 =
-        0x02,  ///< Shot limiting reduction by 0 to 10%
-    SHOT_LIMITING_REDUCTION_10_20 =
-        0x03,  ///< Shot limiting reduction by 10 to 20%
-    SHOT_LIMITING_REDUCTION_20_30 =
-        0x04,  ///< Shot limiting reduction by 20 to 30%
-    SHOT_LIMITING_REDUCTION_30_40 =
-        0x05,  ///< Shot limiting reduction by 30 to 40%
-    SHOT_LIMITING_REDUCTION_40_50 =
-        0x06,  ///< Shot limiting reduction by 40 to 50%
-    SHOT_LIMITING_REDUCTION_50_60 =
-        0x07,  ///< Shot limiting reduction by 50 to 60%
-    SHOT_LIMITING_REDUCTION_60_70 =
-        0x08,  ///< Shot limiting reduction by 60 to 70%
-    SHOT_LIMITING_REDUCTION_70_75 =
-        0x09,  ///< Shot limiting reduction by 70 to 80%
+enum class ShotLimitingStatus : uint8_t {
+    NORMAL = 0x00,           ///< Normal operation
+    IMMINENT = 0x01,         ///< Shot limiting imminent
+    REDUCTION_0_10 = 0x02,   ///< Shot limiting reduction by 0 to 10%
+    REDUCTION_10_20 = 0x03,  ///< Shot limiting reduction by 10 to 20%
+    REDUCTION_20_30 = 0x04,  ///< Shot limiting reduction by 20 to 30%
+    REDUCTION_30_40 = 0x05,  ///< Shot limiting reduction by 30 to 40%
+    REDUCTION_40_50 = 0x06,  ///< Shot limiting reduction by 40 to 50%
+    REDUCTION_50_60 = 0x07,  ///< Shot limiting reduction by 50 to 60%
+    REDUCTION_60_70 = 0x08,  ///< Shot limiting reduction by 60 to 70%
+    REDUCTION_70_75 = 0x09,  ///< Shot limiting reduction by 70 to 80%
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::NORMAL instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_NORMAL, NORMAL,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::IMMINENT
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_IMMINENT, IMMINENT,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_0_10
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_0_10,
+                                       REDUCTION_0_10,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_10_20
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_10_20,
+                                       REDUCTION_10_20,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_20_30
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_20_30,
+                                       REDUCTION_20_30,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_30_40
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_30_40,
+                                       REDUCTION_30_40,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_40_50
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_40_50,
+                                       REDUCTION_40_50,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_50_60
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_50_60,
+                                       REDUCTION_50_60,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_60_70
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_60_70,
+                                       REDUCTION_60_70,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::core::ShotLimitingStatus::REDUCTION_70_75
+    ///< instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(SHOT_LIMITING_REDUCTION_70_75,
+                                       REDUCTION_70_75,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
+};
+
+/** Bloom reduction optimization settings. */
+enum class BloomReductionOptimization {
+    /// Balanced optimization
+    BALANCED = 0,
+    /// Optimization that minimizes false positives
+    MINIMIZE_FALSE_POSITIVES = 1,
 };
 
 /**
  * Convenience type alias for azimuth windows, the window over which the
  * sensor fires in millidegrees.
  */
-using AzimuthWindow = std::pair<int, int>;
+using AzimuthWindow = std::pair<unsigned int, unsigned int>;
 /**
  * Convenience type alias for column windows, the window over which the
  * sensor fires in columns.
@@ -286,26 +581,39 @@ using ColumnWindow = std::pair<int, int>;
 /**
  * Struct for sensor configuration parameters.
  */
-struct OUSTER_API_CLASS sensor_config {
+struct OUSTER_API_CLASS SensorConfig {
     optional<std::string> udp_dest;     ///< The destination address for the
                                         ///< lidar/imu data to be sent to
+    optional<std::string> udp_dest_zm;  ///< The destination address for the
+                                        ///< ZM data to be sent to
     optional<uint16_t> udp_port_lidar;  ///< The destination port for the lidar
                                         ///< data to be sent to
     optional<uint16_t> udp_port_imu;    ///< The destination port for the imu
                                         ///< data to be sent to
+    optional<uint16_t> udp_port_zm;     ///< The destination port for the ZM
+                                        ///< data to be sent to
 
-    // TODO: change timestamp_mode and lidar_mode to UpperCamel
+    /**
+     * Multicast TTL for IMU and lidar UDP traffic.
+     */
+    optional<uint32_t> udp_multicast_ttl;
+
+    /**
+     * Multicast TTL for ZM UDP traffic.
+     */
+    optional<uint32_t> udp_multicast_ttl_zm;
+
     /**
      * The timestamp mode for the sensor to use.
-     * Refer to timestamp_mode for more details.
+     * Refer to TimestampMode for more details.
      */
-    optional<sensor::timestamp_mode> timestamp_mode;
+    optional<TimestampMode> timestamp_mode;
 
     /**
      * The lidar mode for the sensor to use.
-     * Refer to lidar_mode for more details.
+     * Refer to LidarMode for more details.
      */
-    optional<sensor::lidar_mode> lidar_mode;
+    optional<LidarMode> lidar_mode;
 
     /**
      * The operating mode for the sensor to use.
@@ -324,6 +632,12 @@ struct OUSTER_API_CLASS sensor_config {
      * Refer to AzimuthWindow for more details.
      */
     optional<AzimuthWindow> azimuth_window;
+
+    /**
+     * The lidar frame azimuth offset for the sensor to use.
+     * Refer to the sensor docs for more details.
+     */
+    optional<unsigned int> lidar_frame_azimuth_offset;
 
     /**
      * Multiplier for signal strength of sensor. See the sensor docs for
@@ -416,6 +730,12 @@ struct OUSTER_API_CLASS sensor_config {
     optional<UDPProfileIMU> udp_profile_imu;
 
     /**
+     * The udp profile type for the sensor to use.
+     * Refer to HeaderType for more details.
+     */
+    optional<HeaderType> header_type;
+
+    /**
      * The gyro full scale measurement range to use.
      * Refer to FullScaleRange for more details.
      */
@@ -439,32 +759,60 @@ struct OUSTER_API_CLASS sensor_config {
     optional<int> min_range_threshold_cm;
 
     /**
+     * The number of imu packets per frame.
+     */
+    optional<uint32_t> imu_packets_per_frame;
+
+    /**
+     * The bloom reduction optimization setting.
+     */
+    optional<BloomReductionOptimization> bloom_reduction_optimization;
+
+    /**
      * Extra config options to apply that arent in the standard set.
      * Each value should be stringized json
      */
     std::map<std::string, std::string> extra_options;
 
-    /* Constructor from json */
+    /**
+     * Constructs a SensorConfig object by parsing a JSON-formatted
+     * configuration string.
+     *
+     * @param[in] config_json JSON string containing configuration settings for
+     * the sensor.
+     * @throws std::runtime_error If the SensorConfig JSON string is invalid or
+     * incomplete.
+     */
     OUSTER_API_FUNCTION
-    explicit sensor_config(const std::string& config_json);
+    explicit SensorConfig(const std::string& config_json);
 
-    /* Default constructor */
+    /** Default constructor */
     OUSTER_API_FUNCTION
-    sensor_config();
+    SensorConfig();
 };
 
+/**
+ * @deprecated Use ouster::sdk::core::SensorConfig instead.
+ */
+OUSTER_DEPRECATED_TYPE(sensor_config, SensorConfig,             // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
+
 /** Stores data format information. */
-struct OUSTER_API_CLASS data_format {
+struct OUSTER_API_CLASS DataFormat {
     uint32_t pixels_per_column;   ///< pixels per column
     uint32_t columns_per_packet;  ///< columns per packet
     uint32_t
         columns_per_frame;  ///< columns per frame, should match with lidar mode
+    uint32_t imu_measurements_per_packet;  ///< imu measurements per packet
+    uint32_t imu_packets_per_frame;        ///< imu packets per frame
     std::vector<int>
         pixel_shift_by_row;      ///< shift of pixels by row to enable destagger
     ColumnWindow column_window;  ///< window of columns over which sensor fires
     UDPProfileLidar udp_profile_lidar{};  ///< profile of lidar packet
     UDPProfileIMU udp_profile_imu{};      ///< profile of imu packet
+    HeaderType header_type{};             ///< profile of lidar/imu headers
     uint16_t fps;                         ///< frames per second
+    bool zone_monitoring_enabled{false};  ///< if yes, zone monitoring is on
 
     /// Return the number of valid columns per complete frame of data with the
     /// column_window applied.
@@ -476,17 +824,31 @@ struct OUSTER_API_CLASS data_format {
     /// with the column_window applied.
     /// @return the number of packets
     OUSTER_API_FUNCTION
-    int packets_per_frame() const;
+    int lidar_packets_per_frame() const;
 };
+
+/**
+ * @deprecated Use ouster::sdk::core::DataFormat instead.
+ */
+OUSTER_DEPRECATED_TYPE(data_format, DataFormat,                 // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /** Stores from-sensor calibration information */
-struct OUSTER_API_CLASS calibration_status {
-    optional<bool> reflectivity_status;
-    optional<std::string> reflectivity_timestamp;
+struct OUSTER_API_CLASS CalibrationStatus {
+    optional<bool>
+        reflectivity_status;  ///< Whether reflectivity calibration is present.
+    optional<std::string>
+        reflectivity_timestamp;  ///< Timestamp of reflectivity calibration.
 };
 
+/**
+ * @deprecated Use ouster::sdk::core::CalibrationStatus instead.
+ */
+OUSTER_DEPRECATED_TYPE(calibration_status, CalibrationStatus,   // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
+
 /** Stores parsed information about the prod line */
-class OUSTER_API_CLASS product_info {
+class OUSTER_API_CLASS ProductInfo {
    public:
     /**
      * The original full product line string.
@@ -515,28 +877,28 @@ class OUSTER_API_CLASS product_info {
     const int beam_count;
 
     /**
-     * Static method used to create product_info classes.
+     * Static method used to create ProductInfo classes.
      *
      * @throws std::runtime_error on a bad product info line.
      *
      * @param[in] product_info_string The product info string to create
-     *                                the product_info class from.
-     * @return The new product_info class.
+     *                                the ProductInfo class from.
+     * @return The new ProductInfo class.
      */
     OUSTER_API_FUNCTION
-    static product_info create_product_info(std::string product_info_string);
+    static ProductInfo create_product_info(std::string product_info_string);
 
     /**
-     * Default constructor for product_info that
+     * Default constructor for ProductInfo that
      * sets everything to blank.
      */
     OUSTER_API_FUNCTION
-    product_info();
+    ProductInfo();
 
    protected:
     /**
      * Constructor to initialize each of the members off of.
-     * @brief Constructor for product_info that takes params (internal only)
+     * @brief Constructor for ProductInfo that takes params (internal only)
      *
      * @param[in] product_info_string The full product line string.
      * @param[in] form_factor The sensor form factor.
@@ -547,12 +909,17 @@ class OUSTER_API_CLASS product_info {
      * @internal
      */
     OUSTER_API_FUNCTION
-    product_info(std::string product_info_string, std::string form_factor,
-                 bool short_range, std::string beam_config, int beam_count);
+    ProductInfo(std::string product_info_string, std::string form_factor,
+                bool short_range, std::string beam_config, int beam_count);
 };
+/**
+ * @deprecated Use ouster::sdk::core::ProductInfo instead.
+ */
+OUSTER_DEPRECATED_TYPE(product_info, ProductInfo,               // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /**
- * Equality for product_info.
+ * Equality for ProductInfo.
  *
  * @param[in] lhs The first object to compare.
  * @param[in] rhs The second object to compare.
@@ -560,10 +927,10 @@ class OUSTER_API_CLASS product_info {
  * @return lhs == rhs
  */
 OUSTER_API_FUNCTION
-bool operator==(const product_info& lhs, const product_info& rhs);
+bool operator==(const ProductInfo& lhs, const ProductInfo& rhs);
 
 /**
- * In-Equality for product_info.
+ * Inequality for ProductInfo.
  *
  * @param[in] lhs The first object to compare.
  * @param[in] rhs The second object to compare.
@@ -571,7 +938,7 @@ bool operator==(const product_info& lhs, const product_info& rhs);
  * @return lhs != rhs
  */
 OUSTER_API_FUNCTION
-bool operator!=(const product_info& lhs, const product_info& rhs);
+bool operator!=(const ProductInfo& lhs, const ProductInfo& rhs);
 
 /**
  * Get string representation of a product info.
@@ -581,21 +948,23 @@ bool operator!=(const product_info& lhs, const product_info& rhs);
  * @return string representation of the product info.
  */
 OUSTER_API_FUNCTION
-std::string to_string(const product_info& info);
+std::string to_string(const ProductInfo& info);
 
 /**
  * Stores parsed information from metadata.
  */
-class OUSTER_API_CLASS sensor_info {
+class OUSTER_API_CLASS SensorInfo {
    public:
+    /// Copy constructor for sensor_info.
     OUSTER_API_FUNCTION
-    sensor_info(const sensor_info&) = default;
+    SensorInfo(const SensorInfo&) = default;
+    /// Move constructor for SensorInfo.
     OUSTER_API_FUNCTION
-    sensor_info(sensor_info&&) = default;
+    SensorInfo(SensorInfo&&) = default;
     OUSTER_API_FUNCTION
-    ~sensor_info() = default;
+    ~SensorInfo() = default;
     OUSTER_API_FUNCTION
-    sensor_info& operator=(const ouster::sensor::sensor_info&) = default;
+    SensorInfo& operator=(const SensorInfo&) = default;
 
     // clang-format off
     uint64_t sn{};              ///< sensor serial number corresponding to prod_sn in
@@ -604,7 +973,7 @@ class OUSTER_API_CLASS sensor_info {
         fw_rev{};               ///< fw revision corresponding to build_rev in metadata.json
     std::string prod_line{};    ///< prod line
 
-    data_format format{};       ///< data format of sensor
+    DataFormat format{};       ///< data format of sensor
     std::vector<double>
         beam_azimuth_angles{};  ///< beam azimuth angles for 3D projection
     std::vector<double>
@@ -624,49 +993,65 @@ class OUSTER_API_CLASS sensor_info {
                                 ///< matrix, currently is not read from metadata.json
     uint32_t init_id{};         ///< initialization ID updated every reinit
 
-    std::string build_date{};   ///< build date from FW sensor_info
-    std::string image_rev{};    ///< image rev from FW sensor_info
+    std::string build_date{};   ///< build date from FW SensorInfo
+    std::string image_rev{};    ///< image rev from FW SensorInfo
     std::string prod_pn{};      ///< prod pn
     std::string status{};       ///< sensor status at time of pulling metadata
 
-    calibration_status cal{};   ///< sensor calibration
-    sensor_config config{};     ///< parsed sensor config if available from metadata
+    CalibrationStatus cal{};   ///< sensor calibration
+    SensorConfig config{};     ///< parsed sensor config if available from metadata
     std::string user_data{};    ///< userdata from sensor if available
+    nonstd::optional<ZoneSet> zone_set{};  ///< zone monitor configuration, if present
 
-    /* Constructor from metadata */
-    [[deprecated("skip_beam_validation does not do anything anymore")]] 
+    /**
+     * Constructs a SensorInfo object by parsing a metadata.
+     *
+     * @param[in] metadata JSON-formatted string representing sensor metadata.
+     * @throws std::runtime_error If the metadata string is empty.
+     */
     OUSTER_API_FUNCTION
-    explicit sensor_info(const std::string& metadata, bool skip_beam_validation);
-    OUSTER_API_FUNCTION
-    explicit sensor_info(const std::string& metadata);
+    explicit SensorInfo(const std::string& metadata);
 
     /* Empty constructor -- keep for  */
     OUSTER_API_FUNCTION
-    sensor_info();
+    SensorInfo();
 
     /** Return an updated version of the metadata string reflecting any
-     * changes to the sensor_info.
+     * changes to the SensorInfo.
      * Errors out if changes are incompatible but does not check for validity
      *
      * @return json serialized version of this object
      */
     OUSTER_API_FUNCTION
     std::string to_json_string() const;
-    
+
     /**
      * Parse and return version info about this sensor.
      *
      * @return sensor version info
      */
     OUSTER_API_FUNCTION
-    ouster::util::version get_version() const;
+    Version get_version() const;
 
+    /**
+     * Extracts and returns parsed product information for the sensor.
+     *
+     * @return A ProductInfo object containing the form factor, beam count, and other
+     *         relevant product metadata parsed from the SensorInfo.
+     */
     OUSTER_API_FUNCTION
-    product_info get_product_info() const;
+    ProductInfo get_product_info() const;
 
+    /**
+     * Compares the current SensorInfo object to another and checks if the
+     * fields (excluding user metadata) are equal.
+     *
+     * @param[in] other Another SensorInfo object to compare with.
+     * @return True if key fields are equal, false otherwise.
+     */
     OUSTER_API_FUNCTION
-    bool has_fields_equal(const sensor_info& other) const;
-    
+    bool has_fields_equal(const SensorInfo& other) const;
+
     /**
      * Get the number of returns output by the sensor in its current setup.
      *
@@ -694,7 +1079,13 @@ class OUSTER_API_CLASS sensor_info {
 };
 
 /**
- * Equality for data_format.
+ * @deprecated Use ouster::sdk::core::SensorInfo instead.
+ */
+OUSTER_DEPRECATED_TYPE(sensor_info, SensorInfo,                 // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
+
+/**
+ * Equality for DataFormat.
  *
  * @param[in] lhs The first object to compare.
  * @param[in] rhs The second object to compare.
@@ -702,10 +1093,10 @@ class OUSTER_API_CLASS sensor_info {
  * @return lhs == rhs
  */
 OUSTER_API_FUNCTION
-bool operator==(const data_format& lhs, const data_format& rhs);
+bool operator==(const DataFormat& lhs, const DataFormat& rhs);
 
 /**
- * Not-Equality for data_format.
+ * Not-Equality for DataFormat.
  *
  * @param[in] lhs The first object to compare.
  * @param[in] rhs The second object to compare.
@@ -713,10 +1104,10 @@ bool operator==(const data_format& lhs, const data_format& rhs);
  * @return lhs != rhs
  */
 OUSTER_API_FUNCTION
-bool operator!=(const data_format& lhs, const data_format& rhs);
+bool operator!=(const DataFormat& lhs, const DataFormat& rhs);
 
 /**
- * Equality for sensor_info.
+ * Equality for SensorInfo.
  *
  * @param[in] lhs The first object to compare.
  * @param[in] rhs The second object to compare.
@@ -724,10 +1115,10 @@ bool operator!=(const data_format& lhs, const data_format& rhs);
  * @return lhs == rhs
  */
 OUSTER_API_FUNCTION
-bool operator==(const sensor_info& lhs, const sensor_info& rhs);
+bool operator==(const SensorInfo& lhs, const SensorInfo& rhs);
 
 /**
- * Not-Equality for sensor_info.
+ * Inequality for SensorInfo.
  *
  * @param[in] lhs The first object to compare.
  * @param[in] rhs The second object to compare.
@@ -735,7 +1126,7 @@ bool operator==(const sensor_info& lhs, const sensor_info& rhs);
  * @return lhs != rhs
  */
 OUSTER_API_FUNCTION
-bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
+bool operator!=(const SensorInfo& lhs, const SensorInfo& rhs);
 
 /**
  * Equality for sensor config.
@@ -746,10 +1137,10 @@ bool operator!=(const sensor_info& lhs, const sensor_info& rhs);
  * @return lhs == rhs
  */
 OUSTER_API_FUNCTION
-bool operator==(const sensor_config& lhs, const sensor_config& rhs);
+bool operator==(const SensorConfig& lhs, const SensorConfig& rhs);
 
 /**
- * Not-Equality for sensor config.
+ * Inequality for sensor config.
  *
  * @param[in] lhs The first object to compare.
  * @param[in] rhs The second object to compare.
@@ -757,7 +1148,7 @@ bool operator==(const sensor_config& lhs, const sensor_config& rhs);
  * @return lhs != rhs
  */
 OUSTER_API_FUNCTION
-bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
+bool operator!=(const SensorConfig& lhs, const SensorConfig& rhs);
 
 /**
  * Equality of sensor calibration.
@@ -766,36 +1157,36 @@ bool operator!=(const sensor_config& lhs, const sensor_config& rhs);
  * @param[out] rhs The second object to compare.
  */
 OUSTER_API_FUNCTION
-bool operator==(const calibration_status& lhs, const calibration_status& rhs);
+bool operator==(const CalibrationStatus& lhs, const CalibrationStatus& rhs);
 
 /**
- * Not-Equality of sensor calibration.
+ * Inequality of sensor calibration.
  *
  * @param[in] lhs The first object to compare.
  * @param[out] rhs The second object to compare.
  */
 OUSTER_API_FUNCTION
-bool operator!=(const calibration_status& lhs, const calibration_status& rhs);
+bool operator!=(const CalibrationStatus& lhs, const CalibrationStatus& rhs);
 
 /**
- * Get a default sensor_info for the given lidar mode.
+ * Get a default SensorInfo for the given lidar mode.
  *
- * @param[in] mode lidar mode to generate default sensor_info for.
+ * @param[in] mode lidar mode to generate default SensorInfo for.
  *
- * @return default sensor_info for the OS1-64.
+ * @return default SensorInfo for the OS1-64.
  */
 OUSTER_API_FUNCTION
-sensor_info default_sensor_info(lidar_mode mode);
+SensorInfo default_sensor_info(LidarMode mode);
 
 /**
  * Get string representation of a lidar mode.
  *
- * @param[in] mode lidar_mode to get the string representation for.
+ * @param[in] mode LidarMode to get the string representation for.
  *
  * @return string representation of the lidar mode, or "UNKNOWN".
  */
 OUSTER_API_FUNCTION
-std::string to_string(lidar_mode mode);
+std::string to_string(LidarMode mode);
 
 /**
  * Get lidar mode from string.
@@ -805,17 +1196,17 @@ std::string to_string(lidar_mode mode);
  * @return lidar mode corresponding to the string, or 0 on error.
  */
 OUSTER_API_FUNCTION
-lidar_mode lidar_mode_of_string(const std::string& s);
+LidarMode lidar_mode_of_string(const std::string& s);
 
 /**
  * Get number of columns in a scan for a lidar mode.
  *
- * @param[in] mode lidar_mode to get the number of columns for.
+ * @param[in] mode LidarMode to get the number of columns for.
  *
  * @return number of columns per rotation for the mode.
  */
 OUSTER_API_FUNCTION
-uint32_t n_cols_of_lidar_mode(lidar_mode mode);
+uint32_t n_cols_of_lidar_mode(LidarMode mode);
 
 /**
  * Get the lidar rotation frequency from lidar mode.
@@ -825,17 +1216,17 @@ uint32_t n_cols_of_lidar_mode(lidar_mode mode);
  * @return lidar rotation frequency in Hz.
  */
 OUSTER_API_FUNCTION
-int frequency_of_lidar_mode(lidar_mode mode);
+int frequency_of_lidar_mode(LidarMode mode);
 
 /**
  * Get string representation of a timestamp mode.
  *
- * @param[in] mode timestamp_mode to get the string representation for.
+ * @param[in] mode TimestampMode to get the string representation for.
  *
  * @return string representation of the timestamp mode, or "UNKNOWN".
  */
 OUSTER_API_FUNCTION
-std::string to_string(timestamp_mode mode);
+std::string to_string(TimestampMode mode);
 
 /**
  * Get timestamp mode from string.
@@ -845,7 +1236,7 @@ std::string to_string(timestamp_mode mode);
  * @return timestamp mode corresponding to the string, or 0 on error.
  */
 OUSTER_API_FUNCTION
-timestamp_mode timestamp_mode_of_string(const std::string& s);
+TimestampMode timestamp_mode_of_string(const std::string& s);
 
 /**
  * Get string representation of an operating mode.
@@ -980,6 +1371,27 @@ OUSTER_API_FUNCTION
 optional<UDPProfileIMU> udp_profile_imu_of_string(const std::string& s);
 
 /**
+ * Get string representation of a header layout profile.
+ *
+ * @param[in] profile The profile to get the string representation of.
+ *
+ * @return string representation of the header layout profile.
+ */
+OUSTER_API_FUNCTION
+std::string to_string(HeaderType profile);
+
+/**
+ * Get header layut profile from string
+ *
+ * @param[in] s The string to decode into an imu profile.
+ *
+ * @return header layout profile corresponding to the string, or nullopt on
+ *         error.
+ */
+OUSTER_API_FUNCTION
+optional<HeaderType> udp_profile_type_of_string(const std::string& s);
+
+/**
  * Get full scale range setting from string
  *
  * @param[in] s The string to decode into a full scale range.
@@ -1044,6 +1456,31 @@ OUSTER_API_FUNCTION
 std::string to_string(ThermalShutdownStatus thermal_shutdown_status);
 
 /**
+ * Get string representation of Bloom Reduction Optimization setting.
+ *
+ * @param[in] bloom_reduction_optimization The bloom reduction optimization
+ *                                         setting to get the string
+ *                                         representation of.
+ *
+ * @return string representation of bloom reduction optimization setting.
+ */
+OUSTER_API_FUNCTION
+std::string to_string(BloomReductionOptimization bloom_reduction_optimization);
+
+/**
+ * Get Bloom Reduction Optimization setting from string.
+ *
+ * @param[in] s The string to decode into a bloom reduction optimization
+ *              setting.
+ *
+ * @return bloom reduction optimization setting corresponding to the string,
+ *         or nullopt on error.
+ */
+OUSTER_API_FUNCTION
+optional<BloomReductionOptimization> bloom_reduction_optimization_of_string(
+    const std::string& s);
+
+/**
  * Determine validity of provided signal multiplier value
  *
  * @param[in] signal_multiplier Signal multiplier value.
@@ -1061,44 +1498,27 @@ void check_signal_multiplier(const double signal_multiplier);
  *                                 for use on recorded data or metadata
  *                                 from sensors
  *
- * @return a sensor_info struct populated with a subset of the metadata.
+ * @return a SensorInfo struct populated with a subset of the metadata.
  */
 OUSTER_API_FUNCTION
-sensor_info metadata_from_json(const std::string& json_file,
-                               bool skip_beam_validation = false);
+SensorInfo metadata_from_json(const std::string& json_file,
+                              bool skip_beam_validation = false);
 
 // clang-format off
 /**
- * String representation of the sensor_info. All fields included. NOT equivalent
+ * String representation of the SensorInfo. All fields included. NOT equivalent
  * or interchangeable with metadata from sensor.
  *
- * @param[in] info sensor_info struct
+ * @param[in] info SensorInfo struct
  *
  * @return a debug string in json format
  */
 [[deprecated("This is a debug function. Use original_string() or "
               "updated_metadata_string()")]]
 OUSTER_API_FUNCTION
-std::string to_string(const sensor_info& info);
+std::string to_string(const SensorInfo& info);
 
 // clang-format on
-
-/**
- * Parse config text blob from the sensor into a sensor_config struct.
- *
- * All fields are optional, and will only be set if found.
- *
- * @throw runtime_error if the text is not valid json.
- *
- * @param[in] config a text blob given by get_config from client.h.
- *
- * @return a sensor_config struct populated with the sensor config.
- * parameters.
- */
-[[deprecated(
-    "Please switch to using parse_and_validate_config")]] OUSTER_API_FUNCTION
-    sensor_config
-    parse_config(const std::string& config);
 
 /**
  * Get a string representation of sensor config. Only set fields will be
@@ -1109,7 +1529,7 @@ std::string to_string(const sensor_info& info);
  * @return a json sensor config string.
  */
 OUSTER_API_FUNCTION
-std::string to_string(const sensor_config& config);
+std::string to_string(const SensorConfig& config);
 
 /**
  * Get a string representation of sensor calibration. Only set fields will be
@@ -1120,7 +1540,7 @@ std::string to_string(const sensor_config& config);
  * @return string representation of sensor calibration.
  */
 OUSTER_API_FUNCTION
-std::string to_string(const calibration_status& cal);
+std::string to_string(const CalibrationStatus& cal);
 
 /**
  * Get client version.
@@ -1131,104 +1551,6 @@ OUSTER_API_FUNCTION
 std::string client_version();
 
 // clang-format off
-/**
- * Get version information from the metadata.
- *
- * @param[in] metadata string.
- *
- * @return version corresponding to the string, or invalid_version on error.
- */
-[[deprecated("Use sensor_info::get_version() instead")]] 
-OUSTER_API_FUNCTION
-ouster::util::version firmware_version_from_metadata(const std::string& metadata);
-
-typedef const char* cf_type;
-/**
- * @namespace ChanField
- * Tag to identitify a paricular value reported in the sensor channel data
- * block. */
-namespace ChanField {
-    static constexpr cf_type RANGE = "RANGE";            ///< 1st return range in mm
-    static constexpr cf_type RANGE2 = "RANGE2";           ///< 2nd return range in mm
-    static constexpr cf_type SIGNAL = "SIGNAL";           ///< 1st return signal in photons
-    static constexpr cf_type SIGNAL2 = "SIGNAL2";          ///< 2nd return signal in photons
-    static constexpr cf_type REFLECTIVITY = "REFLECTIVITY";     ///< 1st return reflectivity, calibrated by range and sensor
-                          ///< sensitivity in FW 2.1+. See sensor docs for more details
-    static constexpr cf_type REFLECTIVITY2 = "REFLECTIVITY2";    ///< 2nd return reflectivity, calibrated by range and sensor
-                          ///< sensitivity in FW 2.1+. See sensor docs for more details
-    
-    static constexpr cf_type NEAR_IR = "NEAR_IR";          ///< near_ir in photons
-    static constexpr cf_type FLAGS = "FLAGS";            ///< 1st return flags
-    static constexpr cf_type FLAGS2 = "FLAGS2";           ///< 2nd return flags
-    static constexpr cf_type RAW_HEADERS = "RAW_HEADERS";     ///< raw headers for packet/footer/column for dev use
-    static constexpr cf_type RAW32_WORD5 = "RAW32_WORD5";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD6 = "RAW32_WORD6";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD7 = "RAW32_WORD7";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD8 = "RAW32_WORD8";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD9 = "RAW32_WORD9";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD1 = "RAW32_WORD1";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD2 = "RAW32_WORD2";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD3 = "RAW32_WORD3";     ///< raw word access to packet for dev use
-    static constexpr cf_type RAW32_WORD4 = "RAW32_WORD4";     ///< raw word access to packet for dev use
-};
-
-// clang-format on
-/**
- * Types of channel fields.
- */
-#if defined(VOID)
-#define OUSTER_REMOVED_VOID
-#pragma push_macro("VOID")
-#undef VOID
-#endif
-enum ChanFieldType {
-    VOID = 0,
-    UINT8 = 1,
-    UINT16 = 2,
-    UINT32 = 3,
-    UINT64 = 4,
-    INT8 = 5,
-    INT16 = 6,
-    INT32 = 7,
-    INT64 = 8,
-    FLOAT32 = 9,
-    FLOAT64 = 10,
-    UNREGISTERED = 100
-};
-#if defined(OUSTER_REMOVED_VOID)
-#pragma pop_macro("VOID")
-#undef OUSTER_REMOVED_VOID
-#endif
-
-/**
- * Get the size of the ChanFieldType in bytes.
- *
- * @param[in] ft the field type
- *
- * @return size of the field type in bytes
- */
-OUSTER_API_FUNCTION
-size_t field_type_size(ChanFieldType ft);
-
-/**
- * Get the bit mask of the ChanFieldType.
- *
- * @param[in] ft the field type
- *
- * @return 64 bit mask
- */
-OUSTER_API_FUNCTION
-uint64_t field_type_mask(ChanFieldType ft);
-
-/**
- * Get string representation of a channel field.
- *
- * @param[in] ft The field type to get the string representation of.
- *
- * @return string representation of the channel field type.
- */
-OUSTER_API_FUNCTION
-std::string to_string(ChanFieldType ft);
 
 /**
  * Table of accessors for extracting data from imu and lidar packets.
@@ -1243,80 +1565,102 @@ std::string to_string(ChanFieldType ft);
  * Use imu_la_{x,y,z} to access the acceleration in the corresponding
  * direction. Use imu_av_{x,y,z} to read the angular velocity.
  */
-class OUSTER_API_CLASS packet_format {
+class OUSTER_API_CLASS PacketFormat {
    protected:
     struct Impl;
     std::shared_ptr<const Impl> impl_;
 
-    std::vector<std::pair<std::string, sensor::ChanFieldType>> field_types_;
+    std::vector<std::pair<std::string, ChanFieldType>> field_types_;
 
    public:
+    /**
+     * Construct packet format from data format.
+     *
+     * @param[in] format data format
+     */
     OUSTER_API_FUNCTION
-    packet_format(UDPProfileLidar udp_profile_lidar, size_t pixels_per_column,
-                  size_t columns_per_packet);
+    PacketFormat(const DataFormat& format);
 
+    /**
+     * Construct packet format from sensor info
+     *
+     * @param[in] info sensor info
+     */
     OUSTER_API_FUNCTION
-    packet_format(
-        const sensor_info& info);  //< create packet_format from sensor_info
+    PacketFormat(const SensorInfo& info);
 
     using FieldIter =
         decltype(field_types_)::const_iterator;  ///< iterator over field types
                                                  ///< of packet
 
     const UDPProfileLidar
-        udp_profile_lidar;           ///< udp lidar profile of packet format
-    const size_t lidar_packet_size;  ///< lidar packet size
-    const size_t imu_packet_size;    ///< imu packet size
-    const int columns_per_packet;    ///< columns per lidar packet
-    const int pixels_per_column;     ///< pixels per column for lidar
+        udp_profile_lidar;  ///< udp lidar profile of packet format
+    const UDPProfileIMU udp_profile_imu;  ///< udp imu profile of packet format
+    const HeaderType header_type;         ///< header type of packets
+    const size_t lidar_packet_size;       ///< lidar packet size
+    const size_t imu_packet_size;         ///< imu packet size
+    const size_t zone_packet_size;        ///< zone monitoring packet size
+    const int columns_per_packet;         ///< columns per lidar packet
+    const int pixels_per_column;          ///< pixels per column for lidar
 
-    const size_t packet_header_size;
-    const size_t col_header_size;
-    const size_t col_footer_size;
-    const size_t col_size;
-    const size_t packet_footer_size;
+    const size_t imu_measurements_per_packet;  ///< number of accel/gyro
+                                               ///< measurements per imu packet
+    const size_t imu_packets_per_frame;        ///< number of imu packets per
+                                               ///< frame
 
-    const uint64_t max_frame_id;
+    const size_t packet_header_size;  ///< Size in bytes of the packet header.
+    const size_t col_header_size;     ///< Size in bytes of the column header.
+    const size_t col_footer_size;     ///< Size in bytes of the column footer
+    const size_t col_size;  ///< Total size in bytes of a single column block
+                            ///< (header + data + footer).
+    const size_t packet_footer_size;  ///< Size in bytes of the packet footer
+
+    const uint64_t max_frame_id;   ///< maximum frame id for this packet format
+    bool zone_monitoring_enabled;  ///< if yes, zone monitoring is on
 
     /**
      * Read the packet type packet header.
+     * Applicable to non-legacy Lidar and IMU packets.
      *
-     * @param[in] lidar_buf the lidar buf.
+     * @param[in] packet_buf the packet buffer.
      *
      * @return the packet type.
      */
     OUSTER_API_FUNCTION
-    uint16_t packet_type(const uint8_t* lidar_buf) const;
+    uint16_t packet_type(const uint8_t* packet_buf) const;
 
     /**
      * Read the frame_id packet header.
+     * Applicable to lidar packets and non-legacy IMU packets.
      *
-     * @param[in] lidar_buf the lidar buf.
+     * @param[in] packet_buf the packet buffer.
      *
      * @return the frame id.
      */
     OUSTER_API_FUNCTION
-    uint32_t frame_id(const uint8_t* lidar_buf) const;
+    uint32_t frame_id(const uint8_t* packet_buf) const;
 
     /**
      * Read the initialization id packet header.
+     * Applicable to non-legacy Lidar and IMU packets.
      *
-     * @param[in] lidar_buf the lidar buf.
+     * @param[in] packet_buf the packet buffer.
      *
      * @return the init id.
      */
     OUSTER_API_FUNCTION
-    uint32_t init_id(const uint8_t* lidar_buf) const;
+    uint32_t init_id(const uint8_t* packet_buf) const;
 
     /**
      * Read the packet serial number header.
+     * Applicable to non-legacy Lidar and IMU packets.
      *
-     * @param[in] lidar_buf the lidar buf.
+     * @param[in] packet_buf the packet buffer.
      *
      * @return the serial number.
      */
     OUSTER_API_FUNCTION
-    uint64_t prod_sn(const uint8_t* lidar_buf) const;
+    uint64_t prod_sn(const uint8_t* packet_buf) const;
 
     /**
      * Read the alert flags.
@@ -1410,6 +1754,7 @@ class OUSTER_API_CLASS packet_format {
     const uint8_t* footer(const uint8_t* lidar_buf) const;
 
     // Measurement block accessors
+
     /**
      * Get pointer to nth column of a lidar buffer.
      *
@@ -1464,9 +1809,9 @@ class OUSTER_API_CLASS packet_format {
      *
      * @return Encoded column value.
      */
-    [[deprecated("Use col_measurement_id instead")]] 
+    [[deprecated("Use col_measurement_id instead")]]
     OUSTER_API_FUNCTION
-	uint32_t col_encoder(
+    uint32_t col_encoder(
         const uint8_t* col_buf)
         const;  ///< @deprecated Encoder count is deprecated as it is redundant
                 ///< with measurement id, barring a multiplication factor which
@@ -1488,7 +1833,7 @@ class OUSTER_API_CLASS packet_format {
      */
     [[deprecated("Use frame_id instead")]]
     OUSTER_API_FUNCTION
-	uint16_t col_frame_id(
+    uint16_t col_frame_id(
         const uint8_t* col_buf) const;  ///< @deprecated Use frame_id instead
     // clang-format on
 
@@ -1532,6 +1877,7 @@ class OUSTER_API_CLASS packet_format {
                      const uint8_t* lidar_buf) const;
 
     // Per-pixel channel data block accessors
+
     /**
      * Get pointer to nth pixel of a column buffer.
      *
@@ -1544,17 +1890,60 @@ class OUSTER_API_CLASS packet_format {
     const uint8_t* nth_px(int n, const uint8_t* col_buf) const;
 
     // IMU packet accessors
+
     /**
-     * Read sys ts from imu packet buffer.
+     * Get pointer to nth measurement of an IMU buffer.
+     * This applies to PROFILE_IMU_ACCEL32_GYRO32_NMEA which contains multiple
+     * measurements within each packet.
+     * In PROFILE_IMU_LEGACY profile, each packet only contains one measurement.
+     *
+     * @param[in] n which measurement.
+     * @param[in] imu_buf the imu buffer.
+     *
+     * @return pointer to nth measurement of an imu buffer.
+     */
+    OUSTER_API_FUNCTION
+    const uint8_t* imu_nth_measurement(int n, const uint8_t* imu_buf) const;
+
+    /**
+     * Read NMEA timestamp from imu packet buffer.
+     * Only available in PROFILE_ACCEL32_GYRO32_NMEA, otherwise returns 0.
+     *
      * @param[in] imu_buf the imu packet buffer.
      *
-     * @return sys ts from imu pacet buffer.
+     * @return NMEA timestamp from imu packet buffer.
+     */
+    OUSTER_API_FUNCTION
+    uint64_t imu_nmea_ts(const uint8_t* imu_buf) const;
+
+    // uint32_t imu_nmea_status(const uint8_t* imu_buf) const;
+
+    // TODO: would have been std::string_view if we had access to cpp17
+    /**
+     * Read NMEA sentence from an IMU buffer.
+     * Only available in PROFILE_ACCEL32_GYRO32_NMEA.
+     *
+     * @param[in] imu_buf the imu buffer.
+     *
+     * @return NMEA sentence string
+     */
+    OUSTER_API_FUNCTION
+    std::string imu_nmea_sentence(const uint8_t* imu_buf) const;
+
+    /**
+     * Read sys ts from imu packet buffer.
+     * Only available in PROFILE_IMU_LEGACY, otherwise returns 0.
+     *
+     * @param[in] imu_buf the imu packet buffer.
+     *
+     * @return sys ts from imu packet buffer.
      */
     OUSTER_API_FUNCTION
     uint64_t imu_sys_ts(const uint8_t* imu_buf) const;
 
     /**
      * Read acceleration timestamp.
+     * Only available in PROFILE_IMU_LEGACY, otherwise returns 0.
      *
      * @param[in] imu_buf the imu packet buffer.
      *
@@ -1565,6 +1954,7 @@ class OUSTER_API_CLASS packet_format {
 
     /**
      * Read gyro timestamp.
+     * Only available in PROFILE_IMU_LEGACY, otherwise returns 0.
      *
      * @param[in] imu_buf the imu packet buffer.
      *
@@ -1575,63 +1965,95 @@ class OUSTER_API_CLASS packet_format {
 
     /**
      * Read acceleration in x.
+     * Acceleration unit is g.
      *
-     * @param[in] imu_buf the imu packet buffer.
+     * @param[in] buffer pointer to the imu buffer containing the measurement
      *
      * @return acceleration in x.
      */
     OUSTER_API_FUNCTION
-    float imu_la_x(const uint8_t* imu_buf) const;
+    float imu_la_x(const uint8_t* buffer) const;
 
     /**
      * Read acceleration in y.
+     * Acceleration unit is g.
      *
-     * @param[in] imu_buf the imu packet buffer.
+     * @param[in] buffer pointer to the imu buffer containing the measurement
      *
      * @return acceleration in y.
      */
     OUSTER_API_FUNCTION
-    float imu_la_y(const uint8_t* imu_buf) const;
+    float imu_la_y(const uint8_t* buffer) const;
 
     /**
      * Read acceleration in z.
+     * Acceleration unit is g.
      *
-     * @param[in] imu_buf the imu packet buffer.
+     * @param[in] buffer pointer to the imu buffer containing the measurement
      *
      * @return acceleration in z.
      */
     OUSTER_API_FUNCTION
-    float imu_la_z(const uint8_t* imu_buf) const;
+    float imu_la_z(const uint8_t* buffer) const;
 
     /**
      * Read angular velocity in x.
+     * Angular velocity unit is degrees/second.
      *
-     * @param[in] imu_buf the imu packet buffer.
+     * @param[in] buffer pointer to the imu buffer containing the measurement
      *
      * @return angular velocity in x.
      */
     OUSTER_API_FUNCTION
-    float imu_av_x(const uint8_t* imu_buf) const;
+    float imu_av_x(const uint8_t* buffer) const;
 
     /**
      * Read angular velocity in y.
+     * Angular velocity unit is degrees/second.
      *
-     * @param[in] imu_buf the imu packet buffer.
+     * @param[in] buffer pointer to the imu buffer containing the measurement
      *
      * @return angular velocity in y.
      */
     OUSTER_API_FUNCTION
-    float imu_av_y(const uint8_t* imu_buf) const;
+    float imu_av_y(const uint8_t* buffer) const;
 
     /**
      * Read angular velocity in z.
+     * Angular velocity unit is degrees/second.
      *
-     * @param[in] imu_buf the imu packet buffer.
+     * @param[in] buffer pointer to the imu buffer containing the measurement
      *
      * @return angular velocity in z.
      */
     OUSTER_API_FUNCTION
-    float imu_av_z(const uint8_t* imu_buf) const;
+    float imu_av_z(const uint8_t* buffer) const;
+
+    /**
+     * Parse imu measurements of acceleration.
+     *
+     * Does not work with non-legacy IMU format.
+     *
+     * @param[in] col_offset offset to the first column to fill data in
+     * @param[in] imu_buf pointer to imu packet data
+     * @param[out] accel field to store acceleration data, which must be of
+     *             shape (N,3) and float type
+     */
+    OUSTER_API_FUNCTION
+    void parse_accel(size_t col_offset, const uint8_t* imu_buf, Field& accel);
+
+    /**
+     * Parse imu measurements of angular velocity.
+     *
+     * Does not work with non-legacy IMU format.
+     *
+     * @param[in] col_offset offset to the first column to fill data in
+     * @param[in] imu_buf pointer to imu packet data
+     * @param[out] gyro field to store angular velocity data, which must be of
+     *             shape (N,3) and float type
+     */
+    OUSTER_API_FUNCTION
+    void parse_gyro(size_t col_offset, const uint8_t* imu_buf, Field& gyro);
 
     /**
      * Get the mask of possible values that can be parsed by the channel field
@@ -1656,23 +2078,196 @@ class OUSTER_API_CLASS packet_format {
     /**
      * Return the CRC contained in the packet if present
      *
-     * @param[in] lidar_buf the lidar buffer.
+     * @param[in] buf the packet buffer.
+     * @param[in] buffer_size size of buffer
      *
      * @return crc contained in the packet if present
      */
     OUSTER_API_FUNCTION
-    optional<uint64_t> crc(const uint8_t* lidar_buf) const;
+    optional<uint64_t> crc(const uint8_t* buf, size_t buffer_size) const;
 
     /**
      * Calculate the CRC for the given packet.
      *
-     * @param[in] lidar_buf the lidar buffer.
+     * @param[in] buf the packet buffer.
+     * @param[in] buffer_size size of buffer
      *
      * @return calculated crc of the packet
      */
     OUSTER_API_FUNCTION
-    uint64_t calculate_crc(const uint8_t* lidar_buf) const;
+    uint64_t calculate_crc(const uint8_t* buf, size_t buffer_size) const;
+
+    /**
+     * Get zone monitoring timestamp.
+     *
+     * @param[in] zone_packet zone monitoring packet
+     * @return zone monitoring timestamp
+     */
+    OUSTER_API_FUNCTION
+    uint64_t zone_timestamp(const uint8_t* zone_packet) const;
+
+    /**
+     * Get live zoneset hash.
+     *
+     * @param[in] zone_packet zone monitoring packet
+     * @return 256bit hash of zone config
+     */
+    OUSTER_API_FUNCTION
+    std::array<uint8_t, 32> live_zoneset_hash(const uint8_t* zone_packet) const;
+
+    /**
+     * Get pointer to nth measurement of a Zone Monitoring packet.
+     *
+     * @param[in] n which measurement
+     * @param[in] zone_packet zone monitoring packet
+     *
+     * @return pointer to nth measurement of a zone monitoring packet.
+     */
+    OUSTER_API_FUNCTION
+    const uint8_t* zone_nth_measurement(int n,
+                                        const uint8_t* zone_packet) const;
+
+    /**
+     * Get zone status (live or not live).
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return true if the zone is live
+     */
+    OUSTER_API_FUNCTION
+    bool zone_live(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get zone id.
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return zone id
+     */
+    OUSTER_API_FUNCTION
+    uint8_t zone_id(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get zone error flags.
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return zone error flags
+     */
+    OUSTER_API_FUNCTION
+    uint8_t zone_error_flags(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get zone trigger type (Occupancy / Non-occupancy).
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return zone trigger type
+     */
+    OUSTER_API_FUNCTION
+    uint8_t zone_trigger_type(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get zone trigger status.
+     * 0x0 deasserted, 0x1 asserted
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return zone trigger status
+     */
+    OUSTER_API_FUNCTION
+    uint8_t zone_trigger_status(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get the count of frames triggered consecutively for the zone.
+     * Resets on deassertion.
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return zone triggered frames count
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_triggered_frames(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get the count of points in the zone.
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return count of points in the zone
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_points_count(const uint8_t* zone_buffer) const;
+
+    /**
+     * Return the number of measurements that return a range below the zone's
+     * minimum range, i.e. the number of measurements that occlude the zone.
+     *
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return the count of measurements that occlude the zone.
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_occlusion_count(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get the number of pixels that overlap the zone for which an invalid or
+     * undetectable range was returned.
+     * @param[in] zone_buffer zone monitoring measurement
+     *
+     * @return the count of measurements with undetected or invalid range for
+     * the zone.
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_invalid_count(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get the maximum number of points that can be detected in the zone.
+     * @param[in] zone_buffer zone monitoring measurement
+     * @return maximum number of points that can be detected in the zone.
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_max_count(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get the minimum range value detected in a zone from the provided zone
+     * buffer.
+     *
+     * @param[in] zone_buffer Pointer to the buffer containing zone monitoring
+     * data.
+     * @return Minimum range in millimeters for the zone.
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_min_range(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get the maximum range value detected in a zone from the provided zone
+     * buffer.
+     *
+     * @param[in] zone_buffer Pointer to the buffer containing zone monitoring
+     * data.
+     * @return Maximum range in millimeters for the zone.
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_max_range(const uint8_t* zone_buffer) const;
+
+    /**
+     * Get the mean (average) range value detected in a zone from the provided
+     * zone buffer.
+     *
+     * @param[in] zone_buffer Pointer to the buffer containing zone monitoring
+     * data.
+     * @return Mean range in millimeters for the zone.
+     */
+    OUSTER_API_FUNCTION
+    uint32_t zone_mean_range(const uint8_t* zone_buffer) const;
 };
+
+/**
+ * @deprecated Use ouster::sdk::core::PacketFormat instead.
+ */
+OUSTER_DEPRECATED_TYPE(packet_format, PacketFormat,             // NOLINT
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);  // NOLINT
 
 /** @defgroup OusterClientTypeGetFormat Get Packet Format functions */
 
@@ -1683,26 +2278,35 @@ class OUSTER_API_CLASS packet_format {
  *
  * @param[in] info parameters provided by the sensor.
  *
- * @return a packet_format suitable for parsing UDP packets sent by the sensor.
+ * @return a PacketFormat suitable for parsing UDP packets sent by the sensor.
  */
 OUSTER_API_FUNCTION
-const packet_format& get_format(const sensor_info& info);
+const PacketFormat& get_format(const SensorInfo& info);
 
 /**
  * Get a packet parser for a particular data format.
  *
  * @ingroup OusterClientTypeGetFormat
  *
- * @param[in] udp_profile_lidar   lidar profile
- * @param[in] pixels_per_column   pixels per column
- * @param[in] columns_per_packet  columns per packet
+ * @param[in] format DataFormat
  *
- * @return a packet_format suitable for parsing UDP packets sent by the sensor.
+ * @return a PacketFormat suitable for parsing UDP packets sent by the sensor.
  */
 OUSTER_API_FUNCTION
-const packet_format& get_format(UDPProfileLidar udp_profile_lidar,
-                                size_t pixels_per_column,
-                                size_t columns_per_packet);
+const PacketFormat& get_format(const DataFormat& format);
+
+/**
+ * Parse latitude and longitude from an nmea sentence
+ *
+ * @param[in] nmea_sentence pointer to the beginning of nmea string
+ * @param[out] latitude latitude
+ * @param[out] longitude longitude
+ *
+ * @return true if sentence is successfully parsed, otherwise false
+ */
+OUSTER_API_FUNCTION
+bool parse_lat_long(const std::string& nmea_sentence, double& latitude,
+                    double& longitude);
 
 namespace impl {
 
@@ -1711,9 +2315,16 @@ constexpr int MAX_NUM_PROFILES = 32;
 
 }  // namespace impl
 
-}  // namespace sensor
+/** Maximum supported NMEA sentence length */
+constexpr size_t NMEA_SENTENCE_LENGTH = 85;
+
 /**
  * The type to represent json data in string form.
  */
-typedef std::string json_string;
+using json_string = std::string;
+
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster
+
+#include "impl/deprecated/types_enums.h"

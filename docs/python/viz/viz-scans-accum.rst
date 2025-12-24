@@ -72,7 +72,7 @@ Ouster CLI ``viz`` accumulation options
        ``--accum-every-m`` is set.
      * ``--accum-every INTEGER`` Add a new scan to the accumulator for every specified number
        of scans as an argument in this option.
-     * ``--accum-every-m FLOAT`` Add a new scan to the accumulator after specified number of 
+     * ``--accum-every-m FLOAT`` Add a new scan to the accumulator after specified number of
        meters of travel.
   * **map accumulation options**
      * ``--map`` If set, add random points from every scan into an overall map for
@@ -174,7 +174,7 @@ To use any of these accumulation modes, provide their configuration directly to 
 
 
     viz = SimpleViz(
-        source.metadata,
+        source.sensor_info,
         accum_max_num=100,
         accum_min_dist_num=0,
         accum_min_dist_meters=4,
@@ -206,7 +206,7 @@ from scans that have poses computed in a preprocessing step::
     ]
 
     viz = LidarScanViz(
-        source.metadata,
+        source.sensor_info,
         accumulators_config = LidarScanVizAccumulatorsConfig(
             accum_max_num=100,
             accum_min_dist_num=0,

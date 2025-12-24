@@ -5,29 +5,48 @@
 
 #include "ouster/pcap_scan_source.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "ouster/impl/open_source_impl.h"
+#include "ouster/lidar_scan.h"
+#include "ouster/open_source.h"
+#include "ouster/packet_source.h"
+#include "ouster/scan_source.h"
+#include "ouster/types.h"
+
+using namespace ouster::sdk::core;
+
 namespace ouster {
+namespace sdk {
 namespace pcap {
 
-PcapScanSourceOptions::PcapScanSourceOptions(const ScanSourceOptions& o)
-    : ScanSourceOptions(o) {}
+PcapScanSourceOptions::PcapScanSourceOptions(const ScanSourceOptions& opts)
+    : ScanSourceOptions(opts) {}
 
-PcapScanSourceOptions::PcapScanSourceOptions() {}
+PcapScanSourceOptions::PcapScanSourceOptions() = default;
 
-class PcapScanIteratorImpl : public ouster::core::ScanIteratorImpl {
+class PcapScanIteratorImpl : public ScanIteratorImpl {
     const PcapScanSource* source_;
-    ouster::core::PacketIterator packet_iter_;
-    std::vector<std::shared_ptr<LidarScan>> scan_;
+    PacketIterator packet_iter_;
+    std::shared_ptr<LidarScan> scan_;
     int sensor_idx_;
     int64_t i_ = -1;
 
-    std::vector<ouster::ScanBatcher> batchers_;
-    std::vector<std::shared_ptr<ouster::LidarScan>> scans_;
+    std::vector<ScanBatcher> batchers_;
+    std::vector<std::shared_ptr<LidarScan>> scans_;
 
    public:
-    PcapScanIteratorImpl(const PcapScanSource* source, int sensor_idx = -1) {
-        source_ = source;
+    // Clarify
+    explicit PcapScanIteratorImpl(const PcapScanSource* source,
+                                  int sensor_idx = -1)
+        : source_(source), sensor_idx_(sensor_idx < 0 ? -1 : sensor_idx) {
         packet_iter_ = source->packets_.begin();
-        sensor_idx_ = sensor_idx < 0 ? -1 : sensor_idx;
 
         for (const auto& info : source_->sensor_info()) {
             batchers_.emplace_back(info);
@@ -59,7 +78,7 @@ class PcapScanIteratorImpl : public ouster::core::ScanIteratorImpl {
             }
 
             packet_iter_ = source_->packets_.begin_scan(i_ + offset);
-            i_ += offset - 1;
+            i_ += static_cast<int>(offset - 1);
             offset = 1;
         }
         for (size_t i = 0; i < offset; i++) {
@@ -69,10 +88,15 @@ class PcapScanIteratorImpl : public ouster::core::ScanIteratorImpl {
                     // if finished return any partial scans we have
                     // todo should these be in any particular order?
                     bool found = false;
-                    for (auto& scan : scans_) {
-                        if (scan) {
-                            scan_ = {scan};
-                            scan.reset();
+                    for (size_t i = 0; i < scans_.size(); i++) {
+                        if (scans_[i]) {
+                            // ignore scans with no packets batched
+                            if (batchers_[i].batched_packets() == 0) {
+                                scans_[i].reset();
+                                continue;
+                            }
+                            scan_.reset();
+                            scan_.swap(scans_[i]);
                             found = true;
                             break;
                         }
@@ -90,33 +114,26 @@ class PcapScanIteratorImpl : public ouster::core::ScanIteratorImpl {
                 packet_iter_++;
 
                 // todo handle other packet types in the future
-                if (packet.second->type() ==
-                    ouster::sensor::PacketType::Lidar) {
-                    auto& lidar_packet =
-                        static_cast<ouster::sensor::LidarPacket&>(
-                            *packet.second);
+                int index = packet.first;
 
-                    int index = packet.first;
+                // skip packets from sensors we dont care about
+                if (sensor_idx_ >= 0 && index != sensor_idx_) {
+                    continue;
+                }
 
-                    // skip packets from sensors we dont care about
-                    if (sensor_idx_ >= 0 && index != sensor_idx_) {
-                        continue;
-                    }
+                // allocate the scan if it hasnt already been
+                if (!scans_[index]) {
+                    scans_[index] = std::make_shared<LidarScan>(
+                        source_->sensor_info()[index],
+                        source_->field_types_[index]);
+                }
 
-                    // allocate the scan if it hasnt already been
-                    if (!scans_[index]) {
-                        scans_[index] = std::make_shared<ouster::LidarScan>(
-                            source_->sensor_info()[index],
-                            source_->field_types_[index]);
-                    }
-
-                    // finally batch
-                    if (batchers_[index](lidar_packet, *scans_[index])) {
-                        scan_ = {scans_[index]};
-                        scans_[index].reset();
-                        i_++;
-                        break;
-                    }
+                // finally batch
+                if (batchers_[index](*packet.second, *scans_[index])) {
+                    scan_.reset();
+                    scan_.swap(scans_[index]);
+                    i_++;
+                    break;
                 }
             }
         }
@@ -126,24 +143,23 @@ class PcapScanIteratorImpl : public ouster::core::ScanIteratorImpl {
     int64_t length() override {
         source_->assert_indexed("length");
         if (sensor_idx_ >= 0) {
-            return source_->scans_num()[sensor_idx_];
+            return static_cast<int64_t>(source_->scans_num()[sensor_idx_]);
         }
-        return source_->size();
+        return static_cast<int64_t>(source_->size());
     }
 
-    std::vector<std::shared_ptr<LidarScan>>& value() override { return scan_; }
+    LidarScanSet value() override { return LidarScanSet{{scan_}}; }
 };
 
-ouster::core::ScanIterator PcapScanSource::begin() const {
-    return ouster::core::ScanIterator(this, new PcapScanIteratorImpl(this));
+ScanIterator PcapScanSource::begin() const {
+    return ScanIterator(this, new PcapScanIteratorImpl(this));
 }
 
-ouster::core::ScanIterator PcapScanSource::begin(int sensor_index) const {
-    if (sensor_index >= (int)sensor_info().size()) {
+ScanIterator PcapScanSource::begin(int sensor_index) const {
+    if (sensor_index >= static_cast<int>(sensor_info().size())) {
         throw std::runtime_error("Invalid sensor index");
     }
-    return ouster::core::ScanIterator(
-        this, new PcapScanIteratorImpl(this, sensor_index));
+    return ScanIterator(this, new PcapScanIteratorImpl(this, sensor_index));
 }
 
 const std::vector<std::vector<std::pair<uint64_t, uint64_t>>>&
@@ -170,14 +186,15 @@ void PcapScanSource::assert_indexed(const char* function) const {
 
 /// open_source compatible constructor
 PcapScanSource::PcapScanSource(
-    const std::string& n,
+    const std::string& source,
     const std::function<void(PcapScanSourceOptions&)>& options)
-    : PcapScanSource(n, ouster::impl::get_scan_options(options)) {}
+    : PcapScanSource(source, ouster::sdk::impl::get_scan_options(options)) {}
 
 /// open_source compatible constructor
 PcapScanSource::PcapScanSource(const std::string& source,
                                PcapScanSourceOptions options)
-    : packets_(source, PacketSourceOptions((ScanSourceOptions&)options)),
+    : packets_(source, PacketSourceOptions(
+                           reinterpret_cast<ScanSourceOptions&>(options))),
       indexed_(options.index.retrieve()) {
     if (indexed_) {
         const auto& index = packets_.reader_->get_index();
@@ -193,21 +210,35 @@ PcapScanSource::PcapScanSource(const std::string& source,
         // timestamp based index of all scans in the file for each sensor, each
         // pair is timestamp followed by global scan index build index
         index_.resize(sensor_info().size());
-        size_t i = 0;
-        for (const auto& idx : index.global_frame_indices_) {
-            index_[idx.sensor_index].push_back({idx.timestamp, i++});
-            real_index_.push_back({idx.timestamp, idx.sensor_index});
+        for (const auto& idx : index.global_frame_indices) {
+            real_index_.emplace_back(idx.timestamp, idx.sensor_index);
         }
+    } else {
+        // calculate estimated length if we are unindexed
+        uint64_t size = packets_.reader_->file_size();
+
+        // get average scan size plus some overhead
+        const int pcap_pkt_header = 100;
+        int scan_size = 0;
+        for (const auto& sensor : sensor_info()) {
+            PacketFormat packet_format(*sensor);
+            auto pkt_size = packet_format.lidar_packet_size + pcap_pkt_header;
+            scan_size += pkt_size * sensor->format.lidar_packets_per_frame();
+        }
+        scan_size /= sensor_info().size();
+
+        // number of scans is approximately file size divided by scan size
+        size_hint_ = size / scan_size;
     }
 
-    field_types_ = ouster::resolve_field_types(
+    field_types_ = resolve_field_types(
         sensor_info(), options.raw_headers.retrieve(),
         options.raw_fields.retrieve(), options.field_names.retrieve());
     options.check("PcapScanSource");
 }
 
-const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
-PcapScanSource::sensor_info() const {
+const std::vector<std::shared_ptr<SensorInfo>>& PcapScanSource::sensor_info()
+    const {
     return packets_.sensor_info();
 }
 
@@ -215,6 +246,14 @@ size_t PcapScanSource::size() const {
     assert_indexed("size");
 
     return num_scans_;
+}
+
+size_t PcapScanSource::size_hint() const {
+    if (indexed_) {
+        return num_scans_;
+    }
+
+    return size_hint_;
 }
 
 bool PcapScanSource::is_indexed() const { return indexed_; }
@@ -235,8 +274,29 @@ const std::vector<size_t>& PcapScanSource::scans_num() const {
 
 void PcapScanSource::close() { packets_.close(); }
 
-ouster::core::ScanSource* PcapScanSource::move() {
-    return new PcapScanSource(std::move(*this));
+std::unique_ptr<ScanSource> PcapScanSource::move() {
+    return std::make_unique<PcapScanSource>(std::move(*this));
 }
+
+std::unique_ptr<ScanSource> PcapScanSource::create(
+    const std::vector<std::string>& sources, const ScanSourceOptions& options,
+    bool collate, int sensor_idx) {
+    if (sources.size() > 1) {
+        throw std::invalid_argument(
+            "PcapScanSource allows opening only one file at a time.");
+    }
+
+    std::unique_ptr<ScanSource> source =
+        std::make_unique<PcapScanSource>(sources[0], options);
+    if (sensor_idx >= 0) {
+        source = std::make_unique<Singler>(std::move(source), sensor_idx);
+    } else if (collate) {
+        source = std::make_unique<Collator>(std::move(source));
+    }
+
+    return source;
+};
+
 }  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

@@ -10,9 +10,16 @@
 #include "ouster/osf/png_lidarscan_encoder.h"
 
 #include <png.h>
+#include <pngconf.h>
+
+#include <csetjmp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <vector>
 
 #include "ouster/impl/logging.h"
-#include "png_tools.h"
+#include "ouster/osf/impl/png_tools.h"
 
 /* Check for the older version of libpng and add missing macros as necessary */
 
@@ -28,13 +35,15 @@ typedef png_bytep png_const_bytep;
 #endif
 #endif
 
-using namespace ouster::sensor;
+using namespace ouster::sdk::core;
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
-ScanChannelData PngLidarScanEncoder::encodeField(
-    const ouster::Field& field, const std::vector<int>& px_offset) const {
+ScanChannelData PngLidarScanEncoder::encode_field(
+    const ouster::sdk::core::Field& field,
+    const std::vector<int>& px_offset) const {
     ScanChannelData buffer;
 
     // do not compress, flat fields "compressed" size is greater than original
@@ -58,36 +67,36 @@ ScanChannelData PngLidarScanEncoder::encodeField(
     }
 
     bool res = true;
-    if (px_offset.size()) {
+    if (!px_offset.empty()) {
         switch (view.tag()) {
-            case sensor::ChanFieldType::UINT8:
-                res = encode8bitImage<uint8_t>(buffer, view, px_offset);
+            case ChanFieldType::UINT8:
+                res = encode_8bit_image<uint8_t>(buffer, view, px_offset);
                 break;
-            case sensor::ChanFieldType::UINT16:
-                res = encode16bitImage<uint16_t>(buffer, view, px_offset);
+            case ChanFieldType::UINT16:
+                res = encode_16bit_image<uint16_t>(buffer, view, px_offset);
                 break;
-            case sensor::ChanFieldType::UINT32:
-                res = encode32bitImage<uint32_t>(buffer, view, px_offset);
+            case ChanFieldType::UINT32:
+                res = encode_32bit_image<uint32_t>(buffer, view, px_offset);
                 break;
-            case sensor::ChanFieldType::UINT64:
-                res = encode64bitImage<uint64_t>(buffer, view, px_offset);
+            case ChanFieldType::UINT64:
+                res = encode_64bit_image<uint64_t>(buffer, view, px_offset);
                 break;
             default:
                 break;
         }
     } else {
         switch (view.tag()) {
-            case sensor::ChanFieldType::UINT8:
-                res = encode8bitImage<uint8_t>(buffer, view);
+            case ChanFieldType::UINT8:
+                res = encode_8bit_image<uint8_t>(buffer, view);
                 break;
-            case sensor::ChanFieldType::UINT16:
-                res = encode16bitImage<uint16_t>(buffer, view);
+            case ChanFieldType::UINT16:
+                res = encode_16bit_image<uint16_t>(buffer, view);
                 break;
-            case sensor::ChanFieldType::UINT32:
-                res = encode32bitImage<uint32_t>(buffer, view);
+            case ChanFieldType::UINT32:
+                res = encode_32bit_image<uint32_t>(buffer, view);
                 break;
-            case sensor::ChanFieldType::UINT64:
-                res = encode64bitImage<uint64_t>(buffer, view);
+            case ChanFieldType::UINT64:
+                res = encode_64bit_image<uint64_t>(buffer, view);
                 break;
             default:
                 break;
@@ -95,22 +104,22 @@ ScanChannelData PngLidarScanEncoder::encodeField(
     }
 
     if (res) {
-        throw std::runtime_error("encodeField: could not encode field");
+        throw std::runtime_error("encode_field: could not encode field");
     }
 
     return buffer;
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode8bitImage(
+bool PngLidarScanEncoder::encode_8bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img,
     const std::vector<int>& px_offset) const {
-    return PngLidarScanEncoder::encode8bitImage<T>(res_buf,
-                                                   destagger(img, px_offset));
+    return PngLidarScanEncoder::encode_8bit_image<T>(res_buf,
+                                                     destagger(img, px_offset));
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode8bitImage(
+bool PngLidarScanEncoder::encode_8bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
@@ -126,7 +135,7 @@ bool PngLidarScanEncoder::encode8bitImage(
     png_structp png_ptr;
     png_infop png_info_ptr;
 
-    if (png_osf_write_init(&png_ptr, &png_info_ptr)) {
+    if (impl::png_osf_write_init(&png_ptr, &png_info_ptr)) {
         return true;
     }
 
@@ -135,13 +144,13 @@ bool PngLidarScanEncoder::encode8bitImage(
         return true;
     }
 
-    png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
-                        sample_depth, color_type, compression_amount_);
+    impl::png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
+                              sample_depth, color_type, compression_amount_);
 
-    for (size_t u = 0; u < height; ++u) {
-        for (size_t v = 0; v < width; ++v) {
+    for (size_t row = 0; row < height; ++row) {
+        for (size_t col = 0; col < width; ++col) {
             // 8bit Encoding Logic
-            row_data[v] = static_cast<uint8_t>(img(u, v));
+            row_data[col] = static_cast<uint8_t>(img(row, col));
         }
 
         png_write_row(png_ptr,
@@ -156,7 +165,7 @@ bool PngLidarScanEncoder::encode8bitImage(
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode16bitImage(
+bool PngLidarScanEncoder::encode_16bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
@@ -172,7 +181,7 @@ bool PngLidarScanEncoder::encode16bitImage(
     png_structp png_ptr;
     png_infop png_info_ptr;
 
-    if (png_osf_write_init(&png_ptr, &png_info_ptr)) {
+    if (impl::png_osf_write_init(&png_ptr, &png_info_ptr)) {
         return true;
     }
 
@@ -181,20 +190,21 @@ bool PngLidarScanEncoder::encode16bitImage(
         return true;
     }
 
-    png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
-                        sample_depth, color_type, compression_amount_);
+    impl::png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
+                              sample_depth, color_type, compression_amount_);
 
     // Needed to transform provided little-endian samples to internal
     // PNG big endian format
     png_set_swap(png_ptr);
 
-    for (size_t u = 0; u < height; ++u) {
-        for (size_t v = 0; v < width; ++v) {
-            const uint64_t key_val = img(u, v);
+    for (size_t row = 0; row < height; ++row) {
+        for (size_t col = 0; col < width; ++col) {
+            const uint64_t key_val = img(row, col);
 
             // 16bit Encoding Logic
-            row_data[v * 2] = static_cast<uint8_t>(key_val & 0xff);
-            row_data[v * 2 + 1] = static_cast<uint8_t>((key_val >> 8u) & 0xff);
+            row_data[col * 2] = static_cast<uint8_t>(key_val & 0xff);
+            row_data[(col * 2) + 1] =
+                static_cast<uint8_t>((key_val >> 8u) & 0xff);
         }
 
         png_write_row(png_ptr,
@@ -209,21 +219,21 @@ bool PngLidarScanEncoder::encode16bitImage(
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode16bitImage(
+bool PngLidarScanEncoder::encode_16bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img,
     const std::vector<int>& px_offset) const {
-    return encode16bitImage<T>(res_buf, destagger(img, px_offset));
+    return encode_16bit_image<T>(res_buf, destagger(img, px_offset));
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode24bitImage(
+bool PngLidarScanEncoder::encode_24bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img,
     const std::vector<int>& px_offset) const {
-    return encode24bitImage<T>(res_buf, destagger(img, px_offset));
+    return encode_24bit_image<T>(res_buf, destagger(img, px_offset));
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode24bitImage(
+bool PngLidarScanEncoder::encode_24bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
@@ -239,7 +249,7 @@ bool PngLidarScanEncoder::encode24bitImage(
     png_structp png_ptr;
     png_infop png_info_ptr;
 
-    if (png_osf_write_init(&png_ptr, &png_info_ptr)) {
+    if (impl::png_osf_write_init(&png_ptr, &png_info_ptr)) {
         return true;
     }
 
@@ -248,17 +258,19 @@ bool PngLidarScanEncoder::encode24bitImage(
         return true;
     }
 
-    png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
-                        sample_depth, color_type, compression_amount_);
+    impl::png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
+                              sample_depth, color_type, compression_amount_);
 
-    for (size_t u = 0; u < height; ++u) {
-        for (size_t v = 0; v < width; ++v) {
-            const uint64_t key_val = img(u, v);
+    for (size_t row = 0; row < height; ++row) {
+        for (size_t col = 0; col < width; ++col) {
+            const uint64_t key_val = img(row, col);
 
             // 24bit Encoding Logic
-            row_data[v * 3 + 0] = static_cast<uint8_t>(key_val & 0xff);
-            row_data[v * 3 + 1] = static_cast<uint8_t>((key_val >> 8u) & 0xff);
-            row_data[v * 3 + 2] = static_cast<uint8_t>((key_val >> 16u) & 0xff);
+            row_data[(col * 3) + 0] = static_cast<uint8_t>(key_val & 0xff);
+            row_data[(col * 3) + 1] =
+                static_cast<uint8_t>((key_val >> 8u) & 0xff);
+            row_data[(col * 3) + 2] =
+                static_cast<uint8_t>((key_val >> 16u) & 0xff);
         }
 
         png_write_row(png_ptr,
@@ -273,14 +285,14 @@ bool PngLidarScanEncoder::encode24bitImage(
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode32bitImage(
+bool PngLidarScanEncoder::encode_32bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img,
     const std::vector<int>& px_offset) const {
-    return encode32bitImage<T>(res_buf, destagger(img, px_offset));
+    return encode_32bit_image<T>(res_buf, destagger(img, px_offset));
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode32bitImage(
+bool PngLidarScanEncoder::encode_32bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
@@ -296,7 +308,7 @@ bool PngLidarScanEncoder::encode32bitImage(
     png_structp png_ptr;
     png_infop png_info_ptr;
 
-    if (png_osf_write_init(&png_ptr, &png_info_ptr)) {
+    if (impl::png_osf_write_init(&png_ptr, &png_info_ptr)) {
         return true;
     }
 
@@ -305,18 +317,21 @@ bool PngLidarScanEncoder::encode32bitImage(
         return true;
     }
 
-    png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
-                        sample_depth, color_type, compression_amount_);
+    impl::png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
+                              sample_depth, color_type, compression_amount_);
 
     for (size_t u = 0; u < height; ++u) {
         for (size_t v = 0; v < width; ++v) {
             const uint64_t key_val = img(u, v);
 
             // 32bit Encoding Logic
-            row_data[v * 4 + 0] = static_cast<uint8_t>(key_val & 0xff);
-            row_data[v * 4 + 1] = static_cast<uint8_t>((key_val >> 8u) & 0xff);
-            row_data[v * 4 + 2] = static_cast<uint8_t>((key_val >> 16u) & 0xff);
-            row_data[v * 4 + 3] = static_cast<uint8_t>((key_val >> 24u) & 0xff);
+            row_data[(v * 4) + 0] = static_cast<uint8_t>(key_val & 0xff);
+            row_data[(v * 4) + 1] =
+                static_cast<uint8_t>((key_val >> 8u) & 0xff);
+            row_data[(v * 4) + 2] =
+                static_cast<uint8_t>((key_val >> 16u) & 0xff);
+            row_data[(v * 4) + 3] =
+                static_cast<uint8_t>((key_val >> 24u) & 0xff);
         }
 
         png_write_row(png_ptr,
@@ -331,14 +346,14 @@ bool PngLidarScanEncoder::encode32bitImage(
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode64bitImage(
+bool PngLidarScanEncoder::encode_64bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img,
     const std::vector<int>& px_offset) const {
-    return encode64bitImage<T>(res_buf, destagger(img, px_offset));
+    return encode_64bit_image<T>(res_buf, destagger(img, px_offset));
 }
 
 template <typename T>
-bool PngLidarScanEncoder::encode64bitImage(
+bool PngLidarScanEncoder::encode_64bit_image(
     ScanChannelData& res_buf, const Eigen::Ref<const img_t<T>>& img) const {
     const uint32_t width = static_cast<uint32_t>(img.cols());
     const uint32_t height = static_cast<uint32_t>(img.rows());
@@ -354,7 +369,7 @@ bool PngLidarScanEncoder::encode64bitImage(
     png_structp png_ptr;
     png_infop png_info_ptr;
 
-    if (png_osf_write_init(&png_ptr, &png_info_ptr)) {
+    if (impl::png_osf_write_init(&png_ptr, &png_info_ptr)) {
         return true;
     }
 
@@ -363,8 +378,8 @@ bool PngLidarScanEncoder::encode64bitImage(
         return true;
     }
 
-    png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
-                        sample_depth, color_type, compression_amount_);
+    impl::png_osf_write_start(png_ptr, png_info_ptr, res_buf, width, height,
+                              sample_depth, color_type, compression_amount_);
 
     // Needed to transform provided little-endian samples to internal
     // PNG big endian format
@@ -375,14 +390,21 @@ bool PngLidarScanEncoder::encode64bitImage(
             const uint64_t key_val = img(u, v);
 
             // 64bit Encoding Logic
-            row_data[v * 8 + 0] = static_cast<uint8_t>(key_val & 0xff);
-            row_data[v * 8 + 1] = static_cast<uint8_t>((key_val >> 8u) & 0xff);
-            row_data[v * 8 + 2] = static_cast<uint8_t>((key_val >> 16u) & 0xff);
-            row_data[v * 8 + 3] = static_cast<uint8_t>((key_val >> 24u) & 0xff);
-            row_data[v * 8 + 4] = static_cast<uint8_t>((key_val >> 32u) & 0xff);
-            row_data[v * 8 + 5] = static_cast<uint8_t>((key_val >> 40u) & 0xff);
-            row_data[v * 8 + 6] = static_cast<uint8_t>((key_val >> 48u) & 0xff);
-            row_data[v * 8 + 7] = static_cast<uint8_t>((key_val >> 56u) & 0xff);
+            row_data[(v * 8) + 0] = static_cast<uint8_t>(key_val & 0xff);
+            row_data[(v * 8) + 1] =
+                static_cast<uint8_t>((key_val >> 8u) & 0xff);
+            row_data[(v * 8) + 2] =
+                static_cast<uint8_t>((key_val >> 16u) & 0xff);
+            row_data[(v * 8) + 3] =
+                static_cast<uint8_t>((key_val >> 24u) & 0xff);
+            row_data[(v * 8) + 4] =
+                static_cast<uint8_t>((key_val >> 32u) & 0xff);
+            row_data[(v * 8) + 5] =
+                static_cast<uint8_t>((key_val >> 40u) & 0xff);
+            row_data[(v * 8) + 6] =
+                static_cast<uint8_t>((key_val >> 48u) & 0xff);
+            row_data[(v * 8) + 7] =
+                static_cast<uint8_t>((key_val >> 56u) & 0xff);
         }
 
         png_write_row(png_ptr,
@@ -397,4 +419,5 @@ bool PngLidarScanEncoder::encode64bitImage(
 }
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

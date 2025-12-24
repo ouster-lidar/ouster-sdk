@@ -5,11 +5,23 @@
 
 #include "ouster/field.h"
 
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <functional>
+#include <numeric>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
-#include "ouster/impl/lidar_scan_impl.h"
+#include "ouster/lidar_scan.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 
 namespace impl {
 
@@ -29,11 +41,6 @@ std::vector<size_t> calculate_strides(const std::vector<size_t>& shape) {
     return strides;
 }
 
-}  // namespace impl
-
-namespace sensor {
-namespace impl {
-
 // clang-format off
 
 template <> int type_size<void>() { return 1; }
@@ -51,25 +58,29 @@ template <> ChanFieldType type_cft<int32_t>() { return ChanFieldType::INT32; }
 template <> ChanFieldType type_cft<int64_t>() { return ChanFieldType::INT64; }
 template <> ChanFieldType type_cft<float>() { return ChanFieldType::FLOAT32; }
 template <> ChanFieldType type_cft<double>() { return ChanFieldType::FLOAT64; }
+template <> ChanFieldType type_cft<char>() { return ChanFieldType::CHAR; }
+template <> ChanFieldType type_cft<ZoneState>() {
+    return ChanFieldType::ZONE_STATE;
+}
 
 // clang-format on
 
 template <typename K, typename V, size_t N>
 using Table = std::array<std::pair<K, V>, N>;
 
-extern const Table<FieldClass, const char*, 4> field_class_strings{
+extern const Table<FieldClass, const char*, 4> FIELD_CLASS_STRINGS{
     {{FieldClass::PIXEL_FIELD, "PIXEL_FIELD"},
      {FieldClass::COLUMN_FIELD, "COLUMN_FIELD"},
      {FieldClass::PACKET_FIELD, "PACKET_FIELD"},
      {FieldClass::SCAN_FIELD, "SCAN_FIELD"}}};
 
 }  // namespace impl
-}  // namespace sensor
 
 std::string to_string(FieldClass flag) {
-    auto end = sensor::impl::field_class_strings.end();
-    auto res = std::find_if(sensor::impl::field_class_strings.begin(), end,
-                            [flag](const auto& p) { return p.first == flag; });
+    auto end = impl::FIELD_CLASS_STRINGS.end();
+    auto res =
+        std::find_if(impl::FIELD_CLASS_STRINGS.begin(), end,
+                     [flag](const auto& pair) { return pair.first == flag; });
 
     return res == end ? "UNKNOWN" : res->second;
 }
@@ -81,8 +92,8 @@ size_t FieldDescriptor::size() const {
 
 size_t FieldDescriptor::bytes() const { return size() * element_size; }
 
-sensor::ChanFieldType FieldDescriptor::tag() const {
-    using sensor::impl::type_cft;
+ChanFieldType FieldDescriptor::tag() const {
+    using ouster::sdk::core::impl::type_cft;
 
     if (type == type_hash<uint8_t>()) {
         return type_cft<uint8_t>();
@@ -104,10 +115,14 @@ sensor::ChanFieldType FieldDescriptor::tag() const {
         return type_cft<float>();
     } else if (type == type_hash<double>()) {
         return type_cft<double>();
+    } else if (type == type_hash<char>()) {
+        return type_cft<char>();
+    } else if (type == type_hash<ZoneState>()) {
+        return type_cft<ZoneState>();
     } else if (type == type_hash<void>()) {
         return type_cft<void>();
     } else {
-        return sensor::ChanFieldType::UNREGISTERED;
+        return ChanFieldType::UNREGISTERED;
     }
 }
 
@@ -120,7 +135,7 @@ void FieldDescriptor::swap(FieldDescriptor& other) {
 
 bool FieldDescriptor::is_type_compatible(
     const FieldDescriptor& other) const noexcept {
-    return !type || !other.type || type == other.type;
+    return (type == 0u) || (other.type == 0u) || type == other.type;
 }
 
 size_t FieldDescriptor::ndim() const noexcept { return shape.size(); }
@@ -130,27 +145,29 @@ FieldView::FieldView() noexcept : ptr_(nullptr), desc_() {}
 FieldView::FieldView(void* ptr, const FieldDescriptor& desc)
     : ptr_(ptr), desc_(desc) {}
 
-FieldView::operator bool() const noexcept { return !!get(); }
+FieldView::operator bool() const noexcept { return !(get() == nullptr); }
 
 size_t FieldView::bytes() const noexcept { return desc_.bytes(); }
 
 size_t FieldView::size() const { return desc_.size(); }
 
-bool FieldView::matches(const FieldDescriptor& d) const noexcept {
-    return desc_ == d;
+bool FieldView::matches(const FieldDescriptor& desc) const noexcept {
+    return desc_ == desc;
 }
 
 const FieldDescriptor& FieldView::desc() const { return desc_; }
 
 const std::vector<size_t>& FieldView::shape() const { return desc_.shape; }
 
-sensor::ChanFieldType FieldView::tag() const { return desc_.tag(); }
+ChanFieldType FieldView::tag() const { return desc_.tag(); }
 
 bool FieldView::sparse() const {
     const auto& strides = desc_.strides;
     const auto& shape = desc_.shape;
 
-    if (shape.size() == 0) return false;
+    if (shape.empty()) {
+        return false;
+    }
 
     bool dense = strides.back() == 1;
     for (int i = 1, end = shape.size(); i < end; ++i) {
@@ -165,7 +182,7 @@ Field::~Field() { free(ptr_); }
 Field::Field(const FieldDescriptor& desc, FieldClass field_class)
     : FieldView(nullptr, desc), class_{field_class} {
     ptr_ = calloc(desc.bytes(), sizeof(uint8_t));
-    if (!ptr_) {
+    if (ptr_ == nullptr) {
         throw std::runtime_error("Field: host allocation failed");
     }
 }
@@ -180,7 +197,7 @@ Field& Field::operator=(Field&& other) noexcept {
 Field::Field(const Field& other)
     : FieldView(nullptr, other.desc()), class_{other.class_} {
     ptr_ = malloc(desc().bytes());
-    if (!ptr_) {
+    if (ptr_ == nullptr) {
         throw std::runtime_error("Field: host allocation failed");
     }
     std::memcpy(ptr_, other.ptr_, other.bytes());
@@ -207,7 +224,7 @@ bool Field::operator==(const Field& other) const {
 }
 
 FieldView uint_view(const FieldView& other) {
-    if (other.shape().size() == 0) {
+    if (other.shape().empty()) {
         throw std::invalid_argument(
             "uint_view: attempted converting a non-array FieldView");
     }
@@ -239,20 +256,23 @@ FieldView uint_view(const FieldView& other) {
     return {const_cast<void*>(other.get()), desc};
 }
 
-Field destagger(const ouster::sensor::sensor_info& info, const FieldView& field,
-                bool inverse) {
+Field destagger(const SensorInfo& info, const FieldView& field, bool inverse) {
     Field result(field.desc());
 
     auto destagger_fn = [&](auto ref) {
-        ouster::destagger_into<decltype(ref(0))>(
+        destagger_into<std::decay_t<decltype(ref(0))>>(
             ref, info.format.pixel_shift_by_row, inverse, result);
     };
 
-    ouster::impl::visit_field_2d(field, destagger_fn);
+    ouster::sdk::core::impl::visit_field_2d(field, destagger_fn);
 
     return result;
 }
 
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster
 
-void std::swap(ouster::Field& a, ouster::Field& b) { a.swap(b); }
+void std::swap(ouster::sdk::core::Field& a, ouster::sdk::core::Field& b) {
+    a.swap(b);
+}

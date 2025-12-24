@@ -14,7 +14,8 @@
 #include "ouster/types.h"
 #include "util.h"
 
-using namespace ouster::sensor;
+using namespace ouster::sdk::core;
+using namespace ouster::sdk::pcap;
 
 namespace ouster {
 namespace sensor_utils {
@@ -22,8 +23,7 @@ namespace sensor_utils {
 struct parse_col {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
-                    const sensor::packet_format& pf,
-                    const uint8_t* packet_buf) const {
+                    const PacketFormat& pf, const uint8_t* packet_buf) const {
         for (int icol = 0; icol < pf.columns_per_packet; icol++) {
             const uint8_t* col_buf = pf.nth_col(icol, packet_buf);
             const uint16_t m_id = pf.col_measurement_id(col_buf);
@@ -36,8 +36,7 @@ template <int BlockDim>
 struct parse_block {
     template <typename T>
     void operator()(Eigen::Ref<img_t<T>> field, const std::string& f,
-                    const sensor::packet_format& pf,
-                    const uint8_t* packet_buf) const {
+                    const PacketFormat& pf, const uint8_t* packet_buf) const {
         pf.block_field<T, BlockDim>(field, f, packet_buf);
     }
 };
@@ -48,7 +47,7 @@ using HashMap = std::map<std::string, size_t>;
 // https://wjngkoh.wordpress.com/2015/03/04/c-hash-function-for-eigen-matrix-and-vector/
 struct matrix_hash {
     template <typename T>
-    void operator()(Eigen::Ref<ouster::img_t<T>> matrix, const std::string& f,
+    void operator()(Eigen::Ref<img_t<T>> matrix, const std::string& f,
                     HashMap& map) const {
         size_t seed = 0;
         for (int i = 0; i < matrix.size(); ++i) {
@@ -123,9 +122,8 @@ TEST_P(ParsingBenchmarkTestFixture, ParseCorrectnessTest) {
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
 
-    auto info = ouster::sensor::metadata_from_json(data_dir + "/" +
-                                                   test_params.info_filename);
-    auto pf = ouster::sensor::packet_format(info);
+    auto info = metadata_from_json(data_dir + "/" + test_params.info_filename);
+    auto pf = PacketFormat(info);
     PcapReader pcap(data_dir + "/" + test_params.pcap_filename);
 
     // test headers parsing
@@ -180,9 +178,8 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
     auto data_dir = getenvs("DATA_DIR");
     const auto test_params = GetParam();
 
-    auto info = ouster::sensor::metadata_from_json(data_dir + "/" +
-                                                   test_params.info_filename);
-    auto pf = ouster::sensor::packet_format(info);
+    auto info = metadata_from_json(data_dir + "/" + test_params.info_filename);
+    auto pf = PacketFormat(info);
 
     std::cout << styles["yellow"] << styles["bold"]
               << "CHECKING PARSING PERFORMANCE WITH: "
@@ -206,7 +203,9 @@ TEST_P(ParsingBenchmarkTestFixture, ScanBatcherBenchTest) {
         LidarScan(info.format.columns_per_frame, info.format.pixels_per_column,
                   info.format.udp_profile_lidar);
 
-    constexpr int N_SCANS = 1000;
+    // By default run the shortest possible test unless OUSTER_PERFORMANCE is
+    // set
+    int N_SCANS = enable_performance_tests() ? 1000 : 1;
     constexpr int MOVING_AVG_WINDOW = 100;
     using MovingAverage64 = MovingAverage<int64_t, int64_t, MOVING_AVG_WINDOW>;
     static std::map<std::string, MovingAverage64> mv;

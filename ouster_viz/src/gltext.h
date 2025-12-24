@@ -110,7 +110,7 @@ extern "C" {
 #define GLT_RIGHT 2
 #define GLT_BOTTOM 2
 
-typedef struct GLTtext GLTtext;
+using GLTtext = struct GLTtext;
 
 GLT_API GLboolean gltInit(void);
 GLT_API void gltTerminate(void);
@@ -781,7 +781,7 @@ GLT_API void gltTerminate(void) {
     gltInitialized = GL_FALSE;
 }
 
-static const GLchar* _gltText2DVertexShaderSource =
+static const GLchar* _gltText2DVertexShaderSourceCore =
     "#version 330 core\n"
     "\n"
     "in vec2 position;\n"
@@ -798,14 +798,14 @@ static const GLchar* _gltText2DVertexShaderSource =
     "   gl_Position = mvp * vec4(position, 0.0, 1.0);\n"
     "}\n";
 
-static const GLchar* _gltText2DFragmentShaderSource =
+static const GLchar* _gltText2DFragmentShaderSourceCore =
     "#version 330 core\n"
     "\n"
     "out vec4 fragColor;\n"
     "\n"
     "uniform sampler2D diffuse;\n"
     "\n"
-    "uniform vec4 color = vec4(1.0, 1.0, 1.0, 1.0);\n"
+    "uniform vec4 color;\n"
     "\n"
     "in vec2 fTexCoord;\n"
     "\n"
@@ -813,7 +813,38 @@ static const GLchar* _gltText2DFragmentShaderSource =
     "{\n"
     "   fragColor = texture(diffuse, fTexCoord) * color;\n"
     "}\n";
+static const GLchar* _gltText2DVertexShaderSourceES =
+    "#version 310 es\n"
+    "\n"
+    "in vec2 position;\n"
+    "in vec2 texCoord;\n"
+    "\n"
+    "uniform mat4 mvp;\n"
+    "\n"
+    "out vec2 fTexCoord;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "   fTexCoord = texCoord;\n"
+    "   \n"
+    "   gl_Position = mvp * vec4(position, 0.0, 1.0);\n"
+    "}\n";
 
+static const GLchar* _gltText2DFragmentShaderSourceES =
+    "#version 310 es\n"
+    "\n"
+    "out lowp vec4 fragColor;\n"
+    "\n"
+    "uniform sampler2D diffuse;\n"
+    "\n"
+    "uniform lowp vec4 color;\n"
+    "\n"
+    "in mediump vec2 fTexCoord;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "   fragColor = texture(diffuse, fTexCoord) * color;\n"
+    "}\n";
 GLT_API GLboolean _gltCreateText2DShader(void) {
     GLuint vertexShader, fragmentShader;
     GLint compileStatus, linkStatus;
@@ -825,7 +856,12 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
 #endif
 
     vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &_gltText2DVertexShaderSource, NULL);
+    if (ouster::sdk::viz::GLFWContext::is_opengl_es()) {
+        glShaderSource(vertexShader, 1, &_gltText2DVertexShaderSourceES, NULL);
+    } else {
+        glShaderSource(vertexShader, 1, &_gltText2DVertexShaderSourceCore,
+                       NULL);
+    }
     glCompileShader(vertexShader);
 
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &compileStatus);
@@ -861,7 +897,13 @@ GLT_API GLboolean _gltCreateText2DShader(void) {
     }
 
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &_gltText2DFragmentShaderSource, NULL);
+    if (ouster::sdk::viz::GLFWContext::is_opengl_es()) {
+        glShaderSource(fragmentShader, 1, &_gltText2DFragmentShaderSourceES,
+                       NULL);
+    } else {
+        glShaderSource(fragmentShader, 1, &_gltText2DFragmentShaderSourceCore,
+                       NULL);
+    }
     glCompileShader(fragmentShader);
 
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compileStatus);

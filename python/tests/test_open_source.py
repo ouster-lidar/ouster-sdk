@@ -1,3 +1,5 @@
+import copy
+import numpy as np
 import os
 from re import escape
 import pytest
@@ -17,19 +19,26 @@ def test_open_source_empty_source_url():
 def test_open_source_unsupported_source_type():
     """It raises a NotImplementedError if the source type is not supported."""
     with tempfile.NamedTemporaryFile(suffix='.csv') as f:
-        with pytest.raises(NotImplementedError, match="The io_type:IoType.CSV is not supported!"):
+        with pytest.raises(SourceURLException, match="Could not open scan source. Unhandled source type CSV."):
             open_source(f.name)
 
 
 def test_open_source_undetermined_source_type():
     """It raises a RuntimeError if the source type couldn't be determined."""
-    with pytest.raises(SourceURLException, match=escape("Failed to create scan_source for url ['unknown source']\n"
-            "more details: Source type of 'unknown source' expected to be a sensor hostname,"
-            " ip address, or a .pcap, .osf, or .bag file.")):
+    with pytest.raises(SourceURLException, match=escape("Source type of 'unknown source'"
+            " not found. File or host not found.")):
         open_source('unknown source')
 
 
-def test_open_source_meta_not_supported(monkeypatch):
+def test_open_source_unhandled_source_type():
+    """It raises a RuntimeError if the source type is unhandled."""
+    with tempfile.NamedTemporaryFile(suffix='.txt') as f:
+        with pytest.raises(SourceURLException, match=escape("Could not detect IO type from file"
+                " extension. Expecting one of .osf, .pcap, .bag, .mcap, .csv, .png, .ply, .pcd, .stl or .las")):
+            open_source(f.name)
+
+
+def test_open_source_meta_not_supported():
     """It raises a RuntimeError if the meta keyword is provided to an unsupported source type."""
     file_path = os.path.join(OSFS_DATA_DIR, "OS-1-128_v2.3.0_1024x10_lb_n3.osf")
     with pytest.raises(SourceURLException, match="Parameter 'meta' not supported by OsfScanSource."):
@@ -143,3 +152,53 @@ def test_open_packet_source_bag() -> None:
         got_packet = True
         break
     assert got_packet
+
+
+def test_open_source_collating_osf() -> None:
+    file_path = os.path.join(OSFS_DATA_DIR, "OS-1-128_v2.3.0_1024x10_lb_n3.osf")
+
+    input_src = open_source(str(file_path))
+    scans = [scan[0] for scan in input_src]
+    assert len(scans) == 3
+    info = input_src.sensor_info[0]
+    input_src.close()
+
+    scans[0].packet_timestamp[:] = 100  # type: ignore
+    scans[1].packet_timestamp[:] = 200  # type: ignore
+    scans[2].packet_timestamp[:] = 300  # type: ignore
+
+    from ouster.sdk.core import LidarScanSet
+
+    collation = LidarScanSet([scans[0], scans[1], None])
+    field = collation.add_field("my_field", np.float32, (100, 100))
+    field[:] = 3.1415
+
+    from ouster.sdk.osf import Writer
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".osf") as f:
+            new_infos = [copy.deepcopy(info), copy.deepcopy(info), copy.deepcopy(info)]
+            new_infos[0].sn = 0
+            new_infos[1].sn = 1
+            new_infos[2].sn = 2
+            with Writer(f.name, new_infos) as w:
+                w.save(collation)
+            w.close()
+
+        # check we get the same collation out
+        src_collated = open_source(f.name, True)
+        collation_out = next(iter(src_collated))
+        assert len(src_collated) == 1
+        assert collation_out == collation
+        src_collated.close()
+
+        # check we get single scan if asked to not collate
+        src_non_collated = open_source(f.name, False)
+        assert len(src_non_collated) == 2
+        scans_out = next(iter(src_non_collated))
+        assert len(scans_out) == 1
+
+    finally:
+        try:
+            os.unlink(f.name)
+        except (PermissionError, FileNotFoundError):
+            pass

@@ -8,37 +8,33 @@
  */
 #pragma once
 
-#include "chunk_generated.h"
-#include "header_generated.h"
-#include "metadata_generated.h"
+#include "ouster/deprecation.h"
 #include "ouster/lidar_scan.h"
+#include "ouster/osf/buffer.h"
+#include "ouster/osf/offset.h"
 #include "ouster/types.h"
 #include "ouster/visibility.h"
 
 // OSF basic types for LidarSensor and LidarScan/Imu Streams
 #include <chrono>
-
-#include "os_sensor/common_generated.h"
-#include "os_sensor/lidar_scan_stream_generated.h"
-#include "os_sensor/lidar_sensor_generated.h"
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <string>
 
 namespace ouster {
+namespace sdk {
 
 /**
  * %OSF v2 space
  */
 namespace osf {
 
-// current fb generated code in ouster::osf::gen
-namespace gen {
-using namespace v2;
-}
-
 /**
  * Enumerator for the OSF Version. This will change whenever the underlying
  * flatbuffer structures change.
  */
-enum OSF_VERSION : uint64_t {
+enum class OsfVersion : uint64_t {
     V_INVALID = 0,  ///< Invalid OSF Version
     V_1_0,          ///< Original version of the OSF (2019/9/16)
     V_1_1,          ///< Add gps/imu/car trajectory to the OSF (2019/11/14)
@@ -50,14 +46,33 @@ enum OSF_VERSION : uint64_t {
 
     V_2_0 = 20,  ///< Second Generation OSF v2
     V_2_1 = 21   ///< Add full index and addtional info to LidarScans
+    // IMPORTANT: do not add new entries here; doing so is unnecessary.
+    // Instead, use ouster::sdk::core::Version class to specify a semver-style
+    // version. The OSF implementation is capable of handling versions beyond
+    // those listed here.
 };
+
+/**
+ * @deprecated Use `OsfVersion` instead.
+ */
+OUSTER_DEPRECATED_TYPE(OSF_VERSION, OsfVersion,
+                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16);
 
 /**
  * Chunking strategies. Refer to RFC0018 for more details.
  */
-enum ChunksLayout {
-    LAYOUT_STANDARD = 0,  ///< not used currently
-    LAYOUT_STREAMING = 1  ///< default layout (the only one for a user)
+enum class ChunksLayout {
+    STANDARD = 0,   ///< not used currently
+    STREAMING = 1,  ///< default layout (the only one for a user)
+
+    // Deprecated entries
+    ///< @deprecated Use ouster::sdk::osf::ChunksLayout::STANDARD instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(LAYOUT_STANDARD, STANDARD,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< @deprecated Use ouster::sdk::osf::ChunksLayout::STREAMING instead.
+    OUSTER_DEPRECATED_ENUM_CLASS_ENTRY(LAYOUT_STREAMING, STREAMING,
+                                       OUSTER_DEPRECATED_LAST_SUPPORTED_0_16),
+    ///< end of deprecated entries
 };
 
 /**
@@ -78,9 +93,6 @@ std::string to_string(ChunksLayout chunks_layout);
 OUSTER_API_FUNCTION
 ChunksLayout chunks_layout_of_string(const std::string& s);
 
-// stable common types mapped to ouster::osf
-using v2::HEADER_STATUS;
-
 /**
  * Common timestamp for all time in ouster::osf.
  * Nanoseconds were chosen due to the data coming off of the sensor.
@@ -92,15 +104,6 @@ using ts_t = std::chrono::nanoseconds;
  * @todo [pb]: Rename this beast?
  */
 static constexpr uint32_t FLATBUFFERS_PREFIX_LENGTH = 4;
-
-/**
- * To String Functionality For HEADER_STATUS
- *
- * @param[in] status The data to get the string representation format
- * @return The string representation
- */
-OUSTER_API_FUNCTION
-std::string to_string(const HEADER_STATUS status);
 
 /**
  * Debug method to get hex buf values in string
@@ -131,7 +134,17 @@ std::string read_text_file(const std::string& filename);
  * @return the size recovered from the stored prefix size
  */
 OUSTER_API_FUNCTION
-uint32_t get_prefixed_size(const uint8_t* buf);
+uint32_t get_prefixed_size(const OsfBuffer& buf);
+
+/**
+ * Reads the prefix size of the Flatbuffers buffer. First 4 bytes.
+ *
+ * @param[in] buf Pointer to Flatbuffers buffer stared with prefixed size
+ * @param[in] offset Offset in the buffer where the prefixed size starts
+ * @return the size recovered from the stored prefix size
+ */
+OUSTER_API_FUNCTION
+uint32_t get_prefixed_size(const OsfBuffer& buf, OsfOffset offset);
 
 /**
  * Calculates the full size of the block (prefixed_size + size + CRC32).
@@ -140,7 +153,7 @@ uint32_t get_prefixed_size(const uint8_t* buf);
  * @return the calculated size of the block
  */
 OUSTER_API_FUNCTION
-uint32_t get_block_size(const uint8_t* buf);
+uint32_t get_block_size(const OsfBuffer& buf);
 
 /**
  * Check the prefixed size buffer CRC32 fields.
@@ -156,10 +169,13 @@ uint32_t get_block_size(const uint8_t* buf);
  */
 OUSTER_API_FUNCTION
 bool check_prefixed_size_block_crc(
-    const uint8_t* buf,
+    const OsfBuffer& buf,
     const uint32_t max_size = std::numeric_limits<uint32_t>::max());
 
 /** @defgroup OsfBatchingFunctions Osf Batching Functions. */
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster
+
+#include "ouster/osf/impl/deprecated/enums.h"

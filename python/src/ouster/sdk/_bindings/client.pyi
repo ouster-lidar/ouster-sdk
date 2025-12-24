@@ -12,197 +12,342 @@ Note:
     This file should be updated whenever the bindings are modified.
 
 """
-# flake8: noqa (linter complains about scoping, but afaict mypy doesn't care)
-
 import numpy as np
-from numpy import ndarray
-from typing import (Any, ClassVar, Dict, Iterator, List, Optional, overload, Tuple, Union)
-
-from ouster.sdk.core.data import (BufferT, ColHeader)
-
-
+from numpy import ndarray, recarray
+from typing import Any, ClassVar, Dict, Iterator, List, Optional, overload, Tuple, Union
+from ouster.sdk.core.data import BufferT, ColHeader
 SHORT_HTTP_REQUEST_TIMEOUT_SECONDS: int
 LONG_HTTP_REQUEST_TIMEOUT_SECONDS: int
+INVALID_VERSION: Version
+MIN_VERSION: Version
 
+class IntPair:
+    first: int
+    second: int
+__version__: str
+
+class AvailableZonesMap(dict):
+    ...
+
+class ItemsView:
+    ...
+
+class KeysView:
+    ...
+
+class ValuesView:
+    ...
+
+class packet_iterator:
+
+    def __iter__(self) -> packet_iterator:
+        """__iter__(self: ouster.sdk._bindings.client.packet_iterator) -> ouster.sdk._bindings.client.packet_iterator
+"""
+        ...
+
+    def __next__(self) -> Tuple[int, Union[LidarPacket, ImuPacket]]:
+        """__next__(self: ouster.sdk._bindings.client.packet_iterator) -> object
+"""
+        ...
+
+class scan_iterator:
+
+    def __iter__(self) -> scan_iterator:
+        """__iter__(self: ouster.sdk._bindings.client.scan_iterator) -> ouster.sdk._bindings.client.scan_iterator
+"""
+        ...
+
+    def __next__(self) -> List[Optional[LidarScan]]:
+        """__next__(self: ouster.sdk._bindings.client.scan_iterator) -> ouster.sdk._bindings.client.LidarScanSet
+"""
+        ...
 
 class Severity:
-    WARNING: ClassVar[Severity]
-    ERROR: ClassVar[Severity]
+    OUSTER_WARNING: ClassVar[Severity]
+    OUSTER_ERROR: ClassVar[Severity]
 
+    @property
+    def name(self) -> str:
+        """name(self: object) -> str
+"""
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
 
 class PacketValidationFailure:
     NONE: ClassVar[PacketValidationFailure]
     ID: ClassVar[PacketValidationFailure]
     PACKET_SIZE: ClassVar[PacketValidationFailure]
-
     __members__: ClassVar[Dict[str, PacketValidationFailure]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.PacketValidationFailure, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.PacketValidationFailure) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """name(self: object) -> str
+"""
         ...
 
     @property
     def value(self) -> int:
         ...
-
-    @classmethod
-    def from_string(cls, s: str) -> PacketValidationFailure:
-        ...
-
 
 class PacketType:
     Unknown: ClassVar[PacketType]
     Lidar: ClassVar[PacketType]
     Imu: ClassVar[PacketType]
-
+    Zone: ClassVar[PacketType]
     __members__: ClassVar[Dict[str, PacketType]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.PacketType, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.PacketType) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """name(self: object) -> str
+"""
         ...
 
     @property
     def value(self) -> int:
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> PacketType:
-        ...
-
-
 class Packet:
     host_timestamp: int
     capture_timestamp: Optional[float]
     format: Optional[PacketFormat]
-    type: PacketType
 
-    def __init__(self, size: int = ...) -> None:
+    def __init__(self, size: int=...) -> None:
+        """Initialize self.  See help(type(self)) for accurate signature."""
         ...
 
     @property
     def buf(self) -> ndarray:
         ...
 
-
-class LidarPacket(Packet):
-    @overload
-    def validate(self, metadata: SensorInfo, packet_format: PacketFormat) -> PacketValidationFailure:
-        ...
-
-    @overload
-    def validate(self, metadata: SensorInfo) -> PacketValidationFailure:
+    @property
+    def type(self) -> PacketType:
         ...
 
     def packet_type(self) -> int:
+        """packet_type(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def frame_id(self) -> int:
+        """frame_id(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def init_id(self) -> int:
+        """init_id(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def prod_sn(self) -> int:
+        """prod_sn(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def alert_flags(self) -> int:
+        """alert_flags(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def countdown_thermal_shutdown(self) -> int:
+        """countdown_thermal_shutdown(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def countdown_shot_limiting(self) -> int:
+        """countdown_shot_limiting(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def thermal_shutdown(self) -> int:
+        """thermal_shutdown(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def shot_limiting(self) -> int:
+        """shot_limiting(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
     def crc(self) -> int:
+        """crc(self: ouster.sdk._bindings.client.Packet) -> Optional[int]
+"""
         ...
 
     def calculate_crc(self) -> int:
+        """calculate_crc(self: ouster.sdk._bindings.client.Packet) -> int
+"""
         ...
 
-
-class ImuPacket(Packet):
     @overload
     def validate(self, metadata: SensorInfo, packet_format: PacketFormat) -> PacketValidationFailure:
+        """validate(*args, **kwargs)
+Overloaded function.
+
+1. validate(self: ouster.sdk._bindings.client.Packet, arg0: ouster.sdk._bindings.client.SensorInfo, arg1: ouster.sdk._bindings.client.PacketFormat) -> ouster::sdk::core::PacketValidationFailure
+
+2. validate(self: ouster.sdk._bindings.client.Packet, arg0: ouster.sdk._bindings.client.SensorInfo) -> ouster::sdk::core::PacketValidationFailure
+"""
         ...
 
     @overload
     def validate(self, metadata: SensorInfo) -> PacketValidationFailure:
+        """validate(*args, **kwargs)
+Overloaded function.
+
+1. validate(self: ouster.sdk._bindings.client.Packet, arg0: ouster.sdk._bindings.client.SensorInfo, arg1: ouster.sdk._bindings.client.PacketFormat) -> ouster::sdk::core::PacketValidationFailure
+
+2. validate(self: ouster.sdk._bindings.client.Packet, arg0: ouster.sdk._bindings.client.SensorInfo) -> ouster::sdk::core::PacketValidationFailure
+"""
         ...
 
+class LidarPacket(Packet):
+    ...
+
+class ImuPacket(Packet):
+
     def sys_ts(self) -> int:
+        """sys_ts(self: ouster.sdk._bindings.client.ImuPacket) -> int
+"""
         ...
 
     def accel_ts(self) -> int:
+        """accel_ts(self: ouster.sdk._bindings.client.ImuPacket) -> int
+"""
         ...
 
     def gyro_ts(self) -> int:
+        """gyro_ts(self: ouster.sdk._bindings.client.ImuPacket) -> int
+"""
+        ...
+
+    def nmea_sentence(self) -> str:
+        """nmea_sentence(self: ouster.sdk._bindings.client.ImuPacket) -> str
+"""
+        ...
+
+    def nmea_ts(self) -> int:
+        """nmea_ts(self: ouster.sdk._bindings.client.ImuPacket) -> int
+"""
         ...
 
     def la_x(self) -> int:
+        """la_x(self: ouster.sdk._bindings.client.ImuPacket) -> float
+"""
         ...
 
     def la_y(self) -> int:
+        """la_y(self: ouster.sdk._bindings.client.ImuPacket) -> float
+"""
         ...
 
     def la_z(self) -> int:
+        """la_z(self: ouster.sdk._bindings.client.ImuPacket) -> float
+"""
         ...
 
     def av_x(self) -> int:
+        """av_x(self: ouster.sdk._bindings.client.ImuPacket) -> float
+"""
         ...
 
     def av_y(self) -> int:
+        """av_y(self: ouster.sdk._bindings.client.ImuPacket) -> float
+"""
         ...
 
     def av_z(self) -> int:
+        """av_z(self: ouster.sdk._bindings.client.ImuPacket) -> float
+"""
         ...
 
+    def status(self) -> ndarray:
+        """status(self: ouster.sdk._bindings.client.ImuPacket) -> numpy.ndarray[numpy.uint16[m, 1]]
+"""
+        ...
+
+    def accel(self) -> ndarray:
+        """accel(self: ouster.sdk._bindings.client.ImuPacket) -> numpy.ndarray[numpy.float32[m, 3]]
+"""
+        ...
+
+    def gyro(self) -> ndarray:
+        """gyro(self: ouster.sdk._bindings.client.ImuPacket) -> numpy.ndarray[numpy.float32[m, 3]]
+"""
+        ...
+
+    def timestamp(self) -> ndarray:
+        """timestamp(self: ouster.sdk._bindings.client.ImuPacket) -> numpy.ndarray[numpy.uint64[m, 1]]
+"""
+        ...
+
+    def measurement_id(self) -> ndarray:
+        """measurement_id(self: ouster.sdk._bindings.client.ImuPacket) -> numpy.ndarray[numpy.uint16[m, 1]]
+"""
+        ...
+
+class ZonePacket(Packet):
+    ...
 
 class SensorConnection:
+
     @overload
-    def __init__(self,
-                 hostname: str = ...,
-                 lidar_port: int = ...,
-                 imu_port: int = ...) -> None:
+    def __init__(self, hostname: str=..., lidar_port: int=..., imu_port: int=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorConnection, hostname: str, lidar_port: int = 7502, imu_port: int = 7503) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorConnection, hostname: str, udp_dest_host: str, mode: ouster.sdk._bindings.client.LidarMode = <LidarMode._1024x10: 3>, timestamp_mode: ouster.sdk._bindings.client.TimestampMode = <TimestampMode.TIME_FROM_INTERNAL_OSC: 1>, lidar_port: int = 0, imu_port: int = 0, timeout_sec: int = 4, persist_config: bool = False) -> None
+"""
         ...
 
     @overload
-    def __init__(self,
-                 hostname: str = ...,
-                 udp_dest_host: str = ...,
-                 mode: LidarMode = ...,
-                 timestamp_mode: TimestampMode = ...,
-                 lidar_port: int = ...,
-                 imu_port: int = ...,
-                 timeout_sec: int = ...,
-                 persist_config: bool = ...) -> None:
+    def __init__(self, hostname: str=..., udp_dest_host: str=..., mode: LidarMode=..., timestamp_mode: TimestampMode=..., lidar_port: int=..., imu_port: int=..., timeout_sec: int=..., persist_config: bool=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorConnection, hostname: str, lidar_port: int = 7502, imu_port: int = 7503) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorConnection, hostname: str, udp_dest_host: str, mode: ouster.sdk._bindings.client.LidarMode = <LidarMode._1024x10: 3>, timestamp_mode: ouster.sdk._bindings.client.TimestampMode = <TimestampMode.TIME_FROM_INTERNAL_OSC: 1>, lidar_port: int = 0, imu_port: int = 0, timeout_sec: int = 4, persist_config: bool = False) -> None
+"""
         ...
 
     def poll(self, timeout_sec: int) -> ClientState:
+        """poll(self: ouster.sdk._bindings.client.SensorConnection, timeout_sec: int = 1) -> ouster::sdk::sensor::ClientState
+"""
         ...
 
     def read_lidar_packet(self, packet: LidarPacket, pf: PacketFormat) -> bool:
+        """read_lidar_packet(self: ouster.sdk._bindings.client.SensorConnection, arg0: ouster.sdk._bindings.client.LidarPacket) -> bool
+"""
         ...
 
     def read_imu_packet(self, packet: ImuPacket, pf: PacketFormat) -> bool:
+        """read_imu_packet(self: ouster.sdk._bindings.client.SensorConnection, arg0: ouster.sdk._bindings.client.ImuPacket) -> bool
+"""
         ...
 
     @property
@@ -214,88 +359,195 @@ class SensorConnection:
         ...
 
     def get_metadata(self, timeout_sec: int) -> str:
+        """get_metadata(self: ouster.sdk._bindings.client.SensorConnection, timeout_sec: int = 40) -> str
+"""
         ...
 
     def shutdown(self) -> None:
+        """shutdown(self: ouster.sdk._bindings.client.SensorConnection) -> None
+"""
         ...
-
 
 class SensorHttp:
-    def metadata(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+
+    def metadata(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """metadata(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def sensor_info(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+    def sensor_info(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """sensor_info(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def get_config_params(self, active: bool, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+    def get_config_params(self, active: bool, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """get_config_params(self: ouster.sdk._bindings.client.SensorHttp, active: bool, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def set_config_params(self, key: str, value: str, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def set_config_param(self, key: str, value: str, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """set_config_param(self: ouster.sdk._bindings.client.SensorHttp, key: str, value: str, timeout_sec: int = 4) -> None
+"""
         ...
 
-    def active_config_params(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+    def active_config_params(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """active_config_params(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def staged_config_params(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+    def staged_config_params(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """staged_config_params(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def set_udp_dest_auto(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def set_udp_dest_auto(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """set_udp_dest_auto(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> None
+"""
         ...
 
-    def beam_intrinsics(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+    def beam_intrinsics(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """beam_intrinsics(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def imu_intrinsics(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+    def imu_intrinsics(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """imu_intrinsics(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def lidar_intrinsics(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+    def lidar_intrinsics(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """lidar_intrinsics(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def lidar_data_format(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> dict:
+    def lidar_data_format(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """lidar_data_format(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def reinitialize(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def reinitialize(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """reinitialize(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> None
+"""
         ...
 
-    def save_config_params(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def save_config_params(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """save_config_params(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> None
+"""
         ...
 
-    def get_user_data(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+    def get_user_data(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """get_user_data(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
-    def set_user_data(self, user_data: str, keep_on_config_delete: bool = True, timeout_sec: int =
-    SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def set_user_data(self, user_data: str, keep_on_config_delete: bool=True, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """set_user_data(self: ouster.sdk._bindings.client.SensorHttp, data: str, keep_on_config_delete: bool = True, timeout_sec: int = 4) -> None
+"""
         ...
 
-    def delete_user_data(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+    def delete_user_data(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """delete_user_data(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> None
+"""
         ...
 
-    def network(self, timeout_sec: int = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+    def network(self, timeout_sec: int=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> str:
+        """network(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> str
+"""
         ...
 
     def hostname(self) -> str:
+        """hostname(self: ouster.sdk._bindings.client.SensorHttp) -> str
+"""
+        ...
+
+    def restart(self, timeout_sec: int=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """restart(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 40) -> None
+"""
         ...
 
     def firmware_version(self) -> Version:
-        ...
-
-    def set_static_ip(self, ip_address: str, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
-        ...
-
-    def delete_static_ip(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
-        ...
-
-    def diagnostics_dump(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> bytes:
-        ...
-
-    def auto_detected_udp_dest(self, timeout_sec = SHORT_HTTP_REQUEST_TIMEOUT_SECONDS,
-                               original_destination: Optional[str] = None) -> str:
+        """firmware_version(self: ouster.sdk._bindings.client.SensorHttp) -> ouster.sdk._bindings.client.Version
+"""
         ...
 
     @staticmethod
-    def create(hostname: str, timeout_sec: int = LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> SensorHttp:
+    def get_firmware_version(hostname: str, timeout_sec: int=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> Version:
+        """get_firmware_version(hostname: str, timeout_sec: int = 4) -> ouster.sdk._bindings.client.Version
+"""
         ...
 
+    @overload
+    def set_static_ip(self, ip_address: str, timeout_sec=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """set_static_ip(*args, **kwargs)
+Overloaded function.
+
+1. set_static_ip(self: ouster.sdk._bindings.client.SensorHttp, ip_address: str, timeout_sec: int = 4) -> None
+
+2. set_static_ip(self: ouster.sdk._bindings.client.SensorHttp, ip_address: str, gateway_address: str, timeout_sec: int = 4) -> None
+"""
+        ...
+
+    @overload
+    def set_static_ip(self, ip_address: str, gateway_address: str, timeout_sec=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """set_static_ip(*args, **kwargs)
+Overloaded function.
+
+1. set_static_ip(self: ouster.sdk._bindings.client.SensorHttp, ip_address: str, timeout_sec: int = 4) -> None
+
+2. set_static_ip(self: ouster.sdk._bindings.client.SensorHttp, ip_address: str, gateway_address: str, timeout_sec: int = 4) -> None
+"""
+        ...
+
+    def delete_static_ip(self, timeout_sec=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """delete_static_ip(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> None
+"""
+        ...
+
+    def diagnostics_dump(self, timeout_sec=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS) -> bytes:
+        """diagnostics_dump(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 40) -> bytes
+"""
+        ...
+
+    def get_zone_monitor_config_zip(self, staged: bool=False, timeout_sec=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> bytes:
+        """get_zone_monitor_config_zip(self: ouster.sdk._bindings.client.SensorHttp, staged: bool = False, timeout_sec: int = 40) -> bytes
+"""
+        ...
+
+    def set_zone_monitor_config_zip(self, zip_bytes: bytes, timeout_sec=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """set_zone_monitor_config_zip(self: ouster.sdk._bindings.client.SensorHttp, zip_bytes: str, timeout_sec: int = 40) -> None
+"""
+        ...
+
+    def delete_zone_monitor_staged_config(self, timeout_sec=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """delete_zone_monitor_staged_config(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 40) -> None
+"""
+        ...
+
+    def apply_zone_monitor_staged_config_to_active(self, timeout_sec=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """apply_zone_monitor_staged_config_to_active(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 40) -> None
+"""
+        ...
+
+    def set_zone_monitor_live_ids(self, zones: List[int], timeout_sec=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> None:
+        """set_zone_monitor_live_ids(self: ouster.sdk._bindings.client.SensorHttp, zone_ids: list[int], timeout_sec: int = 4) -> None
+"""
+        ...
+
+    def get_zone_monitor_live_ids(self, timeout_sec=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> List[int]:
+        """get_zone_monitor_live_ids(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4) -> list[int]
+"""
+        ...
+
+    def auto_detected_udp_dest(self, timeout_sec=SHORT_HTTP_REQUEST_TIMEOUT_SECONDS, original_destination: Optional[str]=None) -> str:
+        """auto_detected_udp_dest(self: ouster.sdk._bindings.client.SensorHttp, timeout_sec: int = 4, original_destination: Optional[str] = None) -> str
+"""
+        ...
+
+    @staticmethod
+    def create(hostname: str, timeout_sec: int=LONG_HTTP_REQUEST_TIMEOUT_SECONDS) -> SensorHttp:
+        """create(hostname: str, timeout_sec: int = 40) -> ouster.sdk._bindings.client.SensorHttp
+"""
+        ...
 
 class ClientState:
     ERROR: ClassVar[ClientState]
@@ -303,27 +555,47 @@ class ClientState:
     IMU_DATA: ClassVar[ClientState]
     LIDAR_DATA: ClassVar[ClientState]
     TIMEOUT: ClassVar[ClientState]
-
     __members__: ClassVar[Dict[str, ClientState]]
 
     def __init__(self, x: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.ClientState, value: int) -> None
+"""
         ...
 
     def __and__(self, s: ClientState) -> int:
+        """__and__(self: object, other: object) -> object
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.ClientState) -> int
+"""
         ...
 
     def __invert__(self) -> int:
+        """__invert__(self: object) -> object
+"""
         ...
 
     def __or__(self, s: ClientState) -> int:
+        """__or__(self: object, other: object) -> object
+"""
         ...
 
     def __xor__(self, s: ClientState) -> int:
+        """__xor__(self: object, other: object) -> object
+"""
         ...
 
+    @property
+    def name(self) -> str:
+        """name(self: object) -> str
+"""
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
 
 class ClientEventType:
     Error: ClassVar[ClientEventType]
@@ -332,23 +604,98 @@ class ClientEventType:
     Packet: ClassVar[ClientEventType]
 
     def __init__(self, x: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.ClientEventType, value: int) -> None
+"""
         ...
 
+    @property
+    def name(self) -> str:
+        """name(self: object) -> str
+"""
+        ...
+
+    @property
+    def value(self) -> int:
+        ...
 
 class ClientEvent:
     source: int
     type: ClientEventType
 
     def packet(self) -> Union[LidarPacket, ImuPacket]:
+        """packet(self: ouster.sdk._bindings.client.ClientEvent) -> object
+"""
         ...
 
 class ProductInfo:
-    full_product_info: str
-    form_factor: str
-    short_range: bool
-    beam_config: str
-    beam_count: int
 
+    @property
+    def full_product_info(self) -> str:
+        """
+    The original full product info string.
+
+    :type: string
+    """
+        ...
+
+    @property
+    def form_factor(self) -> str:
+        """
+    The form factor of the product.
+
+    :type: string
+    """
+        ...
+
+    @property
+    def short_range(self) -> bool:
+        """
+    If the product is a short range make.
+
+    :type: bool
+    """
+        ...
+
+    @property
+    def beam_config(self) -> str:
+        """
+    The beam configuration of the product..
+
+    :type: string
+    """
+        ...
+
+    @property
+    def beam_count(self) -> int:
+        """
+    Number of beams
+
+    :type: int
+    """
+        ...
+
+class CalibrationStatus:
+    reflectivity_status: Optional[bool]
+    reflectivity_timestamp: Optional[str]
+
+    def __init__(self) -> None:
+        """__init__(self: ouster.sdk._bindings.client.CalibrationStatus) -> None
+
+
+        Sensor Calibration in a Sensor Metadata, covering reflectivity calibration and more"
+    
+"""
+        ...
+
+    def __eq__(self, other: Any) -> bool:
+        """__eq__(self: ouster.sdk._bindings.client.CalibrationStatus, arg0: ouster.sdk._bindings.client.CalibrationStatus) -> bool
+"""
+        ...
+
+    def __str__(self) -> str:
+        """__str__(self: ouster.sdk._bindings.client.CalibrationStatus) -> str
+"""
+        ...
 
 class SensorInfo:
     sn: int
@@ -367,66 +714,137 @@ class SensorInfo:
     image_rev: str
     prod_pn: str
     status: str
-    cal: SensorCalibration
+    cal: CalibrationStatus
     config: SensorConfig
     user_data: str
+    zone_set: Optional[ZoneSet]
 
-    @classmethod
-    def from_default(cls, mode: LidarMode) -> SensorInfo:
+    @staticmethod
+    def from_default(mode: LidarMode) -> SensorInfo:
+        """from_default(arg0: ouster.sdk._bindings.client.LidarMode) -> ouster.sdk._bindings.client.SensorInfo
+
+
+    Create gen-1 OS-1-64 SensorInfo populated with design values.
+    
+"""
         ...
 
-    @classmethod
-    def to_json_string(cls) -> str:
+    def to_json_string(self) -> str:
+        """to_json_string(self: ouster.sdk._bindings.client.SensorInfo) -> str
+
+ Return metadata string made from current entries"
+    
+"""
         ...
 
-    @classmethod
     def get_version(self) -> Version:
+        """get_version(self: ouster.sdk._bindings.client.SensorInfo) -> ouster.sdk._bindings.client.Version
+
+Get parsed sensor version
+"""
         ...
 
-    @classmethod
     def get_product_info(self) -> ProductInfo:
+        """get_product_info(self: ouster.sdk._bindings.client.SensorInfo) -> ouster.sdk._bindings.client.ProductInfo
+
+Get parsed product info
+"""
         ...
 
-    @classmethod
     def has_fields_equal(self, info: SensorInfo) -> bool:
+        """has_fields_equal(self: ouster.sdk._bindings.client.SensorInfo, arg0: ouster.sdk._bindings.client.SensorInfo) -> bool
+
+Compare public fields"
+"""
         ...
 
     @overload
     def __init__(self) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorInfo) -> None
+
+
+        Construct an empty metadata.
+    
+
+2. __init__(self: ouster.sdk._bindings.client.SensorInfo, json_string: str) -> None
+
+
+    Args:
+        json_string (str): json string to parse
+    
+"""
         ...
 
     @overload
     def __init__(self, metadata: str) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorInfo) -> None
+
+
+        Construct an empty metadata.
+    
+
+2. __init__(self: ouster.sdk._bindings.client.SensorInfo, json_string: str) -> None
+
+
+    Args:
+        json_string (str): json string to parse
+    
+"""
         ...
 
     @property
     def w(self) -> int:
+        """returns the width of a frame (equivalent to format.columns_per_frame)"""
         ...
 
     @property
     def h(self) -> int:
+        """returns the height of a frame (equivalent to format.pixels_per_column)"""
         ...
-
 
 class DataFormat:
     columns_per_frame: int
     columns_per_packet: int
     pixel_shift_by_row: List[int]
     pixels_per_column: int
+    imu_measurements_per_packet: int
+    imu_packets_per_frame: int
     column_window: Tuple[int, int]
     udp_profile_lidar: UDPProfileLidar
     udp_profile_imu: UDPProfileIMU
+    header_type: HeaderType
     fps: int
+    zone_monitoring_enabled: bool
 
     def valid_columns_per_frame(self) -> int:
+        """valid_columns_per_frame(self: ouster.sdk._bindings.client.DataFormat) -> int
+
+
+    Return the number of valid columns per complete frame of data with the column_window applied.
+    
+"""
         ...
 
-    def packets_per_frame(self) -> int:
-        ...
+    def lidar_packets_per_frame(self) -> int:
+        """lidar_packets_per_frame(self: ouster.sdk._bindings.client.DataFormat) -> int
 
+
+    Return the number of valid packets actually sent per frame of data with the column_window applied.
+    
+"""
+        ...
 
 class PacketFormat:
+
     def __init__(self, metadata: SensorInfo) -> None:
+        """__init__(self: ouster.sdk._bindings.client.PacketFormat, arg0: ouster.sdk._bindings.client.SensorInfo) -> None
+"""
         ...
 
     @property
@@ -435,6 +853,10 @@ class PacketFormat:
 
     @property
     def imu_packet_size(self) -> int:
+        ...
+
+    @property
+    def zone_packet_size(self) -> int:
         ...
 
     @property
@@ -447,6 +869,14 @@ class PacketFormat:
 
     @property
     def pixels_per_column(self) -> int:
+        ...
+
+    @property
+    def imu_measurements_per_packet(self) -> int:
+        ...
+
+    @property
+    def imu_packets_per_frame(self) -> int:
         ...
 
     @property
@@ -474,475 +904,1043 @@ class PacketFormat:
         ...
 
     def packet_type(self, buf: BufferT) -> int:
+        """packet_type(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def frame_id(self, buf: BufferT) -> int:
+        """frame_id(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def prod_sn(self, buf: BufferT) -> int:
+        """prod_sn(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def init_id(self, buf: BufferT) -> int:
+        """init_id(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def countdown_thermal_shutdown(self, buf: BufferT) -> int:
+        """countdown_thermal_shutdown(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def countdown_shot_limiting(self, buf: BufferT) -> int:
+        """countdown_shot_limiting(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def thermal_shutdown(self, buf: BufferT) -> int:
+        """thermal_shutdown(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def shot_limiting(self, buf: BufferT) -> int:
+        """shot_limiting(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
+        ...
+
+    def alert_flags(self, buf: BufferT) -> int:
+        """alert_flags(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def crc(self, buf: BufferT) -> Optional[int]:
+        """crc(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> Optional[int]
+"""
         ...
 
     def calculate_crc(self, buf: BufferT) -> int:
+        """calculate_crc(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     @property
     def fields(self) -> Iterator[str]:
+        """Return an iterator of available channel fields."""
         ...
 
     def field_value_mask(self, field: str) -> int:
+        """field_value_mask(self: ouster.sdk._bindings.client.PacketFormat, arg0: str) -> int
+"""
         ...
 
     def field_bitness(self, field: str) -> int:
+        """field_bitness(self: ouster.sdk._bindings.client.PacketFormat, arg0: str) -> int
+"""
         ...
 
     def packet_field(self, field: str, buf: BufferT) -> ndarray:
+        """packet_field(self: ouster.sdk._bindings.client.PacketFormat, arg0: str, arg1: Buffer) -> numpy.ndarray
+"""
         ...
 
     def packet_header(self, header: ColHeader, buf: BufferT) -> ndarray:
+        """packet_header(self: ouster.sdk._bindings.client.PacketFormat, arg0: object, arg1: Buffer) -> numpy.ndarray
+"""
         ...
 
     def imu_sys_ts(self, buf: BufferT) -> int:
+        """imu_sys_ts(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def imu_accel_ts(self, buf: BufferT) -> int:
+        """imu_accel_ts(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def imu_gyro_ts(self, buf: BufferT) -> int:
+        """imu_gyro_ts(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> int
+"""
         ...
 
     def imu_av_x(self, buf: BufferT) -> float:
+        """imu_av_x(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> float
+"""
         ...
 
     def imu_av_y(self, buf: BufferT) -> float:
+        """imu_av_y(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> float
+"""
         ...
 
     def imu_av_z(self, buf: BufferT) -> float:
+        """imu_av_z(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> float
+"""
         ...
 
     def imu_la_x(self, buf: BufferT) -> float:
+        """imu_la_x(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> float
+"""
         ...
 
     def imu_la_y(self, buf: BufferT) -> float:
+        """imu_la_y(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> float
+"""
         ...
 
     def imu_la_z(self, buf: BufferT) -> float:
+        """imu_la_z(self: ouster.sdk._bindings.client.PacketFormat, arg0: Buffer) -> float
+"""
         ...
 
     @staticmethod
     def from_info(info: SensorInfo) -> PacketFormat:
+        """from_info(arg0: ouster.sdk._bindings.client.SensorInfo) -> ouster.sdk._bindings.client.PacketFormat
+"""
         ...
 
     @staticmethod
     def from_metadata(info: SensorInfo) -> PacketFormat:
+        """from_metadata(arg0: ouster.sdk._bindings.client.SensorInfo) -> ouster.sdk._bindings.client.PacketFormat
+"""
         ...
 
     @staticmethod
-    def from_profile(udp_profile_lidar: UDPProfileLidar,
-                     pixels_per_column: int,
-                     columns_per_packet: int) -> PacketFormat:
+    def from_data_format(format: DataFormat) -> PacketFormat:
+        """from_data_format(arg0: ouster.sdk._bindings.client.DataFormat) -> ouster.sdk._bindings.client.PacketFormat
+"""
         ...
-
 
 class PacketWriter(PacketFormat):
+
     @staticmethod
     def from_info(info: SensorInfo) -> PacketWriter:
+        """from_info(arg0: ouster.sdk._bindings.client.SensorInfo) -> ouster.sdk._bindings.client.PacketWriter
+"""
         ...
 
     @staticmethod
-    def from_profile(udp_profile_lidar: UDPProfileLidar,
-                     pixels_per_column: int,
-                     columns_per_packet: int) -> PacketWriter:
+    def from_data_format(format: DataFormat) -> PacketFormat:
+        """from_data_format(arg0: ouster.sdk._bindings.client.DataFormat) -> ouster.sdk._bindings.client.PacketWriter
+"""
         ...
 
     def set_col_timestamp(self, packet: LidarPacket, col_idx: int, ts: int) -> None:
+        """set_col_timestamp(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: int, arg2: int) -> None
+"""
         ...
 
-    def set_col_measurement_id(self,
-                               packet: LidarPacket,
-                               col_idx: int,
-                               m_id: int) -> None:
+    def set_col_measurement_id(self, packet: LidarPacket, col_idx: int, m_id: int) -> None:
+        """set_col_measurement_id(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: int, arg2: int) -> None
+"""
         ...
 
     def set_col_status(self, packet: LidarPacket, col_idx: int, status: int) -> None:
+        """set_col_status(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: int, arg2: int) -> None
+"""
         ...
 
     def set_frame_id(self, packet: LidarPacket, frame_id: int) -> None:
+        """set_frame_id(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: int) -> None
+"""
         ...
 
     def set_field(self, packet: LidarPacket, chan: str, field: ndarray) -> None:
+        """set_field(*args, **kwargs)
+Overloaded function.
+
+1. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.uint8]) -> None
+
+2. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.uint16]) -> None
+
+3. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.uint32]) -> None
+
+4. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.uint64]) -> None
+
+5. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.int8]) -> None
+
+6. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.int16]) -> None
+
+7. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.int32]) -> None
+
+8. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.int64]) -> None
+
+9. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.float32]) -> None
+
+10. set_field(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: str, arg2: numpy.ndarray[numpy.float64]) -> None
+"""
         ...
 
+    def set_alert_flags(self, packet: LidarPacket, flags: int) -> None:
+        """set_alert_flags(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: int) -> None
+"""
+        ...
 
-def scan_to_packets(ls: LidarScan, pw: PacketWriter, init_id: int, prod_sn: int) -> List[LidarPacket]:
+    def set_shot_limiting_countdown(self, packet: LidarPacket, countdown: int) -> None:
+        """set_shot_limiting_countdown(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: int) -> None
+"""
+        ...
+
+    def set_shutdown_countdown(self, packet: LidarPacket, countdown: int) -> None:
+        """set_shutdown_countdown(self: ouster.sdk._bindings.client.PacketWriter, arg0: ouster::sdk::core::LidarPacket, arg1: int) -> None
+"""
+        ...
+
+def scan_to_packets(ls: LidarScan, pw: PacketWriter, init_id: int, prod_sn: int) -> List[Packet]:
+    """scan_to_packets(arg0: ouster.sdk._bindings.client.LidarScan, arg1: ouster.sdk._bindings.client.PacketWriter, arg2: int, arg3: int) -> list[object]
+"""
     ...
 
-
 class LidarMode:
-    MODE_UNSPEC: ClassVar[LidarMode]
-    MODE_512x10: ClassVar[LidarMode]
-    MODE_512x20: ClassVar[LidarMode]
-    MODE_1024x10: ClassVar[LidarMode]
-    MODE_1024x20: ClassVar[LidarMode]
-    MODE_2048x10: ClassVar[LidarMode]
-    MODE_4096x5: ClassVar[LidarMode]
-
+    UNSPECIFIED: ClassVar[LidarMode]
+    _512x10: ClassVar[LidarMode]
+    _512x20: ClassVar[LidarMode]
+    _1024x10: ClassVar[LidarMode]
+    _1024x20: ClassVar[LidarMode]
+    _2048x10: ClassVar[LidarMode]
+    _4096x5: ClassVar[LidarMode]
+    UNKNOWN: ClassVar[LidarMode]
     __members__: ClassVar[Dict[str, LidarMode]]
     values: ClassVar[Iterator[LidarMode]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.LidarMode, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.LidarMode) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> LidarMode:
-        ...
+    @staticmethod
+    def from_string(s: str) -> LidarMode:
+        """from_string(arg0: str) -> ouster.sdk._bindings.client.LidarMode
 
+Create LidarMode from string.
+"""
+        ...
 
 class TimestampMode:
-    TIME_FROM_UNSPEC: ClassVar[TimestampMode]
+    UNSPECIFIED: ClassVar[TimestampMode]
     TIME_FROM_INTERNAL_OSC: ClassVar[TimestampMode]
     TIME_FROM_PTP_1588: ClassVar[TimestampMode]
     TIME_FROM_SYNC_PULSE_IN: ClassVar[TimestampMode]
-
+    UNKNOWN: ClassVar[TimestampMode]
     __members__: ClassVar[Dict[str, TimestampMode]]
     values: ClassVar[Iterator[TimestampMode]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.TimestampMode, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.TimestampMode) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> TimestampMode:
-        ...
+    @staticmethod
+    def from_string(s: str) -> TimestampMode:
+        """from_string(arg0: str) -> ouster.sdk._bindings.client.TimestampMode
 
+Create TimestampMode from string.
+"""
+        ...
 
 class OperatingMode:
-    OPERATING_NORMAL: ClassVar[OperatingMode]
-    OPERATING_STANDBY: ClassVar[OperatingMode]
-
+    NORMAL: ClassVar[OperatingMode]
+    STANDBY: ClassVar[OperatingMode]
     __members__: ClassVar[Dict[str, OperatingMode]]
     values: ClassVar[Iterator[OperatingMode]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.OperatingMode, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.OperatingMode) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> OperatingMode:
-        ...
+    @staticmethod
+    def from_string(s: str) -> OperatingMode:
+        """from_string(arg0: str) -> object
 
+Create enum value from string.
+"""
+        ...
 
 class MultipurposeIOMode:
-    MULTIPURPOSE_OFF: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_INPUT_NMEA_UART: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_INTERNAL_OSC: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_SYNC_PULSE_IN: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_PTP_1588: ClassVar[MultipurposeIOMode]
-    MULTIPURPOSE_OUTPUT_FROM_ENCODER_ANGLE: ClassVar[MultipurposeIOMode]
-
+    OFF: ClassVar[MultipurposeIOMode]
+    INPUT_NMEA_UART: ClassVar[MultipurposeIOMode]
+    OUTPUT_FROM_INTERNAL_OSC: ClassVar[MultipurposeIOMode]
+    OUTPUT_FROM_SYNC_PULSE_IN: ClassVar[MultipurposeIOMode]
+    OUTPUT_FROM_PTP_1588: ClassVar[MultipurposeIOMode]
+    OUTPUT_FROM_ENCODER_ANGLE: ClassVar[MultipurposeIOMode]
     __members__: ClassVar[Dict[str, MultipurposeIOMode]]
     values: ClassVar[Iterator[MultipurposeIOMode]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.MultipurposeIOMode, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.MultipurposeIOMode) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> MultipurposeIOMode:
-        ...
+    @staticmethod
+    def from_string(s: str) -> MultipurposeIOMode:
+        """from_string(arg0: str) -> object
 
+Create enum value from string.
+"""
+        ...
 
 class Polarity:
-    POLARITY_ACTIVE_HIGH: ClassVar[Polarity]
-    POLARITY_ACTIVE_LOW: ClassVar[Polarity]
-
+    ACTIVE_HIGH: ClassVar[Polarity]
+    ACTIVE_LOW: ClassVar[Polarity]
     __members__: ClassVar[Dict[str, Polarity]]
     values: ClassVar[Iterator[Polarity]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.Polarity, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.Polarity) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> Polarity:
-        ...
+    @staticmethod
+    def from_string(s: str) -> Polarity:
+        """from_string(arg0: str) -> object
 
+Create enum value from string.
+"""
+        ...
 
 class FullScaleRange:
-    FSR_NORMAL: ClassVar[FullScaleRange]
-    FSR_EXTENDED: ClassVar[FullScaleRange]
-
+    NORMAL: ClassVar[FullScaleRange]
+    EXTENDED: ClassVar[FullScaleRange]
     __members__: ClassVar[Dict[str, FullScaleRange]]
     values: ClassVar[Iterator[FullScaleRange]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.FullScaleRange, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.FullScaleRange) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> FullScaleRange:
-        ...
+    @staticmethod
+    def from_string(s: str) -> FullScaleRange:
+        """from_string(arg0: str) -> object
 
+Create enum value from string.
+"""
+        ...
 
 class ReturnOrder:
-    ORDER_STRONGEST_TO_WEAKEST: ClassVar[ReturnOrder]
-    ORDER_FARTHEST_TO_NEAREST: ClassVar[ReturnOrder]
-    ORDER_NEAREST_TO_FARTHEST: ClassVar[ReturnOrder]
-
+    STRONGEST_TO_WEAKEST: ClassVar[ReturnOrder]
+    FARTHEST_TO_NEAREST: ClassVar[ReturnOrder]
+    NEAREST_TO_FARTHEST: ClassVar[ReturnOrder]
+    LAST_RETURN_FIRST: ClassVar[ReturnOrder]
+    STRONGEST_RETURN_FIRST: ClassVar[ReturnOrder]
     __members__: ClassVar[Dict[str, ReturnOrder]]
     values: ClassVar[Iterator[ReturnOrder]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.ReturnOrder, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.ReturnOrder) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> ReturnOrder:
-        ...
+    @staticmethod
+    def from_string(s: str) -> ReturnOrder:
+        """from_string(arg0: str) -> object
 
+Create enum value from string.
+"""
+        ...
 
 class NMEABaudRate:
     BAUD_9600: ClassVar[NMEABaudRate]
     BAUD_115200: ClassVar[NMEABaudRate]
-
     __members__: ClassVar[Dict[str, NMEABaudRate]]
     values: ClassVar[Iterator[NMEABaudRate]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.NMEABaudRate, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.NMEABaudRate) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> NMEABaudRate:
-        ...
+    @staticmethod
+    def from_string(s: str) -> NMEABaudRate:
+        """from_string(arg0: str) -> object
 
+Create enum value from string.
+"""
+        ...
 
 class UDPProfileLidar:
-    PROFILE_LIDAR_LEGACY: ClassVar[UDPProfileLidar]
-    PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL: ClassVar[UDPProfileLidar]
-    PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16: ClassVar[UDPProfileLidar]
-    PROFILE_LIDAR_RNG15_RFL8_NIR8: ClassVar[UDPProfileLidar]
-    PROFILE_LIDAR_FIVE_WORD_PIXEL: ClassVar[UDPProfileLidar]
-    PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL: ClassVar[UDPProfileLidar]
-
+    LEGACY: ClassVar[UDPProfileLidar]
+    RNG19_RFL8_SIG16_NIR16_DUAL: ClassVar[UDPProfileLidar]
+    RNG19_RFL8_SIG16_NIR16: ClassVar[UDPProfileLidar]
+    RNG15_RFL8_NIR8: ClassVar[UDPProfileLidar]
+    FIVE_WORD_PIXEL: ClassVar[UDPProfileLidar]
+    FUSA_RNG15_RFL8_NIR8_DUAL: ClassVar[UDPProfileLidar]
+    RNG15_RFL8_NIR8_DUAL: ClassVar[UDPProfileLidar]
+    RNG15_RFL8_NIR8_ZONE16: ClassVar[UDPProfileLidar]
+    RNG19_RFL8_SIG16_NIR16_ZONE16: ClassVar[UDPProfileLidar]
+    UNKNOWN: ClassVar[UDPProfileLidar]
+    OFF: ClassVar[UDPProfileLidar]
     __members__: ClassVar[Dict[str, UDPProfileLidar]]
     values: ClassVar[Iterator[UDPProfileLidar]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.UDPProfileLidar, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.UDPProfileLidar) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> UDPProfileLidar:
-        ...
+    @staticmethod
+    def from_string(s: str) -> UDPProfileLidar:
+        """from_string(arg0: str) -> Optional[ouster.sdk._bindings.client.UDPProfileLidar]
 
+Create UDPProfileLidar from string.
+"""
+        ...
 
 class UDPProfileIMU:
-    PROFILE_IMU_LEGACY: ClassVar[UDPProfileIMU]
-
+    LEGACY: ClassVar[UDPProfileIMU]
+    ACCEL32_GYRO32_NMEA: ClassVar[UDPProfileIMU]
+    OFF: ClassVar[UDPProfileIMU]
     __members__: ClassVar[Dict[str, UDPProfileIMU]]
     values: ClassVar[Iterator[UDPProfileIMU]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.UDPProfileIMU, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.UDPProfileIMU) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> UDPProfileIMU:
+    @staticmethod
+    def from_string(s: str) -> UDPProfileIMU:
+        """from_string(arg0: str) -> object
+
+Create enum value from string.
+"""
         ...
 
+class HeaderType:
+    STANDARD: ClassVar[HeaderType]
+    FUSA: ClassVar[HeaderType]
+    __members__: ClassVar[Dict[str, HeaderType]]
+    values: ClassVar[Iterator[HeaderType]]
+
+    def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.HeaderType, value: int) -> None
+"""
+        ...
+
+    def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.HeaderType) -> int
+"""
+        ...
+
+    @property
+    def name(self) -> str:
+        """The name of the Enum member."""
+        ...
+
+    @property
+    def value(self) -> int:
+        """The value of the Enum member."""
+        ...
+
+    @staticmethod
+    def from_string(s: str) -> HeaderType:
+        """from_string(arg0: str) -> object
+
+Create enum value from string.
+"""
+        ...
 
 class ShotLimitingStatus:
-    SHOT_LIMITING_NORMAL: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_IMMINENT: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_0_10: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_10_20: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_20_30: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_30_40: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_40_50: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_50_60: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_60_70: ClassVar[ShotLimitingStatus]
-    SHOT_LIMITING_REDUCTION_70_75: ClassVar[ShotLimitingStatus]
-
+    NORMAL: ClassVar[ShotLimitingStatus]
+    IMMINENT: ClassVar[ShotLimitingStatus]
+    REDUCTION_0_10: ClassVar[ShotLimitingStatus]
+    REDUCTION_10_20: ClassVar[ShotLimitingStatus]
+    REDUCTION_20_30: ClassVar[ShotLimitingStatus]
+    REDUCTION_30_40: ClassVar[ShotLimitingStatus]
+    REDUCTION_40_50: ClassVar[ShotLimitingStatus]
+    REDUCTION_50_60: ClassVar[ShotLimitingStatus]
+    REDUCTION_60_70: ClassVar[ShotLimitingStatus]
+    REDUCTION_70_75: ClassVar[ShotLimitingStatus]
     __members__: ClassVar[Dict[str, ShotLimitingStatus]]
     values: ClassVar[Iterator[ShotLimitingStatus]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.ShotLimitingStatus, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.ShotLimitingStatus) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> ShotLimitingStatus:
-        ...
+    @staticmethod
+    def from_string(s: str) -> ShotLimitingStatus:
+        """from_string(arg0: str) -> object
 
+Create enum value from string.
+"""
+        ...
 
 class ThermalShutdownStatus:
-    THERMAL_SHUTDOWN_NORMAL: ClassVar[ThermalShutdownStatus]
-    THERMAL_SHUTDOWN_IMMINENT: ClassVar[ThermalShutdownStatus]
-
+    NORMAL: ClassVar[ThermalShutdownStatus]
+    IMMINENT: ClassVar[ThermalShutdownStatus]
     __members__: ClassVar[Dict[str, ThermalShutdownStatus]]
     values: ClassVar[Iterator[ThermalShutdownStatus]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.ThermalShutdownStatus, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.ThermalShutdownStatus) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
+        ...
+
+    @property
+    def value(self) -> int:
+        """The value of the Enum member."""
+        ...
+
+    @staticmethod
+    def from_string(s: str) -> ThermalShutdownStatus:
+        """from_string(arg0: str) -> object
+
+Create enum value from string.
+"""
+        ...
+
+class BloomReductionOptimization:
+    BALANCED: ClassVar[BloomReductionOptimization]
+    MINIMIZE_FALSE_POSITIVES: ClassVar[BloomReductionOptimization]
+    __members__: ClassVar[Dict[str, BloomReductionOptimization]]
+    values: ClassVar[Iterator[BloomReductionOptimization]]
+
+    def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.BloomReductionOptimization, value: int) -> None
+"""
+        ...
+
+    def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.BloomReductionOptimization) -> int
+"""
+        ...
+
+    @property
+    def name(self) -> str:
+        """The name of the Enum member."""
+        ...
+
+    @property
+    def value(self) -> int:
+        """The value of the Enum member."""
+        ...
+
+    @staticmethod
+    def from_string(s: str) -> BloomReductionOptimization:
+        """from_string(arg0: str) -> object
+
+Create enum value from string.
+"""
+        ...
+
+class Coord:
+    pass
+
+class Triangle:
+
+    @property
+    def coords(self) -> List[Coord]:
+        ...
+
+    @property
+    def edges(self) -> List[Coord]:
+        ...
+
+    @property
+    def normal(self) -> Coord:
+        ...
+
+class Mesh:
+
+    @overload
+    def __init__(self) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Mesh) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Mesh, arg0: list[ouster::sdk::core::Triangle]) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, triangles: List[Triangle]=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Mesh) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Mesh, arg0: list[ouster::sdk::core::Triangle]) -> None
+"""
+        ...
+
+    def load_from_stl(self, path: str) -> bool:
+        """load_from_stl(self: ouster.sdk._bindings.client.Mesh, arg0: str) -> bool
+"""
+        ...
+
+    @property
+    def triangles(self) -> List[Triangle]:
+        ...
+
+    def set_face_rgba(self, face_index: int, r: float, g: float, b: float, a: float=1.0) -> None:
+        """Unbound function"""
+        ...
+
+class ZoneState:
+    live: int
+    id: int
+    error_flags: int
+    trigger_type: int
+    trigger_status: int
+    count: int
+    occlusion_count: int
+    invalid_count: int
+    max_count: int
+    min_range: int
+    max_range: int
+    mean_range: int
+
+    @staticmethod
+    def dtype() -> np.dtype:
+        """dtype() -> numpy.dtype
+"""
+        ...
+
+class ZoneMode:
+    NONE: ClassVar[ZoneMode]
+    OCCUPANCY: ClassVar[ZoneMode]
+    VACANCY: ClassVar[ZoneMode]
+
+    @property
+    def name(self) -> str:
+        """name(self: object) -> str
+"""
         ...
 
     @property
     def value(self) -> int:
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> ThermalShutdownStatus:
+class CoordinateFrame:
+    SENSOR: ClassVar[CoordinateFrame]
+    BODY: ClassVar[CoordinateFrame]
+
+    @property
+    def name(self) -> str:
+        """name(self: object) -> str
+"""
         ...
 
+    @property
+    def value(self) -> int:
+        ...
 
-class SensorCalibration:
-    reflectivity_status: Optional[bool]
-    reflectivity_timestamp: Optional[str]
+class Stl:
+    coordinate_frame: CoordinateFrame
 
+    @overload
+    def __init__(self, file_path: str) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Stl, arg0: str) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Stl, arg0: list[int]) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, blob: bytes) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Stl, arg0: str) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Stl, arg0: list[int]) -> None
+"""
+        ...
+
+    @property
+    def hash(self) -> str:
+        ...
+
+    def to_mesh(self) -> Mesh:
+        """to_mesh(self: ouster.sdk._bindings.client.Stl) -> ouster.sdk._bindings.client.Mesh
+"""
+        ...
+
+class Zrb:
+    serial_number: int
+    m_per_zmbin: float
+    near_range_mm: np.ndarray
+    far_range_mm: np.ndarray
+
+    @overload
+    def __init__(self) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Zrb) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Zrb, arg0: str) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.Zrb, arg0: list[int]) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, file_path: str) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Zrb) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Zrb, arg0: str) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.Zrb, arg0: list[int]) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, blob: bytes) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Zrb) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Zrb, arg0: str) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.Zrb, arg0: list[int]) -> None
+"""
+        ...
+
+    @property
+    def sensor_to_body_transform(self) -> np.ndarray:
+        ...
+
+    @property
+    def stl_hash(self) -> str:
+        ...
+
+    @property
+    def hash(self) -> str:
+        ...
+
+    def blob(self) -> bytes:
+        """blob(self: ouster.sdk._bindings.client.Zrb) -> list[int]
+"""
+        ...
+
+    def save(self, path: str) -> None:
+        """save(self: ouster.sdk._bindings.client.Zrb, arg0: str) -> None
+"""
+        ...
+
+class Zone:
+    point_count: int
+    frame_count: int
+    mode: ZoneMode
+    stl: Stl
+    zrb: Zrb
+
+    def __init__(self):
+        """__init__(self: ouster.sdk._bindings.client.Zone) -> None
+"""
+        ...
+
+class BeamConfig:
+
+    def __init__(self) -> None:
+        """Unbound class"""
+        ...
+
+class ZoneSetOutputFilter:
+    STL: ClassVar[ZoneSetOutputFilter]
+    ZRB: ClassVar[ZoneSetOutputFilter]
+    STL_AND_ZRB: ClassVar[ZoneSetOutputFilter]
+
+class ZoneSet:
+    zones: Dict[int, Zone]
+    power_on_live_ids: List[int]
+    sensor_to_body_transform: np.ndarray
+    m_per_zmbin: float
+
+    @overload
+    def __init__(self):
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.ZoneSet) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.ZoneSet, arg0: str) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.ZoneSet, arg0: bytes) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, path: str):
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.ZoneSet) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.ZoneSet, arg0: str) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.ZoneSet, arg0: bytes) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, zip_bytes: bytes):
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.ZoneSet) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.ZoneSet, arg0: str) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.ZoneSet, arg0: bytes) -> None
+"""
+        ...
+
+    def to_json(self) -> str:
+        """to_json(self: ouster.sdk._bindings.client.ZoneSet, arg0: ouster.sdk._bindings.client.ZoneSetOutputFilter) -> str
+"""
+        ...
+
+    def to_zip_blob(self, zone_set_output: ZoneSetOutputFilter) -> bytes:
+        """to_zip_blob(self: ouster.sdk._bindings.client.ZoneSet, arg0: ouster.sdk._bindings.client.ZoneSetOutputFilter) -> bytes
+"""
+        ...
+
+    def save(self, path: str) -> None:
+        """save(self: ouster.sdk._bindings.client.ZoneSet, arg0: str, arg1: ouster.sdk._bindings.client.ZoneSetOutputFilter) -> None
+"""
+        ...
+
+    def render(self, sensor_info: SensorInfo) -> Mesh:
+        """render(self: ouster.sdk._bindings.client.ZoneSet, arg0: ouster.sdk._bindings.client.SensorInfo) -> None
+"""
+        ...
 
 class SensorConfig:
     udp_dest: Optional[str]
+    udp_dest_zm: Optional[str]
     udp_port_lidar: Optional[int]
     udp_port_imu: Optional[int]
+    udp_port_zm: Optional[int]
+    udp_multicast_ttl: Optional[int]
+    udp_multicast_ttl_zm: Optional[int]
     timestamp_mode: Optional[TimestampMode]
     lidar_mode: Optional[LidarMode]
     operating_mode: Optional[OperatingMode]
     multipurpose_io_mode: Optional[MultipurposeIOMode]
+    lidar_frame_azimuth_offset: Optional[int]
     azimuth_window: Optional[tuple]
     signal_multiplier: Optional[float]
     sync_pulse_out_angle: Optional[int]
@@ -957,6 +1955,7 @@ class SensorConfig:
     phase_lock_enable: Optional[bool]
     phase_lock_offset: Optional[int]
     columns_per_packet: Optional[int]
+    imu_packets_per_frame: Optional[int]
     udp_profile_lidar: Optional[UDPProfileLidar]
     udp_profile_imu: Optional[UDPProfileIMU]
     min_range_threshold_cm: Optional[int]
@@ -964,123 +1963,284 @@ class SensorConfig:
     accel_fsr: Optional[FullScaleRange]
     return_order: Optional[ReturnOrder]
     extra_options: Dict[str, str]
+    header_type: Optional[HeaderType]
+    bloom_reduction_optimization: Optional[BloomReductionOptimization]
 
     @overload
     def __init__(self) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorConfig) -> None
+
+Construct an empty SensorConfig.
+
+2. __init__(self: ouster.sdk._bindings.client.SensorConfig, config_string: str) -> None
+
+
+    Construct a SensorConfig from a json string.
+    Args:
+        config_string (str): json string to parse
+    
+"""
         ...
 
     @overload
     def __init__(self, config_string: str) -> None:
-        ...
+        """__init__(*args, **kwargs)
+Overloaded function.
 
+1. __init__(self: ouster.sdk._bindings.client.SensorConfig) -> None
+
+Construct an empty SensorConfig.
+
+2. __init__(self: ouster.sdk._bindings.client.SensorConfig, config_string: str) -> None
+
+
+    Construct a SensorConfig from a json string.
+    Args:
+        config_string (str): json string to parse
+    
+"""
+        ...
 
 class FieldClass:
     PIXEL_FIELD: ClassVar[FieldClass]
     COLUMN_FIELD: ClassVar[FieldClass]
     PACKET_FIELD: ClassVar[FieldClass]
     SCAN_FIELD: ClassVar[FieldClass]
-
     __members__: ClassVar[Dict[str, FieldClass]]
     values: ClassVar[Iterator[FieldClass]]
 
     def __init__(self, code: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.FieldClass, value: int) -> None
+"""
         ...
 
     def __int__(self) -> int:
+        """__int__(self: ouster.sdk._bindings.client.FieldClass) -> int
+"""
         ...
 
     @property
     def name(self) -> str:
+        """The name of the Enum member."""
         ...
 
     @property
     def value(self) -> int:
+        """The value of the Enum member."""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> FieldClass:
+    @staticmethod
+    def from_string(s: str) -> FieldClass:
+        """from_string(arg0: str) -> object
+
+Create enum value from string.
+"""
         ...
 
+def init_logger(log_level: str, log_file_path: str=..., rotating: bool=..., max_size_in_bytes: int=..., max_files: int=...) -> bool:
+    """
+    Initializes and configures ouster_client logs. This method should be invoked
+    only once before calling any other method from the library if the user wants
+    to direct the library log statements to a different medium (other than
+    console which is the default).
 
-def init_logger(log_level: str,
-                log_file_path: str = ...,
-                rotating: bool = ...,
-                max_size_in_bytes: int = ...,
-                max_files: int = ...) -> bool:
+    Args:
+        log_level Control the level of log messages outputed by the client.
+            Valid options are (case-sensitive): "trace", "debug", "info", "warning",
+            "error", "critical" and "off".
+        log_file_path (str): Path to location where log files are stored. The
+            path must be in a location that the process has write access to. If an empty
+            string is provided then the logs will be directed to the console. When
+            an empty string is passed then the rest of parameters are ignored.
+        rotating (bool): Configure the log file with rotation, rotation rules are
+            specified through the two following parameters max_size_in_bytes and
+            max_files. If rotating is set to false the following parameters are ignored
+        max_size_in_bytes (int): Maximum number of bytes to write to a rotating log
+            file before starting a new file. ignored if rotating is set to False.
+        max_files (int): Maximum number of rotating files to accumlate before
+            re-using the first file. ignored if rotating is set to False.
+
+    Returns:
+        returns True on success, False otherwise.
+    """
     ...
 
+def set_config(hostname: str, config: SensorConfig, persist: bool=..., udp_dest_auto: bool=..., force_reinit: bool=...) -> None:
+    """set_config(hostname: str, config: ouster.sdk._bindings.client.SensorConfig, persist: bool = False, udp_dest_auto: bool = False, force_reinit: bool = False) -> None
 
-def set_config(hostname: str,
-               config: SensorConfig,
-               persist: bool = ...,
-               udp_dest_auto: bool = ...,
-               force_reinit: bool = ...) -> None:
+
+    Set sensor config parameters on sensor.
+
+    Args:
+        hostname (str): hostname of the sensor
+        config (SensorConfig): config to set sensor parameters to
+        persist (bool): persist parameters after sensor disconnection (default = False)
+        udp_dest_auto (bool): automatically determine sender's IP at the time command was sent
+            and set it as destination of UDP traffic. Function will error out if config has
+            udp_dest member. (default = False)
+        force_reinit (bool): forces the sensor to re-init during set_config even when config
+            params have not changed. (default = False)
+    
+"""
     ...
 
+def get_config(hostname: str, active: bool=...) -> SensorConfig:
+    """get_config(hostname: str, active: bool = True) -> ouster.sdk._bindings.client.SensorConfig
 
-def get_config(hostname: str, active: bool = ...) -> SensorConfig:
+
+    Returns sensor config parameters as SensorConfig.
+
+    Args:
+        hostname (str): hostname of the sensor
+        active (bool): return active or staged sensor configuration
+    
+"""
     ...
-
 
 class Sensor:
-    def __init__(self, hostname: str, desired_config: SensorConfig = ...) -> None:
+
+    def __init__(self, hostname: str, desired_config: SensorConfig=...) -> None:
+        """__init__(self: ouster.sdk._bindings.client.Sensor, hostname: str, desired_config: ouster.sdk._bindings.client.SensorConfig = <ouster.sdk._bindings.client.SensorConfig object at 0x7ad2255554b0>) -> None
+"""
         ...
 
     def hostname(self) -> str:
+        """hostname(self: ouster.sdk._bindings.client.Sensor) -> str
+"""
         ...
 
     def desired_config(self) -> SensorConfig:
+        """desired_config(self: ouster.sdk._bindings.client.Sensor) -> ouster.sdk._bindings.client.SensorConfig
+"""
         ...
 
     def http_client(self) -> SensorHttp:
+        """http_client(self: ouster.sdk._bindings.client.Sensor) -> ouster::sdk::sensor::SensorHttp
+"""
         ...
 
-    def fetch_metadata(self, timeout: int = ...) -> SensorInfo:
+    def fetch_metadata(self, timeout: int=...) -> SensorInfo:
+        """fetch_metadata(self: ouster.sdk._bindings.client.Sensor, timeout: int = 40) -> ouster.sdk._bindings.client.SensorInfo
+"""
         ...
-
 
 class SensorScanSource(ScanSource):
-    @overload
-    def __init__(self, uri: Union[str, List[str]], *, config_timeout : float = 45.0, do_not_reinitialize : bool = False,
-                 extrinsics : List[ndarray] = [], extrinsics_file : str = "",
-                 field_names : List[str] = [], imu_port : Optional[int] = None,
-                 lidar_port : Optional[int] = None, queue_size : int = 2,
-                 no_auto_udp_dest : bool = False, raw_fields : bool = False,
-                 raw_headers : bool = False, sensor_info : List[SensorInfo] = [],
-                 timeout : float = 1.0, soft_id_check : bool = False,
-                 sensor_config: List[SensorConfig] = []) -> None:
-        ...
 
     @overload
-    def __init__(self, sensors: List[Sensor], config_timeout: float = ..., queue_size: int = ..., soft_id_check: bool = ...) -> None:
+    def __init__(self, uri: Union[str, List[str]], *, config_timeout: float=45.0, do_not_reinitialize: bool=False, extrinsics: List[ndarray]=[], extrinsics_file: str='', field_names: List[str]=[], imu_port: Optional[int]=None, lidar_port: Optional[int]=None, queue_size: int=2, no_auto_udp_dest: bool=False, raw_fields: bool=False, raw_headers: bool=False, sensor_info: List[SensorInfo]=[], timeout: float=1.0, soft_id_check: bool=False, sensor_config: List[SensorConfig]=[], reuse_ports: bool=False) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str, **kwargs) -> None
+
+4. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: list[str], **kwargs) -> None
+
+5. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+6. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], fields: list[list[ouster.sdk._bindings.client.FieldType]], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+"""
         ...
 
     @overload
-    def __init__(self, sensors: List[Sensor], infos: List[SensorInfo], config_timeout: float = ..., queue_size: int = ..., soft_id_check: bool = ...) -> None:
+    def __init__(self, sensors: List[Sensor], config_timeout: float=..., queue_size: int=..., soft_id_check: bool=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str, **kwargs) -> None
+
+4. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: list[str], **kwargs) -> None
+
+5. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+6. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], fields: list[list[ouster.sdk._bindings.client.FieldType]], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+"""
         ...
 
     @overload
-    def __init__(self, sensors: List[Sensor], infos: List[SensorInfo], fields: List[List[FieldType]], config_timeout: float = ..., queue_size: int = ..., soft_id_check: bool = ...) -> None:
+    def __init__(self, sensors: List[Sensor], infos: List[SensorInfo], config_timeout: float=..., queue_size: int=..., soft_id_check: bool=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str, **kwargs) -> None
+
+4. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: list[str], **kwargs) -> None
+
+5. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+6. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], fields: list[list[ouster.sdk._bindings.client.FieldType]], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+"""
         ...
 
-    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+    @overload
+    def __init__(self, sensors: List[Sensor], infos: List[SensorInfo], fields: List[List[FieldType]], config_timeout: float=..., queue_size: int=..., soft_id_check: bool=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: str, **kwargs) -> None
+
+4. __init__(self: ouster.sdk._bindings.client.SensorScanSource, file: list[str], **kwargs) -> None
+
+5. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+
+6. __init__(self: ouster.sdk._bindings.client.SensorScanSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], fields: list[list[ouster.sdk._bindings.client.FieldType]], config_timeout: float = 40, queue_size: int = 2, soft_id_check: bool = False) -> None
+"""
         ...
 
-    def get_scan(self, timeout_sec: float = ...) -> LidarScan:
+    def __iter__(self) -> Iterator[LidarScanSet]:
+        """__iter__(self: ouster.sdk._bindings.client.ScanSource) -> ouster.sdk._bindings.client.scan_iterator
+"""
         ...
 
+    def get_scan(self, timeout_sec: float=...) -> LidarScan:
+        """get_scan(self: ouster.sdk._bindings.client.SensorScanSource, timeout: float = 0.1) -> tuple[int, ouster.sdk._bindings.client.LidarScan]
+"""
+        ...
+
+    @property
     def id_error_count(self) -> int:
         ...
 
+    @property
     def dropped_scans(self) -> int:
         ...
 
     def close(self) -> None:
+        """close(self: ouster.sdk._bindings.client.ScanSource) -> None
+"""
         ...
 
     def flush(self) -> None:
+        """flush(self: ouster.sdk._bindings.client.SensorScanSource) -> None
+"""
         ...
 
+class Collator(ScanSource):
+    ...
+
+class Singler(ScanSource):
+    ...
+
+class Slicer(ScanSource):
+    ...
 
 class Version:
     major: int
@@ -1091,19 +2251,43 @@ class Version:
     prerelease: str
     build: str
 
+    @overload
     def __init__(self) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Version) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Version, major: int, minor: int, patch: int) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, major: int, minor: int, patch: int) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.Version) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.Version, major: int, minor: int, patch: int) -> None
+"""
         ...
 
     def __le__(self, v: Version) -> bool:
+        """__le__(self: ouster.sdk._bindings.client.Version, arg0: ouster.sdk._bindings.client.Version) -> bool
+"""
         ...
 
     def __lt__(self, v: Version) -> bool:
+        """__lt__(self: ouster.sdk._bindings.client.Version, arg0: ouster.sdk._bindings.client.Version) -> bool
+"""
         ...
 
-    @classmethod
-    def from_string(cls, s: str) -> Version:
+    @staticmethod
+    def from_string(s: str) -> Version:
+        """from_string(arg0: str) -> ouster.sdk._bindings.client.Version
+"""
         ...
-
 
 class FieldType:
     name: str
@@ -1111,343 +2295,2002 @@ class FieldType:
     extra_dims: Tuple[int, ...]
     field_class: FieldClass
 
-    def __init__(self, name: str, dtype: Any, extra_dims: Tuple[int, ...] = (), field_class: FieldClass = FieldClass.PIXEL_FIELD):
+    def __init__(self, name: str, dtype: Any, extra_dims: Tuple[int, ...]=(), field_class: FieldClass=FieldClass.PIXEL_FIELD):
+        """__init__(self: ouster.sdk._bindings.client.FieldType, name: str, dtype: object, extra_dims: tuple = (), field_class: int = <FieldClass.PIXEL_FIELD: 1>) -> None
+
+
+    Construct a FieldType.
+
+    Args:
+        name:   name of the field
+        dt:     data type of the field, e.g. np.uint8.
+        extra_dims: a tuple representing the number of elements.
+            in the dimensions beyond width and height,
+            for fields with three or more dimensions.
+        field_class: indicates whether the field has an entry
+            per-packet, per-column, per-scan or per-pixel.
+    
+"""
         ...
 
-
 class LidarScan:
-
     frame_id: int
-    frame_status: int  # contains both shutdown and shot limiting status bits
+    frame_status: int
     shutdown_countdown: int
     shot_limiting_countdown: int
     sensor_info: SensorInfo
 
     @overload
     def __init__(self, h: int, w: int) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @overload
     def __init__(self, h: int, w: int, profile: UDPProfileLidar) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @overload
     def __init__(self, h: int, w: int, profile: UDPProfileLidar, columns_per_packet: int) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @overload
-    def __init__(self, h: int, w: int, fields: List[FieldType], columns_per_packet: int = ...) -> None:
+    def __init__(self, h: int, w: int, fields: List[FieldType], columns_per_packet: int=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @overload
     def __init__(self, scan: LidarScan) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @overload
     def __init__(self, scan: LidarScan, fields: List[FieldType]) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @overload
     def __init__(self, info: SensorInfo) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @overload
     def __init__(self, info: SensorInfo, fields: List[FieldType]) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int) -> None
+
+
+
+    Default constructor creates a 0 x 0 scan
+
+    Args:
+        height: height of scan
+        width: width of scan
+
+    Returns:
+        New LidarScan of 0x0 expecting fields of the LEGACY profile
+
+    
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScan, h: int, w: int, profile: ouster::sdk::core::UDPProfileLidar, columns_per_packet: int = 16) -> None
+
+
+
+    Initialize a scan with the default fields for a particular udp profile
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        profile: udp profile
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields of specified profile
+
+        
+
+3. __init__(self: ouster.sdk._bindings.client.LidarScan, w: int, h: int, field_types: list[ouster.sdk._bindings.client.FieldType], columns_per_packet: int = 16) -> None
+
+
+    Initialize a scan with a custom set of fields
+
+    Args:
+        height: height of LidarScan, i.e., number of channels
+        width: width of LidarScan
+        field_types: list of FieldType that specifies which fields should be present in the scan
+
+    Returns:
+        New LidarScan of specified dimensions expecting fields specified by dict
+
+        
+
+4. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+5. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+6. __init__(self: ouster.sdk._bindings.client.LidarScan, sensor_info: ouster::sdk::core::SensorInfo, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a scan with defaults fields and size for a given sensor_info
+    with only the specified fields
+
+    Args:
+        sensor_info: SensorInfo to construct a scan for
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan approprate for the sensor_info
+
+        
+
+7. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan, field_types: list[ouster.sdk._bindings.client.FieldType]) -> None
+
+
+    Initialize a lidar scan from another with only the indicated fields.
+    Casts, zero pads or removes fields from the original scan if necessary.
+
+    Args:
+        source: LidarScan to copy data from
+        field_types: list of fields to have in the new scan where keys are ChanFields
+                        and values are type, e.g., FieldType(client.ChanField.SIGNAL, np.uint32)
+
+    Returns:
+        New LidarScan with selected data copied over or zero padded
+
+        
+
+8. __init__(self: ouster.sdk._bindings.client.LidarScan, source: ouster.sdk._bindings.client.LidarScan) -> None
+
+
+    Initialize a lidar scan with a copy of the data from another.
+
+    Args:
+        source: LidarScan to copy
+
+    Returns:
+        New LidarScan with data copied over from provided scan.
+
+        
+"""
         ...
 
     @property
     def w(self) -> int:
+        """Width or horizontal resolution of the scan."""
         ...
 
     @property
     def h(self) -> int:
+        """Height or vertical resolution of the scan."""
         ...
 
     def thermal_shutdown(self) -> int:
+        """thermal_shutdown(self: ouster.sdk._bindings.client.LidarScan) -> ouster::sdk::core::ThermalShutdownStatus
+
+The frame thermal shutdown status.
+"""
         ...
 
     def shot_limiting(self) -> int:
+        """shot_limiting(self: ouster.sdk._bindings.client.LidarScan) -> ouster::sdk::core::ShotLimitingStatus
+
+The frame shot limiting status.
+"""
         ...
 
     @property
     def packet_timestamp(self) -> ndarray:
+        """The host timestamp header as a numpy array with W/columns-per-packet entries."""
         ...
 
     @property
     def alert_flags(self) -> ndarray:
+        """The alert flags header as a numpy array with W/columns-per-packet entries."""
         ...
 
     @overload
     def field(self, field: str) -> ndarray:
+        """field(self: ouster.sdk._bindings.client.LidarScan, arg0: str) -> object
+
+
+    Return a view of the specified channel field.
+
+    Args:
+        name: name of the field to return
+
+    Returns:
+        The specified field as a numpy array
+    
+"""
         ...
 
     @overload
     def field(self, name: str) -> ndarray:
+        """field(self: ouster.sdk._bindings.client.LidarScan, arg0: str) -> object
+
+
+    Return a view of the specified channel field.
+
+    Args:
+        name: name of the field to return
+
+    Returns:
+        The specified field as a numpy array
+    
+"""
         ...
 
     @property
     def field_types(self) -> List[FieldType]:
+        """Return an list of available fields."""
         ...
-        
+
     @overload
     def add_field(self, field_type: FieldType) -> ndarray:
+        """add_field(*args, **kwargs)
+Overloaded function.
+
+1. add_field(self: ouster.sdk._bindings.client.LidarScan, name: str, dtype: type, shape: tuple = (), field_class: int = <FieldClass.PIXEL_FIELD: 1>) -> object
+
+
+    Adds a new field under specified name
+
+    Args:
+        name: name of the field to add
+        shape: tuple of ints, shape of the field to add
+        dtype: dtype of field to add, e.g. np.uint32
+        field_class: class of the field to add, see field_class
+
+    Returns:
+        The field as a numpy array
+    
+
+2. add_field(self: ouster.sdk._bindings.client.LidarScan, type: ouster.sdk._bindings.client.FieldType) -> object
+
+
+    Adds a new field under specified name and type
+
+    Args:
+        type: FieldType of the field to add
+
+    Returns:
+        The field as a numpy array
+    
+
+3. add_field(self: ouster.sdk._bindings.client.LidarScan, name: str, data: numpy.ndarray, field_class: int = <FieldClass.PIXEL_FIELD: 1>) -> numpy.ndarray
+
+
+    Adds a new field under the specified name, with the given contents.
+    IMPORTANT: this will deep copy the supplied data.
+
+    Args:
+        name: the name of the new field
+        data: the contents of the new field
+        field_class: class of the field to add, see field_class
+
+    Returns:
+        The field as a numpy array.
+        
+"""
         ...
 
     @overload
-    def add_field(self, name: str, array: ndarray, field_class: FieldClass = ...) -> ndarray:
+    def add_field(self, name: str, array: ndarray, field_class: FieldClass=...) -> ndarray:
+        """add_field(*args, **kwargs)
+Overloaded function.
+
+1. add_field(self: ouster.sdk._bindings.client.LidarScan, name: str, dtype: type, shape: tuple = (), field_class: int = <FieldClass.PIXEL_FIELD: 1>) -> object
+
+
+    Adds a new field under specified name
+
+    Args:
+        name: name of the field to add
+        shape: tuple of ints, shape of the field to add
+        dtype: dtype of field to add, e.g. np.uint32
+        field_class: class of the field to add, see field_class
+
+    Returns:
+        The field as a numpy array
+    
+
+2. add_field(self: ouster.sdk._bindings.client.LidarScan, type: ouster.sdk._bindings.client.FieldType) -> object
+
+
+    Adds a new field under specified name and type
+
+    Args:
+        type: FieldType of the field to add
+
+    Returns:
+        The field as a numpy array
+    
+
+3. add_field(self: ouster.sdk._bindings.client.LidarScan, name: str, data: numpy.ndarray, field_class: int = <FieldClass.PIXEL_FIELD: 1>) -> numpy.ndarray
+
+
+    Adds a new field under the specified name, with the given contents.
+    IMPORTANT: this will deep copy the supplied data.
+
+    Args:
+        name: the name of the new field
+        data: the contents of the new field
+        field_class: class of the field to add, see field_class
+
+    Returns:
+        The field as a numpy array.
+        
+"""
         ...
 
     @overload
-    def add_field(self, name: str, dtype: type, shape: Tuple[int, ...], field_class: FieldClass = ...) -> ndarray:
+    def add_field(self, name: str, dtype: type, shape: Tuple[int, ...]=..., field_class: FieldClass=...) -> ndarray:
+        """add_field(*args, **kwargs)
+Overloaded function.
+
+1. add_field(self: ouster.sdk._bindings.client.LidarScan, name: str, dtype: type, shape: tuple = (), field_class: int = <FieldClass.PIXEL_FIELD: 1>) -> object
+
+
+    Adds a new field under specified name
+
+    Args:
+        name: name of the field to add
+        shape: tuple of ints, shape of the field to add
+        dtype: dtype of field to add, e.g. np.uint32
+        field_class: class of the field to add, see field_class
+
+    Returns:
+        The field as a numpy array
+    
+
+2. add_field(self: ouster.sdk._bindings.client.LidarScan, type: ouster.sdk._bindings.client.FieldType) -> object
+
+
+    Adds a new field under specified name and type
+
+    Args:
+        type: FieldType of the field to add
+
+    Returns:
+        The field as a numpy array
+    
+
+3. add_field(self: ouster.sdk._bindings.client.LidarScan, name: str, data: numpy.ndarray, field_class: int = <FieldClass.PIXEL_FIELD: 1>) -> numpy.ndarray
+
+
+    Adds a new field under the specified name, with the given contents.
+    IMPORTANT: this will deep copy the supplied data.
+
+    Args:
+        name: the name of the new field
+        data: the contents of the new field
+        field_class: class of the field to add, see field_class
+
+    Returns:
+        The field as a numpy array.
+        
+"""
         ...
 
     def del_field(self, name: str) -> ndarray:
+        """del_field(self: ouster.sdk._bindings.client.LidarScan, arg0: str) -> numpy.ndarray
+
+
+    Release a field from the LidarScan and return it to the user
+
+    Args:
+        name: name of the field to drop
+
+    Returns:
+        The specified field as a numpy array
+    
+"""
         ...
 
     def field_class(self, name: str) -> FieldClass:
+        """field_class(self: ouster.sdk._bindings.client.LidarScan, arg0: str) -> ouster.sdk._bindings.client.FieldClass
+
+
+    Retrieve FieldClass of field
+
+    Args:
+        name: name of the field
+
+    Returns:
+        FieldClass of the field
+    
+"""
         ...
 
     def has_field(self, name: str) -> bool:
+        """has_field(*args, **kwargs)
+Overloaded function.
+
+1. has_field(self: ouster.sdk._bindings.client.LidarScan, name: str) -> bool
+
+
+    Returns true if the LidarScan has a field with the given name
+
+    Args:
+        name: name of the field to check for
+
+    Returns:
+        True if the field exists in the scan, false otherwise
+    
+
+2. has_field(self: ouster.sdk._bindings.client.LidarScan, arg0: str) -> bool
+
+
+    Check if a field with a given name exists in the LidarScan.
+
+    Args:
+        name: name of the field
+
+    Returns:
+        True if the field is present in the LidarScan.
+    
+"""
         ...
 
     @property
     def timestamp(self) -> ndarray:
+        """The measurement timestamp header as a W-element numpy array."""
         ...
 
     @property
     def measurement_id(self) -> ndarray:
+        """The measurement id header as a W-element numpy array."""
         ...
 
     @property
     def status(self) -> ndarray:
+        """The measurement status header as a W-element numpy array."""
         ...
 
     @property
     def pose(self) -> ndarray:
+        """The pose vector of 4x4 homogeneous matrices (per each timestamp)."""
         ...
 
-    def complete(self, window: Optional[Tuple[int, int]] = ...) -> bool:
+    @property
+    def zones(self) -> np.recarray:
+        ...
+
+    def complete(self, window: Optional[Tuple[int, int]]=...) -> bool:
+        """complete(self: ouster.sdk._bindings.client.LidarScan, window: Optional[tuple[int, int]] = None) -> bool
+"""
         ...
 
     @property
     def packet_count(self) -> int:
+        """The number of packets used to produce a full scan given the width in pixels and the number of columns per packet."""
+        ...
+
+    @property
+    def fields(self) -> Iterator[str]:
+        """Return a list of available fields."""
+        ...
+
+    def get_first_valid_packet_timestamp(self) -> int:
+        """get_first_valid_packet_timestamp(self: ouster.sdk._bindings.client.LidarScan) -> int
+
+Return first valid packet timestamp in the scan.
+"""
+        ...
+
+    def get_last_valid_packet_timestamp(self) -> int:
+        """get_last_valid_packet_timestamp(self: ouster.sdk._bindings.client.LidarScan) -> int
+
+Return last valid packet timestamp in the scan.
+"""
+        ...
+
+    def get_first_valid_column_timestamp(self) -> int:
+        """get_first_valid_column_timestamp(self: ouster.sdk._bindings.client.LidarScan) -> int
+
+Return first valid column timestamp in the scan.
+"""
+        ...
+
+    def get_last_valid_column_timestamp(self) -> int:
+        """get_last_valid_column_timestamp(self: ouster.sdk._bindings.client.LidarScan) -> int
+
+Return last valid column timestamp in the scan.
+"""
+        ...
+
+    def get_first_valid_column(self) -> int:
+        """get_first_valid_column(self: ouster.sdk._bindings.client.LidarScan) -> int
+
+Return first valid column index in the scan.
+"""
+        ...
+
+    def get_last_valid_column(self) -> int:
+        """get_last_valid_column(self: ouster.sdk._bindings.client.LidarScan) -> int
+
+Return last valid column index in the scan.
+"""
+        ...
+
+class LidarScanSet:
+
+    @overload
+    def __init__(self) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScanSet) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScanSet, arg0: list[ouster.sdk._bindings.client.LidarScan]) -> None
+"""
+        ...
+
+    @overload
+    def __init__(self, scans: List[Optional[LidarScan]]) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.LidarScanSet) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.LidarScanSet, arg0: list[ouster.sdk._bindings.client.LidarScan]) -> None
+"""
+        ...
+
+    def __iter__(self) -> Iterator[Optional[LidarScan]]:
+        """__iter__(self: ouster.sdk._bindings.client.LidarScanSet) -> Iterator[ouster.sdk._bindings.client.LidarScan]
+"""
+        ...
+
+    def __getitem__(self, index: int) -> Optional[LidarScan]:
+        """__getitem__(self: ouster.sdk._bindings.client.LidarScanSet, arg0: int) -> ouster.sdk._bindings.client.LidarScan
+"""
+        ...
+
+    def __len__(self) -> int:
+        """__len__(self: ouster.sdk._bindings.client.LidarScanSet) -> int
+"""
+        ...
+
+    @overload
+    def add_field(self, name: str, array: ndarray) -> ndarray:
+        """add_field(*args, **kwargs)
+Overloaded function.
+
+1. add_field(self: ouster.sdk._bindings.client.LidarScanSet, arg0: str, arg1: numpy.ndarray) -> numpy.ndarray
+
+2. add_field(self: ouster.sdk._bindings.client.LidarScanSet, name: str, dtype: type, shape: tuple = ()) -> numpy.ndarray
+"""
+        ...
+
+    @overload
+    def add_field(self, name: str, dtype: type, shape: Tuple[int, ...]) -> ndarray:
+        """add_field(*args, **kwargs)
+Overloaded function.
+
+1. add_field(self: ouster.sdk._bindings.client.LidarScanSet, arg0: str, arg1: numpy.ndarray) -> numpy.ndarray
+
+2. add_field(self: ouster.sdk._bindings.client.LidarScanSet, name: str, dtype: type, shape: tuple = ()) -> numpy.ndarray
+"""
+        ...
+
+    def del_field(self, name: str) -> ndarray:
+        """del_field(self: ouster.sdk._bindings.client.LidarScanSet, arg0: str) -> numpy.ndarray
+"""
+        ...
+
+    def has_field(self, name: str) -> bool:
+        """has_field(self: ouster.sdk._bindings.client.LidarScanSet, arg0: str) -> bool
+"""
+        ...
+
+    def field(self, name: str) -> ndarray:
+        """field(self: ouster.sdk._bindings.client.LidarScanSet, arg0: str) -> object
+"""
         ...
 
     @property
     def fields(self) -> Iterator[str]:
         ...
 
-    def get_first_valid_packet_timestamp(self) -> int:
+    def valid_scans(self) -> Iterator[LidarScan]:
+        """valid_scans(self: ouster.sdk._bindings.client.LidarScanSet) -> Iterator[ouster.sdk._bindings.client.LidarScan]
+
+Return an iterator for scans that are valid.
+"""
         ...
 
-    def get_last_valid_packet_timestamp(self) -> int:
+    def valid_indices(self) -> Iterator[int]:
+        """valid_indices(self: ouster.sdk._bindings.client.LidarScanSet) -> Iterator[int]
+
+Return an iterator to the indices for scans that are valid.
+"""
         ...
 
-    def get_first_valid_column_timestamp(self) -> int:
-        ...
-
-    def get_last_valid_column_timestamp(self) -> int:
-        ...
-
-    def get_first_valid_column(self) -> int:
-        ...
-
-    def get_last_valid_column(self) -> int:
-        ...
-
-
-def destagger_bool(field: ndarray, shifts: List[int],
-                   inverse: bool) -> ndarray:
+def destagger_bool(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_bool(arg0: numpy.ndarray[bool[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[bool[m, n]]
+"""
     ...
 
-
-def destagger_int8(field: ndarray, shifts: List[int],
-                   inverse: bool) -> ndarray:
+def destagger_int8(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_int8(arg0: numpy.ndarray[numpy.int8[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.int8[m, n]]
+"""
     ...
 
-
-def destagger_int16(field: ndarray, shifts: List[int],
-                    inverse: bool) -> ndarray:
+def destagger_int16(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_int16(arg0: numpy.ndarray[numpy.int16[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.int16[m, n]]
+"""
     ...
 
-
-def destagger_int32(field: ndarray, shifts: List[int],
-                    inverse: bool) -> ndarray:
+def destagger_int32(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_int32(arg0: numpy.ndarray[numpy.int32[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.int32[m, n]]
+"""
     ...
 
-
-def destagger_int64(field: ndarray, shifts: List[int],
-                    inverse: bool) -> ndarray:
+def destagger_int64(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_int64(arg0: numpy.ndarray[numpy.int64[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.int64[m, n]]
+"""
     ...
 
-
-def destagger_uint8(field: ndarray, shifts: List[int],
-                    inverse: bool) -> ndarray:
+def destagger_uint8(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_uint8(arg0: numpy.ndarray[numpy.uint8[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.uint8[m, n]]
+"""
     ...
 
-
-def destagger_uint16(field: ndarray, shifts: List[int],
-                     inverse: bool) -> ndarray:
+def destagger_uint16(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_uint16(arg0: numpy.ndarray[numpy.uint16[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.uint16[m, n]]
+"""
     ...
 
-
-def destagger_uint32(field: ndarray, shifts: List[int],
-                     inverse: bool) -> ndarray:
+def destagger_uint32(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_uint32(arg0: numpy.ndarray[numpy.uint32[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.uint32[m, n]]
+"""
     ...
 
-
-def destagger_uint64(field: ndarray, shifts: List[int],
-                     inverse: bool) -> ndarray:
+def destagger_uint64(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_uint64(arg0: numpy.ndarray[numpy.uint64[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.uint64[m, n]]
+"""
     ...
 
-
-def destagger_float(field: ndarray, shifts: List[int],
-                    inverse: bool) -> ndarray:
+def destagger_float(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_float(arg0: numpy.ndarray[numpy.float32[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.float32[m, n]]
+"""
     ...
 
-
-def destagger_double(field: ndarray, shifts: List[int],
-                     inverse: bool) -> ndarray:
+def destagger_double(field: ndarray, shifts: List[int], inverse: bool) -> ndarray:
+    """destagger_double(arg0: numpy.ndarray[numpy.float64[m, n], flags.c_contiguous], arg1: list[int], arg2: bool) -> numpy.ndarray[numpy.float64[m, n]]
+"""
     ...
 
+@overload
+def normals(xyz0: ndarray, range0: ndarray, sensor_origins_xyz: ndarray, pixel_search_range: int=..., max_angle_of_incidence_rad: float=..., target_distance_m: float=...) -> ndarray:
+    """normals(*args, **kwargs)
+Overloaded function.
+
+1. normals(xyz: numpy.ndarray, range: numpy.ndarray, sensor_origins_xyz: numpy.ndarray, pixel_search_range: int = 1, max_angle_of_incidence_rad: float = 0.017453292519943295, target_distance_m: float = 0.025) -> numpy.ndarray[numpy.float64]
+
+
+Compute normals from destaggered XYZ/range arrays.
+
+Args:
+    xyz: destaggered XYZ coordinates for the first return (H, W, 3)
+    range: destaggered range image for the first return (H, W)
+    sensor_origins_xyz: per-column sensor origins in the same frame as xyz/range,
+        shape (W, 3). For world-frame xyz, use
+        (scan.pose @ scan.sensor_info.extrinsic)[:, :3, 3].
+        For sensor-frame xyz, pass zeros with shape (W, 3) (e.g. np.zeros((w, 3))).
+    pixel_search_range: axial search radius (in pixels) when gathering neighbours
+    max_angle_of_incidence_rad: minimum allowable incidence angle between a beam and
+        surface (radians)
+    target_distance_m: target neighbour distance used when selecting candidate points
+
+Returns:
+    A destaggered normal array of shape (H, W, 3) for the provided return.
+
+
+2. normals(xyz: numpy.ndarray, range: numpy.ndarray, xyz2: numpy.ndarray, range2: numpy.ndarray, sensor_origins_xyz: numpy.ndarray, pixel_search_range: int = 1, max_angle_of_incidence_rad: float = 0.017453292519943295, target_distance_m: float = 0.025) -> tuple[numpy.ndarray[numpy.float64], numpy.ndarray[numpy.float64]]
+
+
+Compute normals for both first and second returns from destaggered XYZ/range arrays.
+
+Args:
+    xyz: destaggered XYZ coordinates for the first return (H, W, 3)
+    range: destaggered range image for the first return (H, W)
+    xyz2: destaggered XYZ coordinates for the second return (H, W, 3)
+    range2: destaggered range image for the second return (H, W)
+    sensor_origins_xyz: per-column sensor origins in the same frame as xyz/range,
+        shape (W, 3). For world-frame xyz, use
+        (scan.pose @ scan.sensor_info.extrinsic)[:, :3, 3].
+        For sensor-frame xyz, pass zeros.
+    pixel_search_range: axial search radius (in pixels) when gathering neighbours
+    max_angle_of_incidence_rad: minimum allowable incidence angle between a beam and
+        surface (radians)
+    target_distance_m: target neighbour distance used when selecting candidate points
+
+Returns:
+    A tuple of destaggered normal arrays (first_return_normals, second_return_normals).
+
+"""
+    ...
+
+@overload
+def normals(xyz0: ndarray, range0: ndarray, xyz2: ndarray, range2: ndarray, sensor_origins_xyz: ndarray, pixel_search_range: int=..., max_angle_of_incidence_rad: float=..., target_distance_m: float=...) -> Tuple[ndarray, ndarray]:
+    """normals(*args, **kwargs)
+Overloaded function.
+
+1. normals(xyz: numpy.ndarray, range: numpy.ndarray, sensor_origins_xyz: numpy.ndarray, pixel_search_range: int = 1, max_angle_of_incidence_rad: float = 0.017453292519943295, target_distance_m: float = 0.025) -> numpy.ndarray[numpy.float64]
+
+
+Compute normals from destaggered XYZ/range arrays.
+
+Args:
+    xyz: destaggered XYZ coordinates for the first return (H, W, 3)
+    range: destaggered range image for the first return (H, W)
+    sensor_origins_xyz: per-column sensor origins in the same frame as xyz/range,
+        shape (W, 3). For world-frame xyz, use
+        (scan.pose @ scan.sensor_info.extrinsic)[:, :3, 3].
+        For sensor-frame xyz, pass zeros with shape (W, 3) (e.g. np.zeros((w, 3))).
+    pixel_search_range: axial search radius (in pixels) when gathering neighbours
+    max_angle_of_incidence_rad: minimum allowable incidence angle between a beam and
+        surface (radians)
+    target_distance_m: target neighbour distance used when selecting candidate points
+
+Returns:
+    A destaggered normal array of shape (H, W, 3) for the provided return.
+
+
+2. normals(xyz: numpy.ndarray, range: numpy.ndarray, xyz2: numpy.ndarray, range2: numpy.ndarray, sensor_origins_xyz: numpy.ndarray, pixel_search_range: int = 1, max_angle_of_incidence_rad: float = 0.017453292519943295, target_distance_m: float = 0.025) -> tuple[numpy.ndarray[numpy.float64], numpy.ndarray[numpy.float64]]
+
+
+Compute normals for both first and second returns from destaggered XYZ/range arrays.
+
+Args:
+    xyz: destaggered XYZ coordinates for the first return (H, W, 3)
+    range: destaggered range image for the first return (H, W)
+    xyz2: destaggered XYZ coordinates for the second return (H, W, 3)
+    range2: destaggered range image for the second return (H, W)
+    sensor_origins_xyz: per-column sensor origins in the same frame as xyz/range,
+        shape (W, 3). For world-frame xyz, use
+        (scan.pose @ scan.sensor_info.extrinsic)[:, :3, 3].
+        For sensor-frame xyz, pass zeros.
+    pixel_search_range: axial search radius (in pixels) when gathering neighbours
+    max_angle_of_incidence_rad: minimum allowable incidence angle between a beam and
+        surface (radians)
+    target_distance_m: target neighbour distance used when selecting candidate points
+
+Returns:
+    A tuple of destaggered normal arrays (first_return_normals, second_return_normals).
+
+"""
+    ...
 
 class ScanBatcher:
+
     @overload
     def __init__(self, w: int, pf: PacketFormat) -> None:
+        """__init__(self: ouster.sdk._bindings.client.ScanBatcher, arg0: ouster.sdk._bindings.client.SensorInfo) -> None
+"""
         ...
 
     @overload
     def __init__(self, info: SensorInfo) -> None:
+        """__init__(self: ouster.sdk._bindings.client.ScanBatcher, arg0: ouster.sdk._bindings.client.SensorInfo) -> None
+"""
         ...
 
     @overload
     def __call__(self, buf: BufferT, ls: LidarScan) -> bool:
+        """__call__(self: ouster.sdk._bindings.client.ScanBatcher, arg0: ouster.sdk._bindings.client.Packet, arg1: ouster.sdk._bindings.client.LidarScan) -> bool
+"""
         ...
 
     @overload
     def __call__(self, buf: BufferT, packet_ts: int, ls: LidarScan) -> bool:
+        """__call__(self: ouster.sdk._bindings.client.ScanBatcher, arg0: ouster.sdk._bindings.client.Packet, arg1: ouster.sdk._bindings.client.LidarScan) -> bool
+"""
         ...
 
     @overload
-    def __call__(self, packet: LidarPacket, ls: LidarScan) -> bool:
+    def __call__(self, packet: Packet, ls: LidarScan) -> bool:
+        """__call__(self: ouster.sdk._bindings.client.ScanBatcher, arg0: ouster.sdk._bindings.client.Packet, arg1: ouster.sdk._bindings.client.LidarScan) -> bool
+"""
         ...
 
+    def reset(self) -> None:
+        """reset(self: ouster.sdk._bindings.client.ScanBatcher) -> None
+"""
+        ...
+
+    def batched_packets(self) -> int:
+        """batched_packets(self: ouster.sdk._bindings.client.ScanBatcher) -> int
+"""
+        ...
 
 class XYZLut:
+
     def __init__(self, info: SensorInfo, use_extrinsics: bool) -> None:
+        """__init__(self: ouster.sdk._bindings.client.XYZLut, info: ouster.sdk._bindings.client.SensorInfo, use_extrinsics: bool) -> None
+"""
         ...
 
     @overload
     def __call__(self, scan: LidarScan) -> ndarray:
+        """__call__(*args, **kwargs)
+Overloaded function.
+
+1. __call__(self: ouster.sdk._bindings.client.XYZLut, arg0: numpy.ndarray[numpy.uint32[m, n], flags.c_contiguous]) -> numpy.ndarray[numpy.float64[m, 3]]
+
+2. __call__(self: ouster.sdk._bindings.client.XYZLut, arg0: ouster.sdk._bindings.client.LidarScan) -> numpy.ndarray[numpy.float64[m, 3]]
+"""
         ...
 
     @overload
     def __call__(self, range: ndarray) -> ndarray:
+        """__call__(*args, **kwargs)
+Overloaded function.
+
+1. __call__(self: ouster.sdk._bindings.client.XYZLut, arg0: numpy.ndarray[numpy.uint32[m, n], flags.c_contiguous]) -> numpy.ndarray[numpy.float64[m, 3]]
+
+2. __call__(self: ouster.sdk._bindings.client.XYZLut, arg0: ouster.sdk._bindings.client.LidarScan) -> numpy.ndarray[numpy.float64[m, 3]]
+"""
         ...
 
+    @property
+    def direction(self) -> ndarray:
+        """Unbound function"""
+        ...
+
+    @property
+    def offset(self) -> ndarray:
+        """Unbound function"""
+        ...
 
 class XYZLutFloat:
+
     def __init__(self, info: SensorInfo, use_extrinsics: bool) -> None:
+        """__init__(self: ouster.sdk._bindings.client.XYZLutFloat, info: ouster.sdk._bindings.client.SensorInfo, use_extrinsics: bool) -> None
+"""
         ...
 
     @overload
     def __call__(self, scan: LidarScan) -> ndarray:
+        """__call__(*args, **kwargs)
+Overloaded function.
+
+1. __call__(self: ouster.sdk._bindings.client.XYZLutFloat, arg0: numpy.ndarray[numpy.uint32[m, n], flags.c_contiguous]) -> numpy.ndarray[numpy.float32[m, 3]]
+
+2. __call__(self: ouster.sdk._bindings.client.XYZLutFloat, arg0: ouster.sdk._bindings.client.LidarScan) -> numpy.ndarray[numpy.float32[m, 3]]
+"""
         ...
 
     @overload
     def __call__(self, range: ndarray) -> ndarray:
+        """__call__(*args, **kwargs)
+Overloaded function.
+
+1. __call__(self: ouster.sdk._bindings.client.XYZLutFloat, arg0: numpy.ndarray[numpy.uint32[m, n], flags.c_contiguous]) -> numpy.ndarray[numpy.float32[m, 3]]
+
+2. __call__(self: ouster.sdk._bindings.client.XYZLutFloat, arg0: ouster.sdk._bindings.client.LidarScan) -> numpy.ndarray[numpy.float32[m, 3]]
+"""
         ...
 
+    @property
+    def direction(self) -> ndarray:
+        ...
+
+    @property
+    def offset(self) -> ndarray:
+        ...
 
 class AutoExposure:
+
     @overload
     def __init__(self) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.AutoExposure) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.AutoExposure, update_every: int) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.AutoExposure, lo_percentile: float, hi_percentile: float, update_every: int) -> None
+"""
         ...
 
     @overload
-    def __init__(self, lo_percentile: float, hi_percentile: float,
-                 update_every: int) -> None:
+    def __init__(self, lo_percentile: float, hi_percentile: float, update_every: int) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.AutoExposure) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.AutoExposure, update_every: int) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.AutoExposure, lo_percentile: float, hi_percentile: float, update_every: int) -> None
+"""
         ...
 
-    def __call__(self,
-                 image: ndarray,
-                 update_state: Optional[bool] = True) -> None:
-        ...
+    def __call__(self, image: ndarray, update_state: Optional[bool]=True) -> None:
+        """__call__(*args, **kwargs)
+Overloaded function.
 
+1. __call__(self: ouster.sdk._bindings.client.AutoExposure, image: numpy.ndarray[numpy.float32], update_state: bool = True) -> None
+
+2. __call__(self: ouster.sdk._bindings.client.AutoExposure, image: numpy.ndarray[numpy.float64], update_state: bool = True) -> None
+"""
+        ...
 
 class BeamUniformityCorrector:
+
     def __init__(self) -> None:
+        """__init__(self: ouster.sdk._bindings.client.BeamUniformityCorrector) -> None
+"""
         ...
 
     def __call__(self, image: ndarray) -> None:
+        """__call__(*args, **kwargs)
+Overloaded function.
+
+1. __call__(self: ouster.sdk._bindings.client.BeamUniformityCorrector, image: numpy.ndarray[numpy.float32], update_state: bool = True) -> None
+
+2. __call__(self: ouster.sdk._bindings.client.BeamUniformityCorrector, image: numpy.ndarray[numpy.float64], update_state: bool = True) -> None
+"""
         ...
 
-
 class FieldInfo:
+
     @property
     def ty_tag(self) -> type:
         ...
 
     def __init__(self, ty_tag: type, offset: int, mask: int, shift: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.FieldInfo, arg0: object, arg1: int, arg2: int, arg3: int) -> None
+"""
         ...
-
     offset: int
     mask: int
     shift: int
 
-
-def add_custom_profile(profile_nr: int,
-                       name: str,
-                       fields: List[Tuple[str, FieldInfo]],
-                       chan_data_size: int) -> None:
+def add_custom_profile(profile_nr: int, name: str, fields: List[Tuple[str, FieldInfo]], chan_data_size: int) -> None:
+    """add_custom_profile(arg0: int, arg1: str, arg2: list[tuple[str, ouster.sdk._bindings.client.FieldInfo]], arg3: int) -> None
+"""
     ...
 
+@overload
+def get_field_types(info: SensorInfo) -> List[FieldType]:
+    """get_field_types(*args, **kwargs)
+Overloaded function.
+
+1. get_field_types(info: ouster::sdk::core::SensorInfo) -> list[ouster.sdk._bindings.client.FieldType]
+
+
+    Extracts LidarScan fields with types for a given SensorInfo
+
+    Args:
+        info: sensor metadata for which to find fields types
+
+    Returns:
+        returns field types
+        
+
+2. get_field_types(format: ouster::sdk::core::DataFormat, version: ouster::sdk::core::Version) -> list[ouster.sdk._bindings.client.FieldType]
+
+
+    Extracts LidarScan fields with types for a given SensorInfo
+
+    Args:
+        info: sensor data format for which to find field types
+        fw_version: sensor firmware version
+
+    Returns:
+        returns field types
+        
+
+3. get_field_types(udp_profile_lidar: ouster::sdk::core::UDPProfileLidar) -> list[ouster.sdk._bindings.client.FieldType]
+
+
+    Extracts LidarScan fields with types for a given ``udp_profile_lidar``
+
+    Args:
+        udp_profile_lidar: lidar profile from which to get field types
+
+    Returns:
+        returns field types
+        
+"""
+    ...
 
 @overload
-def get_field_types(info: SensorInfo) -> List[FieldType]: ...
+def get_field_types(format: DataFormat, fw_version: Version) -> List[FieldType]:
+    """get_field_types(*args, **kwargs)
+Overloaded function.
+
+1. get_field_types(info: ouster::sdk::core::SensorInfo) -> list[ouster.sdk._bindings.client.FieldType]
 
 
-@overload
-def get_field_types(udp_profile_lidar: UDPProfileLidar) -> List[FieldType]: ...
+    Extracts LidarScan fields with types for a given SensorInfo
 
+    Args:
+        info: sensor metadata for which to find fields types
+
+    Returns:
+        returns field types
+        
+
+2. get_field_types(format: ouster::sdk::core::DataFormat, version: ouster::sdk::core::Version) -> list[ouster.sdk._bindings.client.FieldType]
+
+
+    Extracts LidarScan fields with types for a given SensorInfo
+
+    Args:
+        info: sensor data format for which to find field types
+        fw_version: sensor firmware version
+
+    Returns:
+        returns field types
+        
+
+3. get_field_types(udp_profile_lidar: ouster::sdk::core::UDPProfileLidar) -> list[ouster.sdk._bindings.client.FieldType]
+
+
+    Extracts LidarScan fields with types for a given ``udp_profile_lidar``
+
+    Args:
+        udp_profile_lidar: lidar profile from which to get field types
+
+    Returns:
+        returns field types
+        
+"""
+    ...
 
 class ValidatorEntry:
+
     def __str__(self) -> str:
+        """__str__(self: ouster.sdk._bindings.client.ValidatorEntry) -> str
+
+
+    Get the string representation of a ValidatorEntry
+
+    Returns:
+        returns the string representation of a ValidatorEntry
+    
+"""
         ...
 
     def __repr__(self) -> str:
+        """__repr__(self: ouster.sdk._bindings.client.ValidatorEntry) -> str
+
+
+    Get the string representation of a ValidatorEntry
+
+    Returns:
+        returns the string representation of a ValidatorEntry
+    
+"""
         ...
 
     def get_path(self) -> str:
+        """get_path(self: ouster.sdk._bindings.client.ValidatorEntry) -> str
+
+
+    Get the entry path to the issue.
+
+    Returns:
+        returns the entry path to the issue.
+    
+"""
         ...
 
     def get_msg(self) -> str:
+        """get_msg(self: ouster.sdk._bindings.client.ValidatorEntry) -> str
+
+
+    Get the message of the ValidatorEntry
+
+    Returns:
+        returns the message of the ValidatorEntry
+    
+"""
         ...
 
-
 class ValidatorIssues:
+
     @property
     def critical(self) -> List[ValidatorEntry]:
+        """Critical validator issues."""
         ...
 
     @property
     def warning(self) -> List[ValidatorEntry]:
+        """Warning validator issues."""
         ...
 
     @property
     def information(self) -> List[ValidatorEntry]:
+        """Information validator issues"""
         ...
-
 
 class ScanSource:
-    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+
+    def __iter__(self) -> Iterator[LidarScanSet]:
+        """__iter__(self: ouster.sdk._bindings.client.ScanSource) -> ouster.sdk._bindings.client.scan_iterator
+"""
         ...
 
-    def single_iter(self, sensor_idx: int) -> Iterator[List[Optional[LidarScan]]]:
+    def single_iter(self, sensor_idx: int) -> Iterator[LidarScanSet]:
+        """single_iter(self: ouster.sdk._bindings.client.ScanSource, arg0: int) -> ouster.sdk._bindings.client.scan_iterator
+"""
         ...
 
     @property
     def is_live(self) -> bool:
+        """
+        Check if the scan source is live.
+
+        A live scan source indicates that it is actively receiving data from a sensor.
+
+        Returns:
+            bool: True if the scan source is live, False otherwise.
+        """
         ...
 
     @property
@@ -1456,6 +4299,14 @@ class ScanSource:
 
     @property
     def sensor_info(self) -> List[SensorInfo]:
+        """
+        Retrieve sensor information for all sensors in the scan source.
+
+        Returns:
+            A list of `SensorInfo` objects, each containing metadata
+            about a sensor, such as serial number, firmware version,
+            and calibration details.
+        """
         ...
 
     @property
@@ -1463,17 +4314,40 @@ class ScanSource:
         ...
 
     def close(self) -> None:
+        """close(self: ouster.sdk._bindings.client.ScanSource) -> None
+"""
         ...
 
     @overload
     def __getitem__(self, index: int) -> List[LidarScan]:
+        """__getitem__(*args, **kwargs)
+Overloaded function.
+
+1. __getitem__(self: ouster.sdk._bindings.client.ScanSource, arg0: int) -> ouster.sdk._bindings.client.LidarScanSet
+
+2. __getitem__(self: ouster.sdk._bindings.client.ScanSource, arg0: slice) -> ouster::sdk::core::Slicer
+"""
         ...
 
     @overload
     def __getitem__(self, index: slice) -> ScanSource:
+        """__getitem__(*args, **kwargs)
+Overloaded function.
+
+1. __getitem__(self: ouster.sdk._bindings.client.ScanSource, arg0: int) -> ouster.sdk._bindings.client.LidarScanSet
+
+2. __getitem__(self: ouster.sdk._bindings.client.ScanSource, arg0: slice) -> ouster::sdk::core::Slicer
+"""
         ...
 
     def __len__(self) -> int:
+        """__len__(self: ouster.sdk._bindings.client.ScanSource) -> int
+"""
+        ...
+
+    def __length_hint__(self) -> int:
+        """__length_hint__(self: ouster.sdk._bindings.client.ScanSource) -> int
+"""
         ...
 
     @property
@@ -1484,83 +4358,157 @@ class ScanSource:
     def individual_index(self) -> List[np.ndarray]:
         ...
 
+    def slice(self, slice: slice) -> ScanSource:
+        """slice(self: ouster.sdk._bindings.client.ScanSource, arg0: slice) -> ouster::sdk::core::Slicer
+"""
+        ...
+
     def single(self, sensor_idx: int) -> ScanSource:
+        """single(self: ouster.sdk._bindings.client.ScanSource, arg0: int) -> ouster::sdk::core::Singler
+"""
         ...
 
     def mask(self, fields: List[str], masks: List[Optional[np.ndarray]]) -> ScanSource:
         ...
 
     def clip(self, fields: List[str], lower: int, upper: int) -> ScanSource:
+        """
+    limits the values of the specified set of fields to within the range = [lower, upper], any value
+    that exceeds this range is replaced by zero.
+    """
         ...
 
     def reduce(self, beams: List[int]) -> ScanSource:
+        """
+    Takes a regular ScanSource and reduces the beams count to the specified values.
+    """
         ...
-
 
 class ClientError(Exception):
-    def __init__(self) -> None:
-        ...
 
+    def __init__(self) -> None:
+        """Initialize self.  See help(type(self)) for accurate signature."""
+        ...
 
 class ClientTimeout(ClientError):
-    def __init__(self) -> None:
-        ...
 
+    def __init__(self) -> None:
+        """Initialize self.  See help(type(self)) for accurate signature."""
+        ...
 
 class ClientOverflow(ClientError):
+
     def __init__(self) -> None:
+        """Initialize self.  See help(type(self)) for accurate signature."""
         ...
 
-
 class PacketSource:
-    def __iter__(self) -> Iterator[Tuple[int, Union[LidarPacket, ImuPacket]]]:
+
+    def __iter__(self) -> Iterator[Tuple[int, Union[LidarPacket, ImuPacket, ZonePacket]]]:
+        """__iter__(self: ouster.sdk._bindings.client.PacketSource) -> iterator_holder<ouster::sdk::core::impl::BaseIterator<std::pair<int, std::shared_ptr<ouster::sdk::core::Packet> >, ouster::sdk::core::PacketSource> >
+"""
         ...
 
     def close(self) -> None:
+        """close(self: ouster.sdk._bindings.client.PacketSource) -> None
+"""
         ...
 
     @property
     def sensor_info(self) -> List[SensorInfo]:
+        """
+                            Retrieve sensor information for all sensors in the packet source.
+
+                            Returns:
+                                A list of `SensorInfo` objects, each containing metadata
+                                about a sensor, such as serial number, firmware version,
+                                and calibration details.
+                            """
         ...
 
     @property
     def is_live(self) -> bool:
+        """
+                            Check if the packet source is live."""
         ...
-
 
 class SensorPacketSource(PacketSource):
+
     @overload
-    def __init__(self, source: Union[str, List[str]], *, sensor_info: List[SensorInfo] = [],
-                 imu_port: Optional[int] = None, lidar_port: Optional[int] = None,
-                 no_auto_udp_dest: bool = False, timeout: float = 1.0,
-                 buffer_time_sec: float = 0.0, extrinsics: List[ndarray] = [],
-                 extrinsics_file: str = "", config_timeout: float = 45.0,
-                 do_not_reinitialize: bool = False, sensor_config: List[SensorConfig] = []) -> None:
+    def __init__(self, source: Union[str, List[str]], *, sensor_info: List[SensorInfo]=[], imu_port: Optional[int]=None, lidar_port: Optional[int]=None, no_auto_udp_dest: bool=False, timeout: float=1.0, buffer_time_sec: float=0.0, extrinsics: List[ndarray]=[], extrinsics_file: str='', config_timeout: float=45.0, do_not_reinitialize: bool=False, sensor_config: List[SensorConfig]=[], reuse_ports: bool=False) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, sensors: list[ouster::sdk::sensor::Sensor], config_timeout: float = 40, buffer_time: float = 0) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, file: str, **kwargs) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, file: list[str], **kwargs) -> None
+
+4. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], config_timeout: float = 40, buffer_time: float = 0) -> None
+"""
         ...
 
     @overload
-    def __init__(self, sensors: List[Sensor], config_timeout: float = ..., buffer_time: float = ...) -> None:
+    def __init__(self, sensors: List[Sensor], config_timeout: float=..., buffer_time: float=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, sensors: list[ouster::sdk::sensor::Sensor], config_timeout: float = 40, buffer_time: float = 0) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, file: str, **kwargs) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, file: list[str], **kwargs) -> None
+
+4. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], config_timeout: float = 40, buffer_time: float = 0) -> None
+"""
         ...
 
     @overload
-    def __init__(self, sensors: List[Sensor], metadata: List[SensorInfo], config_timeout: float = ..., buffer_time: float = ...) -> None:
+    def __init__(self, sensors: List[Sensor], metadata: List[SensorInfo], config_timeout: float=..., buffer_time: float=...) -> None:
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, sensors: list[ouster::sdk::sensor::Sensor], config_timeout: float = 40, buffer_time: float = 0) -> None
+
+2. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, file: str, **kwargs) -> None
+
+3. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, file: list[str], **kwargs) -> None
+
+4. __init__(self: ouster.sdk._bindings.client.SensorPacketSource, sensors: list[ouster::sdk::sensor::Sensor], metadata: list[ouster.sdk._bindings.client.SensorInfo], config_timeout: float = 40, buffer_time: float = 0) -> None
+"""
         ...
 
     def close(self) -> None:
+        """close(self: ouster.sdk._bindings.client.PacketSource) -> None
+"""
         ...
 
     def flush(self) -> None:
+        """flush(self: ouster.sdk._bindings.client.SensorPacketSource) -> None
+"""
         ...
 
     def buffer_size(self) -> int:
+        """buffer_size(self: ouster.sdk._bindings.client.SensorPacketSource) -> int
+"""
         ...
 
+    @property
     def dropped_packets(self) -> int:
         ...
 
-    def get_packet(self, timeout: float = ...) -> ClientEvent:
+    def get_packet(self, timeout: float=...) -> ClientEvent:
+        """get_packet(self: ouster.sdk._bindings.client.SensorPacketSource, timeout: float = 0.1) -> ouster::sdk::sensor::ClientEvent
+"""
         ...
 
+class MultiScanSource(ScanSource):
+
+    def __init__(self, sources: List[ScanSource]) -> None:
+        """__init__(self: ouster.sdk._bindings.client.MultiScanSource, sources: object) -> None
+"""
+        ...
 
 class IoType:
     SENSOR: ClassVar[IoType]
@@ -1575,76 +4523,335 @@ class IoType:
     PNG: ClassVar[IoType]
 
     def __init__(self, x: int) -> None:
+        """__init__(self: ouster.sdk._bindings.client.IoType, value: int) -> None
+"""
+        ...
+
+    @property
+    def name(self) -> str:
+        """name(self: object) -> str
+"""
+        ...
+
+    @property
+    def value(self) -> int:
         ...
 
 def open_source(uri: Union[str, List[str]], **kwargs) -> ScanSource:
+    """open_source(*args, **kwargs)
+Overloaded function.
+
+1. open_source(source: str, collate: bool = True, sensor_idx: int = -1, **kwargs) -> ouster.sdk._bindings.client.ScanSource
+
+2. open_source(source: list[str], collate: bool = True, sensor_idx: int = -1, **kwargs) -> ouster.sdk._bindings.client.ScanSource
+"""
     ...
 
 def open_packet_source(uri: Union[str, List[str]], **kwargs) -> PacketSource:
+    """open_packet_source(*args, **kwargs)
+Overloaded function.
+
+1. open_packet_source(source: str, **kwargs) -> ouster.sdk._bindings.client.PacketSource
+
+2. open_packet_source(source: list[str], **kwargs) -> ouster.sdk._bindings.client.PacketSource
+"""
     ...
 
-def resolve_field_types(metadata: List[SensorInfo], raw_headers: bool = False, raw_fields: bool = False, field_names: Optional[List[str]] = []) -> List[List[FieldType]]:
+def resolve_field_types(metadata: List[SensorInfo], raw_headers: bool=False, raw_fields: bool=False, field_names: Optional[List[str]]=[]) -> List[List[FieldType]]:
+    """resolve_field_types(metadata: list[ouster::sdk::core::SensorInfo], raw_headers: bool = False, raw_fields: bool = False, field_names: Optional[list[str]] = None) -> list[list[ouster.sdk._bindings.client.FieldType]]
+
+
+    Resolve field types for a given set of metadata and field names.
+
+    This function determines the types of fields (e.g., signal, reflectivity) based on
+    the provided sensor metadata and field names.
+
+    Args:
+        metadata (List[SensorInfo]): A list of sensor metadata objects.
+        raw_headers (bool): Whether to include raw headers in the resolution. Default is False.
+        raw_fields (bool): Whether to include raw fields in the resolution. Default is False.
+        field_names (List[str]): A list of field names to resolve. Default is an empty list.
+
+    Returns:
+        List[FieldType]: A list of resolved field types.
+    
+"""
     ...
 
 def io_type(uri: str) -> IoType:
+    """
+    Determine the input/output type for a given URI.
+    """
     ...
 
 def io_type_from_extension(extension: str) -> IoType:
+    """
+        Determine the input/output type based on a file extension.
+        """
     ...
 
 def extension_from_io_type(type: IoType) -> str:
+    """
+        Get the file extension for a given input/output type.
+        """
     ...
 
 def parse_and_validate_metadata(metadata: str) -> Tuple[SensorInfo, ValidatorIssues]:
+    """parse_and_validate_metadata(arg0: str) -> tuple[Optional[ouster::sdk::core::SensorInfo], ouster.sdk._bindings.client.ValidatorIssues]
+
+
+    Parse and validate sensor metadata
+
+    Args:
+        metadata (str): The metadata json to parse and validate.
+
+    Returns:
+        returns (ValidatorIssues, SensorInfo): The list of issues that were encountered
+                                                and the parsed SensorInfo
+    
+"""
     ...
 
 def parse_and_validate_sensor_config(metadata: str) -> Tuple[SensorConfig, ValidatorIssues]:
+    """parse_and_validate_sensor_config(arg0: str) -> tuple[ouster.sdk._bindings.client.SensorConfig, ouster::sdk::core::ValidatorIssues]
+"""
     ...
 
 def dewarp(points: ndarray, poses: ndarray) -> ndarray:
+    """dewarp(*args, **kwargs)
+Overloaded function.
+
+1. dewarp(points: numpy.ndarray[numpy.float64], poses: numpy.ndarray[numpy.float64]) -> numpy.ndarray[numpy.float64]
+
+
+Applies a set of 4x4 pose transformations to a collection of 3D points.
+Args:
+    points: A NumPy array of shape (H, W, 3) representing the 3D points.
+    poses: A NumPy array of shape (W, 4, 4) representing the 4x4 pose
+
+Return:
+    A NumPy array of shape (H, W, 3) containing the dewarped 3D points
+    
+
+2. dewarp(points: numpy.ndarray[numpy.float32], poses: numpy.ndarray[numpy.float32]) -> numpy.ndarray[numpy.float32]
+
+
+Applies a set of 4x4 pose transformations to a collection of 3D points (float precision).
+Args:
+    points: A NumPy array of shape (H, W, 3) representing the 3D points (float32).
+    poses: A NumPy array of shape (W, 4, 4) representing the 4x4 pose (float32)
+
+Return:
+    A NumPy array of shape (H, W, 3) containing the dewarped 3D points (float32)
+    
+"""
     ...
 
-
 def transform(points: ndarray, pose: ndarray) -> ndarray:
+    """transform(*args, **kwargs)
+Overloaded function.
+
+1. transform(points: numpy.ndarray[numpy.float64], pose: numpy.ndarray[numpy.float64]) -> numpy.ndarray[numpy.float64]
+
+
+    Applies a single of 4x4 pose transformations to a collection of 3D points.
+    Args:
+    points: A NumPy array of shape (H, W, 3), or (N, 3)
+    pose: A NumPy array of shape (4, 4) representing the 4x4 pose
+
+    Return:
+    A NumPy array of shape (H, W, 3) or (N, 3) containing the transformed 3D points
+    after applying the corresponding 4x4 transformation matrices to the points
+    
+
+2. transform(points: numpy.ndarray[numpy.float32], pose: numpy.ndarray[numpy.float32]) -> numpy.ndarray[numpy.float32]
+
+
+    Applies a single of 4x4 pose transformations to a collection of 3D points (float precision).
+    Args:
+    points: A NumPy array of shape (H, W, 3), or (N, 3) (float32)
+    pose: A NumPy array of shape (4, 4) representing the 4x4 pose (float32)
+
+    Return:
+    A NumPy array of shape (H, W, 3) or (N, 3) containing the transformed 3D points (float32)
+    after applying the corresponding 4x4 transformation matrices to the points
+    
+"""
     ...
 
 def in_multicast(addr: str) -> bool:
+    """in_multicast(arg0: str) -> bool
+"""
     ...
 
 def populate_extrinsics(file: str, extrinsics, sensor_infos: List[SensorInfo]) -> None:
+    """populate_extrinsics(arg0: str, arg1: list[numpy.ndarray[numpy.float64]], arg2: list[ouster::sdk::core::SensorInfo]) -> None
+
+
+    Populate extrinsics for a set of sensors.
+
+    This function reads extrinsics from a file and applies them to the provided
+    sensor metadata.
+
+    Args:
+        extrinsics_file (str): Path to the file containing extrinsics data.
+        extrinsics (List[np.ndarray]): A list of 4x4 pose matrices.
+        sensor_infos (List[SensorInfo]): A list of sensor metadata objects to update.
+
+    Returns:
+        None
+    
+"""
     ...
 
-def collate(src: ScanSource, dt: int = 210000000) -> ScanSource:
+def collate(src: ScanSource, dt: int=210000000) -> ScanSource:
+    """collate(source: ouster.sdk._bindings.client.ScanSource, dt: int = 210000000) -> ouster.sdk._bindings.client.Collator
+
+
+    Collate scans from a scan source.
+
+    This function creates a `Collator` object that combines scans from a scan source.
+
+    Args:
+        source (ScanSource): The scan source to collate.
+        dt (int): The time delta in nanoseconds for collating scans. Default is 210000000.
+
+    Returns:
+        Collator: A collator object for the given scan source.
+    
+"""
     ...
 
-def complete(src: ScanSource) -> ScanSource:
-    ...
+def euler_pose_to_matrix(pose: ndarray) -> ndarray:
+    """euler_pose_to_matrix(arg0: numpy.ndarray[numpy.float64[6, 1]]) -> numpy.ndarray[numpy.float64[4, 4]]
 
-def cycle(src: ScanSource) -> ScanSource:
-    ...
 
-def euler_pose_to_matrix(pose: ndarray) -> ndarray: 
+        Convert a pose given in Euler angles and translation to a 4x4 transformation matrix.
+
+        The pose vector should contain the following elements in order:
+            [roll, pitch, yaw, x, y, z]
+        where roll, pitch, and yaw are in radians.
+
+        Returns:
+            A 4x4 homogeneous transformation matrix.
+        
+"""
     ...
 
 def quaternion_pose_to_matrix(pose: ndarray) -> ndarray:
+    """quaternion_pose_to_matrix(arg0: numpy.ndarray[numpy.float64[7, 1]]) -> numpy.ndarray[numpy.float64[4, 4]]
+
+
+        Convert a pose given as a quaternion and translation to a 4x4 transformation matrix.
+
+        The pose vector should contain the following elements in order:
+            [qw, qx, qy, qz, x, y, z]
+
+        Returns:
+            A 4x4 homogeneous transformation matrix.
+        
+"""
     ...
 
 def interp_pose(x_interp: ndarray, x_known: ndarray, poses_known: ndarray) -> ndarray:
+    """interp_pose(x_interp: numpy.ndarray[numpy.float64], x_known: numpy.ndarray[numpy.float64], poses_known: numpy.ndarray[numpy.float64]) -> numpy.ndarray[numpy.float64]
+
+
+        Interpolate 4x4 pose matrices at given x-coordinate values (double precision).
+        Args:
+            x_interp: (N,) or (N,1) array of interpolation x values (float64)
+            x_known: (M,) or (M,1) array of known x values (float64)
+            poses_known: (M, 4, 4) array of known pose matrices (float64)
+        Returns:
+            (N, 4, 4) array of interpolated pose matrices (float64)
+        
+"""
+    ...
+
+def interp_pose_float(x_interp: ndarray, x_known: ndarray, poses_known: ndarray) -> ndarray:
+    """interp_pose_float(x_interp: numpy.ndarray[numpy.float64], x_known: numpy.ndarray[numpy.float64], poses_known: numpy.ndarray[numpy.float32]) -> numpy.ndarray[numpy.float32]
+
+
+        Interpolate 4x4 pose matrices at given x-coordinate values (float precision for poses).
+        Args:
+            x_interp: (N,) or (N,1) array of interpolation x values (float64)
+            x_known: (M,) or (M,1) array of known x values (float64)
+            poses_known: (M, 4, 4) array of known pose matrices (float32)
+        Returns:
+            (N, 4, 4) array of interpolated pose matrices (float32)
+        
+"""
     ...
 
 def read_pointcloud(filename: str) -> ndarray:
+    """read_pointcloud(arg0: str) -> numpy.ndarray[numpy.float32[m, 3]]
+
+
+        [BETA] Loads the 3D X Y and Z points from a PCD or PLY file and returns
+        them as Nx3 matrix.
+
+        Args:
+            filename: filename to load
+
+        Returns:
+            Nx3 matrix of the resulting points.
+
+        Note:
+            This is a beta feature and its API may change in future releases.
+        
+"""
     ...
 
 def set_http_api_headers(headers: List[str]) -> None:
+    """set_http_api_headers(headers: list[str]) -> None
+"""
     ...
 
-def set_http_api_prefix(headers: List[str]) -> None:
+def set_http_api_prefix(prefix: str) -> None:
+    """set_http_api_prefix(prefix: str) -> None
+"""
     ...
 
 @overload
-def voxel_downsample(resolution: float, points: ndarray, point_attributes: ndarray, min_points_per_voxel: int = 1) -> Tuple[ndarray, ndarray]:
+def voxel_downsample(resolution: float, points: ndarray, point_attributes: ndarray, min_points_per_voxel: int=1) -> Tuple[ndarray, ndarray]:
+    """voxel_downsample(voxel_size: numpy.ndarray[numpy.float64], pts: numpy.ndarray[numpy.float64], attributes: numpy.ndarray[numpy.float64], min_points_per_voxel: int = 1) -> tuple[numpy.ndarray[numpy.float64[m, 3]], numpy.ndarray[numpy.float64[m, n]]]
+
+
+        [BETA] Downsample a pointcloud using a voxel grid of the requested resolution.
+
+        Args:
+            voxel_size: The size of the voxel grid.
+            pts: Nx3 matrix of points to downsample.
+            attributes: A dictionary of attributes to downsample.
+            min_points_per_voxel: Minimum number of points per voxel to keep.
+
+        Returns:
+            A tuple containing the downsampled points and attributes.
+
+        Note:
+            This is a beta feature and its API may change in future releases.
+        
+"""
     ...
 
 @overload
-def voxel_downsample(resolution: ndarray, points: ndarray, point_attributes: ndarray, min_points_per_voxel: int = 1) -> Tuple[ndarray, ndarray]:
+def voxel_downsample(resolution: ndarray, points: ndarray, point_attributes: ndarray, min_points_per_voxel: int=1) -> Tuple[ndarray, ndarray]:
+    """voxel_downsample(voxel_size: numpy.ndarray[numpy.float64], pts: numpy.ndarray[numpy.float64], attributes: numpy.ndarray[numpy.float64], min_points_per_voxel: int = 1) -> tuple[numpy.ndarray[numpy.float64[m, 3]], numpy.ndarray[numpy.float64[m, n]]]
+
+
+        [BETA] Downsample a pointcloud using a voxel grid of the requested resolution.
+
+        Args:
+            voxel_size: The size of the voxel grid.
+            pts: Nx3 matrix of points to downsample.
+            attributes: A dictionary of attributes to downsample.
+            min_points_per_voxel: Minimum number of points per voxel to keep.
+
+        Returns:
+            A tuple containing the downsampled points and attributes.
+
+        Note:
+            This is a beta feature and its API may change in future releases.
+        
+"""
     ...

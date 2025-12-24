@@ -5,25 +5,25 @@ All rights reserved.
 Ouster scan accumulation for LidarScanViz
 """
 
-from typing import (Optional, Dict, List, Tuple, Callable, Any)
+from typing import (Optional, Dict, Tuple, Callable, Any)
 
 import threading
 from functools import partial
 
 from ouster.sdk._bindings.viz import PointViz, WindowCtx, Label
-from .util import push_point_viz_handler
-from .model import LidarScanVizModel
-from .scans_accumulator import ScansAccumulator
-from .map_accumulator import MapAccumulator
-from .accumulators_config import LidarScanVizAccumulatorsConfig
-from .track import MultiTrack
-from .tracks_accumulator import TracksAccumulator
-from ouster.sdk.core import LidarScan
+from ouster.sdk.viz.util import push_point_viz_handler
+from ouster.sdk.viz.model import LidarScanVizModel
+from ouster.sdk.viz.scans_accumulator import ScansAccumulator
+from ouster.sdk.viz.map_accumulator import MapAccumulator
+from ouster.sdk.viz.accumulators_config import LidarScanVizAccumulatorsConfig
+from ouster.sdk.viz.track import MultiTrack
+from ouster.sdk.viz.tracks_accumulator import TracksAccumulator
+from ouster.sdk.core import LidarScanSet
 
 
 class LidarScanVizAccumulators:
     """Accumulate scans, track poses and overall map view
-    Every new scan (``LidarScan`` or ``List[Optional[LidarScan]]``) is passed
+    Every new scan (``LidarScan`` or ``LidarScanSet``) is passed
     through ``update(scan, num)``.
 
     Available visualization depends on whether poses are present or not
@@ -91,6 +91,11 @@ class LidarScanVizAccumulators:
 
         self._cloud_pt_size: float = 1
 
+    @property
+    def track_accumulator(self) -> TracksAccumulator:
+        """Get the TracksAccumulator instance."""
+        return self._ta
+
     def cycle_cloud_mode(self, direction) -> bool:
         with self._lock:
             self._ma.cycle_cloud_mode(direction=direction)
@@ -114,10 +119,8 @@ class LidarScanVizAccumulators:
             (ord('K'), 1): partial(self.cycle_cloud_mode, direction=-1),
             (ord('G'), 0): partial(self.cycle_cloud_palette, direction=1),
             (ord('G'), 1): partial(self.cycle_cloud_palette, direction=-1),
-            # TODO[UN]: replace with other keys
             (ord('6'), 0): partial(self.toggle_mode_accum),
             (ord('7'), 0): partial(self.toggle_mode_map),
-            (ord('8'), 0): partial(self.toggle_mode_track),
         }
 
         key_definitions: Dict[str, str] = {
@@ -126,7 +129,6 @@ class LidarScanVizAccumulators:
             'g / SHIFT+g': "Cycle point cloud color palette of accumulated clouds or map",
             '6': "Toggle scans accumulation view mode (ACCUM)",
             '7': "Toggle overall map view mode (MAP)",
-            '8': "Toggle poses/trajectory view mode (TRACK)",
         }
         self._key_definitions = key_definitions
 
@@ -215,11 +217,7 @@ class LidarScanVizAccumulators:
             accum_str += f"        palette [G]: {active_cloud_palette.name}\n"  # TODO[tws] generalize
             accum_str += f"        point size [J]: {int(self._cloud_pt_size)}"
 
-        osd_text = append_with_nl(osd_text, accum_str)
-
-        poses_str = f"poses [8]: {'ON' if self._ta.track_visible else 'OFF'}"
-        osd_text = append_with_nl(osd_text, poses_str)
-        return osd_text
+        return append_with_nl(osd_text, accum_str)
 
     def _draw_osd(self):
         """Update on screen display label text"""
@@ -229,7 +227,7 @@ class LidarScanVizAccumulators:
             self._osd.set_text("")
 
     def update(self,
-               scans: List[Optional[LidarScan]],
+               scans: LidarScanSet,
                scan_num: Optional[int] = None) -> None:
         """
         Updates the accumulation state from the current scan. Locking is necessary here because the accumulation state

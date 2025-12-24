@@ -14,8 +14,8 @@ from itertools import tee
 
 import numpy as np
 
-from .data import (LidarScan, ColHeader)
-from .core import (LidarPacket, PacketSource, PacketFormat)
+from ouster.sdk.core.data import (LidarScan, ColHeader)
+from ouster.sdk.core import (LidarPacket, PacketSource, PacketFormat)
 from ouster.sdk._bindings.client import ScanBatcher
 
 

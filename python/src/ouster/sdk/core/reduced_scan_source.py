@@ -1,6 +1,6 @@
 from typing import Optional, Iterator, Union, List, overload
 from ouster.sdk._bindings.client import ScanSource
-from ouster.sdk.core import SensorInfo, LidarScan
+from ouster.sdk.core import SensorInfo, LidarScan, LidarScanSet
 from ouster.sdk.core.scan_ops import reduce_by_factor, reduce_by_factor_metadata
 
 
@@ -49,7 +49,10 @@ class ReducedScanSource(ScanSource):
     def __len__(self) -> int:
         return len(self._scan_source)
 
-    def __iter__(self) -> Iterator[List[Optional[LidarScan]]]:
+    def __length_hint__(self) -> int:
+        return self._scan_source.__length_hint__()
+
+    def __iter__(self) -> Iterator[LidarScanSet]:
         def reduce_scan(scan, factor, sensor_info):
             out = reduce_by_factor(scan, factor)
             out.sensor_info = sensor_info
@@ -65,7 +68,7 @@ class ReducedScanSource(ScanSource):
                     out.append(None)
                 else:
                     out.append(reduce_scan(scan, self._factors[idx], self._metadata[idx]))
-            yield out
+            yield LidarScanSet(out)
 
     @overload
     def __getitem__(self, key: int) -> List[LidarScan]:
@@ -86,11 +89,11 @@ class ReducedScanSource(ScanSource):
         self.close()
 
 
-def _reduce_fn(source: ScanSource, beams: List[int]) -> ScanSource:
+def _reduce_fn(self: ScanSource, beams: List[int]) -> ScanSource:
     """
     Takes a regular ScanSource and reduces the beams count to the specified values.
     """
-    return ReducedScanSource(source, beams)
+    return ReducedScanSource(self, beams)
 
 
 # allow assigning this

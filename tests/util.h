@@ -3,6 +3,8 @@
  * All rights reserved.
  */
 
+#pragma once
+
 #include <chrono>
 #include <cstdlib>
 #include <map>
@@ -69,8 +71,8 @@ std::map<std::string, std::string> term_styles() {
  * seeded version for consistent replication
  */
 template <typename T>
-void randomize_field(Eigen::Ref<ouster::img_t<T>> field, uint64_t value_mask,
-                     size_t seed) {
+void randomize_field(Eigen::Ref<ouster::sdk::core::img_t<T>> field,
+                     uint64_t value_mask, size_t seed) {
     auto g = std::mt19937(seed);
     auto d = std::uniform_int_distribution<uint64_t>(0, value_mask);
 
@@ -86,7 +88,8 @@ void randomize_field(Eigen::Ref<ouster::img_t<T>> field, uint64_t value_mask,
  * randomize field with values conforming to value_mask
  */
 template <typename T>
-void randomize_field(Eigen::Ref<ouster::img_t<T>> field, uint64_t value_mask) {
+void randomize_field(Eigen::Ref<ouster::sdk::core::img_t<T>> field,
+                     uint64_t value_mask) {
     std::random_device rd;
     randomize_field(field, value_mask, rd());
 }
@@ -94,4 +97,17 @@ void randomize_field(Eigen::Ref<ouster::img_t<T>> field, uint64_t value_mask) {
 inline std::string getenvs(const std::string& var) {
     char* res = std::getenv(var.c_str());
     return res ? std::string{res} : std::string{};
+}
+
+inline bool enable_performance_tests() {
+    static std::vector<std::string> yes = {"1", "Y", "YES", "yes",
+                                           "Y", "y", "ON",  "on"};
+    if (const char* env = std::getenv("OUSTER_PERFORMANCE")) {
+        for (const auto& str : yes) {
+            if (strcmp(env, str.c_str()) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
 }

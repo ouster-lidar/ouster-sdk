@@ -4,11 +4,13 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "glfw.h"
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 
@@ -42,4 +44,5 @@ class Framebuffer {
 
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

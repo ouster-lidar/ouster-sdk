@@ -12,6 +12,7 @@
 #include "ouster/point_viz.h"
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 
@@ -22,7 +23,7 @@ namespace impl {
  * or the left (for tall images)
  */
 class GLImage {
-    constexpr static int size_fraction_max = 20;
+    constexpr static int SIZE_FRACTION_MAX = 20;
 
     // global gl state
     static bool initialized;
@@ -37,13 +38,13 @@ class GLImage {
     static GLuint use_palette_id;
 
     // per-image gl state
-    std::array<GLuint, 2> vertexbuffers;
-    GLuint image_texture_id{0};
-    GLuint mask_texture_id{0};
-    GLuint palette_texture_id{0};
-    GLuint image_index_id{0};
+    std::array<GLuint, 2> vertexbuffers_;
+    GLuint image_texture_id_{0};
+    GLuint mask_texture_id_{0};
+    GLuint palette_texture_id_{0};
+    GLuint image_index_id_{0};
 
-    float x0{-1}, x1{0}, y0{0}, y1{-1}, hshift{0};
+    float x0_{-1}, x1_{0}, y0_{0}, y1_{-1}, hshift_{0};
 
    public:
     GLImage();
@@ -71,4 +72,5 @@ class GLImage {
 
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

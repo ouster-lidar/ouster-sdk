@@ -1,5 +1,13 @@
 #pragma once
+#include <pybind11/eigen.h>
+#include <pybind11/functional.h>
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+#include <cstdint>
+#include <functional>
+#include <map>
 
 #include "nonstd/optional.hpp"
 #include "ouster/open_source.h"
@@ -14,9 +22,9 @@ struct iterator_holder {
 };
 
 void parse_packet_source_options(const pybind11::kwargs& args,
-                                 ouster::PacketSourceOptions& options);
+                                 ouster::sdk::PacketSourceOptions& options);
 void parse_scan_source_options(const pybind11::kwargs& args,
-                               ouster::ScanSourceOptions& options);
+                               ouster::sdk::ScanSourceOptions& options);
 
 namespace pybind11 {
 namespace detail {

@@ -1,17 +1,25 @@
 #include "ouster/impl/transform_homogeneous.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "ouster/impl/transform_vector.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 namespace impl {
 
 RotV RotH::log() const {
-    double unused1, unused2;
+    double unused1;
+    double unused2;
     return log(unused1, unused2);
 }
 
 PoseV PoseH::log() const {
-    double unused1, unused2, unused3;
+    double unused1;
+    double unused2;
+    double unused3;
     return log(unused1, unused2, unused3);
 }
 
@@ -49,13 +57,15 @@ void PoseH::reorthogonalize() {
 
 PoseV PoseH::log(double& angle_out, double& sin_angle_out,
                  double& cos_angle_out) const {
-    PoseV v;
-    v.set_rot(r().log(angle_out, cos_angle_out));
+    PoseV vec;
+    vec.set_rot(r().log(angle_out, cos_angle_out));
     sin_angle_out = std::sin(angle_out);
-    v.set_trans(v.r().vee(angle_out, sin_angle_out, cos_angle_out).inverse() *
-                t());
-    return v;
+    vec.set_trans(
+        vec.r().vee(angle_out, sin_angle_out, cos_angle_out).inverse() * t());
+    return vec;
 }
 
 }  // namespace impl
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

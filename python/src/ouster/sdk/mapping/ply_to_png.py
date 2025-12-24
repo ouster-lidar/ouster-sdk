@@ -82,14 +82,19 @@ def screenshot_and_save_png(viz, screenshot_path: str):
     return screenshot_path
 
 
+def scale_rgb_channel(channel):
+    return (channel / (2**8 - 1)).astype(np.float32)
+
+
 def convert_ply_to_png(ply_files, screenshot_path, is_plot):
     start_point = peak_start_point(ply_files)
 
     if not start_point:
         return
 
-    points = np.empty((0, 3))
-    keys = np.empty(0)
+    combined_points = np.empty((0, 3))
+    combined_keys = None
+    key_field = None
 
     for file in ply_files:
         logger.info(f"processing file : {file}")
@@ -98,23 +103,43 @@ def convert_ply_to_png(ply_files, screenshot_path, is_plot):
         x = ply_data['vertex']['x'] - start_point[0]
         y = ply_data['vertex']['y'] - start_point[1]
         z = ply_data['vertex']['z'] - start_point[2]
+        points = np.stack((x, y, z), axis=-1)
 
-        possible_keys = ['REFLECTIVITY', 'SIGNAL', 'NEAR_IR']
-        key_field = None
+        # check if RGB data is available
+        curr_key_field = None
+        if all(channel in ply_data['vertex'].data.dtype.names for channel in ['red', 'green', 'blue']):
+            r = scale_rgb_channel(ply_data['vertex']['red'])
+            g = scale_rgb_channel(ply_data['vertex']['green'])
+            b = scale_rgb_channel(ply_data['vertex']['blue'])
+            key = np.stack((r, g, b), axis=-1)
+            curr_key_field = 'RGB'
+        else:
+            # fallback to other fields
+            possible_keys = ['REFLECTIVITY', 'SIGNAL', 'NEAR_IR']
 
-        for key in possible_keys:
-            if key in ply_data['vertex'].data.dtype.names:
-                key_field = key
-                break
+            for key in possible_keys:
+                if key in ply_data['vertex'].data.dtype.names:
+                    curr_key_field = key
+                    break
 
-        if key_field is None:
+            if curr_key_field is not None:
+                key = ply_data['vertex'][curr_key_field] * 2
+
+        if curr_key_field is None:
             logger.error("No valid key field found in PLY file.")
             return
 
-        k = ply_data['vertex'][key_field] * 2
+        if key_field is not None and curr_key_field != key_field:
+            logger.error("Inconsistent key fields across PLY files.")
+            return
 
-        points = np.concatenate((points, np.stack((x, y, z), axis=-1)), axis=0)
-        keys = np.concatenate((keys, k))
+        if combined_keys is None:
+            key_field = curr_key_field
+            combined_keys = key
+            combined_points = points
+        else:
+            combined_points = np.concatenate((combined_points, points), axis=0)
+            combined_keys = np.concatenate((combined_keys, key), axis=0)
 
     current_size = points.shape[0]
     if current_size > max_plot_points:
@@ -125,7 +150,7 @@ def convert_ply_to_png(ply_files, screenshot_path, is_plot):
         indices_to_delete = np.random.choice(
             current_size, points_to_delete, replace=False)
         points = np.delete(points, indices_to_delete, axis=0)
-        keys = np.delete(keys, indices_to_delete)
+        combined_keys = np.delete(combined_keys, indices_to_delete, axis=0)
         logger.info(f"random delete {points_to_delete} points")
 
     doll_dist = get_doll_dist(points)
@@ -134,8 +159,11 @@ def convert_ply_to_png(ply_files, screenshot_path, is_plot):
     viz.add_default_controls(point_viz)
     cloud = viz.Cloud(points.shape[0])
 
-    cloud.set_xyz(np.asfortranarray(points))
-    cloud.set_key(np.asfortranarray(keys))
+    cloud.set_xyz(combined_points)
+    if key_field == 'RGB':
+        cloud.set_key_rgb(combined_keys)
+    else:
+        cloud.set_key(combined_keys)
     cloud.set_palette(viz.magma_palette)
     point_viz.add(cloud)
     point_viz.camera.set_dolly(doll_dist)

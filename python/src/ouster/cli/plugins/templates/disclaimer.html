@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Configuration Disclaimer</title>
+    <!-- Assumes dashboard.html provides global styles (e.g. .page, .card, .notice). -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <style>
+        /* Fallback minimal styling if dashboard.css not loaded */
+        @font-face {
+            font-family: 'body-font';
+            src: local('Roboto'), sans-serif;
+            font-weight: 400;
+        }
+
+        body {
+            font-family: 'body-font', sans-serif;
+            margin: 0;
+            background: #10141a;
+            color: #e2e8f0;
+        }
+
+        .page {
+            max-width: 960px;
+            margin: 40px auto;
+            padding: 0 24px;
+        }
+
+        .card {
+            background: #1c2530;
+            border: 1px solid #2c3a47;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .35);
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: .5px;
+        }
+
+        p {
+            line-height: 1.5;
+            margin: 0 0 12px;
+        }
+
+        .pill-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 12px 0 20px;
+        }
+
+        .pill {
+            background: #25313f;
+            border: 1px solid #364959;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: .8rem;
+            letter-spacing: .5px;
+        }
+
+        .notice {
+            background: #23313d;
+            border-left: 4px solid #3fa2ff;
+            padding: 14px 16px;
+            border-radius: 4px;
+            font-size: .85rem;
+        }
+
+        a {
+            color: #3fa2ff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="page">
+        <section class="card">
+            <h1>Ouster Sensor Emulation Limitation</h1>
+            <p>This emulator implements a limited subset of the device capabilities and does not fully model the actual sensor behavior.</p>
+            <p>The emulator allows the change of the following list of configuration options (All other settings are read-only):</p>
+            <div aria-label="Editable Parameters">
+                <div>* UDP Destination Address (udp_dest)</div>
+                <div>* UDP Lidar Port (lidar_port)</div>
+                <div>* UDP IMU Port (imu_port)</div>
+                <div>* Operating Mode (operating_mode)</div>
+            </div>
+            <br />
+            <div class="notice">
+                <strong>Important:</strong> Applications developed and tested using this emulator should be validated on actual Ouster hardware to ensure correct functionality and performance.
+            </div>
+            <br />
+            <button type="button" onclick="history.back()"
+                    style="margin-left:12px;background:#25313f;color:#e2e8f0;padding:10px 16px;border:1px solid #364959;border-radius:6px;font-weight:600;font-size:.85rem;cursor:pointer;">
+                    Back
+            </button>
+        </section>
+    </main>
+</body>
+
+</html>

@@ -4,10 +4,13 @@
  */
 #include "framebuffer.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <vector>
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 
@@ -92,4 +95,5 @@ Framebuffer::~Framebuffer() {
 
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

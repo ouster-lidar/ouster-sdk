@@ -47,6 +47,7 @@ def test_custom_copycat_profile_matches_original(packets: core.PacketSource) -> 
         (ChanField.NEAR_IR, FieldInfo(np.uint16, 12, 0, 0)),
         (ChanField.FLAGS2, FieldInfo(np.uint8, 6, 0b11111000, 3)),
         (ChanField.FLAGS, FieldInfo(np.uint8, 2, 0b11111000, 3)),
+        (ChanField.WINDOW, FieldInfo(np.uint8, 15, 0, 0)),
     ]
 
     _client.add_custom_profile(11, "DUAL_COPYCAT", custom_fields, 16)

@@ -1,4 +1,4 @@
-namespace ouster.osf.v2;
+namespace ouster.sdk.osf.v2;
 
 table StreamStats {
     // refers to metadata.entries[id] that describes a stream

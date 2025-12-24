@@ -16,8 +16,14 @@ Building the Python SDK from source requires several dependencies:
 - `libtins <http://libtins.github.io/>`_ >= 3.4
 - `libpcap <https://www.tcpdump.org/>`_
 - `libpng <http://www.libpng.org>`_ >= 1.6
-- `flatbuffers <https://flatbuffers.dev/>`_ >= 1.1
+- `flatbuffers <https://flatbuffers.dev/>`_ == 24.3.25
 - `libglfw3 <https://www.glfw.org/>`_ >= 3.2
+- `zlib <https://zlib.net/>`_
+- `openssl <https://www.openssl.org/>`_
+- `libzstd <http://facebook.github.io/zstd/>`_
+- `libzip <https://libzip.org/>`_
+- `robin-map <https://github.com/Tessil/robin-map>`_ == 1.3.0
+- `ceres <http://ceres-solver.org/>`_ == 2.0.0
 - `python <https://www.python.org/>`_ >= 3.8; <= 3.13 (with headers and development libraries)
 - `pybind11 <https://pybind11.readthedocs.io>`_ >= 2.0
 
@@ -47,20 +53,15 @@ As an alternative, you can install the dependencies manually using following ins
 
 On supported Debian-based Linux systems,
 
-.. code:: console
-
-   $ sudo apt install build-essential cmake \
-                      libeigen3-dev libtins-dev libpcap-dev \
-                      python3-dev python3-pip libcurl4-openssl-dev \
-                      libglfw3-dev libpng-dev libflatbuffers-dev libssl-dev \
-                      libceres-dev libtbb-dev \
-                      robin-map-dev
+.. include:: ../cpp/building.rst
+   :start-after: apt-install-linux-start
+   :end-before: apt-install-linux-end
 
 On macOS >= 11, using Homebrew, you should be able to run:
 
-.. code:: console
-
-  $ brew install cmake eigen curl libtins python3 glfw libpng flatbuffers ceres-solver robin-map
+.. include:: ../cpp/building.rst
+   :start-after: brew-install-macos-start
+   :end-before: brew-install-macos-end
 
 You can build the SDK with:
 
@@ -198,4 +199,3 @@ To run tests against multiple Python versions simultaneously, use the ``tox`` pa
 
 This will take longer, since it will build the package from a source distribution for each supported
 Python version available.
-

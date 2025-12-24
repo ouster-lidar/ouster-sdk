@@ -1,39 +1,26 @@
 #pragma once
+
 #include <Eigen/Dense>
 #include <array>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
-#include "ouster/pose_optimizer_enums.h"
+#include "ouster/pose_optimizer_constraint.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace mapping {
-
-struct OUSTER_API_CLASS SolverConfig {
-    double key_frame_distance = 1.0;
-    double traj_rotation_weight = 1.0;
-    double traj_translation_weight = 1.0;
-    uint64_t max_num_iterations = 2000;
-    double function_tolerance = 1e-18;
-    double gradient_tolerance = 1e-20;
-    double parameter_tolerance = 1e-18;
-    bool process_printout = true;
-    LossFunction loss_function = LossFunction::HuberLoss;
-    double loss_scale = 1.0;
-};
 
 /**
  * @class PoseOptimizer
  * @brief Class for optimizing pose constraints in a trajectory using
  * non-linear optimization.
- *
- * PoseOptimizer manages trajectory optimization by minimizing errors
- * between various constraints such as pose-to-pose, absolute pose, and
- * point-to-point relationships. It uses the Ceres solver internally to
- * perform the optimization.
  */
-
 class OUSTER_API_CLASS PoseOptimizer {
    public:
     /**
@@ -50,12 +37,24 @@ class OUSTER_API_CLASS PoseOptimizer {
      * @param[in] config SolverConfig object specifying optimization
      * parameters such as weights, iteration limits, convergence tolerances,
      * and output settings.
-     * @param[in] fix_first_node Flag to fix the first node of the
-     * trajectory during the pose optimization.
      */
     OUSTER_API_FUNCTION
-    PoseOptimizer(const std::string& osf_filename, const SolverConfig& config,
-                  bool fix_first_node = false);
+    PoseOptimizer(const std::string& osf_filename, const SolverConfig& config);
+
+    /**
+     * @brief Constructor with automatic constraint loading from JSON config
+     * file.
+     *
+     * This constructor loads trajectory data from an OSF file and automatically
+     * loads constraints from a JSON configuration file. The JSON file should
+     * contain both solver parameters and constraint definitions.
+     *
+     * @param[in] osf_filename Path to the OSF file containing trajectory data.
+     * @param[in] config_filename Path to the JSON configuration file.
+     */
+    OUSTER_API_FUNCTION
+    PoseOptimizer(const std::string& osf_filename,
+                  const std::string& config_filename);
 
     /**
      * @brief Constructor that initializes PoseOptimizer with an OSF file
@@ -63,21 +62,15 @@ class OUSTER_API_CLASS PoseOptimizer {
      *
      * This constructor loads trajectory data from an OSF file and
      * configures the optimization problem using default parameters, with
-     * only the node gap being customizable. The node gap controls the
-     * spatial density of optimization nodes along the trajectory. For finer
-     * control over other optimization parameters, use the constructor that
-     * accepts SolverConfig.
+     * only the node gap being customizable.
      *
      * @param[in] osf_filename Path to the OSF file containing trajectory
      * data to be optimized.
      * @param[in] key_frame_distance The distance between consecutive
      * optimization nodes along the trajectory.
-     * @param[in] fix_first_node Flag to fix the first node of the
-     * trajectory during the pose optimization.
      */
     OUSTER_API_FUNCTION
-    PoseOptimizer(const std::string& osf_filename, double key_frame_distance,
-                  bool fix_first_node = false);
+    PoseOptimizer(const std::string& osf_filename, double key_frame_distance);
 
     /**
      * @brief Destructor for PoseOptimizer.
@@ -86,220 +79,56 @@ class OUSTER_API_CLASS PoseOptimizer {
     ~PoseOptimizer();
 
     /**
-     * @brief Adds a pose-to-pose constraint using a predefined pose
-     * difference.
+     * @brief Save the current SolverConfig (including new added constraints)
+     * to a JSON file.
      *
-     * This function adds a constraint between two poses at specified
-     * timestamps, using a given pose difference. The constraint is weighted
-     * by the provided rotation and translation weights.
+     * This function serializes the current solver configuration and all
+     * constraints to a JSON file. The resulting file can be used later with
+     * Pose Optimizer construction to restore the exact same optimization setup.
      *
-     * @param[in] ts1 The first valid column timestamp of the first frame.
-     * @param[in] ts2 The first valid column timestamp of the second frame.
-     * @param[in] diff The pose difference between the first and second
-     * frames in a 6x1 algebraic vector.
-     * @param[in] rotation_weight Rotational weight for this constraint (0
-     * ignores rotation difference).
-     * @param[in] translation_weight Translational weight for this
-     * constraint (0 ignores translation difference).
-     * @return True if the constraint was successfully added, false
-     * otherwise.
+     * @param[in] config_filename The path of the JSON configuration file.
+     * @throws std::runtime_error if the file cannot be saved.
      */
     OUSTER_API_FUNCTION
-    bool add_pose_to_pose_constraint(uint64_t ts1, uint64_t ts2,
-                                     const Eigen::Matrix<double, 6, 1>& diff,
-                                     double rotation_weight = 1.0,
-                                     double translation_weight = 1.0);
-    /**
-     * @brief Adds a pose-to-pose constraint using a predefined pose
-     * difference.
-     *
-     * This function adds a constraint between two poses at specified
-     * timestamps, using a given pose difference. The constraint is weighted
-     * by the provided rotation and translation weights.
-     *
-     * @param[in] ts1 The first valid column timestamp of the first frame.
-     * @param[in] ts2 The first valid column timestamp of the second frame.
-     * @param[in] diff The pose difference between the first and second
-     * frames in a 4x4 transformation matrix.
-     * @param[in] rotation_weight Rotational weight for this constraint (0
-     * ignores rotation difference).
-     * @param[in] translation_weight Translational weight for this
-     * constraint (0 ignores translation difference).
-     * @return True if the constraint was successfully added, false
-     * otherwise.
-     */
-    OUSTER_API_FUNCTION
-    bool add_pose_to_pose_constraint(uint64_t ts1, uint64_t ts2,
-                                     const Eigen::Matrix<double, 4, 4>& diff,
-                                     double rotation_weight = 1.0,
-                                     double translation_weight = 1.0);
+    void save_config(const std::string& config_filename);
 
     /**
-     * @brief Adds a pose-to-pose constraint using the default ICP algorithm
-     * to calculate the frame difference.
+     * @brief Add a constraint to the optimization problem.
      *
-     * This function adds a constraint between two poses at specified
-     * timestamps, using the ICP algorithm to compute the pose difference.
-     * The constraint is weighted by the provided rotation and translation
-     * weights.
+     * This is the main method for adding constraints to the pose optimizer.
+     * It accepts any constraint derived from Constraint. The constraint will
+     * be assigned and return a unique ID for later removal if needed.
      *
-     * @param[in] ts1 The first valid column timestamp of the first frame.
-     * @param[in] ts2 The first valid column timestamp of the second frame.
-     * @param[in] rotation_weight Rotational weight for this constraint (0
-     * ignores rotation difference).
-     * @param[in] translation_weight Translational weight for this
-     * constraint (0 ignores translation difference).
-     * @return True if the constraint was successfully added, false
-     * otherwise.
+     * @param[in] constraint A constraint object derived from Constraint.
+     * @return The unique ID assigned to the constraint.
+     * @throws std::runtime_error if the constraint cannot be added.
      */
     OUSTER_API_FUNCTION
-    bool add_pose_to_pose_constraint(uint64_t ts1, uint64_t ts2,
-                                     double rotation_weight = 1.0,
-                                     double translation_weight = 1.0);
+    uint32_t add_constraint(std::unique_ptr<Constraint> constraint);
 
     /**
-     * @brief Adds an absolute pose constraint with a predefined pose
-     * difference for a given timestamp.
+     * @brief Remove a constraint from the pose optimization problem.
      *
-     * This function adds a constraint to enforce a specific pose at a given
-     * timestamp, using a given pose difference. The constraint is weighted
-     * by the provided rotation and translation weights.
-     *
-     * @param[in] ts The timestamp at which the absolute pose constraint is
-     * applied.
-     * @param[in] target_pose The target pose to be enforced at the given
-     * timestamp.
-     * @param[in] rotation_weight Rotational weight for this constraint (0
-     * ignores rotation difference).
-     * @param[in] translation_weight Translational weight for this
-     * constraint (0 ignores translation difference).
-     * @param[in] diff The pose difference to be applied at the given
-     * timestamp in a 6x1 algebraic vector.
-     * @return True if the constraint was successfully added, false
-     * otherwise.
+     * @param[in] constraint_id The unique ID of the constraint to remove.
+     * @throws std::runtime_error if the constraint ID is not found.
      */
     OUSTER_API_FUNCTION
-    bool add_absolute_pose_constraint(
-        uint64_t ts, const Eigen::Matrix<double, 6, 1>& target_pose,
-        double rotation_weight = 1.0, double translation_weight = 1.0,
-        const Eigen::Matrix<double, 6, 1>& diff =
-            Eigen::Matrix<double, 6, 1>::Zero());
+    void remove_constraint(uint32_t constraint_id);
 
     /**
-     * @brief Adds an absolute pose constraint with a predefined pose
-     * difference for a given timestamp.
+     * @brief Initialize trajectory alignment using average absolute
+     * constraints.
      *
-     * This function adds a constraint to enforce a specific pose at a given
-     * timestamp, using a given pose difference. The constraint is weighted
-     * by the provided rotation and translation weights.
+     * Computes a weighted average transformation matrix from the currently
+     * configured absolute pose and absolute point constraints (using their
+     * weights and Lie algebra representation) and applies it uniformly to the
+     * entire trajectory as an initial alignment step before optimization.
      *
-     * @param[in] ts The timestamp at which the absolute pose constraint is
-     * applied.
-     * @param[in] target_pose The target pose to be enforced at the given
-     * timestamp.
-     * @param[in] rotation_weight Rotational weight for this constraint (0
-     * ignores rotation difference).
-     * @param[in] translation_weight Translational weight for this
-     * constraint (0 ignores translation difference).
-     * @param[in] diff The pose difference to be applied at the given
-     * timestamp in a 4x4 transformation matrix.
-     * @return True if the constraint was successfully added, false
-     * otherwise.
+     * @return true if an alignment transform was successfully applied, false
+     * otherwise (e.g. not enough data, negligible transform).
      */
     OUSTER_API_FUNCTION
-    bool add_absolute_pose_constraint(
-        uint64_t ts, const Eigen::Matrix<double, 4, 4>& target_pose,
-        double rotation_weight = 1.0, double translation_weight = 1.0,
-        const Eigen::Matrix<double, 4, 4>& diff =
-            Eigen::Matrix<double, 4, 4>::Identity());
-
-    /**
-     * @brief Adds an absolute pose constraint with a predefined pose
-     * difference for a given timestamp.
-     *
-     * This function adds a constraint to enforce a specific pose at a given
-     * timestamp, using a given pose difference. The constraint is weighted
-     * by the provided rotation and translation weights.
-     *
-     * @param[in] ts The timestamp at which the absolute pose constraint is
-     * applied.
-     * @param[in] target_pose The target pose to be enforced at the given
-     * timestamp.
-     * @param[in] rotation_weights Rotational weight for each axis of this
-     * constraint (0 ignores rotation difference).
-     * @param[in] translation_weights Translational weight for each
-     * direction of this constraint (0 ignores translation difference).
-     * @param[in] diff The pose difference to be applied at the given
-     * timestamp in a 6x1 algebraic vector.
-     * @return True if the constraint was successfully added, false
-     * otherwise.
-     */
-    OUSTER_API_FUNCTION
-    bool add_absolute_pose_constraint(
-        uint64_t ts, const Eigen::Matrix<double, 6, 1>& target_pose,
-        const std::array<double, 3>& rotation_weights = {1.0, 1.0, 1.0},
-        const std::array<double, 3>& translation_weights = {1.0, 1.0, 1.0},
-        const Eigen::Matrix<double, 6, 1>& diff =
-            Eigen::Matrix<double, 6, 1>::Zero());
-
-    /**
-     * @brief Adds an absolute pose constraint with a predefined pose
-     * difference for a given timestamp.
-     *
-     * This function adds a constraint to enforce a specific pose at a given
-     * timestamp, using a given pose difference. The constraint is weighted
-     * by the provided rotation and translation weights.
-     *
-     * @param[in] ts The timestamp at which the absolute pose constraint is
-     * applied.
-     * @param[in] target_pose The target pose to be enforced at the given
-     * timestamp.
-     * @param[in] rotation_weights Rotational weight for each axis of this
-     * constraint (0 ignores rotation difference).
-     * @param[in] translation_weights Translational weight for each
-     * direction of this constraint (0 ignores translation difference).
-     * @param[in] diff The pose difference to be applied at the given
-     * timestamp in a 4x4 transformation matrix.
-     * @return True if the constraint was successfully added, false
-     * otherwise.
-     */
-    OUSTER_API_FUNCTION
-    bool add_absolute_pose_constraint(
-        uint64_t ts, const Eigen::Matrix<double, 4, 4>& target_pose,
-        const std::array<double, 3>& rotation_weights = {1.0, 1.0, 1.0},
-        const std::array<double, 3>& translation_weights = {1.0, 1.0, 1.0},
-        const Eigen::Matrix<double, 4, 4>& diff =
-            Eigen::Matrix<double, 4, 4>::Identity());
-
-    /**
-     * @brief Adds a point-to-point constraint between two points in
-     * different frames.
-     *
-     * This function adds a constraint between two points at specified
-     * timestamps and positions in their respective frames. The constraint
-     * is weighted by the provided translation weight.
-     *
-     * @param[in] ts1 The first valid column timestamp of the first frame.
-     * @param[in] row1 The row index of the point in the first frame.
-     * @param[in] col1 The column index of the point in the first frame.
-     * @param[in] return_idx1 The return index of the point in the first
-     * frame. Either 1 or 2.
-     * @param[in] ts2 The first valid column timestamp of the second frame.
-     * @param[in] row2 The row index of the point in the second frame.
-     * @param[in] col2 The column index of the point in the second frame.
-     * @param[in] return_idx2 The return index of the point in the second
-     * frame. Either 1 or 2.
-     * @param[in] translation_weight Translational weight for this
-     * constraint (0 ignores translation difference).
-     * @return True if the constraint was successfully added, false
-     * otherwise.
-     */
-    OUSTER_API_FUNCTION
-    bool add_point_to_point_constraint(uint64_t ts1, uint32_t row1,
-                                       uint32_t col1, uint32_t return_idx1,
-                                       uint64_t ts2, uint32_t row2,
-                                       uint32_t col2, uint32_t return_idx2,
-                                       double translation_weight = 1.0);
+    bool initialize_trajectory_alignment();
 
     /**
      * @brief Optimizes the trajectory using Ceres.
@@ -311,9 +140,10 @@ class OUSTER_API_CLASS PoseOptimizer {
      *
      * @param[in] steps Number of iterations to run. Must be >= 0.
      *                  If 0, the default configured value is used.
+     * @return the current cost value.
      */
     OUSTER_API_FUNCTION
-    void solve(uint32_t steps = 0);
+    double solve(uint32_t steps = 0);
 
     /**
      * @brief Saves the optimized trajectory to an OSF file.
@@ -321,10 +151,10 @@ class OUSTER_API_CLASS PoseOptimizer {
      * This function saves the current state of the optimized trajectory to
      * an OSF file with the specified name.
      *
-     * @param[in] osf_name The name of the output OSF file.
+     * @param[in] osf_filename The name of the output OSF file.
      */
     OUSTER_API_FUNCTION
-    void save(const std::string& osf_name);
+    void save(const std::string& osf_filename);
 
     /**
      * @brief Retrieves timestamps based on the specified sampling mode.
@@ -371,9 +201,105 @@ class OUSTER_API_CLASS PoseOptimizer {
     OUSTER_API_FUNCTION
     std::vector<Eigen::Matrix<double, 4, 4>> get_poses(SamplingMode type);
 
+    /**
+     * @brief Return the configured key-frame distance.
+     *
+     * @return the key_frame_distance which represents the spacing in meters
+     * used when constructing the trajectory.
+     */
+    OUSTER_API_FUNCTION
+    double get_key_frame_distance() const;
+
+    /**
+     * @brief Set a general callback to be invoked at each solver iteration.
+     *
+     * The callback is called from Ceres' iteration callback during solve().
+     * Use this to hook custom logic such as visualization. The callback is
+     * executed in the same thread that calls solve().
+     *
+     * @param[in] fn A general callable. Capture what you need.
+     */
+    OUSTER_API_FUNCTION
+    void set_solver_step_callback(std::function<void()> fn);
+
+    /**
+     * @brief Get all constraints currently configured in the pose optimizer.
+     *
+     * This function returns a copy of all constraints that are currently
+     * configured in the pose optimizer, including both constraints loaded
+     * from JSON files during construction and constraints added later via
+     * add_constraint().
+     *
+     * @return A vector of unique_ptr to Constraint objects representing all
+     * currently configured constraints.
+     */
+    OUSTER_API_FUNCTION
+    std::vector<std::unique_ptr<Constraint>> get_constraints() const;
+
+    /**
+     * @brief Set all constraints for the pose optimizer.
+     *
+     * This function replaces all existing constraints with the provided set
+     * of constraints. Any constraints previously loaded from JSON files or
+     * added via add_constraint() will be removed and replaced with the new
+     * constraint set.
+     *
+     * @param[in] constraints A vector of unique_ptr to Constraint objects to
+     * set as the complete constraint set.
+     * @throws std::runtime_error if the constraints cannot be set.
+     */
+    OUSTER_API_FUNCTION
+    void set_constraints(std::vector<std::unique_ptr<Constraint>> constraints);
+
+    /**
+     * @brief Get a node by its timestamp.
+     *
+     * @param[in] timestamp The timestamp (nanoseconds) of the node to retrieve.
+     * @return A shared pointer to the Node with the specified timestamp. If no
+     * node with the given timestamp exists in the trajectory, this function
+     * returns nullptr.
+     */
+    OUSTER_API_FUNCTION
+    std::shared_ptr<class Node> get_node(uint64_t timestamp) const;
+
+    /**
+     * @brief Get the last solver cost value.
+     *
+     * @return the final cost from the most recent call to solve(). If solve()
+     * has not been called yet, the value will be -1
+     */
+    OUSTER_API_FUNCTION
+    double get_cost_value() const;
+
+    /**
+     * @brief Get the cumulative number of solver iterations executed.
+     *
+     * @return the total number of iterations run across all calls to solve().
+     */
+    OUSTER_API_FUNCTION
+    uint64_t get_total_iterations() const;
+
+    /**
+     * @brief Retrieve evenly sampled scan nodes with point clouds.
+     *
+     * @param[in] count Maximum number of samples to retrieve.
+     * @return A vector of nodes, each guaranteed to have a downsampled cloud.
+     */
+    OUSTER_API_FUNCTION
+    std::vector<std::shared_ptr<class Node>> get_sampled_nodes(
+        size_t count = 100) const;
+
    private:
     class Impl;
     std::unique_ptr<Impl> pimpl_;
+
+    /**
+     * @brief Clear all constraints stored in the PoseOptimizer.
+     *
+     * This private function removes all constraints stored in the Pose
+     * Optimizer.
+     */
+    void clear_constraints();
 };
 
 /**
@@ -391,14 +317,15 @@ class OUSTER_API_CLASS PoseOptimizer {
  *                       each representing the pose at the matching timestamp.
  * @param[in] file_type  Output format selector: "csv" or "tum" (default =
  * "csv").
- * @return True if the file was successfully created and written; false on I/O
- * error.
+
+ * @throws std::runtime_error on I/O error or unsupported file type.
  */
 OUSTER_API_FUNCTION
-bool save_trajectory(const std::string& filename,
+void save_trajectory(const std::string& filename,
                      const std::vector<uint64_t>& timestamps,
                      const std::vector<Eigen::Matrix<double, 4, 4>>& poses,
                      const std::string& file_type = "csv");
 
 }  // namespace mapping
+}  // namespace sdk
 }  // namespace ouster

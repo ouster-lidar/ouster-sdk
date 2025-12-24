@@ -12,12 +12,11 @@ import inspect
 from pathlib import Path
 
 from ouster.sdk import core
-
 from tests.conftest import METADATA_DATA_DIR
 
 
 @pytest.mark.parametrize("mode, string", [
-    (core.TimestampMode.TIME_FROM_UNSPEC, "UNKNOWN"),
+    (core.TimestampMode.UNSPECIFIED, "UNKNOWN"),
     (core.TimestampMode.TIME_FROM_INTERNAL_OSC, "TIME_FROM_INTERNAL_OSC"),
     (core.TimestampMode.TIME_FROM_SYNC_PULSE_IN, "TIME_FROM_SYNC_PULSE_IN"),
     (core.TimestampMode.TIME_FROM_PTP_1588, "TIME_FROM_PTP_1588"),
@@ -34,17 +33,19 @@ def test_timestamp_mode_misc() -> None:
     assert len(
         core.TimestampMode.__members__) == 4, "Don't forget to update tests!"
     core.TimestampMode.from_string(
-        "foo") == core.TimestampMode.TIME_FROM_UNSPEC
-    core.TimestampMode(0) == core.TimestampMode.TIME_FROM_UNSPEC
+        "foo") == core.TimestampMode.UNSPECIFIED
+    core.TimestampMode(0) == core.TimestampMode.UNSPECIFIED
 
 
 def test_lidar_mode_misc() -> None:
     """Check some misc properties of lidar mode."""
+    # the number of LidarMode members is set to 14 because we are keeping
+    # the deprecated constants for the time being.
     assert len(
-        core.LidarMode.__members__) == 7, "Don't forget to update tests!"
-    assert core.LidarMode.from_string('foo') == core.LidarMode.MODE_UNSPEC
-    assert core.LidarMode(0) == core.LidarMode.MODE_UNSPEC
-    assert str(core.LidarMode.MODE_UNSPEC) == "UNKNOWN"
+        core.LidarMode.__members__) == 14, "Don't forget to update tests!"
+    assert core.LidarMode.from_string('foo') == core.LidarMode.UNSPECIFIED
+    assert core.LidarMode(0) == core.LidarMode.UNSPECIFIED
+    assert str(core.LidarMode.UNSPECIFIED) == "UNKNOWN"
 
 
 @pytest.mark.parametrize('test_key', ['legacy-2.0'])
@@ -52,7 +53,7 @@ def test_read_info(meta: core.SensorInfo) -> None:
     """Check the particular values in the test data."""
     assert meta.sn == 992029000352
     assert meta.fw_rev == "v2.0.0-rc.2"
-    assert meta.config.lidar_mode == core.LidarMode.MODE_1024x20
+    assert meta.config.lidar_mode == core.LidarMode._1024x20
     assert meta.prod_line == "OS-2-32-U0"
     assert meta.format.columns_per_frame == 1024
     assert meta.format.columns_per_packet == 16
@@ -64,8 +65,8 @@ def test_read_info(meta: core.SensorInfo) -> None:
     assert meta.format.pixels_per_column == 32
     assert len(meta.beam_azimuth_angles) == 32
     assert len(meta.beam_altitude_angles) == 32
-    assert meta.format.udp_profile_lidar == core.UDPProfileLidar.PROFILE_LIDAR_LEGACY
-    assert meta.format.udp_profile_imu == core.UDPProfileIMU.PROFILE_IMU_LEGACY
+    assert meta.format.udp_profile_lidar == core.UDPProfileLidar.LEGACY
+    assert meta.format.udp_profile_imu == core.UDPProfileIMU.LEGACY
     assert meta.imu_to_sensor_transform.shape == (4, 4)
     assert meta.lidar_to_sensor_transform.shape == (4, 4)
     assert meta.lidar_origin_to_beam_origin_mm == 13.762
@@ -83,10 +84,10 @@ def test_read_info(meta: core.SensorInfo) -> None:
     assert meta.prod_pn == "840-102146-C"
     assert meta.image_rev == "ousteros-image-prod-aries-v2.0.0-rc.2+20201023140416.staging"
     assert meta.status == "RUNNING"
-    assert meta.cal == core.SensorCalibration()
+    assert meta.cal == core.CalibrationStatus()
 
     ref_config = core.SensorConfig()
-    ref_config.lidar_mode = core.LidarMode.MODE_1024x20
+    ref_config.lidar_mode = core.LidarMode._1024x20
     assert meta.config == ref_config
     assert meta.get_version().major == 2
 
@@ -110,6 +111,7 @@ def test_write_info(meta: core.SensorInfo) -> None:
     meta.format.pixel_shift_by_row = []
     meta.format.udp_profile_lidar = core.UDPProfileLidar(0)
     meta.format.udp_profile_imu = core.UDPProfileIMU(0)
+    meta.format.header_type = core.HeaderType(0)
     meta.format.fps = 0
     meta.beam_azimuth_angles = []
     meta.beam_altitude_angles = []
@@ -124,7 +126,7 @@ def test_write_info(meta: core.SensorInfo) -> None:
     meta.prod_pn = ""
     meta.status = ""
     meta.user_data = ""
-    meta.cal = core.SensorCalibration()
+    meta.cal = core.CalibrationStatus()
     meta.config = core.SensorConfig()
     meta.config.udp_port_lidar = None
     meta.config.udp_port_imu = None
@@ -149,16 +151,18 @@ def test_write_info(meta: core.SensorInfo) -> None:
         meta.beam_azimuth_angles = ["foo"]  # type: ignore
 
     product_info = meta.get_product_info()
+    # assert that product info fields are readonly
+    # type ignored because my doesnt want you to set readonly vars
     with pytest.raises(AttributeError):
-        product_info.full_product_info = ""
+        product_info.full_product_info = ""  # type: ignore[misc]
     with pytest.raises(AttributeError):
-        product_info.form_factor = ""
+        product_info.form_factor = ""  # type: ignore[misc]
     with pytest.raises(AttributeError):
-        product_info.short_range = True
+        product_info.short_range = True  # type: ignore[misc]
     with pytest.raises(AttributeError):
-        product_info.beam_config = ""
+        product_info.beam_config = ""  # type: ignore[misc]
     with pytest.raises(AttributeError):
-        product_info.beam_count = 1
+        product_info.beam_count = 1  # type: ignore[misc]
 
 
 def test_copy_info(meta: core.SensorInfo) -> None:
@@ -237,7 +241,7 @@ def test_info_length() -> None:
     info_attributes = inspect.getmembers(core.SensorInfo, lambda a: not inspect.isroutine(a))
     info_properties = [a for a in info_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(info_properties) == 21, "Don't forget to update tests and the sensor_info == operator!"
+    assert len(info_properties) == 22, "Don't forget to update tests and the sensor_info == operator!"
 
 
 def test_equality_format() -> None:
@@ -246,7 +250,7 @@ def test_equality_format() -> None:
     data_format_attributes = inspect.getmembers(core.DataFormat, lambda a: not inspect.isroutine(a))
     data_format_properties = [a for a in data_format_attributes if not (a[0].startswith('__') and a[0].endswith('__'))]
 
-    assert len(data_format_properties) == 8, "Don't forget to update tests and the data_format == operator!"
+    assert len(data_format_properties) == 12, "Don't forget to update tests and the data_format == operator!"
 
 
 def test_skip_metadata_beam_validation() -> None:
@@ -288,3 +292,37 @@ def test_updated_string(metadata_base_name) -> None:
     meta2 = core.SensorInfo(updated_metadata_string)
     assert meta2.format.columns_per_packet == 40
     assert meta2.format.fps == 50
+
+
+def test_zone_monitoring_enabled():
+    """sensor_info.format.zone_monitoring_enabled should reflect whether
+    zone monitoring is enabled based on sensor_info.config.udp_zm settings
+    when loading the sensor info from JSON."""
+    # TWS 20251204 this would be better as a property or method, since
+    # its value is derived from other fields.
+
+    sensor_info = core.SensorInfo.from_default(core.LidarMode._1024x20)
+    assert sensor_info.config.udp_port_zm is None
+    assert sensor_info.config.udp_dest_zm is None
+    assert sensor_info.format.zone_monitoring_enabled is False
+
+    # destination is empty -> false
+    sensor_info.config.udp_dest_zm = ""
+    sensor_info.config.udp_port_zm = 7504
+    sensor_info_json = json.loads(sensor_info.to_json_string())
+    sensor_info_new = core.SensorInfo(json.dumps(sensor_info_json))
+    assert sensor_info_new.format.zone_monitoring_enabled is False
+
+    # port is 0 -> false
+    sensor_info.config.udp_dest_zm = "127.0.0.1"
+    sensor_info.config.udp_port_zm = 0
+    sensor_info_json = json.loads(sensor_info.to_json_string())
+    sensor_info_new = core.SensorInfo(json.dumps(sensor_info_json))
+    assert sensor_info_new.format.zone_monitoring_enabled is False
+
+    # both addr and port set -> true
+    sensor_info.config.udp_dest_zm = "127.0.0.1"
+    sensor_info.config.udp_port_zm = 7504
+    sensor_info_json = json.loads(sensor_info.to_json_string())
+    sensor_info_new = core.SensorInfo(json.dumps(sensor_info_json))
+    assert sensor_info_new.format.zone_monitoring_enabled is True

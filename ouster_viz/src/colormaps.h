@@ -8,6 +8,7 @@
 #include <cstddef>
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 
 inline float** genPalette(const int n, const float from[3], const float to[3]) {
@@ -21,14 +22,16 @@ inline float** genPalette(const int n, const float from[3], const float to[3]) {
     return palette;
 }
 
+#ifdef _WIN32
 #pragma warning(push)
 #pragma warning(disable : 4305)
+#endif
 
 // clang-format off
 // generated from:
 // https://daniel.lawrence.lu/public/colortransform/#0_2423_964_352_6_2624_1000_513_11_3248_1000_617_15_415_1000_774
-const size_t spezia_n = 256;
-const float spezia_palette[spezia_n][3] = {
+const size_t SPEZIA_N = 256;
+const float SPEZIA_PALETTE[SPEZIA_N][3] = {
     {0.0489092208, 0.3426569998, 0.5139042139},
     {0.048956722, 0.3439922929, 0.5173324943},
     {0.0489996932, 0.3453243077, 0.5207851529},
@@ -288,8 +291,8 @@ const float spezia_palette[spezia_n][3] = {
 };
 
 
-const size_t spezia_cal_ref_n = 256;
-const float spezia_cal_ref_palette[spezia_cal_ref_n][3] = {
+const size_t SPEZIA_CAL_REF_N = 256;
+const float SPEZIA_CAL_REF_PALETTE[SPEZIA_CAL_REF_N][3] = {
     {0.0489092208, 0.3426569998, 0.5139042139},
     {0.0490717851, 0.3479782045, 0.5277650356},
     {0.0491680056, 0.3545481861, 0.5456704497},
@@ -548,8 +551,8 @@ const float spezia_cal_ref_palette[spezia_cal_ref_n][3] = {
     {1.0, 0.6758182049, 0.3921718895},
 };
 
-const size_t calref_n = 256;
-const float calref_palette[calref_n][3] = {
+const size_t CALREF_N = 256;
+const float CALREF_PALETTE[CALREF_N][3] = {
     {0.37562745098039246f, 0.30080392156862746f, 0.6312941176470588f},
     {0.36862745098039246f, 0.30980392156862746f, 0.6352941176470588f},
     {0.3618608227604765f, 0.31856978085351784f, 0.6394463667820068f},
@@ -807,8 +810,8 @@ const float calref_palette[calref_n][3] = {
     {0.6365244136870435f, 0.02268358323721642f, 0.2628219915417146f},
     {0.6280661284121491f, 0.013302575932333749f, 0.26082276047673913f}};
 
-const size_t grey_n = 256;
-const float grey_palette[grey_n][3] = {
+const size_t GREY_N = 256;
+const float GREY_PALETTE[GREY_N][3] = {
     {0.2, 0.2, 0.2},
     {0.20392156862745098, 0.20392156862745098, 0.20392156862745098},
     {0.20392156862745098, 0.20392156862745098, 0.20392156862745098},
@@ -1067,8 +1070,8 @@ const float grey_palette[grey_n][3] = {
     {1.0, 1.0, 1.0},
 };
                                        
-const size_t grey_cal_ref_n = 256;
-const float grey_cal_ref_palette[grey_cal_ref_n][3] = {
+const size_t GREY_CAL_REF_N = 256;
+const float GREY_CAL_REF_PALETTE[GREY_CAL_REF_N][3] = {
     {0.2, 0.2, 0.2},
     {0.21176470588235294, 0.21176470588235294, 0.21176470588235294},
     {0.22745098039215686, 0.22745098039215686, 0.22745098039215686},
@@ -1331,8 +1334,8 @@ const float grey_cal_ref_palette[grey_cal_ref_n][3] = {
 
 // original colormaps licensed CC0f, public domain, no attribution needed:
 // https://github.com/BIDS/colormap/blob/master/LICENSE.txt
-const size_t viridis_n = 256;
-const float viridis_palette[viridis_n][3] = {
+const size_t VIRIDIS_N = 256;
+const float VIRIDIS_PALETTE[VIRIDIS_N][3] = {
     {0.26700401f, 0.00487433f, 0.32941519f},
     {0.26851048f, 0.00960483f, 0.33542652f},
     {0.26994384f, 0.01462494f, 0.34137895f},
@@ -1590,8 +1593,8 @@ const float viridis_palette[viridis_n][3] = {
     {0.98386829f, 0.90486726f, 0.13689671f},
     {0.99324789f, 0.90615657f, 0.1439362f}};
     
-const size_t viridis_cal_ref_n = 256;
-const float viridis_cal_ref_palette[viridis_cal_ref_n][3] = {
+const size_t VIRIDIS_CAL_REF_N = 256;
+const float VIRIDIS_CAL_REF_PALETTE[VIRIDIS_CAL_REF_N][3] = {
     {0.26700401, 0.00487433, 0.32941519},
     {0.27259384, 0.02556309, 0.35309303},
     {0.27794143, 0.05632444, 0.38119074},
@@ -1851,8 +1854,8 @@ const float viridis_cal_ref_palette[viridis_cal_ref_n][3] = {
 };
 
 
-const size_t magma_n = 256;
-const float magma_palette[magma_n][3] = {
+const size_t MAGMA_N = 256;
+const float MAGMA_PALETTE[MAGMA_N][3] = {
     {0.232077, 0.059889, 0.437695},
     {0.238826, 0.059517, 0.443256},
     {0.238826, 0.059517, 0.443256},
@@ -2111,8 +2114,8 @@ const float magma_palette[magma_n][3] = {
     {0.987053, 0.991438, 0.749504},
 };
     
-const size_t magma_cal_ref_n = 256;
-const float magma_cal_ref_palette[magma_cal_ref_n][3] = {
+const size_t MAGMA_CAL_REF_N = 256;
+const float MAGMA_CAL_REF_PALETTE[MAGMA_CAL_REF_N][3] = {
     {0.232077, 0.059889, 0.437695},
     {0.25222, 0.059415, 0.453248},
     {0.278493, 0.061978, 0.46919},
@@ -2370,7 +2373,10 @@ const float magma_cal_ref_palette[magma_cal_ref_n][3] = {
     {0.987053, 0.991438, 0.749504},
     {0.987053, 0.991438, 0.749504},
 };
+#ifdef _WIN32
 #pragma warning(pop)
+#endif
 // clang-format on
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

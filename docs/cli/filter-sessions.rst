@@ -21,14 +21,15 @@ Where:
 
 - ``SOURCE`` can be a sensor hostname or a PCAP file.
 - ``AXIS_FIELD`` can be either a field name such as ``RANGE``, ``REFLECTIVITY`` or a axis in the cartesian coordinates
-``{X, Y, Z}`` or image coordinates ``{U, V}``.  
+  ``{X, Y, Z}`` or image coordinates ``{U, V}``.
 - ``INDICES`` The indices specifiy a range of values (e.g., ``0:10``) that map to the values of the ``AXIS_FIELD``. Any
- value of the choosen ``AXIS_FIELD`` that matches the ``INDICES`` will be replaced by zero unless the option ``--invalid-value``
- is set to a different value.  
+  value of the choosen ``AXIS_FIELD`` that matches the ``INDICES`` will be replaced by zero unless the option ``--invalid-value``
+  is set to a different value.
 - ``[OPTIONS]`` current options include:
-        - ``--invalid-value``: The value to replace the pixels that match the predicate. Default is zero.
-        - ``--filtered-fields``: A comma-separated list of fields to apply the filter to. If not specified, the filter will
-        be applied to all fields of the scan.
+
+  - ``--invalid-value``: The value to replace the pixels that match the predicate. Default is zero.
+  - ``--filtered-fields``: A comma-separated list of fields to apply the filter to. If not specified, the filter will
+    be applied to all fields of the scan.
 
 Example Usage
 -------------

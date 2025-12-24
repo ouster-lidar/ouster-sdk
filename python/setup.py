@@ -1,10 +1,12 @@
 import os
-import re
 import sys
 import shlex
 import shutil
 import subprocess
-import json
+import platform
+import glob
+import zipfile
+import stat
 
 from setuptools import setup, find_namespace_packages, Extension
 from setuptools.command.build_ext import build_ext
@@ -23,31 +25,101 @@ if __name__ == "__main__":
         raise RuntimeError("Could not guess OUSTER_SDK_PATH")
 
 
+def get_version():
+    version_file = os.path.abspath(os.path.join(
+                                os.path.dirname(__file__),
+                                "..",
+                                "VERSION"))
+    bdist_file_path = os.path.abspath(os.path.join(
+                                os.path.dirname(__file__),
+                                "sdk",
+                                "VERSION"))
+    if os.path.exists(bdist_file_path):
+        version = {}
+        with open(bdist_file_path) as f:
+            exec(f.read(), version)
+        return version["__version__"]
+    if os.path.exists(version_file):
+        version = {}
+        with open(version_file) as f:
+            exec(f.read(), version)
+        return version["__version__"]
+    return None
+
+
 # https://packaging.python.org/en/latest/guides/single-sourcing-package-version/
 def parse_version():
-    with open(os.path.join(OUSTER_SDK_PATH, 'CMakeLists.txt')) as listfile:
-        content = listfile.read()
-        groups = re.search(r"set\(OusterSDK_VERSION_STRING ([^-\)]+)(.(.*))?\)", content)
-        return groups.group(1) + (groups.group(3) or "")
+    python_version = get_version()
+    if (python_version):
+        return python_version
+    else:
+        raise RuntimeError("Error: Could not read __version__ from VERSION file.")
 
 
 class CMakeExtension(Extension):
-    def __init__(self, name, sourcedir=''):
+    def __init__(self, name, builddir, sourcedir=''):
         Extension.__init__(self, name, sources=[])
+        self.builddir = os.path.abspath(builddir)
+        os.makedirs(self.builddir, exist_ok=True)
         self.sourcedir = os.path.abspath(sourcedir)
 
 
 class CMakeBuild(build_ext):
     def run(self):
-        import shutil
+        self._env = os.environ.copy()
+        # Bug in pybind11 cmake strips symbols with RelWithDebInfo
+        # https://github.com/pybind/pybind11/issues/1891
+        # Fixed in https://github.com/pybind/pybind11/issues/1892
+        self._build_type = os.getenv("BUILD_TYPE", "Release")
+        self._jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', os.cpu_count())
+        self._cmake_path = None
 
-        if shutil.which('cmake') is None:
-            raise RuntimeError("No cmake executable found on path")
+        self.cmake_log(f"CMake: Env: {str(self._env)}")
+        self.cmake_log(f"CMake: Build Type: {self._build_type}")
+        self.cmake_log(f"CMake: Jobs: {self._jobs}")
 
         for ext in self.extensions:
+            self.install_deps(ext)
+            self.cmake_log(f"CMake: Extension: {ext.name} Build Dir: {ext.builddir}")
             self.build_extension(ext)
 
-    def build_extension(self, ext):
+    def cmake_log(self, message):
+        print(message)
+        log_file = self._env.get('OUSTER_SDK_CMAKE_LOG_FILE')
+        if log_file:
+            if os.path.exists(os.path.dirname(log_file)):
+                with open(log_file, 'a') as f:
+                    f.write(str(message))
+
+    def install_deps(self, ext):
+        self.cmake_log(f"CMake: Extension: {ext.name} Install Deps: Download")
+        output1 = subprocess.run([sys.executable, "-m", "pip", "download", "pybind11==2.12.0", "cmake==3.24.2"],
+                                 cwd=ext.builddir,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 env=self._env, text=True)
+        self.cmake_log(output1.stdout)
+        if output1.returncode != 0:
+            self.cmake_log(f"CMake: Extension: {ext.name} Install Deps: Download: Error: "
+                           "Failed to download dependencies")
+            sys.exit(1)
+        self.cmake_log(f"CMake: Extension: {ext.name} Install Deps: Extraction")
+        if not os.path.exists(os.path.join(ext.builddir, "cmake")):
+            for item in glob.glob(os.path.join(ext.builddir, "*cmake*.whl")):
+                with zipfile.ZipFile(item, 'r') as z:
+                    z.extractall(ext.builddir)
+        if not os.path.exists(os.path.join(ext.builddir, "pybind11")):
+            for item in glob.glob(os.path.join(ext.builddir, "*pybind11*.whl")):
+                with zipfile.ZipFile(item, 'r') as z:
+                    z.extractall(ext.builddir)
+        if platform.system() in ['Linux', 'Darwin']:
+            self._cmake_path = os.path.join(ext.builddir, "cmake", "data", "bin", "cmake")
+            perm = os.stat(self._cmake_path).st_mode
+            os.chmod(self._cmake_path, perm | stat.S_IXUSR)
+        else:
+            self._cmake_path = os.path.join(ext.builddir, "cmake", "data", "bin", "cmake.exe")
+
+    def cmake_config(self, ext):
         extdir = os.path.abspath(
             os.path.dirname(self.get_ext_fullpath(ext.name)))
         # required for auto-detection of auxiliary "native" libs
@@ -55,79 +127,85 @@ class CMakeBuild(build_ext):
             extdir += os.path.sep
 
         cmake_args = [
-            '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
-            '-DPYTHON_EXECUTABLE=' + sys.executable,
-            '-DBUILD_SHARED_LIBS:BOOL=OFF'
+            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
+            f"-DPYTHON_EXECUTABLE={sys.executable}",
+            '-DBUILD_SHARED_LIBS:BOOL=OFF',
+            f"-DCMAKE_BUILD_TYPE={self._build_type}",
+            f"-DOUSTER_SDK_PATH={OUSTER_SDK_PATH}"
         ]
-
-        # Bug in pybind11 cmake strips symbols with RelWithDebInfo
-        # https://github.com/pybind/pybind11/issues/1891
-        # Fixed in https://github.com/pybind/pybind11/issues/1892
-        build_type = os.getenv("BUILD_TYPE", "Release")
-        print(f"build_type: {build_type}")
-
-        cmake_args += ['-DCMAKE_BUILD_TYPE=' + build_type]
-
-        env = os.environ.copy()
-
-        if "VCPKG_MANIFEST_DIR" in env:
-            cmake_args += [f"-DVCPKG_MANIFEST_DIR={env['VCPKG_MANIFEST_DIR']}"]
+        if "VCPKG_MANIFEST_MODE" in self._env:
+            cmake_args.append(f"-DVCPKG_MANIFEST_MODE={self._env['VCPKG_MANIFEST_MODE']}")
         else:
-            cmake_args += [f"-DVCPKG_MANIFEST_DIR={OUSTER_SDK_PATH}"]
-        if "VCPKG_MANIFEST_MODE" in env:
-            cmake_args += [f"-DVCPKG_MANIFEST_MODE={env['VCPKG_MANIFEST_MODE']}"]
+            cmake_args.append("-DVCPKG_MANIFEST_MODE=ON")
+        if "CMAKE_TOOLCHAIN_FILE" in self._env:
+            cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={self._env['CMAKE_TOOLCHAIN_FILE']}")
+        if "VCPKG_TARGET_TRIPLET" in self._env:
+            cmake_args.append(f"-DVCPKG_TARGET_TRIPLET={self._env['VCPKG_TARGET_TRIPLET']}")
+        if "VCPKG_MAX_CONCURRENCY" in self._env:
+            cmake_args.append(f"-DVCPKG_MAX_CONCURRENCY={self._env['VCPKG_MAX_CONCURRENCY']}")
+        if "VCPKG_MANIFEST_DIR" in self._env:
+            cmake_args.append(f"-DVCPKG_MANIFEST_DIR={self._env['VCPKG_MANIFEST_DIR']}")
         else:
-            cmake_args += ["-DVCPKG_MANIFEST_MODE=ON"]
-
-        jobs = os.getenv('OUSTER_SDK_BUILD_JOBS', os.cpu_count())
-        if "VCPKG_MAX_CONCURRENCY" in env:
-            cmake_args += [f"-DVCPKG_MAX_CONCURRENCY={env['VCPKG_MAX_CONCURRENCY']}"]
-        else:
-            cmake_args += [f"-DVCPKG_MAX_CONCURRENCY={jobs}"]
-
-        # pass OUSTER_SDK_PATH to cmake
-        cmake_args += ['-DOUSTER_SDK_PATH=' + OUSTER_SDK_PATH]
+            cmake_args.append(f"-DVCPKG_MANIFEST_DIR={OUSTER_SDK_PATH}")
+        if "VCPKG_BINARY_SOURCES" in self._env:
+            cmake_args.append(f"-DVCPKG_BINARY_SOURCES={self._env['VCPKG_BINARY_SOURCES']}")
+        if "CMAKE_CXX_COMPILER" in self._env:
+            cmake_args.append(f"-DCMAKE_CXX_COMPILER={self._env['CMAKE_CXX_COMPILER']}")
+        if "CMAKE_C_COMPILER" in self._env:
+            cmake_args.append(f"-DCMAKE_C_COMPILER={self._env['CMAKE_C_COMPILER']}")
+        if "CMAKE_CXX_FLAGS" in self._env:
+            cmake_args.append(f"-DCMAKE_CXX_FLAGS={self._env['CMAKE_CXX_FLAGS']}")
+        if "CMAKE_C_FLAGS" in self._env:
+            cmake_args.append(f"-DCMAKE_C_FLAGS={self._env['CMAKE_C_FLAGS']}")
+        if "USE_OPENMP" in self._env:
+            cmake_args.append(f"-DUSE_OPENMP={self._env['USE_OPENMP']}")
 
         # specify additional cmake args
-        extra_args = env.get('OUSTER_SDK_CMAKE_ARGS')
+        extra_args = self._env.get('OUSTER_SDK_CMAKE_ARGS')
         if extra_args:
             cmake_args += shlex.split(extra_args)
-        if not os.path.exists(self.build_temp):
-            os.makedirs(self.build_temp)
 
-        def cmake_log(message):
-            env = os.environ.copy()
-            log_file = env.get('OUSTER_SDK_CMAKE_LOG_FILE')
-            if log_file:
-                if os.path.exists(os.path.dirname(log_file)):
-                    with open(log_file, 'a') as f:
-                        f.write(str(message))
-            print(message)
-
-        cmake_log("Running: ")
-        run = ['cmake', ext.sourcedir] + cmake_args
-        cmake_log(run)
+        run = []
+        if platform.system() == "Darwin":
+            run.extend(["arch", "-arch", platform.machine()])
+        run.extend([self._cmake_path, ext.sourcedir])
+        run.extend(cmake_args)
+        self.cmake_log(f"CMake: Extension: {ext.name} Config: {run}")
         output1 = subprocess.run(run,
-                                 cwd=self.build_temp,
+                                 cwd=ext.builddir,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
-                                 env=env, text=True)
-        cmake_log("CMAKE CONFIG OUTPUT")
-        cmake_log(output1.stdout)
+                                 env=self._env, text=True)
+        self.cmake_log(f"CMake: Extension: {ext.name} Config: Output:")
+        self.cmake_log(output1.stdout)
         if output1.returncode != 0:
-            print("Error running cmake")
+            self.cmake_log(f"CMake: Extension: {ext.name} Config: Error: Failed to config")
             sys.exit(1)
 
-        output2 = subprocess.run(['cmake', '--build', '.', '--parallel', str(jobs), '--config', build_type],
-                                 cwd=self.build_temp,
+    def cmake_build(self, ext):
+        run = [self._cmake_path, '--build', '.', '--parallel', str(self._jobs), '--config', self._build_type]
+        self.cmake_log(f"CMake: Extension: {ext.name} Build: {run}")
+        output2 = subprocess.run(run,
+                                 cwd=ext.builddir,
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT,
-                                 env=env, text=True)
-        cmake_log("CMAKE BUILD OUTPUT")
-        cmake_log(output2.stdout)
+                                 env=self._env, text=True)
+        self.cmake_log(f"CMake: Extension: {ext.name} Build: Output:")
+        self.cmake_log(output2.stdout)
+        if "OUSTER_BUILD_DIR_COPY" in self._env:
+            shutil.copytree(ext.builddir, self._env["OUSTER_BUILD_DIR_COPY"], dirs_exist_ok=True)
         if output2.returncode != 0:
-            print("Error running cmake --build")
+            self.cmake_log(f"CMake: Extension: {ext.name} Build: Error: Failed to build")
             sys.exit(1)
+
+    def build_extension(self, ext):
+        if not os.path.exists(os.path.join(ext.builddir, "CMakeCache.txt")):
+            self.cmake_log(f"CMake: Extension: {ext.name} Config: CMake Cache does not exist, running cmake config")
+            self.cmake_config(ext)
+        else:
+            self.cmake_log(f"CMake: Extension: {ext.name} Config: CMake Cache Exists, trying to use cache")
+
+        self.cmake_build(ext)
 
 
 class sdk_sdist(sdist):
@@ -147,7 +225,7 @@ class sdk_sdist(sdist):
 class sdk_bdist_wheel(bdist_wheel):
     """Copy files needed by wheel from SDK dir."""
 
-    FILES = ["LICENSE", "LICENSE-bin"]
+    FILES = ["LICENSE", "LICENSE-bin", "VERSION"]
 
     def run(self):
         try:
@@ -165,18 +243,6 @@ def install_requires():
     with open(os.path.join(SRC_PATH, "requirements.txt")) as f:
         for line in f:
             install_requires.append(line)
-
-    # PUT ALL MAPPING REQUIREMENTS INSIDE OF THE requirements.json file
-    with open(os.path.join(SRC_PATH,
-                           "src",
-                           "ouster",
-                           "sdk",
-                           "mapping",
-                           "requirements.json")) as f:
-        mapping_reqs = json.loads(f.read())
-    for item in mapping_reqs:
-        temp = f"{item['name']} {item['version']}; {item['marker']}"
-        install_requires.append(temp)
     return install_requires
 
 
@@ -193,15 +259,18 @@ if __name__ == "__main__":
             'ouster.sdk.pcap': ['py.typed', '_pcap.pyi'],
             'ouster.sdk.osf': ['py.typed', '_osf.pyi'],
             'ouster.sdk.viz': ['py.typed', '_viz.pyi'],
-            'ouster.sdk.mapping': ['py.typed', '_mapping.pyi', 'requirements.json'],
-            'ouster.sdk.bag': ['py.typed']
+            'ouster.sdk.mapping': ['py.typed', '_mapping.pyi'],
+            'ouster.sdk.bag': ['py.typed'],
+            'ouster.cli': ['sensor_replay_dockerfile', 'templates/*.html']
         },
+        include_package_data=True,
         author='Ouster Sensor SDK Developers',
         author_email='oss@ouster.io',
         description='Ouster Sensor SDK',
         license='BSD 3-Clause License',
         ext_modules=[
-            CMakeExtension('ouster.*'),
+            CMakeExtension('ouster.*',
+                           os.path.join(OUSTER_SDK_PATH, "build", f"py{platform.python_version()}"))
         ],
         cmdclass={
             'build_ext': CMakeBuild,
@@ -215,6 +284,7 @@ if __name__ == "__main__":
             'test': [
                 'pytest >=7.0, <8',
                 'pytest-asyncio',
+                'iniconfig <=2.1.0',
             ],
             'dev': ['flake8', 'mypy', 'pylsp-mypy', 'python-lsp-server', 'yapf'],
             'docs': [

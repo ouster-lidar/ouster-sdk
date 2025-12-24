@@ -21,6 +21,10 @@ if(MSVC)
   add_compile_definitions(NOMINMAX _USE_MATH_DEFINES WIN32_LEAN_AND_MEAN)
 else()
   add_compile_options(-Wall -Wextra -Wno-error=deprecated-declarations)
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    # Parallelize linking optimization for GCC
+    add_link_options(-flto=auto)
+  endif()
 endif()
 
 option(BUILD_SENSOR "Enabled for Python build" ON)
@@ -43,11 +47,32 @@ endif()
 # extension module here.
 set(EXT_DIR ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/sdk)
 
+
+# Warning: All of the python binding code must be within the same static library
+# otherwise you will get random segfaults due to how pybind11 works.
+#
 # Note: With multi-configuration generators (like for VS), CMake automatically
 # appends build-configuration suffix to *_OUTPUT_DIRECTORY properties *unless*
 # they contain a generator expression, so we use a noop: $<0:>
 # https://cmake.org/cmake/help/latest/prop_tgt/LIBRARY_OUTPUT_DIRECTORY.html
-pybind11_add_module(_bindings src/cpp/main.cpp src/cpp/_client.cpp src/cpp/_viz.cpp src/cpp/_pcap.cpp src/cpp/_osf.cpp src/cpp/_mapping.cpp)
+pybind11_add_module(_bindings
+  src/cpp/main.cpp
+  src/cpp/_viz.cpp
+  src/cpp/_pcap.cpp
+  src/cpp/_osf.cpp
+  src/cpp/_mapping.cpp
+  src/cpp/client/main.cpp
+  src/cpp/client/zone_monitor.cpp
+  src/cpp/client/packet.cpp
+  src/cpp/client/scan_source.cpp
+  src/cpp/client/lidar_scan.cpp
+  src/cpp/client/field.cpp
+  src/cpp/client/data.cpp
+  src/cpp/client/client.cpp
+  src/cpp/client/misc.cpp
+  src/cpp/client/processing.cpp
+  )
+
 target_link_libraries(_bindings
   PRIVATE
     ouster_client
@@ -61,7 +86,17 @@ target_link_libraries(_bindings
   )
 CodeCoverageFunctionality(_bindings)
 
-target_include_directories(_bindings SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
+target_include_directories(_bindings SYSTEM
+  PRIVATE
+    ${EIGEN3_INCLUDE_DIR}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/sophus>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty/kiss-icp/cpp>
+    ${CMAKE_CURRENT_LIST_DIR}/src/cpp
+  )
+
 set_target_properties(_bindings PROPERTIES
   POSITION_INDEPENDENT_CODE TRUE
   LIBRARY_OUTPUT_DIRECTORY ${EXT_DIR}/$<0:>)
+target_compile_definitions(_bindings PRIVATE
+  PYBIND11_DETAILED_ERROR_MESSAGES=TRUE
+  )

@@ -7,37 +7,44 @@
  * static.ouster.dev for clearer explanations.
  */
 
-#include <fstream>
-#include <iomanip>
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <iostream>
-#include <vector>
+#include <string>
 
 #include "helpers.h"
 #include "ouster/impl/build.h"
 #include "ouster/lidar_scan.h"
 #include "ouster/types.h"
+#include "ouster/xyzlut.h"
 
-using namespace ouster;
+using namespace ouster::sdk;
 
 //! [docs-stag-x-image-form]
-img_t<double> get_x_in_image_form(const LidarScan& scan, bool destaggered,
-                                  const sensor::sensor_info& info) {
+core::img_t<double> get_x_in_image_form(const core::LidarScan& scan,
+                                        bool destaggered,
+                                        const core::SensorInfo& info) {
     // For convenience, save w and h to variables
     const size_t w = info.format.columns_per_frame;
     const size_t h = info.format.pixels_per_column;
 
     // Get the XYZ in ouster::Points (n x 3 Eigen array) form
     // Do not apply extrinsics in this case (the false)
-    XYZLut lut = make_xyz_lut(info, false);
-    auto cloud = cartesian(scan.field(sensor::ChanField::RANGE), lut);
+    core::XYZLut lut(info, false);
+    auto cloud = lut(scan.field(core::ChanField::RANGE));
 
     // Access x and reshape as needed
     // Note that the values in cloud.col(0) are ordered
-    auto x = Eigen::Map<const img_t<double>>(cloud.col(0).data(), h, w);
-    auto x_destaggered = destagger<double>(x, info.format.pixel_shift_by_row);
+    auto x = Eigen::Map<const core::img_t<double>>(cloud.col(0).data(), h, w);
+    auto x_destaggered =
+        core::destagger<double>(x, info.format.pixel_shift_by_row);
 
     // Apply destagger if desired
-    if (!destaggered) return x;
+    if (!destaggered) {
+        return x;
+    }
     return x_destaggered;
 }
 //! [docs-etag-x-image-form]
@@ -45,8 +52,8 @@ img_t<double> get_x_in_image_form(const LidarScan& scan, bool destaggered,
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        std::cerr << "Version: " << ouster::SDK_VERSION_FULL << " ("
-                  << ouster::BUILD_SYSTEM << ")"
+        std::cerr << "Version: " << SDK_VERSION_FULL << " (" << BUILD_SYSTEM
+                  << ")"
                   << "\n\nUsage: representation_example <pcap_file> <json_file>"
                   << std::endl;
         return argc == 1 ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -55,13 +62,13 @@ int main(int argc, char* argv[]) {
     const std::string pcap_file = argv[1];
     const std::string json_file = argv[2];
 
-    auto handle = sensor_utils::replay_initialize(pcap_file);
-    auto info = sensor::metadata_from_json(json_file);
+    auto handle = pcap::replay_initialize(pcap_file);
+    auto info = core::metadata_from_json(json_file);
 
     size_t w = info.format.columns_per_frame;
     size_t h = info.format.pixels_per_column;
 
-    auto scan = LidarScan(info);
+    auto scan = core::LidarScan(info);
 
     std::cerr << "Reading in scan from pcap..." << std::endl;
     get_complete_scan(handle, scan, info);
@@ -69,9 +76,9 @@ int main(int argc, char* argv[]) {
     // 1. Getting XYZ
     std::cerr << "1. Calculating 3d Points... " << std::endl;
     //! [doc-stag-cpp-xyz]
-    XYZLut lut = make_xyz_lut(info, true);
-    auto range = scan.field(sensor::ChanField::RANGE);
-    auto cloud = cartesian(range, lut);
+    core::XYZLut lut(info, true);
+    auto range = scan.field(core::ChanField::RANGE);
+    auto cloud = lut(range);
     //! [doc-etag-cpp-xyz]
     //
     std::cerr << "\nLet's see what the 2000th point in this cloud is...  ("
@@ -83,7 +90,7 @@ int main(int argc, char* argv[]) {
     // have a different frame you would like to be in, say if you have an
     // extrinsics matrix:
     Eigen::Matrix<double, 4, 4, Eigen::DontAlign> transformation =
-        mat4d::Identity();
+        core::mat4d::Identity();
 
     // Let's turn it upside down and put it on a very tall pole and shift x
     transformation(2, 2) = -1;
@@ -100,13 +107,13 @@ int main(int argc, char* argv[]) {
     // matrix was between sensor coordinate system and some stable point,
     // say a vehicle center
     //! [doc-stag-extrinsics-to-xyzlut]
-    auto lut_extrinsics = make_xyz_lut(
-        w, h, sensor::range_unit, info.beam_to_lidar_transform, transformation,
+    auto lut_extrinsics = core::make_xyz_lut(
+        w, h, core::RANGE_UNIT, info.beam_to_lidar_transform, transformation,
         info.beam_azimuth_angles, info.beam_altitude_angles);
 
     std::cerr << "Calculating 3d Points of with special transform provided.."
               << std::endl;
-    auto cloud_adjusted = cartesian(range, lut_extrinsics);
+    auto cloud_adjusted = core::cartesian(range, lut_extrinsics);
     //! [doc-etag-extrinsics-to-xyzlut]
 
     std::cerr << "And now the 2000th point in the transformed point cloud... ("
@@ -123,22 +130,12 @@ int main(int argc, char* argv[]) {
 
     Eigen::Array<uint32_t, -1, -1, Eigen::RowMajor> reflectivity;
 
-    if (info.format.udp_profile_lidar ==
-        sensor::UDPProfileLidar::PROFILE_LIDAR_LEGACY) {
-        reflectivity = scan.field<uint8_t>(sensor::ChanField::REFLECTIVITY)
-                           .cast<uint32_t>();
-    } else if (info.format.udp_profile_lidar ==
-               sensor::UDPProfileLidar::PROFILE_RNG19_RFL8_SIG16_NIR16_DUAL) {
-        reflectivity = scan.field<uint8_t>(sensor::ChanField::REFLECTIVITY)
-                           .cast<uint32_t>();
-    } else {  // legacy or single return profile
-        reflectivity = scan.field<uint16_t>(sensor::ChanField::REFLECTIVITY)
-                           .cast<uint32_t>();
-    }
+    reflectivity =
+        scan.field<uint8_t>(core::ChanField::REFLECTIVITY).cast<uint32_t>();
 
     //! [doc-stag-cpp-destagger]
     auto reflectivity_destaggered =
-        destagger<uint32_t>(reflectivity, info.format.pixel_shift_by_row);
+        core::destagger<uint32_t>(reflectivity, info.format.pixel_shift_by_row);
     //! [doc-etag-cpp-destagger]
 
     // 4. You can get XYZ in w x h arrays too
@@ -149,7 +146,7 @@ int main(int argc, char* argv[]) {
     auto x_image_destaggered = get_x_in_image_form(scan, true, info);
 
     const auto print_row = std::min<size_t>(123, h - 3);
-    const auto print_column = std::min<size_t>(1507, w / 2 + 5);
+    const auto print_column = std::min<size_t>(1507, (w / 2) + 5);
 
     const std::string point_string = "(" + std::to_string(print_row) + ", " +
                                      std::to_string(print_column) + ")";

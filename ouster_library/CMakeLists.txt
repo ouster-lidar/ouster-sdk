@@ -14,13 +14,24 @@ function(ouster_library_common _TARGET)
     PUBLIC
     $<BUILD_INTERFACE:${CLIENT_INCLUDE_DIRS}>
     $<BUILD_INTERFACE:${SENSOR_INCLUDE_DIRS}>
-	$<INSTALL_INTERFACE:include>
-	$<INSTALL_INTERFACE:include/fb_generated>)
+    $<INSTALL_INTERFACE:include>)
 
   set_property(TARGET ${_TARGET} PROPERTY POSITION_INDEPENDENT_CODE ON)
   set_target_properties(${_TARGET} PROPERTIES CXX_VISIBILITY_PRESET hidden)
   target_link_libraries(${_TARGET} PRIVATE ouster_client ouster_sensor)
   message("Building Library: ${_TARGET}: Adding ouster_client")
+  message("Building Library: ${_TARGET}: CLIENT_INCLUDE_DIRS: ${CLIENT_INCLUDE_DIRS}")
+  message("Building Library: ${_TARGET}: SENSOR_INCLUDE_DIRS: ${SENSOR_INCLUDE_DIRS}")
+  # TWS 20250911: causes LNK1189 with shared build on Windows
+  #if(BUILD_MAPPING)
+  #  target_link_libraries(${_TARGET} PRIVATE ouster_mapping)
+  #  get_target_property(_INCLUDE_DIRS ouster_mapping INTERFACE_INCLUDE_DIRECTORIES)
+  #  target_include_directories(${_TARGET}
+  #    PUBLIC
+  #    $<BUILD_INTERFACE:${_INCLUDE_DIRS}>)
+  #  message("Building Library: ${_TARGET}: Adding ouster_mapping")
+  #  message("Building Library: ${_TARGET}: MAPPING_INCLUDE_DIRS: ${_INCLUDE_DIRS}")
+  #endif()
   if(BUILD_PCAP)
     target_link_libraries(${_TARGET} PRIVATE ouster_pcap)
     get_target_property(_INCLUDE_DIRS ouster_pcap INTERFACE_INCLUDE_DIRECTORIES)
@@ -28,6 +39,7 @@ function(ouster_library_common _TARGET)
       PUBLIC
       $<BUILD_INTERFACE:${_INCLUDE_DIRS}>)
     message("Building Library: ${_TARGET}: Adding ouster_pcap")
+    message("Building Library: ${_TARGET}: PCAP_INCLUDE_DIRS: ${_INCLUDE_DIRS}")
   endif()
   if(BUILD_OSF)
     target_link_libraries(${_TARGET} PRIVATE ouster_osf)
@@ -36,6 +48,7 @@ function(ouster_library_common _TARGET)
       PUBLIC
       $<BUILD_INTERFACE:${_INCLUDE_DIRS}>)
     message("Building Library: ${_TARGET}: Adding ouster_osf")
+    message("Building Library: ${_TARGET}: OSF_INCLUDE_DIRS: ${_INCLUDE_DIRS}")
   endif()
   if(BUILD_VIZ)
     target_link_libraries(${_TARGET} PRIVATE ouster_viz)
@@ -44,6 +57,7 @@ function(ouster_library_common _TARGET)
       PUBLIC
       $<BUILD_INTERFACE:${_INCLUDE_DIRS}>)
     message("Building Library: ${_TARGET}: Adding ouster_viz")
+    message("Building Library: ${_TARGET}: VIZ_INCLUDE_DIRS: ${_INCLUDE_DIRS}")
   endif()
 
   add_library(OusterSDK::${_TARGET} ALIAS ${_TARGET})
@@ -54,6 +68,9 @@ if(BUILD_SHARED_LIBRARY)
   # FIGURE OUT HOW TO SKIP VIZ OSF AND PCAP HERE
   add_library(shared_library SHARED
     $<TARGET_OBJECTS:ouster_client>)
+  #if(TARGET ouster_mapping)
+  #    target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_mapping>)
+  #endif()
   if(TARGET ouster_pcap)
       target_sources(shared_library PRIVATE $<TARGET_OBJECTS:ouster_pcap>)
   endif()

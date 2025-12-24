@@ -68,7 +68,11 @@ Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
         tbb::blocked_range<points_iterator>{points.cbegin(), points.cend()},
         [&](const tbb::blocked_range<points_iterator> &r) {
             std::for_each(r.begin(), r.end(), [&](const auto &point) {
-                const auto &[closest_neighbor, distance] = voxel_map.GetClosestNeighbor(point);
+		auto closest_neighbor_tuple =
+                    voxel_map.GetClosestNeighbor(point);
+                const auto& closest_neighbor =
+                    std::get<0>(closest_neighbor_tuple);
+                const auto& distance = std::get<1>(closest_neighbor_tuple);
                 if (distance < max_correspondance_distance) {
                     correspondences.emplace_back(point, closest_neighbor);
                 }
@@ -79,7 +83,8 @@ Correspondences DataAssociation(const std::vector<Eigen::Vector3d> &points,
 
 LinearSystem BuildLinearSystem(const Correspondences &correspondences, const double kernel_scale) {
     auto compute_jacobian_and_residual = [](const auto &correspondence) {
-        const auto &[source, target] = correspondence;
+	const auto& source = correspondence.first;
+        const auto& target = correspondence.second;
         const Eigen::Vector3d residual = source - target;
         Eigen::Matrix3_6d J_r;
         J_r.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
@@ -98,7 +103,7 @@ LinearSystem BuildLinearSystem(const Correspondences &correspondences, const dou
     };
 
     using correspondence_iterator = Correspondences::const_iterator;
-    const auto &[JTJ, JTr] = tbb::parallel_reduce(
+    const auto linear_system = tbb::parallel_reduce(
         // Range
         tbb::blocked_range<correspondence_iterator>{correspondences.cbegin(),
                                                     correspondences.cend()},
@@ -106,16 +111,23 @@ LinearSystem BuildLinearSystem(const Correspondences &correspondences, const dou
         LinearSystem(Eigen::Matrix6d::Zero(), Eigen::Vector6d::Zero()),
         // 1st Lambda: Parallel computation
         [&](const tbb::blocked_range<correspondence_iterator> &r, LinearSystem J) -> LinearSystem {
-            return std::transform_reduce(
-                r.begin(), r.end(), J, sum_linear_systems, [&](const auto &correspondence) {
-                    const auto &[J_r, residual] = compute_jacobian_and_residual(correspondence);
-                    const double w = GM_weight(residual.squaredNorm());
-                    return LinearSystem(J_r.transpose() * w * J_r,        // JTJ
-                                        J_r.transpose() * w * residual);  // JTr
-                });
+            for (auto it = r.begin(); it != r.end(); ++it) {
+                const auto &correspondence = *it;
+                const auto jacobian_residual = compute_jacobian_and_residual(correspondence);
+                const auto &J_r = std::get<0>(jacobian_residual);
+                const auto &residual = std::get<1>(jacobian_residual);
+                const double w = GM_weight(residual.squaredNorm());
+                LinearSystem local_system(J_r.transpose() * w * J_r,        // JTJ
+                                         J_r.transpose() * w * residual);  // JTr
+                J = sum_linear_systems(J, local_system);
+            }
+            return J;
         },
         // 2nd Lambda: Parallel reduction of the private Jacboians
         sum_linear_systems);
+
+    const auto &JTJ = linear_system.first;
+    const auto &JTr = linear_system.second;
 
     return {JTJ, JTr};
 }
@@ -152,7 +164,9 @@ Sophus::SE3d Registration::AlignPointsToMap(const std::vector<Eigen::Vector3d> &
         // Equation (10)
         const auto correspondences = DataAssociation(source, voxel_map, max_distance);
         // Equation (11)
-        const auto &[JTJ, JTr] = BuildLinearSystem(correspondences, kernel_scale);
+        const auto linear_system = BuildLinearSystem(correspondences, kernel_scale);
+        const auto &JTJ = linear_system.first;
+        const auto &JTr = linear_system.second;
         const Eigen::Vector6d dx = JTJ.ldlt().solve(-JTr);
         const Sophus::SE3d estimation = Sophus::SE3d::exp(dx);
         // Equation (12)

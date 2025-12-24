@@ -24,9 +24,9 @@ class TracksAccumulator(AccumulatorBase):
         self._accum_mode_track = True
 
         pnum = self._track._xyz.shape[0]
-        self._cloud_track = Cloud(pnum)
+        self._cloud_track: Cloud = Cloud(pnum)
         self._cloud_track.set_point_size(self.DEFAULT_PT_SIZE)
-        self._cloud_kf_track = Cloud(track._kf_max_num + 1)
+        self._cloud_kf_track: Cloud = Cloud(track._kf_max_num + 1)
         self._cloud_kf_track.set_point_size(self.DEFAULT_KF_PT_SIZE)
         self._cloud_kf_track.set_xyz(track._kf_xyz)
         self._cloud_kf_track.set_key(track._kf_key[np.newaxis, ...])

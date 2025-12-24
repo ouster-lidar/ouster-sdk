@@ -16,17 +16,17 @@ logger = logging.getLogger("HIL")
 @pytest.fixture(
     scope='module',
     params=[
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_LEGACY,
+        pytest.param(UDPProfileLidar.LEGACY,
                      id="PROFILE_LIDAR_LEGACY"),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_RNG15_RFL8_NIR8,
+        pytest.param(UDPProfileLidar.RNG15_RFL8_NIR8,
                      id="PROFILE_LIDAR_RNG15_RFL8_NIR8",
                      marks=pytest.mark.full),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16,
+        pytest.param(UDPProfileLidar.RNG19_RFL8_SIG16_NIR16,
                      id="PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16"),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL,
+        pytest.param(UDPProfileLidar.RNG19_RFL8_SIG16_NIR16_DUAL,
                      id="PROFILE_LIDAR_RNG19_RFL8_SIG16_NIR16_DUAL",
                      marks=pytest.mark.full),
-        pytest.param(UDPProfileLidar.PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL,
+        pytest.param(UDPProfileLidar.FUSA_RNG15_RFL8_NIR8_DUAL,
                      id="PROFILE_LIDAR_FUSA_RNG15_RFL8_NIR8_DUAL",
                      marks=pytest.mark.full)
     ])
@@ -38,7 +38,7 @@ def udp_profile_lidar(request):
 def hil_sensor_config(hil_initial_config, udp_profile_lidar) -> None:
     hil_initial_config.udp_port_lidar = 7502
     hil_initial_config.udp_port_imu = 7503
-    hil_initial_config.lidar_mode = core.LidarMode.MODE_2048x10 # will fail on older sensors
+    hil_initial_config.lidar_mode = core.LidarMode._2048x10 # will fail on older sensors
     hil_initial_config.udp_profile_lidar = udp_profile_lidar
     hil_initial_config.azimuth_window = (0, 360000)
     return hil_initial_config

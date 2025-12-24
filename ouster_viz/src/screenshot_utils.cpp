@@ -5,16 +5,22 @@
 #include "screenshot_utils.h"
 
 #include <png.h>
+#include <pngconf.h>
 
 #include <chrono>
+#include <csetjmp>
+#include <cstdint>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iomanip>
+#include <ios>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace ouster {
+namespace sdk {
 namespace viz {
 namespace impl {
 namespace screenshot_utils {
@@ -34,15 +40,15 @@ std::string generate_filename(const std::string& path) {
     std::ostringstream filename_ss;
     std::tm local_time;
 #if defined(_WIND32) || defined(_MSC_VER)
-    const char PATH_SEP = '\\';
+    const char path_sep = '\\';
     localtime_s(&local_time, &now_c);  // Windows secure version
 #else
-    const char PATH_SEP = '/';
+    const char path_sep = '/';
     localtime_r(&now_c, &local_time);  // POSIX (Linux/macOS)
 #endif
     auto final_path = path;
-    if (!path.empty() && path.back() != PATH_SEP) {
-        final_path.push_back(PATH_SEP);
+    if (!path.empty() && path.back() != path_sep) {
+        final_path.push_back(path_sep);
     }
 
     filename_ss << final_path << "viz_screenshot_"
@@ -73,13 +79,13 @@ std::string write_png(const std::string& path,
     // Set up libpng
     png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr,
                                               nullptr, nullptr);
-    if (!png) {
+    if (png == nullptr) {
         throw std::runtime_error(
             "write_png: Failed to create png write struct");
     }
 
     png_infop info = png_create_info_struct(png);
-    if (!info) {
+    if (info == nullptr) {
         png_destroy_write_struct(&png, nullptr);
         throw std::runtime_error("write_png: Failed to create png info struct");
     }
@@ -110,7 +116,7 @@ std::string write_png(const std::string& path,
 
     std::vector<png_bytep> row_pointers(height);
     for (int y = 0; y < height; ++y) {
-        row_pointers[y] = (png_bytep)&pixels[y * width * 3];
+        row_pointers[y] = const_cast<png_bytep>(&pixels[y * width * 3]);
     }
 
     png_write_image(png, row_pointers.data());
@@ -140,8 +146,8 @@ void flip_pixels(std::vector<uint8_t>& pixels, int width, int height) {
     for (int row = 0; row < height / 2; ++row) {
         // Indices for the current row from the top and its counterpart from the
         // bottom
-        uint8_t* top_row = pixels.data() + row * row_size;
-        uint8_t* bottom_row = pixels.data() + (height - row - 1) * row_size;
+        uint8_t* top_row = pixels.data() + (row * row_size);
+        uint8_t* bottom_row = pixels.data() + ((height - row - 1) * row_size);
 
         // Swap the two rows
         std::memcpy(tmp.data(), top_row, row_size);
@@ -153,4 +159,5 @@ void flip_pixels(std::vector<uint8_t>& pixels, int width, int height) {
 }  // namespace screenshot_utils
 }  // namespace impl
 }  // namespace viz
+}  // namespace sdk
 }  // namespace ouster

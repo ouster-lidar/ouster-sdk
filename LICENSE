@@ -16,7 +16,7 @@ Copyright: Daniel Parker 2013 - 2020
 License: BSL-1.0
 
 Files: thirdparty/spdlog/*
-Copyright: 2016 Gabi Melman. 
+Copyright: 2016 Gabi Melman.
 License: MIT
 
 Files: thirdparty/kiss-icp/*
@@ -29,6 +29,18 @@ License: Apache-2.0
 
 Files: thirdparty/glad/include/khrplatform.h
 Copyright: 2008-2018 The Khronos Group Inc.
+License: MIT
+
+Files: thirdparty/nmea/*
+Copyright: 2022 pcdangio
+License: MIT
+
+Files: thirdparty/zpng/*
+Copyright: 2018 Christopher A. Taylor
+License: BSD-3-Clause
+
+FILES: examples/cxxopts.hpp
+Copyright (c) 2014-2022 Jarryd Beck
 License: MIT
 
 Files:thirdparty/sophus/*
@@ -76,7 +88,7 @@ License: MIT derivative
  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
  --- Optional exception to the license ---
-    
+
  As an exception, if, as a result of your compiling your source code, portions
  of this Software are embedded into a machine-executable object form of such
  source code, you may redistribute such embedded portions in such object form

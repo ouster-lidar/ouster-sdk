@@ -23,7 +23,7 @@ Installation<installation-python>` for details.
 
 This interactive tutorial will open a series of visualizer windows on your screen. Each example can
 be exited by pressing ``ESC`` or the exit button on the window; doing so will open the next
-visualizer window. 
+visualizer window.
 
 Let's start the tutorial::
 
@@ -74,7 +74,7 @@ masks, to get color.
 The :class:`.viz.Image` screen coordinate system is *height-normalized* and goes from bottom to top
 (``[-1, +1]``) for the ``y`` coordinate, and from left to right (``[-aspect, +aspect]``) for the
 ``x`` coordinate, where::
-    
+
     aspect = viewport width in Pixels / viewport height in Pixels
 
 Here is how we create a square image and place it in the center:
@@ -160,7 +160,7 @@ correspondingly.
     If you aren't familiar with the ``LidarScan``, please see :doc:`/reference/lidar-scan`. A single
     scan contains a full frame of lidar data.
 
-So how do we do it? 
+So how do we do it?
 
 .. literalinclude:: /../python/src/ouster/sdk/examples/viz.py
     :start-after: [doc-stag-scan-fields-images]
@@ -171,7 +171,7 @@ So how do we do it?
 
 In the highlighted lines, you can see that we're simply using :func:`.viz.Image()`,
 :func:`.viz.set_image()`, and :func:`.viz.set_position()` like we did before, but this time with
-more interesting data! 
+more interesting data!
 
 Expected result:
 
@@ -215,7 +215,7 @@ Point Clouds: the ``Cloud`` object
 Point Cloud visualization implemented via the :class:`.viz.Cloud` object can be used in two ways:
 
     - :ref:`Structured Point Clouds <structured-point-cloud>`, where 3D points are defined with 2D
-      field images (i.e. ``LidarScan`` fields images) 
+      field images (i.e. ``LidarScan`` fields images)
     - :ref:`Unstructured Point Clouds <unstructured-point-cloud>`, where 3D points are defined
       directly as a set of XYZ 3D points
 
@@ -229,7 +229,7 @@ Structured Point Cloud
 The Ouster sensor produces a structured point cloud as a 2D range image which can be projected into
 3D Cartesian coordinates with a pre-generated lookup table. For this reason the internal
 implementation of :class:`.viz.Cloud` applies the lookup table transform automatically generated
-from :class:`.client.SensorInfo` (metadata object) and 2D ``RANGE`` image as an input.
+from :class:`.core.SensorInfo` (metadata object) and 2D ``RANGE`` image as an input.
 
 .. note::
 
@@ -237,7 +237,7 @@ from :class:`.client.SensorInfo` (metadata object) and 2D ``RANGE`` image as an 
    representations and its basic operations.
 
 
-To visualize :class:`.client.LidarScan` object we use the following code:
+To visualize :class:`.core.LidarScan` object we use the following code:
 
 .. literalinclude:: /../python/src/ouster/sdk/examples/viz.py
     :start-after: [doc-stag-scan-structured]
@@ -298,7 +298,7 @@ Expected result:
 ``LidarScanViz`` for point cloud with fields images
 ---------------------------------------------------
 
-To make it even more easier to explore the data of :class:`.client.LidarScan` objects, we provide a
+To make it even easier to explore the data of :class:`.core.LidarScan` objects, we provide a
 higher-order visual component :class:`.viz.LidarScanViz` that enables:
 
 - 3D point cloud and two 2D fields images in one view
@@ -311,7 +311,7 @@ higher-order visual component :class:`.viz.LidarScanViz` that enables:
 The majority of keyboard operations that you can see in :ref:`simple-viz keymaps
 <simple-viz-keymap>` implemented by :class:`.viz.LidarScanViz`.
 
-Let's look at how we can explore a :class:`.client.LidarScan` object with a couple of lines:
+Let's look at how we can explore a :class:`.core.LidarScan` object with a couple of lines:
 
 .. literalinclude:: /../python/src/ouster/sdk/examples/viz.py
     :start-after: [doc-stag-lidar-scan-viz]

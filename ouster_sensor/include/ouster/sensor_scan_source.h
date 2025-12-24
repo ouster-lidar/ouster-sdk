@@ -11,21 +11,27 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdint>
+#include <deque>
+#include <functional>
+#include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
-#include "nonstd/optional.hpp"
 #include "ouster/open_source.h"
 #include "ouster/scan_source.h"
 #include "ouster/sensor_packet_source.h"
 #include "ouster/visibility.h"
 
 namespace ouster {
+namespace sdk {
 namespace sensor {
 
 /// Options for theSensorScanSource
-struct SensorScanSourceOptions : private ScanSourceOptions {
+struct OUSTER_API_CLASS SensorScanSourceOptions : private ScanSourceOptions {
     using ScanSourceOptions::config_timeout;
     using ScanSourceOptions::do_not_reinitialize;
     using ScanSourceOptions::extrinsics;
@@ -37,6 +43,7 @@ struct SensorScanSourceOptions : private ScanSourceOptions {
     using ScanSourceOptions::queue_size;
     using ScanSourceOptions::raw_fields;
     using ScanSourceOptions::raw_headers;
+    using ScanSourceOptions::reuse_ports;
     using ScanSourceOptions::sensor_config;
     using ScanSourceOptions::sensor_info;
     using ScanSourceOptions::soft_id_check;
@@ -44,31 +51,40 @@ struct SensorScanSourceOptions : private ScanSourceOptions {
 
     using ScanSourceOptions::check;
 
+    /**
+     * Construct SensorScanSourceOptions from a ScanSourceOptions object.
+     *
+     * @param[in] o The ScanSourceOptions object to copy from.
+     */
+    OUSTER_API_FUNCTION
     SensorScanSourceOptions(const ScanSourceOptions& o)
         : ScanSourceOptions(o) {}
 
-    SensorScanSourceOptions() {}
+    OUSTER_API_FUNCTION
+    SensorScanSourceOptions() = default;
 };
 
 /// Provides a simple API for configuring sensors and retreiving LidarScans from
 /// them
 class OUSTER_API_CLASS SensorScanSource
-    : public core::ScanSource,
-      ouster::impl::ScanSourceBuilderMulti<ouster::core::IoType::SENSOR,
+    : public ouster::sdk::core::ScanSource,
+      ouster::sdk::impl::ScanSourceBuilder<ouster::sdk::core::IoType::SENSOR,
                                            SensorScanSource> {
     friend class SensorScanIteratorImpl;
 
     // registers this with the open_source factory
-    inline void dummy() { (void)registered_; }
+    inline void dummy() { (void)REGISTERED; }
 
    public:
     /// Construct the SensorScanSource
+    OUSTER_API_FUNCTION
     SensorScanSource(
         const std::string& source,       ///< [in] sensor hostname to connect to
         SensorScanSourceOptions options  ///< [in] scan source options
     );
 
     /// Construct the SensorScanSource
+    OUSTER_API_FUNCTION
     SensorScanSource(
         const std::vector<std::string>&
             source,  ///< [in] sensor hostnames to connect to
@@ -76,6 +92,7 @@ class OUSTER_API_CLASS SensorScanSource
     );
 
     /// construct the SensorScanSource
+    OUSTER_API_FUNCTION
     SensorScanSource(
         const std::string& source,  ///< [in] sensor hostname to connect to
         const std::function<void(SensorScanSourceOptions&)>& options = {}
@@ -83,6 +100,7 @@ class OUSTER_API_CLASS SensorScanSource
     );
 
     /// construct the SensorScanSource
+    OUSTER_API_FUNCTION
     SensorScanSource(
         const std::vector<std::string>&
             source,  ///< [in] sensor hostnames to connect
@@ -108,7 +126,7 @@ class OUSTER_API_CLASS SensorScanSource
     OUSTER_API_FUNCTION
     SensorScanSource(
         const std::vector<Sensor>& sensors,  ///< [in] sensors to connect to
-        const std::vector<ouster::sensor::sensor_info>&
+        const std::vector<ouster::sdk::core::SensorInfo>&
             infos,  ///< [in] metadata for each sensor, if present used instead
                     ///< of configuring each sensor
         double config_timeout = 45,   ///< [in] timeout for sensor config
@@ -124,10 +142,10 @@ class OUSTER_API_CLASS SensorScanSource
     OUSTER_API_FUNCTION
     SensorScanSource(
         const std::vector<Sensor>& sensors,  ///< [in] sensors to connect to
-        const std::vector<ouster::sensor::sensor_info>&
+        const std::vector<ouster::sdk::core::SensorInfo>&
             infos,  ///< [in] metadata for each sensor, if present used instead
                     ///< of configuring each sensor
-        const std::vector<LidarScanFieldTypes>&
+        const std::vector<ouster::sdk::core::LidarScanFieldTypes>&
             fields,  ///< [in] fields to batch into LidarScans for each lidar.
                      ///< If empty default fields for that profile are used.
         double config_timeout = 45,   ///< [in] timeout for sensor config
@@ -138,7 +156,7 @@ class OUSTER_API_CLASS SensorScanSource
     );
 
     OUSTER_API_FUNCTION
-    ~SensorScanSource();
+    ~SensorScanSource() override;
 
     /// Flush any buffered scans.
     OUSTER_API_FUNCTION
@@ -164,7 +182,7 @@ class OUSTER_API_CLASS SensorScanSource
     /// @return the resulting lidar scan with the idx of the producing sensor
     ///         if no result, the returned scan will be nullptr
     OUSTER_API_FUNCTION
-    std::pair<int, std::unique_ptr<LidarScan>> get_scan(
+    std::pair<int, std::unique_ptr<ouster::sdk::core::LidarScan>> get_scan(
         double timeout_sec = 0.0  /// [in] timeout for retrieving a scan
     );
 
@@ -172,21 +190,40 @@ class OUSTER_API_CLASS SensorScanSource
     bool is_live() const override { return true; }
 
     OUSTER_API_FUNCTION
-    const std::vector<std::shared_ptr<ouster::sensor::sensor_info>>&
+    const std::vector<std::shared_ptr<ouster::sdk::core::SensorInfo>>&
     sensor_info() const override {
         return client_.sensor_info();
     }
 
     OUSTER_API_FUNCTION
-    core::ScanIterator begin() const override;
+    ouster::sdk::core::ScanIterator begin() const override;
 
     OUSTER_API_FUNCTION
-    core::ScanIterator begin(int sensor_index) const override;
+    ouster::sdk::core::ScanIterator begin(int sensor_index) const override;
 
     OUSTER_API_FUNCTION
-    ScanSource* move() override {
+    size_t size_hint() const override;
+
+    OUSTER_API_FUNCTION
+    std::unique_ptr<ScanSource> move() override {
         throw std::runtime_error("Moving SensorScanSource not supported.");
     }
+
+    /**
+     * open_source compatible factory.
+     *
+     * @relates ouster::open_source
+     *
+     * @param[in] sources source filenames
+     * @param[in] options source options
+     * @param[in] collate whether to collate the source or not
+     * @param[in] sensor_idx access specific sensor index in the osf
+     * @return unique_ptr of ScanSource type
+     */
+    OUSTER_API_FUNCTION
+    static std::unique_ptr<ouster::sdk::core::ScanSource> create(
+        const std::vector<std::string>& sources,
+        const ScanSourceOptions& options, bool collate, int sensor_idx = -1);
 
    protected:
     void close() override;
@@ -195,9 +232,10 @@ class OUSTER_API_CLASS SensorScanSource
     SensorPacketSource client_;
     std::mutex buffer_mutex_;
     std::condition_variable buffer_cv_;
-    std::deque<std::pair<int, std::unique_ptr<LidarScan>>> buffer_;
+    std::deque<std::pair<int, std::unique_ptr<ouster::sdk::core::LidarScan>>>
+        buffer_;
     uint64_t dropped_scans_ = 0;
-    std::vector<LidarScanFieldTypes> fields_;
+    std::vector<ouster::sdk::core::LidarScanFieldTypes> fields_;
     bool run_thread_;
     std::thread batcher_thread_;
     std::atomic<uint64_t> id_error_count_;
@@ -209,4 +247,5 @@ class OUSTER_API_CLASS SensorScanSource
 };
 
 }  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

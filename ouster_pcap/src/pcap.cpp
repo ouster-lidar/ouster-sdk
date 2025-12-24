@@ -2,6 +2,9 @@
  * Copyright (c) 2022, Ouster, Inc.
  * All rights reserved.
  *
+ * Linting exceptions:
+ * cppcoreguidelines-avoid-non-const-global-variables: To preserve logic where
+ * value is incremented.
  * @todo check that the header casting is idiomatic libpcap
  * @todo warn on dropped packets when pcap contains garbage, when fragments
  * missing, buffer reused before sending
@@ -10,6 +13,16 @@
  */
 
 #include "ouster/pcap.h"
+
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <cstdint>
+#include <cstdio>
+#include <ios>
+#include <memory>
+#include <string>
+#include <vector>
 
 #if defined _WIN32
 #include <winsock2.h>
@@ -35,46 +48,62 @@
 #include <tins/tins.h>
 
 #include <chrono>
-#include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <ios>
+#include <memory>
 #include <stdexcept>
+#include <string>
 
 #include "ip_reassembler.h"
 
 using us = std::chrono::microseconds;
 using timepoint = std::chrono::system_clock::time_point;
-using namespace Tins;
+using Tins::FileSniffer;
+using Tins::IP;
+using Tins::IPv4Reassembler2;
+using Tins::IPv6;
+using Tins::Packet;
+using Tins::PDU;
+using Tins::RawPDU;
+using Tins::UDP;
 
 static constexpr size_t UDP_BUF_SIZE = 65535;
 static constexpr int PROTOCOL_UDP = 17;
 
 namespace ouster {
-namespace sensor_utils {
+namespace sdk {
+namespace pcap {
+namespace {
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::atomic<int> global_id = {1};
+}  // namespace
 
 struct pcap_impl {
-    pcap_t* handle;
+    pcap_t* handle{nullptr};
     std::unique_ptr<Tins::FileSniffer>
         pcap_reader;  ///< Object that holds the unified pcap reader
-    FILE* pcap_reader_internals;
+    FILE* pcap_reader_internals{nullptr};
     Tins::Packet packet_cache;
     IPv4Reassembler2 reassembler;  ///< The reassembler mainly for lidar packets
-    bool have_new_packet;
-    int encap_proto;
+    bool have_new_packet{false};
+    int encap_proto{0};
 };
 
 struct pcap_writer_impl {
-    pcap_t* handle;
-    pcap_dumper* dumper;
+    pcap_t* handle{nullptr};
+    pcap_dumper* dumper{nullptr};
     std::unique_ptr<Tins::PacketWriter>
         pcap_file_writer;  ///< Object that holds the pcap writer
 };
 
-PcapReader::PcapReader(const std::string& file) : impl_(new pcap_impl) {
-    std::ifstream fileSizeStream(file, std::ios::binary);
-    if (fileSizeStream) {
-        fileSizeStream.seekg(0, std::ios::end);
-        file_size_ = fileSizeStream.tellg();
+PcapReader::PcapReader(const std::string& file)
+    : impl_(new pcap_impl), data_{} {
+    std::ifstream file_size_stream(file, std::ios::binary);
+    if (file_size_stream) {
+        file_size_stream.seekg(0, std::ios::end);
+        file_size_ = file_size_stream.tellg();
     }
     impl_->pcap_reader = std::make_unique<Tins::FileSniffer>(file);
     impl_->encap_proto = impl_->pcap_reader->link_type();
@@ -93,24 +122,28 @@ const uint8_t* PcapReader::current_data() const { return data_; }
 
 size_t PcapReader::current_length() const { return info_.payload_size; }
 
-const packet_info& PcapReader::current_info() const { return info_; }
+const PacketInfo& PcapReader::current_info() const { return info_; }
 
+// Does offset need to unsigned int?
 void PcapReader::seek(uint64_t offset) {
-    if (offset < sizeof(struct pcap_file_header)) {
-        offset = sizeof(struct pcap_file_header);
-    }
-    if (FSEEK(impl_->pcap_reader_internals, offset, SEEK_SET)) {
+    offset = std::max<uint64_t>(offset, sizeof(struct pcap_file_header));
+    if (FSEEK(impl_->pcap_reader_internals, static_cast<off_t>(offset),
+              SEEK_SET)) {
         throw std::runtime_error("pcap seek failed");
     }
 }
 
 int64_t PcapReader::file_size() const { return file_size_; }
 
+// warning: calling legacy resource function without passing a 'gsl::owner<>'
 int64_t PcapReader::current_offset() const {
     int64_t ret = FTELL(impl_->pcap_reader_internals);
 
     if (ret == -1L) {
-        fclose(impl_->pcap_reader_internals);
+        if (fclose(impl_->pcap_reader_internals) != 0) {
+            throw std::runtime_error("fclose error: errno " +
+                                     std::to_string(errno));
+        }
         throw std::runtime_error("ftell error: errno " + std::to_string(errno));
     }
     return ret;
@@ -129,13 +162,14 @@ size_t PcapReader::next_packet() {
         impl_->packet_cache = impl_->pcap_reader->next_packet();
         if (impl_->packet_cache) {
             auto pdu = impl_->packet_cache.pdu();
-            if (pdu) {
+            if (pdu != nullptr) {
                 info_.packet_size = pdu->size();
                 IP* ip = pdu->find_pdu<IP>();
                 IPv6* ipv6 = pdu->find_pdu<IPv6>();
                 // Using short circuiting here
-                if ((ip && ip->protocol() == PROTOCOL_UDP) ||
-                    (ipv6 && ipv6->next_header() == PROTOCOL_UDP)) {
+                if (((ip != nullptr) && ip->protocol() == PROTOCOL_UDP) ||
+                    ((ipv6 != nullptr) &&
+                     ipv6->next_header() == PROTOCOL_UDP)) {
                     // reassm is also used in the while loop
                     reassm = (impl_->reassembler.process(
                                   impl_->packet_cache.timestamp(), *pdu) !=
@@ -144,12 +178,12 @@ size_t PcapReader::next_packet() {
                         info_.fragments_in_packet = reassm_packets;
                         info_.encapsulation_protocol = impl_->encap_proto;
 
-                        if (ip) {
+                        if (ip != nullptr) {
                             info_.dst_ip = ip->dst_addr().to_string();
                             info_.src_ip = ip->src_addr().to_string();
                             info_.ip_version = 4;
                             info_.network_protocol = ip->protocol();
-                        } else if (ipv6) {
+                        } else if (ipv6 != nullptr) {
                             info_.dst_ip = ipv6->dst_addr().to_string();
                             info_.src_ip = ipv6->src_addr().to_string();
                             info_.ip_version = 6;
@@ -194,11 +228,11 @@ PcapWriter::PcapWriter(
       frag_size_(frag_size),
       closed_(false) {
     if (encap_ != PcapWriter::ETHERNET) {
-        impl_->pcap_file_writer.reset(
-            new Tins::PacketWriter((file), Tins::DataLinkType<Tins::SLL>()));
+        impl_->pcap_file_writer = std::make_unique<Tins::PacketWriter>(
+            (file), Tins::DataLinkType<Tins::SLL>());
     } else {
-        impl_->pcap_file_writer.reset(new Tins::PacketWriter(
-            (file), Tins::DataLinkType<Tins::EthernetII>()));
+        impl_->pcap_file_writer = std::make_unique<Tins::PacketWriter>(
+            (file), Tins::DataLinkType<Tins::EthernetII>());
     }
 }
 
@@ -232,8 +266,8 @@ header.
 * pkt.flags(IP::MORE_FRAGMENTS);
 *
 */
-size_t global_id = 1;
 // SLL is the linux pcap capture container
+namespace {
 std::vector<IP> buffer_to_frag_packets(size_t frag_size,
                                        const std::string& src_ip,
                                        const std::string& dst_ip, int src_port,
@@ -289,7 +323,9 @@ std::vector<IP> buffer_to_frag_packets(size_t frag_size,
         // This is a packet in the middle or end
         else {
             // Set the "There is more data to follow" flag
-            if (i + size < buf_size) pkt.flags(IP::MORE_FRAGMENTS);
+            if (i + size < buf_size) {
+                pkt.flags(IP::MORE_FRAGMENTS);
+            }
 
             // Manually set the ipv4 protocol to UDP
             pkt.protocol(PROTOCOL_UDP);
@@ -318,11 +354,12 @@ std::vector<IP> buffer_to_frag_packets(size_t frag_size,
 
     return result;
 }
+}  // namespace
 
 void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
                               const std::string& src_ip,
                               const std::string& dst_ip, uint16_t src_port,
-                              uint16_t dst_port, packet_info::ts timestamp) {
+                              uint16_t dst_port, PacketInfo::ts timestamp) {
     // ensure IPs were provided
     if (dst_ip.empty() || src_ip.empty()) {
         throw std::invalid_argument(
@@ -330,16 +367,16 @@ void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
             "be empty.");
     }
     // For each of the packets write it to the pcap file
-    for (auto item : buffer_to_frag_packets(
+    for (const auto& item : buffer_to_frag_packets(
              frag_size_, src_ip, dst_ip, src_port, dst_port, buf, buf_size)) {
         Packet packet;
-        PDU* pdu;
+        std::unique_ptr<PDU> pdu;
         switch (encap_) {
             case PcapWriter::PacketEncapsulation::ETHERNET:
-                pdu = new Tins::EthernetII();
+                pdu = std::make_unique<Tins::EthernetII>();
                 break;
             case PcapWriter::PacketEncapsulation::SLL:
-                pdu = new Tins::SLL();
+                pdu = std::make_unique<Tins::SLL>();
                 break;
             case PcapWriter::PacketEncapsulation::NULL_LOOPBACK:
                 throw std::runtime_error(
@@ -363,21 +400,21 @@ void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
          * not treat the udp packet as if it were decodable. Manually tell
          * libtins to go in and serialize the udp packet as well
          */
-        if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != NULL) {
+        if (pdu->inner_pdu()->inner_pdu()->inner_pdu() != nullptr) {
             ignore_output =
                 pdu->inner_pdu()->inner_pdu()->inner_pdu()->serialize();
         }
         packet = Packet(*pdu, timestamp);
         impl_->pcap_file_writer->write(packet);
-        delete pdu;
     }
 }
 
 void PcapWriter::write_packet(const uint8_t* buf, size_t buf_size,
-                              const packet_info& info) {
+                              const PacketInfo& info) {
     write_packet(buf, buf_size, info.src_ip, info.dst_ip, info.src_port,
                  info.dst_port, info.timestamp);
 }
 
-}  // namespace sensor_utils
+}  // namespace pcap
+}  // namespace sdk
 }  // namespace ouster

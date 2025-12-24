@@ -14,8 +14,7 @@ Prerequisites
 Before using the Pose Optimizer, one must have: 
 
 - A :ref:`SLAM processed OSF file <ouster-cli-mapping>` as input which contains the trajectory.
-- A JSON file that defines the constraints for optimization. The constraints are used to impose limitations 
-  and define relationship between poses or points in the trajectory to guide the optimization process.
+- Optionally, a JSON file that defines constraints for optimization (pass it via ``--config``) and Optimizer parameters.
 
 The following section describes the expected structure and content of the JSON file and provides
 guidelines for creating it. The constraints mentioned in examples below correspond to the `Sample Data`_ .
@@ -23,10 +22,10 @@ guidelines for creating it. The constraints mentioned in examples below correspo
 Constraint JSON File Structure
 ------------------------------
 
-The constraint file must include:
+The constraint JSON file must include:
 
-- A top-level key ``constraints`` that maps to a list of constraint objects.
 - A ``key_frame_distance`` parameter which defines the distance (in meters) between the key nodes.
+- A top-level key ``constraints`` that maps to a list of constraint objects.
 
 **Example:**
 
@@ -39,40 +38,50 @@ The constraint file must include:
         ]
     }
 
+Optional Config Parameters
+--------------------------
+
+The constraint JSON file may also include the following optional parameters to fine-tune the optimization process:
+
+- ``traj_rotation_weight`` (float): The weight for rotational constraints during trajectory optimization (default: ``10.0``). Higher values enforce stronger rotation consistency.
+- ``traj_translation_weight`` (float): The weight for translational constraints during trajectory optimization (default: ``10.0``). Higher values enforce stronger position consistency.
+- ``max_num_iterations`` (int): The maximum number of iterations the solver will perform before terminating.
+- ``loss_function`` (str): The name of the robust loss function to use (e.g., ``HUBER_LOSS``, ``CAUCHY_LOSS``, ``SOFT_L_ONE_LOSS``, ``ARCTAN_LOSS``, ``TRIVIAL_LOSS``).
+- ``loss_scale`` (float): The scaling parameter for the chosen loss function. Higher values make the loss less sensitive to outliers.
+- ``fix_first_node`` (bool): Flag to fix the first node of the trajectory during optimization. Default is ``False``.
+- ``function_tolerance`` (float): The tolerance threshold for changes in the cost function. Solver stops when improvements fall below this value.
+- ``gradient_tolerance`` (float): The tolerance threshold for changes in the gradient. Solver stops when gradient magnitude falls below this value.
+- ``parameter_tolerance`` (float): The tolerance threshold for changes in parameters. Solver stops when parameter changes fall below this value.
+- ``process_printout`` (bool): Flag to enable or disable detailed printout of the optimization process.
+
+These parameters are optional and can be omitted for default behavior. If included, they should be specified at the top level of the JSON file alongside ``key_frame_distance`` and ``constraints``.
+
+
 .. _weight-fields:
 
 Weight Fields: Rotation and Translation
 ---------------------------------------
 
-Several constraint types (explained later) support optional weight fields: ``rotation_weight`` and ``translation_weight``. 
-These influence optimizer by informing it of the confidence in accuracy of the rotational or translation information provided.
+Several constraint types (explained later) support optional weight fields that express your confidence in the rotation or translation information.
 
-**rotation_weight**
+**rotation weight**
 
-- Can be a single number (float or int), or a list of three numbers.
-- Applies to the angular components: **roll**, **pitch**, and **yaw**.
-- Higher value signifies greater confidence in the accuracy of angular components.
-- Lower values reduce the influence of rotation in the optimization — helpful when rotational measurements are noisy or unreliable.
-- A value of `0` disables optimization for that rotation axis.
-- If specified as a list of three values, the optimizer treats them as relative weights across the three axes.
+- ``rotation_weight`` (single float) scales the quaternion axis-alignment residual for ``ABSOLUTE_POSE`` and ``POSE_TO_POSE`` constraints. Higher values enforce the orientation more strongly; set it to ``0`` to ignore the rotational component.
 
-**Example:**
+**Example (rotation_weight for ABSOLUTE_POSE):**
 
 .. code-block:: json
 
-    "rotation_weight": [2.0, 1.0, 0.5]
+    "rotation_weight": 2.0
 
-This means:
-- Roll is weighted 4× more than yaw.
-- Pitch is weighted 2× more than yaw.
-- The optimizer prioritizes roll corrections the most.
+This doubles the strength of the orientation penalty for that absolute pose.
 
 **translation_weight**
 
-- Can also be a single number or a list of three numbers.
+- Must be a list of three numbers.
 - Applies to the positional components: **x**, **y**, and **z**.
-- Similar to ``rotation_weight``, higher values signal stronger confidence in the position, and lower values give the optimizer more freedom to adjust.
-- If provided as a list, values are treated as relative weights for each axis.
+- Higher values signal stronger confidence in the position, and lower values give the optimizer more freedom to adjust.
+- Values are treated as relative weights for each axis.
 
 **Example:**
 
@@ -91,11 +100,12 @@ This enforces strict alignment in x and y, while allowing more flexibility in z.
 Constraint Types
 ----------------
 
-The Pose Optimizer supports three constraint types:
+The Pose Optimizer supports four constraint types:
 
-1. ``ABSOLUTE_POSE``
-2. ``RELATIVE_POINT_TO_POINT``
-3. ``RELATIVE_POSE_TO_POSE``
+- ``ABSOLUTE_POSE`` fixes a node to a global pose measurement.
+- ``ABSOLUTE_POINT`` pins a single scan point to global coordinates.
+- ``POINT_TO_POINT`` enforces correspondence between two scan points.
+- ``POSE_TO_POSE`` constrains the relative motion between two trajectory nodes.
 
 
 Each type requires specific fields and validations.
@@ -118,18 +128,13 @@ Defines an absolute pose measurement relative to the world coordinate frame.
 
 **Optional fields:**
 
-- ``transformation``: If provided, must match the format of ``pose``, either as a valid dictionary or as a list.
-  
-  * If the ``pose`` is provided as a 6x1 vector, then the ``transformation`` must also be a 6x1 vector (list of 6 numbers).
-  * If the ``pose`` is provided as a 4x4 matrix, then the ``transformation``, must be a 4x4 matrix (list of 16 numbers).
-- ``rotation_weight``:
+- ``rotation_weight`` (float):
 
-  * A single number (float or int) or a list of three numbers.
-  * Corresponds to **roll**, **pitch**, and **yaw** confidence.
-  * Higher values increase sensitivity to rotational deviations.
+  * Scales the quaternion axis-alignment residual applied to this pose.
+  * Higher values increase sensitivity to rotational deviations; setting it to ``0`` disables the rotational penalty.
 - ``translation_weight``:
   
-  * A single number or list of three values.
+  * A list of three values.
   * Corresponds to confidence in the **x**, **y**, and **z** position.
 
 See :ref:`weight-fields` for a detailed explanation.
@@ -156,40 +161,76 @@ Below is an example JSON code block for an ABSOLUTE_POSE constraint:
             "y": 30,
             "z": 0.0
           },
-          "transformation": {
-            "rx": 0.0,
-            "ry": 0.0,
-            "rz": 0.0,
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
           "rotation_weight": 1.0,
-          "translation_weight": 1.0
+          "translation_weight": [1.0, 1.0, 1.0]
         }
       ]
     }
 
 
-RELATIVE_POINT_TO_POINT
-~~~~~~~~~~~~~~~~~~~~~~~~
-The ``RELATIVE_POINT_TO_POINT`` constraint is used to align a point from one point cloud to a corresponding point in another point cloud.
+ABSOLUTE_POINT
+~~~~~~~~~~~~~~
 
-Each constraint of this type **must** include the following:
+Fixes a single point from a scan to known coordinates in the trajectory map frame.
 
 **Required fields:**
 
-- ``type``: Must be ``"RELATIVE_POINT_TO_POINT"``.
-- ``point_a`` and ``point_b``: Each must include:
-  
-  * ``row``: A numeric value > 0
-  * ``col``: A numeric value > 0
-  * ``timestamp``: The frame timestamp which is the lidar scan's first valid timestamp
-  * ``return_idx`` (optional): Specifies which range return to use 1 for the first return or 2 for the second return. Default is 1
+- ``type``: Must be exactly ``"ABSOLUTE_POINT"``.
+- ``timestamp``: Lidar frame timestamp (first valid column timestamp).
+- ``row``: Row index of the point (>= 0 && < scan.h).
+- ``col``: Column index of the point (>= 0 && scan.w).
+- ``return_idx``: Which range return to use (1 or 2).
+- ``absolute_position``: Either an object with keys ``x``, ``y``, ``z`` or a list of three numbers ``[x, y, z]``.
+
+**Optional fields:**
+
+- ``translation_weight``: List of three values describing confidence along ``x``, ``y``, and ``z``.
+
+.. note::
+
+   If ``translation_weight`` is omitted the optimizer assumes ``[1.0, 1.0,
+   1.0]`` internally.
+
+Below is an example JSON code block for an ``ABSOLUTE_POINT`` constraint:
+
+.. code-block:: json
+
+    {
+      "constraints": [
+        {
+          "type": "ABSOLUTE_POINT",
+          "timestamp": 411107223370,
+          "row": 10,
+          "col": 100,
+          "return_idx": 1,
+          "absolute_position": [5.0, 2.0, 1.5],
+          "translation_weight": [1.0, 1.0, 1.0]
+        }
+      ]
+    }
+
+
+POINT_TO_POINT
+~~~~~~~~~~~~~~~~~~~~~~~~
+The ``POINT_TO_POINT`` constraint is used to align a point from one point cloud to a corresponding point in another point cloud.
+
+This constraint uses 2D image coordinates to select points from the lidar scans:
+
+**Required fields:**
+
+- ``type``: Must be ``"POINT_TO_POINT"``.
+- ``timestamp1``: The frame timestamp for the first point (must be lidar scan's first valid timestamp)
+- ``row1``: A numeric value > 0 for the first point
+- ``col1``: A numeric value > 0 for the first point
+- ``return_idx1``: Specifies which range return to use (1 for first return or 2 for second return)
+- ``timestamp2``: The frame timestamp for the second point (must be lidar scan's first valid timestamp)
+- ``row2``: A numeric value > 0 for the second point
+- ``col2``: A numeric value > 0 for the second point
+- ``return_idx2``: Specifies which range return to use (1 for first return or 2 for second return)
 
 **Optional field:**
 
-- ``translation_weight``: A number or list of three numbers.
+- ``translation_weight``: A list of three numbers.
 
 See :ref:`weight-fields` for a detailed explanation.
 
@@ -217,80 +258,70 @@ The frame timestamp can be obtained from the LidarScan object, which contains a 
     main()
                 
 
-Below is an example JSON code block for a ``RELATIVE_POINT_TO_POINT`` constraint:
-
+Below is an example JSON code block for a ``POINT_TO_POINT`` constraint:
 
 .. code-block:: json
    
     {
       "constraints": [
         {
-          "type": "RELATIVE_POINT_TO_POINT",
-          "point_a": {
-            "row": 9,
-            "col": 542,
-            "timestamp": 411107223370,
-            "return_idx": 1
-          },
-          "point_b": {
-            "row": 5,
-            "col": 545,
-            "timestamp": 531097181460,
-            "return_idx": 1
-          },
-          "translation_weight": 1.0
+          "type": "POINT_TO_POINT",
+          "timestamp1": 411107223370,
+          "row1": 9,
+          "col1": 542,
+          "return_idx1": 1,
+          "timestamp2": 531097181460,
+          "row2": 5,
+          "col2": 545,
+          "return_idx2": 1,
+          "translation_weight": [1.0, 1.0, 1.0]
         }
       ]
     }
 
-RELATIVE_POSE_TO_POSE
+POSE_TO_POSE
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The ``RELATIVE_POSE_TO_POSE`` constraint defines a constraint between two poses in the trajectory.
-
+The ``POSE_TO_POSE`` constraint defines a constraint between two poses in the trajectory.
 
 **Required fields:**
 
-- ``type``: Must be ``"RELATIVE_POSE_TO_POSE"``.
-- ``pose_a`` and ``pose_b``: Each must include:
-  
-  * ``timestamp``: The frame timestamp which is the lidar scan's first valid timestamp
+- ``type``: Must be ``"POSE_TO_POSE"``.
+- ``timestamp1``: The frame timestamp for the first pose (lidar scan's first valid timestamp)
+- ``timestamp2``: The frame timestamp for the second pose (lidar scan's first valid timestamp)
 
 **Optional fields:**
 
-- ``transformation``: Defines the relative pose from pose_a to pose_b
+- ``transformation``: Defines the relative pose from pose1 to pose2
   
   * A dictionary (with ``rx``, ``ry``, ``rz``, ``x``, ``y``, ``z``), or
   * A 16-element list (4x4 matrix)
   * If omitted, transformation is auto-estimated using ICP matching.
-- ``rotation_weight``: Number or list of three values.
-- ``translation_weight``: Number or list of three values.
+- ``rotation_weight`` (float): Scales the quaternion axis-alignment residual for the relative pose. Setting it higher enforces the measured rotation more strongly; setting it to ``0`` disables the rotational penalty.
+- ``translation_weight``: List of three values.
 
 See :ref:`weight-fields` for a detailed explanation.
 
-Below is an example JSON code block for a ``RELATIVE_POSE_TO_POSE`` constraint:
-
+Below is an example JSON code block for a ``POSE_TO_POSE`` constraint:
 
 .. code-block:: json
 
     {
       "constraints": [
         {
-          "type": "RELATIVE_POSE_TO_POSE",
-          "pose_a": {
-            "timestamp": 411107223370
+          "type": "POSE_TO_POSE",
+          "timestamp1": 411107223370,
+          "timestamp2": 531097181460,
+          "transformation": {
+            "rx": -0.000396419,
+            "ry": -0.0103704,
+            "rz": -0.0289703,
+            "x": 1.29628,
+            "y": 0.61089,
+            "z": -0.138204
           },
-          "pose_b": {
-            "timestamp": 531097181460
-          },
-          "transformation": [
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, 0.0, 0.0, 1.0
-          ],
           "rotation_weight": 1.0,
-          "translation_weight": 1.0
+          "translation_weight": [1.0, 1.0, 1.0]
         }
       ]
     }
@@ -323,31 +354,32 @@ You can use this file with the downloaded OSF file to run the Pose Optimizer.
                     }
                 },
                 {
-                    "type": "RELATIVE_POINT_TO_POINT",
-                    "translation_weight": 1.0,
-                    "point_a": {
-                        "row": 9,
-                        "col": 542,
-                        "return_idx": 1,
-                        "timestamp": 411107223370
-                    },
-                    "point_b": {
-                        "row": 5,
-                        "col": 545,
-                        "return_idx": 1,
-                        "timestamp": 531097181460
-                    }
+                    "type": "ABSOLUTE_POINT",
+                    "translation_weight": [1.0, 1.0, 1.0],
+                    "timestamp": 411107223370,
+                    "row": 10,
+                    "col": 100,
+                    "return_idx": 1,
+                    "absolute_position": [5.0, 2.0, 1.5]
                 },
                 {
-                    "type": "RELATIVE_POSE_TO_POSE",
-                    "translation_weight": 2.0,
+                    "type": "POINT_TO_POINT",
+                    "translation_weight": [1.0, 1.0, 1.0],
+                    "timestamp1": 411107223370,
+                    "row1": 9,
+                    "col1": 542,
+                    "return_idx1": 1,
+                    "timestamp2": 531097181460,
+                    "row2": 5,
+                    "col2": 545,
+                    "return_idx2": 1
+                },
+                {
+                    "type": "POSE_TO_POSE",
+                    "translation_weight": [2.0, 2.0, 2.0],
                     "rotation_weight": 2.0,
-                    "pose_a": {
-                        "timestamp": 411107223370
-                    },
-                    "pose_b": {
-                        "timestamp": 531097181460
-                    },
+                    "timestamp1": 411107223370,
+                    "timestamp2": 531097181460,
                     "transformation": {
                         "rx": -0.000396419,
                         "ry": -0.0103704,
@@ -369,7 +401,34 @@ After installing the Ouster SDK, downloading the OSF file and creating the JSON 
 
 .. code:: bash
 
-   ouster-cli source <OSF_FILENAME> pose_optimize <CONSTRAINT_JSON_FILE> <OUTPUT_OSF_FILENAME>
+   ouster-cli source <OSF_FILENAME> pose_optimize --config <CONSTRAINT_JSON_FILE> <OUTPUT_OSF_FILENAME>
+
+The ``--config`` option is optional. But if it's omitted, no constraints are loaded and optimizer will use its default settings.:
+
+
+Using the Visualizer (--viz)
+-----------------------------
+
+Add ``--viz`` to start the interactive trajectory visualizer alongside the
+optimizer:
+
+.. code:: bash
+
+   ouster-cli source <OSF_FILENAME> pose_optimize --viz --config <CONSTRAINT_JSON_FILE> <OUTPUT_OSF_FILENAME>
+
+Key bindings in the viz:
+
+- ``n`` solve one optimization step.
+- ``Shift`` + ``n`` solve ten optimization steps.
+- ``Shift`` + ``Ctrl`` + ``n`` iterate until solver convergence.
+- ``p`` increase point cloud point-size (hold ``Shift`` to decrease).
+- ``Shift`` + ``s`` save the optimized trajectory to the output OSF.
+- ``g`` toggle sampled scan clouds on/off.
+- ``r`` toggle the raw trajectory overlay on/off.
+- ``t`` toggle constraint labels.
+- ``m`` toggle sampling mode between keyframes and full columns.
+- ``o`` toggle node orientation arrows (RGB axes).
+- ``x`` toggle absolute pose axes (RGB axes).
 
 
 Visualizing the Results
@@ -387,6 +446,30 @@ After completing pose optimization, you can view the point cloud which is regist
 .. code:: bash
    
    ouster-cli source <OUTPUT_OSF_FILENAME> save refined_point_cloud.ply
-   ouster-cli source refined_point_cloud.ply viz
+   ouster-cli source refined_point_cloud-000.ply viz
 
-.. _Sample Data: https://studio.ouster.com/drive/92996?orgId=1
+
+Automatic GPS Constraints
+-------------------------
+You can also auto-generate GPS absolute pose constraints from an OSF with GPS data (in
+addition to any constraints loaded from ``--config``). Remember the ``--config`` option is optional.
+
+To record a dataset, connect your sensor to receive GPS data over a serial interface and set
+the udp_profile_imu to ACCEL32_GYRO32_NMEA. Detailed instructions for configuring the sensor to accept
+GPS input can be found in the `Sensor Time Sync`_ documentation:
+
+- ``--auto-constraints``: Automatically generate and add GPS absolute pose constraints.
+- ``--gps-constraints-every-m``: Approximate spacing in meters between constraints,
+  computed from distance traveled using lidar scan poses.
+- ``--gps-constraints-weights``: Translation weights ``WX,WY,WZ``. ``WX`` and ``WY``
+- ``--no-initial-align``: In ``--viz`` mode, disables the initial alignment step
+  using absolute constraints.
+
+.. code:: bash
+
+   ouster-cli source <OSF_FILENAME> pose_optimize --auto-constraints <OUTPUT_OSF_FILENAME>
+
+   ouster-cli source <OSF_FILENAME> pose_optimize --auto-constraints --config <CONSTRAINT_JSON_FILE> <OUTPUT_OSF_FILENAME>
+
+.. _Sample Data: https://studio.ouster.com/share/QP8WDMOTC3HOI0TD
+.. _Sensor Time Sync: https://static.ouster.dev/sensor-docs/image_route1/image_route3/time_sync/time-sync.html#sensor-time-source

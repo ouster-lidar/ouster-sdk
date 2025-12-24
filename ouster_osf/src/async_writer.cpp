@@ -1,18 +1,32 @@
 #include "ouster/osf/async_writer.h"
 
-#include "ouster/impl/logging.h"
-#include "ouster/osf/stream_lidar_scan.h"
+#include <cstdint>
+#include <exception>
+#include <future>
+#include <memory>
+#include <mutex>
+#include <nonstd/optional.hpp>
+#include <string>
+#include <utility>
+#include <vector>
 
-using ouster::sensor::logger;
+#include "ouster/impl/logging.h"
+#include "ouster/lidar_scan.h"
+#include "ouster/osf/osf_encoder.h"
+#include "ouster/types.h"
+
+using ouster::sdk::core::logger;
+using namespace ouster::sdk::core;
 
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 AsyncWriter::AsyncWriter(const std::string& filename,
-                         const std::vector<ouster::sensor::sensor_info>& info,
+                         const std::vector<SensorInfo>& info,
                          const std::vector<std::string>& fields_to_write,
                          uint32_t chunk_size, std::shared_ptr<Encoder> encoder)
-    : writer_(filename, info, fields_to_write, chunk_size, encoder),
+    : writer_(filename, info, fields_to_write, chunk_size, std::move(encoder)),
       save_queue_{10} {
     save_thread_ = std::thread([this] { save_thread_method(); });
 }
@@ -26,14 +40,14 @@ void AsyncWriter::save_thread_method() {
         auto& msg_value = msg.value();
         std::lock_guard<std::mutex> lock(stream_mutex_);
         try {
-            writer_._save(msg_value.stream_index_, msg_value.lidar_scan_,
-                          msg_value.timestamp_);
-            msg_value.promise_.set_value();
+            writer_.save_internal(msg_value.stream_index, msg_value.lidar_scan,
+                                  msg_value.timestamp);
+            msg_value.promise.set_value();
         } catch (const std::exception& ex) {
             logger().error("Exception when saving LidarScan as OSF: {}",
                            ex.what());
             try {
-                msg_value.promise_.set_exception(std::current_exception());
+                msg_value.promise.set_exception(std::current_exception());
             } catch (...) {
                 logger().error(
                     "An exception occurred during std::promise set_exception.");
@@ -50,19 +64,21 @@ std::future<void> AsyncWriter::save(uint32_t stream_index,
     std::promise<void> promise;
     std::future<void> result = promise.get_future();
     ts_t time = ts_t(scan.get_first_valid_packet_timestamp());
-    save_queue_.push(LidarScanMessage(stream_index, time, scan, promise));
+    save_queue_.push(
+        LidarScanMessage(static_cast<int>(stream_index), time, scan, promise));
     return result;
 }
 
 std::future<void> AsyncWriter::save(uint32_t stream_index,
                                     const LidarScan& scan,
-                                    const ouster::osf::ts_t timestamp) {
+                                    const ouster::sdk::osf::ts_t timestamp) {
     if (writer_.is_closed()) {
         throw std::logic_error("ERROR: Writer is closed");
     }
     std::promise<void> promise;
     std::future<void> result = promise.get_future();
-    save_queue_.push(LidarScanMessage(stream_index, timestamp, scan, promise));
+    save_queue_.push(LidarScanMessage(static_cast<int>(stream_index), timestamp,
+                                      scan, promise));
     return result;
 }
 
@@ -81,22 +97,24 @@ std::vector<std::future<void>> AsyncWriter::save(
             ts_t time = ts_t(scans[i].get_first_valid_packet_timestamp());
             std::promise<void> promise;
             std::future<void> result = promise.get_future();
-            save_queue_.push(LidarScanMessage(i, time, scans[i], promise));
+            save_queue_.push(
+                LidarScanMessage(static_cast<int>(i), time, scans[i], promise));
             results.push_back(std::move(result));
         }
         return results;
     }
 }
 
-void AsyncWriter::close() {
+void AsyncWriter::close(bool fsync) {
     save_queue_.shutdown();
     if (save_thread_.joinable()) {
         save_thread_.join();
     }
-    writer_.close();
+    writer_.close(fsync);
 }
 
 AsyncWriter::~AsyncWriter() { close(); }
 
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

@@ -18,6 +18,7 @@
 #include "ouster/impl/netcompat.h"  // NOLINT(misc-include-cleaner)
 
 #include <array>
+#include <cstring>
 #include <string>
 
 #if defined _WIN32
@@ -31,11 +32,11 @@
 #include <unistd.h>
 
 #include <cerrno>
-#include <cstring>
 
 #endif
 
 namespace ouster {
+namespace sdk {
 namespace sensor {
 namespace impl {
 
@@ -147,4 +148,5 @@ int socket_set_rcvtimeout(SOCKET sock, int timeout_sec) {
 
 }  // namespace impl
 }  // namespace sensor
+}  // namespace sdk
 }  // namespace ouster

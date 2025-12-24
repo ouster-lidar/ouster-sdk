@@ -1,10 +1,17 @@
-
 #include <pybind11/eigen.h>
 #include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <cstdint>
+#include <iostream>
+#include <nonstd/optional.hpp>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include "common.h"
 #include "ouster/open_source.h"
 
 namespace py = pybind11;
@@ -16,7 +23,7 @@ void init_viz(py::module&, py::module&);
 void init_mapping(py::module&, py::module&);
 
 void parse_packet_source_options(const py::kwargs& args,
-                                 ouster::PacketSourceOptions& options) {
+                                 ouster::sdk::PacketSourceOptions& options) {
     for (const auto& item : args) {
         // this check is probably unnecessary
         if (!py::isinstance<py::str>(item.first)) {
@@ -44,10 +51,11 @@ void parse_packet_source_options(const py::kwargs& args,
             options.timeout = py::cast<float>(item.second);
         } else if (key == "sensor_info") {
             options.sensor_info =
-                py::cast<std::vector<ouster::sensor::sensor_info>>(item.second);
+                py::cast<std::vector<ouster::sdk::core::SensorInfo>>(
+                    item.second);
         } else if (key == "sensor_config") {
             options.sensor_config =
-                py::cast<std::vector<ouster::sensor::sensor_config>>(
+                py::cast<std::vector<ouster::sdk::core::SensorConfig>>(
                     item.second);
         } else if (key == "extrinsics") {
             auto extrinsics =
@@ -65,7 +73,7 @@ void parse_packet_source_options(const py::kwargs& args,
                 // F-style const
                 const py::array_t<double>* pose_ptr = &pose;
                 py::array_t<double> c_style_pose;
-                if (!(pose.flags() & py::array::c_style)) {
+                if ((pose.flags() & py::array::c_style) == 0) {
                     c_style_pose =
                         py::array_t<double, py::array::c_style>(pose);
                     pose_ptr =
@@ -75,7 +83,7 @@ void parse_packet_source_options(const py::kwargs& args,
                 // Convert pose to Eigen format
                 Eigen::Map<const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>
                     pose_eigen(pose_ptr->data());
-                exts.push_back(pose_eigen);
+                exts.emplace_back(pose_eigen);
             }
             options.extrinsics = exts;
         } else if (key == "extrinsics_file") {
@@ -86,6 +94,8 @@ void parse_packet_source_options(const py::kwargs& args,
             options.soft_id_check = py::cast<bool>(item.second);
         } else if (key == "config_timeout") {
             options.config_timeout = py::cast<float>(item.second);
+        } else if (key == "reuse_ports") {
+            options.reuse_ports = py::cast<bool>(item.second);
         } else if (key == "buffer_time_sec") {
             options.buffer_time_sec = py::cast<float>(item.second);
         } else if (key == "meta") {
@@ -98,7 +108,7 @@ void parse_packet_source_options(const py::kwargs& args,
 }
 
 void parse_scan_source_options(const py::kwargs& args,
-                               ouster::ScanSourceOptions& options) {
+                               ouster::sdk::ScanSourceOptions& options) {
     for (const auto& item : args) {
         // this check is probably unnecessary
         if (!py::isinstance<py::str>(item.first)) {
@@ -112,7 +122,7 @@ void parse_scan_source_options(const py::kwargs& args,
                     continue;
                 }
                 options.error_handler =
-                    py::cast<ouster::core::error_handler_t>(item.second);
+                    py::cast<ouster::sdk::core::error_handler_t>(item.second);
             } else if (key == "lidar_port") {
                 if (py::isinstance<py::none>(item.second)) {
                     continue;
@@ -133,17 +143,19 @@ void parse_scan_source_options(const py::kwargs& args,
                     py::cast<std::vector<std::string>>(item.second);
             } else if (key == "no_auto_udp_dest") {
                 options.no_auto_udp_dest = py::cast<bool>(item.second);
+            } else if (key == "reuse_ports") {
+                options.reuse_ports = py::cast<bool>(item.second);
             } else if (key == "do_not_reinitialize") {
                 options.do_not_reinitialize = py::cast<bool>(item.second);
             } else if (key == "timeout") {
                 options.timeout = py::cast<float>(item.second);
             } else if (key == "sensor_info") {
                 options.sensor_info =
-                    py::cast<std::vector<ouster::sensor::sensor_info>>(
+                    py::cast<std::vector<ouster::sdk::core::SensorInfo>>(
                         item.second);
             } else if (key == "sensor_config") {
                 options.sensor_config =
-                    py::cast<std::vector<ouster::sensor::sensor_config>>(
+                    py::cast<std::vector<ouster::sdk::core::SensorConfig>>(
                         item.second);
             } else if (key == "extrinsics") {
                 auto extrinsics =
@@ -161,7 +173,7 @@ void parse_scan_source_options(const py::kwargs& args,
                     // F-style const
                     const py::array_t<double>* pose_ptr = &pose;
                     py::array_t<double> c_style_pose;
-                    if (!(pose.flags() & py::array::c_style)) {
+                    if ((pose.flags() & py::array::c_style) == 0) {
                         c_style_pose =
                             py::array_t<double, py::array::c_style>(pose);
                         pose_ptr = &c_style_pose;  // Use the C-style array for
@@ -172,7 +184,7 @@ void parse_scan_source_options(const py::kwargs& args,
                     Eigen::Map<
                         const Eigen::Matrix<double, 4, 4, Eigen::RowMajor>>
                         pose_eigen(pose_ptr->data());
-                    exts.push_back(pose_eigen);
+                    exts.emplace_back(pose_eigen);
                 }
                 options.extrinsics = exts;
             } else if (key == "extrinsics_file") {
@@ -216,22 +228,22 @@ void parse_scan_source_options(const py::kwargs& args,
     }
 }
 
-PYBIND11_MODULE(_bindings, m) {
-    m.doc() = R"(
+PYBIND11_MODULE(_bindings, module) {
+    module.doc() = R"(
     SDK bindings generated by pybind11.
 
     This module is generated directly from the C++ code and not meant to be used
     directly.
     )";
 
-    auto client = m.def_submodule("client");
-    init_client(client, m);
-    auto pcap = m.def_submodule("pcap");
-    init_pcap(pcap, m);
-    auto osf = m.def_submodule("osf");
-    init_osf(osf, m);
-    auto viz = m.def_submodule("viz");
-    init_viz(viz, m);
-    auto mapping = m.def_submodule("mapping");
-    init_mapping(mapping, m);
+    auto client = module.def_submodule("client");
+    init_client(client, module);
+    auto pcap = module.def_submodule("pcap");
+    init_pcap(pcap, module);
+    auto osf = module.def_submodule("osf");
+    init_osf(osf, module);
+    auto viz = module.def_submodule("viz");
+    init_viz(viz, module);
+    auto mapping = module.def_submodule("mapping");
+    init_mapping(mapping, module);
 }

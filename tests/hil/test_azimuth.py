@@ -14,8 +14,8 @@ pytestmark = pytest.mark.usefixtures("hil_initial_config")
 logger = logging.getLogger("HIL")
 
 MODES = [
-    (LidarMode.MODE_512x20, 512), (LidarMode.MODE_1024x10, 1024), (LidarMode.MODE_2048x10, 2048),
-    (LidarMode.MODE_4096x5, 4096)
+    (LidarMode._512x20, 512), (LidarMode._1024x10, 1024), (LidarMode._2048x10, 2048),
+    (LidarMode._4096x5, 4096)
 ]
 
 def genparams(modes):
@@ -101,9 +101,9 @@ def test_azimuth_setting(hil_configured_sensor, hil_sensor_config,
         assert not expect_fail, "Configuration succeeded unexpectedly"
 
     with closing(sensor.SensorScanSource(hil_configured_sensor)) as scans:
-        w = scans.metadata[0].format.columns_per_frame
+        w = scans.sensor_info[0].format.columns_per_frame
 
-        col_window = scans.metadata[0].format.column_window
+        col_window = scans.sensor_info[0].format.column_window
         logger.debug(f"Reported col_window: {col_window}")
 
         window_len = (col_window[1] - col_window[0] + w) % w + 1

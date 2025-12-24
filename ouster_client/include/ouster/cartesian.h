@@ -2,9 +2,14 @@
 
 #include <ouster/lidar_scan.h>
 
+#include <cassert>
+#include <cstdint>
+
 #include "ouster/types.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 
 // Users can enable OpenMP within ouster_client by first enabling omp through
 // the compiler and then adding '-DOUSTER_OMP' option to the DCMAKE_CXX_FLAGS
@@ -28,9 +33,9 @@ namespace ouster {
  *
  */
 template <typename T>
-void cartesianT(PointsT<T>& points,
+void cartesianT(PointCloudXYZ<T>& points,
                 const Eigen::Ref<const img_t<uint32_t>>& range,
-                const PointsT<T>& direction, const PointsT<T>& offset) {
+                const ArrayX3R<T>& direction, const ArrayX3R<T>& offset) {
     assert(points.rows() == direction.rows() &&
            "points & direction row count mismatch");
     assert(points.rows() == offset.rows() &&
@@ -44,18 +49,15 @@ void cartesianT(PointsT<T>& points,
     const auto* const ofs = offset.data();
 
     const auto N = range.size();
-    const auto col_x = 0 * N;  // 1st column of points (x)
-    const auto col_y = 1 * N;  // 2nd column of points (y)
-    const auto col_z = 2 * N;  // 3rd column of points (z)
 
 #ifdef __OUSTER_UTILIZE_OPENMP__
 #pragma omp parallel for schedule(static)
 #endif
     for (auto i = 0; i < N; ++i) {
         const auto r = rng[i];
-        const auto idx_x = col_x + i;
-        const auto idx_y = col_y + i;
-        const auto idx_z = col_z + i;
+        const auto idx_x = (i * 3) + 0;
+        const auto idx_y = (i * 3) + 1;
+        const auto idx_z = (i * 3) + 2;
         if (r == 0) {
             pts[idx_x] = pts[idx_y] = pts[idx_z] = static_cast<T>(0.0);
         } else {
@@ -79,12 +81,13 @@ void cartesianT(PointsT<T>& points,
  * @throw std::invalid_argument if the range image dimensions do not match
  */
 template <typename T>
-PointsT<T> cartesianT(const Eigen::Ref<const img_t<uint32_t>>& range,
-                      const PointsT<T>& direction, const PointsT<T>& offset) {
+PointCloudXYZ<T> cartesianT(const Eigen::Ref<const img_t<uint32_t>>& range,
+                            const ArrayX3R<T>& direction,
+                            const ArrayX3R<T>& offset) {
     if (range.cols() * range.rows() != direction.rows()) {
         throw std::invalid_argument("unexpected image dimensions");
     }
-    PointsT<T> points(direction.rows(), 3);
+    PointCloudXYZ<T> points(direction.rows(), 3);
     cartesianT(points, range, direction, offset);
     return points;
 }
@@ -100,9 +103,11 @@ PointsT<T> cartesianT(const Eigen::Ref<const img_t<uint32_t>>& range,
  *         to ith pixel in LidarScan where i = row * w + col.
  */
 template <typename T>
-PointsT<T> cartesianT(const LidarScan& scan, const PointsT<T>& direction,
-                      const PointsT<T>& offset) {
-    return cartesianT(scan.field(sensor::ChanField::RANGE), direction, offset);
+PointCloudXYZ<T> cartesianT(const LidarScan& scan, const ArrayX3R<T>& direction,
+                            const ArrayX3R<T>& offset) {
+    return cartesianT(scan.field(ChanField::RANGE), direction, offset);
 }
 
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

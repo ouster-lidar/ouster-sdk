@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace ouster::viz;
+using namespace ouster::sdk::viz;
 
 TEST(PointViz, viewport_coordinates_to_world_coordinates) {
     WindowCtx ctx;

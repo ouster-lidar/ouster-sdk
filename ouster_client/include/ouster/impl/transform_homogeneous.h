@@ -3,6 +3,8 @@
 #include "ouster/impl/transform_typedefs.h"
 
 namespace ouster {
+namespace sdk {
+namespace core {
 namespace impl {
 
 class RotV;
@@ -19,7 +21,7 @@ class PoseV;
  */
 class RotH : public Eigen::Matrix3d {
    public:
-    RotH() {}
+    RotH() = default;
 
     template <typename OtherDerived>
     RotH(const Eigen::MatrixBase<OtherDerived>& m) : Eigen::Matrix3d(m) {}
@@ -95,4 +97,6 @@ class PoseH : public Eigen::Matrix4d {
 };
 
 }  // namespace impl
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

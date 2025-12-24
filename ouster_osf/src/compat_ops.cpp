@@ -3,8 +3,13 @@
  * All rights reserved.
  */
 
-#include "compat_ops.h"
+#include "ouster/osf/impl/compat_ops.h"
 
+#include <array>
+#include <cerrno>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -24,13 +29,11 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-#include <cstring>
 #endif
 
-using namespace ouster::sensor;
-
+using ouster::sdk::core::logger;
 namespace ouster {
+namespace sdk {
 namespace osf {
 
 static const std::string FILE_SEPS = "\\/";
@@ -68,6 +71,15 @@ std::string LastErrorMessageStr() {
 }
 #endif
 
+void file_size_exception(const std::string& path) {
+    throw std::runtime_error("Couldn't read " + path +
+                             ": couldn't determine file size.");
+}
+
+bool is_file_sep(char character) {
+    return (FILE_SEPS.find(character) != std::string::npos);
+}
+
 }  // namespace
 
 /// Get the last system error and return it in a string
@@ -75,7 +87,22 @@ std::string get_last_error() {
 #ifdef _WIN32
     return LastErrorMessageStr();
 #else
-    return std::string(std::strerror(errno));
+    std::array<char, 1024> buf = {};
+// NOLINTBEGIN(misc-include-cleaner)
+#if defined(__EMSCRIPTEN__) || (defined(__APPLE__) && defined(__MACH__)) || \
+    ((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE)
+    // Using XSI-compliant version of strerror_r
+    if (strerror_r(errno, buf.data(), buf.size()) == 0) {
+        return buf.data();
+    } else {
+        return "Error: Unknown OSF Error";
+    }
+// NOLINTEND(misc-include-cleaner)
+#else
+    // Using GNU-specific version of strerror_r
+    return strerror_r(errno, buf.data(),
+                      buf.size());  // NOLINT(misc-include-cleaner)
+#endif
 #endif
 }
 
@@ -91,10 +118,10 @@ bool is_dir(const std::string& path) {
     }
     return false;
 #else
-    struct stat statbuf;
+    struct stat statbuf {};
     if (stat(path.c_str(), &statbuf) != 0) {
         if (errno != ENOENT) {
-            logger().error("ERROR: stat: {}", std::strerror(errno));
+            logger().error("ERROR: stat: {}", get_last_error());
         }
         return false;
     }
@@ -110,21 +137,25 @@ bool path_exists(const std::string& path) {
     DWORD attrs = GetFileAttributesA(path.c_str());
     return (attrs != INVALID_FILE_ATTRIBUTES);
 #else
-    struct stat sb;
-    return !(stat(path.c_str(), &sb) != 0);
+    struct stat stats {};
+    return !(stat(path.c_str(), &stats) != 0);
 #endif
 }
-
-bool is_file_sep(char c) { return (FILE_SEPS.find(c) != std::string::npos); }
 
 /// Path concatenation with OS specific path separator
 // NOTE: Trying not to be too smart here ... and it's impossible function
 //       to make it fully correct, so use it wisely.
 std::string path_concat(const std::string& path1, const std::string& path2) {
-    if (path1.empty()) return path2;
-    if (path2.empty()) return path1;
+    if (path1.empty()) {
+        return path2;
+    }
+    if (path2.empty()) {
+        return path1;
+    }
 
-    if (is_file_sep(path2.front())) return path2;
+    if (is_file_sep(path2.front())) {
+        return path2;
+    }
 #ifdef _WIN32
     if (path2.size() > 1 && path2.at(1) == ':') return path2;
 #endif
@@ -157,12 +188,13 @@ bool make_tmp_dir(std::string& tmp_path) {
 #else
     // TODO[pb]: Check that it works on Mac OS and especially that
     // temp files are cleaned correctly and don't feel up the CI machine ...
-    char tmpdir[] = "/tmp/ouster-test.XXXXXX";
-    if (::mkdtemp(tmpdir) == nullptr) {
+    std::array<char, 25> tmpdir = {"/tmp/ouster-test.XXXXXX"};
+    if (::mkdtemp(static_cast<char*>(tmpdir.data())) ==
+        nullptr) {  // NOLINT(misc-include-cleaner)
         logger().error("ERROR: Can't create temp dir.");
         return false;
     };
-    tmp_path = tmpdir;
+    tmp_path = std::string(static_cast<char*>(tmpdir.data()));
     return true;
 #endif
 }
@@ -195,8 +227,11 @@ bool get_env_var(const std::string& name, std::string& value) {
     value.clear();
     return false;
 #else
-    char* var_value;
-    if ((var_value = std::getenv(name.c_str())) != nullptr) {
+    // No good way to make the get env thread-safe in C++11, so
+    // using std::getenv here.
+    char* var_value =
+        std::getenv(name.c_str());  // NOLINT(concurrency-mt-unsafe)
+    if (var_value != nullptr) {
         value = var_value;
         return true;
     }
@@ -224,29 +259,24 @@ bool remove_dir(const std::string& path) {
 }
 
 /// Get file size
-int64_t file_size(const std::string& path) {
+uint64_t file_size(const std::string& path) {
 #ifdef _WIN32
     LARGE_INTEGER fsize;
     WIN32_FILE_ATTRIBUTE_DATA file_attr_data;
     if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard,
-                              &file_attr_data)) {
-        return -1;
-    }
-    if (file_attr_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-        return -2;
+                              &file_attr_data) ||
+        file_attr_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+        file_size_exception(path);
     }
     fsize.LowPart = file_attr_data.nFileSizeLow;
     fsize.HighPart = file_attr_data.nFileSizeHigh;
     return fsize.QuadPart;
 #else
-    struct stat st;
-    if (stat(path.c_str(), &st) < 0) {
-        return -1;
+    struct stat stats {};
+    if (stat(path.c_str(), &stats) < 0 || !S_ISREG(stats.st_mode)) {
+        file_size_exception(path);
     };
-    if (!S_ISREG(st.st_mode)) {
-        return -2;
-    }
-    return st.st_size;
+    return stats.st_size;
 #endif
 }
 
@@ -264,7 +294,8 @@ uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
     memmap_handle = reinterpret_cast<uintptr_t>(file_map);
     if (file_map == nullptr) {
         CloseHandle(file);
-        return nullptr;
+        throw std::runtime_error("CreateFileMappingA " + path + ": " +
+                                 get_last_error());
     }
 
     uint8_t* buffer_pointer =
@@ -278,28 +309,19 @@ uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
     // Silence unused variable warning
     (void)memmap_handle;
 
-    struct stat st;
-    if (stat(path.c_str(), &st) < 0) {
-        return nullptr;
-    };
-    if (!S_ISREG(st.st_mode)) {
-        return nullptr;
-    }
-    if (st.st_size == 0) {
-        return nullptr;
-    }
-
-    int fd = open(path.c_str(), O_RDONLY);
+    // Have to use var arg open due to the memory-mapped file API
+    // Also technically we are not using the var arg portionion of the API
+    int fd = open(path.c_str(),
+                  O_RDONLY);  // NOLINT(cppcoreguidelines-pro-type-vararg)
     if (fd < 0) {
-        return nullptr;
+        throw std::runtime_error("open " + path + ": " + get_last_error());
     }
 
-    void* map_osf_file = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-
-    // Closing the file descriptor does not invalidate the memory map.
-    ::close(fd);
+    void* map_osf_file =
+        mmap(nullptr, file_size(path), PROT_READ, MAP_SHARED, fd, 0);
     if (map_osf_file == MAP_FAILED) {
-        return nullptr;
+        ::close(fd);
+        throw std::runtime_error("mmap " + path + ": " + get_last_error());
     }
     return static_cast<uint8_t*>(map_osf_file);
 #endif
@@ -308,7 +330,9 @@ uint8_t* mmap_open(const std::string& path, uintptr_t& memmap_handle) {
 /// File mapping close
 bool mmap_close(uint8_t* file_buf, const uint64_t file_size,
                 uintptr_t memmap_handle) {
-    if (file_buf == nullptr || file_size == 0) return false;
+    if (file_buf == nullptr || file_size == 0) {
+        return false;
+    }
 #ifdef _WIN32
     bool result = (UnmapViewOfFile(file_buf) != 0);
     if (memmap_handle != 0) {
@@ -324,8 +348,8 @@ bool mmap_close(uint8_t* file_buf, const uint64_t file_size,
 }
 
 int64_t truncate_file(const std::string& path, uint64_t filesize) {
-    int64_t actual_file_size = file_size(path);
-    if (actual_file_size < (int64_t)filesize) {
+    uint64_t actual_file_size = file_size(path);
+    if (actual_file_size < filesize) {
         return -1;
     }
 #ifdef _WIN32
@@ -335,11 +359,11 @@ int64_t truncate_file(const std::string& path, uint64_t filesize) {
         _close(file_handle);
     }
 #else
-    if (truncate(path.c_str(), filesize) != 0) {
+    if (truncate(path.c_str(), static_cast<int64_t>(filesize)) != 0) {
         return -1;
     }
 #endif
-    return file_size(path);
+    return static_cast<int64_t>(file_size(path));
 }
 
 int64_t append_binary_file(const std::string& append_to_file_name,
@@ -371,8 +395,12 @@ int64_t append_binary_file(const std::string& append_to_file_name,
                        append_to_file_name);
     }
 
-    if (append_to_file_stream.is_open()) append_to_file_stream.close();
-    if (append_from_file_stream.is_open()) append_from_file_stream.close();
+    if (append_to_file_stream.is_open()) {
+        append_to_file_stream.close();
+    }
+    if (append_from_file_stream.is_open()) {
+        append_from_file_stream.close();
+    }
 
     return saved_size;
 }
@@ -380,8 +408,8 @@ int64_t append_binary_file(const std::string& append_to_file_name,
 int64_t copy_file_trailing_bytes(const std::string& source_file,
                                  const std::string& target_file,
                                  uint64_t offset) {
-    int64_t actual_file_size = file_size(source_file);
-    if (actual_file_size < (int64_t)offset) {
+    uint64_t actual_file_size = file_size(source_file);
+    if (actual_file_size < offset) {
         return -1;
     }
 
@@ -401,7 +429,7 @@ int64_t copy_file_trailing_bytes(const std::string& source_file,
 
     if (target_file_stream.is_open()) {
         if (source_file_stream.is_open()) {
-            source_file_stream.seekg(offset);
+            source_file_stream.seekg(static_cast<int64_t>(offset));
             target_file_stream << source_file_stream.rdbuf();
             saved_size = target_file_stream.tellg();
         } else {
@@ -411,11 +439,50 @@ int64_t copy_file_trailing_bytes(const std::string& source_file,
         logger().error("ERROR: Failed to open {} for copy", target_file);
     }
 
-    if (source_file_stream.is_open()) source_file_stream.close();
-    if (target_file_stream.is_open()) target_file_stream.close();
+    if (source_file_stream.is_open()) {
+        source_file_stream.close();
+    }
+    if (target_file_stream.is_open()) {
+        target_file_stream.close();
+    }
 
     return saved_size;
 }
 
+bool file_flush(const std::string& path) {
+#ifdef _WIN32
+    HANDLE fd = CreateFile(path.c_str(), GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL, NULL);
+    if (fd == INVALID_HANDLE_VALUE) {
+        // somehow failed to open the file
+        return false;
+    }
+
+    if (!FlushFileBuffers(fd)) {
+        // fsync failed
+        CloseHandle(fd);
+        return false;
+    }
+
+    CloseHandle(fd);
+#else
+    int fd = open(path.c_str(), O_WRONLY, 0644);
+    if (fd == -1) {
+        // somehow failed to open the file
+        return false;
+    }
+
+    if (fsync(fd) == -1) {
+        // fsync failed
+        close(fd);
+        return false;
+    }
+
+    close(fd);
+#endif
+    return true;
+}
+
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster

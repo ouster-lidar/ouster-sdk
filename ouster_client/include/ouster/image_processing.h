@@ -14,20 +14,22 @@
 #include "ouster/visibility.h"
 
 namespace ouster {
-namespace viz {
+namespace sdk {
+namespace core {
 
 /** Adjusts brightness to between 0 and 1. */
 class OUSTER_API_CLASS AutoExposure {
-    const double lo_percentile, hi_percentile;  // percentiles used for scaling
-    const int ae_update_every;
+    const double lo_percentile_,
+        hi_percentile_;  // percentiles used for scaling
+    const int ae_update_every_;
 
-    double lo_state = -1.0;
-    double hi_state = -1.0;
-    double lo = -1.0;
-    double hi = -1.0;
+    double lo_state_ = -1.0;
+    double hi_state_ = -1.0;
+    double lo_ = -1.0;
+    double hi_ = -1.0;
 
-    bool initialized = false;
-    int counter = 0;
+    bool initialized_ = false;
+    int counter_ = 0;
 
     template <typename T>
     void update(Eigen::Ref<img_t<T>> image, bool update_state);
@@ -87,8 +89,8 @@ class OUSTER_API_CLASS AutoExposure {
  */
 class OUSTER_API_CLASS BeamUniformityCorrector {
    private:
-    int counter = 0;
-    Eigen::ArrayXd dark_count;
+    int counter_ = 0;
+    Eigen::ArrayXd dark_count_;
 
     template <typename T>
     void update(Eigen::Ref<img_t<T>> image, bool update_state);
@@ -114,5 +116,6 @@ class OUSTER_API_CLASS BeamUniformityCorrector {
     OUSTER_API_FUNCTION
     void operator()(Eigen::Ref<img_t<double>> image, bool update_state = true);
 };
-}  // namespace viz
+}  // namespace core
+}  // namespace sdk
 }  // namespace ouster

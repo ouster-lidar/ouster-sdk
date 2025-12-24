@@ -7,10 +7,12 @@
 #include <ouster/io_type.h>
 
 #include <cstring>
-#include <string>
+#include <nonstd/optional.hpp>
 #include <stdexcept>
+#include <string>
 
 namespace ouster {
+namespace sdk {
 namespace core {
 
 nonstd::optional<std::string> extension_from_io_type(IoType type) {
@@ -41,8 +43,40 @@ nonstd::optional<std::string> extension_from_io_type(IoType type) {
     if (type == IoType::PNG) {
         return ".png";
     }
+    if (type == IoType::STL) {
+        return ".stl";
+    }
 
     return nonstd::optional<std::string>();
+}
+
+std::string to_string(IoType type) {
+    switch (type) {
+        case IoType::OSF:
+            return "OSF";
+        case IoType::PCAP:
+            return "PCAP";
+        case IoType::BAG:
+            return "BAG";
+        case IoType::PLY:
+            return "PLY";
+        case IoType::PCD:
+            return "PCD";
+        case IoType::LAS:
+            return "LAS";
+        case IoType::MCAP:
+            return "MCAP";
+        case IoType::PNG:
+            return "PNG";
+        case IoType::STL:
+            return "STL";
+        case IoType::SENSOR:
+            return "sensor";
+        case IoType::CSV:
+            return "CSV";
+        default:
+            throw std::invalid_argument("Unhandled IoType");
+    }
 }
 
 IoType io_type_from_extension(const std::string& filename) {
@@ -76,9 +110,14 @@ IoType io_type_from_extension(const std::string& filename) {
         if (ext == "png") {
             return IoType::PNG;
         }
+        if (ext == "stl") {
+            return IoType::STL;
+        }
     }
     throw std::invalid_argument(
-        "Expecting .osf, .pcap, .bag, .mcap, .csv, .png, .ply, .pcd, or .las.");
+        "Could not detect IO type from file extension. Expecting one of .osf, "
+        ".pcap, .bag, .mcap, .csv, .png, .ply, .pcd, .stl or "
+        ".las.");
 }
 
 IoType io_type(const std::string& source) {
@@ -89,22 +128,28 @@ IoType io_type(const std::string& source) {
             auto idx = source.find_last_of('.');
             if (idx != std::string::npos) {
                 std::string ext = source.substr(idx + 1);
-                if (ext == "bag") return IoType::BAG;
+                if (ext == "bag") {
+                    return IoType::BAG;
+                }
             }
+
+            throw std::invalid_argument(
+                "Source type of '" + source +
+                "' not found. Was a directory and was not a ROSbag.");
         } else {
             // file, check the extension
             return io_type_from_extension(source);
         }
     } else {
         // not a file, check if its a sensor
-        if (ouster::core::is_host(source)) {
+        if (is_host(source)) {
             return IoType::SENSOR;
         }
     }
 
     throw std::invalid_argument("Source type of '" + source +
-                                "' expected to be a sensor hostname, ip "
-                                "address, or a .pcap, .osf, or .bag file.");
+                                "' not found. File or host not found.");
 }
 }  // namespace core
+}  // namespace sdk
 }  // namespace ouster

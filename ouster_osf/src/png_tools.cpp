@@ -3,33 +3,42 @@
  * All rights reserved.
  */
 
-#include "png_tools.h"
+#include "ouster/osf/impl/png_tools.h"
+
+#include <png.h>
+#include <pngconf.h>
 
 #include <Eigen/Eigen>
-#include <fstream>
-#include <future>
-#include <iostream>
-#include <memory>
+#include <csetjmp>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <vector>
 
 #include "ouster/impl/logging.h"
 #include "ouster/lidar_scan.h"
+#include "zpng.h"
 
-using namespace ouster::sensor;
+using namespace ouster::sdk::core;
 
 namespace ouster {
+namespace sdk {
 namespace osf {
+namespace impl {
 
 /**
  * Provides the data reader capabilities from std::vector for png_read IO
  */
 struct VectorReader {
-    const std::vector<uint8_t>& buffer;
+    const EncodedScanChannelData& buffer;
     uint32_t offset;
-    explicit VectorReader(const std::vector<uint8_t>& buf)
+    explicit VectorReader(const EncodedScanChannelData& buf)
         : buffer(buf), offset(0) {}
     void read(void* bytes, const uint32_t bytes_len) {
         // Skip safety check and trust libpng?
-        if (offset >= buffer.size()) return;
+        if (offset >= buffer.size()) {
+            return;
+        }
         uint32_t bytes_to_read = bytes_len;
         if (offset + bytes_to_read > buffer.size()) {
             bytes_to_read = buffer.size() - offset;
@@ -110,7 +119,7 @@ void png_osf_read_data(png_structp png_ptr, png_bytep bytes,
  * @TODO Change up tests to not use this stuff
  */
 OUSTER_API_FUNCTION
-void png_osf_flush_data(png_structp){};
+void png_osf_flush_data(png_structp /*unused*/){};
 
 /**
  * Common png WRITE init routine, creates and setups png_ptr and png_info_ptr
@@ -118,13 +127,13 @@ void png_osf_flush_data(png_structp){};
 bool png_osf_write_init(png_structpp png_ptrp, png_infopp png_info_ptrp) {
     *png_ptrp = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr,
                                         png_osf_error, png_osf_error);
-    if (!*png_ptrp) {
+    if (*png_ptrp == nullptr) {
         logger().error("ERROR: no png_ptr");
         return true;
     }
 
     *png_info_ptrp = png_create_info_struct(*png_ptrp);
-    if (!*png_info_ptrp) {
+    if (*png_info_ptrp == nullptr) {
         logger().error("ERROR: no png_info_ptr");
         png_destroy_write_struct(png_ptrp, nullptr);
         return true;
@@ -139,13 +148,13 @@ bool png_osf_write_init(png_structpp png_ptrp, png_infopp png_info_ptrp) {
 bool png_osf_read_init(png_structpp png_ptrp, png_infopp png_info_ptrp) {
     *png_ptrp = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr,
                                        png_osf_error, png_osf_error);
-    if (!*png_ptrp) {
+    if (*png_ptrp == nullptr) {
         logger().error("ERROR: no png_ptr");
         return true;
     }
 
     *png_info_ptrp = png_create_info_struct(*png_ptrp);
-    if (!*png_info_ptrp) {
+    if (*png_info_ptrp == nullptr) {
         logger().error("ERROR: no png_info_ptr");
         png_destroy_read_struct(png_ptrp, nullptr, nullptr);
         return true;
@@ -177,32 +186,32 @@ void png_osf_write_start(png_structp png_ptr, png_infop png_info_ptr,
 // ========== Decode Functions ===================================
 
 template <typename T>
-bool decode24bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset) {
-    if (!decode24bitImage<T>(img, channel_buf)) {
+bool decode_24bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf,
+                        const std::vector<int>& px_offset) {
+    if (!decode_24bit_image<T>(img, channel_buf)) {
         img = stagger<T>(img, px_offset);
         return false;  // SUCCESS
     }
     return true;  // ERROR
 }
 
-template bool decode24bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&,
-                                        const std::vector<int>&);
-template bool decode24bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode24bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode24bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
+template bool decode_24bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&,
+                                          const std::vector<int>&);
+template bool decode_24bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_24bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_24bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
 
 template <typename T>
-bool decode24bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf) {
+bool decode_24bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf) {
     // libpng main structs
     png_structp png_ptr;
     png_infop png_info_ptr;
@@ -254,11 +263,12 @@ bool decode24bitImage(Eigen::Ref<img_t<T>> img,
     }
 
     // 24bit channel data decoding to LidarScan for key channel_index
-    for (size_t u = 0; u < height; u++) {
-        for (size_t v = 0; v < width; v++) {
-            img(u, v) = static_cast<T>(row_pointers[u][v * 3 + 0]) +
-                        (static_cast<T>(row_pointers[u][v * 3 + 1]) << 8u) +
-                        (static_cast<T>(row_pointers[u][v * 3 + 2]) << 16u);
+    for (size_t row = 0; row < height; row++) {
+        for (size_t col = 0; col < width; col++) {
+            img(row, col) =
+                static_cast<T>(row_pointers[row][(col * 3) + 0]) +
+                (static_cast<T>(row_pointers[row][(col * 3) + 1]) << 8u) +
+                (static_cast<T>(row_pointers[row][(col * 3) + 2]) << 16u);
         }
     }
 
@@ -267,45 +277,46 @@ bool decode24bitImage(Eigen::Ref<img_t<T>> img,
     return false;  // SUCCESS
 }
 
-template bool decode24bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&);
-template bool decode24bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&);
-template bool decode24bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&);
-template bool decode24bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&);
+template bool decode_24bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&);
+template bool decode_24bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_24bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_24bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&);
 
 template <typename T>
-bool decode32bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset) {
-    if (!decode32bitImage<T>(img, channel_buf)) {
+bool decode_32bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf,
+                        const std::vector<int>& px_offset) {
+    if (!decode_32bit_image<T>(img, channel_buf)) {
         img = stagger<T>(img, px_offset);
         return false;  // SUCCESS
     }
     return true;  // ERROR
 }
 
-template bool decode32bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&,
-                                        const std::vector<int>&);
-template bool decode32bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode32bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode32bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
+template bool decode_32bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&,
+                                          const std::vector<int>&);
+template bool decode_32bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_32bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_32bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
 
 template <typename T>
-bool decode32bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf) {
+bool decode_32bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf) {
     if (sizeof(T) < 4) {
         print_bad_pixel_size();
     }
+
     // libpng main structs
     png_structp png_ptr;
     png_infop png_info_ptr;
@@ -357,12 +368,13 @@ bool decode32bitImage(Eigen::Ref<img_t<T>> img,
     }
 
     // 32bit channel data decoding to LidarScan for key channel_index
-    for (size_t u = 0; u < height; u++) {
-        for (size_t v = 0; v < width; v++) {
-            img(u, v) = static_cast<T>(row_pointers[u][v * 4 + 0]) +
-                        (static_cast<T>(row_pointers[u][v * 4 + 1]) << 8u) +
-                        (static_cast<T>(row_pointers[u][v * 4 + 2]) << 16u) +
-                        (static_cast<T>(row_pointers[u][v * 4 + 3]) << 24u);
+    for (size_t row = 0; row < height; row++) {
+        for (size_t col = 0; col < width; col++) {
+            img(row, col) =
+                static_cast<T>(row_pointers[row][(col * 4) + 0]) +
+                (static_cast<T>(row_pointers[row][(col * 4) + 1]) << 8u) +
+                (static_cast<T>(row_pointers[row][(col * 4) + 2]) << 16u) +
+                (static_cast<T>(row_pointers[row][(col * 4) + 3]) << 24u);
         }
     }
 
@@ -371,42 +383,42 @@ bool decode32bitImage(Eigen::Ref<img_t<T>> img,
     return false;  // SUCCESS
 }
 
-template bool decode32bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&);
-template bool decode32bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&);
-template bool decode32bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&);
-template bool decode32bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&);
+template bool decode_32bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&);
+template bool decode_32bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_32bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_32bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&);
 
 template <typename T>
-bool decode64bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset) {
-    if (!decode64bitImage<T>(img, channel_buf)) {
+bool decode_64bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf,
+                        const std::vector<int>& px_offset) {
+    if (!decode_64bit_image<T>(img, channel_buf)) {
         img = stagger<T>(img, px_offset);
         return false;  // SUCCESS
     }
     return true;  // ERROR
 }
 
-template bool decode64bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&,
-                                        const std::vector<int>&);
-template bool decode64bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode64bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode64bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
+template bool decode_64bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&,
+                                          const std::vector<int>&);
+template bool decode_64bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_64bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_64bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
 
 template <typename T>
-bool decode64bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf) {
+bool decode_64bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf) {
     if (sizeof(T) < 8) {
         print_bad_pixel_size();
     }
@@ -463,18 +475,25 @@ bool decode64bitImage(Eigen::Ref<img_t<T>> img,
     }
 
     // 64bit channel data decoding to LidarScan for key channel_index
-    for (size_t u = 0; u < height; u++) {
-        for (size_t v = 0; v < width; v++) {
+    for (size_t row = 0; row < height; row++) {
+        for (size_t col = 0; col < width; col++) {
             uint64_t val =
-                static_cast<uint64_t>(row_pointers[u][v * 8 + 0]) +
-                (static_cast<uint64_t>(row_pointers[u][v * 8 + 1]) << 8u) +
-                (static_cast<uint64_t>(row_pointers[u][v * 8 + 2]) << 16u) +
-                (static_cast<uint64_t>(row_pointers[u][v * 8 + 3]) << 24u) +
-                (static_cast<uint64_t>(row_pointers[u][v * 8 + 4]) << 32u) +
-                (static_cast<uint64_t>(row_pointers[u][v * 8 + 5]) << 40u) +
-                (static_cast<uint64_t>(row_pointers[u][v * 8 + 6]) << 48u) +
-                (static_cast<uint64_t>(row_pointers[u][v * 8 + 7]) << 56u);
-            img(u, v) = static_cast<T>(val);
+                static_cast<uint64_t>(row_pointers[row][(col * 8) + 0]) +
+                (static_cast<uint64_t>(row_pointers[row][(col * 8) + 1])
+                 << 8u) +
+                (static_cast<uint64_t>(row_pointers[row][(col * 8) + 2])
+                 << 16u) +
+                (static_cast<uint64_t>(row_pointers[row][(col * 8) + 3])
+                 << 24u) +
+                (static_cast<uint64_t>(row_pointers[row][(col * 8) + 4])
+                 << 32u) +
+                (static_cast<uint64_t>(row_pointers[row][(col * 8) + 5])
+                 << 40u) +
+                (static_cast<uint64_t>(row_pointers[row][(col * 8) + 6])
+                 << 48u) +
+                (static_cast<uint64_t>(row_pointers[row][(col * 8) + 7])
+                 << 56u);
+            img(row, col) = static_cast<T>(val);
         }
     }
 
@@ -483,42 +502,42 @@ bool decode64bitImage(Eigen::Ref<img_t<T>> img,
     return false;  // SUCCESS
 }
 
-template bool decode64bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&);
-template bool decode64bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&);
-template bool decode64bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&);
-template bool decode64bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&);
+template bool decode_64bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&);
+template bool decode_64bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_64bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_64bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&);
 
 template <typename T>
-bool decode16bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf,
-                      const std::vector<int>& px_offset) {
-    if (!decode16bitImage<T>(img, channel_buf)) {
+bool decode_16bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf,
+                        const std::vector<int>& px_offset) {
+    if (!decode_16bit_image<T>(img, channel_buf)) {
         img = stagger<T>(img, px_offset);
         return false;  // SUCCESS
     }
     return true;  // ERROR
 }
 
-template bool decode16bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&,
-                                        const std::vector<int>&);
-template bool decode16bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode16bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
-template bool decode16bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&,
-                                         const std::vector<int>&);
+template bool decode_16bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&,
+                                          const std::vector<int>&);
+template bool decode_16bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_16bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
+template bool decode_16bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&,
+                                           const std::vector<int>&);
 
 template <typename T>
-bool decode16bitImage(Eigen::Ref<img_t<T>> img,
-                      const ScanChannelData& channel_buf) {
+bool decode_16bit_image(Eigen::Ref<img_t<T>> img,
+                        const EncodedScanChannelData& channel_buf) {
     if (sizeof(T) < 2) {
         print_bad_pixel_size();
     }
@@ -573,10 +592,11 @@ bool decode16bitImage(Eigen::Ref<img_t<T>> img,
     }
 
     // 16bit channel data decoding to LidarScan for key channel_index
-    for (size_t u = 0; u < height; u++) {
-        for (size_t v = 0; v < width; v++) {
-            img(u, v) = static_cast<T>(row_pointers[u][v * 2 + 0]) +
-                        (static_cast<T>(row_pointers[u][v * 2 + 1]) << 8u);
+    for (size_t row = 0; row < height; row++) {
+        for (size_t col = 0; col < width; col++) {
+            img(row, col) =
+                static_cast<T>(row_pointers[row][(col * 2) + 0]) +
+                (static_cast<T>(row_pointers[row][(col * 2) + 1]) << 8u);
         }
     }
 
@@ -585,42 +605,42 @@ bool decode16bitImage(Eigen::Ref<img_t<T>> img,
     return false;  // SUCCESS
 }
 
-template bool decode16bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                        const ScanChannelData&);
-template bool decode16bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                         const ScanChannelData&);
-template bool decode16bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                         const ScanChannelData&);
-template bool decode16bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                         const ScanChannelData&);
+template bool decode_16bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                          const EncodedScanChannelData&);
+template bool decode_16bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_16bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                           const EncodedScanChannelData&);
+template bool decode_16bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                           const EncodedScanChannelData&);
 
 template <typename T>
-bool decode8bitImage(Eigen::Ref<img_t<T>> img,
-                     const ScanChannelData& channel_buf,
-                     const std::vector<int>& px_offset) {
-    if (!decode8bitImage<T>(img, channel_buf)) {
+bool decode_8bit_image(Eigen::Ref<img_t<T>> img,
+                       const EncodedScanChannelData& channel_buf,
+                       const std::vector<int>& px_offset) {
+    if (!decode_8bit_image<T>(img, channel_buf)) {
         img = stagger<T>(img, px_offset);
         return false;  // SUCCESS
     }
     return true;  // ERROR
 }
 
-template bool decode8bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                       const ScanChannelData&,
-                                       const std::vector<int>&);
-template bool decode8bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                        const ScanChannelData&,
-                                        const std::vector<int>&);
-template bool decode8bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                        const ScanChannelData&,
-                                        const std::vector<int>&);
-template bool decode8bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                        const ScanChannelData&,
-                                        const std::vector<int>&);
+template bool decode_8bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                         const EncodedScanChannelData&,
+                                         const std::vector<int>&);
+template bool decode_8bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                          const EncodedScanChannelData&,
+                                          const std::vector<int>&);
+template bool decode_8bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                          const EncodedScanChannelData&,
+                                          const std::vector<int>&);
+template bool decode_8bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                          const EncodedScanChannelData&,
+                                          const std::vector<int>&);
 
 template <typename T>
-bool decode8bitImage(Eigen::Ref<img_t<T>> img,
-                     const ScanChannelData& channel_buf) {
+bool decode_8bit_image(Eigen::Ref<img_t<T>> img,
+                       const EncodedScanChannelData& channel_buf) {
     // libpng main structs
     png_structp png_ptr;
     png_infop png_info_ptr;
@@ -672,9 +692,9 @@ bool decode8bitImage(Eigen::Ref<img_t<T>> img,
     }
 
     // 16bit channel data decoding to LidarScan for key channel_index
-    for (size_t u = 0; u < height; u++) {
-        for (size_t v = 0; v < width; v++) {
-            img(u, v) = row_pointers[u][v];
+    for (size_t row = 0; row < height; row++) {
+        for (size_t col = 0; col < width; col++) {
+            img(row, col) = row_pointers[row][col];
         }
     }
 
@@ -683,17 +703,18 @@ bool decode8bitImage(Eigen::Ref<img_t<T>> img,
     return false;  // SUCCESS
 }
 
-template bool decode8bitImage<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
-                                       const ScanChannelData&);
-template bool decode8bitImage<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
-                                        const ScanChannelData&);
-template bool decode8bitImage<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
-                                        const ScanChannelData&);
-template bool decode8bitImage<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
-                                        const ScanChannelData&);
+template bool decode_8bit_image<uint8_t>(Eigen::Ref<img_t<uint8_t>>,
+                                         const EncodedScanChannelData&);
+template bool decode_8bit_image<uint16_t>(Eigen::Ref<img_t<uint16_t>>,
+                                          const EncodedScanChannelData&);
+template bool decode_8bit_image<uint32_t>(Eigen::Ref<img_t<uint32_t>>,
+                                          const EncodedScanChannelData&);
+template bool decode_8bit_image<uint64_t>(Eigen::Ref<img_t<uint64_t>>,
+                                          const EncodedScanChannelData&);
 
-void decodeField(ouster::Field& field, const ScanChannelData& buffer,
-                 const std::vector<int>& px_offset) {
+void decode_field(ouster::sdk::core::Field& field,
+                  const EncodedScanChannelData& buffer,
+                  const std::vector<int>& px_offset) {
     // 1d case, uncompressed
     if (field.shape().size() == 1) {
         std::memcpy(field, buffer.data(), buffer.size());
@@ -713,37 +734,56 @@ void decodeField(ouster::Field& field, const ScanChannelData& buffer,
         view = view.reshape(rows, cols);
     }
 
+    ZPNG_Buffer zbuffer;
+    zbuffer.Bytes = buffer.size();
+    zbuffer.Data = const_cast<unsigned char*>(buffer.data());
+    ZPNG_Allocator alloc;
+    alloc.AllocatorData = &field;
+    alloc.Allocator = [](uint64_t size, void* data) {
+        auto field = static_cast<Field*>(data);
+        if (size != field->bytes()) {
+            throw std::runtime_error("Invalid allocation");
+        }
+        return static_cast<void*>(field->get());
+    };
+    auto out = ZPNG_DecompressEx(zbuffer, &alloc);
+
+    if (out.Buffer.Data != nullptr) {
+        // ZPNG decoding successfull
+        return;
+    }
+
     bool res = true;
-    if (px_offset.size()) {
+    if (!px_offset.empty()) {
         switch (view.tag()) {
-            case sensor::ChanFieldType::UINT8:
-                res = decode8bitImage<uint8_t>(view, buffer, px_offset);
+            case ChanFieldType::UINT8:
+                res = decode_8bit_image<uint8_t>(view, buffer, px_offset);
                 break;
-            case sensor::ChanFieldType::UINT16:
-                res = decode16bitImage<uint16_t>(view, buffer, px_offset);
+            case ChanFieldType::UINT16:
+                res = decode_16bit_image<uint16_t>(view, buffer, px_offset);
                 break;
-            case sensor::ChanFieldType::UINT32:
-                res = decode32bitImage<uint32_t>(view, buffer, px_offset);
+            case ChanFieldType::UINT32:
+                res = decode_32bit_image<uint32_t>(view, buffer, px_offset);
                 break;
-            case sensor::ChanFieldType::UINT64:
-                res = decode64bitImage<uint64_t>(view, buffer, px_offset);
+            case ChanFieldType::UINT64:
+                res = decode_64bit_image<uint64_t>(view, buffer, px_offset);
                 break;
             default:
                 break;
         }
     } else {
         switch (view.tag()) {
-            case sensor::ChanFieldType::UINT8:
-                res = decode8bitImage<uint8_t>(view, buffer);
+            case ChanFieldType::UINT8:
+                res = decode_8bit_image<uint8_t>(view, buffer);
                 break;
-            case sensor::ChanFieldType::UINT16:
-                res = decode16bitImage<uint16_t>(view, buffer);
+            case ChanFieldType::UINT16:
+                res = decode_16bit_image<uint16_t>(view, buffer);
                 break;
-            case sensor::ChanFieldType::UINT32:
-                res = decode32bitImage<uint32_t>(view, buffer);
+            case ChanFieldType::UINT32:
+                res = decode_32bit_image<uint32_t>(view, buffer);
                 break;
-            case sensor::ChanFieldType::UINT64:
-                res = decode64bitImage<uint64_t>(view, buffer);
+            case ChanFieldType::UINT64:
+                res = decode_64bit_image<uint64_t>(view, buffer);
                 break;
             default:
                 break;
@@ -755,5 +795,7 @@ void decodeField(ouster::Field& field, const ScanChannelData& buffer,
     }
 }
 
+}  // namespace impl
 }  // namespace osf
+}  // namespace sdk
 }  // namespace ouster
