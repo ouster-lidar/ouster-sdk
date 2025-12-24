@@ -30,6 +30,8 @@ jobs:
     - name: install python
       run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
+      run: python3 ./scripts/dev.py --help
+    - name: install deps
       run: python3 ./scripts/dev.py utils install-system-packages
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
@@ -44,7 +46,7 @@ jobs:
     - name: install python
       run: sudo apt install python3 python3-pip python3-venv
     - name: install deps
-      uses: python3 ./scripts/dev.py utils install-system-packages
+      run: python3 ./scripts/dev.py utils install-system-packages
     - name: cmake configure
       run: cmake . -B build -DBUILD_TESTING=ON -DBUILD_EXAMPLES=ON
     - name: cmake build
