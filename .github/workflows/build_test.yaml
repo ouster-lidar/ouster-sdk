@@ -7,7 +7,7 @@ on:
       - master
 jobs:
   lint:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
     - name: install python
@@ -15,7 +15,7 @@ jobs:
     - name: install python-deps one
       run: cd python && python3 setup.py egg_info && pip3 install `grep -v '^\[' src/*.egg-info/requires.txt`
     - name: install deps
-      run: sudo python3 ./scripts/dev.py utils install-system-packages --clangformat
+      run: sudo python3 ./scripts/dev.py utils install-system-packages
     - name: install python-deps
       run: pip3 install --force-reinstall mypy==1.14.1 flake8==7.1.2 clang-format==14.0.0
     - name: cpp-lint
@@ -138,6 +138,15 @@ jobs:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v1
+    - name: install python-deps
+      run: python3.12 -m pip install venv --break-system-packages
+    - name: setup venv
+      run: python3 -m venv venv
+    - name: Activate virtual environment
+      run: |
+        echo PATH=${GITHUB_WORKSPACE}/venv/bin:$PATH >> $GITHUB_ENV
+        echo VIRTUAL_ENV=${GITHUB_WORKSPACE}/venv >> $GITHUB_ENV
+        ls ${GITHUB_WORKSPACE}/venv
     - name: install deps
       run: python3 ./scripts/dev.py utils install-system-packages
     - name: cmake configure
@@ -151,11 +160,18 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: install python-deps
-      run: python3.12 -m pip install pytest pytest-xdist --break-system-packages
-    - name: build python
-      run: cd python && python3.12 -m pip install -e .[test] --break-system-packages
+      run: python3.12 -m pip install pytest pytest-xdist venv --break-system-packages
+    - name: setup venv
+      run: python3 -m venv venv
+    - name: Activate virtual environment
+      run: |
+        echo PATH=${GITHUB_WORKSPACE}/venv/bin:$PATH >> $GITHUB_ENV
+        echo VIRTUAL_ENV=${GITHUB_WORKSPACE}/venv >> $GITHUB_ENV
+        ls ${GITHUB_WORKSPACE}/venv
     - name: install deps
       run: python3 ./scripts/dev.py utils install-system-packages
+    - name: build python
+      run: cd python && python3.12 -m pip install -e .[test] --break-system-packages
     - name: set netparams
       run: sudo sysctl -w net.inet.udp.maxdgram=65535
     - name: run tests
